@@ -9,10 +9,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/SummerXaa-Z/ai-nexus-go-rebirth/internal/contracts"
-	"github.com/SummerXaa-Z/ai-nexus-go-rebirth/internal/domain"
-	"github.com/SummerXaa-Z/ai-nexus-go-rebirth/internal/security"
-	"github.com/SummerXaa-Z/ai-nexus-go-rebirth/internal/store"
+	"github.com/SummerXaa-Z/agent-harbor/internal/contracts"
+	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
+	"github.com/SummerXaa-Z/agent-harbor/internal/security"
+	"github.com/SummerXaa-Z/agent-harbor/internal/store"
 )
 
 type callerContextKey struct{}

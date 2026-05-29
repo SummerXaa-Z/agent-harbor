@@ -3,8 +3,8 @@ package app
 import (
 	"net/http"
 
-	"github.com/SummerXaa-Z/ai-nexus-go-rebirth/internal/httpapi"
-	"github.com/SummerXaa-Z/ai-nexus-go-rebirth/internal/store"
+	"github.com/SummerXaa-Z/agent-harbor/internal/httpapi"
+	"github.com/SummerXaa-Z/agent-harbor/internal/store"
 )
 
 type App struct {

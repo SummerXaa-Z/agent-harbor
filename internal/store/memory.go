@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SummerXaa-Z/ai-nexus-go-rebirth/internal/domain"
+	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
 )
 
 type Repository interface {

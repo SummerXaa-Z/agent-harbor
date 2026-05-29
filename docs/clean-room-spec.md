@@ -1,12 +1,12 @@
-# AI Nexus Go Rebirth Clean-room Spec
+# AgentHarbor Clean-room Spec
 
 Date: 2026-05-29
-Branch: `codex/ai-nexus-go-rebirth`
+Branch: `codex/agent-harbor`
 Status: Sprint 0 implementation spec
 
 ## Clean-room Boundary
 
-This rebirth track is a fresh Go implementation of the AI Nexus Agent Gateway problem space. It must not copy Rust, TypeScript, migration, test fixture, deployment, or adapter source from the existing implementation. Existing AI Nexus documents may be used only as product requirements. Public protocols and public product references are allowed: MCP, OpenAPI, OIDC, A2A concepts, and Higress public AI Gateway/MCP Gateway materials.
+AgentHarbor is a fresh Go implementation of an Agent Gateway problem space. It must not copy Rust, TypeScript, migration, test fixture, deployment, or adapter source from the legacy implementation. Legacy documents may be used only as product requirements. Public protocols and public product references are allowed: MCP, OpenAPI, OIDC, A2A concepts, and Higress public AI Gateway/MCP Gateway materials.
 
 The first code milestone lives in a new isolated module and does not replace the current production runtime.
 
@@ -81,7 +81,7 @@ Build a runnable Agent Gateway skeleton that proves the product model:
 ## Non-goals
 
 - No production database persistence in Sprint 0.
-- No frontend rewrite yet.
+- Frontend Sprint 0 is tracked separately from this backend skeleton spec.
 - No migration from existing production data.
 - No real upstream MCP/OpenAPI proxying yet; Sprint 0 simulates data-plane authorization and evidence shape.
 - No direct reuse of existing source code, schemas, migrations, tests, or deployment files.
@@ -91,4 +91,4 @@ Build a runnable Agent Gateway skeleton that proves the product model:
 - `go test ./...` passes in the new module.
 - `go build ./...` passes in the new module.
 - Tests cover health, contract catalogs, create/list/read Agent, key creation, allowed data-plane trace, denied data-plane trace, endpoint validation, and secret-like channel config rejection.
-- The module can run with `go run ./cmd/nexus-go`.
+- The module can run with `go run ./cmd/agent-harbor`.

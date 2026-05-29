@@ -1,10 +1,10 @@
-# AI Nexus Go Rebirth Implementation Plan
+# AgentHarbor Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a clean-room Go Agent Gateway skeleton that proves registry, contracts, Agent Key auth, access grants, data-plane authorization, and audit traces.
 
-**Architecture:** A new root-level Go module under `go-nexus/` contains all new runtime code. HTTP handlers depend on small domain services and an in-memory repository so the first milestone is testable without PostgreSQL. The API shape intentionally follows the product model, not the existing implementation internals.
+**Architecture:** The repository root contains the Go module and all new runtime code. HTTP handlers depend on small domain services and an in-memory repository so the first milestone is testable without PostgreSQL. The API shape intentionally follows the product model, not the existing implementation internals.
 
 **Tech Stack:** Go 1.25, `chi` router, standard `net/http/httptest`, in-memory store for Sprint 0, future `pgx/sqlc/goose` placeholders documented but not required for tests.
 
@@ -12,25 +12,25 @@
 
 ## File Structure
 
-- `go-nexus/go.mod`: independent Go module for the rebirth service.
-- `go-nexus/cmd/nexus-go/main.go`: process entrypoint.
-- `go-nexus/internal/app/app.go`: server wiring and route registration.
-- `go-nexus/internal/httpapi/`: JSON helpers, handlers, middleware.
-- `go-nexus/internal/domain/`: clean-room domain types.
-- `go-nexus/internal/store/`: repository interface and in-memory implementation.
-- `go-nexus/internal/security/`: key generation, hashing, endpoint validation.
-- `go-nexus/internal/contracts/`: provider/channel contract catalog.
-- `go-nexus/internal/audit/`: trace event helpers.
-- `go-nexus/internal/httpapi/server_test.go`: end-to-end HTTP tests.
+- `go.mod`: independent Go module for the AgentHarbor service.
+- `cmd/agent-harbor/main.go`: process entrypoint.
+- `internal/app/app.go`: server wiring and route registration.
+- `internal/httpapi/`: JSON helpers, handlers, middleware.
+- `internal/domain/`: clean-room domain types.
+- `internal/store/`: repository interface and in-memory implementation.
+- `internal/security/`: key generation, hashing, endpoint validation.
+- `internal/contracts/`: provider/channel contract catalog.
+- `internal/audit/`: trace event helpers.
+- `internal/httpapi/server_test.go`: end-to-end HTTP tests.
 
 ## Tasks
 
 ### Task 1: Module and Domain Types
 
-- [ ] Create `go-nexus/go.mod` with `chi` dependency.
+- [ ] Create `go.mod` with `chi` dependency.
 - [ ] Create domain structs for Agent, AgentKey, AccessGrant, TraceEvent, contracts, and common API envelopes.
 - [ ] Add repository interface and in-memory store with deterministic mutex protection.
-- [ ] Run `go test ./...` from `go-nexus`.
+- [ ] Run `go test ./...` from the repository root.
 
 ### Task 2: HTTP Skeleton and Contracts
 
@@ -65,7 +65,7 @@
 
 ### Task 6: Clean-room Documentation and Push
 
-- [ ] Add README for `go-nexus/` with clean-room warning and local commands.
+- [ ] Add README with clean-room warning and local commands.
 - [ ] Run secret scan over new files.
 - [ ] Commit with a clear clean-room message.
-- [ ] Push branch `codex/ai-nexus-go-rebirth`.
+- [ ] Push the AgentHarbor repository to GitHub.

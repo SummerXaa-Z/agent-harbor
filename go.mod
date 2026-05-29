@@ -1,4 +1,4 @@
-module github.com/SummerXaa-Z/ai-nexus-go-rebirth
+module github.com/SummerXaa-Z/agent-harbor
 
 go 1.25
 

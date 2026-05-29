@@ -10,11 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/SummerXaa-Z/ai-nexus-go-rebirth/internal/app"
+	"github.com/SummerXaa-Z/agent-harbor/internal/app"
 )
 
 func main() {
-	addr := env("NEXUS_ADDR", ":9090")
+	addr := env("AGENT_HARBOR_ADDR", ":9090")
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           app.New().Router(),
@@ -23,7 +23,7 @@ func main() {
 
 	errs := make(chan error, 1)
 	go func() {
-		slog.Info("nexus-go listening", "addr", addr)
+		slog.Info("agent-harbor listening", "addr", addr)
 		errs <- server.ListenAndServe()
 	}()
 

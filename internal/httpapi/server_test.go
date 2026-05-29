@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/SummerXaa-Z/ai-nexus-go-rebirth/internal/httpapi"
-	"github.com/SummerXaa-Z/ai-nexus-go-rebirth/internal/store"
+	"github.com/SummerXaa-Z/agent-harbor/internal/httpapi"
+	"github.com/SummerXaa-Z/agent-harbor/internal/store"
 )
 
 type apiEnvelope struct {

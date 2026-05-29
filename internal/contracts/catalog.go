@@ -1,6 +1,6 @@
 package contracts
 
-import "github.com/SummerXaa-Z/ai-nexus-go-rebirth/internal/domain"
+import "github.com/SummerXaa-Z/agent-harbor/internal/domain"
 
 const (
 	providerSchemaVersion = "agent-provider-contract-v1"

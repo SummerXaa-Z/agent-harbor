@@ -98,7 +98,7 @@ function App() {
             <Network size={18} />
           </div>
           <div>
-            <strong>AI Nexus</strong>
+            <strong>AgentHarbor</strong>
             <span>Agent Gateway</span>
           </div>
         </div>

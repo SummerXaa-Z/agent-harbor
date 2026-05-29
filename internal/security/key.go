@@ -22,7 +22,7 @@ func NewAgentKey() (plaintext string, prefix string) {
 		panic(err)
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
-	plaintext = "nxs_" + token
+	plaintext = "ah_" + token
 	if len(plaintext) > 12 {
 		prefix = plaintext[:12]
 	}

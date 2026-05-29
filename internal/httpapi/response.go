@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/SummerXaa-Z/ai-nexus-go-rebirth/internal/domain"
+	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
 )
 
 type envelope struct {

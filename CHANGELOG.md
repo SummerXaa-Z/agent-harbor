@@ -1,3 +1,30 @@
+## [2026-05-29 16:45] Session: Rename to AgentHarbor
+
+### 完成
+- 将产品展示名统一为 `AgentHarbor`，仓库标识统一为 `agent-harbor`。
+- 将 Go module 改为 `github.com/SummerXaa-Z/agent-harbor`。
+- 将启动入口改为 `cmd/agent-harbor`。
+- 将服务地址环境变量从旧名改为 `AGENT_HARBOR_ADDR`。
+- 将前端包名和页面标题改为 `agent-harbor-console` / `AgentHarbor Console`。
+- 将 Agent Key 前缀从旧缩写改为 `ah_`。
+
+### 决策
+- 用户确认使用 `AgentHarbor`，不要再使用旧产品名或旧仓库名。
+- GitHub 仓库目标名为 `SummerXaa-Z/agent-harbor`。
+
+### 血泪教训
+- 改名不是只改 README；Go module path、import path、cmd 目录、前端 package、文档、日志、key prefix、GitHub remote 都要一起改。
+- pnpm package name 改动后需要刷新 lockfile，否则仓库元数据会残留旧名。
+
+### 待办
+- GitHub 仓库 rename 后，同步本地 remote URL 和本地目录名。
+
+### 影响文件
+- `go.mod` 与 Go imports：切换到 `github.com/SummerXaa-Z/agent-harbor`。
+- `cmd/agent-harbor/main.go`：新入口、日志和环境变量。
+- `frontend/package.json` / `frontend/index.html` / `frontend/src/App.tsx`：前端命名。
+- `README.md` / `docs/*.md` / `CHANGELOG.md`：文档命名。
+
 ## [2026-05-29 16:34] Session: Clean-room To B Frontend Rebirth
 
 ### 完成
@@ -10,13 +37,13 @@
 - 更新 `README.md` 前后端运行说明。
 
 ### 决策
-- 前端不复用旧 AI Nexus `web/` 代码，全部放在独立 GitHub 仓库 `SummerXaa-Z/ai-nexus-go-rebirth`。
+- 前端不复用旧实现 `web/` 代码，全部放在独立 GitHub 仓库 `SummerXaa-Z/agent-harbor`。
 - 设计参考吸收 Ant Design Pro、Semi Design、shadcn dashboard blocks、Arco Design Pro 的通用中后台模式，但不复制模板代码。
 - 后端在线时 catalog / agents / traces 走 Go runtime；route policies / evidence / runtime signals 暂用本地样例面板，状态栏写作 `Go runtime + samples`。
 - GitHub 仓库保持 private，提交到 `main`，不再触碰公司 GitLab。
 
 ### 血泪教训
-- `apply_patch` 没有 `workdir` 参数时会按会话默认目录写文件，曾误写到原 AI Nexus 仓库；后续跨仓库操作必须使用绝对路径。
+- `apply_patch` 没有 `workdir` 参数时会按会话默认目录写文件，曾误写到原项目仓库；后续跨仓库操作必须使用绝对路径。
 - Vite 调本地 Go API 会遇到 CORS，不能只靠 curl 验证；必须用真实浏览器检查。
 - API 请求成功但返回空数组时不能用 mock 替换，否则会出现 `Go runtime` 标签下展示 mock agent/trace 的混合状态。
 - CORS 中间件不能对所有 `OPTIONS` 一律 204，只能短路 allowlist origin 的 preflight。

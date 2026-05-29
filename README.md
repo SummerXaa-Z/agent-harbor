@@ -1,6 +1,6 @@
-# AI Nexus Go Rebirth
+# AgentHarbor
 
-Clean-room Go implementation track for the AI Nexus Agent Gateway product model.
+Clean-room Go implementation track for the AgentHarbor Agent Gateway product model.
 
 This module is intentionally isolated from the existing Rust/React runtime. Do not copy source code, migrations, tests, deployment scripts, adapter code, or generated assets from the existing implementation into this directory. Use only product requirements, public protocols, and public product references.
 
@@ -24,18 +24,18 @@ Management APIs in this skeleton are intentionally unauthenticated so local test
 ```bash
 go test ./...
 go build ./...
-go run ./cmd/nexus-go
+go run ./cmd/agent-harbor
 ```
 
 The service listens on `:9090` by default. Override with:
 
 ```bash
-NEXUS_ADDR=:9091 go run ./cmd/nexus-go
+AGENT_HARBOR_ADDR=:9091 go run ./cmd/agent-harbor
 ```
 
 ## Frontend
 
-`frontend/` is a clean-room Vite + React + TypeScript enterprise console. It must not copy source code, styles, component structure, generated assets, or mock data from the existing AI Nexus `web/` implementation.
+`frontend/` is a clean-room Vite + React + TypeScript enterprise console. It must not copy source code, styles, component structure, generated assets, or mock data from the legacy `web/` implementation.
 
 ```bash
 cd frontend

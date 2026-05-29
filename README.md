@@ -22,7 +22,6 @@ Management APIs in this skeleton are intentionally unauthenticated so local test
 ## Run
 
 ```bash
-cd go-nexus
 go test ./...
 go build ./...
 go run ./cmd/nexus-go
@@ -33,6 +32,19 @@ The service listens on `:9090` by default. Override with:
 ```bash
 NEXUS_ADDR=:9091 go run ./cmd/nexus-go
 ```
+
+## Frontend
+
+`frontend/` is a clean-room Vite + React + TypeScript enterprise console. It must not copy source code, styles, component structure, generated assets, or mock data from the existing AI Nexus `web/` implementation.
+
+```bash
+cd frontend
+pnpm install
+pnpm build
+pnpm dev
+```
+
+The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it defaults to `http://127.0.0.1:9090`. When the backend is unavailable during local development, the UI uses mock fallback data so the console remains navigable. When the backend is reachable, catalog, agent, and trace data come from the Go runtime; route policies, evidence runs, and runtime signals remain local sample panels until those APIs exist.
 
 ## Current API
 

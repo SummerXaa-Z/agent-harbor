@@ -64,6 +64,39 @@ func TestHealthAndContracts(t *testing.T) {
 	}
 }
 
+func TestLocalDevCORS(t *testing.T) {
+	router := newRouter()
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/contracts/channels", nil)
+	req.Header.Set("Origin", "http://127.0.0.1:5174")
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("preflight status = %d", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://127.0.0.1:5174" {
+		t.Fatalf("unexpected allowed origin %q", got)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/contracts/channels", nil)
+	req.Header.Set("Origin", "https://example.invalid")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("unexpected CORS header for disallowed origin %q", got)
+	}
+
+	req = httptest.NewRequest(http.MethodOptions, "/api/v1/contracts/channels", nil)
+	req.Header.Set("Origin", "https://example.invalid")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code == http.StatusNoContent {
+		t.Fatalf("disallowed preflight should not be short-circuited")
+	}
+}
+
 func TestAgentRegistryValidation(t *testing.T) {
 	router := newRouter()
 

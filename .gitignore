@@ -1,8 +1,10 @@
 bin/
 dist/
+node_modules/
 coverage.out
 *.test
 *.log
+*.tsbuildinfo
 .env
 .env.*
 !.env.example

@@ -34,6 +34,7 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(localDevCORS)
 
 	r.Get("/healthz", s.health)
 	r.Route("/api/v1", func(r chi.Router) {
@@ -57,6 +58,31 @@ func (s *Server) Router() http.Handler {
 		})
 	})
 	return r
+}
+
+func localDevCORS(next http.Handler) http.Handler {
+	allowedOrigins := map[string]struct{}{
+		"http://localhost:4174": {},
+		"http://localhost:5174": {},
+		"http://127.0.0.1:4174": {},
+		"http://127.0.0.1:5174": {},
+		"http://[::1]:4174":     {},
+		"http://[::1]:5174":     {},
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if _, ok := allowedOrigins[origin]; ok {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Run-Id")
+			w.Header().Set("Vary", "Origin")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {

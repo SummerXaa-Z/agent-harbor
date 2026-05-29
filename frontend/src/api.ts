@@ -8,13 +8,19 @@ import {
   systemMetrics,
 } from './data'
 import type {
+  AccessGrant,
   Agent,
   ApiEnvelope,
   CatalogData,
   ChannelContract,
   ConsoleData,
+  CreateAccessGrantRequest,
+  CreateAgentKeyRequest,
+  CreateAgentKeyResponse,
+  CreateAgentRequest,
   ProviderContract,
   TraceEvent,
+  TraceFilters,
 } from './types'
 
 const DEFAULT_API_BASE = 'http://127.0.0.1:9090'
@@ -32,20 +38,57 @@ function endpoint(path: string): string {
   return `${apiBase}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+function queryString(params: Record<string, string | undefined>): string {
+  const query = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value?.trim()) query.set(key, value.trim())
+  })
+  const value = query.toString()
+  return value ? `?${value}` : ''
+}
+
 function isEnvelope<T>(value: unknown): value is ApiEnvelope<T> {
   return Boolean(value && typeof value === 'object' && 'code' in value)
 }
 
-async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
+interface RequestOptions {
+  adminKey?: string
+  body?: unknown
+  method?: 'GET' | 'POST'
+  signal?: AbortSignal
+}
+
+class ApiRequestError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'ApiRequestError'
+  }
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' }
+  if (options.adminKey?.trim()) headers['X-Admin-Key'] = options.adminKey.trim()
+  if (options.body !== undefined) headers['Content-Type'] = 'application/json'
+
   const response = await fetch(endpoint(path), {
-    headers: { Accept: 'application/json' },
-    signal,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    headers,
+    method: options.method ?? (options.body === undefined ? 'GET' : 'POST'),
+    signal: options.signal,
   })
 
-  const payload = (await response.json()) as unknown
+  let payload: unknown
+  try {
+    payload = (await response.json()) as unknown
+  } catch {
+    payload = undefined
+  }
   if (!response.ok) {
     const message = isEnvelope<T>(payload) ? payload.message || payload.error : response.statusText
-    throw new Error(message || `Request failed with status ${response.status}`)
+    throw new ApiRequestError(response.status, message || `Request failed with status ${response.status}`)
   }
 
   if (isEnvelope<T>(payload)) {
@@ -64,17 +107,20 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
 async function withFallback<T>(loader: () => Promise<T>, fallback: T): Promise<{ data: T; ok: boolean }> {
   try {
     return { data: await loader(), ok: true }
-  } catch {
-    return { data: fallback, ok: false }
+  } catch (error) {
+    if (error instanceof TypeError) {
+      return { data: fallback, ok: false }
+    }
+    throw error
   }
 }
 
 export async function fetchProviders(signal?: AbortSignal): Promise<ProviderContract[]> {
-  return request<ProviderContract[]>('/api/v1/contracts/providers', signal)
+  return request<ProviderContract[]>('/api/v1/contracts/providers', { signal })
 }
 
 export async function fetchChannels(signal?: AbortSignal): Promise<ChannelContract[]> {
-  return request<ChannelContract[]>('/api/v1/contracts/channels', signal)
+  return request<ChannelContract[]>('/api/v1/contracts/channels', { signal })
 }
 
 export async function fetchCatalog(signal?: AbortSignal): Promise<CatalogData> {
@@ -82,35 +128,73 @@ export async function fetchCatalog(signal?: AbortSignal): Promise<CatalogData> {
   return { providers, channels }
 }
 
-export async function fetchAgents(workspaceId?: string, signal?: AbortSignal): Promise<Agent[]> {
+export async function fetchAgents(
+  workspaceId?: string,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<Agent[]> {
   const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
-  return request<Agent[]>(`/api/v1/agents${query}`, signal)
+  return request<Agent[]>(`/api/v1/agents${query}`, { adminKey, signal })
 }
 
-export async function fetchTraces(runId?: string, signal?: AbortSignal): Promise<TraceEvent[]> {
-  const query = runId ? `?runId=${encodeURIComponent(runId)}` : ''
-  return request<TraceEvent[]>(`/api/v1/audit/traces${query}`, signal)
+export async function fetchAccessGrants(adminKey?: string, signal?: AbortSignal): Promise<AccessGrant[]> {
+  return request<AccessGrant[]>('/api/v1/access-grants', { adminKey, signal })
 }
 
-export async function loadConsoleData(): Promise<ConsoleData> {
-  const [catalogResult, agentsResult, tracesResult] = await Promise.all([
+export async function fetchTraces(
+  filters: TraceFilters = {},
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<TraceEvent[]> {
+  const query = queryString({
+    callerAgentId: filters.callerAgentId,
+    decision: filters.decision || undefined,
+    runId: filters.runId,
+    targetAgentId: filters.targetAgentId,
+  })
+  return request<TraceEvent[]>(`/api/v1/audit/traces${query}`, { adminKey, signal })
+}
+
+export async function createAgent(body: CreateAgentRequest, adminKey?: string): Promise<Agent> {
+  return request<Agent>('/api/v1/agents', { adminKey, body })
+}
+
+export async function createAgentKey(
+  body: CreateAgentKeyRequest,
+  adminKey?: string,
+): Promise<CreateAgentKeyResponse> {
+  return request<CreateAgentKeyResponse>('/api/v1/agent-keys', { adminKey, body })
+}
+
+export async function createAccessGrant(
+  body: CreateAccessGrantRequest,
+  adminKey?: string,
+): Promise<AccessGrant> {
+  return request<AccessGrant>('/api/v1/access-grants', { adminKey, body })
+}
+
+export async function loadConsoleData(adminKey?: string, traceFilters: TraceFilters = {}): Promise<ConsoleData> {
+  const [catalogResult, agentsResult, grantsResult, tracesResult] = await Promise.all([
     withFallback(() => fetchCatalog(), {
       providers: sampleProviders,
       channels: sampleChannels,
     }),
-    withFallback(() => fetchAgents(), sampleAgents),
-    withFallback(() => fetchTraces(), sampleTraces),
+    withFallback(() => fetchAgents(undefined, adminKey), sampleAgents),
+    withFallback(() => fetchAccessGrants(adminKey), []),
+    withFallback(() => fetchTraces(traceFilters, adminKey), sampleTraces),
   ])
 
   return {
     providers: catalogResult.data.providers,
     channels: catalogResult.data.channels,
     agents: agentsResult.data,
+    accessGrants: grantsResult.data,
     traces: tracesResult.data,
-    routePolicies,
+    routePolicies: grantsResult.ok ? [] : routePolicies,
     evidenceRuns,
     systemMetrics,
-    loadedFromApi: catalogResult.ok && agentsResult.ok && tracesResult.ok,
+    loadedFromApi: catalogResult.ok && agentsResult.ok && grantsResult.ok && tracesResult.ok,
+    grantsLoadedFromApi: grantsResult.ok,
     apiBase,
   }
 }

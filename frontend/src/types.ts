@@ -162,10 +162,19 @@ export interface ConsoleData {
   providers: ProviderContract[]
   channels: ChannelContract[]
   agents: Agent[]
+  accessGrants: AccessGrant[]
   traces: TraceEvent[]
   routePolicies: RoutePolicy[]
   evidenceRuns: EvidenceRun[]
   systemMetrics: SystemMetric[]
   loadedFromApi: boolean
+  grantsLoadedFromApi: boolean
   apiBase: string
+}
+
+export interface TraceFilters {
+  runId?: string
+  decision?: TraceDecision | ''
+  callerAgentId?: string
+  targetAgentId?: string
 }

@@ -15,9 +15,17 @@ import (
 
 func main() {
 	addr := env("AGENT_HARBOR_ADDR", ":9090")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	application, err := app.New(ctx)
+	if err != nil {
+		slog.Error("app initialization failed", "error", err)
+		os.Exit(1)
+	}
+	defer application.Close()
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           app.New().Router(),
+		Handler:           application.Router(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -40,9 +48,9 @@ func main() {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)
 	}

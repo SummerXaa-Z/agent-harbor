@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   Activity,
   Boxes,
   CheckCircle2,
   CircleDot,
   ClipboardCheck,
+  Copy,
   DatabaseZap,
   ExternalLink,
   FileSearch,
@@ -24,15 +25,20 @@ import {
   TriangleAlert,
   Workflow
 } from "lucide-react";
-import { loadConsoleData } from "./api";
+import { createAccessGrant, createAgent, createAgentKey, loadConsoleData } from "./api";
 import type {
+  AccessGrant,
   Agent,
+  AgentStatus,
   ChannelContract,
   ConsoleData,
+  CreateAgentKeyResponse,
   EvidenceRun,
   RoutePolicy,
   SystemMetric,
-  TraceEvent
+  TraceDecision,
+  TraceEvent,
+  TraceFilters
 } from "./types";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
@@ -47,13 +53,33 @@ const navItems = [
 ];
 
 const workspaceTabs = ["Prod", "Staging", "Sandbox"];
+const defaultAgentForm = {
+  channelType: "local",
+  description: "",
+  endpoint: "",
+  name: "",
+  status: "draft" as AgentStatus,
+  workspaceId: "workspace-demo"
+};
+const defaultKeyForm = { agentId: "", expiresInSeconds: "900", name: "console key" };
+const defaultGrantForm = { callerAgentId: "", routeKey: "", routeType: "mcp", targetAgentId: "" };
+const defaultTraceFilters: TraceFilters = { callerAgentId: "", decision: "", runId: "", targetAgentId: "" };
 
 function App() {
   const [activeNav, setActiveNav] = useState("cockpit");
   const [activeWorkspace, setActiveWorkspace] = useState("Prod");
+  const [adminKey, setAdminKey] = useState("");
   const [data, setData] = useState<ConsoleData | null>(null);
   const [loadError, setLoadError] = useState("");
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [agentForm, setAgentForm] = useState(defaultAgentForm);
+  const [agentMessage, setAgentMessage] = useState("");
+  const [keyForm, setKeyForm] = useState(defaultKeyForm);
+  const [keyMessage, setKeyMessage] = useState("");
+  const [createdKey, setCreatedKey] = useState<CreateAgentKeyResponse | null>(null);
+  const [grantForm, setGrantForm] = useState(defaultGrantForm);
+  const [grantMessage, setGrantMessage] = useState("");
+  const [traceFilters, setTraceFilters] = useState<TraceFilters>(defaultTraceFilters);
 
   useEffect(() => {
     void refresh();
@@ -62,7 +88,7 @@ function App() {
   async function refresh() {
     try {
       setLoadError("");
-      const next = await loadConsoleData();
+      const next = await loadConsoleData(adminKey, traceFilters);
       setData(next);
       setLastRefresh(new Date());
     } catch (error) {
@@ -70,12 +96,88 @@ function App() {
     }
   }
 
+  async function submitAgent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAgentMessage("");
+    try {
+      const channelConfig = agentForm.endpoint.trim() ? { endpoint: agentForm.endpoint.trim() } : undefined;
+      await createAgent(
+        {
+          channelConfig,
+          channelType: agentForm.channelType.trim() || "local",
+          description: agentForm.description.trim() || undefined,
+          name: agentForm.name.trim(),
+          status: agentForm.status,
+          workspaceId: agentForm.workspaceId.trim()
+        },
+        adminKey
+      );
+      setAgentForm({ ...defaultAgentForm, workspaceId: agentForm.workspaceId });
+      setAgentMessage("Agent created. Registry refreshed.");
+      await refresh();
+    } catch (error) {
+      setAgentMessage(error instanceof Error ? error.message : "Unable to create agent");
+    }
+  }
+
+  async function submitKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setKeyMessage("");
+    setCreatedKey(null);
+    try {
+      const ttl = Number(keyForm.expiresInSeconds);
+      if (!Number.isInteger(ttl) || ttl < 1 || ttl > 3600) {
+        setKeyMessage("TTL must be an integer between 1 and 3600 seconds.");
+        return;
+      }
+      const next = await createAgentKey(
+        {
+          agentId: keyForm.agentId,
+          expiresInSeconds: ttl,
+          name: keyForm.name.trim() || undefined
+        },
+        adminKey
+      );
+      setCreatedKey(next);
+      setKeyMessage("Plaintext key is shown once. Copy it before leaving this view.");
+      setKeyForm({ ...defaultKeyForm, agentId: keyForm.agentId });
+    } catch (error) {
+      setKeyMessage(error instanceof Error ? error.message : "Unable to create key");
+    }
+  }
+
+  async function submitGrant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setGrantMessage("");
+    try {
+      await createAccessGrant(
+        {
+          callerAgentId: grantForm.callerAgentId,
+          routeKey: grantForm.routeKey.trim() || undefined,
+          routeType: grantForm.routeType.trim() || undefined,
+          targetAgentId: grantForm.targetAgentId
+        },
+        adminKey
+      );
+      setGrantMessage("Access grant created. Route Governance refreshed.");
+      setGrantForm({ ...defaultGrantForm, callerAgentId: grantForm.callerAgentId });
+      await refresh();
+    } catch (error) {
+      setGrantMessage(error instanceof Error ? error.message : "Unable to create grant");
+    }
+  }
+
   const agents = data?.agents ?? [];
+  const grants = data?.accessGrants ?? [];
   const traces = data?.traces ?? [];
   const channels = data?.channels ?? [];
-  const policies = data?.routePolicies ?? [];
+  const policies = useMemo(
+    () => (data?.grantsLoadedFromApi ? grants.map(grantToPolicy) : data?.routePolicies ?? []),
+    [data?.grantsLoadedFromApi, data?.routePolicies, grants]
+  );
   const evidenceRuns = data?.evidenceRuns ?? [];
   const metrics = data?.systemMetrics ?? [];
+  const localCallers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
 
   const channelLabels = useMemo(() => {
     return channels.reduce<Record<string, string>>((acc, item) => {
@@ -88,7 +190,7 @@ function App() {
   const deniedTraces = traces.filter((trace) => trace.decision === "denied").length;
   const allowedTraces = traces.filter((trace) => trace.decision === "allowed").length;
   const evidencePassed = evidenceRuns.filter((run) => run.status === "passed").length;
-  const dataSourceLabel = data?.loadedFromApi ? "Go runtime + samples" : "Fallback dataset";
+  const dataSourceLabel = loadError ? "API error" : data?.loadedFromApi ? "Go runtime + samples" : "Fallback dataset";
 
   return (
     <div className="app-shell">
@@ -142,7 +244,7 @@ function App() {
             <span className="health-dot" />
             <strong>Control plane</strong>
           </div>
-          <span>{data?.loadedFromApi ? "Live API" : "Mock fallback"}</span>
+          <span>{loadError ? "API error" : data?.loadedFromApi ? "Live API" : "Mock fallback"}</span>
         </div>
       </aside>
 
@@ -153,6 +255,15 @@ function App() {
             <h1>Agent Gateway Cockpit</h1>
           </div>
           <div className="topbar-actions">
+            <label className="admin-key-box">
+              <LockKeyhole size={16} />
+              <input
+                onChange={(event) => setAdminKey(event.target.value)}
+                placeholder="X-Admin-Key"
+                type="password"
+                value={adminKey}
+              />
+            </label>
             <label className="search-box">
               <Search size={16} />
               <input placeholder="Search agents, routes, traces" />
@@ -184,12 +295,31 @@ function App() {
 
         <section className="metric-grid" aria-label="Gateway metrics">
           <MetricCard icon={<ServerCog size={18} />} label="Managed Agents" value={String(agents.length)} detail={`${activeAgents} active`} tone="info" />
-          <MetricCard icon={<KeyRound size={18} />} label="Active Grants" value={String(policies.length)} detail="route scoped" tone="success" />
+          <MetricCard icon={<KeyRound size={18} />} label="Active Grants" value={String(policies.length)} detail={data?.grantsLoadedFromApi ? "live access grants" : "sample fallback"} tone="success" />
           <MetricCard icon={<TriangleAlert size={18} />} label="Denied Traces" value={String(deniedTraces)} detail={`${allowedTraces} allowed`} tone={deniedTraces > 0 ? "warning" : "success"} />
           <MetricCard icon={<ClipboardCheck size={18} />} label="Evidence Health" value={`${evidencePassed}/${Math.max(evidenceRuns.length, 1)}`} detail="checks passed" tone="neutral" />
         </section>
 
         <section className="content-grid">
+          <Panel className="span-4" icon={<Boxes size={18} />} title="Create Agent">
+            <AgentCreateForm form={agentForm} message={agentMessage} onChange={setAgentForm} onSubmit={submitAgent} />
+          </Panel>
+
+          <Panel className="span-4" icon={<KeyRound size={18} />} title="Create Key">
+            <KeyCreateForm
+              agents={localCallers}
+              createdKey={createdKey}
+              form={keyForm}
+              message={keyMessage}
+              onChange={setKeyForm}
+              onSubmit={submitKey}
+            />
+          </Panel>
+
+          <Panel className="span-4" icon={<Route size={18} />} title="Create Grant">
+            <GrantCreateForm agents={agents} form={grantForm} message={grantMessage} onChange={setGrantForm} onSubmit={submitGrant} />
+          </Panel>
+
           <Panel className="span-8" icon={<Workflow size={18} />} title="Route Governance" action={<IconMore />}>
             <PolicyTable agents={agents} policies={policies} />
           </Panel>
@@ -211,10 +341,136 @@ function App() {
           </Panel>
 
           <Panel className="span-7" icon={<FileSearch size={18} />} title="Audit Traces" action={<IconOpen />}>
+            <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} />
             <TraceTable traces={traces} agents={agents} />
           </Panel>
         </section>
       </main>
+    </div>
+  );
+}
+
+function AgentCreateForm({
+  form,
+  message,
+  onChange,
+  onSubmit
+}: {
+  form: typeof defaultAgentForm;
+  message: string;
+  onChange: (form: typeof defaultAgentForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form className="control-form" onSubmit={onSubmit}>
+      <label>Name<input required value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
+      <label>Workspace<input required value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} /></label>
+      <div className="form-row">
+        <label>Channel<input value={form.channelType} onChange={(event) => onChange({ ...form, channelType: event.target.value })} /></label>
+        <label>Status<select value={form.status} onChange={(event) => onChange({ ...form, status: event.target.value as AgentStatus })}><option value="draft">draft</option><option value="active">active</option><option value="disabled">disabled</option></select></label>
+      </div>
+      <label>Endpoint<input placeholder="https://api.example.com/a2a" value={form.endpoint} onChange={(event) => onChange({ ...form, endpoint: event.target.value })} /></label>
+      <label>Description<textarea rows={2} value={form.description} onChange={(event) => onChange({ ...form, description: event.target.value })} /></label>
+      <FormFooter message={message} submitLabel="Create agent" />
+    </form>
+  );
+}
+
+function KeyCreateForm({
+  agents,
+  createdKey,
+  form,
+  message,
+  onChange,
+  onSubmit
+}: {
+  agents: Agent[];
+  createdKey: CreateAgentKeyResponse | null;
+  form: typeof defaultKeyForm;
+  message: string;
+  onChange: (form: typeof defaultKeyForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form className="control-form" onSubmit={onSubmit}>
+      <label>Active local caller<select required value={form.agentId} onChange={(event) => onChange({ ...form, agentId: event.target.value })}><option value="">Select caller</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
+      <label>Name<input value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
+      <label>TTL seconds<input inputMode="numeric" max={3600} min={1} type="number" value={form.expiresInSeconds} onChange={(event) => onChange({ ...form, expiresInSeconds: event.target.value })} /></label>
+      {createdKey ? (
+        <div className="one-time-key">
+          <div><strong>One-time key</strong><span>Copy now. Expires {formatDate(createdKey.expiresAt)}.</span></div>
+          <code>{createdKey.key}</code>
+          <button className="secondary-button" type="button" onClick={() => void navigator.clipboard?.writeText(createdKey.key)}><Copy size={14} /> Copy</button>
+        </div>
+      ) : null}
+      <FormFooter message={message} submitLabel="Create key" />
+    </form>
+  );
+}
+
+function GrantCreateForm({
+  agents,
+  form,
+  message,
+  onChange,
+  onSubmit
+}: {
+  agents: Agent[];
+  form: typeof defaultGrantForm;
+  message: string;
+  onChange: (form: typeof defaultGrantForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form className="control-form" onSubmit={onSubmit}>
+      <label>Caller<select required value={form.callerAgentId} onChange={(event) => onChange({ ...form, callerAgentId: event.target.value })}><option value="">Select caller</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
+      <label>Target<select required value={form.targetAgentId} onChange={(event) => onChange({ ...form, targetAgentId: event.target.value })}><option value="">Select target</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
+      <div className="form-row">
+        <label>Route type<input value={form.routeType} onChange={(event) => onChange({ ...form, routeType: event.target.value })} /></label>
+        <label>Route key<input value={form.routeKey} onChange={(event) => onChange({ ...form, routeKey: event.target.value })} /></label>
+      </div>
+      <FormFooter message={message} submitLabel="Create grant" />
+    </form>
+  );
+}
+
+function TraceFilterBar({
+  agents,
+  filters,
+  onChange,
+  onRefresh
+}: {
+  agents: Agent[];
+  filters: TraceFilters;
+  onChange: (filters: TraceFilters) => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="trace-filters">
+      <input placeholder="runId" value={filters.runId ?? ""} onChange={(event) => onChange({ ...filters, runId: event.target.value })} />
+      <select value={filters.decision ?? ""} onChange={(event) => onChange({ ...filters, decision: event.target.value as TraceDecision | "" })}>
+        <option value="">Any decision</option>
+        <option value="allowed">allowed</option>
+        <option value="denied">denied</option>
+      </select>
+      <select value={filters.callerAgentId ?? ""} onChange={(event) => onChange({ ...filters, callerAgentId: event.target.value })}>
+        <option value="">Any caller</option>
+        {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+      </select>
+      <select value={filters.targetAgentId ?? ""} onChange={(event) => onChange({ ...filters, targetAgentId: event.target.value })}>
+        <option value="">Any target</option>
+        {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+      </select>
+      <button className="secondary-button" type="button" onClick={onRefresh}><RefreshCw size={14} /> Refresh</button>
+    </div>
+  );
+}
+
+function FormFooter({ message, submitLabel }: { message: string; submitLabel: string }) {
+  return (
+    <div className="form-footer">
+      <button className="primary-button" type="submit">{submitLabel}</button>
+      {message ? <span>{message}</span> : null}
     </div>
   );
 }
@@ -494,6 +750,21 @@ function agentNameMap(agents: Agent[]) {
     acc[agent.id] = agent.name;
     return acc;
   }, {});
+}
+
+function grantToPolicy(grant: AccessGrant): RoutePolicy {
+  return {
+    callerAgentId: grant.callerAgentId,
+    createdAt: grant.createdAt,
+    effect: grant.revokedAt ? "deny" : "allow",
+    id: grant.id,
+    name: `${grant.routeType || "route"} grant`,
+    priority: 10,
+    routeKey: grant.routeKey,
+    routeType: grant.routeType || "default",
+    status: grant.revokedAt ? "disabled" : "enabled",
+    targetAgentId: grant.targetAgentId
+  };
 }
 
 function evidenceDuration(run: EvidenceRun) {

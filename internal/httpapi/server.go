@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
 	"strings"
 	"time"
@@ -18,15 +19,28 @@ import (
 type callerContextKey struct{}
 
 type Server struct {
-	repo store.Repository
-	now  func() time.Time
+	repo     store.Repository
+	now      func() time.Time
+	adminKey string
 }
 
-func New(repo store.Repository) *Server {
-	return &Server{
+type Option func(*Server)
+
+func WithAdminKey(key string) Option {
+	return func(s *Server) {
+		s.adminKey = strings.TrimSpace(key)
+	}
+}
+
+func New(repo store.Repository, options ...Option) *Server {
+	server := &Server{
 		repo: repo,
 		now:  func() time.Time { return time.Now().UTC() },
 	}
+	for _, option := range options {
+		option(server)
+	}
+	return server
 }
 
 func (s *Server) Router() http.Handler {
@@ -40,15 +54,19 @@ func (s *Server) Router() http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/contracts/providers", s.listProviderContracts)
 		r.Get("/contracts/channels", s.listChannelContracts)
-		r.Post("/agents", s.createAgent)
-		r.Get("/agents", s.listAgents)
-		r.Get("/agents/{id}", s.getAgent)
-		r.Post("/agent-keys", s.createAgentKey)
-		r.Get("/api-keys", s.listAgentKeys)
-		r.Post("/api-keys", s.createAgentKey)
-		r.Delete("/api-keys/{id}", s.revokeAgentKey)
-		r.Post("/access-grants", s.createAccessGrant)
-		r.Get("/audit/traces", s.listTraces)
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireAdmin)
+			r.Post("/agents", s.createAgent)
+			r.Get("/agents", s.listAgents)
+			r.Get("/agents/{id}", s.getAgent)
+			r.Post("/agent-keys", s.createAgentKey)
+			r.Get("/api-keys", s.listAgentKeys)
+			r.Post("/api-keys", s.createAgentKey)
+			r.Delete("/api-keys/{id}", s.revokeAgentKey)
+			r.Post("/access-grants", s.createAccessGrant)
+			r.Get("/access-grants", s.listAccessGrants)
+			r.Get("/audit/traces", s.listTraces)
+		})
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAgentKey)
 			r.Post("/mcp/agents/{targetId}", s.mcpRPC)
@@ -74,12 +92,27 @@ func localDevCORS(next http.Handler) http.Handler {
 		if _, ok := allowedOrigins[origin]; ok {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Run-Id")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Key, X-Run-Id")
 			w.Header().Set("Vary", "Origin")
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) requireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.adminKey == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		provided := r.Header.Get("X-Admin-Key")
+		if len(provided) != len(s.adminKey) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.adminKey)) != 1 {
+			writeError(w, domain.Unauthorized("missing or invalid admin key"))
+			return
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -235,8 +268,11 @@ func (s *Server) createAgentKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ttl := req.ExpiresInSeconds
-	if ttl <= 0 || ttl > 3600 {
+	if ttl == 0 {
 		ttl = 1800
+	} else if ttl < 0 || ttl > 3600 {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "expiresInSeconds must be between 1 and 3600"))
+		return
 	}
 	plaintext, prefix := security.NewAgentKey()
 	now := s.now()
@@ -293,6 +329,10 @@ func (s *Server) createAccessGrant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	req.CallerID = strings.TrimSpace(req.CallerID)
+	req.TargetID = strings.TrimSpace(req.TargetID)
+	req.RouteType = strings.TrimSpace(req.RouteType)
+	req.RouteKey = strings.TrimSpace(req.RouteKey)
 	if req.CallerID == "" || req.TargetID == "" {
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "callerAgentId and targetAgentId are required"))
 		return
@@ -325,6 +365,15 @@ func (s *Server) createAccessGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) listAccessGrants(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.repo.ListAccessGrants(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
 }
 
 func (s *Server) requireAgentKey(next http.Handler) http.Handler {
@@ -408,7 +457,19 @@ func (s *Server) handleDataPlane(w http.ResponseWriter, r *http.Request, routeTy
 }
 
 func (s *Server) listTraces(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.repo.ListTraces(r.Context(), r.URL.Query().Get("runId"))
+	filter := store.TraceFilter{
+		RunID:    r.URL.Query().Get("runId"),
+		CallerID: r.URL.Query().Get("callerAgentId"),
+		TargetID: r.URL.Query().Get("targetAgentId"),
+	}
+	switch decision := domain.TraceDecision(r.URL.Query().Get("decision")); decision {
+	case "", domain.TraceDecisionAllowed, domain.TraceDecisionDenied:
+		filter.Decision = decision
+	default:
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "decision must be allowed or denied"))
+		return
+	}
+	rows, err := s.repo.ListTraces(r.Context(), filter)
 	if err != nil {
 		writeError(w, err)
 		return

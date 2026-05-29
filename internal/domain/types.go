@@ -43,7 +43,7 @@ type AgentKey struct {
 	Prefix    string    `json:"prefix"`
 	CreatedAt time.Time `json:"createdAt"`
 	ExpiresAt time.Time `json:"expiresAt"`
-	RevokedAt time.Time `json:"revokedAt,omitempty"`
+	RevokedAt time.Time `json:"revokedAt,omitempty,omitzero"`
 }
 
 type CreateAgentKeyRequest struct {
@@ -69,8 +69,8 @@ type AccessGrant struct {
 	RouteType string    `json:"routeType,omitempty"`
 	RouteKey  string    `json:"routeKey,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
-	ExpiresAt time.Time `json:"expiresAt,omitempty"`
-	RevokedAt time.Time `json:"revokedAt,omitempty"`
+	ExpiresAt time.Time `json:"expiresAt,omitempty,omitzero"`
+	RevokedAt time.Time `json:"revokedAt,omitempty,omitzero"`
 }
 
 type CreateAccessGrantRequest struct {

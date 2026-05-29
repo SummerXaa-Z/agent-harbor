@@ -38,7 +38,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -244,6 +246,27 @@ button {
   color: var(--soft);
 }
 
+.admin-key-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(260px, 28vw);
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid #cfd8e1;
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--soft);
+}
+
+.admin-key-box input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+}
+
 .search-box input {
   min-width: 0;
   width: 100%;
@@ -426,6 +449,136 @@ button {
   letter-spacing: 0;
 }
 
+.control-form {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.control-form label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.control-form input,
+.control-form select,
+.control-form textarea,
+.trace-filters input,
+.trace-filters select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d8e0e7;
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 13px;
+  outline: 0;
+}
+
+.control-form input,
+.control-form select,
+.trace-filters input,
+.trace-filters select {
+  height: 34px;
+  padding: 0 9px;
+}
+
+.control-form textarea {
+  min-height: 58px;
+  padding: 8px 9px;
+  resize: vertical;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.form-footer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 34px;
+}
+
+.form-footer span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.primary-button {
+  border: 1px solid #0f7897;
+  background: #0f7897;
+  color: #ffffff;
+}
+
+.secondary-button {
+  border: 1px solid #cfd8e1;
+  background: #ffffff;
+  color: #40505f;
+}
+
+.one-time-key {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #b7dfe9;
+  border-radius: var(--radius);
+  background: #f2fbfd;
+}
+
+.one-time-key strong,
+.one-time-key span {
+  display: block;
+}
+
+.one-time-key strong {
+  color: #1f2a34;
+  font-size: 13px;
+}
+
+.one-time-key span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.one-time-key code {
+  overflow: hidden;
+  padding: 7px 8px;
+  border: 1px solid #cfe6ed;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #23313d;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -439,6 +592,14 @@ table {
 .policy-table,
 .agent-table {
   table-layout: fixed;
+}
+
+.policy-table {
+  min-width: 720px;
+}
+
+.agent-table {
+  min-width: 760px;
 }
 
 .policy-table th:nth-child(1),
@@ -504,9 +665,11 @@ th {
 
 td {
   height: 54px;
+  overflow: hidden;
   padding: 7px 10px;
   border-top: 1px solid #edf1f4;
   color: #33404c;
+  text-overflow: ellipsis;
   vertical-align: middle;
   white-space: nowrap;
 }
@@ -517,9 +680,12 @@ td span {
 }
 
 td strong {
+  overflow: hidden;
   color: #1f2a34;
   font-size: 13px;
   font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 td span {
@@ -779,6 +945,14 @@ td code {
   padding: 4px 14px 10px;
 }
 
+.trace-filters {
+  display: grid;
+  grid-template-columns: 1fr 0.8fr 1fr 1fr auto;
+  gap: 8px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid #edf1f4;
+}
+
 .trace-row {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) 76px;
@@ -838,6 +1012,10 @@ td code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .trace-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .span-4,
   .span-5,
   .span-7,
@@ -883,9 +1061,19 @@ td code {
     width: 100%;
   }
 
+  .topbar-actions {
+    flex-wrap: wrap;
+  }
+
+  .admin-key-box {
+    width: 100%;
+  }
+
   .status-strip,
   .metric-grid,
-  .signal-grid {
+  .signal-grid,
+  .form-row,
+  .trace-filters {
     grid-template-columns: 1fr;
   }
 

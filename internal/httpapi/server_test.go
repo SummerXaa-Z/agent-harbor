@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/httpapi"
@@ -41,8 +42,20 @@ type traceResponse struct {
 	RunID    string `json:"runId"`
 }
 
+type grantResponse struct {
+	ID        string `json:"id"`
+	CallerID  string `json:"callerAgentId"`
+	TargetID  string `json:"targetAgentId"`
+	RouteType string `json:"routeType"`
+	RouteKey  string `json:"routeKey"`
+}
+
 func newRouter() http.Handler {
 	return httpapi.New(store.NewMemory()).Router()
+}
+
+func newRouterWithAdmin(adminKey string) http.Handler {
+	return httpapi.New(store.NewMemory(), httpapi.WithAdminKey(adminKey)).Router()
 }
 
 func TestHealthAndContracts(t *testing.T) {
@@ -94,6 +107,39 @@ func TestLocalDevCORS(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	if rec.Code == http.StatusNoContent {
 		t.Fatalf("disallowed preflight should not be short-circuited")
+	}
+}
+
+func TestAdminKeyProtectsManagementEndpoints(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	missing := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Blocked Caller",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+	}, "")
+	if missing.Code != http.StatusUnauthorized {
+		t.Fatalf("missing admin key should be unauthorized, got %d", missing.Code)
+	}
+
+	wrong := requestWithAdmin(t, router, http.MethodGet, "/api/v1/agents", nil, "", "wrong-admin")
+	if wrong.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong admin key should be unauthorized, got %d", wrong.Code)
+	}
+
+	created := decodeData[agentResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Admin Caller",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+	}, "", "test-admin"))
+	if created.ID == "" {
+		t.Fatalf("expected created agent with admin key: %#v", created)
+	}
+
+	contracts := request(t, router, http.MethodGet, "/api/v1/contracts/channels", nil, "")
+	if contracts.Code != http.StatusOK {
+		t.Fatalf("contracts should remain public, got %d", contracts.Code)
 	}
 }
 
@@ -201,7 +247,18 @@ func TestDataPlaneAllowedDeniedTraces(t *testing.T) {
 	if targetKey.Code != http.StatusBadRequest {
 		t.Fatalf("target agent key should fail, got %d", targetKey.Code)
 	}
-	keys := decodeData[[]keyResponse](t, request(t, router, http.MethodGet, "/api/v1/api-keys", nil, ""))
+	longKey := request(t, router, http.MethodPost, "/api/v1/agent-keys", map[string]any{
+		"agentId":          caller.ID,
+		"expiresInSeconds": 3601,
+	}, "")
+	if longKey.Code != http.StatusBadRequest {
+		t.Fatalf("agent key ttl above one hour should fail, got %d", longKey.Code)
+	}
+	keysResp := request(t, router, http.MethodGet, "/api/v1/api-keys", nil, "")
+	if strings.Contains(keysResp.Body.String(), "0001-01-01") {
+		t.Fatalf("listed keys should omit zero times: %s", keysResp.Body.String())
+	}
+	keys := decodeData[[]keyResponse](t, keysResp)
 	if len(keys) != 1 || keys[0].Key != "" || keys[0].ID != key.ID {
 		t.Fatalf("expected listed key without plaintext, got %#v", keys)
 	}
@@ -215,11 +272,21 @@ func TestDataPlaneAllowedDeniedTraces(t *testing.T) {
 	}
 
 	grantResp := request(t, router, http.MethodPost, "/api/v1/access-grants", map[string]any{
-		"callerAgentId": caller.ID,
-		"targetAgentId": target.ID,
+		"callerAgentId": " " + caller.ID + " ",
+		"targetAgentId": " " + target.ID + " ",
+		"routeType":     " mcp ",
+		"routeKey":      " tools/call ",
 	}, "")
 	if grantResp.Code != http.StatusCreated {
 		t.Fatalf("grant create failed: %d", grantResp.Code)
+	}
+	grantsResp := request(t, router, http.MethodGet, "/api/v1/access-grants", nil, "")
+	if strings.Contains(grantsResp.Body.String(), "0001-01-01") {
+		t.Fatalf("listed grants should omit zero times: %s", grantsResp.Body.String())
+	}
+	grants := decodeData[[]grantResponse](t, grantsResp)
+	if len(grants) != 1 || grants[0].CallerID != caller.ID || grants[0].TargetID != target.ID || grants[0].RouteType != "mcp" || grants[0].RouteKey != "tools/call" {
+		t.Fatalf("unexpected grant list: %#v", grants)
 	}
 
 	allowed := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
@@ -236,6 +303,14 @@ func TestDataPlaneAllowedDeniedTraces(t *testing.T) {
 	}
 	if traces[0].Decision != "denied" || traces[1].Decision != "allowed" {
 		t.Fatalf("expected denied then allowed trace, got %#v", traces)
+	}
+	deniedTraces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces?runId=run-1&decision=denied&callerAgentId="+caller.ID+"&targetAgentId="+target.ID, nil, ""))
+	if len(deniedTraces) != 1 || deniedTraces[0].Decision != "denied" {
+		t.Fatalf("expected one denied trace with filters, got %#v", deniedTraces)
+	}
+	badDecision := request(t, router, http.MethodGet, "/api/v1/audit/traces?decision=maybe", nil, "")
+	if badDecision.Code != http.StatusBadRequest {
+		t.Fatalf("bad decision filter should fail, got %d", badDecision.Code)
 	}
 
 	revoked := request(t, router, http.MethodDelete, "/api/v1/api-keys/"+key.ID, nil, "")
@@ -310,6 +385,16 @@ func request(t *testing.T, router http.Handler, method string, path string, body
 
 func requestWithRunID(t *testing.T, router http.Handler, method string, path string, body any, bearer string, runID string) *httptest.ResponseRecorder {
 	t.Helper()
+	return requestWithRunIDAndAdmin(t, router, method, path, body, bearer, runID, "")
+}
+
+func requestWithAdmin(t *testing.T, router http.Handler, method string, path string, body any, bearer string, adminKey string) *httptest.ResponseRecorder {
+	t.Helper()
+	return requestWithRunIDAndAdmin(t, router, method, path, body, bearer, "", adminKey)
+}
+
+func requestWithRunIDAndAdmin(t *testing.T, router http.Handler, method string, path string, body any, bearer string, runID string, adminKey string) *httptest.ResponseRecorder {
+	t.Helper()
 	var payload bytes.Buffer
 	if body != nil {
 		if err := json.NewEncoder(&payload).Encode(body); err != nil {
@@ -323,6 +408,9 @@ func requestWithRunID(t *testing.T, router http.Handler, method string, path str
 	}
 	if runID != "" {
 		req.Header.Set("X-Run-Id", runID)
+	}
+	if adminKey != "" {
+		req.Header.Set("X-Admin-Key", adminKey)
 	}
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)

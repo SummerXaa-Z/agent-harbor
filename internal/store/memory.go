@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,9 +19,17 @@ type Repository interface {
 	RevokeAgentKey(context.Context, string, time.Time) (domain.AgentKey, bool, error)
 	FindAgentByKeyHash(context.Context, string, time.Time) (domain.Agent, bool, error)
 	CreateAccessGrant(context.Context, domain.AccessGrant) (domain.AccessGrant, error)
+	ListAccessGrants(context.Context) ([]domain.AccessGrant, error)
 	HasGrant(context.Context, string, string, string, string, time.Time) bool
 	AppendTrace(context.Context, domain.TraceEvent) (domain.TraceEvent, error)
-	ListTraces(context.Context, string) ([]domain.TraceEvent, error)
+	ListTraces(context.Context, TraceFilter) ([]domain.TraceEvent, error)
+}
+
+type TraceFilter struct {
+	RunID    string
+	Decision domain.TraceDecision
+	CallerID string
+	TargetID string
 }
 
 type Memory struct {
@@ -56,6 +65,12 @@ func (m *Memory) ListAgents(_ context.Context, workspaceID string) ([]domain.Age
 			rows = append(rows, agent)
 		}
 	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
 	return rows, nil
 }
 
@@ -80,6 +95,12 @@ func (m *Memory) ListAgentKeys(_ context.Context) ([]domain.AgentKey, error) {
 	for _, key := range m.keys {
 		rows = append(rows, key)
 	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
 	return rows, nil
 }
 
@@ -118,6 +139,22 @@ func (m *Memory) CreateAccessGrant(_ context.Context, grant domain.AccessGrant) 
 	return grant, nil
 }
 
+func (m *Memory) ListAccessGrants(_ context.Context) ([]domain.AccessGrant, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rows := make([]domain.AccessGrant, 0, len(m.grants))
+	for _, grant := range m.grants {
+		rows = append(rows, grant)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
+	return rows, nil
+}
+
 func (m *Memory) HasGrant(_ context.Context, callerID string, targetID string, routeType string, routeKey string, now time.Time) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -144,14 +181,30 @@ func (m *Memory) AppendTrace(_ context.Context, event domain.TraceEvent) (domain
 	return event, nil
 }
 
-func (m *Memory) ListTraces(_ context.Context, runID string) ([]domain.TraceEvent, error) {
+func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.TraceEvent, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	rows := make([]domain.TraceEvent, 0, len(m.traces))
 	for _, trace := range m.traces {
-		if runID == "" || trace.RunID == runID {
-			rows = append(rows, trace)
+		if filter.RunID != "" && trace.RunID != filter.RunID {
+			continue
 		}
+		if filter.Decision != "" && trace.Decision != filter.Decision {
+			continue
+		}
+		if filter.CallerID != "" && trace.CallerID != filter.CallerID {
+			continue
+		}
+		if filter.TargetID != "" && trace.TargetID != filter.TargetID {
+			continue
+		}
+		rows = append(rows, trace)
 	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
 	return rows, nil
 }

@@ -17,7 +17,7 @@ Caller Agent
   -> trace evidence
 ```
 
-Management APIs in this skeleton are intentionally unauthenticated so local tests and clean-room iteration stay frictionless. Do not expose this process outside a developer machine until admin auth, tenant scoping, and persistence are added.
+Management APIs stay open by default for local tests and clean-room iteration. Set `AGENT_HARBOR_ADMIN_KEY` before exposing the process outside a developer machine so management and audit endpoints require `X-Admin-Key`; the data plane continues to use short-lived Agent Keys.
 
 ## Run
 
@@ -33,6 +33,44 @@ The service listens on `:9090` by default. Override with:
 AGENT_HARBOR_ADDR=:9091 go run ./cmd/agent-harbor
 ```
 
+## Sprint 1 Demo
+
+With the API running, use the governance-loop demo script to exercise the end-to-end control plane and data plane:
+
+```bash
+bash scripts/demo-governance-loop.sh
+```
+
+The script defaults to `BASE_URL=http://127.0.0.1:9090`. It creates a local caller Agent, an MCP target Agent, a short-lived Agent Key, proves the MCP data-plane call is denied before a grant, creates an Access Grant, proves the call is allowed, then checks run traces for both `denied` and `allowed` decisions.
+
+Override the target service or run id when needed:
+
+```bash
+BASE_URL=http://127.0.0.1:9091 RUN_ID=demo-manual-1 bash scripts/demo-governance-loop.sh
+```
+
+## Admin Key
+
+Management APIs are open by default for local clean-room iteration. If `AGENT_HARBOR_ADMIN_KEY` is set on the server, management endpoints require the same value in `X-Admin-Key`.
+
+```bash
+AGENT_HARBOR_ADMIN_KEY=local-admin-key go run ./cmd/agent-harbor
+ADMIN_KEY=local-admin-key bash scripts/demo-governance-loop.sh
+```
+
+The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the admin key only protects management and audit APIs. Agent Key TTLs must be between 1 and 3600 seconds, with a 1800 second server default when omitted.
+
+## PostgreSQL Env
+
+Sprint 1 persistence is configured with `AGENT_HARBOR_DATABASE_URL`. When the variable is unset, the service uses the in-memory repository for local development. When it is set, the service should migrate and use PostgreSQL:
+
+```bash
+AGENT_HARBOR_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' \
+  go run ./cmd/agent-harbor
+```
+
+PostgreSQL integration tests use `AGENT_HARBOR_TEST_DATABASE_URL` when present.
+
 ## Frontend
 
 `frontend/` is a clean-room Vite + React + TypeScript enterprise console. It must not copy source code, styles, component structure, generated assets, or mock data from the legacy `web/` implementation.
@@ -44,7 +82,7 @@ pnpm build
 pnpm dev
 ```
 
-The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it defaults to `http://127.0.0.1:9090`. When the backend is unavailable during local development, the UI uses mock fallback data so the console remains navigable. When the backend is reachable, catalog, agent, and trace data come from the Go runtime; route policies, evidence runs, and runtime signals remain local sample panels until those APIs exist.
+The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it defaults to `http://127.0.0.1:9090`. When the backend is unavailable during local development, the UI uses mock fallback data so the console remains navigable. When the backend is reachable, catalog, agent, access grant, and trace data come from the Go runtime; evidence runs and runtime signals remain local sample panels until those APIs exist.
 
 ## Current API
 
@@ -59,6 +97,7 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 - `POST /api/v1/api-keys`
 - `DELETE /api/v1/api-keys/{id}`
 - `POST /api/v1/access-grants`
+- `GET /api/v1/access-grants`
 - `POST /api/v1/mcp/agents/{targetId}`
 - `POST /api/v1/mcp/agents/{targetId}/rpc`
 - `POST /api/v1/openapi/agents/{targetId}/operations/{operationId}`
@@ -67,8 +106,8 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 
 ## Next Milestones
 
-- Add PostgreSQL persistence via `pgx/v5`, `sqlc`, and `goose`.
+- Add tenant/workspace scoping across management reads and writes.
 - Add OpenAPI relative-path proxying with traversal protection.
 - Add MCP `initialize`, `tools/list`, `tools/call` method-level policy.
-- Add API-key revoke/list for cleanup residue checks.
+- Add agent/access-grant revoke APIs for cleanup residue checks.
 - Add OTel spans and metrics for route/caller/target dimensions.

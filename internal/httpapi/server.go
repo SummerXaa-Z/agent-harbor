@@ -104,6 +104,10 @@ func (s *Server) Router() http.Handler {
 			r.Post("/access-grants", s.createAccessGrant)
 			r.Get("/access-grants", s.listAccessGrants)
 			r.Delete("/access-grants/{id}", s.revokeAccessGrant)
+			r.Post("/route-policies", s.createRoutePolicy)
+			r.Get("/route-policies", s.listRoutePolicies)
+			r.Patch("/route-policies/{id}", s.updateRoutePolicy)
+			r.Delete("/route-policies/{id}", s.disableRoutePolicy)
 			r.Get("/audit/events", s.listAuditEvents)
 			r.Get("/audit/traces", s.listTraces)
 			r.Get("/metrics/runtime", s.runtimeMetrics)
@@ -650,6 +654,183 @@ func (s *Server) revokeAccessGrant(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, grant)
 }
 
+func (s *Server) createRoutePolicy(w http.ResponseWriter, r *http.Request) {
+	var req domain.CreateRoutePolicyRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	req.CallerID = strings.TrimSpace(req.CallerID)
+	req.TargetID = strings.TrimSpace(req.TargetID)
+	req.RouteType = strings.TrimSpace(req.RouteType)
+	req.RouteKey = strings.TrimSpace(req.RouteKey)
+	if req.CallerID == "" || req.TargetID == "" {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "callerAgentId and targetAgentId are required"))
+		return
+	}
+	if req.RouteType == "" {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "routeType is required"))
+		return
+	}
+	effect, err := normalizeRoutePolicyEffect(req.Effect, domain.RoutePolicyEffectAllow)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	status, err := normalizeRoutePolicyStatus(req.Status, domain.RoutePolicyStatusEnabled)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	priority, err := normalizeRoutePolicyPriority(req.Priority)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	caller, ok, err := s.repo.GetAgent(r.Context(), req.CallerID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("caller agent not found"))
+		return
+	}
+	target, ok, err := s.repo.GetAgent(r.Context(), req.TargetID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("target agent not found"))
+		return
+	}
+	if caller.TenantID != target.TenantID || caller.WorkspaceID != target.WorkspaceID {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "caller and target agents must be in the same tenant and workspace for route policies"))
+		return
+	}
+	if req.Name == "" {
+		req.Name = defaultRoutePolicyName(req.RouteType, req.RouteKey, effect)
+	}
+	now := s.now()
+	policy := domain.RoutePolicy{
+		ID:          security.NewID("rpl"),
+		TenantID:    caller.TenantID,
+		WorkspaceID: caller.WorkspaceID,
+		Name:        req.Name,
+		CallerID:    caller.ID,
+		TargetID:    target.ID,
+		RouteType:   req.RouteType,
+		RouteKey:    req.RouteKey,
+		Effect:      effect,
+		Status:      status,
+		Priority:    priority,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	created, err := s.repo.CreateRoutePolicy(r.Context(), policy)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	s.recordManagementAudit(r, created.TenantID, created.WorkspaceID, "route_policy.created", "route_policy", created.ID, "Route policy created", routePolicyAuditMetadata(created))
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) listRoutePolicies(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.repo.ListRoutePolicies(r.Context(), managementScopeFromRequest(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
+func (s *Server) updateRoutePolicy(w http.ResponseWriter, r *http.Request) {
+	policyID := chi.URLParam(r, "id")
+	existing, ok, err := s.repo.GetRoutePolicy(r.Context(), policyID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("route policy not found"))
+		return
+	}
+	var req domain.UpdateRoutePolicyRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	policy := existing
+	if req.Name != nil {
+		policy.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.RouteType != nil {
+		policy.RouteType = strings.TrimSpace(*req.RouteType)
+	}
+	if req.RouteKey != nil {
+		policy.RouteKey = strings.TrimSpace(*req.RouteKey)
+	}
+	if policy.RouteType == "" {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "routeType is required"))
+		return
+	}
+	if req.Effect != nil {
+		effect, err := normalizeRoutePolicyEffect(*req.Effect, existing.Effect)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		policy.Effect = effect
+	}
+	if req.Status != nil {
+		status, err := normalizeRoutePolicyStatus(*req.Status, existing.Status)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		policy.Status = status
+	}
+	if req.Priority != nil {
+		if *req.Priority < 0 {
+			writeError(w, domain.BadRequest("VALIDATION_FAILED", "priority must be zero or greater"))
+			return
+		}
+		policy.Priority = *req.Priority
+	}
+	if policy.Name == "" {
+		policy.Name = defaultRoutePolicyName(policy.RouteType, policy.RouteKey, policy.Effect)
+	}
+	policy.UpdatedAt = s.now()
+	updated, ok, err := s.repo.UpdateRoutePolicy(r.Context(), policy)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("route policy not found"))
+		return
+	}
+	s.recordManagementAudit(r, updated.TenantID, updated.WorkspaceID, "route_policy.updated", "route_policy", updated.ID, "Route policy updated", routePolicyAuditMetadata(updated))
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *Server) disableRoutePolicy(w http.ResponseWriter, r *http.Request) {
+	policy, ok, err := s.repo.DisableRoutePolicy(r.Context(), chi.URLParam(r, "id"), s.now())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("route policy not found"))
+		return
+	}
+	s.recordManagementAudit(r, policy.TenantID, policy.WorkspaceID, "route_policy.disabled", "route_policy", policy.ID, "Route policy disabled", routePolicyAuditMetadata(policy))
+	writeJSON(w, http.StatusOK, policy)
+}
+
 func (s *Server) requireAgentKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := security.BearerToken(r.Header.Get("Authorization"))
@@ -702,8 +883,16 @@ func (s *Server) openapiRelativePath(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDataPlane(w http.ResponseWriter, r *http.Request, routeType string, routeKey string) {
 	caller := callerFromContext(r.Context())
 	targetID := chi.URLParam(r, "targetId")
-	if !s.repo.HasGrant(r.Context(), caller.ID, targetID, routeType, routeKey, s.now()) {
-		reason := "caller has no access grant for target route"
+	decision, err := s.repo.EvaluateRouteAccess(r.Context(), caller.ID, targetID, routeType, routeKey, s.now())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !decision.Allowed {
+		reason := decision.Reason
+		if reason == "" {
+			reason = "caller has no route policy or access grant for target route"
+		}
 		if _, err := s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionDenied, reason, proxyTraceResult{}); err != nil {
 			writeError(w, err)
 			return
@@ -729,8 +918,12 @@ func (s *Server) handleDataPlane(w http.ResponseWriter, r *http.Request, routeTy
 		writeError(w, domain.PermissionDenied(reason))
 		return
 	}
+	allowedReason := decision.Reason
+	if allowedReason == "" {
+		allowedReason = "access grant matched"
+	}
 	recordAllowedTrace := func(result proxyTraceResult) (domain.TraceEvent, error) {
-		return s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionAllowed, "access grant matched", result)
+		return s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionAllowed, allowedReason, result)
 	}
 	if s.proxyUpstreamIfConfigured(w, r, target, routeType, routeKey, recordAllowedTrace) {
 		return
@@ -1542,6 +1735,56 @@ func managementActor(r *http.Request) string {
 		return "admin-key"
 	}
 	return "local-dev"
+}
+
+func normalizeRoutePolicyEffect(value domain.RoutePolicyEffect, fallback domain.RoutePolicyEffect) (domain.RoutePolicyEffect, error) {
+	if value == "" {
+		return fallback, nil
+	}
+	if value != domain.RoutePolicyEffectAllow && value != domain.RoutePolicyEffectDeny {
+		return "", domain.BadRequest("VALIDATION_FAILED", "effect must be allow or deny")
+	}
+	return value, nil
+}
+
+func normalizeRoutePolicyStatus(value domain.RoutePolicyStatus, fallback domain.RoutePolicyStatus) (domain.RoutePolicyStatus, error) {
+	if value == "" {
+		return fallback, nil
+	}
+	if value != domain.RoutePolicyStatusEnabled && value != domain.RoutePolicyStatusDisabled {
+		return "", domain.BadRequest("VALIDATION_FAILED", "status must be enabled or disabled")
+	}
+	return value, nil
+}
+
+func normalizeRoutePolicyPriority(value *int) (int, error) {
+	if value == nil {
+		return 100, nil
+	}
+	if *value < 0 {
+		return 0, domain.BadRequest("VALIDATION_FAILED", "priority must be zero or greater")
+	}
+	return *value, nil
+}
+
+func defaultRoutePolicyName(routeType string, routeKey string, effect domain.RoutePolicyEffect) string {
+	key := routeKey
+	if key == "" {
+		key = "*"
+	}
+	return string(effect) + " " + routeType + ":" + key
+}
+
+func routePolicyAuditMetadata(policy domain.RoutePolicy) map[string]any {
+	return map[string]any{
+		"callerAgentId": policy.CallerID,
+		"targetAgentId": policy.TargetID,
+		"routeType":     policy.RouteType,
+		"routeKey":      policy.RouteKey,
+		"effect":        policy.Effect,
+		"status":        policy.Status,
+		"priority":      policy.Priority,
+	}
 }
 
 func initialCredentialVersion(credentials map[string]string) int {

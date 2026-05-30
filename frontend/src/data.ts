@@ -263,6 +263,8 @@ export const sampleAuditEvents: AuditEvent[] = [
 export const routePolicies: RoutePolicy[] = [
   {
     id: 'pol_001',
+    tenantId: 'default',
+    workspaceId: 'workspace-demo',
     name: 'Console to policy router',
     callerAgentId: 'agt_console_ops',
     targetAgentId: 'agt_policy_router',
@@ -273,9 +275,12 @@ export const routePolicies: RoutePolicy[] = [
     priority: 10,
     lastMatchedAt: '2026-05-29T08:45:11Z',
     createdAt: '2026-05-20T03:00:00Z',
+    updatedAt: '2026-05-20T03:00:00Z',
   },
   {
     id: 'pol_002',
+    tenantId: 'default',
+    workspaceId: 'workspace-demo',
     name: 'Console knowledge search',
     callerAgentId: 'agt_console_ops',
     targetAgentId: 'agt_knowledge_gateway',
@@ -286,9 +291,12 @@ export const routePolicies: RoutePolicy[] = [
     priority: 20,
     lastMatchedAt: '2026-05-29T08:51:27Z',
     createdAt: '2026-05-22T09:00:00Z',
+    updatedAt: '2026-05-22T09:00:00Z',
   },
   {
     id: 'pol_003',
+    tenantId: 'default',
+    workspaceId: 'workspace-demo',
     name: 'Webhook export safeguard',
     callerAgentId: 'agt_review_webhook',
     targetAgentId: 'agt_knowledge_gateway',
@@ -299,6 +307,7 @@ export const routePolicies: RoutePolicy[] = [
     priority: 5,
     lastMatchedAt: '2026-05-29T09:02:44Z',
     createdAt: '2026-05-25T12:00:00Z',
+    updatedAt: '2026-05-25T12:00:00Z',
   },
 ]
 

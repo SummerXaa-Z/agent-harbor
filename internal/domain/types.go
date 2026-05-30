@@ -108,6 +108,63 @@ type CreateAccessGrantRequest struct {
 	RouteKey  string `json:"routeKey"`
 }
 
+type RoutePolicyEffect string
+
+const (
+	RoutePolicyEffectAllow RoutePolicyEffect = "allow"
+	RoutePolicyEffectDeny  RoutePolicyEffect = "deny"
+)
+
+type RoutePolicyStatus string
+
+const (
+	RoutePolicyStatusEnabled  RoutePolicyStatus = "enabled"
+	RoutePolicyStatusDisabled RoutePolicyStatus = "disabled"
+)
+
+type RoutePolicy struct {
+	ID          string            `json:"id"`
+	TenantID    string            `json:"tenantId"`
+	WorkspaceID string            `json:"workspaceId"`
+	Name        string            `json:"name"`
+	CallerID    string            `json:"callerAgentId"`
+	TargetID    string            `json:"targetAgentId"`
+	RouteType   string            `json:"routeType"`
+	RouteKey    string            `json:"routeKey,omitempty"`
+	Effect      RoutePolicyEffect `json:"effect"`
+	Status      RoutePolicyStatus `json:"status"`
+	Priority    int               `json:"priority"`
+	CreatedAt   time.Time         `json:"createdAt"`
+	UpdatedAt   time.Time         `json:"updatedAt"`
+}
+
+type CreateRoutePolicyRequest struct {
+	Name      string            `json:"name"`
+	CallerID  string            `json:"callerAgentId"`
+	TargetID  string            `json:"targetAgentId"`
+	RouteType string            `json:"routeType"`
+	RouteKey  string            `json:"routeKey"`
+	Effect    RoutePolicyEffect `json:"effect"`
+	Status    RoutePolicyStatus `json:"status"`
+	Priority  *int              `json:"priority"`
+}
+
+type UpdateRoutePolicyRequest struct {
+	Name      *string            `json:"name"`
+	RouteType *string            `json:"routeType"`
+	RouteKey  *string            `json:"routeKey"`
+	Effect    *RoutePolicyEffect `json:"effect"`
+	Status    *RoutePolicyStatus `json:"status"`
+	Priority  *int               `json:"priority"`
+}
+
+type RouteAccessDecision struct {
+	Allowed  bool   `json:"allowed"`
+	Source   string `json:"source"`
+	PolicyID string `json:"policyId,omitempty"`
+	Reason   string `json:"reason"`
+}
+
 type TraceDecision string
 
 const (

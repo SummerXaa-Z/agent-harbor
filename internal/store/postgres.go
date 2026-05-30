@@ -306,6 +306,147 @@ func (p *Postgres) HasGrant(ctx context.Context, callerID string, targetID strin
 	return err == nil && exists
 }
 
+func (p *Postgres) CreateRoutePolicy(ctx context.Context, policy domain.RoutePolicy) (domain.RoutePolicy, error) {
+	_, err := p.pool.Exec(ctx, `
+		insert into route_policies (
+			id, tenant_id, workspace_id, name, caller_agent_id, target_agent_id,
+			route_type, route_key, effect, status, priority, created_at, updated_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+	`, policy.ID, policy.TenantID, policy.WorkspaceID, policy.Name, policy.CallerID, policy.TargetID,
+		policy.RouteType, policy.RouteKey, string(policy.Effect), string(policy.Status), policy.Priority,
+		policy.CreatedAt, policy.UpdatedAt)
+	if err != nil {
+		return domain.RoutePolicy{}, fmt.Errorf("insert route policy: %w", err)
+	}
+	return policy, nil
+}
+
+func (p *Postgres) ListRoutePolicies(ctx context.Context, scope ManagementScope) ([]domain.RoutePolicy, error) {
+	query := `
+		select id, tenant_id, workspace_id, name, caller_agent_id, target_agent_id,
+			route_type, route_key, effect, status, priority, created_at, updated_at
+		from route_policies
+		where 1=1
+	`
+	args := []any{}
+	add := func(sql string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(" and "+sql, len(args))
+	}
+	if strings.TrimSpace(scope.TenantID) != "" {
+		add("tenant_id=$%d", strings.TrimSpace(scope.TenantID))
+	}
+	if strings.TrimSpace(scope.WorkspaceID) != "" {
+		add("workspace_id=$%d", strings.TrimSpace(scope.WorkspaceID))
+	}
+	query += " order by created_at asc, id asc"
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list route policies: %w", err)
+	}
+	defer rows.Close()
+	return scanRoutePolicies(rows)
+}
+
+func (p *Postgres) GetRoutePolicy(ctx context.Context, id string) (domain.RoutePolicy, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select id, tenant_id, workspace_id, name, caller_agent_id, target_agent_id,
+			route_type, route_key, effect, status, priority, created_at, updated_at
+		from route_policies
+		where id=$1
+	`, id)
+	policy, err := scanRoutePolicy(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.RoutePolicy{}, false, nil
+	}
+	if err != nil {
+		return domain.RoutePolicy{}, false, fmt.Errorf("get route policy: %w", err)
+	}
+	return policy, true, nil
+}
+
+func (p *Postgres) UpdateRoutePolicy(ctx context.Context, policy domain.RoutePolicy) (domain.RoutePolicy, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		update route_policies
+		set name=$2, route_type=$3, route_key=$4, effect=$5, status=$6, priority=$7, updated_at=$8
+		where id=$1
+		returning id, tenant_id, workspace_id, name, caller_agent_id, target_agent_id,
+			route_type, route_key, effect, status, priority, created_at, updated_at
+	`, policy.ID, policy.Name, policy.RouteType, policy.RouteKey, string(policy.Effect),
+		string(policy.Status), policy.Priority, policy.UpdatedAt)
+	updated, err := scanRoutePolicy(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.RoutePolicy{}, false, nil
+	}
+	if err != nil {
+		return domain.RoutePolicy{}, false, fmt.Errorf("update route policy: %w", err)
+	}
+	return updated, true, nil
+}
+
+func (p *Postgres) DisableRoutePolicy(ctx context.Context, id string, now time.Time) (domain.RoutePolicy, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		update route_policies
+		set status=$2, updated_at=$3
+		where id=$1
+		returning id, tenant_id, workspace_id, name, caller_agent_id, target_agent_id,
+			route_type, route_key, effect, status, priority, created_at, updated_at
+	`, id, string(domain.RoutePolicyStatusDisabled), now)
+	policy, err := scanRoutePolicy(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.RoutePolicy{}, false, nil
+	}
+	if err != nil {
+		return domain.RoutePolicy{}, false, fmt.Errorf("disable route policy: %w", err)
+	}
+	return policy, true, nil
+}
+
+func (p *Postgres) EvaluateRouteAccess(ctx context.Context, callerID string, targetID string, routeType string, routeKey string, now time.Time) (domain.RouteAccessDecision, error) {
+	row := p.pool.QueryRow(ctx, `
+		select route_policies.id, route_policies.tenant_id, route_policies.workspace_id, route_policies.name,
+			route_policies.caller_agent_id, route_policies.target_agent_id,
+			route_policies.route_type, route_policies.route_key, route_policies.effect,
+			route_policies.status, route_policies.priority, route_policies.created_at, route_policies.updated_at
+		from route_policies
+		join agents c on c.id = route_policies.caller_agent_id
+		join agents t on t.id = route_policies.target_agent_id
+		where route_policies.caller_agent_id=$1
+			and route_policies.target_agent_id=$2
+			and route_policies.tenant_id = c.tenant_id
+			and route_policies.workspace_id = c.workspace_id
+			and t.tenant_id = c.tenant_id
+			and t.workspace_id = c.workspace_id
+			and route_policies.status=$3
+			and (route_policies.route_type='' or route_policies.route_type=$4)
+			and (route_policies.route_key='' or route_policies.route_key=$5)
+		order by route_policies.priority desc,
+			case when route_policies.effect=$6 then 0 else 1 end asc,
+			route_policies.created_at asc,
+			route_policies.id asc
+		limit 1
+	`, callerID, targetID, string(domain.RoutePolicyStatusEnabled), routeType, routeKey, string(domain.RoutePolicyEffectDeny))
+	policy, err := scanRoutePolicy(row)
+	if err == nil {
+		return routePolicyDecision(policy), nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return domain.RouteAccessDecision{}, fmt.Errorf("evaluate route policy: %w", err)
+	}
+	if p.HasGrant(ctx, callerID, targetID, routeType, routeKey, now) {
+		return domain.RouteAccessDecision{
+			Allowed: true,
+			Source:  "access_grant",
+			Reason:  "access grant matched",
+		}, nil
+	}
+	return domain.RouteAccessDecision{
+		Allowed: false,
+		Source:  "none",
+		Reason:  "caller has no route policy or access grant for target route",
+	}, nil
+}
+
 func (p *Postgres) AppendTrace(ctx context.Context, event domain.TraceEvent) (domain.TraceEvent, error) {
 	_, err := p.pool.Exec(ctx, `
 		insert into trace_events (
@@ -527,6 +668,35 @@ func scanAccessGrant(row scanner) (domain.AccessGrant, error) {
 		grant.RevokedAt = *revokedAt
 	}
 	return grant, nil
+}
+
+func scanRoutePolicies(rows pgx.Rows) ([]domain.RoutePolicy, error) {
+	var out []domain.RoutePolicy
+	for rows.Next() {
+		policy, err := scanRoutePolicy(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, policy)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanRoutePolicy(row scanner) (domain.RoutePolicy, error) {
+	var policy domain.RoutePolicy
+	var effect string
+	var status string
+	if err := row.Scan(&policy.ID, &policy.TenantID, &policy.WorkspaceID, &policy.Name,
+		&policy.CallerID, &policy.TargetID, &policy.RouteType, &policy.RouteKey, &effect,
+		&status, &policy.Priority, &policy.CreatedAt, &policy.UpdatedAt); err != nil {
+		return domain.RoutePolicy{}, err
+	}
+	policy.Effect = domain.RoutePolicyEffect(effect)
+	policy.Status = domain.RoutePolicyStatus(status)
+	return policy, nil
 }
 
 func scanTraceEvents(rows pgx.Rows) ([]domain.TraceEvent, error) {

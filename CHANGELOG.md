@@ -1,3 +1,46 @@
+## [2026-05-30 21:58] Session: Sprint 9 Route Policy Objects
+
+### 完成
+- 新增 Sprint 9 brief / design / implementation plan，范围聚焦 route policy objects、优先级、显式 allow/deny 和 legacy grant fallback。
+- 新增 `RoutePolicy` domain model、create/update request、`RouteAccessDecision`，并扩展 repository contract。
+- 新增 `POST/GET/PATCH/DELETE /api/v1/route-policies` 管理接口；`DELETE` 语义为 disable，保留治理表稳定性。
+- 数据面从 `HasGrant` 直查改为 `EvaluateRouteAccess`：enabled route policy 优先，按 priority 排序，deny tie-break，未命中时回退 access grant。
+- Memory / PostgreSQL repository 支持 route policy CRUD、排序评估、scope listing；新增 `005_sprint9_route_policies.sql`。
+- 管理审计新增 `route_policy.created`、`route_policy.updated`、`route_policy.disabled`，metadata 只记录 caller/target/route/effect/status/priority。
+- 根据 review 修复：RoutePolicy 创建拒绝跨 tenant/workspace caller-target 组合，数据面评估也会忽略直接写入的跨 scope policy，避免 target 侧治理盲区。
+- 根据二轮 review 修复：`POST /route-policies` 使用 `*int` 区分 omitted priority 和显式 `0`，避免把最低优先级策略静默提升为默认 100。
+- 前端 Route Governance 改为直接读写 `/route-policies`，Create Grant 改为 Create Policy，表格动作改为 Disable policy。
+- 新增 `scripts/demo-sprint9-route-policies.sh`，覆盖无策略拒绝、allow 放行、高优先级 deny 拦截、降低 deny priority 后 allow 胜出、disable allow 后 deny 生效。
+
+### 决策
+- RoutePolicy scope 使用 caller Agent 的 `tenantId/workspaceId`，便于控制面按发起方治理归属过滤。
+- 不迁移已有 access grants；Sprint 9 保持 legacy fallback，避免破坏之前 demo 和现有数据面调用。
+- Sprint 9 暂不支持跨 tenant/workspace route policy；如果后续需要跨 workspace/tenant 路由，要显式建模 source/target scope 和双方可见性。
+- 策略排序采用 higher priority wins；同优先级 deny wins；再按 createdAt / id 固定顺序，保证 memory 和 PostgreSQL 行为一致。
+
+### 血泪教训
+- 本次一开始用相对路径写 Sprint 9 文档，误落到旧 `ai-nexus` 工作区；已删除误落文件并用绝对路径补回 AgentHarbor。后续跨仓库上下文里新增文件必须优先用绝对路径确认目标。
+
+### 验证
+- TDD red/green: `/api/v1/route-policies` 404 → CRUD + audit 通过。
+- TDD red/green: legacy grant 先 allow → 高优先级 deny policy 拦截 → 更高优先级 allow policy 放行 → disable allow 后 deny 生效。
+- Review fix red/green: 跨 scope policy 起初可创建并在数据面生效 → 现在 API 返回 400，直接写 repo 的跨 scope policy 也不会匹配。
+- Review fix red/green: 显式 `priority: 0` 起初会被 create 默认成 100 → 现在保存为 0，`priority=50` 的 deny 可以正确压过 `priority=0` 的 allow。
+- `go test ./...`
+- `npm --prefix frontend run build`
+- `ADMIN_KEY=local-admin-key bash scripts/demo-sprint9-route-policies.sh` against local API
+- `go vet ./... && go build ./... && git diff --check`
+- `AGENT_HARBOR_TEST_DATABASE_URL=... go test ./internal/store -run TestPostgresRepositoryRoundTrip -count=1`（临时 PostgreSQL 16 容器）
+- Playwright smoke for Create Policy / Route Governance / Active Policies / Management Audit against live local backend + Vite dev server
+
+### 影响文件
+- `internal/domain/types.go`：新增 route policy 和 route access decision 类型。
+- `internal/httpapi/server.go` / `server_test.go`：route policy API、数据面鉴权切换、HTTP tests。
+- `internal/store/memory.go` / `postgres.go` / `postgres_test.go`：route policy persistence/evaluation 和 PostgreSQL round-trip。
+- `internal/db/migrations/005_sprint9_route_policies.sql`：新增 route_policies 表和索引。
+- `frontend/src/App.tsx` / `api.ts` / `types.ts` / `data.ts`：Route Governance 读写 policy API。
+- `scripts/demo-sprint9-route-policies.sh`、`README.md`、`docs/sprints/`、`docs/superpowers/`：Sprint 9 行为记录。
+
 ## [2026-05-30 21:10] Session: Sprint 8 Management Audit and Credential Versions
 
 ### 完成

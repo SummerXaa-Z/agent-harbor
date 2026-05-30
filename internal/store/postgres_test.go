@@ -67,6 +67,20 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	if _, err := repo.CreateAgent(ctx, target); err != nil {
 		t.Fatalf("create target: %v", err)
 	}
+	crossScopeTarget := domain.Agent{
+		ID:            security.NewID("agt"),
+		TenantID:      "other",
+		WorkspaceID:   "ws-other",
+		Name:          "PG Cross Scope Target",
+		ChannelType:   "mcp",
+		ChannelConfig: map[string]any{},
+		Status:        domain.AgentStatusActive,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	if _, err := repo.CreateAgent(ctx, crossScopeTarget); err != nil {
+		t.Fatalf("create cross-scope target: %v", err)
+	}
 	agents, err := repo.ListAgents(ctx, store.AgentFilter{ManagementScope: store.ManagementScope{
 		TenantID:    "test",
 		WorkspaceID: "ws-pg",
@@ -165,6 +179,75 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	}
 	if len(grants) == 0 {
 		t.Fatalf("expected grant rows")
+	}
+	denyPolicy := domain.RoutePolicy{
+		ID:          security.NewID("rpl"),
+		TenantID:    caller.TenantID,
+		WorkspaceID: caller.WorkspaceID,
+		Name:        "PG deny call",
+		CallerID:    caller.ID,
+		TargetID:    target.ID,
+		RouteType:   "mcp",
+		RouteKey:    "tools/call",
+		Effect:      domain.RoutePolicyEffectDeny,
+		Status:      domain.RoutePolicyStatusEnabled,
+		Priority:    100,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if _, err := repo.CreateRoutePolicy(ctx, denyPolicy); err != nil {
+		t.Fatalf("create route policy: %v", err)
+	}
+	decision, err := repo.EvaluateRouteAccess(ctx, caller.ID, target.ID, "mcp", "tools/call", now)
+	if err != nil {
+		t.Fatalf("evaluate denied route policy: %v", err)
+	}
+	if decision.Allowed || decision.Source != "route_policy" || decision.PolicyID != denyPolicy.ID {
+		t.Fatalf("expected deny route policy to override grant, got %#v", decision)
+	}
+	policies, err := repo.ListRoutePolicies(ctx, store.ManagementScope{TenantID: "test", WorkspaceID: "ws-pg"})
+	if err != nil {
+		t.Fatalf("list route policies: %v", err)
+	}
+	if len(policies) != 1 || policies[0].ID != denyPolicy.ID {
+		t.Fatalf("unexpected route policies: %#v", policies)
+	}
+	crossScopePolicy := domain.RoutePolicy{
+		ID:          security.NewID("rpl"),
+		TenantID:    caller.TenantID,
+		WorkspaceID: caller.WorkspaceID,
+		Name:        "PG cross scope allow",
+		CallerID:    caller.ID,
+		TargetID:    crossScopeTarget.ID,
+		RouteType:   "mcp",
+		RouteKey:    "tools/call",
+		Effect:      domain.RoutePolicyEffectAllow,
+		Status:      domain.RoutePolicyStatusEnabled,
+		Priority:    500,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if _, err := repo.CreateRoutePolicy(ctx, crossScopePolicy); err != nil {
+		t.Fatalf("create cross-scope route policy: %v", err)
+	}
+	decision, err = repo.EvaluateRouteAccess(ctx, caller.ID, crossScopeTarget.ID, "mcp", "tools/call", now)
+	if err != nil {
+		t.Fatalf("evaluate cross-scope route policy: %v", err)
+	}
+	if decision.Allowed {
+		t.Fatalf("cross-scope route policy should be ignored, got %#v", decision)
+	}
+	if _, ok, err := repo.DisableRoutePolicy(ctx, denyPolicy.ID, now.Add(time.Minute)); err != nil {
+		t.Fatalf("disable route policy: %v", err)
+	} else if !ok {
+		t.Fatalf("expected route policy to disable")
+	}
+	decision, err = repo.EvaluateRouteAccess(ctx, caller.ID, target.ID, "mcp", "tools/call", now.Add(2*time.Minute))
+	if err != nil {
+		t.Fatalf("evaluate route access after disabled policy: %v", err)
+	}
+	if !decision.Allowed || decision.Source != "access_grant" {
+		t.Fatalf("expected disabled route policy to fall back to access grant, got %#v", decision)
 	}
 
 	trace := domain.TraceEvent{

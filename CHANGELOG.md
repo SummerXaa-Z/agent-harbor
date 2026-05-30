@@ -1,3 +1,23 @@
+## [2026-05-31 04:25] Session: Sprint 3 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-3-mcp-policy-controls` 分支补跑 focused verification，并将证据写入 PR #3。
+- 将 PR #3 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 3 MCP method policy controls` 改为 `Sprint 3 MCP method policy controls`。
+- 验证 Sprint 3 的 MCP method policy demo、governance loop demo、PostgreSQL store integration、Go 后端和前端 build。
+
+### 决策
+- 保留 #3 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 3 代码和历史，只更新 GitHub PR 元数据。
+
+### 血泪教训
+- 方法级授权类 PR 的 ready evidence 必须包含真实 demo；单靠单元测试不能给 reviewer 直观看到 `tools/list` allowed / `tools/call` denied 的行为证据。
+
+### 待办
+- 下一步从 #4 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #3 ready evidence 和验证结果。
+
 ## [2026-05-31 04:21] Session: Sprint 2 Ready Evidence
 
 ### 完成

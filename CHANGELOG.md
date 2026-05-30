@@ -1,3 +1,25 @@
+## [2026-05-31 04:13] Session: Stacked PR Boundary Split
+
+### 完成
+- 为既有线性 Sprint 分支创建 Draft PR stack：#2 Sprint 2、#3 Sprint 3、#4 Sprint 4、#5 Sprint 5、#6 Sprint 6、#7 Sprint 7、#8 Sprint 8、#9 Sprint 9。
+- 将 Draft PR #1 的 base 从 `main` 改为 `codex/sprint-9-route-policies`，使其只覆盖 Sprint 10、Sprint 11、CI workflow 和 review governance。
+- 重写 PR #1 正文，补充 lower stack 列表、顶部 PR review order、风险关注点和验证证据。
+- 验证分支祖先关系为线性：`main -> sprint2 -> ... -> sprint9 -> sprint10/11`。
+
+### 决策
+- 不重写历史、不 rebase、不拆提交；本轮只调整 GitHub PR 拓扑，降低对已有分支的扰动。
+- 保留所有 PR 为 Draft，作为 review stack 和协作入口，而不是立即进入 ready-to-merge 状态。
+
+### 血泪教训
+- 大型集成 PR 最安全的第一步不是改代码，而是先把 base/head 拓扑调窄；这样 reviewer 可以从底层 Sprint 逐层审，而不是面对全量 diff。
+
+### 待办
+- 如果后续要逐个 ready，需要在各 Sprint PR 上补对应的最新验证证据；较早分支没有当前 CI workflow，需要按需回补或在合并后依赖主线 CI。
+- 决定最终合并策略：逐 PR merge、squash、还是保留 #1 作为 integration checkpoint。
+
+### 影响文件
+- `CHANGELOG.md`：记录 Draft PR stack 创建和 #1 retarget 决策。
+
 ## [2026-05-31 04:08] Session: PR Review Governance
 
 ### 完成

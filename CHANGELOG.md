@@ -1,3 +1,23 @@
+## [2026-05-31 04:49] Session: Sprint 5 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-5-proxy-retry-classification` 分支补跑 focused verification，并将证据写入 PR #5。
+- 将 PR #5 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 5 proxy retry classification` 改为 `Sprint 5 proxy retry classification`。
+- 验证 Sprint 5 的 retry config demo、Sprint 1-4 demo 回归、PostgreSQL store integration、Go 后端和前端 build。
+
+### 决策
+- 保留 #5 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 5 代码和历史，只更新 GitHub PR 元数据。
+
+### 血泪教训
+- retry/classification 类 PR 的 ready evidence 要同时包含 targeted unit tests 和真实 demo；attempt header、最终 retryable response、DNS/TLS/connect error code、配置校验分别证明不同风险面。
+
+### 待办
+- 下一步从 #6 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #5 ready evidence 和验证结果。
+
 ## [2026-05-31 04:29] Session: Sprint 4 Ready Evidence
 
 ### 完成

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -759,6 +761,175 @@ func TestUpstreamProxyInjectsCredentialHeaders(t *testing.T) {
 	}
 }
 
+func TestUpstreamProxyRetriesRetryableStatusThenReturnsSuccess(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	attempts := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read upstream body: %v", err)
+		}
+		if !strings.Contains(string(body), `"method":"tools/call"`) {
+			t.Fatalf("upstream body did not receive original request on attempt %d: %s", attempts, string(body))
+		}
+		if attempts == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"temporary":true}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "Retry Caller")
+	target := createDirectAgent(t, repo, "Retry MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL + "/mcp",
+		"retry": map[string]any{
+			"maxAttempts": 2,
+			"backoffMs":   0,
+			"statusCodes": []any{503},
+		},
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	resp := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("expected successful retried upstream status, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if attempts != 2 {
+		t.Fatalf("expected two upstream attempts, got %d", attempts)
+	}
+	if got := resp.Header().Get("X-AgentHarbor-Upstream-Attempts"); got != "2" {
+		t.Fatalf("expected attempts header 2, got %q", got)
+	}
+	if strings.TrimSpace(resp.Body.String()) != `{"ok":true}` {
+		t.Fatalf("expected final upstream body, got %s", resp.Body.String())
+	}
+}
+
+func TestUpstreamProxyReturnsLastRetryableStatusAfterAttemptsExhausted(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	attempts := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"attempt":` + strconv.Itoa(attempts) + `}`))
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "Retry Exhaust Caller")
+	target := createDirectAgent(t, repo, "Retry Exhaust MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL + "/mcp",
+		"retry": map[string]any{
+			"maxAttempts": 3,
+			"backoffMs":   0,
+			"statusCodes": []any{503},
+		},
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	resp := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected final retryable status, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if attempts != 3 {
+		t.Fatalf("expected three upstream attempts, got %d", attempts)
+	}
+	if got := resp.Header().Get("X-AgentHarbor-Upstream-Attempts"); got != "3" {
+		t.Fatalf("expected attempts header 3, got %q", got)
+	}
+	if strings.TrimSpace(resp.Body.String()) != `{"attempt":3}` {
+		t.Fatalf("expected final upstream body, got %s", resp.Body.String())
+	}
+}
+
+func TestProxyRejectsOversizedBufferedBody(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("oversized request should not reach upstream")
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "Oversized Body Caller")
+	target := createDirectAgent(t, repo, "Oversized Body MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL + "/mcp",
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	payload := `{"jsonrpc":"2.0","method":"tools/call","params":{"blob":"` + strings.Repeat("x", 4<<20) + `"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+key.Key)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected oversized body to return 413, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var env apiEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if env.Error != "PAYLOAD_TOO_LARGE" {
+		t.Fatalf("expected PAYLOAD_TOO_LARGE, got %#v", env)
+	}
+}
+
+func TestProxyUpstreamDNSFailureReturnsDNSError(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	originalTransport := http.DefaultClient.Transport
+	http.DefaultClient.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return nil, &net.DNSError{Err: "no such host", Name: "nonexistent.invalid", IsNotFound: true}
+	})
+	t.Cleanup(func() {
+		http.DefaultClient.Transport = originalTransport
+	})
+
+	caller, key := createLocalCallerWithKey(t, router, "DNS Proxy Caller")
+	target := createDirectAgent(t, repo, "DNS Proxy MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": "http://nonexistent.invalid/mcp",
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	resp := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if resp.Code != http.StatusBadGateway {
+		t.Fatalf("expected upstream DNS failure to return 502, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	var env apiEnvelope
+	if err := json.Unmarshal(resp.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if env.Error != "UPSTREAM_DNS_ERROR" {
+		t.Fatalf("expected UPSTREAM_DNS_ERROR, got %#v", env)
+	}
+	if got := resp.Header().Get("X-AgentHarbor-Upstream-Attempts"); got != "1" {
+		t.Fatalf("expected attempts header 1, got %q", got)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return fn(r)
+}
+
 func TestAgentRejectsSecretLikeHeaders(t *testing.T) {
 	router := newRouter()
 	for _, headerName := range []string{"Authorization", "Cookie", "X-Api-Key"} {
@@ -922,6 +1093,36 @@ func TestAgentRejectsInvalidProxyConfig(t *testing.T) {
 	if missingCredential.Code != http.StatusBadRequest {
 		t.Fatalf("missing credential header reference should fail, got %d body=%s", missingCredential.Code, missingCredential.Body.String())
 	}
+
+	badRetryAttempts := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Bad Retry Attempts",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"retry": map[string]any{
+				"maxAttempts": 5,
+			},
+		},
+	}, "")
+	if badRetryAttempts.Code != http.StatusBadRequest {
+		t.Fatalf("out-of-range retry maxAttempts should fail, got %d body=%s", badRetryAttempts.Code, badRetryAttempts.Body.String())
+	}
+
+	badRetryStatus := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Bad Retry Status",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"retry": map[string]any{
+				"statusCodes": []any{429},
+			},
+		},
+	}, "")
+	if badRetryStatus.Code != http.StatusBadRequest {
+		t.Fatalf("non-5xx retry status should fail, got %d body=%s", badRetryStatus.Code, badRetryStatus.Body.String())
+	}
 }
 
 func TestUpstreamTimeoutReturnsGatewayTimeout(t *testing.T) {
@@ -1000,7 +1201,7 @@ func TestOpenAPIProxyRelaysRelativePath(t *testing.T) {
 	}
 }
 
-func TestProxyUpstreamFailureRecordsTraceAndReturnsBadGateway(t *testing.T) {
+func TestProxyUpstreamConnectFailureRecordsTraceAndReturnsConnectError(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1026,12 +1227,48 @@ func TestProxyUpstreamFailureRecordsTraceAndReturnsBadGateway(t *testing.T) {
 	if err := json.Unmarshal(resp.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode error envelope: %v", err)
 	}
-	if env.Error != "UPSTREAM_ERROR" {
-		t.Fatalf("expected UPSTREAM_ERROR, got %#v", env)
+	if env.Error != "UPSTREAM_CONNECT_ERROR" {
+		t.Fatalf("expected UPSTREAM_CONNECT_ERROR, got %#v", env)
+	}
+	if got := resp.Header().Get("X-AgentHarbor-Upstream-Attempts"); got != "1" {
+		t.Fatalf("expected attempts header 1, got %q", got)
 	}
 	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces?runId=run-upstream-fail", nil, ""))
 	if len(traces) != 1 || traces[0].Decision != "allowed" || traces[0].TargetID != target.ID {
 		t.Fatalf("expected allowed trace recorded before proxy failure, got %#v", traces)
+	}
+}
+
+func TestProxyUpstreamTLSFailureReturnsTLSError(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("untrusted TLS upstream should not receive request")
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "TLS Proxy Caller")
+	target := createDirectAgent(t, repo, "TLS Proxy MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL + "/mcp",
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	resp := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if resp.Code != http.StatusBadGateway {
+		t.Fatalf("expected upstream TLS failure to return 502, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	var env apiEnvelope
+	if err := json.Unmarshal(resp.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if env.Error != "UPSTREAM_TLS_ERROR" {
+		t.Fatalf("expected UPSTREAM_TLS_ERROR, got %#v", env)
+	}
+	if got := resp.Header().Get("X-AgentHarbor-Upstream-Attempts"); got != "1" {
+		t.Fatalf("expected attempts header 1, got %q", got)
 	}
 }
 

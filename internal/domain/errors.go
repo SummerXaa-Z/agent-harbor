@@ -16,6 +16,10 @@ func BadRequest(code, message string) AppError {
 	return AppError{Status: 400, Code: code, Message: message}
 }
 
+func PayloadTooLarge(message string) AppError {
+	return AppError{Status: 413, Code: "PAYLOAD_TOO_LARGE", Message: message}
+}
+
 func Unauthorized(message string) AppError {
 	return AppError{Status: 401, Code: "UNAUTHORIZED", Message: message}
 }
@@ -26,6 +30,18 @@ func PermissionDenied(message string) AppError {
 
 func UpstreamError(message string) AppError {
 	return AppError{Status: 502, Code: "UPSTREAM_ERROR", Message: message}
+}
+
+func UpstreamConnectError(message string) AppError {
+	return AppError{Status: 502, Code: "UPSTREAM_CONNECT_ERROR", Message: message}
+}
+
+func UpstreamDNSError(message string) AppError {
+	return AppError{Status: 502, Code: "UPSTREAM_DNS_ERROR", Message: message}
+}
+
+func UpstreamTLSError(message string) AppError {
+	return AppError{Status: 502, Code: "UPSTREAM_TLS_ERROR", Message: message}
 }
 
 func UpstreamTimeout(message string) AppError {

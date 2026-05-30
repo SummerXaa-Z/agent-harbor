@@ -25,11 +25,12 @@ import {
   TriangleAlert,
   Workflow
 } from "lucide-react";
-import { createAccessGrant, createAgent, createAgentKey, loadConsoleData, revokeAccessGrant, rotateAgentCredentials, updateAgent } from "./api";
+import { createAccessGrant, createAgent, createAgentKey, disableAgent, loadConsoleData, revokeAccessGrant, rotateAgentCredentials, updateAgent } from "./api";
 import type {
   AccessGrant,
   Agent,
   AgentStatus,
+  AuditEvent,
   ChannelContract,
   ConsoleData,
   CreateAgentKeyResponse,
@@ -177,7 +178,11 @@ function App() {
     setAgentMessage("");
     setCleanupActionId(agent.id);
     try {
-      await updateAgent(agent.id, { status }, adminKey);
+      if (status === "disabled") {
+        await disableAgent(agent.id, adminKey);
+      } else {
+        await updateAgent(agent.id, { status }, adminKey);
+      }
       setAgentMessage(`${agent.name} set to ${status}. Registry refreshed.`);
       await refresh();
     } catch (error) {
@@ -277,6 +282,7 @@ function App() {
   const agents = data?.agents ?? [];
   const grants = data?.accessGrants ?? [];
   const traces = data?.traces ?? [];
+  const auditEvents = data?.auditEvents ?? [];
   const channels = data?.channels ?? [];
   const policies = useMemo(
     () => (data?.grantsLoadedFromApi ? grants.map(grantToPolicy) : data?.routePolicies ?? []),
@@ -491,6 +497,10 @@ function App() {
           <Panel className="span-7" icon={<FileSearch size={18} />} title="Audit Traces" action={<IconOpen />}>
             <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} />
             <TraceTable traces={traces} agents={agents} />
+          </Panel>
+
+          <Panel className="span-12" icon={<ClipboardCheck size={18} />} title="Management Audit" action={<IconOpen />}>
+            <ManagementAuditTable events={auditEvents} />
           </Panel>
         </section>
       </main>
@@ -962,6 +972,47 @@ function TraceTable({ traces, agents }: { traces: TraceEvent[]; agents: Agent[] 
   );
 }
 
+function ManagementAuditTable({ events }: { events: AuditEvent[] }) {
+  return (
+    <div className="table-wrap">
+      <table className="audit-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Action</th>
+            <th>Resource</th>
+            <th>Actor</th>
+            <th>Version</th>
+            <th>Summary</th>
+          </tr>
+        </thead>
+        <tbody>
+          {events.length === 0 ? (
+            <tr>
+              <td colSpan={6}>
+                <EmptyRow title="No management audit events" detail="Control-plane changes will appear here after they are recorded." />
+              </td>
+            </tr>
+          ) : null}
+          {events.map((event) => (
+            <tr key={event.id}>
+              <td>{formatDate(event.createdAt)}</td>
+              <td><Badge tone={auditTone(event.action)}>{event.action}</Badge></td>
+              <td>
+                <strong>{event.resourceType}</strong>
+                <span>{event.resourceId}</span>
+              </td>
+              <td>{event.actor || "-"}</td>
+              <td>{auditCredentialVersion(event)}</td>
+              <td>{event.summary || "-"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
   return <span className={`badge tone-${tone}`}>{children}</span>;
 }
@@ -1035,6 +1086,19 @@ function grantToPolicy(grant: AccessGrant): RoutePolicy {
     status: grant.revokedAt ? "disabled" : "enabled",
     targetAgentId: grant.targetAgentId
   };
+}
+
+function auditCredentialVersion(event: AuditEvent) {
+  const value = event.metadata?.credentialVersion;
+  if (typeof value === "number" || typeof value === "string") return String(value);
+  return "-";
+}
+
+function auditTone(action: string): Tone {
+  if (action.includes("delete") || action.includes("revoke") || action.includes("disable")) return "danger";
+  if (action.includes("rotate") || action.includes("credentials")) return "warning";
+  if (action.includes("create") || action.includes("enable")) return "success";
+  return "info";
 }
 
 function evidenceDuration(run: EvidenceRun) {

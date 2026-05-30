@@ -55,10 +55,11 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 				"Authorization": "apiToken",
 			},
 		},
-		Credentials: map[string]string{"apiToken": "Bearer pg-secret"},
-		Status:      domain.AgentStatusActive,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		Credentials:       map[string]string{"apiToken": "Bearer pg-secret"},
+		CredentialVersion: 1,
+		Status:            domain.AgentStatusActive,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	if _, err := repo.CreateAgent(ctx, caller); err != nil {
 		t.Fatalf("create caller: %v", err)
@@ -80,7 +81,7 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get target: %v", err)
 	}
-	if !ok || persistedTarget.Credentials["apiToken"] != "Bearer pg-secret" {
+	if !ok || persistedTarget.Credentials["apiToken"] != "Bearer pg-secret" || persistedTarget.CredentialVersion != 1 {
 		t.Fatalf("expected credential round trip, ok=%v agent=%#v", ok, persistedTarget)
 	}
 	var credentialCiphertext []byte
@@ -90,15 +91,21 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	if len(credentialCiphertext) == 0 || bytes.Contains(credentialCiphertext, []byte("pg-secret")) {
 		t.Fatalf("expected encrypted credential ciphertext, got %x", credentialCiphertext)
 	}
-	target.Description = "rotated through update"
-	target.Credentials = map[string]string{"apiToken": "Bearer rotated-secret"}
+	target.Description = "updated before rotation"
 	target.UpdatedAt = now.Add(time.Minute)
 	updatedTarget, ok, err := repo.UpdateAgent(ctx, target)
 	if err != nil {
 		t.Fatalf("update target: %v", err)
 	}
-	if !ok || updatedTarget.Description != "rotated through update" || updatedTarget.Credentials["apiToken"] != "Bearer rotated-secret" {
-		t.Fatalf("expected updated target with rotated credential, ok=%v agent=%#v", ok, updatedTarget)
+	if !ok || updatedTarget.Description != "updated before rotation" || updatedTarget.Credentials["apiToken"] != "Bearer pg-secret" || updatedTarget.CredentialVersion != 1 {
+		t.Fatalf("expected updated target without credential version change, ok=%v agent=%#v", ok, updatedTarget)
+	}
+	rotatedTarget, ok, err := repo.RotateAgentCredentials(ctx, target.ID, map[string]string{"apiToken": "Bearer rotated-secret"}, now.Add(2*time.Minute))
+	if err != nil {
+		t.Fatalf("rotate target credentials: %v", err)
+	}
+	if !ok || rotatedTarget.Credentials["apiToken"] != "Bearer rotated-secret" || rotatedTarget.CredentialVersion != 2 {
+		t.Fatalf("expected rotated target with version increment, ok=%v agent=%#v", ok, rotatedTarget)
 	}
 	if err := pool.QueryRow(ctx, "select credentials_ciphertext from agents where id=$1", target.ID).Scan(&credentialCiphertext); err != nil {
 		t.Fatalf("read rotated credential ciphertext: %v", err)
@@ -195,6 +202,36 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 		traces[0].UpstreamStatus != trace.UpstreamStatus ||
 		traces[0].UpstreamError != trace.UpstreamError {
 		t.Fatalf("unexpected trace metrics: %#v", traces[0])
+	}
+	audit := domain.AuditEvent{
+		ID:           security.NewID("aud"),
+		TenantID:     "test",
+		WorkspaceID:  "ws-pg",
+		Actor:        "integration-test",
+		Action:       "agent.credentials_rotated",
+		ResourceType: "agent",
+		ResourceID:   target.ID,
+		Summary:      "PG credential rotation",
+		Metadata: map[string]any{
+			"credentialVersion": 2,
+			"credentialKeys":    []any{"apiToken"},
+		},
+		CreatedAt: now.Add(2 * time.Minute),
+	}
+	if _, err := repo.AppendAuditEvent(ctx, audit); err != nil {
+		t.Fatalf("append audit event: %v", err)
+	}
+	audits, err := repo.ListAuditEvents(ctx, store.AuditEventFilter{
+		ManagementScope: store.ManagementScope{TenantID: "test", WorkspaceID: "ws-pg"},
+		Action:          "agent.credentials_rotated",
+		ResourceType:    "agent",
+		ResourceID:      target.ID,
+	})
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	if len(audits) != 1 || audits[0].ID != audit.ID || audits[0].Metadata["credentialVersion"] != float64(2) {
+		t.Fatalf("unexpected audit events: %#v", audits)
 	}
 	if _, ok, err := repo.RevokeAccessGrant(ctx, grant.ID, now.Add(time.Minute)); err != nil {
 		t.Fatalf("revoke grant: %v", err)

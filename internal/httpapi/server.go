@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -41,6 +42,8 @@ const (
 	maxRetryAttempts    = 4
 	maxRetryBackoff     = time.Second
 	maxProxyBodyBytes   = 4 << 20
+	defaultAuditLimit   = 100
+	maxAuditLimit       = 500
 )
 
 type proxyRetryPolicy struct {
@@ -101,6 +104,7 @@ func (s *Server) Router() http.Handler {
 			r.Post("/access-grants", s.createAccessGrant)
 			r.Get("/access-grants", s.listAccessGrants)
 			r.Delete("/access-grants/{id}", s.revokeAccessGrant)
+			r.Get("/audit/events", s.listAuditEvents)
 			r.Get("/audit/traces", s.listTraces)
 			r.Get("/metrics/runtime", s.runtimeMetrics)
 		})
@@ -183,6 +187,13 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	s.recordManagementAudit(r, created.TenantID, created.WorkspaceID, "agent.created", "agent", created.ID, "Agent created", map[string]any{
+		"channelType":        created.ChannelType,
+		"status":             string(created.Status),
+		"credentialVersion":  created.CredentialVersion,
+		"hasCredentials":     len(created.Credentials) > 0,
+		"credentialKeyCount": len(created.Credentials),
+	})
 	writeJSON(w, http.StatusCreated, created)
 }
 
@@ -209,18 +220,19 @@ func (s *Server) agentFromRequest(req domain.CreateAgentRequest) (domain.Agent, 
 	}
 	now := s.now()
 	agent := domain.Agent{
-		ID:            security.NewID("agt"),
-		TenantID:      req.TenantID,
-		WorkspaceID:   req.WorkspaceID,
-		Name:          req.Name,
-		Description:   req.Description,
-		OwnerID:       req.OwnerID,
-		ChannelType:   req.ChannelType,
-		ChannelConfig: req.ChannelConfig,
-		Credentials:   credentials,
-		Status:        req.Status,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:                security.NewID("agt"),
+		TenantID:          req.TenantID,
+		WorkspaceID:       req.WorkspaceID,
+		Name:              req.Name,
+		Description:       req.Description,
+		OwnerID:           req.OwnerID,
+		ChannelType:       req.ChannelType,
+		ChannelConfig:     req.ChannelConfig,
+		Credentials:       credentials,
+		CredentialVersion: initialCredentialVersion(credentials),
+		Status:            req.Status,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	if err := validateAgentForSave(agent); err != nil {
 		return domain.Agent{}, err
@@ -350,6 +362,11 @@ func (s *Server) updateAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("agent not found"))
 		return
 	}
+	s.recordManagementAudit(r, saved.TenantID, saved.WorkspaceID, "agent.updated", "agent", saved.ID, "Agent updated", map[string]any{
+		"fields":            agentPatchFields(req),
+		"status":            string(saved.Status),
+		"credentialVersion": saved.CredentialVersion,
+	})
 	writeJSON(w, http.StatusOK, saved)
 }
 
@@ -364,6 +381,10 @@ func (s *Server) rotateAgentCredentials(w http.ResponseWriter, r *http.Request) 
 		writeError(w, err)
 		return
 	}
+	if len(credentials) == 0 {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "credentials must include at least one credential"))
+		return
+	}
 	agent, ok, err := s.repo.GetAgent(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, err)
@@ -373,13 +394,13 @@ func (s *Server) rotateAgentCredentials(w http.ResponseWriter, r *http.Request) 
 		writeError(w, domain.NotFound("agent not found"))
 		return
 	}
-	agent.Credentials = credentials
-	agent.UpdatedAt = s.now()
-	if err := validateAgentForSave(agent); err != nil {
+	effective := agent
+	effective.Credentials = credentials
+	if err := validateAgentForSave(effective); err != nil {
 		writeError(w, err)
 		return
 	}
-	updated, ok, err := s.repo.UpdateAgent(r.Context(), agent)
+	updated, ok, err := s.repo.RotateAgentCredentials(r.Context(), agent.ID, credentials, s.now())
 	if err != nil {
 		writeError(w, err)
 		return
@@ -388,6 +409,10 @@ func (s *Server) rotateAgentCredentials(w http.ResponseWriter, r *http.Request) 
 		writeError(w, domain.NotFound("agent not found"))
 		return
 	}
+	s.recordManagementAudit(r, updated.TenantID, updated.WorkspaceID, "agent.credentials_rotated", "agent", updated.ID, "Agent credentials rotated", map[string]any{
+		"credentialKeys":    credentialKeyNames(updated.Credentials),
+		"credentialVersion": updated.CredentialVersion,
+	})
 	writeJSON(w, http.StatusOK, updated)
 }
 
@@ -401,6 +426,10 @@ func (s *Server) disableAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("agent not found"))
 		return
 	}
+	s.recordManagementAudit(r, agent.TenantID, agent.WorkspaceID, "agent.disabled", "agent", agent.ID, "Agent disabled", map[string]any{
+		"status":            string(agent.Status),
+		"credentialVersion": agent.CredentialVersion,
+	})
 	writeJSON(w, http.StatusOK, agent)
 }
 
@@ -457,6 +486,11 @@ func (s *Server) createAgentKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	s.recordManagementAudit(r, agent.TenantID, agent.WorkspaceID, "agent_key.created", "agent_key", created.ID, "Agent key created", map[string]any{
+		"agentId":   created.AgentID,
+		"name":      created.Name,
+		"expiresAt": created.ExpiresAt,
+	})
 	writeJSON(w, http.StatusCreated, domain.CreateAgentKeyResponse{
 		ID:        created.ID,
 		AgentID:   created.AgentID,
@@ -478,7 +512,27 @@ func (s *Server) listAgentKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) revokeAgentKey(w http.ResponseWriter, r *http.Request) {
-	key, ok, err := s.repo.RevokeAgentKey(r.Context(), chi.URLParam(r, "id"), s.now())
+	keyID := chi.URLParam(r, "id")
+	tenantID, workspaceID := "", ""
+	keys, err := s.repo.ListAgentKeys(r.Context(), store.ManagementScope{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	for _, existing := range keys {
+		if existing.ID != keyID {
+			continue
+		}
+		if agent, ok, err := s.repo.GetAgent(r.Context(), existing.AgentID); err != nil {
+			writeError(w, err)
+			return
+		} else if ok {
+			tenantID = agent.TenantID
+			workspaceID = agent.WorkspaceID
+		}
+		break
+	}
+	key, ok, err := s.repo.RevokeAgentKey(r.Context(), keyID, s.now())
 	if err != nil {
 		writeError(w, err)
 		return
@@ -487,6 +541,10 @@ func (s *Server) revokeAgentKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("agent key not found"))
 		return
 	}
+	s.recordManagementAudit(r, tenantID, workspaceID, "agent_key.revoked", "agent_key", key.ID, "Agent key revoked", map[string]any{
+		"agentId": key.AgentID,
+		"name":    key.Name,
+	})
 	writeJSON(w, http.StatusOK, key)
 }
 
@@ -504,17 +562,21 @@ func (s *Server) createAccessGrant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "callerAgentId and targetAgentId are required"))
 		return
 	}
-	if _, ok, err := s.repo.GetAgent(r.Context(), req.CallerID); err != nil {
+	caller, ok, err := s.repo.GetAgent(r.Context(), req.CallerID)
+	if err != nil {
 		writeError(w, err)
 		return
-	} else if !ok {
+	}
+	if !ok {
 		writeError(w, domain.NotFound("caller agent not found"))
 		return
 	}
-	if _, ok, err := s.repo.GetAgent(r.Context(), req.TargetID); err != nil {
+	target, ok, err := s.repo.GetAgent(r.Context(), req.TargetID)
+	if err != nil {
 		writeError(w, err)
 		return
-	} else if !ok {
+	}
+	if !ok {
 		writeError(w, domain.NotFound("target agent not found"))
 		return
 	}
@@ -531,6 +593,12 @@ func (s *Server) createAccessGrant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	s.recordManagementAudit(r, caller.TenantID, caller.WorkspaceID, "access_grant.created", "access_grant", created.ID, "Access grant created", map[string]any{
+		"callerAgentId": caller.ID,
+		"targetAgentId": target.ID,
+		"routeType":     created.RouteType,
+		"routeKey":      created.RouteKey,
+	})
 	writeJSON(w, http.StatusCreated, created)
 }
 
@@ -544,7 +612,27 @@ func (s *Server) listAccessGrants(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) revokeAccessGrant(w http.ResponseWriter, r *http.Request) {
-	grant, ok, err := s.repo.RevokeAccessGrant(r.Context(), chi.URLParam(r, "id"), s.now())
+	grantID := chi.URLParam(r, "id")
+	tenantID, workspaceID := "", ""
+	grants, err := s.repo.ListAccessGrants(r.Context(), store.ManagementScope{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	for _, existing := range grants {
+		if existing.ID != grantID {
+			continue
+		}
+		if caller, ok, err := s.repo.GetAgent(r.Context(), existing.CallerID); err != nil {
+			writeError(w, err)
+			return
+		} else if ok {
+			tenantID = caller.TenantID
+			workspaceID = caller.WorkspaceID
+		}
+		break
+	}
+	grant, ok, err := s.repo.RevokeAccessGrant(r.Context(), grantID, s.now())
 	if err != nil {
 		writeError(w, err)
 		return
@@ -553,6 +641,12 @@ func (s *Server) revokeAccessGrant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("access grant not found"))
 		return
 	}
+	s.recordManagementAudit(r, tenantID, workspaceID, "access_grant.revoked", "access_grant", grant.ID, "Access grant revoked", map[string]any{
+		"callerAgentId": grant.CallerID,
+		"targetAgentId": grant.TargetID,
+		"routeType":     grant.RouteType,
+		"routeKey":      grant.RouteKey,
+	})
 	writeJSON(w, http.StatusOK, grant)
 }
 
@@ -1249,6 +1343,27 @@ func (s *Server) listTraces(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rows)
 }
 
+func (s *Server) listAuditEvents(w http.ResponseWriter, r *http.Request) {
+	filter := store.AuditEventFilter{
+		ManagementScope: managementScopeFromRequest(r),
+		Action:          strings.TrimSpace(r.URL.Query().Get("action")),
+		ResourceType:    strings.TrimSpace(r.URL.Query().Get("resourceType")),
+		ResourceID:      strings.TrimSpace(r.URL.Query().Get("resourceId")),
+	}
+	limit, err := auditLimitFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	filter.Limit = limit
+	rows, err := s.repo.ListAuditEvents(r.Context(), filter)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
 func (s *Server) runtimeMetrics(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.repo.ListTraces(r.Context(), store.TraceFilter{ManagementScope: managementScopeFromRequest(r)})
 	if err != nil {
@@ -1386,4 +1501,81 @@ func managementScopeFromRequest(r *http.Request) store.ManagementScope {
 		TenantID:    strings.TrimSpace(r.URL.Query().Get("tenantId")),
 		WorkspaceID: strings.TrimSpace(r.URL.Query().Get("workspaceId")),
 	}
+}
+
+func auditLimitFromRequest(r *http.Request) (int, error) {
+	raw := strings.TrimSpace(r.URL.Query().Get("limit"))
+	if raw == "" {
+		return defaultAuditLimit, nil
+	}
+	limit, err := strconv.Atoi(raw)
+	if err != nil || limit < 1 || limit > maxAuditLimit {
+		return 0, domain.BadRequest("VALIDATION_FAILED", "limit must be between 1 and 500")
+	}
+	return limit, nil
+}
+
+func (s *Server) recordManagementAudit(r *http.Request, tenantID string, workspaceID string, action string, resourceType string, resourceID string, summary string, metadata map[string]any) {
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	event := domain.AuditEvent{
+		ID:           security.NewID("aud"),
+		TenantID:     tenantID,
+		WorkspaceID:  workspaceID,
+		Actor:        managementActor(r),
+		Action:       action,
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+		Summary:      summary,
+		Metadata:     metadata,
+		CreatedAt:    s.now(),
+	}
+	// Until management mutations and audit writes share a transaction/outbox,
+	// audit persistence must not turn an already committed mutation into a
+	// failed API response.
+	_, _ = s.repo.AppendAuditEvent(r.Context(), event)
+}
+
+func managementActor(r *http.Request) string {
+	if strings.TrimSpace(r.Header.Get("X-Admin-Key")) != "" {
+		return "admin-key"
+	}
+	return "local-dev"
+}
+
+func initialCredentialVersion(credentials map[string]string) int {
+	if len(credentials) == 0 {
+		return 0
+	}
+	return 1
+}
+
+func credentialKeyNames(credentials map[string]string) []string {
+	keys := make([]string, 0, len(credentials))
+	for key := range credentials {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func agentPatchFields(req domain.UpdateAgentRequest) []string {
+	fields := []string{}
+	if req.Name != nil {
+		fields = append(fields, "name")
+	}
+	if req.Description != nil {
+		fields = append(fields, "description")
+	}
+	if req.OwnerID != nil {
+		fields = append(fields, "ownerId")
+	}
+	if req.ChannelConfig != nil {
+		fields = append(fields, "channelConfig")
+	}
+	if req.Status != nil {
+		fields = append(fields, "status")
+	}
+	return fields
 }

@@ -2,6 +2,7 @@ import {
   evidenceRuns,
   routePolicies,
   sampleAgents,
+  sampleAuditEvents,
   sampleChannels,
   sampleProviders,
   sampleTraces,
@@ -11,6 +12,7 @@ import type {
   AccessGrant,
   Agent,
   ApiEnvelope,
+  AuditEvent,
   CatalogData,
   ChannelContract,
   ConsoleData,
@@ -184,6 +186,27 @@ export async function fetchTraces(
   return request<TraceEvent[]>(`/api/v1/audit/traces${query}`, { adminKey, signal })
 }
 
+type AuditEventScope = Partial<ManagementScope> & {
+  action?: string
+  resourceType?: string
+  resourceId?: string
+}
+
+export async function fetchAuditEvents(
+  scope?: AuditEventScope,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<AuditEvent[]> {
+  const query = queryString({
+    action: scope?.action,
+    resourceId: scope?.resourceId,
+    resourceType: scope?.resourceType,
+    tenantId: scope?.tenantId,
+    workspaceId: scope?.workspaceId,
+  })
+  return request<AuditEvent[]>(`/api/v1/audit/events${query}`, { adminKey, signal })
+}
+
 export async function fetchRuntimeMetrics(
   scope?: ManagementScope,
   adminKey?: string,
@@ -242,7 +265,7 @@ export async function loadConsoleData(
   traceFilters: TraceFilters = {},
   scope?: ManagementScope,
 ): Promise<ConsoleData> {
-  const [catalogResult, agentsResult, grantsResult, tracesResult, metricsResult] = await Promise.all([
+  const [catalogResult, agentsResult, grantsResult, tracesResult, auditEventsResult, metricsResult] = await Promise.all([
     withFallback(() => fetchCatalog(), {
       providers: sampleProviders,
       channels: sampleChannels,
@@ -250,6 +273,7 @@ export async function loadConsoleData(
     withFallback(() => fetchAgents(scope, adminKey), sampleAgents),
     withFallback(() => fetchAccessGrants(scope, adminKey), []),
     withFallback(() => fetchTraces(traceFilters, scope, adminKey), sampleTraces),
+    withFallback(() => fetchAuditEvents(scope, adminKey), sampleAuditEvents),
     withFallback(() => fetchRuntimeMetrics(scope, adminKey), systemMetrics),
   ])
 
@@ -259,10 +283,17 @@ export async function loadConsoleData(
     agents: agentsResult.data,
     accessGrants: grantsResult.data,
     traces: tracesResult.data,
+    auditEvents: auditEventsResult.data,
     routePolicies: grantsResult.ok ? [] : routePolicies,
     evidenceRuns,
     systemMetrics: metricsResult.data,
-    loadedFromApi: catalogResult.ok && agentsResult.ok && grantsResult.ok && tracesResult.ok && metricsResult.ok,
+    loadedFromApi:
+      catalogResult.ok &&
+      agentsResult.ok &&
+      grantsResult.ok &&
+      tracesResult.ok &&
+      auditEventsResult.ok &&
+      metricsResult.ok,
     grantsLoadedFromApi: grantsResult.ok,
     apiBase,
   }

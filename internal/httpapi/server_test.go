@@ -28,15 +28,16 @@ type apiEnvelope struct {
 }
 
 type agentResponse struct {
-	ID            string         `json:"id"`
-	TenantID      string         `json:"tenantId"`
-	Name          string         `json:"name"`
-	Description   string         `json:"description"`
-	OwnerID       string         `json:"ownerId"`
-	WorkspaceID   string         `json:"workspaceId"`
-	ChannelType   string         `json:"channelType"`
-	ChannelConfig map[string]any `json:"channelConfig"`
-	Status        string         `json:"status"`
+	ID                string         `json:"id"`
+	TenantID          string         `json:"tenantId"`
+	Name              string         `json:"name"`
+	Description       string         `json:"description"`
+	OwnerID           string         `json:"ownerId"`
+	WorkspaceID       string         `json:"workspaceId"`
+	ChannelType       string         `json:"channelType"`
+	ChannelConfig     map[string]any `json:"channelConfig"`
+	CredentialVersion int            `json:"credentialVersion"`
+	Status            string         `json:"status"`
 }
 
 type keyResponse struct {
@@ -58,6 +59,19 @@ type traceResponse struct {
 	UpstreamAttempts int    `json:"upstreamAttempts"`
 	UpstreamStatus   int    `json:"upstreamStatus"`
 	UpstreamError    string `json:"upstreamError"`
+}
+
+type auditEventResponse struct {
+	ID           string         `json:"id"`
+	TenantID     string         `json:"tenantId"`
+	WorkspaceID  string         `json:"workspaceId"`
+	Actor        string         `json:"actor"`
+	Action       string         `json:"action"`
+	ResourceType string         `json:"resourceType"`
+	ResourceID   string         `json:"resourceId"`
+	Summary      string         `json:"summary"`
+	Metadata     map[string]any `json:"metadata"`
+	CreatedAt    string         `json:"createdAt"`
 }
 
 type grantResponse struct {
@@ -1282,6 +1296,159 @@ func TestRotateAgentCredentialsTakesEffectOnNextProxyCall(t *testing.T) {
 	}
 }
 
+func TestManagementAuditEventsRecordAgentLifecycleWithoutSecrets(t *testing.T) {
+	router := newRouter()
+	oldSecret := "Bearer audit-old-secret"
+	newSecret := "Bearer audit-new-secret"
+
+	createResp := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Audited MCP",
+		"tenantId":    "tenant-audit",
+		"workspaceId": "ws-audit",
+		"channelType": "mcp",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"endpoint": "https://api.example.com/mcp",
+			"credentialHeaders": map[string]any{
+				"Authorization": "apiToken",
+			},
+		},
+		"credentials": map[string]any{
+			"apiToken": oldSecret,
+		},
+	}, "")
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("create audited agent failed: status=%d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if strings.Contains(createResp.Body.String(), oldSecret) || strings.Contains(createResp.Body.String(), "credentials") {
+		t.Fatalf("create response leaked credentials: %s", createResp.Body.String())
+	}
+	created := decodeData[agentResponse](t, createResp)
+	if created.CredentialVersion != 1 {
+		t.Fatalf("credentialed agent should start at version 1, got %#v", created)
+	}
+
+	updateResp := request(t, router, http.MethodPatch, "/api/v1/agents/"+created.ID, map[string]any{
+		"name":   "Audited MCP Updated",
+		"status": "draft",
+	}, "")
+	if updateResp.Code != http.StatusOK {
+		t.Fatalf("patch audited agent failed: status=%d body=%s", updateResp.Code, updateResp.Body.String())
+	}
+	updated := decodeData[agentResponse](t, updateResp)
+	if updated.CredentialVersion != 1 {
+		t.Fatalf("metadata update should not change credential version: %#v", updated)
+	}
+
+	emptyRotateResp := request(t, router, http.MethodPost, "/api/v1/agents/"+created.ID+"/credentials:rotate", map[string]any{
+		"credentials": map[string]any{},
+	}, "")
+	if emptyRotateResp.Code != http.StatusBadRequest {
+		t.Fatalf("empty credential rotation should fail, got %d body=%s", emptyRotateResp.Code, emptyRotateResp.Body.String())
+	}
+
+	rotateResp := request(t, router, http.MethodPost, "/api/v1/agents/"+created.ID+"/credentials:rotate", map[string]any{
+		"credentials": map[string]any{
+			"apiToken": newSecret,
+		},
+	}, "")
+	if rotateResp.Code != http.StatusOK {
+		t.Fatalf("rotate audited credentials failed: status=%d body=%s", rotateResp.Code, rotateResp.Body.String())
+	}
+	if strings.Contains(rotateResp.Body.String(), oldSecret) || strings.Contains(rotateResp.Body.String(), newSecret) || strings.Contains(rotateResp.Body.String(), "credentials") {
+		t.Fatalf("rotate response leaked credentials: %s", rotateResp.Body.String())
+	}
+	rotated := decodeData[agentResponse](t, rotateResp)
+	if rotated.CredentialVersion != 2 {
+		t.Fatalf("credential rotation should increment version to 2, got %#v", rotated)
+	}
+
+	eventsResp := request(t, router, http.MethodGet, "/api/v1/audit/events?resourceId="+created.ID, nil, "")
+	if eventsResp.Code != http.StatusOK {
+		t.Fatalf("list audit events failed: status=%d body=%s", eventsResp.Code, eventsResp.Body.String())
+	}
+	if strings.Contains(eventsResp.Body.String(), oldSecret) || strings.Contains(eventsResp.Body.String(), newSecret) {
+		t.Fatalf("audit events leaked credential values: %s", eventsResp.Body.String())
+	}
+	events := decodeData[[]auditEventResponse](t, eventsResp)
+	if got := auditActions(events); strings.Join(got, ",") != "agent.created,agent.updated,agent.credentials_rotated" {
+		t.Fatalf("unexpected audit actions: %#v events=%#v", got, events)
+	}
+	rotation := events[2]
+	if rotation.Metadata["credentialVersion"] != float64(2) {
+		t.Fatalf("rotation audit event should include new credential version, got %#v", rotation.Metadata)
+	}
+	keys, ok := rotation.Metadata["credentialKeys"].([]any)
+	if !ok || len(keys) != 1 || keys[0] != "apiToken" {
+		t.Fatalf("rotation audit event should include credential key names only, got %#v", rotation.Metadata)
+	}
+}
+
+func TestRotateAgentCredentialsRejectsEmptyCredentialBag(t *testing.T) {
+	router := newRouter()
+	agent := createAgent(t, router, map[string]any{
+		"name":        "No Credential Local",
+		"workspaceId": "ws-audit",
+		"channelType": "local",
+		"status":      "active",
+	})
+
+	resp := request(t, router, http.MethodPost, "/api/v1/agents/"+agent.ID+"/credentials:rotate", map[string]any{
+		"credentials": map[string]any{},
+	}, "")
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("empty credential rotation should fail, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	read := decodeData[agentResponse](t, request(t, router, http.MethodGet, "/api/v1/agents/"+agent.ID, nil, ""))
+	if read.CredentialVersion != 0 {
+		t.Fatalf("rejected empty rotation should not change credential version, got %#v", read)
+	}
+}
+
+func TestManagementAuditEventsFilterByScopeActionAndResource(t *testing.T) {
+	router := newRouter()
+	first := createAgent(t, router, map[string]any{
+		"name":        "First Audited Agent",
+		"tenantId":    "tenant-filter",
+		"workspaceId": "ws-filter-a",
+		"channelType": "local",
+		"status":      "active",
+	})
+	second := createAgent(t, router, map[string]any{
+		"name":        "Second Audited Agent",
+		"tenantId":    "tenant-filter",
+		"workspaceId": "ws-filter-b",
+		"channelType": "local",
+		"status":      "active",
+	})
+	patchResp := request(t, router, http.MethodPatch, "/api/v1/agents/"+second.ID, map[string]any{
+		"description": "only second agent was updated",
+	}, "")
+	if patchResp.Code != http.StatusOK {
+		t.Fatalf("patch second audited agent failed: status=%d body=%s", patchResp.Code, patchResp.Body.String())
+	}
+
+	workspaceEvents := decodeData[[]auditEventResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/events?tenantId=tenant-filter&workspaceId=ws-filter-a", nil, ""))
+	if len(workspaceEvents) != 1 || workspaceEvents[0].ResourceID != first.ID || workspaceEvents[0].Action != "agent.created" {
+		t.Fatalf("workspace filter should return only first create event, got %#v", workspaceEvents)
+	}
+
+	updateEvents := decodeData[[]auditEventResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/events?action=agent.updated&resourceType=agent", nil, ""))
+	if len(updateEvents) != 1 || updateEvents[0].ResourceID != second.ID {
+		t.Fatalf("action/resourceType filter should return second update event, got %#v", updateEvents)
+	}
+
+	secondEvents := decodeData[[]auditEventResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/events?resourceId="+second.ID, nil, ""))
+	if got := auditActions(secondEvents); strings.Join(got, ",") != "agent.created,agent.updated" {
+		t.Fatalf("resourceId filter should return second lifecycle events, got %#v events=%#v", got, secondEvents)
+	}
+
+	limitedEvents := decodeData[[]auditEventResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/events?tenantId=tenant-filter&limit=1", nil, ""))
+	if len(limitedEvents) != 1 {
+		t.Fatalf("limit=1 should return one audit event, got %#v", limitedEvents)
+	}
+}
+
 func TestAgentRejectsInvalidProxyConfig(t *testing.T) {
 	router := newRouter()
 	badHeaderValue := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
@@ -1586,22 +1753,30 @@ func createDirectAgentWithCredentials(t *testing.T, repo store.Repository, name 
 	}
 	now := time.Now().UTC()
 	agent := domain.Agent{
-		ID:            security.NewID("agt"),
-		TenantID:      tenantID,
-		WorkspaceID:   workspaceID,
-		Name:          name,
-		ChannelType:   channelType,
-		ChannelConfig: channelConfig,
-		Credentials:   credentials,
-		Status:        status,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:                security.NewID("agt"),
+		TenantID:          tenantID,
+		WorkspaceID:       workspaceID,
+		Name:              name,
+		ChannelType:       channelType,
+		ChannelConfig:     channelConfig,
+		Credentials:       credentials,
+		CredentialVersion: credentialVersionForTest(credentials),
+		Status:            status,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	created, err := repo.CreateAgent(t.Context(), agent)
 	if err != nil {
 		t.Fatalf("create direct agent: %v", err)
 	}
 	return created
+}
+
+func credentialVersionForTest(credentials map[string]string) int {
+	if len(credentials) == 0 {
+		return 0
+	}
+	return 1
 }
 
 func createLocalCallerWithKey(t *testing.T, router http.Handler, name string) (agentResponse, keyResponse) {
@@ -1626,6 +1801,14 @@ func grantRoute(t *testing.T, router http.Handler, callerID string, targetID str
 		"routeType":     routeType,
 		"routeKey":      routeKey,
 	}, ""))
+}
+
+func auditActions(events []auditEventResponse) []string {
+	actions := make([]string, 0, len(events))
+	for _, event := range events {
+		actions = append(actions, event.Action)
+	}
+	return actions
 }
 
 func request(t *testing.T, router http.Handler, method string, path string, body any, bearer string) *httptest.ResponseRecorder {

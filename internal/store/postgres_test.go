@@ -385,7 +385,9 @@ func TestPostgresAuditedCreateAgentRollsBackWhenAuditFails(t *testing.T) {
 		t.Fatalf("seed duplicate audit event: %v", err)
 	}
 
-	if _, err := repo.CreateAgentWithAudit(ctx, agent, audit); err == nil {
+	if _, err := repo.CreateAgentWithAudit(ctx, agent, func(domain.Agent) domain.AuditEvent {
+		return audit
+	}); err == nil {
 		t.Fatalf("CreateAgentWithAudit should fail when audit insert conflicts")
 	}
 	if _, ok, err := repo.GetAgent(ctx, agent.ID); err != nil {

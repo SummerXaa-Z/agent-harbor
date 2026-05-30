@@ -2184,10 +2184,10 @@ type failingAuditedAgentRepository struct {
 	store.Repository
 }
 
-func (r *failingAuditedAgentRepository) CreateAgentWithAudit(ctx context.Context, agent domain.Agent, audit domain.AuditEvent) (domain.Agent, error) {
+func (r *failingAuditedAgentRepository) CreateAgentWithAudit(ctx context.Context, agent domain.Agent, build store.AgentAuditBuilder) (domain.Agent, error) {
 	return domain.Agent{}, errors.New("audit insert failed")
 }
 
-func (r *failingAuditedAgentRepository) UpdateAgentWithAudit(ctx context.Context, agent domain.Agent, audit domain.AuditEvent) (domain.Agent, bool, error) {
+func (r *failingAuditedAgentRepository) UpdateAgentWithAudit(ctx context.Context, agent domain.Agent, build store.AgentAuditBuilder) (domain.Agent, bool, error) {
 	return domain.Agent{}, false, errors.New("audit insert failed")
 }

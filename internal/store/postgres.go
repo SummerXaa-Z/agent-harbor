@@ -595,7 +595,7 @@ func (p *Postgres) appendAuditEvent(ctx context.Context, exec sqlExecutor, event
 	return event, nil
 }
 
-func (p *Postgres) CreateAgentWithAudit(ctx context.Context, agent domain.Agent, audit domain.AuditEvent) (domain.Agent, error) {
+func (p *Postgres) CreateAgentWithAudit(ctx context.Context, agent domain.Agent, build AgentAuditBuilder) (domain.Agent, error) {
 	var created domain.Agent
 	err := p.withTx(ctx, func(tx pgx.Tx) error {
 		var err error
@@ -603,13 +603,14 @@ func (p *Postgres) CreateAgentWithAudit(ctx context.Context, agent domain.Agent,
 		if err != nil {
 			return err
 		}
+		audit := build(created)
 		_, err = p.appendAuditEvent(ctx, tx, audit)
 		return err
 	})
 	return created, err
 }
 
-func (p *Postgres) UpdateAgentWithAudit(ctx context.Context, agent domain.Agent, audit domain.AuditEvent) (domain.Agent, bool, error) {
+func (p *Postgres) UpdateAgentWithAudit(ctx context.Context, agent domain.Agent, build AgentAuditBuilder) (domain.Agent, bool, error) {
 	var updated domain.Agent
 	var ok bool
 	err := p.withTx(ctx, func(tx pgx.Tx) error {
@@ -618,13 +619,14 @@ func (p *Postgres) UpdateAgentWithAudit(ctx context.Context, agent domain.Agent,
 		if err != nil || !ok {
 			return err
 		}
+		audit := build(updated)
 		_, err = p.appendAuditEvent(ctx, tx, audit)
 		return err
 	})
 	return updated, ok, err
 }
 
-func (p *Postgres) RotateAgentCredentialsWithAudit(ctx context.Context, id string, credentials map[string]string, now time.Time, audit domain.AuditEvent) (domain.Agent, bool, error) {
+func (p *Postgres) RotateAgentCredentialsWithAudit(ctx context.Context, id string, credentials map[string]string, now time.Time, build AgentAuditBuilder) (domain.Agent, bool, error) {
 	var updated domain.Agent
 	var ok bool
 	err := p.withTx(ctx, func(tx pgx.Tx) error {
@@ -633,13 +635,14 @@ func (p *Postgres) RotateAgentCredentialsWithAudit(ctx context.Context, id strin
 		if err != nil || !ok {
 			return err
 		}
+		audit := build(updated)
 		_, err = p.appendAuditEvent(ctx, tx, audit)
 		return err
 	})
 	return updated, ok, err
 }
 
-func (p *Postgres) DisableAgentWithAudit(ctx context.Context, id string, now time.Time, audit domain.AuditEvent) (domain.Agent, bool, error) {
+func (p *Postgres) DisableAgentWithAudit(ctx context.Context, id string, now time.Time, build AgentAuditBuilder) (domain.Agent, bool, error) {
 	var disabled domain.Agent
 	var ok bool
 	err := p.withTx(ctx, func(tx pgx.Tx) error {
@@ -648,13 +651,14 @@ func (p *Postgres) DisableAgentWithAudit(ctx context.Context, id string, now tim
 		if err != nil || !ok {
 			return err
 		}
+		audit := build(disabled)
 		_, err = p.appendAuditEvent(ctx, tx, audit)
 		return err
 	})
 	return disabled, ok, err
 }
 
-func (p *Postgres) CreateAgentKeyWithAudit(ctx context.Context, key domain.AgentKey, audit domain.AuditEvent) (domain.AgentKey, error) {
+func (p *Postgres) CreateAgentKeyWithAudit(ctx context.Context, key domain.AgentKey, build AgentKeyAuditBuilder) (domain.AgentKey, error) {
 	var created domain.AgentKey
 	err := p.withTx(ctx, func(tx pgx.Tx) error {
 		var err error
@@ -662,13 +666,14 @@ func (p *Postgres) CreateAgentKeyWithAudit(ctx context.Context, key domain.Agent
 		if err != nil {
 			return err
 		}
+		audit := build(created)
 		_, err = p.appendAuditEvent(ctx, tx, audit)
 		return err
 	})
 	return created, err
 }
 
-func (p *Postgres) RevokeAgentKeyWithAudit(ctx context.Context, id string, now time.Time, audit domain.AuditEvent) (domain.AgentKey, bool, error) {
+func (p *Postgres) RevokeAgentKeyWithAudit(ctx context.Context, id string, now time.Time, build AgentKeyAuditBuilder) (domain.AgentKey, bool, error) {
 	var revoked domain.AgentKey
 	var ok bool
 	err := p.withTx(ctx, func(tx pgx.Tx) error {
@@ -677,13 +682,14 @@ func (p *Postgres) RevokeAgentKeyWithAudit(ctx context.Context, id string, now t
 		if err != nil || !ok {
 			return err
 		}
+		audit := build(revoked)
 		_, err = p.appendAuditEvent(ctx, tx, audit)
 		return err
 	})
 	return revoked, ok, err
 }
 
-func (p *Postgres) CreateAccessGrantWithAudit(ctx context.Context, grant domain.AccessGrant, audit domain.AuditEvent) (domain.AccessGrant, error) {
+func (p *Postgres) CreateAccessGrantWithAudit(ctx context.Context, grant domain.AccessGrant, build AccessGrantAuditBuilder) (domain.AccessGrant, error) {
 	var created domain.AccessGrant
 	err := p.withTx(ctx, func(tx pgx.Tx) error {
 		var err error
@@ -691,13 +697,14 @@ func (p *Postgres) CreateAccessGrantWithAudit(ctx context.Context, grant domain.
 		if err != nil {
 			return err
 		}
+		audit := build(created)
 		_, err = p.appendAuditEvent(ctx, tx, audit)
 		return err
 	})
 	return created, err
 }
 
-func (p *Postgres) RevokeAccessGrantWithAudit(ctx context.Context, id string, now time.Time, audit domain.AuditEvent) (domain.AccessGrant, bool, error) {
+func (p *Postgres) RevokeAccessGrantWithAudit(ctx context.Context, id string, now time.Time, build AccessGrantAuditBuilder) (domain.AccessGrant, bool, error) {
 	var revoked domain.AccessGrant
 	var ok bool
 	err := p.withTx(ctx, func(tx pgx.Tx) error {
@@ -706,13 +713,14 @@ func (p *Postgres) RevokeAccessGrantWithAudit(ctx context.Context, id string, no
 		if err != nil || !ok {
 			return err
 		}
+		audit := build(revoked)
 		_, err = p.appendAuditEvent(ctx, tx, audit)
 		return err
 	})
 	return revoked, ok, err
 }
 
-func (p *Postgres) CreateRoutePolicyWithAudit(ctx context.Context, policy domain.RoutePolicy, audit domain.AuditEvent) (domain.RoutePolicy, error) {
+func (p *Postgres) CreateRoutePolicyWithAudit(ctx context.Context, policy domain.RoutePolicy, build RoutePolicyAuditBuilder) (domain.RoutePolicy, error) {
 	var created domain.RoutePolicy
 	err := p.withTx(ctx, func(tx pgx.Tx) error {
 		var err error
@@ -720,13 +728,14 @@ func (p *Postgres) CreateRoutePolicyWithAudit(ctx context.Context, policy domain
 		if err != nil {
 			return err
 		}
+		audit := build(created)
 		_, err = p.appendAuditEvent(ctx, tx, audit)
 		return err
 	})
 	return created, err
 }
 
-func (p *Postgres) UpdateRoutePolicyWithAudit(ctx context.Context, policy domain.RoutePolicy, audit domain.AuditEvent) (domain.RoutePolicy, bool, error) {
+func (p *Postgres) UpdateRoutePolicyWithAudit(ctx context.Context, policy domain.RoutePolicy, build RoutePolicyAuditBuilder) (domain.RoutePolicy, bool, error) {
 	var updated domain.RoutePolicy
 	var ok bool
 	err := p.withTx(ctx, func(tx pgx.Tx) error {
@@ -735,13 +744,14 @@ func (p *Postgres) UpdateRoutePolicyWithAudit(ctx context.Context, policy domain
 		if err != nil || !ok {
 			return err
 		}
+		audit := build(updated)
 		_, err = p.appendAuditEvent(ctx, tx, audit)
 		return err
 	})
 	return updated, ok, err
 }
 
-func (p *Postgres) DisableRoutePolicyWithAudit(ctx context.Context, id string, now time.Time, audit domain.AuditEvent) (domain.RoutePolicy, bool, error) {
+func (p *Postgres) DisableRoutePolicyWithAudit(ctx context.Context, id string, now time.Time, build RoutePolicyAuditBuilder) (domain.RoutePolicy, bool, error) {
 	var disabled domain.RoutePolicy
 	var ok bool
 	err := p.withTx(ctx, func(tx pgx.Tx) error {
@@ -750,6 +760,7 @@ func (p *Postgres) DisableRoutePolicyWithAudit(ctx context.Context, id string, n
 		if err != nil || !ok {
 			return err
 		}
+		audit := build(disabled)
 		_, err = p.appendAuditEvent(ctx, tx, audit)
 		return err
 	})

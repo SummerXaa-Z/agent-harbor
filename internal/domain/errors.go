@@ -28,6 +28,10 @@ func UpstreamError(message string) AppError {
 	return AppError{Status: 502, Code: "UPSTREAM_ERROR", Message: message}
 }
 
+func UpstreamTimeout(message string) AppError {
+	return AppError{Status: 504, Code: "UPSTREAM_TIMEOUT", Message: message}
+}
+
 func NotFound(message string) AppError {
 	return AppError{Status: 404, Code: "NOT_FOUND", Message: message}
 }

@@ -59,6 +59,14 @@ bash scripts/demo-sprint2-cleanup.sh
 
 It creates a caller/target pair in one workspace, confirms an allowed call, revokes the grant and sees the next call denied, recreates a grant, disables the caller Agent, sees its old Agent Key rejected, then verifies `tenantId`/`workspaceId` scoped agent listing.
 
+## Sprint 3 MCP Policy Demo
+
+Sprint 3 makes MCP authorization method-aware. Against a running API, this script grants only `tools/list`, proves a `tools/list` JSON-RPC call is allowed, proves `tools/call` is denied, and checks traces for the actual MCP methods:
+
+```bash
+bash scripts/demo-sprint3-mcp-policy.sh
+```
+
 ## Admin Key
 
 Management APIs are open by default for local clean-room iteration. If `AGENT_HARBOR_ADMIN_KEY` is set on the server, management endpoints require the same value in `X-Admin-Key`.
@@ -67,9 +75,28 @@ Management APIs are open by default for local clean-room iteration. If `AGENT_HA
 AGENT_HARBOR_ADMIN_KEY=local-admin-key go run ./cmd/agent-harbor
 ADMIN_KEY=local-admin-key bash scripts/demo-governance-loop.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint2-cleanup.sh
+ADMIN_KEY=local-admin-key bash scripts/demo-sprint3-mcp-policy.sh
 ```
 
 The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the admin key only protects management and audit APIs. Agent Key TTLs must be between 1 and 3600 seconds, with a 1800 second server default when omitted.
+
+## Proxy Controls
+
+MCP calls derive authorization from the JSON-RPC `method`. Use `AccessGrant.routeType=mcp` with route keys such as `initialize`, `tools/list`, or `tools/call`; an empty route key remains a wildcard.
+
+Target `channelConfig` also supports optional proxy controls:
+
+```json
+{
+  "endpoint": "https://api.example.com/mcp",
+  "headers": {
+    "X-AgentHarbor-Tenant": "default"
+  },
+  "timeoutMs": 10000
+}
+```
+
+`headers` must be string-to-string and cannot contain secret-like names such as authorization, token, cookie, or api key. `timeoutMs` must be an integer from 1 to 30000. Upstream timeout returns `504 UPSTREAM_TIMEOUT`; other network failures return `502 UPSTREAM_ERROR`.
 
 ## PostgreSQL Env
 
@@ -119,7 +146,6 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 
 ## Next Milestones
 
-- Add MCP `initialize`, `tools/list`, `tools/call` method-level policy.
-- Add per-agent upstream credentials and header injection.
-- Add proxy timeout/retry policy and upstream error classification.
+- Add encrypted per-agent upstream credentials and secret header injection.
+- Add proxy retry policy and richer upstream error classification.
 - Add OTel spans and metrics for route/caller/target dimensions.

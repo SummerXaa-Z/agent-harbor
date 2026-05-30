@@ -1,3 +1,44 @@
+## [2026-05-30 14:45] Session: Sprint 3 MCP Policy Controls
+
+### 完成
+- 新增 Sprint 3 brief / design / implementation plan，范围收敛在 MCP method-level policy、proxy headers、timeout controls。
+- MCP 数据面从固定 `tools/call` 改为解析 JSON-RPC `method` 作为 `AccessGrant.routeKey`，trace 也记录真实 method。
+- 无效 MCP JSON 或缺失/空 `method` 返回 `400 VALIDATION_FAILED`，且不写 trace。
+- `channelConfig.headers` 支持非 secret 的 string-to-string upstream header 注入，并拒绝 `Authorization`、`Cookie`、`x-api-key`、token 等 secret-like header 名。
+- `channelConfig.timeoutMs` 支持 1-30000ms proxy timeout，超时返回 `504 UPSTREAM_TIMEOUT`，其他网络失败仍是 `502 UPSTREAM_ERROR`。
+- 前端 Create Grant 新增 MCP route key presets：`initialize` / `tools/list` / `tools/call` / `wildcard`，保留自由输入。
+- 新增 `scripts/demo-sprint3-mcp-policy.sh`，一键验证 `tools/list` grant 只允许 `tools/list`，拒绝 `tools/call`。
+
+### 决策
+- Sprint 3 不引入 encrypted credential store；headers 只允许非 secret 值，真正密钥注入留到下一轮。
+- MCP method 解析在授权前完成；解析失败不写 trace，因为还没有可信 route key。
+- Timeout 是 per-target channel config，默认 10s，最大 30s，避免 demo gateway 被慢 upstream 拖住。
+
+### 血泪教训
+- `x-api-key` 这种 header 名不会被只查 `api_key` 的规则挡住，secret-like 检测需要同时看原串和去掉 `-/_/space` 后的归一化形式。
+- `Cookie` / `Set-Cookie` 也属于 credential-bearing header，不能只盯 Authorization / token。
+- MCP JSON-RPC method 是大小写敏感的 route key，grant 匹配不能继续沿用 Sprint 0 的 `EqualFold` 宽松策略。
+- 解析 MCP body 后必须把 request body 放回去，否则 Sprint 2 的 upstream proxy 会拿到空 body。
+- method-level policy 会改变旧脚本的语义；demo 必须显式发送匹配的 JSON-RPC `method`。
+
+### 验证
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `go build ./...`
+- `pnpm -C frontend build`
+- `bash -n scripts/demo-governance-loop.sh scripts/demo-sprint2-cleanup.sh scripts/demo-sprint3-mcp-policy.sh`
+- `AGENT_HARBOR_TEST_DATABASE_URL=... go test ./internal/store -run TestPostgresRepositoryRoundTrip -count=1`（临时 PostgreSQL 16 容器）
+- `scripts/demo-governance-loop.sh` + `scripts/demo-sprint2-cleanup.sh` + `scripts/demo-sprint3-mcp-policy.sh` against local API with `AGENT_HARBOR_ADMIN_KEY`
+- Playwright route preset smoke against Vite dev server
+
+### 影响文件
+- `internal/httpapi/server.go` / `server_test.go`：MCP method parsing、headers/timeout validation、upstream timeout handling。
+- `internal/security/validation.go`：secret-like key/header 判断增强。
+- `internal/domain/errors.go`：新增 `UPSTREAM_TIMEOUT`。
+- `frontend/src/App.tsx` / `styles.css`：Create Grant MCP preset 控件。
+- `scripts/demo-sprint3-mcp-policy.sh`：新增 method policy demo。
+- `README.md` / `docs/sprints/` / `docs/superpowers/`：Sprint 3 行为和计划记录。
+
 ## [2026-05-29 17:45] Session: Sprint 2 Governance Proxy
 
 ### 完成

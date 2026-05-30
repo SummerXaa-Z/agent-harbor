@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -213,7 +212,7 @@ func (m *Memory) HasGrant(_ context.Context, callerID string, targetID string, r
 			continue
 		}
 		if grant.RouteType == "" || grant.RouteType == routeType {
-			if grant.RouteKey == "" || strings.EqualFold(grant.RouteKey, routeKey) {
+			if grant.RouteKey == "" || grant.RouteKey == routeKey {
 				return true
 			}
 		}

@@ -16,18 +16,28 @@ var secretKeyFragments = []string{
 	"apikey",
 	"authorization",
 	"authheader",
+	"cookie",
 	"credential",
 }
 
 func ContainsSecretLikeKey(value map[string]any) bool {
 	for key, nested := range value {
-		lower := strings.ToLower(key)
-		for _, fragment := range secretKeyFragments {
-			if strings.Contains(lower, fragment) {
-				return true
-			}
+		if IsSecretLikeKey(key) {
+			return true
 		}
 		if child, ok := nested.(map[string]any); ok && ContainsSecretLikeKey(child) {
+			return true
+		}
+	}
+	return false
+}
+
+func IsSecretLikeKey(key string) bool {
+	lower := strings.ToLower(key)
+	normalized := strings.NewReplacer("-", "", "_", "", " ", "").Replace(lower)
+	for _, fragment := range secretKeyFragments {
+		normalizedFragment := strings.NewReplacer("-", "", "_", "", " ", "").Replace(fragment)
+		if strings.Contains(lower, fragment) || strings.Contains(normalized, normalizedFragment) {
 			return true
 		}
 	}

@@ -524,6 +524,30 @@ button {
   gap: 10px;
 }
 
+.route-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.route-presets button {
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid #d8e0e7;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #4d5b68;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.route-presets button:hover,
+.route-presets button.selected {
+  border-color: #9fd2df;
+  background: #e8f7fb;
+  color: #0d6f88;
+}
+
 .form-footer {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

@@ -20,9 +20,11 @@ import type {
   CreateAgentRequest,
   ManagementScope,
   ProviderContract,
+  RotateAgentCredentialsRequest,
   SystemMetric,
   TraceEvent,
   TraceFilters,
+  UpdateAgentRequest,
 } from './types'
 
 const DEFAULT_API_BASE = 'http://127.0.0.1:9090'
@@ -56,7 +58,7 @@ function isEnvelope<T>(value: unknown): value is ApiEnvelope<T> {
 interface RequestOptions {
   adminKey?: string
   body?: unknown
-  method?: 'GET' | 'POST' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   signal?: AbortSignal
 }
 
@@ -196,6 +198,18 @@ export async function fetchRuntimeMetrics(
 
 export async function createAgent(body: CreateAgentRequest, adminKey?: string): Promise<Agent> {
   return request<Agent>('/api/v1/agents', { adminKey, body })
+}
+
+export async function updateAgent(id: string, body: UpdateAgentRequest, adminKey?: string): Promise<Agent> {
+  return request<Agent>(`/api/v1/agents/${encodeURIComponent(id)}`, { adminKey, body, method: 'PATCH' })
+}
+
+export async function rotateAgentCredentials(
+  id: string,
+  body: RotateAgentCredentialsRequest,
+  adminKey?: string,
+): Promise<Agent> {
+  return request<Agent>(`/api/v1/agents/${encodeURIComponent(id)}/credentials:rotate`, { adminKey, body })
 }
 
 export async function disableAgent(id: string, adminKey?: string): Promise<Agent> {

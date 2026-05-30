@@ -91,7 +91,9 @@ func (s *Server) Router() http.Handler {
 			r.Post("/agents", s.createAgent)
 			r.Get("/agents", s.listAgents)
 			r.Get("/agents/{id}", s.getAgent)
+			r.Patch("/agents/{id}", s.updateAgent)
 			r.Delete("/agents/{id}", s.disableAgent)
+			r.Post("/agents/{id}/credentials:rotate", s.rotateAgentCredentials)
 			r.Post("/agent-keys", s.createAgentKey)
 			r.Get("/api-keys", s.listAgentKeys)
 			r.Post("/api-keys", s.createAgentKey)
@@ -126,7 +128,7 @@ func localDevCORS(next http.Handler) http.Handler {
 		origin := r.Header.Get("Origin")
 		if _, ok := allowedOrigins[origin]; ok {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Key, X-Run-Id")
 			w.Header().Set("Vary", "Origin")
 			if r.Method == http.MethodOptions {
@@ -189,27 +191,14 @@ func (s *Server) agentFromRequest(req domain.CreateAgentRequest) (domain.Agent, 
 	req.TenantID = strings.TrimSpace(req.TenantID)
 	req.WorkspaceID = strings.TrimSpace(req.WorkspaceID)
 	req.ChannelType = strings.TrimSpace(req.ChannelType)
-	if req.Name == "" {
-		return domain.Agent{}, domain.BadRequest("VALIDATION_FAILED", "name is required")
-	}
-	if req.WorkspaceID == "" {
-		return domain.Agent{}, domain.BadRequest("VALIDATION_FAILED", "workspaceId is required")
-	}
 	if req.TenantID == "" {
 		req.TenantID = "default"
 	}
 	if req.Status == "" {
 		req.Status = domain.AgentStatusDraft
 	}
-	if req.Status != domain.AgentStatusDraft && req.Status != domain.AgentStatusActive && req.Status != domain.AgentStatusDisabled {
-		return domain.Agent{}, domain.BadRequest("VALIDATION_FAILED", "status must be draft, active, or disabled")
-	}
 	if req.ChannelType == "" {
 		req.ChannelType = "local"
-	}
-	channel, ok := contracts.Channel(req.ChannelType)
-	if !ok {
-		return domain.Agent{}, domain.BadRequest("VALIDATION_FAILED", "channelType is not supported")
 	}
 	if req.ChannelConfig == nil {
 		req.ChannelConfig = map[string]any{}
@@ -218,40 +207,8 @@ func (s *Server) agentFromRequest(req domain.CreateAgentRequest) (domain.Agent, 
 	if err != nil {
 		return domain.Agent{}, err
 	}
-	if channelConfigContainsSecretLikeKey(req.ChannelConfig) {
-		return domain.Agent{}, domain.BadRequest("VALIDATION_FAILED", "channelConfig must not contain secret-like keys")
-	}
-	if err := validateConfiguredHeaders(req.ChannelConfig); err != nil {
-		return domain.Agent{}, err
-	}
-	if err := validateCredentialHeaders(req.ChannelConfig, credentials); err != nil {
-		return domain.Agent{}, err
-	}
-	if _, err := proxyTimeoutFromConfig(req.ChannelConfig); err != nil {
-		return domain.Agent{}, err
-	}
-	if _, err := proxyRetryPolicyFromConfig(req.ChannelConfig); err != nil {
-		return domain.Agent{}, err
-	}
-	for _, key := range []string{"endpoint", "specUrl"} {
-		if raw, exists := req.ChannelConfig[key]; exists {
-			value, ok := raw.(string)
-			if !ok {
-				return domain.Agent{}, domain.BadRequest("VALIDATION_FAILED", key+" must be a string URL")
-			}
-			if err := security.ValidateOutboundEndpoint(value); err != nil {
-				return domain.Agent{}, domain.BadRequest("VALIDATION_FAILED", err.Error())
-			}
-		}
-	}
-	if req.Status == domain.AgentStatusActive && channel.EndpointRequiredWhenActive {
-		endpoint, ok := req.ChannelConfig["endpoint"].(string)
-		if !ok || strings.TrimSpace(endpoint) == "" {
-			return domain.Agent{}, domain.BadRequest("VALIDATION_FAILED", "active "+req.ChannelType+" agent requires channelConfig.endpoint")
-		}
-	}
 	now := s.now()
-	return domain.Agent{
+	agent := domain.Agent{
 		ID:            security.NewID("agt"),
 		TenantID:      req.TenantID,
 		WorkspaceID:   req.WorkspaceID,
@@ -264,7 +221,63 @@ func (s *Server) agentFromRequest(req domain.CreateAgentRequest) (domain.Agent, 
 		Status:        req.Status,
 		CreatedAt:     now,
 		UpdatedAt:     now,
-	}, nil
+	}
+	if err := validateAgentForSave(agent); err != nil {
+		return domain.Agent{}, err
+	}
+	return agent, nil
+}
+
+func validateAgentForSave(agent domain.Agent) error {
+	if strings.TrimSpace(agent.Name) == "" {
+		return domain.BadRequest("VALIDATION_FAILED", "name is required")
+	}
+	if strings.TrimSpace(agent.WorkspaceID) == "" {
+		return domain.BadRequest("VALIDATION_FAILED", "workspaceId is required")
+	}
+	if agent.Status != domain.AgentStatusDraft && agent.Status != domain.AgentStatusActive && agent.Status != domain.AgentStatusDisabled {
+		return domain.BadRequest("VALIDATION_FAILED", "status must be draft, active, or disabled")
+	}
+	channel, ok := contracts.Channel(agent.ChannelType)
+	if !ok {
+		return domain.BadRequest("VALIDATION_FAILED", "channelType is not supported")
+	}
+	if agent.ChannelConfig == nil {
+		agent.ChannelConfig = map[string]any{}
+	}
+	if channelConfigContainsSecretLikeKey(agent.ChannelConfig) {
+		return domain.BadRequest("VALIDATION_FAILED", "channelConfig must not contain secret-like keys")
+	}
+	if err := validateConfiguredHeaders(agent.ChannelConfig); err != nil {
+		return err
+	}
+	if err := validateCredentialHeaders(agent.ChannelConfig, agent.Credentials); err != nil {
+		return err
+	}
+	if _, err := proxyTimeoutFromConfig(agent.ChannelConfig); err != nil {
+		return err
+	}
+	if _, err := proxyRetryPolicyFromConfig(agent.ChannelConfig); err != nil {
+		return err
+	}
+	for _, key := range []string{"endpoint", "specUrl"} {
+		if raw, exists := agent.ChannelConfig[key]; exists {
+			value, ok := raw.(string)
+			if !ok {
+				return domain.BadRequest("VALIDATION_FAILED", key+" must be a string URL")
+			}
+			if err := security.ValidateOutboundEndpoint(value); err != nil {
+				return domain.BadRequest("VALIDATION_FAILED", err.Error())
+			}
+		}
+	}
+	if agent.Status == domain.AgentStatusActive && channel.EndpointRequiredWhenActive {
+		endpoint, ok := agent.ChannelConfig["endpoint"].(string)
+		if !ok || strings.TrimSpace(endpoint) == "" {
+			return domain.BadRequest("VALIDATION_FAILED", "active "+agent.ChannelType+" agent requires channelConfig.endpoint")
+		}
+	}
+	return nil
 }
 
 func (s *Server) listAgents(w http.ResponseWriter, r *http.Request) {
@@ -287,6 +300,95 @@ func (s *Server) getAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, agent)
+}
+
+func (s *Server) updateAgent(w http.ResponseWriter, r *http.Request) {
+	var req domain.UpdateAgentRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	existing, ok, err := s.repo.GetAgent(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("agent not found"))
+		return
+	}
+	updated := existing
+	if req.Name != nil {
+		updated.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.Description != nil {
+		updated.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.OwnerID != nil {
+		updated.OwnerID = strings.TrimSpace(*req.OwnerID)
+	}
+	if req.Status != nil {
+		updated.Status = *req.Status
+	}
+	if req.ChannelConfig != nil {
+		updated.ChannelConfig = *req.ChannelConfig
+		if updated.ChannelConfig == nil {
+			updated.ChannelConfig = map[string]any{}
+		}
+	}
+	updated.UpdatedAt = s.now()
+	if err := validateAgentForSave(updated); err != nil {
+		writeError(w, err)
+		return
+	}
+	saved, ok, err := s.repo.UpdateAgent(r.Context(), updated)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("agent not found"))
+		return
+	}
+	writeJSON(w, http.StatusOK, saved)
+}
+
+func (s *Server) rotateAgentCredentials(w http.ResponseWriter, r *http.Request) {
+	var req domain.RotateAgentCredentialsRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	credentials, err := normalizeCredentials(req.Credentials)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	agent, ok, err := s.repo.GetAgent(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("agent not found"))
+		return
+	}
+	agent.Credentials = credentials
+	agent.UpdatedAt = s.now()
+	if err := validateAgentForSave(agent); err != nil {
+		writeError(w, err)
+		return
+	}
+	updated, ok, err := s.repo.UpdateAgent(r.Context(), agent)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("agent not found"))
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func (s *Server) disableAgent(w http.ResponseWriter, r *http.Request) {
@@ -848,8 +950,22 @@ func channelConfigContainsSecretLikeKeyAt(config map[string]any, allowCredential
 		if security.IsSecretLikeKey(key) {
 			return true
 		}
-		if child, ok := nested.(map[string]any); ok && channelConfigContainsSecretLikeKeyAt(child, false) {
+		if channelConfigValueContainsSecretLikeKey(nested, false) {
 			return true
+		}
+	}
+	return false
+}
+
+func channelConfigValueContainsSecretLikeKey(value any, allowCredentialHeaders bool) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		return channelConfigContainsSecretLikeKeyAt(typed, allowCredentialHeaders)
+	case []any:
+		for _, item := range typed {
+			if channelConfigValueContainsSecretLikeKey(item, allowCredentialHeaders) {
+				return true
+			}
 		}
 	}
 	return false

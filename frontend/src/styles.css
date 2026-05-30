@@ -599,6 +599,12 @@ button {
   color: #9d333a;
 }
 
+.table-action-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .table-action:disabled {
   cursor: not-allowed;
   opacity: 0.65;

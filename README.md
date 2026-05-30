@@ -91,6 +91,14 @@ Sprint 6 backs Runtime Signals with trace-derived metrics. Against a running API
 bash scripts/demo-sprint6-runtime-metrics.sh
 ```
 
+## Sprint 7 Credential Rotation Demo
+
+Sprint 7 adds Agent partial update and credential rotation. Against a running API, this script creates a credentialed Agent, patches mutable metadata/status, rotates credentials, and verifies responses remain redacted:
+
+```bash
+bash scripts/demo-sprint7-credential-rotation.sh
+```
+
 ## Admin Key
 
 Management APIs are open by default for local clean-room iteration. If `AGENT_HARBOR_ADMIN_KEY` is set on the server, management endpoints require the same value in `X-Admin-Key`.
@@ -103,6 +111,7 @@ ADMIN_KEY=local-admin-key bash scripts/demo-sprint3-mcp-policy.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint4-credentials.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint5-retry-config.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint6-runtime-metrics.sh
+ADMIN_KEY=local-admin-key bash scripts/demo-sprint7-credential-rotation.sh
 ```
 
 The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the admin key only protects management and audit APIs. Agent Key TTLs must be between 1 and 3600 seconds, with a 1800 second server default when omitted.
@@ -134,6 +143,8 @@ Target `channelConfig` also supports optional proxy controls:
 `headers` must be string-to-string and cannot contain secret-like names such as authorization, token, cookie, or api key. Put secret header bindings in `credentialHeaders` instead, where the object maps an upstream header name to a key in the Agent-level `credentials` object submitted at create time. Credentials are never returned by management responses; PostgreSQL stores non-empty credentials as AES-GCM ciphertext. `timeoutMs` must be an integer from 1 to 30000.
 
 `retry` is opt-in. `maxAttempts` defaults to `1` and accepts `1` through `4`; `backoffMs` defaults to `0` and accepts `0` through `1000`; `statusCodes` defaults to `[502,503,504]` and only accepts 5xx codes. Proxied upstream responses include `X-AgentHarbor-Upstream-Attempts`. The proxy buffers request bodies up to 4MiB so retry attempts can replay the same payload; larger bodies return `413 PAYLOAD_TOO_LARGE`. Gateway-generated upstream failures use `UPSTREAM_TIMEOUT`, `UPSTREAM_DNS_ERROR`, `UPSTREAM_TLS_ERROR`, `UPSTREAM_CONNECT_ERROR`, or fallback `UPSTREAM_ERROR`.
+
+`PATCH /api/v1/agents/{id}` updates mutable Agent metadata, status, and full `channelConfig` replacement while keeping `tenantId`, `workspaceId`, and `channelType` immutable. `POST /api/v1/agents/{id}/credentials:rotate` replaces the Agent credential bag; responses continue to omit plaintext credentials. Rotation reuses the existing credential validation and encrypted PostgreSQL persistence path.
 
 ## PostgreSQL Env
 
@@ -168,7 +179,9 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 - `POST /api/v1/agents`
 - `GET /api/v1/agents?tenantId=&workspaceId=`
 - `GET /api/v1/agents/{id}`
+- `PATCH /api/v1/agents/{id}`
 - `DELETE /api/v1/agents/{id}`
+- `POST /api/v1/agents/{id}/credentials:rotate`
 - `POST /api/v1/agent-keys`
 - `GET /api/v1/api-keys?tenantId=&workspaceId=`
 - `POST /api/v1/api-keys`
@@ -186,5 +199,5 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 ## Next Milestones
 
 - Export runtime trace dimensions to OpenTelemetry spans and metrics.
-- Add credential rotation and partial update APIs.
+- Add credential version metadata and audit events for rotation/update.
 - Add route-level retry overrides after route policy objects exist.

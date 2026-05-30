@@ -1,3 +1,40 @@
+## [2026-05-30 19:40] Session: Sprint 7 Agent Update and Credential Rotation
+
+### 完成
+- 新增 Sprint 7 brief / design / implementation plan，范围聚焦 Agent partial update 和 credential rotation。
+- 新增 `PATCH /api/v1/agents/{id}`，支持更新 name / description / ownerId / status / full `channelConfig` replacement。
+- 新增 `POST /api/v1/agents/{id}/credentials:rotate`，完整替换 Agent credential bag，响应继续不回显明文。
+- 更新与轮换复用 create-time 校验：status、channel catalog、endpoint required、SSRF、headers、credentialHeaders、timeout、retry。
+- Memory / PostgreSQL repository 新增 `UpdateAgent`，PostgreSQL 继续用 `credentials_ciphertext` AES-GCM 路径保存轮换后的密钥。
+- 前端新增 credential rotation 表单，并把 Registry 状态动作切到 `PATCH`。
+- 根据 review 修复 `channelConfig` secret-like key 在 array nesting 中可绕过并被回显的问题。
+- 新增 `scripts/demo-sprint7-credential-rotation.sh`，验证 patch、rotate、get 响应均不泄露 credential。
+
+### 决策
+- Sprint 7 不支持 channel type / tenant / workspace 迁移，避免 update API 变成隐式 re-register。
+- `channelConfig` 更新采用 full replacement，不做 deep merge，避免 nested headers / credentialHeaders 语义歧义。
+- Credential rotation 是 full replacement，不做 per-key merge；缺失 `credentialHeaders` 引用会直接拒绝。
+
+### 验证
+- TDD red/green: `PATCH /api/v1/agents/{id}` 405 → mutable fields update + unsafe config rejection 通过。
+- TDD red/green: rotate endpoint 404 → 下一次 proxy 使用新 Authorization 通过。
+- Review fix red/green: array-nested `authorization` in `channelConfig.metadata` 先泄露回显 → 现在拒绝。
+- `go test ./internal/httpapi ./internal/store -count=1`
+- `pnpm -C frontend build`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `go build ./...`
+- `AGENT_HARBOR_TEST_DATABASE_URL=... go test ./internal/store -run TestPostgresRepositoryRoundTrip -count=1`（临时 PostgreSQL 16 容器）
+- `scripts/demo-sprint7-credential-rotation.sh` against local API with `AGENT_HARBOR_ADMIN_KEY`
+- Playwright smoke for Rotate Credential / Agent Registry against live local API
+
+### 影响文件
+- `internal/httpapi/server.go` / `server_test.go`：update/rotate handlers、共享 Agent validation、HTTP tests。
+- `internal/store/memory.go` / `postgres.go` / `postgres_test.go`：Agent update persistence 和 encrypted credential round-trip。
+- `internal/domain/types.go`：新增 update/rotate request types。
+- `frontend/src/api.ts` / `types.ts` / `App.tsx` / `styles.css`：update/rotate API client 和控制台操作入口。
+- `scripts/demo-sprint7-credential-rotation.sh`、`README.md`、`docs/sprints/`、`docs/superpowers/`：Sprint 7 行为记录。
+
 ## [2026-05-30 18:45] Session: Sprint 6 Runtime Metrics
 
 ### 完成

@@ -37,6 +37,18 @@ type CreateAgentRequest struct {
 	Status        AgentStatus       `json:"status"`
 }
 
+type UpdateAgentRequest struct {
+	Name          *string         `json:"name"`
+	Description   *string         `json:"description"`
+	OwnerID       *string         `json:"ownerId"`
+	ChannelConfig *map[string]any `json:"channelConfig"`
+	Status        *AgentStatus    `json:"status"`
+}
+
+type RotateAgentCredentialsRequest struct {
+	Credentials map[string]string `json:"credentials"`
+}
+
 type AgentKey struct {
 	ID        string    `json:"id"`
 	AgentID   string    `json:"agentId"`

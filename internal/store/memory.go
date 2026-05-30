@@ -13,6 +13,7 @@ type Repository interface {
 	CreateAgent(context.Context, domain.Agent) (domain.Agent, error)
 	ListAgents(context.Context, AgentFilter) ([]domain.Agent, error)
 	GetAgent(context.Context, string) (domain.Agent, bool, error)
+	UpdateAgent(context.Context, domain.Agent) (domain.Agent, bool, error)
 	DisableAgent(context.Context, string, time.Time) (domain.Agent, bool, error)
 	CreateAgentKey(context.Context, domain.AgentKey) (domain.AgentKey, error)
 	ListAgentKeys(context.Context, ManagementScope) ([]domain.AgentKey, error)
@@ -90,6 +91,16 @@ func (m *Memory) GetAgent(_ context.Context, id string) (domain.Agent, bool, err
 	defer m.mu.RUnlock()
 	agent, ok := m.agents[id]
 	return agent, ok, nil
+}
+
+func (m *Memory) UpdateAgent(_ context.Context, agent domain.Agent) (domain.Agent, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.agents[agent.ID]; !ok {
+		return domain.Agent{}, false, nil
+	}
+	m.agents[agent.ID] = agent
+	return agent, true, nil
 }
 
 func (m *Memory) DisableAgent(_ context.Context, id string, now time.Time) (domain.Agent, bool, error) {

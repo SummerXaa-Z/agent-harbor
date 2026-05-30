@@ -1618,6 +1618,64 @@ func TestManagementAuditEventsRecordAgentLifecycleWithoutSecrets(t *testing.T) {
 	}
 }
 
+func TestManagementAuditFailureBlocksAgentCreateAndUpdate(t *testing.T) {
+	base := store.NewMemory()
+	router := newRouterWithRepo(&failingAuditedAgentRepository{Repository: base})
+
+	createResp := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Audit Required Agent",
+		"tenantId":    "tenant-audit-failure",
+		"workspaceId": "ws-audit-failure",
+		"channelType": "local",
+		"status":      "active",
+	}, "")
+	if createResp.Code != http.StatusInternalServerError {
+		t.Fatalf("create should fail when audit persistence fails: status=%d body=%s", createResp.Code, createResp.Body.String())
+	}
+	agents, err := base.ListAgents(t.Context(), store.AgentFilter{ManagementScope: store.ManagementScope{
+		TenantID:    "tenant-audit-failure",
+		WorkspaceID: "ws-audit-failure",
+	}})
+	if err != nil {
+		t.Fatalf("list agents after failed create: %v", err)
+	}
+	if len(agents) != 0 {
+		t.Fatalf("failed audited create should not persist agent: %#v", agents)
+	}
+
+	existing := domain.Agent{
+		ID:            security.NewID("agt"),
+		TenantID:      "tenant-audit-failure",
+		WorkspaceID:   "ws-audit-failure",
+		Name:          "Original Agent",
+		ChannelType:   "local",
+		ChannelConfig: map[string]any{},
+		Status:        domain.AgentStatusActive,
+		CreatedAt:     time.Now().UTC(),
+		UpdatedAt:     time.Now().UTC(),
+	}
+	if _, err := base.CreateAgent(t.Context(), existing); err != nil {
+		t.Fatalf("seed existing agent: %v", err)
+	}
+
+	updateResp := request(t, router, http.MethodPatch, "/api/v1/agents/"+existing.ID, map[string]any{
+		"name": "Updated Agent",
+	}, "")
+	if updateResp.Code != http.StatusInternalServerError {
+		t.Fatalf("update should fail when audit persistence fails: status=%d body=%s", updateResp.Code, updateResp.Body.String())
+	}
+	after, ok, err := base.GetAgent(t.Context(), existing.ID)
+	if err != nil {
+		t.Fatalf("get agent after failed update: %v", err)
+	}
+	if !ok {
+		t.Fatalf("seeded agent disappeared after failed update")
+	}
+	if after.Name != "Original Agent" {
+		t.Fatalf("failed audited update should keep previous name, got %q", after.Name)
+	}
+}
+
 func TestRotateAgentCredentialsRejectsEmptyCredentialBag(t *testing.T) {
 	router := newRouter()
 	agent := createAgent(t, router, map[string]any{
@@ -2120,4 +2178,16 @@ func (r *failingAllowedTraceRepository) AppendTrace(ctx context.Context, event d
 		return domain.TraceEvent{}, errors.New("trace append failed")
 	}
 	return r.Repository.AppendTrace(ctx, event)
+}
+
+type failingAuditedAgentRepository struct {
+	store.Repository
+}
+
+func (r *failingAuditedAgentRepository) CreateAgentWithAudit(ctx context.Context, agent domain.Agent, audit domain.AuditEvent) (domain.Agent, error) {
+	return domain.Agent{}, errors.New("audit insert failed")
+}
+
+func (r *failingAuditedAgentRepository) UpdateAgentWithAudit(ctx context.Context, agent domain.Agent, audit domain.AuditEvent) (domain.Agent, bool, error) {
+	return domain.Agent{}, false, errors.New("audit insert failed")
 }

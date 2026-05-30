@@ -9,11 +9,17 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
 	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 )
+
+type sqlExecutor interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
 
 type Postgres struct {
 	pool          *pgxpool.Pool
@@ -30,7 +36,26 @@ func NewPostgresWithCredentialKey(pool *pgxpool.Pool, key []byte) *Postgres {
 	return &Postgres{pool: pool, credentialKey: copied}
 }
 
+func (p *Postgres) withTx(ctx context.Context, fn func(pgx.Tx) error) error {
+	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if err := fn(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+	return nil
+}
+
 func (p *Postgres) CreateAgent(ctx context.Context, agent domain.Agent) (domain.Agent, error) {
+	return p.createAgent(ctx, p.pool, agent)
+}
+
+func (p *Postgres) createAgent(ctx context.Context, exec sqlExecutor, agent domain.Agent) (domain.Agent, error) {
 	config, err := json.Marshal(agent.ChannelConfig)
 	if err != nil {
 		return domain.Agent{}, fmt.Errorf("marshal channel config: %w", err)
@@ -42,7 +67,7 @@ func (p *Postgres) CreateAgent(ctx context.Context, agent domain.Agent) (domain.
 	if credentialsCiphertext == nil {
 		credentialsCiphertext = []byte{}
 	}
-	_, err = p.pool.Exec(ctx, `
+	_, err = exec.Exec(ctx, `
 		insert into agents (
 			id, tenant_id, workspace_id, name, description, owner_id,
 			channel_type, channel_config, credentials_ciphertext, credential_version, status, created_at, updated_at
@@ -100,11 +125,15 @@ func (p *Postgres) GetAgent(ctx context.Context, id string) (domain.Agent, bool,
 }
 
 func (p *Postgres) UpdateAgent(ctx context.Context, agent domain.Agent) (domain.Agent, bool, error) {
+	return p.updateAgent(ctx, p.pool, agent)
+}
+
+func (p *Postgres) updateAgent(ctx context.Context, exec sqlExecutor, agent domain.Agent) (domain.Agent, bool, error) {
 	config, err := json.Marshal(agent.ChannelConfig)
 	if err != nil {
 		return domain.Agent{}, false, fmt.Errorf("marshal channel config: %w", err)
 	}
-	row := p.pool.QueryRow(ctx, `
+	row := exec.QueryRow(ctx, `
 		update agents
 		set name=$2, description=$3, owner_id=$4, channel_config=$5, status=$6, updated_at=$7
 		where id=$1
@@ -122,6 +151,10 @@ func (p *Postgres) UpdateAgent(ctx context.Context, agent domain.Agent) (domain.
 }
 
 func (p *Postgres) RotateAgentCredentials(ctx context.Context, id string, credentials map[string]string, now time.Time) (domain.Agent, bool, error) {
+	return p.rotateAgentCredentials(ctx, p.pool, id, credentials, now)
+}
+
+func (p *Postgres) rotateAgentCredentials(ctx context.Context, exec sqlExecutor, id string, credentials map[string]string, now time.Time) (domain.Agent, bool, error) {
 	credentialsCiphertext, err := security.EncryptCredentials(credentials, p.credentialKey)
 	if err != nil {
 		return domain.Agent{}, false, fmt.Errorf("encrypt credentials: %w", err)
@@ -129,7 +162,7 @@ func (p *Postgres) RotateAgentCredentials(ctx context.Context, id string, creden
 	if credentialsCiphertext == nil {
 		credentialsCiphertext = []byte{}
 	}
-	row := p.pool.QueryRow(ctx, `
+	row := exec.QueryRow(ctx, `
 		update agents
 		set credentials_ciphertext=$2,
 			credential_version=credential_version + 1,
@@ -149,7 +182,11 @@ func (p *Postgres) RotateAgentCredentials(ctx context.Context, id string, creden
 }
 
 func (p *Postgres) DisableAgent(ctx context.Context, id string, now time.Time) (domain.Agent, bool, error) {
-	row := p.pool.QueryRow(ctx, `
+	return p.disableAgent(ctx, p.pool, id, now)
+}
+
+func (p *Postgres) disableAgent(ctx context.Context, exec sqlExecutor, id string, now time.Time) (domain.Agent, bool, error) {
+	row := exec.QueryRow(ctx, `
 		update agents
 		set status=$2, updated_at=$3
 		where id=$1
@@ -167,7 +204,11 @@ func (p *Postgres) DisableAgent(ctx context.Context, id string, now time.Time) (
 }
 
 func (p *Postgres) CreateAgentKey(ctx context.Context, key domain.AgentKey) (domain.AgentKey, error) {
-	_, err := p.pool.Exec(ctx, `
+	return p.createAgentKey(ctx, p.pool, key)
+}
+
+func (p *Postgres) createAgentKey(ctx context.Context, exec sqlExecutor, key domain.AgentKey) (domain.AgentKey, error) {
+	_, err := exec.Exec(ctx, `
 		insert into agent_keys (id, agent_id, name, hash, prefix, created_at, expires_at, revoked_at)
 		values ($1,$2,$3,$4,$5,$6,$7,$8)
 	`, key.ID, key.AgentID, key.Name, key.Hash, key.Prefix, key.CreatedAt, key.ExpiresAt, nullTime(key.RevokedAt))
@@ -205,7 +246,11 @@ func (p *Postgres) ListAgentKeys(ctx context.Context, scope ManagementScope) ([]
 }
 
 func (p *Postgres) RevokeAgentKey(ctx context.Context, id string, now time.Time) (domain.AgentKey, bool, error) {
-	row := p.pool.QueryRow(ctx, `
+	return p.revokeAgentKey(ctx, p.pool, id, now)
+}
+
+func (p *Postgres) revokeAgentKey(ctx context.Context, exec sqlExecutor, id string, now time.Time) (domain.AgentKey, bool, error) {
+	row := exec.QueryRow(ctx, `
 		update agent_keys
 		set revoked_at=$2
 		where id=$1
@@ -240,7 +285,11 @@ func (p *Postgres) FindAgentByKeyHash(ctx context.Context, hash string, now time
 }
 
 func (p *Postgres) CreateAccessGrant(ctx context.Context, grant domain.AccessGrant) (domain.AccessGrant, error) {
-	_, err := p.pool.Exec(ctx, `
+	return p.createAccessGrant(ctx, p.pool, grant)
+}
+
+func (p *Postgres) createAccessGrant(ctx context.Context, exec sqlExecutor, grant domain.AccessGrant) (domain.AccessGrant, error) {
+	_, err := exec.Exec(ctx, `
 		insert into access_grants (
 			id, caller_agent_id, target_agent_id, route_type, route_key, created_at, expires_at, revoked_at
 		) values ($1,$2,$3,$4,$5,$6,$7,$8)
@@ -273,7 +322,11 @@ func (p *Postgres) ListAccessGrants(ctx context.Context, scope ManagementScope) 
 }
 
 func (p *Postgres) RevokeAccessGrant(ctx context.Context, id string, now time.Time) (domain.AccessGrant, bool, error) {
-	row := p.pool.QueryRow(ctx, `
+	return p.revokeAccessGrant(ctx, p.pool, id, now)
+}
+
+func (p *Postgres) revokeAccessGrant(ctx context.Context, exec sqlExecutor, id string, now time.Time) (domain.AccessGrant, bool, error) {
+	row := exec.QueryRow(ctx, `
 		update access_grants
 		set revoked_at=$2
 		where id=$1
@@ -307,7 +360,11 @@ func (p *Postgres) HasGrant(ctx context.Context, callerID string, targetID strin
 }
 
 func (p *Postgres) CreateRoutePolicy(ctx context.Context, policy domain.RoutePolicy) (domain.RoutePolicy, error) {
-	_, err := p.pool.Exec(ctx, `
+	return p.createRoutePolicy(ctx, p.pool, policy)
+}
+
+func (p *Postgres) createRoutePolicy(ctx context.Context, exec sqlExecutor, policy domain.RoutePolicy) (domain.RoutePolicy, error) {
+	_, err := exec.Exec(ctx, `
 		insert into route_policies (
 			id, tenant_id, workspace_id, name, caller_agent_id, target_agent_id,
 			route_type, route_key, effect, status, priority, created_at, updated_at
@@ -366,7 +423,11 @@ func (p *Postgres) GetRoutePolicy(ctx context.Context, id string) (domain.RouteP
 }
 
 func (p *Postgres) UpdateRoutePolicy(ctx context.Context, policy domain.RoutePolicy) (domain.RoutePolicy, bool, error) {
-	row := p.pool.QueryRow(ctx, `
+	return p.updateRoutePolicy(ctx, p.pool, policy)
+}
+
+func (p *Postgres) updateRoutePolicy(ctx context.Context, exec sqlExecutor, policy domain.RoutePolicy) (domain.RoutePolicy, bool, error) {
+	row := exec.QueryRow(ctx, `
 		update route_policies
 		set name=$2, route_type=$3, route_key=$4, effect=$5, status=$6, priority=$7, updated_at=$8
 		where id=$1
@@ -385,7 +446,11 @@ func (p *Postgres) UpdateRoutePolicy(ctx context.Context, policy domain.RoutePol
 }
 
 func (p *Postgres) DisableRoutePolicy(ctx context.Context, id string, now time.Time) (domain.RoutePolicy, bool, error) {
-	row := p.pool.QueryRow(ctx, `
+	return p.disableRoutePolicy(ctx, p.pool, id, now)
+}
+
+func (p *Postgres) disableRoutePolicy(ctx context.Context, exec sqlExecutor, id string, now time.Time) (domain.RoutePolicy, bool, error) {
+	row := exec.QueryRow(ctx, `
 		update route_policies
 		set status=$2, updated_at=$3
 		where id=$1
@@ -510,11 +575,15 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 }
 
 func (p *Postgres) AppendAuditEvent(ctx context.Context, event domain.AuditEvent) (domain.AuditEvent, error) {
+	return p.appendAuditEvent(ctx, p.pool, event)
+}
+
+func (p *Postgres) appendAuditEvent(ctx context.Context, exec sqlExecutor, event domain.AuditEvent) (domain.AuditEvent, error) {
 	metadata, err := json.Marshal(event.Metadata)
 	if err != nil {
 		return domain.AuditEvent{}, fmt.Errorf("marshal audit metadata: %w", err)
 	}
-	_, err = p.pool.Exec(ctx, `
+	_, err = exec.Exec(ctx, `
 		insert into audit_events (
 			id, tenant_id, workspace_id, actor, action, resource_type, resource_id, summary, metadata, created_at
 		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -524,6 +593,167 @@ func (p *Postgres) AppendAuditEvent(ctx context.Context, event domain.AuditEvent
 		return domain.AuditEvent{}, fmt.Errorf("insert audit event: %w", err)
 	}
 	return event, nil
+}
+
+func (p *Postgres) CreateAgentWithAudit(ctx context.Context, agent domain.Agent, audit domain.AuditEvent) (domain.Agent, error) {
+	var created domain.Agent
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		created, err = p.createAgent(ctx, tx, agent)
+		if err != nil {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return created, err
+}
+
+func (p *Postgres) UpdateAgentWithAudit(ctx context.Context, agent domain.Agent, audit domain.AuditEvent) (domain.Agent, bool, error) {
+	var updated domain.Agent
+	var ok bool
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		updated, ok, err = p.updateAgent(ctx, tx, agent)
+		if err != nil || !ok {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return updated, ok, err
+}
+
+func (p *Postgres) RotateAgentCredentialsWithAudit(ctx context.Context, id string, credentials map[string]string, now time.Time, audit domain.AuditEvent) (domain.Agent, bool, error) {
+	var updated domain.Agent
+	var ok bool
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		updated, ok, err = p.rotateAgentCredentials(ctx, tx, id, credentials, now)
+		if err != nil || !ok {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return updated, ok, err
+}
+
+func (p *Postgres) DisableAgentWithAudit(ctx context.Context, id string, now time.Time, audit domain.AuditEvent) (domain.Agent, bool, error) {
+	var disabled domain.Agent
+	var ok bool
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		disabled, ok, err = p.disableAgent(ctx, tx, id, now)
+		if err != nil || !ok {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return disabled, ok, err
+}
+
+func (p *Postgres) CreateAgentKeyWithAudit(ctx context.Context, key domain.AgentKey, audit domain.AuditEvent) (domain.AgentKey, error) {
+	var created domain.AgentKey
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		created, err = p.createAgentKey(ctx, tx, key)
+		if err != nil {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return created, err
+}
+
+func (p *Postgres) RevokeAgentKeyWithAudit(ctx context.Context, id string, now time.Time, audit domain.AuditEvent) (domain.AgentKey, bool, error) {
+	var revoked domain.AgentKey
+	var ok bool
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		revoked, ok, err = p.revokeAgentKey(ctx, tx, id, now)
+		if err != nil || !ok {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return revoked, ok, err
+}
+
+func (p *Postgres) CreateAccessGrantWithAudit(ctx context.Context, grant domain.AccessGrant, audit domain.AuditEvent) (domain.AccessGrant, error) {
+	var created domain.AccessGrant
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		created, err = p.createAccessGrant(ctx, tx, grant)
+		if err != nil {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return created, err
+}
+
+func (p *Postgres) RevokeAccessGrantWithAudit(ctx context.Context, id string, now time.Time, audit domain.AuditEvent) (domain.AccessGrant, bool, error) {
+	var revoked domain.AccessGrant
+	var ok bool
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		revoked, ok, err = p.revokeAccessGrant(ctx, tx, id, now)
+		if err != nil || !ok {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return revoked, ok, err
+}
+
+func (p *Postgres) CreateRoutePolicyWithAudit(ctx context.Context, policy domain.RoutePolicy, audit domain.AuditEvent) (domain.RoutePolicy, error) {
+	var created domain.RoutePolicy
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		created, err = p.createRoutePolicy(ctx, tx, policy)
+		if err != nil {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return created, err
+}
+
+func (p *Postgres) UpdateRoutePolicyWithAudit(ctx context.Context, policy domain.RoutePolicy, audit domain.AuditEvent) (domain.RoutePolicy, bool, error) {
+	var updated domain.RoutePolicy
+	var ok bool
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		updated, ok, err = p.updateRoutePolicy(ctx, tx, policy)
+		if err != nil || !ok {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return updated, ok, err
+}
+
+func (p *Postgres) DisableRoutePolicyWithAudit(ctx context.Context, id string, now time.Time, audit domain.AuditEvent) (domain.RoutePolicy, bool, error) {
+	var disabled domain.RoutePolicy
+	var ok bool
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		disabled, ok, err = p.disableRoutePolicy(ctx, tx, id, now)
+		if err != nil || !ok {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return disabled, ok, err
 }
 
 func (p *Postgres) ListAuditEvents(ctx context.Context, filter AuditEventFilter) ([]domain.AuditEvent, error) {

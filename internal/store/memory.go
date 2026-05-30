@@ -11,24 +11,35 @@ import (
 
 type Repository interface {
 	CreateAgent(context.Context, domain.Agent) (domain.Agent, error)
+	CreateAgentWithAudit(context.Context, domain.Agent, domain.AuditEvent) (domain.Agent, error)
 	ListAgents(context.Context, AgentFilter) ([]domain.Agent, error)
 	GetAgent(context.Context, string) (domain.Agent, bool, error)
 	UpdateAgent(context.Context, domain.Agent) (domain.Agent, bool, error)
+	UpdateAgentWithAudit(context.Context, domain.Agent, domain.AuditEvent) (domain.Agent, bool, error)
 	RotateAgentCredentials(context.Context, string, map[string]string, time.Time) (domain.Agent, bool, error)
+	RotateAgentCredentialsWithAudit(context.Context, string, map[string]string, time.Time, domain.AuditEvent) (domain.Agent, bool, error)
 	DisableAgent(context.Context, string, time.Time) (domain.Agent, bool, error)
+	DisableAgentWithAudit(context.Context, string, time.Time, domain.AuditEvent) (domain.Agent, bool, error)
 	CreateAgentKey(context.Context, domain.AgentKey) (domain.AgentKey, error)
+	CreateAgentKeyWithAudit(context.Context, domain.AgentKey, domain.AuditEvent) (domain.AgentKey, error)
 	ListAgentKeys(context.Context, ManagementScope) ([]domain.AgentKey, error)
 	RevokeAgentKey(context.Context, string, time.Time) (domain.AgentKey, bool, error)
+	RevokeAgentKeyWithAudit(context.Context, string, time.Time, domain.AuditEvent) (domain.AgentKey, bool, error)
 	FindAgentByKeyHash(context.Context, string, time.Time) (domain.Agent, bool, error)
 	CreateAccessGrant(context.Context, domain.AccessGrant) (domain.AccessGrant, error)
+	CreateAccessGrantWithAudit(context.Context, domain.AccessGrant, domain.AuditEvent) (domain.AccessGrant, error)
 	ListAccessGrants(context.Context, ManagementScope) ([]domain.AccessGrant, error)
 	RevokeAccessGrant(context.Context, string, time.Time) (domain.AccessGrant, bool, error)
+	RevokeAccessGrantWithAudit(context.Context, string, time.Time, domain.AuditEvent) (domain.AccessGrant, bool, error)
 	HasGrant(context.Context, string, string, string, string, time.Time) bool
 	CreateRoutePolicy(context.Context, domain.RoutePolicy) (domain.RoutePolicy, error)
+	CreateRoutePolicyWithAudit(context.Context, domain.RoutePolicy, domain.AuditEvent) (domain.RoutePolicy, error)
 	ListRoutePolicies(context.Context, ManagementScope) ([]domain.RoutePolicy, error)
 	GetRoutePolicy(context.Context, string) (domain.RoutePolicy, bool, error)
 	UpdateRoutePolicy(context.Context, domain.RoutePolicy) (domain.RoutePolicy, bool, error)
+	UpdateRoutePolicyWithAudit(context.Context, domain.RoutePolicy, domain.AuditEvent) (domain.RoutePolicy, bool, error)
 	DisableRoutePolicy(context.Context, string, time.Time) (domain.RoutePolicy, bool, error)
+	DisableRoutePolicyWithAudit(context.Context, string, time.Time, domain.AuditEvent) (domain.RoutePolicy, bool, error)
 	EvaluateRouteAccess(context.Context, string, string, string, string, time.Time) (domain.RouteAccessDecision, error)
 	AppendTrace(context.Context, domain.TraceEvent) (domain.TraceEvent, error)
 	ListTraces(context.Context, TraceFilter) ([]domain.TraceEvent, error)
@@ -87,6 +98,14 @@ func (m *Memory) CreateAgent(_ context.Context, agent domain.Agent) (domain.Agen
 	return agent, nil
 }
 
+func (m *Memory) CreateAgentWithAudit(_ context.Context, agent domain.Agent, audit domain.AuditEvent) (domain.Agent, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.agents[agent.ID] = agent
+	m.audits = append(m.audits, audit)
+	return agent, nil
+}
+
 func (m *Memory) ListAgents(_ context.Context, filter AgentFilter) ([]domain.Agent, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -126,6 +145,20 @@ func (m *Memory) UpdateAgent(_ context.Context, agent domain.Agent) (domain.Agen
 	return agent, true, nil
 }
 
+func (m *Memory) UpdateAgentWithAudit(_ context.Context, agent domain.Agent, audit domain.AuditEvent) (domain.Agent, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	existing, ok := m.agents[agent.ID]
+	if !ok {
+		return domain.Agent{}, false, nil
+	}
+	agent.Credentials = existing.Credentials
+	agent.CredentialVersion = existing.CredentialVersion
+	m.agents[agent.ID] = agent
+	m.audits = append(m.audits, audit)
+	return agent, true, nil
+}
+
 func (m *Memory) RotateAgentCredentials(_ context.Context, id string, credentials map[string]string, now time.Time) (domain.Agent, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -137,6 +170,21 @@ func (m *Memory) RotateAgentCredentials(_ context.Context, id string, credential
 	agent.CredentialVersion++
 	agent.UpdatedAt = now
 	m.agents[id] = agent
+	return agent, true, nil
+}
+
+func (m *Memory) RotateAgentCredentialsWithAudit(_ context.Context, id string, credentials map[string]string, now time.Time, audit domain.AuditEvent) (domain.Agent, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	agent, ok := m.agents[id]
+	if !ok {
+		return domain.Agent{}, false, nil
+	}
+	agent.Credentials = credentials
+	agent.CredentialVersion++
+	agent.UpdatedAt = now
+	m.agents[id] = agent
+	m.audits = append(m.audits, audit)
 	return agent, true, nil
 }
 
@@ -153,10 +201,32 @@ func (m *Memory) DisableAgent(_ context.Context, id string, now time.Time) (doma
 	return agent, true, nil
 }
 
+func (m *Memory) DisableAgentWithAudit(_ context.Context, id string, now time.Time, audit domain.AuditEvent) (domain.Agent, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	agent, ok := m.agents[id]
+	if !ok {
+		return domain.Agent{}, false, nil
+	}
+	agent.Status = domain.AgentStatusDisabled
+	agent.UpdatedAt = now
+	m.agents[id] = agent
+	m.audits = append(m.audits, audit)
+	return agent, true, nil
+}
+
 func (m *Memory) CreateAgentKey(_ context.Context, key domain.AgentKey) (domain.AgentKey, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.keys[key.ID] = key
+	return key, nil
+}
+
+func (m *Memory) CreateAgentKeyWithAudit(_ context.Context, key domain.AgentKey, audit domain.AuditEvent) (domain.AgentKey, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.keys[key.ID] = key
+	m.audits = append(m.audits, audit)
 	return key, nil
 }
 
@@ -192,6 +262,19 @@ func (m *Memory) RevokeAgentKey(_ context.Context, id string, now time.Time) (do
 	return key, true, nil
 }
 
+func (m *Memory) RevokeAgentKeyWithAudit(_ context.Context, id string, now time.Time, audit domain.AuditEvent) (domain.AgentKey, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key, ok := m.keys[id]
+	if !ok {
+		return domain.AgentKey{}, false, nil
+	}
+	key.RevokedAt = now
+	m.keys[id] = key
+	m.audits = append(m.audits, audit)
+	return key, true, nil
+}
+
 func (m *Memory) FindAgentByKeyHash(_ context.Context, hash string, now time.Time) (domain.Agent, bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -215,6 +298,14 @@ func (m *Memory) CreateAccessGrant(_ context.Context, grant domain.AccessGrant) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.grants[grant.ID] = grant
+	return grant, nil
+}
+
+func (m *Memory) CreateAccessGrantWithAudit(_ context.Context, grant domain.AccessGrant, audit domain.AuditEvent) (domain.AccessGrant, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.grants[grant.ID] = grant
+	m.audits = append(m.audits, audit)
 	return grant, nil
 }
 
@@ -249,6 +340,19 @@ func (m *Memory) RevokeAccessGrant(_ context.Context, id string, now time.Time) 
 	return grant, true, nil
 }
 
+func (m *Memory) RevokeAccessGrantWithAudit(_ context.Context, id string, now time.Time, audit domain.AuditEvent) (domain.AccessGrant, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	grant, ok := m.grants[id]
+	if !ok {
+		return domain.AccessGrant{}, false, nil
+	}
+	grant.RevokedAt = now
+	m.grants[id] = grant
+	m.audits = append(m.audits, audit)
+	return grant, true, nil
+}
+
 func (m *Memory) HasGrant(_ context.Context, callerID string, targetID string, routeType string, routeKey string, now time.Time) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -259,6 +363,14 @@ func (m *Memory) CreateRoutePolicy(_ context.Context, policy domain.RoutePolicy)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.policies[policy.ID] = policy
+	return policy, nil
+}
+
+func (m *Memory) CreateRoutePolicyWithAudit(_ context.Context, policy domain.RoutePolicy, audit domain.AuditEvent) (domain.RoutePolicy, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.policies[policy.ID] = policy
+	m.audits = append(m.audits, audit)
 	return policy, nil
 }
 
@@ -304,6 +416,23 @@ func (m *Memory) UpdateRoutePolicy(_ context.Context, policy domain.RoutePolicy)
 	return policy, true, nil
 }
 
+func (m *Memory) UpdateRoutePolicyWithAudit(_ context.Context, policy domain.RoutePolicy, audit domain.AuditEvent) (domain.RoutePolicy, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	existing, ok := m.policies[policy.ID]
+	if !ok {
+		return domain.RoutePolicy{}, false, nil
+	}
+	policy.TenantID = existing.TenantID
+	policy.WorkspaceID = existing.WorkspaceID
+	policy.CallerID = existing.CallerID
+	policy.TargetID = existing.TargetID
+	policy.CreatedAt = existing.CreatedAt
+	m.policies[policy.ID] = policy
+	m.audits = append(m.audits, audit)
+	return policy, true, nil
+}
+
 func (m *Memory) DisableRoutePolicy(_ context.Context, id string, now time.Time) (domain.RoutePolicy, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -314,6 +443,20 @@ func (m *Memory) DisableRoutePolicy(_ context.Context, id string, now time.Time)
 	policy.Status = domain.RoutePolicyStatusDisabled
 	policy.UpdatedAt = now
 	m.policies[id] = policy
+	return policy, true, nil
+}
+
+func (m *Memory) DisableRoutePolicyWithAudit(_ context.Context, id string, now time.Time, audit domain.AuditEvent) (domain.RoutePolicy, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	policy, ok := m.policies[id]
+	if !ok {
+		return domain.RoutePolicy{}, false, nil
+	}
+	policy.Status = domain.RoutePolicyStatusDisabled
+	policy.UpdatedAt = now
+	m.policies[id] = policy
+	m.audits = append(m.audits, audit)
 	return policy, true, nil
 }
 

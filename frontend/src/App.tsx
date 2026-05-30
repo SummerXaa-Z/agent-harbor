@@ -25,7 +25,7 @@ import {
   TriangleAlert,
   Workflow
 } from "lucide-react";
-import { createAccessGrant, createAgent, createAgentKey, loadConsoleData } from "./api";
+import { createAccessGrant, createAgent, createAgentKey, disableAgent, loadConsoleData, revokeAccessGrant } from "./api";
 import type {
   AccessGrant,
   Agent,
@@ -34,6 +34,7 @@ import type {
   ConsoleData,
   CreateAgentKeyResponse,
   EvidenceRun,
+  ManagementScope,
   RoutePolicy,
   SystemMetric,
   TraceDecision,
@@ -53,13 +54,16 @@ const navItems = [
 ];
 
 const workspaceTabs = ["Prod", "Staging", "Sandbox"];
+const defaultManagementScope: ManagementScope = {
+  tenantId: "default",
+  workspaceId: "workspace-demo"
+};
 const defaultAgentForm = {
   channelType: "local",
   description: "",
   endpoint: "",
   name: "",
-  status: "draft" as AgentStatus,
-  workspaceId: "workspace-demo"
+  status: "draft" as AgentStatus
 };
 const defaultKeyForm = { agentId: "", expiresInSeconds: "900", name: "console key" };
 const defaultGrantForm = { callerAgentId: "", routeKey: "", routeType: "mcp", targetAgentId: "" };
@@ -69,6 +73,7 @@ function App() {
   const [activeNav, setActiveNav] = useState("cockpit");
   const [activeWorkspace, setActiveWorkspace] = useState("Prod");
   const [adminKey, setAdminKey] = useState("");
+  const [scope, setScope] = useState<ManagementScope>(defaultManagementScope);
   const [data, setData] = useState<ConsoleData | null>(null);
   const [loadError, setLoadError] = useState("");
   const [lastRefresh, setLastRefresh] = useState(new Date());
@@ -79,6 +84,7 @@ function App() {
   const [createdKey, setCreatedKey] = useState<CreateAgentKeyResponse | null>(null);
   const [grantForm, setGrantForm] = useState(defaultGrantForm);
   const [grantMessage, setGrantMessage] = useState("");
+  const [cleanupActionId, setCleanupActionId] = useState("");
   const [traceFilters, setTraceFilters] = useState<TraceFilters>(defaultTraceFilters);
 
   useEffect(() => {
@@ -88,7 +94,7 @@ function App() {
   async function refresh() {
     try {
       setLoadError("");
-      const next = await loadConsoleData(adminKey, traceFilters);
+      const next = await loadConsoleData(adminKey, traceFilters, normalizedScope(scope));
       setData(next);
       setLastRefresh(new Date());
     } catch (error) {
@@ -101,6 +107,7 @@ function App() {
     setAgentMessage("");
     try {
       const channelConfig = agentForm.endpoint.trim() ? { endpoint: agentForm.endpoint.trim() } : undefined;
+      const requestScope = normalizedScope(scope);
       await createAgent(
         {
           channelConfig,
@@ -108,15 +115,44 @@ function App() {
           description: agentForm.description.trim() || undefined,
           name: agentForm.name.trim(),
           status: agentForm.status,
-          workspaceId: agentForm.workspaceId.trim()
+          tenantId: requestScope.tenantId,
+          workspaceId: requestScope.workspaceId
         },
         adminKey
       );
-      setAgentForm({ ...defaultAgentForm, workspaceId: agentForm.workspaceId });
+      setAgentForm(defaultAgentForm);
       setAgentMessage("Agent created. Registry refreshed.");
       await refresh();
     } catch (error) {
       setAgentMessage(error instanceof Error ? error.message : "Unable to create agent");
+    }
+  }
+
+  async function handleDisableAgent(agent: Agent) {
+    setAgentMessage("");
+    setCleanupActionId(agent.id);
+    try {
+      await disableAgent(agent.id, adminKey);
+      setAgentMessage(`${agent.name} disabled. Registry refreshed.`);
+      await refresh();
+    } catch (error) {
+      setAgentMessage(error instanceof Error ? error.message : "Unable to disable agent");
+    } finally {
+      setCleanupActionId("");
+    }
+  }
+
+  async function handleRevokeGrant(policy: RoutePolicy) {
+    setGrantMessage("");
+    setCleanupActionId(policy.id);
+    try {
+      await revokeAccessGrant(policy.id, adminKey);
+      setGrantMessage("Access grant revoked. Route Governance refreshed.");
+      await refresh();
+    } catch (error) {
+      setGrantMessage(error instanceof Error ? error.message : "Unable to revoke access grant");
+    } finally {
+      setCleanupActionId("");
     }
   }
 
@@ -187,6 +223,7 @@ function App() {
   }, [channels]);
 
   const activeAgents = agents.filter((agent) => agent.status === "active").length;
+  const activeGrants = policies.filter((policy) => policy.status === "enabled" && policy.effect === "allow").length;
   const deniedTraces = traces.filter((trace) => trace.decision === "denied").length;
   const allowedTraces = traces.filter((trace) => trace.decision === "allowed").length;
   const evidencePassed = evidenceRuns.filter((run) => run.status === "passed").length;
@@ -290,12 +327,31 @@ function App() {
             <span>Last refresh</span>
             <strong>{lastRefresh.toLocaleTimeString("zh-CN", { hour12: false })}</strong>
           </div>
+          <div className="scope-control">
+            <span>Scope</span>
+            <div className="scope-inputs">
+              <input
+                aria-label="Tenant ID"
+                onBlur={() => void refresh()}
+                onChange={(event) => setScope((current) => ({ ...current, tenantId: event.target.value }))}
+                placeholder="tenantId"
+                value={scope.tenantId}
+              />
+              <input
+                aria-label="Workspace ID"
+                onBlur={() => void refresh()}
+                onChange={(event) => setScope((current) => ({ ...current, workspaceId: event.target.value }))}
+                placeholder="workspaceId"
+                value={scope.workspaceId}
+              />
+            </div>
+          </div>
           {loadError ? <div className="strip-error">{loadError}</div> : null}
         </section>
 
         <section className="metric-grid" aria-label="Gateway metrics">
           <MetricCard icon={<ServerCog size={18} />} label="Managed Agents" value={String(agents.length)} detail={`${activeAgents} active`} tone="info" />
-          <MetricCard icon={<KeyRound size={18} />} label="Active Grants" value={String(policies.length)} detail={data?.grantsLoadedFromApi ? "live access grants" : "sample fallback"} tone="success" />
+          <MetricCard icon={<KeyRound size={18} />} label="Active Grants" value={String(activeGrants)} detail={data?.grantsLoadedFromApi ? "live access grants" : "sample fallback"} tone="success" />
           <MetricCard icon={<TriangleAlert size={18} />} label="Denied Traces" value={String(deniedTraces)} detail={`${allowedTraces} allowed`} tone={deniedTraces > 0 ? "warning" : "success"} />
           <MetricCard icon={<ClipboardCheck size={18} />} label="Evidence Health" value={`${evidencePassed}/${Math.max(evidenceRuns.length, 1)}`} detail="checks passed" tone="neutral" />
         </section>
@@ -321,7 +377,13 @@ function App() {
           </Panel>
 
           <Panel className="span-8" icon={<Workflow size={18} />} title="Route Governance" action={<IconMore />}>
-            <PolicyTable agents={agents} policies={policies} />
+            <PolicyTable
+              agents={agents}
+              canRevoke={Boolean(data?.grantsLoadedFromApi)}
+              onRevoke={handleRevokeGrant}
+              pendingActionId={cleanupActionId}
+              policies={policies}
+            />
           </Panel>
 
           <Panel className="span-4" icon={<Sparkles size={18} />} title="Evidence Runs" action={<IconOpen />}>
@@ -329,7 +391,12 @@ function App() {
           </Panel>
 
           <Panel className="span-8" icon={<Boxes size={18} />} title="Agent Registry" action={<IconMore />}>
-            <AgentTable agents={agents} channelLabels={channelLabels} />
+            <AgentTable
+              agents={agents}
+              channelLabels={channelLabels}
+              onDisable={handleDisableAgent}
+              pendingActionId={cleanupActionId}
+            />
           </Panel>
 
           <Panel className="span-4" icon={<Layers3 size={18} />} title="Contract Matrix" action={<IconOpen />}>
@@ -364,7 +431,6 @@ function AgentCreateForm({
   return (
     <form className="control-form" onSubmit={onSubmit}>
       <label>Name<input required value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
-      <label>Workspace<input required value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} /></label>
       <div className="form-row">
         <label>Channel<input value={form.channelType} onChange={(event) => onChange({ ...form, channelType: event.target.value })} /></label>
         <label>Status<select value={form.status} onChange={(event) => onChange({ ...form, status: event.target.value as AgentStatus })}><option value="draft">draft</option><option value="active">active</option><option value="disabled">disabled</option></select></label>
@@ -527,7 +593,19 @@ function Panel({
   );
 }
 
-function PolicyTable({ agents, policies }: { agents: Agent[]; policies: RoutePolicy[] }) {
+function PolicyTable({
+  agents,
+  canRevoke,
+  onRevoke,
+  pendingActionId,
+  policies
+}: {
+  agents: Agent[];
+  canRevoke: boolean;
+  onRevoke: (policy: RoutePolicy) => void;
+  pendingActionId: string;
+  policies: RoutePolicy[];
+}) {
   const names = agentNameMap(agents);
 
   return (
@@ -540,18 +618,19 @@ function PolicyTable({ agents, policies }: { agents: Agent[]; policies: RoutePol
             <th>Target</th>
             <th>Route</th>
             <th>Decision</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
           {policies.length === 0 ? (
             <tr>
-              <td colSpan={5}>
+              <td colSpan={6}>
                 <EmptyRow title="No route policies" detail="Create an access grant to populate governed routes." />
               </td>
             </tr>
           ) : null}
           {policies.map((policy) => (
-            <tr key={policy.id}>
+            <tr className={policy.status === "disabled" ? "row-disabled" : undefined} key={policy.id}>
               <td>
                 <strong>{policy.name}</strong>
                 <span>priority {policy.priority} · matched {formatDate(policy.lastMatchedAt ?? policy.createdAt)}</span>
@@ -559,9 +638,24 @@ function PolicyTable({ agents, policies }: { agents: Agent[]; policies: RoutePol
               <td>{names[policy.callerAgentId] ?? policy.callerAgentId}</td>
               <td>{names[policy.targetAgentId] ?? policy.targetAgentId}</td>
               <td>
-                <code>{policy.routeType}:{policy.routeKey}</code>
+                <code>{policy.routeType}:{policy.routeKey || "default"}</code>
               </td>
               <td><Badge tone={policy.effect === "allow" ? "success" : "danger"}>{policy.effect}</Badge></td>
+              <td>
+                {canRevoke && policy.status === "enabled" ? (
+                  <button
+                    className="table-action"
+                    disabled={pendingActionId === policy.id}
+                    onClick={() => onRevoke(policy)}
+                    type="button"
+                  >
+                    <LockKeyhole size={13} />
+                    {pendingActionId === policy.id ? "Revoking" : "Revoke"}
+                  </button>
+                ) : (
+                  <span className="muted-action">{policy.status === "disabled" ? "revoked" : "sample"}</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -570,7 +664,17 @@ function PolicyTable({ agents, policies }: { agents: Agent[]; policies: RoutePol
   );
 }
 
-function AgentTable({ agents, channelLabels }: { agents: Agent[]; channelLabels: Record<string, string> }) {
+function AgentTable({
+  agents,
+  channelLabels,
+  onDisable,
+  pendingActionId
+}: {
+  agents: Agent[];
+  channelLabels: Record<string, string>;
+  onDisable: (agent: Agent) => void;
+  pendingActionId: string;
+}) {
   return (
     <div className="table-wrap">
       <table className="agent-table">
@@ -581,18 +685,19 @@ function AgentTable({ agents, channelLabels }: { agents: Agent[]; channelLabels:
             <th>Endpoint</th>
             <th>Status</th>
             <th>Owner</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
           {agents.length === 0 ? (
             <tr>
-              <td colSpan={5}>
+              <td colSpan={6}>
                 <EmptyRow title="No agents registered" detail="Register caller and target agents to start routing traffic." />
               </td>
             </tr>
           ) : null}
           {agents.map((agent) => (
-            <tr key={agent.id}>
+            <tr className={agent.status === "disabled" ? "row-disabled" : undefined} key={agent.id}>
               <td>
                 <strong>{agent.name}</strong>
                 <span>{agent.description || agent.id}</span>
@@ -601,6 +706,21 @@ function AgentTable({ agents, channelLabels }: { agents: Agent[]; channelLabels:
               <td className="truncate">{configText(agent, "endpoint") || "local runtime"}</td>
               <td><Badge tone={agent.status === "active" ? "success" : agent.status === "draft" ? "warning" : "neutral"}>{agent.status}</Badge></td>
               <td>{agent.ownerId || "platform"}</td>
+              <td>
+                {agent.status !== "disabled" ? (
+                  <button
+                    className="table-action"
+                    disabled={pendingActionId === agent.id}
+                    onClick={() => onDisable(agent)}
+                    type="button"
+                  >
+                    <LockKeyhole size={13} />
+                    {pendingActionId === agent.id ? "Disabling" : "Disable"}
+                  </button>
+                ) : (
+                  <span className="muted-action">disabled</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -731,6 +851,13 @@ function IconOpen() {
 function configText(agent: Agent, key: string) {
   const value = agent.channelConfig?.[key];
   return typeof value === "string" ? value : "";
+}
+
+function normalizedScope(scope: ManagementScope): ManagementScope {
+  return {
+    tenantId: scope.tenantId.trim() || defaultManagementScope.tenantId,
+    workspaceId: scope.workspaceId.trim() || defaultManagementScope.workspaceId
+  };
 }
 
 function formatDate(value: string) {

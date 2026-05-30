@@ -3,12 +3,16 @@ package httpapi_test
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
 	"github.com/SummerXaa-Z/agent-harbor/internal/httpapi"
+	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 	"github.com/SummerXaa-Z/agent-harbor/internal/store"
 )
 
@@ -21,6 +25,7 @@ type apiEnvelope struct {
 
 type agentResponse struct {
 	ID          string `json:"id"`
+	TenantID    string `json:"tenantId"`
 	Name        string `json:"name"`
 	WorkspaceID string `json:"workspaceId"`
 	ChannelType string `json:"channelType"`
@@ -39,6 +44,7 @@ type traceResponse struct {
 	CallerID string `json:"callerAgentId"`
 	TargetID string `json:"targetAgentId"`
 	Decision string `json:"decision"`
+	Reason   string `json:"reason"`
 	RunID    string `json:"runId"`
 }
 
@@ -56,6 +62,10 @@ func newRouter() http.Handler {
 
 func newRouterWithAdmin(adminKey string) http.Handler {
 	return httpapi.New(store.NewMemory(), httpapi.WithAdminKey(adminKey)).Router()
+}
+
+func newRouterWithRepo(repo store.Repository) http.Handler {
+	return httpapi.New(repo).Router()
 }
 
 func TestHealthAndContracts(t *testing.T) {
@@ -217,22 +227,15 @@ func TestAgentRegistryValidation(t *testing.T) {
 }
 
 func TestDataPlaneAllowedDeniedTraces(t *testing.T) {
-	router := newRouter()
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
 	caller := createAgent(t, router, map[string]any{
 		"name":        "Local Codex Agent",
 		"workspaceId": "ws-1",
 		"channelType": "local",
 		"status":      "active",
 	})
-	target := createAgent(t, router, map[string]any{
-		"name":        "PMM Tracker MCP",
-		"workspaceId": "ws-1",
-		"channelType": "mcp",
-		"status":      "active",
-		"channelConfig": map[string]any{
-			"endpoint": "https://api.example.com/mcp",
-		},
-	})
+	target := createDirectAgent(t, repo, "PMM Tracker MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, nil)
 	key := decodeData[keyResponse](t, request(t, router, http.MethodPost, "/api/v1/agent-keys", map[string]any{
 		"agentId":          caller.ID,
 		"name":             "unit-key",
@@ -327,22 +330,15 @@ func TestDataPlaneAllowedDeniedTraces(t *testing.T) {
 }
 
 func TestOpenAPIOperationUsesGrant(t *testing.T) {
-	router := newRouter()
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
 	caller := createAgent(t, router, map[string]any{
 		"name":        "CI Caller",
 		"workspaceId": "ws-1",
 		"channelType": "local",
 		"status":      "active",
 	})
-	target := createAgent(t, router, map[string]any{
-		"name":        "Read-only Ops API",
-		"workspaceId": "ws-1",
-		"channelType": "openapi",
-		"status":      "active",
-		"channelConfig": map[string]any{
-			"endpoint": "https://api.example.com",
-		},
-	})
+	target := createDirectAgent(t, repo, "Read-only Ops API", "default", "ws-1", "openapi", domain.AgentStatusActive, nil)
 	key := decodeData[keyResponse](t, request(t, router, http.MethodPost, "/api/v1/agent-keys", map[string]any{
 		"agentId": caller.ID,
 	}, ""))
@@ -369,6 +365,323 @@ func TestOpenAPIOperationUsesGrant(t *testing.T) {
 	}
 }
 
+func TestManagementScopeFiltersLists(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+
+	inScope := createAgent(t, router, map[string]any{
+		"tenantId":    "tenant-a",
+		"name":        "In Scope Caller",
+		"workspaceId": "ws-a",
+		"channelType": "local",
+		"status":      "active",
+	})
+	sameTenantOtherWorkspace := createAgent(t, router, map[string]any{
+		"tenantId":    "tenant-a",
+		"name":        "Other Workspace",
+		"workspaceId": "ws-b",
+		"channelType": "local",
+		"status":      "active",
+	})
+	otherTenantSameWorkspace := createAgent(t, router, map[string]any{
+		"tenantId":    "tenant-b",
+		"name":        "Other Tenant",
+		"workspaceId": "ws-a",
+		"channelType": "local",
+		"status":      "active",
+	})
+
+	for _, agent := range []agentResponse{inScope, sameTenantOtherWorkspace, otherTenantSameWorkspace} {
+		request(t, router, http.MethodPost, "/api/v1/agent-keys", map[string]any{
+			"agentId": agent.ID,
+			"name":    "key-" + agent.ID,
+		}, "")
+	}
+	includedGrant := decodeData[grantResponse](t, request(t, router, http.MethodPost, "/api/v1/access-grants", map[string]any{
+		"callerAgentId": inScope.ID,
+		"targetAgentId": sameTenantOtherWorkspace.ID,
+		"routeType":     "mcp",
+		"routeKey":      "tools/call",
+	}, ""))
+	request(t, router, http.MethodPost, "/api/v1/access-grants", map[string]any{
+		"callerAgentId": sameTenantOtherWorkspace.ID,
+		"targetAgentId": otherTenantSameWorkspace.ID,
+		"routeType":     "mcp",
+		"routeKey":      "tools/call",
+	}, "")
+
+	now := time.Now().UTC()
+	if _, err := repo.AppendTrace(t.Context(), domain.TraceEvent{
+		ID:        security.NewID("trc"),
+		RunID:     "scope-run",
+		CallerID:  inScope.ID,
+		TargetID:  sameTenantOtherWorkspace.ID,
+		RouteType: "mcp",
+		RouteKey:  "tools/call",
+		Decision:  domain.TraceDecisionAllowed,
+		CreatedAt: now,
+	}); err != nil {
+		t.Fatalf("append included trace: %v", err)
+	}
+	if _, err := repo.AppendTrace(t.Context(), domain.TraceEvent{
+		ID:        security.NewID("trc"),
+		RunID:     "scope-run",
+		CallerID:  sameTenantOtherWorkspace.ID,
+		TargetID:  otherTenantSameWorkspace.ID,
+		RouteType: "mcp",
+		RouteKey:  "tools/call",
+		Decision:  domain.TraceDecisionAllowed,
+		CreatedAt: now.Add(time.Second),
+	}); err != nil {
+		t.Fatalf("append excluded trace: %v", err)
+	}
+
+	scopeQuery := "?tenantId=tenant-a&workspaceId=ws-a"
+	agents := decodeData[[]agentResponse](t, request(t, router, http.MethodGet, "/api/v1/agents"+scopeQuery, nil, ""))
+	if len(agents) != 1 || agents[0].ID != inScope.ID {
+		t.Fatalf("expected scoped agents to contain only in-scope agent, got %#v", agents)
+	}
+	allAgents := decodeData[[]agentResponse](t, request(t, router, http.MethodGet, "/api/v1/agents", nil, ""))
+	if len(allAgents) != 3 {
+		t.Fatalf("unscoped agents should preserve old list behavior, got %#v", allAgents)
+	}
+
+	keys := decodeData[[]keyResponse](t, request(t, router, http.MethodGet, "/api/v1/api-keys"+scopeQuery, nil, ""))
+	if len(keys) != 1 || keys[0].AgentID != inScope.ID {
+		t.Fatalf("expected scoped keys to contain only in-scope caller key, got %#v", keys)
+	}
+	grants := decodeData[[]grantResponse](t, request(t, router, http.MethodGet, "/api/v1/access-grants"+scopeQuery, nil, ""))
+	if len(grants) != 1 || grants[0].ID != includedGrant.ID {
+		t.Fatalf("expected scoped grants to match caller or target in scope, got %#v", grants)
+	}
+	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces"+scopeQuery+"&runId=scope-run", nil, ""))
+	if len(traces) != 1 || traces[0].CallerID != inScope.ID {
+		t.Fatalf("expected scoped traces to match caller or target in scope, got %#v", traces)
+	}
+}
+
+func TestDisableAgentBlocksExistingKey(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	caller := createAgent(t, router, map[string]any{
+		"name":        "Disposable Caller",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+	})
+	target := createDirectAgent(t, repo, "Stub MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, nil)
+	key := decodeData[keyResponse](t, request(t, router, http.MethodPost, "/api/v1/agent-keys", map[string]any{
+		"agentId": caller.ID,
+	}, ""))
+	request(t, router, http.MethodPost, "/api/v1/access-grants", map[string]any{
+		"callerAgentId": caller.ID,
+		"targetAgentId": target.ID,
+		"routeType":     "mcp",
+		"routeKey":      "tools/call",
+	}, "")
+
+	beforeDisable := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if beforeDisable.Code != http.StatusOK {
+		t.Fatalf("expected existing key to work before disable, got %d", beforeDisable.Code)
+	}
+
+	disabled := decodeData[agentResponse](t, request(t, router, http.MethodDelete, "/api/v1/agents/"+caller.ID, nil, ""))
+	if disabled.Status != "disabled" {
+		t.Fatalf("expected disabled agent response, got %#v", disabled)
+	}
+	afterDisable := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if afterDisable.Code != http.StatusUnauthorized {
+		t.Fatalf("disabled caller key should be unauthorized, got %d", afterDisable.Code)
+	}
+}
+
+func TestDisabledTargetDeniesLaterCalls(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	caller, key := createLocalCallerWithKey(t, router, "Target Disable Caller")
+	target := createDirectAgent(t, repo, "Disable Target", "default", "ws-1", "mcp", domain.AgentStatusActive, nil)
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	disabled := decodeData[agentResponse](t, request(t, router, http.MethodDelete, "/api/v1/agents/"+target.ID, nil, ""))
+	if disabled.Status != "disabled" {
+		t.Fatalf("expected disabled target response, got %#v", disabled)
+	}
+	resp := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key, "run-disabled-target")
+	if resp.Code != http.StatusForbidden {
+		t.Fatalf("disabled target should deny data-plane call, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces?runId=run-disabled-target", nil, ""))
+	if len(traces) != 1 || traces[0].Decision != "denied" || traces[0].Reason != "target agent is not active" {
+		t.Fatalf("expected denied disabled-target trace, got %#v", traces)
+	}
+}
+
+func TestRevokeAccessGrantDeniesLaterCalls(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	caller := createAgent(t, router, map[string]any{
+		"name":        "Revocable Caller",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+	})
+	target := createDirectAgent(t, repo, "Revocable Target", "default", "ws-1", "mcp", domain.AgentStatusActive, nil)
+	key := decodeData[keyResponse](t, request(t, router, http.MethodPost, "/api/v1/agent-keys", map[string]any{
+		"agentId": caller.ID,
+	}, ""))
+	grant := decodeData[grantResponse](t, request(t, router, http.MethodPost, "/api/v1/access-grants", map[string]any{
+		"callerAgentId": caller.ID,
+		"targetAgentId": target.ID,
+		"routeType":     "mcp",
+		"routeKey":      "tools/call",
+	}, ""))
+
+	allowed := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if allowed.Code != http.StatusOK {
+		t.Fatalf("expected allowed before grant revoke, got %d", allowed.Code)
+	}
+
+	revoked := request(t, router, http.MethodDelete, "/api/v1/access-grants/"+grant.ID, nil, "")
+	if revoked.Code != http.StatusOK {
+		t.Fatalf("expected revoke grant success, got %d body=%s", revoked.Code, revoked.Body.String())
+	}
+	denied := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("revoked grant should deny later call, got %d", denied.Code)
+	}
+}
+
+func TestMCPProxyRelaysAllowedUpstreamResponse(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/mcp" {
+			t.Fatalf("unexpected upstream request %s %s", r.Method, r.URL.String())
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read upstream body: %v", err)
+		}
+		if !strings.Contains(string(body), `"method":"tools/call"`) {
+			t.Fatalf("upstream body did not receive original request: %s", string(body))
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"upstream":true}`))
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "Proxy Caller")
+	target := createDirectAgent(t, repo, "Proxy MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL + "/mcp",
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	resp := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("expected upstream status, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if got := resp.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("expected upstream content-type, got %q", got)
+	}
+	if strings.TrimSpace(resp.Body.String()) != `{"upstream":true}` {
+		t.Fatalf("expected raw upstream body, got %s", resp.Body.String())
+	}
+}
+
+func TestOpenAPIProxyRelaysRelativePath(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/base/projects/42" || r.URL.RawQuery != "include=stats" {
+			t.Fatalf("unexpected upstream request %s %s", r.Method, r.URL.String())
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read upstream body: %v", err)
+		}
+		if !strings.Contains(string(body), `"name":"nexus"`) {
+			t.Fatalf("upstream body did not receive original request: %s", string(body))
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("updated"))
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "OpenAPI Proxy Caller")
+	target := createDirectAgent(t, repo, "Proxy OpenAPI", "default", "ws-1", "openapi", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL + "/base",
+	})
+	grantRoute(t, router, caller.ID, target.ID, "openapi", "projects/42")
+
+	resp := request(t, router, http.MethodPut, "/api/v1/openapi/agents/"+target.ID+"/projects/42?include=stats", map[string]any{
+		"name": "nexus",
+	}, key.Key)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("expected upstream status, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if got := resp.Header().Get("Content-Type"); !strings.Contains(got, "text/plain") {
+		t.Fatalf("expected upstream content-type, got %q", got)
+	}
+	if strings.TrimSpace(resp.Body.String()) != "updated" {
+		t.Fatalf("expected raw upstream body, got %s", resp.Body.String())
+	}
+}
+
+func TestProxyUpstreamFailureRecordsTraceAndReturnsBadGateway(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("closed upstream should not receive request")
+	}))
+	endpoint := upstream.URL + "/mcp"
+	upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "Failing Proxy Caller")
+	target := createDirectAgent(t, repo, "Failing Proxy MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": endpoint,
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	resp := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key, "run-upstream-fail")
+	if resp.Code != http.StatusBadGateway {
+		t.Fatalf("expected upstream failure to return 502, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	var env apiEnvelope
+	if err := json.Unmarshal(resp.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if env.Error != "UPSTREAM_ERROR" {
+		t.Fatalf("expected UPSTREAM_ERROR, got %#v", env)
+	}
+	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces?runId=run-upstream-fail", nil, ""))
+	if len(traces) != 1 || traces[0].Decision != "allowed" || traces[0].TargetID != target.ID {
+		t.Fatalf("expected allowed trace recorded before proxy failure, got %#v", traces)
+	}
+}
+
 func createAgent(t *testing.T, router http.Handler, body map[string]any) agentResponse {
 	t.Helper()
 	resp := request(t, router, http.MethodPost, "/api/v1/agents", body, "")
@@ -376,6 +689,54 @@ func createAgent(t *testing.T, router http.Handler, body map[string]any) agentRe
 		t.Fatalf("create agent failed: status=%d body=%s", resp.Code, resp.Body.String())
 	}
 	return decodeData[agentResponse](t, resp)
+}
+
+func createDirectAgent(t *testing.T, repo store.Repository, name string, tenantID string, workspaceID string, channelType string, status domain.AgentStatus, channelConfig map[string]any) domain.Agent {
+	t.Helper()
+	if channelConfig == nil {
+		channelConfig = map[string]any{}
+	}
+	now := time.Now().UTC()
+	agent := domain.Agent{
+		ID:            security.NewID("agt"),
+		TenantID:      tenantID,
+		WorkspaceID:   workspaceID,
+		Name:          name,
+		ChannelType:   channelType,
+		ChannelConfig: channelConfig,
+		Status:        status,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	created, err := repo.CreateAgent(t.Context(), agent)
+	if err != nil {
+		t.Fatalf("create direct agent: %v", err)
+	}
+	return created
+}
+
+func createLocalCallerWithKey(t *testing.T, router http.Handler, name string) (agentResponse, keyResponse) {
+	t.Helper()
+	caller := createAgent(t, router, map[string]any{
+		"name":        name,
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+	})
+	key := decodeData[keyResponse](t, request(t, router, http.MethodPost, "/api/v1/agent-keys", map[string]any{
+		"agentId": caller.ID,
+	}, ""))
+	return caller, key
+}
+
+func grantRoute(t *testing.T, router http.Handler, callerID string, targetID string, routeType string, routeKey string) grantResponse {
+	t.Helper()
+	return decodeData[grantResponse](t, request(t, router, http.MethodPost, "/api/v1/access-grants", map[string]any{
+		"callerAgentId": callerID,
+		"targetAgentId": targetID,
+		"routeType":     routeType,
+		"routeKey":      routeKey,
+	}, ""))
 }
 
 func request(t *testing.T, router http.Handler, method string, path string, body any, bearer string) *httptest.ResponseRecorder {

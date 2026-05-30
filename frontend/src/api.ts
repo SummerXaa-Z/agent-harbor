@@ -18,6 +18,7 @@ import type {
   CreateAgentKeyRequest,
   CreateAgentKeyResponse,
   CreateAgentRequest,
+  ManagementScope,
   ProviderContract,
   TraceEvent,
   TraceFilters,
@@ -54,7 +55,7 @@ function isEnvelope<T>(value: unknown): value is ApiEnvelope<T> {
 interface RequestOptions {
   adminKey?: string
   body?: unknown
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'DELETE'
   signal?: AbortSignal
 }
 
@@ -129,20 +130,32 @@ export async function fetchCatalog(signal?: AbortSignal): Promise<CatalogData> {
 }
 
 export async function fetchAgents(
-  workspaceId?: string,
+  scope?: ManagementScope,
   adminKey?: string,
   signal?: AbortSignal,
 ): Promise<Agent[]> {
-  const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+  const query = queryString({
+    tenantId: scope?.tenantId,
+    workspaceId: scope?.workspaceId,
+  })
   return request<Agent[]>(`/api/v1/agents${query}`, { adminKey, signal })
 }
 
-export async function fetchAccessGrants(adminKey?: string, signal?: AbortSignal): Promise<AccessGrant[]> {
-  return request<AccessGrant[]>('/api/v1/access-grants', { adminKey, signal })
+export async function fetchAccessGrants(
+  scope?: ManagementScope,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<AccessGrant[]> {
+  const query = queryString({
+    tenantId: scope?.tenantId,
+    workspaceId: scope?.workspaceId,
+  })
+  return request<AccessGrant[]>(`/api/v1/access-grants${query}`, { adminKey, signal })
 }
 
 export async function fetchTraces(
   filters: TraceFilters = {},
+  scope?: ManagementScope,
   adminKey?: string,
   signal?: AbortSignal,
 ): Promise<TraceEvent[]> {
@@ -151,12 +164,18 @@ export async function fetchTraces(
     decision: filters.decision || undefined,
     runId: filters.runId,
     targetAgentId: filters.targetAgentId,
+    tenantId: scope?.tenantId,
+    workspaceId: scope?.workspaceId,
   })
   return request<TraceEvent[]>(`/api/v1/audit/traces${query}`, { adminKey, signal })
 }
 
 export async function createAgent(body: CreateAgentRequest, adminKey?: string): Promise<Agent> {
   return request<Agent>('/api/v1/agents', { adminKey, body })
+}
+
+export async function disableAgent(id: string, adminKey?: string): Promise<Agent> {
+  return request<Agent>(`/api/v1/agents/${encodeURIComponent(id)}`, { adminKey, method: 'DELETE' })
 }
 
 export async function createAgentKey(
@@ -173,15 +192,26 @@ export async function createAccessGrant(
   return request<AccessGrant>('/api/v1/access-grants', { adminKey, body })
 }
 
-export async function loadConsoleData(adminKey?: string, traceFilters: TraceFilters = {}): Promise<ConsoleData> {
+export async function revokeAccessGrant(id: string, adminKey?: string): Promise<AccessGrant> {
+  return request<AccessGrant>(`/api/v1/access-grants/${encodeURIComponent(id)}`, {
+    adminKey,
+    method: 'DELETE',
+  })
+}
+
+export async function loadConsoleData(
+  adminKey?: string,
+  traceFilters: TraceFilters = {},
+  scope?: ManagementScope,
+): Promise<ConsoleData> {
   const [catalogResult, agentsResult, grantsResult, tracesResult] = await Promise.all([
     withFallback(() => fetchCatalog(), {
       providers: sampleProviders,
       channels: sampleChannels,
     }),
-    withFallback(() => fetchAgents(undefined, adminKey), sampleAgents),
-    withFallback(() => fetchAccessGrants(adminKey), []),
-    withFallback(() => fetchTraces(traceFilters, adminKey), sampleTraces),
+    withFallback(() => fetchAgents(scope, adminKey), sampleAgents),
+    withFallback(() => fetchAccessGrants(scope, adminKey), []),
+    withFallback(() => fetchTraces(traceFilters, scope, adminKey), sampleTraces),
   ])
 
   return {

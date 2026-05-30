@@ -40,18 +40,25 @@ func (p *Postgres) CreateAgent(ctx context.Context, agent domain.Agent) (domain.
 	return agent, nil
 }
 
-func (p *Postgres) ListAgents(ctx context.Context, workspaceID string) ([]domain.Agent, error) {
+func (p *Postgres) ListAgents(ctx context.Context, filter AgentFilter) ([]domain.Agent, error) {
 	query := `
 		select id, tenant_id, workspace_id, name, description, owner_id,
 			channel_type, channel_config, status, created_at, updated_at
 		from agents
+		where 1=1
 	`
 	args := []any{}
-	if strings.TrimSpace(workspaceID) != "" {
-		query += " where workspace_id=$1"
-		args = append(args, workspaceID)
+	add := func(sql string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(" and "+sql, len(args))
 	}
-	query += " order by created_at asc"
+	if strings.TrimSpace(filter.TenantID) != "" {
+		add("tenant_id=$%d", filter.TenantID)
+	}
+	if strings.TrimSpace(filter.WorkspaceID) != "" {
+		add("workspace_id=$%d", filter.WorkspaceID)
+	}
+	query += " order by created_at asc, id asc"
 	rows, err := p.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list agents: %w", err)
@@ -77,6 +84,24 @@ func (p *Postgres) GetAgent(ctx context.Context, id string) (domain.Agent, bool,
 	return agent, true, nil
 }
 
+func (p *Postgres) DisableAgent(ctx context.Context, id string, now time.Time) (domain.Agent, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		update agents
+		set status=$2, updated_at=$3
+		where id=$1
+		returning id, tenant_id, workspace_id, name, description, owner_id,
+			channel_type, channel_config, status, created_at, updated_at
+	`, id, string(domain.AgentStatusDisabled), now)
+	agent, err := scanAgent(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Agent{}, false, nil
+	}
+	if err != nil {
+		return domain.Agent{}, false, fmt.Errorf("disable agent: %w", err)
+	}
+	return agent, true, nil
+}
+
 func (p *Postgres) CreateAgentKey(ctx context.Context, key domain.AgentKey) (domain.AgentKey, error) {
 	_, err := p.pool.Exec(ctx, `
 		insert into agent_keys (id, agent_id, name, hash, prefix, created_at, expires_at, revoked_at)
@@ -88,12 +113,26 @@ func (p *Postgres) CreateAgentKey(ctx context.Context, key domain.AgentKey) (dom
 	return key, nil
 }
 
-func (p *Postgres) ListAgentKeys(ctx context.Context) ([]domain.AgentKey, error) {
-	rows, err := p.pool.Query(ctx, `
-		select id, agent_id, name, hash, prefix, created_at, expires_at, revoked_at
-		from agent_keys
-		order by created_at asc
-	`)
+func (p *Postgres) ListAgentKeys(ctx context.Context, scope ManagementScope) ([]domain.AgentKey, error) {
+	query := `
+		select k.id, k.agent_id, k.name, k.hash, k.prefix, k.created_at, k.expires_at, k.revoked_at
+		from agent_keys k
+		join agents a on a.id = k.agent_id
+		where 1=1
+	`
+	args := []any{}
+	add := func(sql string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(" and "+sql, len(args))
+	}
+	if strings.TrimSpace(scope.TenantID) != "" {
+		add("a.tenant_id=$%d", scope.TenantID)
+	}
+	if strings.TrimSpace(scope.WorkspaceID) != "" {
+		add("a.workspace_id=$%d", scope.WorkspaceID)
+	}
+	query += " order by k.created_at asc, k.id asc"
+	rows, err := p.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list agent keys: %w", err)
 	}
@@ -124,8 +163,8 @@ func (p *Postgres) FindAgentByKeyHash(ctx context.Context, hash string, now time
 			a.channel_type, a.channel_config, a.status, a.created_at, a.updated_at
 		from agent_keys k
 		join agents a on a.id = k.agent_id
-		where k.hash=$1 and k.revoked_at is null and k.expires_at > $2
-	`, hash, now)
+		where k.hash=$1 and k.revoked_at is null and k.expires_at > $2 and a.status=$3
+	`, hash, now, string(domain.AgentStatusActive))
 	agent, err := scanAgent(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Agent{}, false, nil
@@ -149,17 +188,41 @@ func (p *Postgres) CreateAccessGrant(ctx context.Context, grant domain.AccessGra
 	return grant, nil
 }
 
-func (p *Postgres) ListAccessGrants(ctx context.Context) ([]domain.AccessGrant, error) {
+func (p *Postgres) ListAccessGrants(ctx context.Context, scope ManagementScope) ([]domain.AccessGrant, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, caller_agent_id, target_agent_id, route_type, route_key, created_at, expires_at, revoked_at
-		from access_grants
-		order by created_at asc
-	`)
+		select g.id, g.caller_agent_id, g.target_agent_id, g.route_type, g.route_key, g.created_at, g.expires_at, g.revoked_at
+		from access_grants g
+		join agents c on c.id = g.caller_agent_id
+		join agents t on t.id = g.target_agent_id
+		where (
+			($1 = '' and $2 = '')
+			or (($1 = '' or c.tenant_id = $1) and ($2 = '' or c.workspace_id = $2))
+			or (($1 = '' or t.tenant_id = $1) and ($2 = '' or t.workspace_id = $2))
+		)
+		order by g.created_at asc, g.id asc
+	`, strings.TrimSpace(scope.TenantID), strings.TrimSpace(scope.WorkspaceID))
 	if err != nil {
 		return nil, fmt.Errorf("list access grants: %w", err)
 	}
 	defer rows.Close()
 	return scanAccessGrants(rows)
+}
+
+func (p *Postgres) RevokeAccessGrant(ctx context.Context, id string, now time.Time) (domain.AccessGrant, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		update access_grants
+		set revoked_at=$2
+		where id=$1
+		returning id, caller_agent_id, target_agent_id, route_type, route_key, created_at, expires_at, revoked_at
+	`, id, now)
+	grant, err := scanAccessGrant(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AccessGrant{}, false, nil
+	}
+	if err != nil {
+		return domain.AccessGrant{}, false, fmt.Errorf("revoke access grant: %w", err)
+	}
+	return grant, true, nil
 }
 
 func (p *Postgres) HasGrant(ctx context.Context, callerID string, targetID string, routeType string, routeKey string, now time.Time) bool {
@@ -215,7 +278,21 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 	if filter.TargetID != "" {
 		add("target_agent_id=$%d", filter.TargetID)
 	}
-	query += " order by created_at asc"
+	if strings.TrimSpace(filter.TenantID) != "" || strings.TrimSpace(filter.WorkspaceID) != "" {
+		args = append(args, strings.TrimSpace(filter.TenantID), strings.TrimSpace(filter.WorkspaceID))
+		tenantIndex := len(args) - 1
+		workspaceIndex := len(args)
+		query += fmt.Sprintf(`
+			and exists (
+				select 1
+				from agents scoped
+				where scoped.id in (trace_events.caller_agent_id, trace_events.target_agent_id)
+					and ($%d = '' or scoped.tenant_id = $%d)
+					and ($%d = '' or scoped.workspace_id = $%d)
+			)
+		`, tenantIndex, tenantIndex, workspaceIndex, workspaceIndex)
+	}
+	query += " order by created_at asc, id asc"
 	rows, err := p.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list traces: %w", err)
@@ -294,18 +371,9 @@ func scanAgentKey(row scanner) (domain.AgentKey, error) {
 func scanAccessGrants(rows pgx.Rows) ([]domain.AccessGrant, error) {
 	var out []domain.AccessGrant
 	for rows.Next() {
-		var grant domain.AccessGrant
-		var expiresAt *time.Time
-		var revokedAt *time.Time
-		if err := rows.Scan(&grant.ID, &grant.CallerID, &grant.TargetID, &grant.RouteType, &grant.RouteKey,
-			&grant.CreatedAt, &expiresAt, &revokedAt); err != nil {
+		grant, err := scanAccessGrant(rows)
+		if err != nil {
 			return nil, err
-		}
-		if expiresAt != nil {
-			grant.ExpiresAt = *expiresAt
-		}
-		if revokedAt != nil {
-			grant.RevokedAt = *revokedAt
 		}
 		out = append(out, grant)
 	}
@@ -313,6 +381,23 @@ func scanAccessGrants(rows pgx.Rows) ([]domain.AccessGrant, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+func scanAccessGrant(row scanner) (domain.AccessGrant, error) {
+	var grant domain.AccessGrant
+	var expiresAt *time.Time
+	var revokedAt *time.Time
+	if err := row.Scan(&grant.ID, &grant.CallerID, &grant.TargetID, &grant.RouteType, &grant.RouteKey,
+		&grant.CreatedAt, &expiresAt, &revokedAt); err != nil {
+		return domain.AccessGrant{}, err
+	}
+	if expiresAt != nil {
+		grant.ExpiresAt = *expiresAt
+	}
+	if revokedAt != nil {
+		grant.RevokedAt = *revokedAt
+	}
+	return grant, nil
 }
 
 func scanTraceEvents(rows pgx.Rows) ([]domain.TraceEvent, error) {

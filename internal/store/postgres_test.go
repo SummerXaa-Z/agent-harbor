@@ -335,3 +335,61 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 		t.Fatalf("disabled agent key should no longer authenticate")
 	}
 }
+
+func TestPostgresAuditedCreateAgentRollsBackWhenAuditFails(t *testing.T) {
+	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set AGENT_HARBOR_TEST_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	defer pool.Close()
+	if err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	repo := store.NewPostgresWithCredentialKey(pool, []byte("0123456789abcdef0123456789abcdef"))
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	agent := domain.Agent{
+		ID:            security.NewID("agt"),
+		TenantID:      "test",
+		WorkspaceID:   "ws-pg-rollback",
+		Name:          "Rollback Agent",
+		ChannelType:   "local",
+		ChannelConfig: map[string]any{},
+		Status:        domain.AgentStatusActive,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	audit := domain.AuditEvent{
+		ID:           security.NewID("aud"),
+		TenantID:     agent.TenantID,
+		WorkspaceID:  agent.WorkspaceID,
+		Actor:        "test",
+		Action:       "agent.created",
+		ResourceType: "agent",
+		ResourceID:   agent.ID,
+		Summary:      "Agent created",
+		Metadata:     map[string]any{"cannotMarshal": make(chan int)},
+		CreatedAt:    now,
+	}
+
+	if _, err := repo.CreateAgentWithAudit(ctx, agent, audit); err == nil {
+		t.Fatalf("CreateAgentWithAudit should fail when audit metadata cannot be marshaled")
+	}
+	if _, ok, err := repo.GetAgent(ctx, agent.ID); err != nil {
+		t.Fatalf("get rollback agent: %v", err)
+	} else if ok {
+		t.Fatalf("agent persisted even though audit insert failed")
+	}
+	var auditCount int
+	if err := pool.QueryRow(ctx, "select count(*) from audit_events where id=$1", audit.ID).Scan(&auditCount); err != nil {
+		t.Fatalf("count rollback audit event: %v", err)
+	}
+	if auditCount != 0 {
+		t.Fatalf("audit event persisted after rollback, count=%d", auditCount)
+	}
+}

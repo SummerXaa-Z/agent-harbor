@@ -364,14 +364,18 @@ func (p *Postgres) CreateRoutePolicy(ctx context.Context, policy domain.RoutePol
 }
 
 func (p *Postgres) createRoutePolicy(ctx context.Context, exec sqlExecutor, policy domain.RoutePolicy) (domain.RoutePolicy, error) {
-	_, err := exec.Exec(ctx, `
+	retry, err := marshalRoutePolicyRetry(policy.Retry)
+	if err != nil {
+		return domain.RoutePolicy{}, err
+	}
+	_, err = exec.Exec(ctx, `
 		insert into route_policies (
 			id, tenant_id, workspace_id, name, caller_agent_id, target_agent_id,
-			route_type, route_key, effect, status, priority, created_at, updated_at
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+			route_type, route_key, effect, status, priority, retry, created_at, updated_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 	`, policy.ID, policy.TenantID, policy.WorkspaceID, policy.Name, policy.CallerID, policy.TargetID,
 		policy.RouteType, policy.RouteKey, string(policy.Effect), string(policy.Status), policy.Priority,
-		policy.CreatedAt, policy.UpdatedAt)
+		retry, policy.CreatedAt, policy.UpdatedAt)
 	if err != nil {
 		return domain.RoutePolicy{}, fmt.Errorf("insert route policy: %w", err)
 	}
@@ -381,7 +385,7 @@ func (p *Postgres) createRoutePolicy(ctx context.Context, exec sqlExecutor, poli
 func (p *Postgres) ListRoutePolicies(ctx context.Context, scope ManagementScope) ([]domain.RoutePolicy, error) {
 	query := `
 		select id, tenant_id, workspace_id, name, caller_agent_id, target_agent_id,
-			route_type, route_key, effect, status, priority, created_at, updated_at
+			route_type, route_key, effect, status, priority, retry, created_at, updated_at
 		from route_policies
 		where 1=1
 	`
@@ -408,7 +412,7 @@ func (p *Postgres) ListRoutePolicies(ctx context.Context, scope ManagementScope)
 func (p *Postgres) GetRoutePolicy(ctx context.Context, id string) (domain.RoutePolicy, bool, error) {
 	row := p.pool.QueryRow(ctx, `
 		select id, tenant_id, workspace_id, name, caller_agent_id, target_agent_id,
-			route_type, route_key, effect, status, priority, created_at, updated_at
+			route_type, route_key, effect, status, priority, retry, created_at, updated_at
 		from route_policies
 		where id=$1
 	`, id)
@@ -427,14 +431,18 @@ func (p *Postgres) UpdateRoutePolicy(ctx context.Context, policy domain.RoutePol
 }
 
 func (p *Postgres) updateRoutePolicy(ctx context.Context, exec sqlExecutor, policy domain.RoutePolicy) (domain.RoutePolicy, bool, error) {
+	retry, err := marshalRoutePolicyRetry(policy.Retry)
+	if err != nil {
+		return domain.RoutePolicy{}, false, err
+	}
 	row := exec.QueryRow(ctx, `
 		update route_policies
-		set name=$2, route_type=$3, route_key=$4, effect=$5, status=$6, priority=$7, updated_at=$8
+		set name=$2, route_type=$3, route_key=$4, effect=$5, status=$6, priority=$7, retry=$8, updated_at=$9
 		where id=$1
 		returning id, tenant_id, workspace_id, name, caller_agent_id, target_agent_id,
-			route_type, route_key, effect, status, priority, created_at, updated_at
+			route_type, route_key, effect, status, priority, retry, created_at, updated_at
 	`, policy.ID, policy.Name, policy.RouteType, policy.RouteKey, string(policy.Effect),
-		string(policy.Status), policy.Priority, policy.UpdatedAt)
+		string(policy.Status), policy.Priority, retry, policy.UpdatedAt)
 	updated, err := scanRoutePolicy(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.RoutePolicy{}, false, nil
@@ -455,7 +463,7 @@ func (p *Postgres) disableRoutePolicy(ctx context.Context, exec sqlExecutor, id 
 		set status=$2, updated_at=$3
 		where id=$1
 		returning id, tenant_id, workspace_id, name, caller_agent_id, target_agent_id,
-			route_type, route_key, effect, status, priority, created_at, updated_at
+			route_type, route_key, effect, status, priority, retry, created_at, updated_at
 	`, id, string(domain.RoutePolicyStatusDisabled), now)
 	policy, err := scanRoutePolicy(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -472,7 +480,8 @@ func (p *Postgres) EvaluateRouteAccess(ctx context.Context, callerID string, tar
 		select route_policies.id, route_policies.tenant_id, route_policies.workspace_id, route_policies.name,
 			route_policies.caller_agent_id, route_policies.target_agent_id,
 			route_policies.route_type, route_policies.route_key, route_policies.effect,
-			route_policies.status, route_policies.priority, route_policies.created_at, route_policies.updated_at
+			route_policies.status, route_policies.priority, route_policies.retry,
+			route_policies.created_at, route_policies.updated_at
 		from route_policies
 		join agents c on c.id = route_policies.caller_agent_id
 		join agents t on t.id = route_policies.target_agent_id
@@ -930,14 +939,33 @@ func scanRoutePolicy(row scanner) (domain.RoutePolicy, error) {
 	var policy domain.RoutePolicy
 	var effect string
 	var status string
+	var retry []byte
 	if err := row.Scan(&policy.ID, &policy.TenantID, &policy.WorkspaceID, &policy.Name,
 		&policy.CallerID, &policy.TargetID, &policy.RouteType, &policy.RouteKey, &effect,
-		&status, &policy.Priority, &policy.CreatedAt, &policy.UpdatedAt); err != nil {
+		&status, &policy.Priority, &retry, &policy.CreatedAt, &policy.UpdatedAt); err != nil {
 		return domain.RoutePolicy{}, err
 	}
 	policy.Effect = domain.RoutePolicyEffect(effect)
 	policy.Status = domain.RoutePolicyStatus(status)
+	if len(retry) > 0 {
+		var parsed domain.RoutePolicyRetry
+		if err := json.Unmarshal(retry, &parsed); err != nil {
+			return domain.RoutePolicy{}, fmt.Errorf("unmarshal route policy retry: %w", err)
+		}
+		policy.Retry = &parsed
+	}
 	return policy, nil
+}
+
+func marshalRoutePolicyRetry(retry *domain.RoutePolicyRetry) ([]byte, error) {
+	if retry == nil {
+		return nil, nil
+	}
+	data, err := json.Marshal(retry)
+	if err != nil {
+		return nil, fmt.Errorf("marshal route policy retry: %w", err)
+	}
+	return data, nil
 }
 
 func scanTraceEvents(rows pgx.Rows) ([]domain.TraceEvent, error) {

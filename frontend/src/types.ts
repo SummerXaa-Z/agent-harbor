@@ -99,6 +99,13 @@ export interface CreateRoutePolicyRequest {
   effect?: RoutePolicyEffect
   status?: RoutePolicyStatus
   priority?: number
+  retry?: RoutePolicyRetry
+}
+
+export interface RoutePolicyRetry {
+  maxAttempts: number
+  backoffMs: number
+  statusCodes: number[]
 }
 
 export interface TraceEvent {
@@ -178,6 +185,7 @@ export interface RoutePolicy {
   effect: RoutePolicyEffect
   status: RoutePolicyStatus
   priority: number
+  retry?: RoutePolicyRetry
   lastMatchedAt?: string
   createdAt: string
   updatedAt: string

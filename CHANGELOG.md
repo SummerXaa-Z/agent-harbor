@@ -49,6 +49,76 @@
 - `internal/store/postgres_test.go`：PostgreSQL rollback regression。
 - `scripts/demo-sprint11-transactional-audit.sh`、`README.md`、`docs/sprints/`：Sprint 11 文档与 demo。
 
+## [2026-05-31 01:47] Session: Sprint 10 Review Hardening
+
+### 完成
+- 根据 review 风险补强 retry 表单校验：新增 `frontend/src/retryForm.ts`，Agent / Route Policy 表单统一拒绝空 retry companion 字段，避免空值被静默序列化成 `0` / `null`。
+- 新增 `frontend/tests/retryForm.test.mjs` 和 `frontend/package.json` 的 `test` script，覆盖默认 retry omit、空字段拒绝、正常 retry 归一化。
+- 新增 `TestProxyDoesNotRetryCanceledContext`，锁定 data-plane 在 `context.Canceled` 时即使配置 retry 也只尝试一次。
+- 确认既有 Sprint 10 dirty worktree 已包含 4MiB proxy body cap、DNS failure、status retry success/exhaustion 等 regression tests。
+
+### 决策
+- 前端 retry 校验统一使用整数边界：`maxAttempts` 1-4，`backoffMs` 0-1000；默认 `1/0` 不发送 retry override。
+- Node 内置 `node:test` 测试放在 `frontend/tests/`，避免进入 Vite/tsc 的应用源码编译范围。
+
+### 血泪教训
+- 跨仓库续接时 `apply_patch` 会按当前线程 cwd 落文件；本次第一次把前端测试误落到 `ai-nexus/frontend/src/`，已删除。后续对 `agent-harbor` 打补丁优先使用绝对路径。
+
+### 验证
+- `go test ./...`
+- `go vet ./...`
+- `go build ./...`
+- `pnpm --dir frontend test`
+- `pnpm --dir frontend build`
+- `git diff --check`
+- `bash -n scripts/demo-governance-loop.sh ... scripts/demo-sprint10-route-policy-retry.sh`
+- `scripts/demo-sprint10-route-policy-retry.sh` against local API on `127.0.0.1:9090`
+
+### 待办
+- 如需提交 PR，建议下一轮 review 聚焦 retry precedence、body cap trace 形态、PostgreSQL JSONB retry persistence、前端 policy retry UX。
+
+### 影响文件
+- `frontend/src/retryForm.ts`：新增 retry 表单解析/校验 helper。
+- `frontend/tests/retryForm.test.mjs` / `frontend/package.json`：新增前端 regression test 和 test script。
+- `frontend/src/App.tsx`：Agent / Policy 表单复用 retry helper。
+- `internal/httpapi/server_test.go`：新增 cancel 不重试 regression test。
+
+## [2026-05-30 22:20] Session: Sprint 10 Route Policy Retry Overrides
+
+### 完成
+- 新增 Sprint 10 brief / design / implementation plan，范围聚焦 RoutePolicy 级 retry override。
+- `RoutePolicy` 新增可选 `retry`，包含 `maxAttempts`、`backoffMs`、`statusCodes`。
+- `POST /api/v1/route-policies` 支持创建 retry override；`PATCH /api/v1/route-policies/{id}` 支持替换或清空 retry。
+- `EvaluateRouteAccess` 在命中的 allow policy 上返回 retry override；deny policy 和 legacy access grant 不返回 override。
+- 数据面 proxy retry 解析顺序改为 policy retry → target Agent `channelConfig.retry` → 默认不重试。
+- PostgreSQL 新增 `006_sprint10_route_policy_retry.sql`，`route_policies.retry` 使用 JSONB 存储。
+- 前端 Create Policy 新增 retry attempts/backoff 字段，Route Governance 表显示 policy retry summary。
+- 新增 `scripts/demo-sprint10-route-policy-retry.sh`，覆盖 policy retry shape、非法参数拒绝和 `PATCH retry:null` 清空。
+
+### 决策
+- RoutePolicy retry 使用和 target Agent retry 相同的边界：`maxAttempts` 1-4、`backoffMs` 0-1000、`statusCodes` 只允许 5xx。
+- 创建 policy 时 retry 对象内缺失字段会归一化：attempts=1、backoff=0、statusCodes=[502,503,504]。
+- policy 没有 retry 时不改变既有行为，继续使用 target Agent retry；legacy access grant 不增加 retry override。
+
+### 验证
+- TDD red/green: policy retry 起初被 JSON unknown field 拒绝或不会影响 proxy → 现在 `maxAttempts=2` 可让 upstream 503 后第二次 202 成功。
+- TDD red/green: route policy retry invalid attempts/status 起初不会被校验 → 现在 create/patch 返回 400。
+- TDD red/green: PostgreSQL route policy retry 起初无类型/无字段 → 现在持久化并随 access decision 返回。
+- `go test ./...`
+- `npm --prefix frontend run build`
+- `ADMIN_KEY=local-admin-key bash scripts/demo-sprint10-route-policy-retry.sh` against local API
+- `go vet ./... && go build ./... && git diff --check`
+- `AGENT_HARBOR_TEST_DATABASE_URL=... go test ./internal/store -run TestPostgresRepositoryRoundTrip -count=1`（临时 PostgreSQL 16 容器）
+- Playwright smoke for Create Policy retry fields / Route Governance / Active Policies / Management Audit against live local backend + Vite dev server
+
+### 影响文件
+- `internal/domain/types.go`：新增 RoutePolicy retry 类型和 access decision retry。
+- `internal/httpapi/server.go` / `server_test.go`：policy retry validation、patch parsing、proxy retry precedence、HTTP tests。
+- `internal/store/memory.go` / `postgres.go` / `postgres_test.go`：policy retry persistence/evaluation。
+- `internal/db/migrations/006_sprint10_route_policy_retry.sql`：新增 retry JSONB 列。
+- `frontend/src/App.tsx` / `types.ts` / `data.ts`：Create Policy retry 字段和表格展示。
+- `scripts/demo-sprint10-route-policy-retry.sh`、`README.md`、`docs/sprints/`、`docs/superpowers/`：Sprint 10 行为记录。
+
 ## [2026-05-30 21:58] Session: Sprint 9 Route Policy Objects
 
 ### 完成

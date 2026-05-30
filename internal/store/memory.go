@@ -367,6 +367,7 @@ func (m *Memory) HasGrant(_ context.Context, callerID string, targetID string, r
 func (m *Memory) CreateRoutePolicy(_ context.Context, policy domain.RoutePolicy) (domain.RoutePolicy, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	policy.Retry = cloneRoutePolicyRetry(policy.Retry)
 	m.policies[policy.ID] = policy
 	return policy, nil
 }
@@ -412,6 +413,7 @@ func (m *Memory) UpdateRoutePolicy(_ context.Context, policy domain.RoutePolicy)
 	if !ok {
 		return domain.RoutePolicy{}, false, nil
 	}
+	policy.Retry = cloneRoutePolicyRetry(policy.Retry)
 	policy.TenantID = existing.TenantID
 	policy.WorkspaceID = existing.WorkspaceID
 	policy.CallerID = existing.CallerID
@@ -672,7 +674,26 @@ func routePolicyDecision(policy domain.RoutePolicy) domain.RouteAccessDecision {
 		Source:   "route_policy",
 		PolicyID: policy.ID,
 		Reason:   reason,
+		Retry:    routePolicyRetryForDecision(policy),
 	}
+}
+
+func routePolicyRetryForDecision(policy domain.RoutePolicy) *domain.RoutePolicyRetry {
+	if policy.Effect != domain.RoutePolicyEffectAllow {
+		return nil
+	}
+	return cloneRoutePolicyRetry(policy.Retry)
+}
+
+func cloneRoutePolicyRetry(retry *domain.RoutePolicyRetry) *domain.RoutePolicyRetry {
+	if retry == nil {
+		return nil
+	}
+	copied := *retry
+	if retry.StatusCodes != nil {
+		copied.StatusCodes = append([]int(nil), retry.StatusCodes...)
+	}
+	return &copied
 }
 
 func agentMatchesScope(agent domain.Agent, scope ManagementScope) bool {

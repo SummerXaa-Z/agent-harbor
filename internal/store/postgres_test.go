@@ -249,6 +249,37 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	if !decision.Allowed || decision.Source != "access_grant" {
 		t.Fatalf("expected disabled route policy to fall back to access grant, got %#v", decision)
 	}
+	retryPolicy := domain.RoutePolicy{
+		ID:          security.NewID("rpl"),
+		TenantID:    caller.TenantID,
+		WorkspaceID: caller.WorkspaceID,
+		Name:        "PG allow call with retry",
+		CallerID:    caller.ID,
+		TargetID:    target.ID,
+		RouteType:   "mcp",
+		RouteKey:    "tools/call",
+		Effect:      domain.RoutePolicyEffectAllow,
+		Status:      domain.RoutePolicyStatusEnabled,
+		Priority:    200,
+		Retry: &domain.RoutePolicyRetry{
+			MaxAttempts: 2,
+			BackoffMs:   25,
+			StatusCodes: []int{502, 503},
+		},
+		CreatedAt: now.Add(3 * time.Minute),
+		UpdatedAt: now.Add(3 * time.Minute),
+	}
+	if _, err := repo.CreateRoutePolicy(ctx, retryPolicy); err != nil {
+		t.Fatalf("create retry route policy: %v", err)
+	}
+	decision, err = repo.EvaluateRouteAccess(ctx, caller.ID, target.ID, "mcp", "tools/call", now.Add(4*time.Minute))
+	if err != nil {
+		t.Fatalf("evaluate retry route policy: %v", err)
+	}
+	if !decision.Allowed || decision.PolicyID != retryPolicy.ID || decision.Retry == nil ||
+		decision.Retry.MaxAttempts != 2 || decision.Retry.BackoffMs != 25 || len(decision.Retry.StatusCodes) != 2 || decision.Retry.StatusCodes[1] != 503 {
+		t.Fatalf("expected retry policy decision, got %#v", decision)
+	}
 
 	trace := domain.TraceEvent{
 		ID:               security.NewID("trc"),

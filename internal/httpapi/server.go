@@ -720,6 +720,11 @@ func (s *Server) createRoutePolicy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	retry, err := normalizeRoutePolicyRetry(req.Retry, "retry")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	caller, ok, err := s.repo.GetAgent(r.Context(), req.CallerID)
 	if err != nil {
 		writeError(w, err)
@@ -758,6 +763,7 @@ func (s *Server) createRoutePolicy(w http.ResponseWriter, r *http.Request) {
 		Effect:      effect,
 		Status:      status,
 		Priority:    priority,
+		Retry:       retry,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -832,6 +838,14 @@ func (s *Server) updateRoutePolicy(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		policy.Priority = *req.Priority
+	}
+	if req.Retry != nil {
+		retry, err := routePolicyRetryFromPatch(req.Retry)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		policy.Retry = retry
 	}
 	if policy.Name == "" {
 		policy.Name = defaultRoutePolicyName(policy.RouteType, policy.RouteKey, policy.Effect)
@@ -970,7 +984,7 @@ func (s *Server) handleDataPlane(w http.ResponseWriter, r *http.Request, routeTy
 	recordAllowedTrace := func(result proxyTraceResult) (domain.TraceEvent, error) {
 		return s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionAllowed, allowedReason, result)
 	}
-	if s.proxyUpstreamIfConfigured(w, r, target, routeType, routeKey, recordAllowedTrace) {
+	if s.proxyUpstreamIfConfigured(w, r, target, routeType, routeKey, decision.Retry, recordAllowedTrace) {
 		return
 	}
 	trace, err := recordAllowedTrace(proxyTraceResult{})
@@ -1004,7 +1018,7 @@ func (s *Server) recordDataPlaneTrace(r *http.Request, callerID string, targetID
 	return s.repo.AppendTrace(r.Context(), trace)
 }
 
-func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Request, target domain.Agent, routeType string, routeKey string, recordAllowedTrace func(proxyTraceResult) (domain.TraceEvent, error)) bool {
+func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Request, target domain.Agent, routeType string, routeKey string, retryOverride *domain.RoutePolicyRetry, recordAllowedTrace func(proxyTraceResult) (domain.TraceEvent, error)) bool {
 	endpoint, ok := target.ChannelConfig["endpoint"].(string)
 	endpoint = strings.TrimSpace(endpoint)
 	if !ok || endpoint == "" {
@@ -1027,10 +1041,14 @@ func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Reques
 		writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
 		return true
 	}
-	retryPolicy, err := proxyRetryPolicyFromConfig(target.ChannelConfig)
-	if err != nil {
-		writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
-		return true
+	retryPolicy := proxyRetryPolicyFromRoutePolicyRetry(retryOverride)
+	if retryPolicy == nil {
+		parsedRetryPolicy, err := proxyRetryPolicyFromConfig(target.ChannelConfig)
+		if err != nil {
+			writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
+			return true
+		}
+		retryPolicy = &parsedRetryPolicy
 	}
 	body, err := readProxyBody(r.Body)
 	if err != nil {
@@ -1420,12 +1438,8 @@ func proxyTimeoutFromConfig(config map[string]any) (time.Duration, error) {
 
 func proxyRetryPolicyFromConfig(config map[string]any) (proxyRetryPolicy, error) {
 	policy := proxyRetryPolicy{
-		maxAttempts: 1,
-		retryStatusCodes: map[int]struct{}{
-			http.StatusBadGateway:         {},
-			http.StatusServiceUnavailable: {},
-			http.StatusGatewayTimeout:     {},
-		},
+		maxAttempts:      1,
+		retryStatusCodes: defaultRetryStatusCodes(),
 	}
 	raw, exists := config["retry"]
 	if !exists {
@@ -1474,6 +1488,29 @@ func proxyRetryPolicyFromConfig(config map[string]any) (proxyRetryPolicy, error)
 		policy.retryStatusCodes = statusCodes
 	}
 	return policy, nil
+}
+
+func proxyRetryPolicyFromRoutePolicyRetry(retry *domain.RoutePolicyRetry) *proxyRetryPolicy {
+	if retry == nil {
+		return nil
+	}
+	statusCodes := make(map[int]struct{}, len(retry.StatusCodes))
+	for _, statusCode := range retry.StatusCodes {
+		statusCodes[statusCode] = struct{}{}
+	}
+	return &proxyRetryPolicy{
+		maxAttempts:      retry.MaxAttempts,
+		backoff:          time.Duration(retry.BackoffMs) * time.Millisecond,
+		retryStatusCodes: statusCodes,
+	}
+}
+
+func defaultRetryStatusCodes() map[int]struct{} {
+	return map[int]struct{}{
+		http.StatusBadGateway:         {},
+		http.StatusServiceUnavailable: {},
+		http.StatusGatewayTimeout:     {},
+	}
 }
 
 func configInteger(raw any, field string) (int64, error) {
@@ -1808,6 +1845,51 @@ func normalizeRoutePolicyPriority(value *int) (int, error) {
 	return *value, nil
 }
 
+func normalizeRoutePolicyRetry(req *domain.RoutePolicyRetryRequest, fieldPrefix string) (*domain.RoutePolicyRetry, error) {
+	if req == nil {
+		return nil, nil
+	}
+	maxAttempts := 1
+	if req.MaxAttempts != nil {
+		if *req.MaxAttempts < 1 || *req.MaxAttempts > maxRetryAttempts {
+			return nil, domain.BadRequest("VALIDATION_FAILED", fieldPrefix+".maxAttempts must be between 1 and 4")
+		}
+		maxAttempts = *req.MaxAttempts
+	}
+	backoffMs := 0
+	if req.BackoffMs != nil {
+		if *req.BackoffMs < 0 || *req.BackoffMs > int(maxRetryBackoff/time.Millisecond) {
+			return nil, domain.BadRequest("VALIDATION_FAILED", fieldPrefix+".backoffMs must be between 0 and 1000")
+		}
+		backoffMs = *req.BackoffMs
+	}
+	statusCodes := []int{http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout}
+	if req.StatusCodes != nil {
+		statusCodes = append([]int(nil), req.StatusCodes...)
+	}
+	for _, statusCode := range statusCodes {
+		if statusCode < 500 || statusCode > 599 {
+			return nil, domain.BadRequest("VALIDATION_FAILED", fieldPrefix+".statusCodes must contain 5xx status codes")
+		}
+	}
+	return &domain.RoutePolicyRetry{
+		MaxAttempts: maxAttempts,
+		BackoffMs:   backoffMs,
+		StatusCodes: statusCodes,
+	}, nil
+}
+
+func routePolicyRetryFromPatch(raw json.RawMessage) (*domain.RoutePolicyRetry, error) {
+	if string(bytes.TrimSpace(raw)) == "null" {
+		return nil, nil
+	}
+	var req domain.RoutePolicyRetryRequest
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return nil, domain.BadRequest("INVALID_JSON", "retry must be an object or null")
+	}
+	return normalizeRoutePolicyRetry(&req, "retry")
+}
+
 func defaultRoutePolicyName(routeType string, routeKey string, effect domain.RoutePolicyEffect) string {
 	key := routeKey
 	if key == "" {
@@ -1817,7 +1899,7 @@ func defaultRoutePolicyName(routeType string, routeKey string, effect domain.Rou
 }
 
 func routePolicyAuditMetadata(policy domain.RoutePolicy) map[string]any {
-	return map[string]any{
+	metadata := map[string]any{
 		"callerAgentId": policy.CallerID,
 		"targetAgentId": policy.TargetID,
 		"routeType":     policy.RouteType,
@@ -1826,6 +1908,14 @@ func routePolicyAuditMetadata(policy domain.RoutePolicy) map[string]any {
 		"status":        policy.Status,
 		"priority":      policy.Priority,
 	}
+	if policy.Retry != nil {
+		metadata["retry"] = map[string]any{
+			"maxAttempts": policy.Retry.MaxAttempts,
+			"backoffMs":   policy.Retry.BackoffMs,
+			"statusCodes": policy.Retry.StatusCodes,
+		}
+	}
+	return metadata
 }
 
 func initialCredentialVersion(credentials map[string]string) int {

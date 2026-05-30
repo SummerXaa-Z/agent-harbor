@@ -1,3 +1,23 @@
+## [2026-05-31 04:52] Session: Sprint 6 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-6-runtime-metrics` 分支补跑 focused verification，并将证据写入 PR #6。
+- 将 PR #6 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 6 runtime metrics` 改为 `Sprint 6 runtime metrics`。
+- 验证 Sprint 6 的 runtime metrics demo、Sprint 1-5 demo 回归、PostgreSQL trace metrics round-trip、Go 后端和前端 build。
+
+### 决策
+- 保留 #6 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 6 代码和历史，只更新 GitHub PR 元数据。
+
+### 血泪教训
+- runtime metrics 类 PR 的 ready evidence 必须同时证明聚合结果和原始 trace 字段；`calls=2 allowed=50%` 证明 API 聚合，attempts/status/error/duration 证明可观测性来源。
+
+### 待办
+- 下一步从 #7 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #6 ready evidence 和验证结果。
+
 ## [2026-05-31 04:49] Session: Sprint 5 Ready Evidence
 
 ### 完成

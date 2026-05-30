@@ -1,3 +1,27 @@
+## [2026-05-31 04:08] Session: PR Review Governance
+
+### 完成
+- 新增 `.github/pull_request_template.md`，固定 Summary、Scope、Review Boundary、Verification、Data And Security、Follow-Ups 六个 PR 栏目。
+- 新增 `docs/engineering/review-guidelines.md`，沉淀 AgentHarbor sprint stack 的 review 顺序、验证证据、安全治理检查和拆分条件。
+- 新增 `docs/superpowers/plans/2026-05-31-pr-review-governance.md`，记录本次协作治理底座的实施计划。
+
+### 决策
+- PR 模板保持轻量，不引入强制 code owners 或 branch protection，避免在当前 stacked draft PR 阶段制造流程摩擦。
+- Review guide 明确区分 Draft integration checkpoint 和 Ready PR：前者可大，后者必须有窄 review path。
+
+### 血泪教训
+- 只有 CI 不够；大型工程分支还需要 review boundary 文档，否则绿色检查会掩盖“难以审”的协作风险。
+
+### 待办
+- 后续可在 PR #1 拆分前，用该模板重写各子 PR 描述。
+- 如团队成员增加，再考虑补 CODEOWNERS 和 branch protection。
+
+### 影响文件
+- `.github/pull_request_template.md`：新增未来 PR 的结构化描述模板。
+- `docs/engineering/review-guidelines.md`：新增工程 review 指南。
+- `docs/superpowers/plans/2026-05-31-pr-review-governance.md`：新增实施计划。
+- `CHANGELOG.md`：记录协作治理底座落地。
+
 ## [2026-05-31 04:03] Session: CI Workflow Foundation
 
 ### 完成

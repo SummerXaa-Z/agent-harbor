@@ -854,7 +854,7 @@ function SignalBoard({ metrics }: { metrics: SystemMetric[] }) {
   return (
     <div className="signal-grid">
       {metrics.map((metric) => (
-        <article className="signal" key={metric.label}>
+        <article className="signal" key={metric.id}>
           <span>{metric.label}</span>
           <strong>{metric.value}{metric.unit ?? ""}</strong>
           <div className="signal-track" aria-hidden="true">

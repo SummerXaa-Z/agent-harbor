@@ -90,15 +90,29 @@ const (
 )
 
 type TraceEvent struct {
-	ID        string        `json:"id"`
-	RunID     string        `json:"runId,omitempty"`
-	CallerID  string        `json:"callerAgentId,omitempty"`
-	TargetID  string        `json:"targetAgentId"`
-	RouteType string        `json:"routeType"`
-	RouteKey  string        `json:"routeKey,omitempty"`
-	Decision  TraceDecision `json:"decision"`
-	Reason    string        `json:"reason,omitempty"`
-	CreatedAt time.Time     `json:"createdAt"`
+	ID               string        `json:"id"`
+	RunID            string        `json:"runId,omitempty"`
+	CallerID         string        `json:"callerAgentId,omitempty"`
+	TargetID         string        `json:"targetAgentId"`
+	RouteType        string        `json:"routeType"`
+	RouteKey         string        `json:"routeKey,omitempty"`
+	Decision         TraceDecision `json:"decision"`
+	Reason           string        `json:"reason,omitempty"`
+	DurationMs       int64         `json:"durationMs,omitempty"`
+	UpstreamAttempts int           `json:"upstreamAttempts,omitempty"`
+	UpstreamStatus   int           `json:"upstreamStatus,omitempty"`
+	UpstreamError    string        `json:"upstreamError,omitempty"`
+	CreatedAt        time.Time     `json:"createdAt"`
+}
+
+type SystemMetric struct {
+	ID        string    `json:"id"`
+	Label     string    `json:"label"`
+	Value     int       `json:"value"`
+	Unit      string    `json:"unit,omitempty"`
+	Trend     string    `json:"trend"`
+	Status    string    `json:"status"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type FieldContract struct {

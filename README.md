@@ -83,6 +83,14 @@ Sprint 5 adds bounded proxy retry controls and richer upstream error classificat
 bash scripts/demo-sprint5-retry-config.sh
 ```
 
+## Sprint 6 Runtime Metrics Demo
+
+Sprint 6 backs Runtime Signals with trace-derived metrics. Against a running API, this script creates one denied and one allowed data-plane call, then verifies `GET /api/v1/metrics/runtime` reports gateway calls and allowed rate from real traces:
+
+```bash
+bash scripts/demo-sprint6-runtime-metrics.sh
+```
+
 ## Admin Key
 
 Management APIs are open by default for local clean-room iteration. If `AGENT_HARBOR_ADMIN_KEY` is set on the server, management endpoints require the same value in `X-Admin-Key`.
@@ -94,6 +102,7 @@ ADMIN_KEY=local-admin-key bash scripts/demo-sprint2-cleanup.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint3-mcp-policy.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint4-credentials.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint5-retry-config.sh
+ADMIN_KEY=local-admin-key bash scripts/demo-sprint6-runtime-metrics.sh
 ```
 
 The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the admin key only protects management and audit APIs. Agent Key TTLs must be between 1 and 3600 seconds, with a 1800 second server default when omitted.
@@ -149,7 +158,7 @@ pnpm build
 pnpm dev
 ```
 
-The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it defaults to `http://127.0.0.1:9090`. When the backend is unavailable during local development, the UI uses mock fallback data so the console remains navigable. When the backend is reachable, catalog, agent, access grant, and trace data come from the Go runtime; evidence runs and runtime signals remain local sample panels until those APIs exist.
+The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it defaults to `http://127.0.0.1:9090`. When the backend is unavailable during local development, the UI uses mock fallback data so the console remains navigable. When the backend is reachable, catalog, agent, access grant, trace, and runtime signal data come from the Go runtime; evidence runs remain local sample panels until those APIs exist.
 
 ## Current API
 
@@ -172,9 +181,10 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 - `POST /api/v1/openapi/agents/{targetId}/operations/{operationId}`
 - `ANY /api/v1/openapi/agents/{targetId}/{relativePath...}`
 - `GET /api/v1/audit/traces?tenantId=&workspaceId=&runId=&decision=&callerAgentId=&targetAgentId=`
+- `GET /api/v1/metrics/runtime?tenantId=&workspaceId=`
 
 ## Next Milestones
 
-- Add OTel spans and metrics for route/caller/target dimensions.
+- Export runtime trace dimensions to OpenTelemetry spans and metrics.
 - Add credential rotation and partial update APIs.
 - Add route-level retry overrides after route policy objects exist.

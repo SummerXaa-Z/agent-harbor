@@ -1,3 +1,36 @@
+## [2026-05-30 18:45] Session: Sprint 6 Runtime Metrics
+
+### 完成
+- 新增 Sprint 6 brief / design / implementation plan，范围聚焦 Runtime Signals 从 mock 转真实后端指标。
+- `TraceEvent` 新增 `durationMs`、`upstreamAttempts`、`upstreamStatus`、`upstreamError`，用于记录数据面 proxy 结果。
+- PostgreSQL 新增 `003_sprint6_runtime_metrics.sql`，memory/PostgreSQL trace 读写路径均保留新增指标字段。
+- MCP/OpenAPI proxied calls 在写响应前记录 allowed trace，包含最终 attempts、upstream status、gateway upstream error code 和 duration。
+- 新增 `GET /api/v1/metrics/runtime?tenantId=&workspaceId=`，按 scoped traces 聚合 gateway calls、allowed rate、upstream error rate、avg latency。
+- 前端 Signal Board 改为优先读取 runtime metrics API，只有网络不可达时才回落本地 sample metrics。
+- 根据 review 修复 proxied upstream 已成功后 trace 写入失败会覆盖成 500 的风险；此时保留 upstream response，trace 写入退化为 best-effort。
+- 收窄前端 fallback，只对浏览器 fetch 网络失败回落 sample data，不再吞所有 `TypeError`。
+- 新增 `scripts/demo-sprint6-runtime-metrics.sh`，验证 denied + allowed 数据面调用会反映到 runtime metrics。
+
+### 决策
+- Sprint 6 先做 trace-derived metrics API，不引入外部 OpenTelemetry exporter；同一批字段后续可直接映射到 spans/counters。
+- Trace storage 保持 append-only，不新增 update trace 接口；proxied allowed trace 改为 proxy outcome 已知后写入。
+- Metrics 聚合先放在 HTTP 层内存计算，等 trace 量增长后再加 time window 和 SQL 聚合。
+
+### 验证
+- TDD red/green: runtime metrics endpoint 404 → scoped metrics 聚合通过。
+- TDD red/green: proxied trace metrics fields 为空 → attempts/status/duration 写入通过。
+- `go test ./internal/httpapi -run 'TestRuntimeMetricsSummarizeDataPlaneTraces|TestProxyTraceMetricsRecordAttemptsStatusAndDuration' -count=1`
+- `go test ./internal/store -run TestPostgresRepositoryRoundTrip -count=1`
+- `pnpm -C frontend build`
+- Review fix targeted test: `TestProxySuccessDoesNotFailWhenTraceAppendFails`
+
+### 影响文件
+- `internal/httpapi/server.go` / `server_test.go`：proxy outcome trace recording、runtime metrics endpoint 和聚合测试。
+- `internal/domain/types.go`：TraceEvent 指标字段和 SystemMetric 响应形状。
+- `internal/store/postgres.go` / `internal/db/migrations/003_sprint6_runtime_metrics.sql` / `postgres_test.go`：trace metric persistence。
+- `frontend/src/api.ts` / `App.tsx` / `types.ts`：Runtime Signal API 接入和 trace 字段类型。
+- `scripts/demo-sprint6-runtime-metrics.sh`、`README.md`、`docs/sprints/`、`docs/superpowers/`：Sprint 6 行为记录。
+
 ## [2026-05-30 17:30] Session: Sprint 5 Proxy Retry and Error Classification
 
 ### 完成

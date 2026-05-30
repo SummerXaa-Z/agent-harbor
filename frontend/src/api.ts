@@ -20,6 +20,7 @@ import type {
   CreateAgentRequest,
   ManagementScope,
   ProviderContract,
+  SystemMetric,
   TraceEvent,
   TraceFilters,
 } from './types'
@@ -109,11 +110,22 @@ async function withFallback<T>(loader: () => Promise<T>, fallback: T): Promise<{
   try {
     return { data: await loader(), ok: true }
   } catch (error) {
-    if (error instanceof TypeError) {
+    if (isFetchNetworkError(error)) {
       return { data: fallback, ok: false }
     }
     throw error
   }
+}
+
+function isFetchNetworkError(error: unknown): boolean {
+  if (!(error instanceof TypeError)) return false
+  const message = error.message.toLowerCase()
+  return (
+    message.includes('failed to fetch') ||
+    message.includes('load failed') ||
+    message.includes('networkerror') ||
+    message.includes('network request failed')
+  )
 }
 
 export async function fetchProviders(signal?: AbortSignal): Promise<ProviderContract[]> {
@@ -170,6 +182,18 @@ export async function fetchTraces(
   return request<TraceEvent[]>(`/api/v1/audit/traces${query}`, { adminKey, signal })
 }
 
+export async function fetchRuntimeMetrics(
+  scope?: ManagementScope,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<SystemMetric[]> {
+  const query = queryString({
+    tenantId: scope?.tenantId,
+    workspaceId: scope?.workspaceId,
+  })
+  return request<SystemMetric[]>(`/api/v1/metrics/runtime${query}`, { adminKey, signal })
+}
+
 export async function createAgent(body: CreateAgentRequest, adminKey?: string): Promise<Agent> {
   return request<Agent>('/api/v1/agents', { adminKey, body })
 }
@@ -204,7 +228,7 @@ export async function loadConsoleData(
   traceFilters: TraceFilters = {},
   scope?: ManagementScope,
 ): Promise<ConsoleData> {
-  const [catalogResult, agentsResult, grantsResult, tracesResult] = await Promise.all([
+  const [catalogResult, agentsResult, grantsResult, tracesResult, metricsResult] = await Promise.all([
     withFallback(() => fetchCatalog(), {
       providers: sampleProviders,
       channels: sampleChannels,
@@ -212,6 +236,7 @@ export async function loadConsoleData(
     withFallback(() => fetchAgents(scope, adminKey), sampleAgents),
     withFallback(() => fetchAccessGrants(scope, adminKey), []),
     withFallback(() => fetchTraces(traceFilters, scope, adminKey), sampleTraces),
+    withFallback(() => fetchRuntimeMetrics(scope, adminKey), systemMetrics),
   ])
 
   return {
@@ -222,8 +247,8 @@ export async function loadConsoleData(
     traces: tracesResult.data,
     routePolicies: grantsResult.ok ? [] : routePolicies,
     evidenceRuns,
-    systemMetrics,
-    loadedFromApi: catalogResult.ok && agentsResult.ok && grantsResult.ok && tracesResult.ok,
+    systemMetrics: metricsResult.data,
+    loadedFromApi: catalogResult.ok && agentsResult.ok && grantsResult.ok && tracesResult.ok && metricsResult.ok,
     grantsLoadedFromApi: grantsResult.ok,
     apiBase,
   }

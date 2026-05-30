@@ -1,3 +1,33 @@
+## [2026-05-31] Session: Sprint 11 Transactional Management Audit
+
+### 完成
+- 新增 audited repository mutation 方法，覆盖 Agent、Agent Key、Access Grant、Route Policy 管理写入。
+- Memory store 在同一把写锁内完成业务变更和 audit append。
+- PostgreSQL store 使用单事务提交业务变更和 `audit_events` 写入。
+- HTTP 管理 mutation 从 best-effort audit 改为事务化 audit 写入。
+- 新增 Sprint 11 demo，验证 audit 可见性和 credential redaction。
+
+### 决策
+- Sprint 11 不引入异步 outbox worker；`audit_events` 先作为本地事务化事件日志。
+- data-plane trace append 保持非阻塞，不纳入本次事务化范围。
+
+### 验证
+- `go test ./internal/httpapi -run 'TestManagementAuditFailureBlocksAgentCreateAndUpdate|TestManagementAuditEvents|TestRoutePolicyCRUDAndAudit' -count=1`
+- `go test ./internal/store -count=1`
+- `go test ./...`
+- `go vet ./...`
+- `go build ./...`
+- `pnpm --dir frontend test`
+- `pnpm --dir frontend build`
+- `git diff --check`
+- `bash -n scripts/demo-sprint11-transactional-audit.sh`
+
+### 影响文件
+- `internal/store/memory.go` / `internal/store/postgres.go`：事务化 audited mutations。
+- `internal/httpapi/server.go` / `server_test.go`：HTTP 管理写入改用 audited repository 方法并补失败注入测试。
+- `internal/store/postgres_test.go`：PostgreSQL rollback regression。
+- `scripts/demo-sprint11-transactional-audit.sh`、`README.md`、`docs/sprints/`：Sprint 11 文档与 demo。
+
 ## [2026-05-30 21:58] Session: Sprint 9 Route Policy Objects
 
 ### 完成

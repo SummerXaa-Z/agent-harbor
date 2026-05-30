@@ -1,3 +1,26 @@
+## [2026-05-31 04:03] Session: CI Workflow Foundation
+
+### 完成
+- 新增 `.github/workflows/ci.yml`，在 PR 和 `main` / `codex/**` push 上运行 CI。
+- CI 拆为 Backend、PostgreSQL integration、Frontend 三个 job，分别覆盖 Go test/vet/build、PostgreSQL store integration、pnpm test/build。
+- 新增 `docs/superpowers/plans/2026-05-31-ci-workflow.md`，记录 workflow 结构和验证步骤。
+
+### 决策
+- 使用官方当前主版本 action：`actions/checkout@v6`、`actions/setup-go@v6`、`actions/setup-node@v6`、`pnpm/action-setup@v6`。
+- PostgreSQL integration 独立成 job，避免普通 backend job 依赖服务容器，也让失败边界更清楚。
+- pnpm 只由 `pnpm/action-setup` 安装，依赖缓存交给 `setup-node` 的 `cache: pnpm` 处理，避免重复缓存。
+
+### 血泪教训
+- GitHub Actions workflow 需要和本地验证命令一一对应；否则 PR 上的绿色检查容易给出比本地更弱的信号。
+
+### 待办
+- 推送后观察 Draft PR #1 的 CI checks，若 action 版本或 runner 环境有兼容问题，按失败日志修复。
+
+### 影响文件
+- `.github/workflows/ci.yml`：新增 PR/push 自动验证 workflow。
+- `docs/superpowers/plans/2026-05-31-ci-workflow.md`：新增 CI workflow 实施计划。
+- `CHANGELOG.md`：记录 CI 底座落地和验证策略。
+
 ## [2026-05-31 03:57] Session: Draft PR Integration Checkpoint
 
 ### 完成

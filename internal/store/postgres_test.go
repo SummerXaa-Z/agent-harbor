@@ -373,12 +373,20 @@ func TestPostgresAuditedCreateAgentRollsBackWhenAuditFails(t *testing.T) {
 		ResourceType: "agent",
 		ResourceID:   agent.ID,
 		Summary:      "Agent created",
-		Metadata:     map[string]any{"cannotMarshal": make(chan int)},
+		Metadata:     map[string]any{"source": "rollback-test"},
 		CreatedAt:    now,
+	}
+	if _, err := pool.Exec(ctx, `
+		insert into audit_events (
+			id, tenant_id, workspace_id, actor, action, resource_type, resource_id, summary, metadata, created_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	`, audit.ID, audit.TenantID, audit.WorkspaceID, audit.Actor, audit.Action, audit.ResourceType,
+		audit.ResourceID, audit.Summary, []byte(`{"source":"rollback-test"}`), audit.CreatedAt); err != nil {
+		t.Fatalf("seed duplicate audit event: %v", err)
 	}
 
 	if _, err := repo.CreateAgentWithAudit(ctx, agent, audit); err == nil {
-		t.Fatalf("CreateAgentWithAudit should fail when audit metadata cannot be marshaled")
+		t.Fatalf("CreateAgentWithAudit should fail when audit insert conflicts")
 	}
 	if _, ok, err := repo.GetAgent(ctx, agent.ID); err != nil {
 		t.Fatalf("get rollback agent: %v", err)
@@ -389,7 +397,7 @@ func TestPostgresAuditedCreateAgentRollsBackWhenAuditFails(t *testing.T) {
 	if err := pool.QueryRow(ctx, "select count(*) from audit_events where id=$1", audit.ID).Scan(&auditCount); err != nil {
 		t.Fatalf("count rollback audit event: %v", err)
 	}
-	if auditCount != 0 {
-		t.Fatalf("audit event persisted after rollback, count=%d", auditCount)
+	if auditCount != 1 {
+		t.Fatalf("expected only seeded audit event after rollback, count=%d", auditCount)
 	}
 }

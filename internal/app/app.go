@@ -10,6 +10,7 @@ import (
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/db"
 	"github.com/SummerXaa-Z/agent-harbor/internal/httpapi"
+	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 	"github.com/SummerXaa-Z/agent-harbor/internal/store"
 )
 
@@ -30,7 +31,12 @@ func New(ctx context.Context) (*App, error) {
 			pool.Close()
 			return nil, err
 		}
-		repo = store.NewPostgres(pool)
+		credentialKey, err := postgresCredentialKeyFromEnv()
+		if err != nil {
+			pool.Close()
+			return nil, fmt.Errorf("parse credential key: %w", err)
+		}
+		repo = store.NewPostgresWithCredentialKey(pool, credentialKey)
 		closeFn = pool.Close
 	}
 	return &App{
@@ -45,4 +51,12 @@ func (a *App) Router() http.Handler {
 
 func (a *App) Close() {
 	a.close()
+}
+
+func postgresCredentialKeyFromEnv() ([]byte, error) {
+	raw := os.Getenv("AGENT_HARBOR_CREDENTIAL_KEY")
+	if raw == "" {
+		return nil, fmt.Errorf("AGENT_HARBOR_CREDENTIAL_KEY is required when AGENT_HARBOR_DATABASE_URL is set")
+	}
+	return security.ParseCredentialKey(raw)
 }

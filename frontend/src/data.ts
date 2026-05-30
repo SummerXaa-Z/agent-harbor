@@ -61,6 +61,9 @@ export const sampleChannels: ChannelContract[] = [
     channelConfigFields: [
       { key: 'endpoint', type: 'url', required: true, outboundUrl: true },
       { key: 'transport', type: 'string', required: false },
+      { key: 'headers', type: 'object', required: false, secretDisallowed: true },
+      { key: 'credentialHeaders', type: 'object', required: false },
+      { key: 'timeoutMs', type: 'integer', required: false },
       { key: 'metadata', type: 'object', required: false },
     ],
     futureMetadataPolicy: 'metadata object only',
@@ -73,6 +76,9 @@ export const sampleChannels: ChannelContract[] = [
     channelConfigFields: [
       { key: 'endpoint', type: 'url', required: true, outboundUrl: true },
       { key: 'specUrl', type: 'url', required: false, outboundUrl: true },
+      { key: 'headers', type: 'object', required: false, secretDisallowed: true },
+      { key: 'credentialHeaders', type: 'object', required: false },
+      { key: 'timeoutMs', type: 'integer', required: false },
       { key: 'metadata', type: 'object', required: false },
     ],
     futureMetadataPolicy: 'metadata object only',
@@ -85,6 +91,9 @@ export const sampleChannels: ChannelContract[] = [
     channelConfigFields: [
       { key: 'endpoint', type: 'url', required: true, outboundUrl: true },
       { key: 'provider', type: 'string', required: false },
+      { key: 'headers', type: 'object', required: false, secretDisallowed: true },
+      { key: 'credentialHeaders', type: 'object', required: false },
+      { key: 'timeoutMs', type: 'integer', required: false },
       { key: 'metadata', type: 'object', required: false },
     ],
     futureMetadataPolicy: 'metadata object only',

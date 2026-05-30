@@ -67,6 +67,14 @@ Sprint 3 makes MCP authorization method-aware. Against a running API, this scrip
 bash scripts/demo-sprint3-mcp-policy.sh
 ```
 
+## Sprint 4 Credential Demo
+
+Sprint 4 separates upstream secrets from `channelConfig`. Against a running API, this script creates a credentialed MCP Agent and verifies create/get/list responses do not leak plaintext credentials:
+
+```bash
+bash scripts/demo-sprint4-credentials.sh
+```
+
 ## Admin Key
 
 Management APIs are open by default for local clean-room iteration. If `AGENT_HARBOR_ADMIN_KEY` is set on the server, management endpoints require the same value in `X-Admin-Key`.
@@ -76,6 +84,7 @@ AGENT_HARBOR_ADMIN_KEY=local-admin-key go run ./cmd/agent-harbor
 ADMIN_KEY=local-admin-key bash scripts/demo-governance-loop.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint2-cleanup.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint3-mcp-policy.sh
+ADMIN_KEY=local-admin-key bash scripts/demo-sprint4-credentials.sh
 ```
 
 The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the admin key only protects management and audit APIs. Agent Key TTLs must be between 1 and 3600 seconds, with a 1800 second server default when omitted.
@@ -92,11 +101,14 @@ Target `channelConfig` also supports optional proxy controls:
   "headers": {
     "X-AgentHarbor-Tenant": "default"
   },
+  "credentialHeaders": {
+    "Authorization": "apiToken"
+  },
   "timeoutMs": 10000
 }
 ```
 
-`headers` must be string-to-string and cannot contain secret-like names such as authorization, token, cookie, or api key. `timeoutMs` must be an integer from 1 to 30000. Upstream timeout returns `504 UPSTREAM_TIMEOUT`; other network failures return `502 UPSTREAM_ERROR`.
+`headers` must be string-to-string and cannot contain secret-like names such as authorization, token, cookie, or api key. Put secret header bindings in `credentialHeaders` instead, where the object maps an upstream header name to a key in the Agent-level `credentials` object submitted at create time. Credentials are never returned by management responses; PostgreSQL stores non-empty credentials as AES-GCM ciphertext. `timeoutMs` must be an integer from 1 to 30000. Upstream timeout returns `504 UPSTREAM_TIMEOUT`; other network failures return `502 UPSTREAM_ERROR`.
 
 ## PostgreSQL Env
 
@@ -104,10 +116,11 @@ Sprint 1 persistence is configured with `AGENT_HARBOR_DATABASE_URL`. When the va
 
 ```bash
 AGENT_HARBOR_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' \
+AGENT_HARBOR_CREDENTIAL_KEY='0123456789abcdef0123456789abcdef' \
   go run ./cmd/agent-harbor
 ```
 
-PostgreSQL integration tests use `AGENT_HARBOR_TEST_DATABASE_URL` when present.
+PostgreSQL integration tests use `AGENT_HARBOR_TEST_DATABASE_URL` when present. `AGENT_HARBOR_CREDENTIAL_KEY` accepts either a raw 32-byte value or a base64-encoded 32-byte value, and is required whenever `AGENT_HARBOR_DATABASE_URL` is set.
 
 ## Frontend
 
@@ -146,6 +159,6 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 
 ## Next Milestones
 
-- Add encrypted per-agent upstream credentials and secret header injection.
 - Add proxy retry policy and richer upstream error classification.
 - Add OTel spans and metrics for route/caller/target dimensions.
+- Add credential rotation and partial update APIs.

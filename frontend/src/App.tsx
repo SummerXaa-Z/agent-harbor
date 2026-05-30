@@ -34,6 +34,7 @@ import type {
   ConsoleData,
   CreateAgentKeyResponse,
   EvidenceRun,
+  JsonObject,
   ManagementScope,
   RoutePolicy,
   SystemMetric,
@@ -60,6 +61,9 @@ const defaultManagementScope: ManagementScope = {
 };
 const defaultAgentForm = {
   channelType: "local",
+  credentialHeader: "",
+  credentialName: "",
+  credentialValue: "",
   description: "",
   endpoint: "",
   name: "",
@@ -107,12 +111,28 @@ function App() {
     event.preventDefault();
     setAgentMessage("");
     try {
-      const channelConfig = agentForm.endpoint.trim() ? { endpoint: agentForm.endpoint.trim() } : undefined;
+      const channelConfig: JsonObject = {};
+      const endpoint = agentForm.endpoint.trim();
+      if (endpoint) channelConfig.endpoint = endpoint;
+      const credentialHeader = agentForm.credentialHeader.trim();
+      const credentialName = agentForm.credentialName.trim();
+      const credentialValue = agentForm.credentialValue;
+      const hasCredentialInput = Boolean(credentialHeader || credentialName || credentialValue.trim());
+      let credentials: Record<string, string> | undefined;
+      if (hasCredentialInput) {
+        if (!credentialHeader || !credentialName || !credentialValue.trim()) {
+          setAgentMessage("Credential header, key, and value are required together.");
+          return;
+        }
+        channelConfig.credentialHeaders = { [credentialHeader]: credentialName };
+        credentials = { [credentialName]: credentialValue };
+      }
       const requestScope = normalizedScope(scope);
       await createAgent(
         {
-          channelConfig,
+          channelConfig: Object.keys(channelConfig).length > 0 ? channelConfig : undefined,
           channelType: agentForm.channelType.trim() || "local",
+          credentials,
           description: agentForm.description.trim() || undefined,
           name: agentForm.name.trim(),
           status: agentForm.status,
@@ -437,6 +457,11 @@ function AgentCreateForm({
         <label>Status<select value={form.status} onChange={(event) => onChange({ ...form, status: event.target.value as AgentStatus })}><option value="draft">draft</option><option value="active">active</option><option value="disabled">disabled</option></select></label>
       </div>
       <label>Endpoint<input placeholder="https://api.example.com/a2a" value={form.endpoint} onChange={(event) => onChange({ ...form, endpoint: event.target.value })} /></label>
+      <div className="form-row">
+        <label>Credential header<input placeholder="Authorization" value={form.credentialHeader} onChange={(event) => onChange({ ...form, credentialHeader: event.target.value })} /></label>
+        <label>Credential key<input placeholder="apiToken" value={form.credentialName} onChange={(event) => onChange({ ...form, credentialName: event.target.value })} /></label>
+      </div>
+      <label>Secret value<input placeholder="Bearer ..." type="password" value={form.credentialValue} onChange={(event) => onChange({ ...form, credentialValue: event.target.value })} /></label>
       <label>Description<textarea rows={2} value={form.description} onChange={(event) => onChange({ ...form, description: event.target.value })} /></label>
       <FormFooter message={message} submitLabel="Create agent" />
     </form>

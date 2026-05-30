@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"testing"
@@ -29,7 +30,7 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	repo := store.NewPostgres(pool)
+	repo := store.NewPostgresWithCredentialKey(pool, []byte("0123456789abcdef0123456789abcdef"))
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	caller := domain.Agent{
 		ID:            security.NewID("agt"),
@@ -43,15 +44,21 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 		UpdatedAt:     now,
 	}
 	target := domain.Agent{
-		ID:            security.NewID("agt"),
-		TenantID:      "test",
-		WorkspaceID:   "ws-pg",
-		Name:          "PG Target",
-		ChannelType:   "mcp",
-		ChannelConfig: map[string]any{"endpoint": "https://api.example.com/mcp"},
-		Status:        domain.AgentStatusActive,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:          security.NewID("agt"),
+		TenantID:    "test",
+		WorkspaceID: "ws-pg",
+		Name:        "PG Target",
+		ChannelType: "mcp",
+		ChannelConfig: map[string]any{
+			"endpoint": "https://api.example.com/mcp",
+			"credentialHeaders": map[string]any{
+				"Authorization": "apiToken",
+			},
+		},
+		Credentials: map[string]string{"apiToken": "Bearer pg-secret"},
+		Status:      domain.AgentStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 	if _, err := repo.CreateAgent(ctx, caller); err != nil {
 		t.Fatalf("create caller: %v", err)
@@ -68,6 +75,20 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	}
 	if len(agents) < 2 {
 		t.Fatalf("expected persisted agents, got %#v", agents)
+	}
+	persistedTarget, ok, err := repo.GetAgent(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("get target: %v", err)
+	}
+	if !ok || persistedTarget.Credentials["apiToken"] != "Bearer pg-secret" {
+		t.Fatalf("expected credential round trip, ok=%v agent=%#v", ok, persistedTarget)
+	}
+	var credentialCiphertext []byte
+	if err := pool.QueryRow(ctx, "select credentials_ciphertext from agents where id=$1", target.ID).Scan(&credentialCiphertext); err != nil {
+		t.Fatalf("read credential ciphertext: %v", err)
+	}
+	if len(credentialCiphertext) == 0 || bytes.Contains(credentialCiphertext, []byte("pg-secret")) {
+		t.Fatalf("expected encrypted credential ciphertext, got %x", credentialCiphertext)
 	}
 
 	plaintext, prefix := security.NewAgentKey()

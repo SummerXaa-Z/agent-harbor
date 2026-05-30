@@ -27,6 +27,7 @@ export interface CreateAgentRequest {
   ownerId?: string
   channelType?: string
   channelConfig?: JsonObject
+  credentials?: Record<string, string>
   status?: AgentStatus
 }
 

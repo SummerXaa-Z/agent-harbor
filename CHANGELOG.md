@@ -1,3 +1,24 @@
+## [2026-05-31 03:57] Session: Draft PR Integration Checkpoint
+
+### 完成
+- 创建 Draft PR [#1](https://github.com/SummerXaa-Z/agent-harbor/pull/1)，作为 AgentHarbor governance foundation through Sprint 11 的协作入口。
+- PR 正文标注这是 large stacked branch，并写明建议 review 顺序、已验证命令和拆分前不要直接 merge 的语境。
+- 确认 PR base 为 `main`，head 为 `codex/sprint-10-route-policy-retry-overrides`，当前状态为 open draft。
+
+### 决策
+- 继续采用低风险集成策略：先用 Draft PR 建立协作与 CI 入口，再决定是否按 Sprint 拆成更小 PR。
+- 不在本轮做本地 merge，也不清理工作区或删除分支。
+
+### 血泪教训
+- 多个 Sprint 堆叠在一条分支上时，PR 正文必须把 review boundary 写清楚，否则 reviewer 很容易把它当成一个普通可合并改动。
+
+### 待办
+- 观察 GitHub CI；如果仓库没有 Actions，需要补 `.github/workflows` 作为后续工程底座任务。
+- 后续可把 PR #1 拆成按 Sprint/能力域分层的 review stack。
+
+### 影响文件
+- `CHANGELOG.md`：记录 Draft PR 创建、集成策略和后续 PR 边界治理事项。
+
 ## [2026-05-31 03:51] Session: Sprint 11 Final Verification
 
 ### 完成

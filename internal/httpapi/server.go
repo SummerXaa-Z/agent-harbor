@@ -186,18 +186,18 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	created, err := s.repo.CreateAgent(r.Context(), agent)
+	audit := s.managementAuditEvent(r, agent.TenantID, agent.WorkspaceID, "agent.created", "agent", agent.ID, "Agent created", map[string]any{
+		"channelType":        agent.ChannelType,
+		"status":             string(agent.Status),
+		"credentialVersion":  agent.CredentialVersion,
+		"hasCredentials":     len(agent.Credentials) > 0,
+		"credentialKeyCount": len(agent.Credentials),
+	})
+	created, err := s.repo.CreateAgentWithAudit(r.Context(), agent, audit)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	s.recordManagementAudit(r, created.TenantID, created.WorkspaceID, "agent.created", "agent", created.ID, "Agent created", map[string]any{
-		"channelType":        created.ChannelType,
-		"status":             string(created.Status),
-		"credentialVersion":  created.CredentialVersion,
-		"hasCredentials":     len(created.Credentials) > 0,
-		"credentialKeyCount": len(created.Credentials),
-	})
 	writeJSON(w, http.StatusCreated, created)
 }
 
@@ -357,7 +357,12 @@ func (s *Server) updateAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	saved, ok, err := s.repo.UpdateAgent(r.Context(), updated)
+	updateAudit := s.managementAuditEvent(r, updated.TenantID, updated.WorkspaceID, "agent.updated", "agent", updated.ID, "Agent updated", map[string]any{
+		"fields":            agentPatchFields(req),
+		"status":            string(updated.Status),
+		"credentialVersion": updated.CredentialVersion,
+	})
+	saved, ok, err := s.repo.UpdateAgentWithAudit(r.Context(), updated, updateAudit)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -366,11 +371,6 @@ func (s *Server) updateAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("agent not found"))
 		return
 	}
-	s.recordManagementAudit(r, saved.TenantID, saved.WorkspaceID, "agent.updated", "agent", saved.ID, "Agent updated", map[string]any{
-		"fields":            agentPatchFields(req),
-		"status":            string(saved.Status),
-		"credentialVersion": saved.CredentialVersion,
-	})
 	writeJSON(w, http.StatusOK, saved)
 }
 
@@ -404,7 +404,12 @@ func (s *Server) rotateAgentCredentials(w http.ResponseWriter, r *http.Request) 
 		writeError(w, err)
 		return
 	}
-	updated, ok, err := s.repo.RotateAgentCredentials(r.Context(), agent.ID, credentials, s.now())
+	now := s.now()
+	rotateAudit := s.managementAuditEvent(r, agent.TenantID, agent.WorkspaceID, "agent.credentials_rotated", "agent", agent.ID, "Agent credentials rotated", map[string]any{
+		"credentialKeys":    credentialKeyNames(credentials),
+		"credentialVersion": agent.CredentialVersion + 1,
+	})
+	updated, ok, err := s.repo.RotateAgentCredentialsWithAudit(r.Context(), agent.ID, credentials, now, rotateAudit)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -413,15 +418,11 @@ func (s *Server) rotateAgentCredentials(w http.ResponseWriter, r *http.Request) 
 		writeError(w, domain.NotFound("agent not found"))
 		return
 	}
-	s.recordManagementAudit(r, updated.TenantID, updated.WorkspaceID, "agent.credentials_rotated", "agent", updated.ID, "Agent credentials rotated", map[string]any{
-		"credentialKeys":    credentialKeyNames(updated.Credentials),
-		"credentialVersion": updated.CredentialVersion,
-	})
 	writeJSON(w, http.StatusOK, updated)
 }
 
 func (s *Server) disableAgent(w http.ResponseWriter, r *http.Request) {
-	agent, ok, err := s.repo.DisableAgent(r.Context(), chi.URLParam(r, "id"), s.now())
+	agent, ok, err := s.repo.GetAgent(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -430,11 +431,21 @@ func (s *Server) disableAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("agent not found"))
 		return
 	}
-	s.recordManagementAudit(r, agent.TenantID, agent.WorkspaceID, "agent.disabled", "agent", agent.ID, "Agent disabled", map[string]any{
-		"status":            string(agent.Status),
+	now := s.now()
+	disableAudit := s.managementAuditEvent(r, agent.TenantID, agent.WorkspaceID, "agent.disabled", "agent", agent.ID, "Agent disabled", map[string]any{
+		"status":            string(domain.AgentStatusDisabled),
 		"credentialVersion": agent.CredentialVersion,
 	})
-	writeJSON(w, http.StatusOK, agent)
+	disabled, ok, err := s.repo.DisableAgentWithAudit(r.Context(), agent.ID, now, disableAudit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("agent not found"))
+		return
+	}
+	writeJSON(w, http.StatusOK, disabled)
 }
 
 func (s *Server) createAgentKey(w http.ResponseWriter, r *http.Request) {
@@ -485,16 +496,16 @@ func (s *Server) createAgentKey(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: now,
 		ExpiresAt: now.Add(time.Duration(ttl) * time.Second),
 	}
-	created, err := s.repo.CreateAgentKey(r.Context(), key)
+	audit := s.managementAuditEvent(r, agent.TenantID, agent.WorkspaceID, "agent_key.created", "agent_key", key.ID, "Agent key created", map[string]any{
+		"agentId":   key.AgentID,
+		"name":      key.Name,
+		"expiresAt": key.ExpiresAt,
+	})
+	created, err := s.repo.CreateAgentKeyWithAudit(r.Context(), key, audit)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	s.recordManagementAudit(r, agent.TenantID, agent.WorkspaceID, "agent_key.created", "agent_key", created.ID, "Agent key created", map[string]any{
-		"agentId":   created.AgentID,
-		"name":      created.Name,
-		"expiresAt": created.ExpiresAt,
-	})
 	writeJSON(w, http.StatusCreated, domain.CreateAgentKeyResponse{
 		ID:        created.ID,
 		AgentID:   created.AgentID,
@@ -518,6 +529,8 @@ func (s *Server) listAgentKeys(w http.ResponseWriter, r *http.Request) {
 func (s *Server) revokeAgentKey(w http.ResponseWriter, r *http.Request) {
 	keyID := chi.URLParam(r, "id")
 	tenantID, workspaceID := "", ""
+	var keyForAudit domain.AgentKey
+	foundForAudit := false
 	keys, err := s.repo.ListAgentKeys(r.Context(), store.ManagementScope{})
 	if err != nil {
 		writeError(w, err)
@@ -527,6 +540,8 @@ func (s *Server) revokeAgentKey(w http.ResponseWriter, r *http.Request) {
 		if existing.ID != keyID {
 			continue
 		}
+		keyForAudit = existing
+		foundForAudit = true
 		if agent, ok, err := s.repo.GetAgent(r.Context(), existing.AgentID); err != nil {
 			writeError(w, err)
 			return
@@ -536,7 +551,16 @@ func (s *Server) revokeAgentKey(w http.ResponseWriter, r *http.Request) {
 		}
 		break
 	}
-	key, ok, err := s.repo.RevokeAgentKey(r.Context(), keyID, s.now())
+	if !foundForAudit {
+		writeError(w, domain.NotFound("agent key not found"))
+		return
+	}
+	now := s.now()
+	audit := s.managementAuditEvent(r, tenantID, workspaceID, "agent_key.revoked", "agent_key", keyForAudit.ID, "Agent key revoked", map[string]any{
+		"agentId": keyForAudit.AgentID,
+		"name":    keyForAudit.Name,
+	})
+	key, ok, err := s.repo.RevokeAgentKeyWithAudit(r.Context(), keyID, now, audit)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -545,10 +569,6 @@ func (s *Server) revokeAgentKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("agent key not found"))
 		return
 	}
-	s.recordManagementAudit(r, tenantID, workspaceID, "agent_key.revoked", "agent_key", key.ID, "Agent key revoked", map[string]any{
-		"agentId": key.AgentID,
-		"name":    key.Name,
-	})
 	writeJSON(w, http.StatusOK, key)
 }
 
@@ -575,12 +595,10 @@ func (s *Server) createAccessGrant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("caller agent not found"))
 		return
 	}
-	target, ok, err := s.repo.GetAgent(r.Context(), req.TargetID)
-	if err != nil {
+	if _, ok, err := s.repo.GetAgent(r.Context(), req.TargetID); err != nil {
 		writeError(w, err)
 		return
-	}
-	if !ok {
+	} else if !ok {
 		writeError(w, domain.NotFound("target agent not found"))
 		return
 	}
@@ -592,17 +610,17 @@ func (s *Server) createAccessGrant(w http.ResponseWriter, r *http.Request) {
 		RouteKey:  req.RouteKey,
 		CreatedAt: s.now(),
 	}
-	created, err := s.repo.CreateAccessGrant(r.Context(), grant)
+	audit := s.managementAuditEvent(r, caller.TenantID, caller.WorkspaceID, "access_grant.created", "access_grant", grant.ID, "Access grant created", map[string]any{
+		"callerAgentId": grant.CallerID,
+		"targetAgentId": grant.TargetID,
+		"routeType":     grant.RouteType,
+		"routeKey":      grant.RouteKey,
+	})
+	created, err := s.repo.CreateAccessGrantWithAudit(r.Context(), grant, audit)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	s.recordManagementAudit(r, caller.TenantID, caller.WorkspaceID, "access_grant.created", "access_grant", created.ID, "Access grant created", map[string]any{
-		"callerAgentId": caller.ID,
-		"targetAgentId": target.ID,
-		"routeType":     created.RouteType,
-		"routeKey":      created.RouteKey,
-	})
 	writeJSON(w, http.StatusCreated, created)
 }
 
@@ -618,6 +636,8 @@ func (s *Server) listAccessGrants(w http.ResponseWriter, r *http.Request) {
 func (s *Server) revokeAccessGrant(w http.ResponseWriter, r *http.Request) {
 	grantID := chi.URLParam(r, "id")
 	tenantID, workspaceID := "", ""
+	var grantForAudit domain.AccessGrant
+	foundForAudit := false
 	grants, err := s.repo.ListAccessGrants(r.Context(), store.ManagementScope{})
 	if err != nil {
 		writeError(w, err)
@@ -627,6 +647,8 @@ func (s *Server) revokeAccessGrant(w http.ResponseWriter, r *http.Request) {
 		if existing.ID != grantID {
 			continue
 		}
+		grantForAudit = existing
+		foundForAudit = true
 		if caller, ok, err := s.repo.GetAgent(r.Context(), existing.CallerID); err != nil {
 			writeError(w, err)
 			return
@@ -636,7 +658,18 @@ func (s *Server) revokeAccessGrant(w http.ResponseWriter, r *http.Request) {
 		}
 		break
 	}
-	grant, ok, err := s.repo.RevokeAccessGrant(r.Context(), grantID, s.now())
+	if !foundForAudit {
+		writeError(w, domain.NotFound("access grant not found"))
+		return
+	}
+	now := s.now()
+	audit := s.managementAuditEvent(r, tenantID, workspaceID, "access_grant.revoked", "access_grant", grantForAudit.ID, "Access grant revoked", map[string]any{
+		"callerAgentId": grantForAudit.CallerID,
+		"targetAgentId": grantForAudit.TargetID,
+		"routeType":     grantForAudit.RouteType,
+		"routeKey":      grantForAudit.RouteKey,
+	})
+	grant, ok, err := s.repo.RevokeAccessGrantWithAudit(r.Context(), grantID, now, audit)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -645,12 +678,6 @@ func (s *Server) revokeAccessGrant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("access grant not found"))
 		return
 	}
-	s.recordManagementAudit(r, tenantID, workspaceID, "access_grant.revoked", "access_grant", grant.ID, "Access grant revoked", map[string]any{
-		"callerAgentId": grant.CallerID,
-		"targetAgentId": grant.TargetID,
-		"routeType":     grant.RouteType,
-		"routeKey":      grant.RouteKey,
-	})
 	writeJSON(w, http.StatusOK, grant)
 }
 
@@ -729,12 +756,12 @@ func (s *Server) createRoutePolicy(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	created, err := s.repo.CreateRoutePolicy(r.Context(), policy)
+	audit := s.managementAuditEvent(r, policy.TenantID, policy.WorkspaceID, "route_policy.created", "route_policy", policy.ID, "Route policy created", routePolicyAuditMetadata(policy))
+	created, err := s.repo.CreateRoutePolicyWithAudit(r.Context(), policy, audit)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	s.recordManagementAudit(r, created.TenantID, created.WorkspaceID, "route_policy.created", "route_policy", created.ID, "Route policy created", routePolicyAuditMetadata(created))
 	writeJSON(w, http.StatusCreated, created)
 }
 
@@ -804,7 +831,8 @@ func (s *Server) updateRoutePolicy(w http.ResponseWriter, r *http.Request) {
 		policy.Name = defaultRoutePolicyName(policy.RouteType, policy.RouteKey, policy.Effect)
 	}
 	policy.UpdatedAt = s.now()
-	updated, ok, err := s.repo.UpdateRoutePolicy(r.Context(), policy)
+	audit := s.managementAuditEvent(r, policy.TenantID, policy.WorkspaceID, "route_policy.updated", "route_policy", policy.ID, "Route policy updated", routePolicyAuditMetadata(policy))
+	updated, ok, err := s.repo.UpdateRoutePolicyWithAudit(r.Context(), policy, audit)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -813,12 +841,11 @@ func (s *Server) updateRoutePolicy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("route policy not found"))
 		return
 	}
-	s.recordManagementAudit(r, updated.TenantID, updated.WorkspaceID, "route_policy.updated", "route_policy", updated.ID, "Route policy updated", routePolicyAuditMetadata(updated))
 	writeJSON(w, http.StatusOK, updated)
 }
 
 func (s *Server) disableRoutePolicy(w http.ResponseWriter, r *http.Request) {
-	policy, ok, err := s.repo.DisableRoutePolicy(r.Context(), chi.URLParam(r, "id"), s.now())
+	existing, ok, err := s.repo.GetRoutePolicy(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -827,7 +854,18 @@ func (s *Server) disableRoutePolicy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("route policy not found"))
 		return
 	}
-	s.recordManagementAudit(r, policy.TenantID, policy.WorkspaceID, "route_policy.disabled", "route_policy", policy.ID, "Route policy disabled", routePolicyAuditMetadata(policy))
+	now := s.now()
+	auditPolicy := disabledRoutePolicyForAudit(existing, now)
+	audit := s.managementAuditEvent(r, existing.TenantID, existing.WorkspaceID, "route_policy.disabled", "route_policy", existing.ID, "Route policy disabled", routePolicyAuditMetadata(auditPolicy))
+	policy, ok, err := s.repo.DisableRoutePolicyWithAudit(r.Context(), existing.ID, now, audit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("route policy not found"))
+		return
+	}
 	writeJSON(w, http.StatusOK, policy)
 }
 
@@ -1708,11 +1746,11 @@ func auditLimitFromRequest(r *http.Request) (int, error) {
 	return limit, nil
 }
 
-func (s *Server) recordManagementAudit(r *http.Request, tenantID string, workspaceID string, action string, resourceType string, resourceID string, summary string, metadata map[string]any) {
+func (s *Server) managementAuditEvent(r *http.Request, tenantID string, workspaceID string, action string, resourceType string, resourceID string, summary string, metadata map[string]any) domain.AuditEvent {
 	if metadata == nil {
 		metadata = map[string]any{}
 	}
-	event := domain.AuditEvent{
+	return domain.AuditEvent{
 		ID:           security.NewID("aud"),
 		TenantID:     tenantID,
 		WorkspaceID:  workspaceID,
@@ -1724,10 +1762,6 @@ func (s *Server) recordManagementAudit(r *http.Request, tenantID string, workspa
 		Metadata:     metadata,
 		CreatedAt:    s.now(),
 	}
-	// Until management mutations and audit writes share a transaction/outbox,
-	// audit persistence must not turn an already committed mutation into a
-	// failed API response.
-	_, _ = s.repo.AppendAuditEvent(r.Context(), event)
 }
 
 func managementActor(r *http.Request) string {
@@ -1773,6 +1807,12 @@ func defaultRoutePolicyName(routeType string, routeKey string, effect domain.Rou
 		key = "*"
 	}
 	return string(effect) + " " + routeType + ":" + key
+}
+
+func disabledRoutePolicyForAudit(policy domain.RoutePolicy, now time.Time) domain.RoutePolicy {
+	policy.Status = domain.RoutePolicyStatusDisabled
+	policy.UpdatedAt = now
+	return policy
 }
 
 func routePolicyAuditMetadata(policy domain.RoutePolicy) map[string]any {

@@ -236,4 +236,4 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 
 - Export runtime trace dimensions to OpenTelemetry spans and metrics.
 - Add route-level retry overrides to route policies.
-- Add transactional audit/outbox semantics for management mutations.
+- Add external audit outbox/export semantics for management mutations.

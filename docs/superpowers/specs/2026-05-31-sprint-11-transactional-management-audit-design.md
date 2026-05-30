@@ -88,7 +88,8 @@ Backend tests should cover both stores where practical:
 - HTTP regression tests proving all covered management mutations still produce the expected audit actions.
 - Failure-injection tests proving audit failure prevents a newly created object from persisting and prevents an updated object from replacing the previous state.
 - PostgreSQL round-trip tests proving an audited mutation and audit event commit together.
-- PostgreSQL failure test using invalid audit metadata passed directly to an audited repository method to prove rollback semantics.
+- PostgreSQL failure test that pre-seeds a duplicate audit event id, then calls an audited mutation with valid metadata so the audit insert fails inside the database transaction.
+- Code review for the PostgreSQL implementation must verify the domain mutation runs before the audit insert inside the same transaction; the rollback test verifies the final state.
 
 Existing frontend build and retry form tests should continue to pass. Sprint 11 does not require frontend UI changes unless TypeScript types need adjustment.
 

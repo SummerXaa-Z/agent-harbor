@@ -16,7 +16,7 @@
 - Modify `internal/store/postgres.go`: add transaction helpers, transaction-scoped mutation helpers, and audited mutation methods.
 - Modify `internal/httpapi/server.go`: replace covered best-effort audit writes with audited repository calls.
 - Modify `internal/httpapi/server_test.go`: add HTTP failure-injection coverage for create/update rollback behavior.
-- Modify `internal/store/postgres_test.go`: add PostgreSQL rollback coverage for audit metadata marshal failure.
+- Modify `internal/store/postgres_test.go`: add PostgreSQL rollback coverage for audit insert failure inside a transaction.
 - Create `docs/sprints/sprint-11-brief.md`: short product/engineering brief for the sprint.
 - Create `scripts/demo-sprint11-transactional-audit.sh`: public API demo for normal audit visibility and redaction.
 - Modify `README.md`: document the Sprint 11 demo and strengthened audit contract.
@@ -175,12 +175,20 @@ func TestPostgresAuditedCreateAgentRollsBackWhenAuditFails(t *testing.T) {
 		ResourceType: "agent",
 		ResourceID:   agent.ID,
 		Summary:      "Agent created",
-		Metadata:     map[string]any{"cannotMarshal": make(chan int)},
+		Metadata:     map[string]any{"source": "rollback-test"},
 		CreatedAt:    now,
+	}
+	if _, err := pool.Exec(ctx, `
+		insert into audit_events (
+			id, tenant_id, workspace_id, actor, action, resource_type, resource_id, summary, metadata, created_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	`, audit.ID, audit.TenantID, audit.WorkspaceID, audit.Actor, audit.Action, audit.ResourceType,
+		audit.ResourceID, audit.Summary, []byte(`{"source":"rollback-test"}`), audit.CreatedAt); err != nil {
+		t.Fatalf("seed duplicate audit event: %v", err)
 	}
 
 	if _, err := repo.CreateAgentWithAudit(ctx, agent, audit); err == nil {
-		t.Fatalf("CreateAgentWithAudit should fail when audit metadata cannot be marshaled")
+		t.Fatalf("CreateAgentWithAudit should fail when audit insert conflicts")
 	}
 	if _, ok, err := repo.GetAgent(ctx, agent.ID); err != nil {
 		t.Fatalf("get rollback agent: %v", err)
@@ -191,8 +199,8 @@ func TestPostgresAuditedCreateAgentRollsBackWhenAuditFails(t *testing.T) {
 	if err := pool.QueryRow(ctx, "select count(*) from audit_events where id=$1", audit.ID).Scan(&auditCount); err != nil {
 		t.Fatalf("count rollback audit event: %v", err)
 	}
-	if auditCount != 0 {
-		t.Fatalf("audit event persisted after rollback, count=%d", auditCount)
+	if auditCount != 1 {
+		t.Fatalf("expected only seeded audit event after rollback, count=%d", auditCount)
 	}
 }
 ```
@@ -213,7 +221,7 @@ Run with PostgreSQL:
 AGENT_HARBOR_TEST_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' go test ./internal/store -run TestPostgresAuditedCreateAgentRollsBackWhenAuditFails -count=1
 ```
 
-Expected with PostgreSQL before implementation: compile FAIL with `repo.CreateAgentWithAudit undefined`.
+Expected with PostgreSQL before implementation: compile FAIL with `repo.CreateAgentWithAudit undefined`. After implementation, the test should fail the audit insert with a duplicate audit id and prove the Agent row rolls back.
 
 - [ ] **Step 3: Commit the red PostgreSQL test**
 
@@ -491,6 +499,8 @@ func (p *Postgres) appendAuditEvent(ctx context.Context, exec sqlExecutor, event
 - [ ] **Step 5: Add PostgreSQL audited methods**
 
 Add these audited methods in `internal/store/postgres.go` after the unaudited mutation methods:
+
+For every method, the domain mutation helper must run before `appendAuditEvent` inside the same `withTx` callback. Reviewers will check this ordering because the duplicate-audit-id rollback test verifies final state, while code review verifies the business write is attempted before audit insert failure.
 
 ```go
 func (p *Postgres) CreateAgentWithAudit(ctx context.Context, agent domain.Agent, audit domain.AuditEvent) (domain.Agent, error) {
@@ -869,7 +879,7 @@ Make management audit events part of the write contract so successful control-pl
 - Memory store appends the audit event under the same write lock as the mutation.
 - PostgreSQL store writes mutation and audit event in one transaction.
 - Audit metadata remains secret-free.
-- PostgreSQL rollback test proves invalid audit metadata prevents the Agent row from persisting.
+- PostgreSQL rollback test proves duplicate audit insert failure prevents the Agent row from persisting.
 - Existing audit listing filters continue to work.
 
 ## Non-goals

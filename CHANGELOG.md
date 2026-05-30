@@ -1,3 +1,25 @@
+## [2026-05-31 04:17] Session: Stacked PR Runbook
+
+### 完成
+- 新增 `docs/engineering/stacked-pr-runbook.md`，记录 #1-#9 的当前 Draft PR stack、base/head 关系和 review scope。
+- 明确 lower PR #2-#9 当前 checks=0 的原因：CI workflow 是在顶部 PR 分支中引入的。
+- 写入 ready order、CI status caveat、CI-first review 可选策略和 bottom-up merge discipline。
+
+### 决策
+- 暂不重写或 force-push 已存在分支；先用 runbook 固化当前低扰动 stacked review 方案。
+- 将 #1 保持为完整 integration signal，lower PR 进入 ready 前需要补本地 focused verification 证据。
+
+### 血泪教训
+- PR stack 拆好以后，还必须写明 checks 缺口；否则 reviewer 看到 lower PR 没有 checks 时会以为 CI 配置坏了。
+
+### 待办
+- 如需自动化 lower PR checks，需要单独执行 CI-first stack strategy：先落 CI foundation，再重排或合并 sprint branches。
+- 下一步可从 #2 开始补 focused verification evidence，并决定是否 ready for review。
+
+### 影响文件
+- `docs/engineering/stacked-pr-runbook.md`：新增当前 PR stack 操作手册。
+- `CHANGELOG.md`：记录 stack runbook 和 lower PR checks caveat。
+
 ## [2026-05-31 04:13] Session: Stacked PR Boundary Split
 
 ### 完成

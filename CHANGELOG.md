@@ -1,3 +1,24 @@
+## [2026-05-31 03:51] Session: Sprint 11 Final Verification
+
+### 完成
+- 完成 Sprint 11 Task 5 inline code-quality review，确认 demo script、README、brief、CHANGELOG 与 transactional audit 目标一致。
+- 补充 README Next Milestones，将已落地的 transactional audit 改为后续 external audit outbox/export 方向。
+- 完成最终验证：后端聚焦测试、全量 Go 测试、vet/build、前端 test/build、静态检查、Sprint 11 demo against local API、临时 PostgreSQL integration。
+
+### 决策
+- 避免继续关闭已卡住的 reviewer subagent，改为当前线程 inline review 和验证，保证主线不被 graceful shutdown 阻塞。
+- 保留现有 Sprint 10 dirty worktree，不将其混入 Sprint 11 final verification 提交。
+
+### 血泪教训
+- `close_agent` 对异常或长尾子进程表现为无超时 graceful shutdown，可能卡住当前线程；遇到这种情况应停止重复 close，改用 inline verification 或新 reviewer 继续推进。
+
+### 待办
+- 下一步可整理 Sprint 10 dirty worktree，拆分 retry hardening 与 Sprint 11 transactional audit 的 PR 边界。
+
+### 影响文件
+- `CHANGELOG.md`：记录 Sprint 11 final verification 和智能体关闭卡住的处理经验。
+- `README.md`：更新 Sprint 11 后续路线图措辞。
+
 ## [2026-05-31] Session: Sprint 11 Transactional Management Audit
 
 ### 完成

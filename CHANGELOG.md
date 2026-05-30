@@ -1,3 +1,23 @@
+## [2026-05-31 04:21] Session: Sprint 2 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-2-governance-proxy` 分支补跑 focused verification，并将证据写入 PR #2。
+- 将 PR #2 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 2 governance proxy cleanup` 改为 `Sprint 2 governance proxy cleanup`。
+- 验证 Sprint 2 的 governance loop demo、cleanup demo、PostgreSQL store integration、Go 后端和前端 build。
+
+### 决策
+- 保留 #2 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 2 代码和历史，只更新 GitHub PR 元数据。
+
+### 血泪教训
+- lower stack PR 标 ready 时，标题也要去掉 `Draft:` 前缀；否则 GitHub 状态和人类阅读信号会互相打架。
+
+### 待办
+- 下一步从 #3 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #2 ready evidence 和验证结果。
+
 ## [2026-05-31 04:17] Session: Stacked PR Runbook
 
 ### 完成

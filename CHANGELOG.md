@@ -1,3 +1,23 @@
+## [2026-05-31 04:29] Session: Sprint 4 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-4-secret-header-injection` 分支补跑 focused verification，并将证据写入 PR #4。
+- 将 PR #4 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 4 secret header injection` 改为 `Sprint 4 secret header injection`。
+- 验证 Sprint 4 的 credential response redaction demo、governance loop demo、PostgreSQL credential encryption integration、Go 后端和前端 build。
+
+### 决策
+- 保留 #4 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 4 代码和历史，只更新 GitHub PR 元数据。
+
+### 血泪教训
+- secret/header 类 PR 的 ready evidence 不能只说“已脱敏”；必须跑真实 API demo，让 create/get/list response redacted 和 PostgreSQL ciphertext 不含明文 secret 都成为可复核证据。
+
+### 待办
+- 下一步从 #5 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #4 ready evidence 和验证结果。
+
 ## [2026-05-31 04:25] Session: Sprint 3 Ready Evidence
 
 ### 完成

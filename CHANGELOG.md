@@ -1,3 +1,26 @@
+## [2026-05-31 14:47] Session: Release Checklist Guardrail
+
+### 完成
+- 新增 `make release-check`，把 uncached Go tests、vet、build、frontend test/build、demo script lint 串成 release/merge readiness gate。
+- 新增 `docs/engineering/release-checklist.md`，沉淀本地检查、PostgreSQL integration、demo suite、GitHub checks 和 release notes 要求。
+- 更新 `CONTRIBUTING.md` 与 `docs/engineering/review-guidelines.md`，让贡献和 review 流程引用 Makefile 入口而不是散落的裸命令。
+
+### 决策
+- `release-check` 不隐式跑 PostgreSQL 或 demo-all，避免本地 release gate 依赖外部服务；这些仍按风险面显式触发。
+- review evidence 继续保留 `git diff --check` 作为独立命令，因为它不是 Makefile target，且适合在提交前快速验证。
+
+### 血泪教训
+- 有了 `make check` 后还需要更强的 `release-check`：默认检查追求快，合并/发布前检查要追求少缓存、可复核。
+
+### 待办
+- 后续可把 release notes 生成规则接到 GitHub release 或 changelog 自动摘要，但当前先保持人工 checklist。
+
+### 影响文件
+- `Makefile`：新增 `release-check` target 和 help 文案。
+- `docs/engineering/release-checklist.md`：新增 release/merge readiness 清单。
+- `CONTRIBUTING.md`：补充 release-check 和 release checklist 入口。
+- `docs/engineering/review-guidelines.md`：改用 Makefile targets 表达 verification evidence。
+
 ## [2026-05-31 14:42] Session: Contributor Workflow Docs
 
 ### 完成

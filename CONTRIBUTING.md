@@ -29,8 +29,10 @@ This runs backend tests, vet, build, frontend tests/build, and demo script synta
 Use uncached Go tests before behavior-sensitive review:
 
 ```bash
-make test-fresh
+make release-check
 ```
+
+`make release-check` runs the uncached Go test path plus vet, build, frontend test/build, and demo script syntax checks.
 
 Run PostgreSQL integration when a change touches repository behavior, migrations, transactions, credentials, audit events, route policies, or CI database wiring:
 
@@ -60,6 +62,8 @@ GitHub Actions runs the same Makefile targets used locally:
 - Frontend: `make frontend-test`, `make frontend-build`
 
 Do not mark work complete until the relevant local checks and GitHub checks have both passed.
+
+For larger behavior changes, downstream handoffs, or tagged releases, use the release checklist in `docs/engineering/release-checklist.md`.
 
 ## Documentation
 

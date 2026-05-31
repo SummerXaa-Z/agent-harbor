@@ -13,12 +13,13 @@ DEMO_SCRIPTS := \
 	scripts/demo-sprint10-route-policy-retry.sh \
 	scripts/demo-sprint11-transactional-audit.sh
 
-.PHONY: help check test test-fresh vet build frontend-test frontend-build demo-scripts-lint test-postgres run demo-all
+.PHONY: help check release-check test test-fresh vet build frontend-test frontend-build demo-scripts-lint test-postgres run demo-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
 	@printf '\n'
 	@printf '  make check              Run local backend, frontend, and demo-script checks\n'
+	@printf '  make release-check      Run uncached release/merge readiness checks\n'
 	@printf '  make test               Run Go tests\n'
 	@printf '  make test-fresh         Run uncached Go tests\n'
 	@printf '  make vet                Run go vet\n'
@@ -31,6 +32,8 @@ help:
 	@printf '  make demo-all           Run all demos against BASE_URL\n'
 
 check: test vet build frontend-test frontend-build demo-scripts-lint
+
+release-check: test-fresh vet build frontend-test frontend-build demo-scripts-lint
 
 test:
 	go test ./...

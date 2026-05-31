@@ -21,11 +21,7 @@ AgentHarbor changes should be easy to review in small slices, even when the bran
 Every ready PR should state which commands were run. Use the full set when runtime code changes:
 
 ```bash
-go test ./...
-go vet ./...
-go build ./...
-pnpm --dir frontend test
-pnpm --dir frontend build
+make check
 git diff --check
 ```
 
@@ -33,8 +29,10 @@ Run PostgreSQL integration when a PR changes store behavior, migrations, audit p
 
 ```bash
 AGENT_HARBOR_TEST_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' \
-  go test ./internal/store -count=1
+  make test-postgres
 ```
+
+Use `make release-check` instead of `make check` before larger behavior merges or release handoffs so uncached Go tests are part of the evidence.
 
 Run the relevant demo script when a user-facing workflow changes. Demo scripts should prove the public behavior and fail if expected evidence is missing.
 

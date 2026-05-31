@@ -1,3 +1,24 @@
+## [2026-05-31 15:02] Session: TypeScript 6 Dependency Update
+
+### 完成
+- 处理 Dependabot PR #17，将 frontend TypeScript 从 `5.9.3` 升级到 `6.0.3`。
+- 新增 `frontend/src/vite-env.d.ts`，为 Vite asset imports 提供类型环境，修复 TypeScript 6 对 `import "./styles.css"` 的 TS2882 检查失败。
+- 复跑 `make release-check`，确认 TypeScript 6 下前端测试/build、Go 后端检查和 demo script lint 都通过。
+
+### 决策
+- 用 Vite 官方类型入口 `vite/client` 解决 CSS side-effect import 声明，不在业务代码里绕过检查。
+- TypeScript major update 暂不和 Vite/lucide major update 混合处理，保持依赖 PR 单独可回滚。
+
+### 血泪教训
+- 本地 build 可能因为 `node_modules` 还停在旧依赖而误判；处理依赖 PR 时要先按 lockfile 重新 `pnpm --dir frontend install --frozen-lockfile`。
+
+### 待办
+- 后续单独评估 #16 Vite 8 和 #18 lucide-react 1.x。
+
+### 影响文件
+- `frontend/src/vite-env.d.ts`：新增 Vite 类型引用，声明 CSS/asset imports。
+- `CHANGELOG.md`：记录 TypeScript 6 升级修复和验证结果。
+
 ## [2026-05-31 14:53] Session: Dependency Update Automation
 
 ### 完成

@@ -25,13 +25,16 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Test
-        run: go test ./...
+        run: make test
 
       - name: Vet
-        run: go vet ./...
+        run: make vet
 
       - name: Build
-        run: go build ./...
+        run: make build
+
+      - name: Demo script lint
+        run: make demo-scripts-lint
 
   postgres:
     name: PostgreSQL integration
@@ -63,7 +66,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Store integration tests
-        run: go test ./internal/store -count=1
+        run: make test-postgres
 
   frontend:
     name: Frontend
@@ -88,7 +91,7 @@ jobs:
         run: pnpm --dir frontend install --frozen-lockfile
 
       - name: Test
-        run: pnpm --dir frontend test
+        run: make frontend-test
 
       - name: Build
-        run: pnpm --dir frontend build
+        run: make frontend-build

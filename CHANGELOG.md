@@ -1,3 +1,23 @@
+## [2026-05-31 13:30] Session: Sprint 8 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-8-management-audit` 分支补跑 focused verification，并将证据写入 PR #8。
+- 将 PR #8 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 8 management audit` 改为 `Sprint 8 management audit`。
+- 验证 Sprint 8 的 management audit demo、credentialVersion 递增、audit event 过滤/排序、Sprint 1-7 demo 回归、PostgreSQL audit_events round-trip、Go 后端和前端 build。
+
+### 决策
+- 保留 #8 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 8 代码和历史，只更新 GitHub PR 元数据。
+
+### 血泪教训
+- management audit 类 PR 的 ready evidence 必须证明 metadata 只含非 secret 证据；`credentialVersion=2` 和 `credentialKeys=["apiToken"]` 有用，但 plaintext secret 必须从 response 与 audit list 中同时缺席。
+
+### 待办
+- 下一步从 #9 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #8 ready evidence 和验证结果。
+
 ## [2026-05-31 12:45] Session: Sprint 7 Ready Evidence
 
 ### 完成

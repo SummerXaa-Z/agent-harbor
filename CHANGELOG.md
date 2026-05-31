@@ -1,3 +1,25 @@
+## [2026-05-31 13:46] Session: Top PR Ready Evidence
+
+### 完成
+- 在 `codex/sprint-10-route-policy-retry-overrides` 顶层分支补跑 Sprint 10/11 focused verification，并将证据写入 PR #1。
+- 将 PR #1 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 10-11 retry, transactional audit, and CI governance` 改为 `Sprint 10-11 retry, transactional audit, and CI governance`。
+- 更新 `docs/engineering/stacked-pr-runbook.md`，记录 #2-#9 lower stack 已全部 ready，#1 是 Sprint 10/11 + CI/governance integration PR。
+- 验证 route policy retry override、transactional management audit、PostgreSQL integration、前端 retry form test/build、Go 后端和 Sprint 1-11 demos。
+
+### 决策
+- 保留现有 stacked PR 拓扑，不重写历史、不 force-push；#2-#9 作为 lower ready PR，#1 作为顶层 integration PR 进入 review。
+- lower PR 没有 GitHub checks 的 caveat 继续保留；以 focused local evidence + #1 CI 作为当前审核信号。
+
+### 血泪教训
+- 顶层 integration PR 标 ready 前，runbook 必须同步状态；否则 GitHub ready 状态和文档里的 Draft 叙述会互相打架。
+
+### 待办
+- 后续按 runbook bottom-up merge：先合 #2，再逐层 retarget/merge 到 #9，最后处理 #1。
+
+### 影响文件
+- `docs/engineering/stacked-pr-runbook.md`：更新 lower stack ready 和顶层 PR ready 流程。
+- `CHANGELOG.md`：记录 PR #1 ready evidence 和验证结果。
+
 ## [2026-05-31 13:41] Session: Sprint 9 Ready Evidence
 
 ### 完成

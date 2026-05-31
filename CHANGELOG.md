@@ -1,3 +1,30 @@
+## [2026-05-31 15:15] Session: Dependency Update Cycle Closure
+
+### 完成
+- 合入 PR #14，新增 Dependabot 周期化依赖更新配置和依赖 PR 处理文档。
+- 验证并合入 PR #15，将 `github.com/go-chi/chi/v5` 从 `5.2.3` 升级到 `5.3.0`。
+- 修复并合入 PR #17，将 frontend TypeScript 从 `5.9.3` 升级到 `6.0.3`，补齐 Vite 类型环境。
+- 验证并合入 PR #16，将 frontend Vite 从 `7.3.3` 升级到 `8.0.14`。
+- 验证并合入 PR #18，将 frontend `lucide-react` 从 `0.556.0` 升级到 `1.17.0`。
+
+### 决策
+- Dependabot PR 继续逐个验证和合并，不启用自动合并；major/minor 更新都保留人工 local evidence。
+- Vite 8 和 lucide-react 1.x 使用 Dependabot rebase 后的最新 head 合并，避免把本地竞态产生的 merge commit 推到依赖分支。
+
+### 血泪教训
+- 对 Dependabot 分支评论 `@dependabot rebase` 后，远端可能在本地手工解冲突期间 force-update；推送前要重新 fetch，并以 PR 最新 head 为准复跑验证。
+- 依赖 PR 的旧 CI 绿不代表当前 base 绿；连续合并依赖后必须重新看 `mergeable` 和最新 main CI。
+
+### 待办
+- 观察下一轮 Dependabot 噪音；如果 PR 过碎，再考虑分组或 ignore 规则。
+
+### 影响文件
+- `.github/dependabot.yml`：新增 Go modules、frontend npm、GitHub Actions 周期更新配置。
+- `docs/engineering/dependency-updates.md`：新增依赖 PR review 和合并准则。
+- `frontend/package.json` / `frontend/pnpm-lock.yaml`：落地 TypeScript 6、Vite 8、lucide-react 1.x。
+- `frontend/src/vite-env.d.ts`：补齐 Vite client 类型引用。
+- `CHANGELOG.md`：记录依赖更新闭环与 rebase 竞态经验。
+
 ## [2026-05-31 15:02] Session: TypeScript 6 Dependency Update
 
 ### 完成

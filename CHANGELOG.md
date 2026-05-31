@@ -1,3 +1,24 @@
+## [2026-05-31 13:41] Session: Sprint 9 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-9-route-policies` 分支补跑 focused verification，并将证据写入 PR #9。
+- 将 PR #9 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 9 route policy objects` 改为 `Sprint 9 route policy objects`。
+- 验证 Sprint 9 的 route policy CRUD/disable、allow/deny priority precedence、legacy access grant fallback、cross-scope policy handling、Sprint 1-8 demo 回归、PostgreSQL route_policies round-trip、Go 后端和前端 build。
+
+### 决策
+- 保留 #9 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 9 代码和历史，只更新 GitHub PR 元数据。
+- #2-#9 lower stack 已全部补齐 ready evidence；下一步可以回到顶层 #1 处理 integration PR 的 ready 边界。
+
+### 血泪教训
+- route policy 类 PR 的 ready evidence 必须同时证明优先级和回退路径；只验证 allow/deny 不够，还要证明 disabled policy 会被忽略并回退到 legacy grant。
+
+### 待办
+- 下一步检查顶层 PR #1 的 scope 和验证证据，决定是否继续保持 Draft 或拆出/标记 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #9 ready evidence 和 lower stack ready 里程碑。
+
 ## [2026-05-31 13:30] Session: Sprint 8 Ready Evidence
 
 ### 完成

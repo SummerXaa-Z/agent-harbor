@@ -12,14 +12,22 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
+	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 )
 
 type Postgres struct {
-	pool *pgxpool.Pool
+	pool          *pgxpool.Pool
+	credentialKey []byte
 }
 
 func NewPostgres(pool *pgxpool.Pool) *Postgres {
 	return &Postgres{pool: pool}
+}
+
+func NewPostgresWithCredentialKey(pool *pgxpool.Pool, key []byte) *Postgres {
+	copied := make([]byte, len(key))
+	copy(copied, key)
+	return &Postgres{pool: pool, credentialKey: copied}
 }
 
 func (p *Postgres) CreateAgent(ctx context.Context, agent domain.Agent) (domain.Agent, error) {
@@ -27,13 +35,20 @@ func (p *Postgres) CreateAgent(ctx context.Context, agent domain.Agent) (domain.
 	if err != nil {
 		return domain.Agent{}, fmt.Errorf("marshal channel config: %w", err)
 	}
+	credentialsCiphertext, err := security.EncryptCredentials(agent.Credentials, p.credentialKey)
+	if err != nil {
+		return domain.Agent{}, fmt.Errorf("encrypt credentials: %w", err)
+	}
+	if credentialsCiphertext == nil {
+		credentialsCiphertext = []byte{}
+	}
 	_, err = p.pool.Exec(ctx, `
 		insert into agents (
 			id, tenant_id, workspace_id, name, description, owner_id,
-			channel_type, channel_config, status, created_at, updated_at
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+			channel_type, channel_config, credentials_ciphertext, status, created_at, updated_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 	`, agent.ID, agent.TenantID, agent.WorkspaceID, agent.Name, agent.Description, agent.OwnerID,
-		agent.ChannelType, config, string(agent.Status), agent.CreatedAt, agent.UpdatedAt)
+		agent.ChannelType, config, credentialsCiphertext, string(agent.Status), agent.CreatedAt, agent.UpdatedAt)
 	if err != nil {
 		return domain.Agent{}, fmt.Errorf("insert agent: %w", err)
 	}
@@ -43,7 +58,7 @@ func (p *Postgres) CreateAgent(ctx context.Context, agent domain.Agent) (domain.
 func (p *Postgres) ListAgents(ctx context.Context, filter AgentFilter) ([]domain.Agent, error) {
 	query := `
 		select id, tenant_id, workspace_id, name, description, owner_id,
-			channel_type, channel_config, status, created_at, updated_at
+			channel_type, channel_config, credentials_ciphertext, status, created_at, updated_at
 		from agents
 		where 1=1
 	`
@@ -64,17 +79,17 @@ func (p *Postgres) ListAgents(ctx context.Context, filter AgentFilter) ([]domain
 		return nil, fmt.Errorf("list agents: %w", err)
 	}
 	defer rows.Close()
-	return scanAgents(rows)
+	return p.scanAgents(rows)
 }
 
 func (p *Postgres) GetAgent(ctx context.Context, id string) (domain.Agent, bool, error) {
 	row := p.pool.QueryRow(ctx, `
 		select id, tenant_id, workspace_id, name, description, owner_id,
-			channel_type, channel_config, status, created_at, updated_at
+			channel_type, channel_config, credentials_ciphertext, status, created_at, updated_at
 		from agents
 		where id=$1
 	`, id)
-	agent, err := scanAgent(row)
+	agent, err := p.scanAgent(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Agent{}, false, nil
 	}
@@ -90,9 +105,9 @@ func (p *Postgres) DisableAgent(ctx context.Context, id string, now time.Time) (
 		set status=$2, updated_at=$3
 		where id=$1
 		returning id, tenant_id, workspace_id, name, description, owner_id,
-			channel_type, channel_config, status, created_at, updated_at
+			channel_type, channel_config, credentials_ciphertext, status, created_at, updated_at
 	`, id, string(domain.AgentStatusDisabled), now)
-	agent, err := scanAgent(row)
+	agent, err := p.scanAgent(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Agent{}, false, nil
 	}
@@ -160,12 +175,12 @@ func (p *Postgres) RevokeAgentKey(ctx context.Context, id string, now time.Time)
 func (p *Postgres) FindAgentByKeyHash(ctx context.Context, hash string, now time.Time) (domain.Agent, bool, error) {
 	row := p.pool.QueryRow(ctx, `
 		select a.id, a.tenant_id, a.workspace_id, a.name, a.description, a.owner_id,
-			a.channel_type, a.channel_config, a.status, a.created_at, a.updated_at
+			a.channel_type, a.channel_config, a.credentials_ciphertext, a.status, a.created_at, a.updated_at
 		from agent_keys k
 		join agents a on a.id = k.agent_id
 		where k.hash=$1 and k.revoked_at is null and k.expires_at > $2 and a.status=$3
 	`, hash, now, string(domain.AgentStatusActive))
-	agent, err := scanAgent(row)
+	agent, err := p.scanAgent(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Agent{}, false, nil
 	}
@@ -305,10 +320,10 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
-func scanAgents(rows pgx.Rows) ([]domain.Agent, error) {
+func (p *Postgres) scanAgents(rows pgx.Rows) ([]domain.Agent, error) {
 	var out []domain.Agent
 	for rows.Next() {
-		agent, err := scanAgent(rows)
+		agent, err := p.scanAgent(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -320,12 +335,13 @@ func scanAgents(rows pgx.Rows) ([]domain.Agent, error) {
 	return out, nil
 }
 
-func scanAgent(row scanner) (domain.Agent, error) {
+func (p *Postgres) scanAgent(row scanner) (domain.Agent, error) {
 	var agent domain.Agent
 	var status string
 	var config []byte
+	var credentialsCiphertext []byte
 	if err := row.Scan(&agent.ID, &agent.TenantID, &agent.WorkspaceID, &agent.Name, &agent.Description,
-		&agent.OwnerID, &agent.ChannelType, &config, &status, &agent.CreatedAt, &agent.UpdatedAt); err != nil {
+		&agent.OwnerID, &agent.ChannelType, &config, &credentialsCiphertext, &status, &agent.CreatedAt, &agent.UpdatedAt); err != nil {
 		return domain.Agent{}, err
 	}
 	if len(config) > 0 {
@@ -336,6 +352,11 @@ func scanAgent(row scanner) (domain.Agent, error) {
 	if agent.ChannelConfig == nil {
 		agent.ChannelConfig = map[string]any{}
 	}
+	credentials, err := security.DecryptCredentials(credentialsCiphertext, p.credentialKey)
+	if err != nil {
+		return domain.Agent{}, fmt.Errorf("decrypt credentials: %w", err)
+	}
+	agent.Credentials = credentials
 	agent.Status = domain.AgentStatus(status)
 	return agent, nil
 }

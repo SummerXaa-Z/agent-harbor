@@ -61,6 +61,9 @@ func Channels() []domain.ChannelContract {
 			ChannelConfigFields: []domain.FieldContract{
 				{Key: "endpoint", Type: "url", Required: true, OutboundURL: true},
 				{Key: "transport", Type: "string", Required: false},
+				{Key: "headers", Type: "object", Required: false, SecretDisallowed: true},
+				{Key: "credentialHeaders", Type: "object", Required: false},
+				{Key: "timeoutMs", Type: "integer", Required: false},
 				{Key: "metadata", Type: "object", Required: false},
 			},
 			FutureMetadataPolicy: "metadata object only",
@@ -73,6 +76,9 @@ func Channels() []domain.ChannelContract {
 			ChannelConfigFields: []domain.FieldContract{
 				{Key: "endpoint", Type: "url", Required: true, OutboundURL: true},
 				{Key: "specUrl", Type: "url", Required: false, OutboundURL: true},
+				{Key: "headers", Type: "object", Required: false, SecretDisallowed: true},
+				{Key: "credentialHeaders", Type: "object", Required: false},
+				{Key: "timeoutMs", Type: "integer", Required: false},
 				{Key: "metadata", Type: "object", Required: false},
 			},
 			FutureMetadataPolicy: "metadata object only",
@@ -85,6 +91,9 @@ func Channels() []domain.ChannelContract {
 			ChannelConfigFields: []domain.FieldContract{
 				{Key: "endpoint", Type: "url", Required: true, OutboundURL: true},
 				{Key: "provider", Type: "string", Required: false},
+				{Key: "headers", Type: "object", Required: false, SecretDisallowed: true},
+				{Key: "credentialHeaders", Type: "object", Required: false},
+				{Key: "timeoutMs", Type: "integer", Required: false},
 				{Key: "metadata", Type: "object", Required: false},
 			},
 			FutureMetadataPolicy: "metadata object only",

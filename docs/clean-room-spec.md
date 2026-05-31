@@ -38,7 +38,7 @@ Build a runnable Agent Gateway skeleton that proves the product model:
 
 | Entity | Purpose |
 |---|---|
-| Agent | A managed caller or target. Fields include id, tenantId, workspaceId, name, channelType, channelConfig, status, ownerId, createdAt, updatedAt |
+| Agent | A managed caller or target. Fields include id, tenantId, workspaceId, name, channelType, channelConfig, credentials, status, ownerId, createdAt, updatedAt |
 | ProviderContract | Server-owned provider preset and schema metadata |
 | ChannelContract | Server-owned channel schema and endpoint policy |
 | AgentKey | A hashed caller credential. Plaintext is returned only at creation |
@@ -74,7 +74,8 @@ Build a runnable Agent Gateway skeleton that proves the product model:
 - Denied calls must return `403` with stable `PERMISSION_DENIED` code and must record a trace.
 - Endpoint values in `channelConfig.endpoint` reject loopback, RFC1918, link-local, and metadata hostnames.
 - Active `mcp`, `openapi`, and `a2a` target Agents require `channelConfig.endpoint`.
-- Secret-like keys must not appear in `channelConfig`; use credentials in later milestones.
+- Secret-like keys must not appear in `channelConfig.headers`; use Agent-level `credentials` plus `channelConfig.credentialHeaders` for upstream secret header injection.
+- Agent credentials are never returned by management APIs; PostgreSQL persistence stores non-empty credentials as AES-GCM ciphertext.
 - Agent Key plaintext is never returned after creation and is never stored un-hashed.
 - Management APIs are unauthenticated in Sprint 0 and must not be exposed beyond local development.
 

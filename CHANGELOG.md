@@ -1,3 +1,38 @@
+## [2026-05-30 16:10] Session: Sprint 4 Secret Header Injection
+
+### 完成
+- 后端 `POST /api/v1/agents` 新增 Agent-level `credentials` 输入，响应、读取、列表均不会回显明文密钥。
+- `channelConfig.credentialHeaders` 支持声明 upstream header 到 credential key 的映射，数据面 proxy 授权通过后自动注入对应 header。
+- `channelConfig.headers` 继续只允许非 secret header；`Authorization` / `Cookie` / `X-Api-Key` 等仍必须走 credentials。
+- PostgreSQL 新增 `credentials_ciphertext` migration，非空 credentials 通过 AES-GCM ciphertext 持久化；`AGENT_HARBOR_CREDENTIAL_KEY` 支持 raw/base64 32-byte key。
+- Credential key 收紧为短 identifier，避免把真实 secret 误填成 key 后通过 `credentialHeaders` 回显。
+- PostgreSQL 模式缺少 `AGENT_HARBOR_CREDENTIAL_KEY` 时启动期 fail fast，不再等到首次写入/读取 credential 才暴露配置错误。
+- 前端 Create Agent 表单新增 credential header/key/value 输入，提交后由后端脱敏保存。
+- 新增 `scripts/demo-sprint4-credentials.sh` 验证 credentialed Agent 创建成功且 create/get/list 响应不泄漏 secret。
+
+### 决策
+- Sprint 4 只支持创建时写入 credentials，不做 partial update / rotate；轮换留给后续专门 API。
+- `credentialHeaders` 留在 `channelConfig` 中作为非密钥映射，真正 secret 只进入 Agent-level `credentials`。
+- 内存模式不需要 `AGENT_HARBOR_CREDENTIAL_KEY`；PostgreSQL 模式一律需要 key，减少配置漂移。
+- AES-GCM AAD / key version 留到 credential rotation sprint 一起设计，避免这轮 migration 过度展开。
+
+### 验证
+- `go test ./internal/httpapi ./internal/store ./internal/security -count=1`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `go build ./...`
+- `pnpm -C frontend build`
+- `bash -n scripts/demo-governance-loop.sh scripts/demo-sprint2-cleanup.sh scripts/demo-sprint3-mcp-policy.sh scripts/demo-sprint4-credentials.sh`
+- `AGENT_HARBOR_TEST_DATABASE_URL=... go test ./internal/store -run TestPostgresRepositoryRoundTrip -count=1`（临时 PostgreSQL 16 容器，覆盖 ciphertext round-trip）
+- `scripts/demo-governance-loop.sh` + `scripts/demo-sprint2-cleanup.sh` + `scripts/demo-sprint3-mcp-policy.sh` + `scripts/demo-sprint4-credentials.sh` against local API with `AGENT_HARBOR_ADMIN_KEY`
+
+### 影响文件
+- `internal/httpapi/server.go` / `server_test.go`：credentials 输入校验、响应脱敏、upstream secret header 注入。
+- `internal/security/credentials.go`：AES-GCM credential encrypt/decrypt 和 key parsing。
+- `internal/store/postgres.go` / `internal/db/migrations/002_sprint4_agent_credentials.sql` / `postgres_test.go`：encrypted credential persistence。
+- `frontend/src/App.tsx` / `types.ts`：Create Agent credential fields 和 API request 类型。
+- `scripts/demo-sprint4-credentials.sh`、`README.md`、`docs/clean-room-spec.md`、`docs/sprints/`、`docs/superpowers/`：Sprint 4 行为记录。
+
 ## [2026-05-30 14:45] Session: Sprint 3 MCP Policy Controls
 
 ### 完成

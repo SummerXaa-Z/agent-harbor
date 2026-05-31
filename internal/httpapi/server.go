@@ -192,10 +192,17 @@ func (s *Server) agentFromRequest(req domain.CreateAgentRequest) (domain.Agent, 
 	if req.ChannelConfig == nil {
 		req.ChannelConfig = map[string]any{}
 	}
-	if security.ContainsSecretLikeKey(req.ChannelConfig) {
+	credentials, err := normalizeCredentials(req.Credentials)
+	if err != nil {
+		return domain.Agent{}, err
+	}
+	if channelConfigContainsSecretLikeKey(req.ChannelConfig) {
 		return domain.Agent{}, domain.BadRequest("VALIDATION_FAILED", "channelConfig must not contain secret-like keys")
 	}
 	if err := validateConfiguredHeaders(req.ChannelConfig); err != nil {
+		return domain.Agent{}, err
+	}
+	if err := validateCredentialHeaders(req.ChannelConfig, credentials); err != nil {
 		return domain.Agent{}, err
 	}
 	if _, err := proxyTimeoutFromConfig(req.ChannelConfig); err != nil {
@@ -228,6 +235,7 @@ func (s *Server) agentFromRequest(req domain.CreateAgentRequest) (domain.Agent, 
 		OwnerID:       req.OwnerID,
 		ChannelType:   req.ChannelType,
 		ChannelConfig: req.ChannelConfig,
+		Credentials:   credentials,
 		Status:        req.Status,
 		CreatedAt:     now,
 		UpdatedAt:     now,
@@ -564,6 +572,10 @@ func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Reques
 		writeError(w, err)
 		return true
 	}
+	if err := copyCredentialHeaders(req.Header, target.ChannelConfig, target.Credentials); err != nil {
+		writeError(w, err)
+		return true
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
@@ -637,14 +649,138 @@ func validateConfiguredHeaders(config map[string]any) error {
 		if trimmedName == "" {
 			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers names must be non-empty")
 		}
+		if !validHeaderName(trimmedName) {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers names must be valid HTTP header names")
+		}
 		if security.IsSecretLikeKey(trimmedName) {
 			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers must not contain secret-like names")
 		}
-		if _, ok := value.(string); !ok {
+		headerValue, ok := value.(string)
+		if !ok {
 			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers values must be strings")
+		}
+		if containsHeaderNewline(headerValue) {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers values must not contain CR or LF")
 		}
 	}
 	return nil
+}
+
+func normalizeCredentials(credentials map[string]string) (map[string]string, error) {
+	if len(credentials) == 0 {
+		return map[string]string{}, nil
+	}
+	out := make(map[string]string, len(credentials))
+	for key, value := range credentials {
+		trimmedKey := strings.TrimSpace(key)
+		if trimmedKey == "" {
+			return nil, domain.BadRequest("VALIDATION_FAILED", "credentials keys must be non-empty")
+		}
+		if !validCredentialKey(trimmedKey) {
+			return nil, domain.BadRequest("VALIDATION_FAILED", "credentials keys must be 1-64 character identifiers")
+		}
+		if strings.TrimSpace(value) == "" {
+			return nil, domain.BadRequest("VALIDATION_FAILED", "credentials values must be non-empty strings")
+		}
+		if containsHeaderNewline(value) {
+			return nil, domain.BadRequest("VALIDATION_FAILED", "credentials values must not contain CR or LF")
+		}
+		if _, exists := out[trimmedKey]; exists {
+			return nil, domain.BadRequest("VALIDATION_FAILED", "credentials keys must be unique after trimming")
+		}
+		out[trimmedKey] = value
+	}
+	return out, nil
+}
+
+func validateCredentialHeaders(config map[string]any, credentials map[string]string) error {
+	raw, exists := config["credentialHeaders"]
+	if !exists {
+		return nil
+	}
+	headers, ok := raw.(map[string]any)
+	if !ok {
+		return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders must be an object")
+	}
+	for headerName, credentialKey := range headers {
+		trimmedHeaderName := strings.TrimSpace(headerName)
+		if trimmedHeaderName == "" {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders names must be non-empty")
+		}
+		if !validHeaderName(trimmedHeaderName) {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders names must be valid HTTP header names")
+		}
+		key, ok := credentialKey.(string)
+		if !ok {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders values must be credential key strings")
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders values must be credential key strings")
+		}
+		if !validCredentialKey(key) {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders values must be credential key identifiers")
+		}
+		if _, exists := credentials[key]; !exists {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders references missing credentials")
+		}
+	}
+	return nil
+}
+
+func channelConfigContainsSecretLikeKey(config map[string]any) bool {
+	return channelConfigContainsSecretLikeKeyAt(config, true)
+}
+
+func channelConfigContainsSecretLikeKeyAt(config map[string]any, allowCredentialHeaders bool) bool {
+	for key, nested := range config {
+		if allowCredentialHeaders && key == "credentialHeaders" {
+			continue
+		}
+		if security.IsSecretLikeKey(key) {
+			return true
+		}
+		if child, ok := nested.(map[string]any); ok && channelConfigContainsSecretLikeKeyAt(child, false) {
+			return true
+		}
+	}
+	return false
+}
+
+func validHeaderName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if r < 33 || r > 126 {
+			return false
+		}
+		switch r {
+		case '(', ')', '<', '>', '@', ',', ';', '\\', '"', '/', '[', ']', '?', '=', '{', '}', ':':
+			return false
+		}
+	}
+	return true
+}
+
+func containsHeaderNewline(value string) bool {
+	return strings.ContainsAny(value, "\r\n")
+}
+
+func validCredentialKey(key string) bool {
+	if key == "" || len(key) > 64 {
+		return false
+	}
+	for i, r := range key {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' {
+			continue
+		}
+		if i > 0 && (r >= '0' && r <= '9' || r == '_' || r == '-' || r == '.') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func copyConfiguredHeaders(dst http.Header, config map[string]any) error {
@@ -662,10 +798,41 @@ func copyConfiguredHeaders(dst http.Header, config map[string]any) error {
 			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers values must be strings")
 		}
 		trimmedName := strings.TrimSpace(name)
-		if trimmedName == "" || security.IsSecretLikeKey(trimmedName) {
+		if trimmedName == "" || !validHeaderName(trimmedName) || security.IsSecretLikeKey(trimmedName) {
 			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers contains invalid header name")
 		}
+		if containsHeaderNewline(headerValue) {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers values must not contain CR or LF")
+		}
 		dst.Set(trimmedName, headerValue)
+	}
+	return nil
+}
+
+func copyCredentialHeaders(dst http.Header, config map[string]any, credentials map[string]string) error {
+	raw, exists := config["credentialHeaders"]
+	if !exists {
+		return nil
+	}
+	headers, ok := raw.(map[string]any)
+	if !ok {
+		return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders must be an object")
+	}
+	for name, credentialKey := range headers {
+		key, ok := credentialKey.(string)
+		if !ok {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders values must be credential key strings")
+		}
+		trimmedName := strings.TrimSpace(name)
+		key = strings.TrimSpace(key)
+		value, exists := credentials[key]
+		if trimmedName == "" || !validHeaderName(trimmedName) || key == "" || !validCredentialKey(key) || !exists {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders references missing credentials")
+		}
+		if containsHeaderNewline(value) {
+			return domain.BadRequest("VALIDATION_FAILED", "credentials values must not contain CR or LF")
+		}
+		dst.Set(trimmedName, value)
 	}
 	return nil
 }

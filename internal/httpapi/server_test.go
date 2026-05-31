@@ -190,6 +190,23 @@ func TestAgentRegistryValidation(t *testing.T) {
 		t.Fatalf("secret-like channelConfig should fail, got %d", secretResp.Code)
 	}
 
+	nestedSecretResp := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Nested Bad Agent",
+		"workspaceId": "ws-1",
+		"channelType": "mcp",
+		"channelConfig": map[string]any{
+			"endpoint": "https://api.example.com/mcp",
+			"metadata": map[string]any{
+				"credentialHeaders": map[string]any{
+					"Authorization": "apiToken",
+				},
+			},
+		},
+	}, "")
+	if nestedSecretResp.Code != http.StatusBadRequest {
+		t.Fatalf("nested credentialHeaders should not bypass secret-like channelConfig validation, got %d", nestedSecretResp.Code)
+	}
+
 	unsafeResp := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
 		"name":        "Unsafe Agent",
 		"workspaceId": "ws-1",
@@ -704,6 +721,44 @@ func TestUpstreamProxyForwardsConfiguredHeaders(t *testing.T) {
 	}
 }
 
+func TestUpstreamProxyInjectsCredentialHeaders(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer sprint4-secret" {
+			t.Fatalf("expected credential Authorization header, got %q", got)
+		}
+		if got := r.Header.Get("X-AgentHarbor-Tenant"); got != "default" {
+			t.Fatalf("expected configured non-secret header, got %q", got)
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"credentials":true}`))
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "Credential Header Caller")
+	target := createDirectAgentWithCredentials(t, repo, "Credential Header MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL + "/mcp",
+		"headers": map[string]any{
+			"X-AgentHarbor-Tenant": "default",
+		},
+		"credentialHeaders": map[string]any{
+			"Authorization": "apiToken",
+		},
+	}, map[string]string{
+		"apiToken": "Bearer sprint4-secret",
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	resp := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("expected upstream status, got %d body=%s", resp.Code, resp.Body.String())
+	}
+}
+
 func TestAgentRejectsSecretLikeHeaders(t *testing.T) {
 	router := newRouter()
 	for _, headerName := range []string{"Authorization", "Cookie", "X-Api-Key"} {
@@ -725,6 +780,50 @@ func TestAgentRejectsSecretLikeHeaders(t *testing.T) {
 	}
 }
 
+func TestAgentCredentialsAreAcceptedAndRedacted(t *testing.T) {
+	router := newRouter()
+	secret := "Bearer sprint4-secret"
+
+	resp := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Credentialed MCP",
+		"workspaceId": "ws-1",
+		"channelType": "mcp",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"endpoint": "https://api.example.com/mcp",
+			"credentialHeaders": map[string]any{
+				"Authorization": "apiToken",
+			},
+		},
+		"credentials": map[string]any{
+			"apiToken": secret,
+		},
+	}, "")
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("credentialed agent create failed: status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	if strings.Contains(resp.Body.String(), secret) || strings.Contains(resp.Body.String(), "credentials") {
+		t.Fatalf("create response leaked credentials: %s", resp.Body.String())
+	}
+	created := decodeData[agentResponse](t, resp)
+
+	read := request(t, router, http.MethodGet, "/api/v1/agents/"+created.ID, nil, "")
+	if read.Code != http.StatusOK {
+		t.Fatalf("get credentialed agent failed: status=%d body=%s", read.Code, read.Body.String())
+	}
+	if strings.Contains(read.Body.String(), secret) || strings.Contains(read.Body.String(), "credentials") {
+		t.Fatalf("get response leaked credentials: %s", read.Body.String())
+	}
+
+	list := request(t, router, http.MethodGet, "/api/v1/agents?workspaceId=ws-1", nil, "")
+	if list.Code != http.StatusOK {
+		t.Fatalf("list credentialed agent failed: status=%d body=%s", list.Code, list.Body.String())
+	}
+	if strings.Contains(list.Body.String(), secret) || strings.Contains(list.Body.String(), "credentials") {
+		t.Fatalf("list response leaked credentials: %s", list.Body.String())
+	}
+}
+
 func TestAgentRejectsInvalidProxyConfig(t *testing.T) {
 	router := newRouter()
 	badHeaderValue := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
@@ -742,6 +841,59 @@ func TestAgentRejectsInvalidProxyConfig(t *testing.T) {
 		t.Fatalf("non-string configured header should fail, got %d body=%s", badHeaderValue.Code, badHeaderValue.Body.String())
 	}
 
+	badHeaderName := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Bad Header Name",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"headers": map[string]any{
+				"X-Bad\nHeader": "value",
+			},
+		},
+	}, "")
+	if badHeaderName.Code != http.StatusBadRequest {
+		t.Fatalf("invalid configured header name should fail, got %d body=%s", badHeaderName.Code, badHeaderName.Body.String())
+	}
+
+	badCredentialValue := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Bad Credential Value",
+		"workspaceId": "ws-1",
+		"channelType": "mcp",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"endpoint": "https://api.example.com/mcp",
+			"credentialHeaders": map[string]any{
+				"Authorization": "apiToken",
+			},
+		},
+		"credentials": map[string]any{
+			"apiToken": "Bearer good\nX-Bad: injected",
+		},
+	}, "")
+	if badCredentialValue.Code != http.StatusBadRequest {
+		t.Fatalf("credential header value with newline should fail, got %d body=%s", badCredentialValue.Code, badCredentialValue.Body.String())
+	}
+
+	badCredentialKey := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Bad Credential Key",
+		"workspaceId": "ws-1",
+		"channelType": "mcp",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"endpoint": "https://api.example.com/mcp",
+			"credentialHeaders": map[string]any{
+				"Authorization": "Bearer copied-secret",
+			},
+		},
+		"credentials": map[string]any{
+			"Bearer copied-secret": "Bearer sprint4-secret",
+		},
+	}, "")
+	if badCredentialKey.Code != http.StatusBadRequest {
+		t.Fatalf("credential key that looks like secret material should fail, got %d body=%s", badCredentialKey.Code, badCredentialKey.Body.String())
+	}
+
 	badTimeout := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
 		"name":        "Bad Timeout",
 		"workspaceId": "ws-1",
@@ -753,6 +905,22 @@ func TestAgentRejectsInvalidProxyConfig(t *testing.T) {
 	}, "")
 	if badTimeout.Code != http.StatusBadRequest {
 		t.Fatalf("out-of-range timeout should fail, got %d body=%s", badTimeout.Code, badTimeout.Body.String())
+	}
+
+	missingCredential := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Missing Credential",
+		"workspaceId": "ws-1",
+		"channelType": "mcp",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"endpoint": "https://api.example.com/mcp",
+			"credentialHeaders": map[string]any{
+				"Authorization": "apiToken",
+			},
+		},
+	}, "")
+	if missingCredential.Code != http.StatusBadRequest {
+		t.Fatalf("missing credential header reference should fail, got %d body=%s", missingCredential.Code, missingCredential.Body.String())
 	}
 }
 
@@ -878,8 +1046,16 @@ func createAgent(t *testing.T, router http.Handler, body map[string]any) agentRe
 
 func createDirectAgent(t *testing.T, repo store.Repository, name string, tenantID string, workspaceID string, channelType string, status domain.AgentStatus, channelConfig map[string]any) domain.Agent {
 	t.Helper()
+	return createDirectAgentWithCredentials(t, repo, name, tenantID, workspaceID, channelType, status, channelConfig, nil)
+}
+
+func createDirectAgentWithCredentials(t *testing.T, repo store.Repository, name string, tenantID string, workspaceID string, channelType string, status domain.AgentStatus, channelConfig map[string]any, credentials map[string]string) domain.Agent {
+	t.Helper()
 	if channelConfig == nil {
 		channelConfig = map[string]any{}
+	}
+	if credentials == nil {
+		credentials = map[string]string{}
 	}
 	now := time.Now().UTC()
 	agent := domain.Agent{
@@ -889,6 +1065,7 @@ func createDirectAgent(t *testing.T, repo store.Repository, name string, tenantI
 		Name:          name,
 		ChannelType:   channelType,
 		ChannelConfig: channelConfig,
+		Credentials:   credentials,
 		Status:        status,
 		CreatedAt:     now,
 		UpdatedAt:     now,

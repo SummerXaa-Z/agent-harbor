@@ -11,28 +11,30 @@ const (
 )
 
 type Agent struct {
-	ID            string         `json:"id"`
-	TenantID      string         `json:"tenantId"`
-	WorkspaceID   string         `json:"workspaceId"`
-	Name          string         `json:"name"`
-	Description   string         `json:"description,omitempty"`
-	OwnerID       string         `json:"ownerId,omitempty"`
-	ChannelType   string         `json:"channelType"`
-	ChannelConfig map[string]any `json:"channelConfig,omitempty"`
-	Status        AgentStatus    `json:"status"`
-	CreatedAt     time.Time      `json:"createdAt"`
-	UpdatedAt     time.Time      `json:"updatedAt"`
+	ID            string            `json:"id"`
+	TenantID      string            `json:"tenantId"`
+	WorkspaceID   string            `json:"workspaceId"`
+	Name          string            `json:"name"`
+	Description   string            `json:"description,omitempty"`
+	OwnerID       string            `json:"ownerId,omitempty"`
+	ChannelType   string            `json:"channelType"`
+	ChannelConfig map[string]any    `json:"channelConfig,omitempty"`
+	Credentials   map[string]string `json:"-"`
+	Status        AgentStatus       `json:"status"`
+	CreatedAt     time.Time         `json:"createdAt"`
+	UpdatedAt     time.Time         `json:"updatedAt"`
 }
 
 type CreateAgentRequest struct {
-	TenantID      string         `json:"tenantId"`
-	WorkspaceID   string         `json:"workspaceId"`
-	Name          string         `json:"name"`
-	Description   string         `json:"description"`
-	OwnerID       string         `json:"ownerId"`
-	ChannelType   string         `json:"channelType"`
-	ChannelConfig map[string]any `json:"channelConfig"`
-	Status        AgentStatus    `json:"status"`
+	TenantID      string            `json:"tenantId"`
+	WorkspaceID   string            `json:"workspaceId"`
+	Name          string            `json:"name"`
+	Description   string            `json:"description"`
+	OwnerID       string            `json:"ownerId"`
+	ChannelType   string            `json:"channelType"`
+	ChannelConfig map[string]any    `json:"channelConfig"`
+	Credentials   map[string]string `json:"credentials"`
+	Status        AgentStatus       `json:"status"`
 }
 
 type AgentKey struct {

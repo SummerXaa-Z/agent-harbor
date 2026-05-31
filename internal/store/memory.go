@@ -24,6 +24,12 @@ type Repository interface {
 	ListAccessGrants(context.Context, ManagementScope) ([]domain.AccessGrant, error)
 	RevokeAccessGrant(context.Context, string, time.Time) (domain.AccessGrant, bool, error)
 	HasGrant(context.Context, string, string, string, string, time.Time) bool
+	CreateRoutePolicy(context.Context, domain.RoutePolicy) (domain.RoutePolicy, error)
+	ListRoutePolicies(context.Context, ManagementScope) ([]domain.RoutePolicy, error)
+	GetRoutePolicy(context.Context, string) (domain.RoutePolicy, bool, error)
+	UpdateRoutePolicy(context.Context, domain.RoutePolicy) (domain.RoutePolicy, bool, error)
+	DisableRoutePolicy(context.Context, string, time.Time) (domain.RoutePolicy, bool, error)
+	EvaluateRouteAccess(context.Context, string, string, string, string, time.Time) (domain.RouteAccessDecision, error)
 	AppendTrace(context.Context, domain.TraceEvent) (domain.TraceEvent, error)
 	ListTraces(context.Context, TraceFilter) ([]domain.TraceEvent, error)
 	AppendAuditEvent(context.Context, domain.AuditEvent) (domain.AuditEvent, error)
@@ -56,19 +62,21 @@ type AuditEventFilter struct {
 }
 
 type Memory struct {
-	mu     sync.RWMutex
-	agents map[string]domain.Agent
-	keys   map[string]domain.AgentKey
-	grants map[string]domain.AccessGrant
-	traces []domain.TraceEvent
-	audits []domain.AuditEvent
+	mu       sync.RWMutex
+	agents   map[string]domain.Agent
+	keys     map[string]domain.AgentKey
+	grants   map[string]domain.AccessGrant
+	policies map[string]domain.RoutePolicy
+	traces   []domain.TraceEvent
+	audits   []domain.AuditEvent
 }
 
 func NewMemory() *Memory {
 	return &Memory{
-		agents: make(map[string]domain.Agent),
-		keys:   make(map[string]domain.AgentKey),
-		grants: make(map[string]domain.AccessGrant),
+		agents:   make(map[string]domain.Agent),
+		keys:     make(map[string]domain.AgentKey),
+		grants:   make(map[string]domain.AccessGrant),
+		policies: make(map[string]domain.RoutePolicy),
 	}
 }
 
@@ -244,6 +252,92 @@ func (m *Memory) RevokeAccessGrant(_ context.Context, id string, now time.Time) 
 func (m *Memory) HasGrant(_ context.Context, callerID string, targetID string, routeType string, routeKey string, now time.Time) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	return m.hasGrantLocked(callerID, targetID, routeType, routeKey, now)
+}
+
+func (m *Memory) CreateRoutePolicy(_ context.Context, policy domain.RoutePolicy) (domain.RoutePolicy, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.policies[policy.ID] = policy
+	return policy, nil
+}
+
+func (m *Memory) ListRoutePolicies(_ context.Context, scope ManagementScope) ([]domain.RoutePolicy, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rows := make([]domain.RoutePolicy, 0, len(m.policies))
+	for _, policy := range m.policies {
+		if !routePolicyMatchesScope(policy, scope) {
+			continue
+		}
+		rows = append(rows, policy)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
+	return rows, nil
+}
+
+func (m *Memory) GetRoutePolicy(_ context.Context, id string) (domain.RoutePolicy, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	policy, ok := m.policies[id]
+	return policy, ok, nil
+}
+
+func (m *Memory) UpdateRoutePolicy(_ context.Context, policy domain.RoutePolicy) (domain.RoutePolicy, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	existing, ok := m.policies[policy.ID]
+	if !ok {
+		return domain.RoutePolicy{}, false, nil
+	}
+	policy.TenantID = existing.TenantID
+	policy.WorkspaceID = existing.WorkspaceID
+	policy.CallerID = existing.CallerID
+	policy.TargetID = existing.TargetID
+	policy.CreatedAt = existing.CreatedAt
+	m.policies[policy.ID] = policy
+	return policy, true, nil
+}
+
+func (m *Memory) DisableRoutePolicy(_ context.Context, id string, now time.Time) (domain.RoutePolicy, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	policy, ok := m.policies[id]
+	if !ok {
+		return domain.RoutePolicy{}, false, nil
+	}
+	policy.Status = domain.RoutePolicyStatusDisabled
+	policy.UpdatedAt = now
+	m.policies[id] = policy
+	return policy, true, nil
+}
+
+func (m *Memory) EvaluateRouteAccess(_ context.Context, callerID string, targetID string, routeType string, routeKey string, now time.Time) (domain.RouteAccessDecision, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if policy, ok := m.topMatchingRoutePolicyLocked(callerID, targetID, routeType, routeKey); ok {
+		return routePolicyDecision(policy), nil
+	}
+	if m.hasGrantLocked(callerID, targetID, routeType, routeKey, now) {
+		return domain.RouteAccessDecision{
+			Allowed: true,
+			Source:  "access_grant",
+			Reason:  "access grant matched",
+		}, nil
+	}
+	return domain.RouteAccessDecision{
+		Allowed: false,
+		Source:  "none",
+		Reason:  "caller has no route policy or access grant for target route",
+	}, nil
+}
+
+func (m *Memory) hasGrantLocked(callerID string, targetID string, routeType string, routeKey string, now time.Time) bool {
 	for _, grant := range m.grants {
 		if grant.CallerID != callerID || grant.TargetID != targetID {
 			continue
@@ -258,6 +352,26 @@ func (m *Memory) HasGrant(_ context.Context, callerID string, targetID string, r
 		}
 	}
 	return false
+}
+
+func (m *Memory) topMatchingRoutePolicyLocked(callerID string, targetID string, routeType string, routeKey string) (domain.RoutePolicy, bool) {
+	var best domain.RoutePolicy
+	found := false
+	caller, callerOK := m.agents[callerID]
+	target, targetOK := m.agents[targetID]
+	if !callerOK || !targetOK {
+		return domain.RoutePolicy{}, false
+	}
+	for _, policy := range m.policies {
+		if !routePolicyMatches(policy, caller, target, routeType, routeKey) {
+			continue
+		}
+		if !found || routePolicyPrecedes(policy, best) {
+			best = policy
+			found = true
+		}
+	}
+	return best, found
 }
 
 func (m *Memory) AppendTrace(_ context.Context, event domain.TraceEvent) (domain.TraceEvent, error) {
@@ -352,6 +466,65 @@ func (m *Memory) traceMatchesScope(trace domain.TraceEvent, scope ManagementScop
 	caller, callerOK := m.agents[trace.CallerID]
 	target, targetOK := m.agents[trace.TargetID]
 	return (callerOK && agentMatchesScope(caller, scope)) || (targetOK && agentMatchesScope(target, scope))
+}
+
+func routePolicyMatchesScope(policy domain.RoutePolicy, scope ManagementScope) bool {
+	if scope.TenantID != "" && policy.TenantID != scope.TenantID {
+		return false
+	}
+	if scope.WorkspaceID != "" && policy.WorkspaceID != scope.WorkspaceID {
+		return false
+	}
+	return true
+}
+
+func routePolicyMatches(policy domain.RoutePolicy, caller domain.Agent, target domain.Agent, routeType string, routeKey string) bool {
+	if policy.CallerID != caller.ID || policy.TargetID != target.ID {
+		return false
+	}
+	if policy.TenantID != caller.TenantID || policy.WorkspaceID != caller.WorkspaceID {
+		return false
+	}
+	if target.TenantID != caller.TenantID || target.WorkspaceID != caller.WorkspaceID {
+		return false
+	}
+	if policy.Status != domain.RoutePolicyStatusEnabled {
+		return false
+	}
+	if policy.RouteType != "" && policy.RouteType != routeType {
+		return false
+	}
+	if policy.RouteKey != "" && policy.RouteKey != routeKey {
+		return false
+	}
+	return true
+}
+
+func routePolicyPrecedes(left domain.RoutePolicy, right domain.RoutePolicy) bool {
+	if left.Priority != right.Priority {
+		return left.Priority > right.Priority
+	}
+	if left.Effect != right.Effect {
+		return left.Effect == domain.RoutePolicyEffectDeny
+	}
+	if !left.CreatedAt.Equal(right.CreatedAt) {
+		return left.CreatedAt.Before(right.CreatedAt)
+	}
+	return left.ID < right.ID
+}
+
+func routePolicyDecision(policy domain.RoutePolicy) domain.RouteAccessDecision {
+	allowed := policy.Effect == domain.RoutePolicyEffectAllow
+	reason := "route policy allowed"
+	if !allowed {
+		reason = "route policy denied"
+	}
+	return domain.RouteAccessDecision{
+		Allowed:  allowed,
+		Source:   "route_policy",
+		PolicyID: policy.ID,
+		Reason:   reason,
+	}
 }
 
 func agentMatchesScope(agent domain.Agent, scope ManagementScope) bool {

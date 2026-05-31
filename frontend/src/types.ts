@@ -87,6 +87,20 @@ export interface CreateAccessGrantRequest {
   routeKey?: string
 }
 
+export type RoutePolicyEffect = 'allow' | 'deny'
+export type RoutePolicyStatus = 'enabled' | 'disabled'
+
+export interface CreateRoutePolicyRequest {
+  name?: string
+  callerAgentId: string
+  targetAgentId: string
+  routeType: string
+  routeKey?: string
+  effect?: RoutePolicyEffect
+  status?: RoutePolicyStatus
+  priority?: number
+}
+
 export interface TraceEvent {
   id: string
   runId?: string
@@ -154,16 +168,19 @@ export interface ApiEnvelope<T> {
 
 export interface RoutePolicy {
   id: string
+  tenantId: string
+  workspaceId: string
   name: string
   callerAgentId: string
   targetAgentId: string
   routeType: string
   routeKey?: string
-  effect: 'allow' | 'deny'
-  status: 'enabled' | 'disabled'
+  effect: RoutePolicyEffect
+  status: RoutePolicyStatus
   priority: number
   lastMatchedAt?: string
   createdAt: string
+  updatedAt: string
 }
 
 export interface EvidenceRun {
@@ -206,6 +223,7 @@ export interface ConsoleData {
   systemMetrics: SystemMetric[]
   loadedFromApi: boolean
   grantsLoadedFromApi: boolean
+  routePoliciesLoadedFromApi: boolean
   apiBase: string
 }
 

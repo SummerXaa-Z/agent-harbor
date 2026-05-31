@@ -20,9 +20,11 @@ import type {
   CreateAgentKeyRequest,
   CreateAgentKeyResponse,
   CreateAgentRequest,
+  CreateRoutePolicyRequest,
   ManagementScope,
   ProviderContract,
   RotateAgentCredentialsRequest,
+  RoutePolicy,
   SystemMetric,
   TraceEvent,
   TraceFilters,
@@ -169,6 +171,18 @@ export async function fetchAccessGrants(
   return request<AccessGrant[]>(`/api/v1/access-grants${query}`, { adminKey, signal })
 }
 
+export async function fetchRoutePolicies(
+  scope?: ManagementScope,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<RoutePolicy[]> {
+  const query = queryString({
+    tenantId: scope?.tenantId,
+    workspaceId: scope?.workspaceId,
+  })
+  return request<RoutePolicy[]>(`/api/v1/route-policies${query}`, { adminKey, signal })
+}
+
 export async function fetchTraces(
   filters: TraceFilters = {},
   scope?: ManagementScope,
@@ -260,18 +274,33 @@ export async function revokeAccessGrant(id: string, adminKey?: string): Promise<
   })
 }
 
+export async function createRoutePolicy(
+  body: CreateRoutePolicyRequest,
+  adminKey?: string,
+): Promise<RoutePolicy> {
+  return request<RoutePolicy>('/api/v1/route-policies', { adminKey, body })
+}
+
+export async function disableRoutePolicy(id: string, adminKey?: string): Promise<RoutePolicy> {
+  return request<RoutePolicy>(`/api/v1/route-policies/${encodeURIComponent(id)}`, {
+    adminKey,
+    method: 'DELETE',
+  })
+}
+
 export async function loadConsoleData(
   adminKey?: string,
   traceFilters: TraceFilters = {},
   scope?: ManagementScope,
 ): Promise<ConsoleData> {
-  const [catalogResult, agentsResult, grantsResult, tracesResult, auditEventsResult, metricsResult] = await Promise.all([
+  const [catalogResult, agentsResult, grantsResult, policiesResult, tracesResult, auditEventsResult, metricsResult] = await Promise.all([
     withFallback(() => fetchCatalog(), {
       providers: sampleProviders,
       channels: sampleChannels,
     }),
     withFallback(() => fetchAgents(scope, adminKey), sampleAgents),
     withFallback(() => fetchAccessGrants(scope, adminKey), []),
+    withFallback(() => fetchRoutePolicies(scope, adminKey), routePolicies),
     withFallback(() => fetchTraces(traceFilters, scope, adminKey), sampleTraces),
     withFallback(() => fetchAuditEvents(scope, adminKey), sampleAuditEvents),
     withFallback(() => fetchRuntimeMetrics(scope, adminKey), systemMetrics),
@@ -284,17 +313,19 @@ export async function loadConsoleData(
     accessGrants: grantsResult.data,
     traces: tracesResult.data,
     auditEvents: auditEventsResult.data,
-    routePolicies: grantsResult.ok ? [] : routePolicies,
+    routePolicies: policiesResult.data,
     evidenceRuns,
     systemMetrics: metricsResult.data,
     loadedFromApi:
       catalogResult.ok &&
       agentsResult.ok &&
       grantsResult.ok &&
+      policiesResult.ok &&
       tracesResult.ok &&
       auditEventsResult.ok &&
       metricsResult.ok,
     grantsLoadedFromApi: grantsResult.ok,
+    routePoliciesLoadedFromApi: policiesResult.ok,
     apiBase,
   }
 }

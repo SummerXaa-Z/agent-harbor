@@ -107,6 +107,14 @@ Sprint 8 adds non-secret credential versions and management audit events. Agains
 bash scripts/demo-sprint8-management-audit.sh
 ```
 
+## Sprint 9 Route Policy Demo
+
+Sprint 9 promotes Route Governance into first-class route policy objects. Against a running API, this script creates allow and deny policies, verifies priority-based data-plane decisions, disables a policy, and checks trace reasons:
+
+```bash
+bash scripts/demo-sprint9-route-policies.sh
+```
+
 ## Admin Key
 
 Management APIs are open by default for local clean-room iteration. If `AGENT_HARBOR_ADMIN_KEY` is set on the server, management endpoints require the same value in `X-Admin-Key`.
@@ -121,13 +129,14 @@ ADMIN_KEY=local-admin-key bash scripts/demo-sprint5-retry-config.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint6-runtime-metrics.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint7-credential-rotation.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint8-management-audit.sh
+ADMIN_KEY=local-admin-key bash scripts/demo-sprint9-route-policies.sh
 ```
 
 The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the admin key only protects management and audit APIs. Agent Key TTLs must be between 1 and 3600 seconds, with a 1800 second server default when omitted.
 
 ## Proxy Controls
 
-MCP calls derive authorization from the JSON-RPC `method`. Use `AccessGrant.routeType=mcp` with route keys such as `initialize`, `tools/list`, or `tools/call`; an empty route key remains a wildcard.
+MCP calls derive authorization from the JSON-RPC `method`. New control-plane flows should use `RoutePolicy.routeType=mcp` with route keys such as `initialize`, `tools/list`, or `tools/call`; an empty route key remains a wildcard. Route policies require caller and target Agents to share the same tenant and workspace. Enabled route policies are evaluated before legacy access grants: higher `priority` wins, `deny` wins ties, and disabled policies are ignored. If no matching route policy exists, the runtime falls back to existing `AccessGrant` rows for backward compatibility.
 
 Target `channelConfig` also supports optional proxy controls:
 
@@ -155,7 +164,7 @@ Target `channelConfig` also supports optional proxy controls:
 
 `PATCH /api/v1/agents/{id}` updates mutable Agent metadata, status, and full `channelConfig` replacement while keeping `tenantId`, `workspaceId`, and `channelType` immutable. `POST /api/v1/agents/{id}/credentials:rotate` replaces the Agent credential bag; responses continue to omit plaintext credentials. Rotation reuses the existing credential validation and encrypted PostgreSQL persistence path. Agent responses include non-secret `credentialVersion`: `0` means no credential material has been stored, create-time credentials start at `1`, and each rotation increments the version.
 
-Management mutations append audit events to `GET /api/v1/audit/events`. Events record action, actor, resource, scope, summary, and small metadata such as `credentialVersion` and credential key names. Audit metadata must not contain credential values or Agent Key plaintext. Audit listing accepts `limit`, defaults to 100 events, and caps at 500 events.
+Management mutations append audit events to `GET /api/v1/audit/events`. Events record action, actor, resource, scope, summary, and small metadata such as `credentialVersion`, credential key names, route policy effect, and priority. Audit metadata must not contain credential values or Agent Key plaintext. Audit listing accepts `limit`, defaults to 100 events, and caps at 500 events.
 
 ## PostgreSQL Env
 
@@ -180,7 +189,7 @@ pnpm build
 pnpm dev
 ```
 
-The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it defaults to `http://127.0.0.1:9090`. When the backend is unavailable during local development, the UI uses mock fallback data so the console remains navigable. When the backend is reachable, catalog, agent, access grant, management audit, trace, and runtime signal data come from the Go runtime; evidence runs remain local sample panels until those APIs exist.
+The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it defaults to `http://127.0.0.1:9090`. When the backend is unavailable during local development, the UI uses mock fallback data so the console remains navigable. When the backend is reachable, catalog, agent, route policy, access grant, management audit, trace, and runtime signal data come from the Go runtime; evidence runs remain local sample panels until those APIs exist.
 
 ## Current API
 
@@ -200,6 +209,10 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 - `POST /api/v1/access-grants`
 - `GET /api/v1/access-grants?tenantId=&workspaceId=`
 - `DELETE /api/v1/access-grants/{id}`
+- `POST /api/v1/route-policies`
+- `GET /api/v1/route-policies?tenantId=&workspaceId=`
+- `PATCH /api/v1/route-policies/{id}`
+- `DELETE /api/v1/route-policies/{id}`
 - `POST /api/v1/mcp/agents/{targetId}`
 - `POST /api/v1/mcp/agents/{targetId}/rpc`
 - `POST /api/v1/openapi/agents/{targetId}/operations/{operationId}`
@@ -211,5 +224,5 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 ## Next Milestones
 
 - Export runtime trace dimensions to OpenTelemetry spans and metrics.
-- Add route-level retry overrides after route policy objects exist.
+- Add route-level retry overrides to route policies.
 - Add transactional audit/outbox semantics for management mutations.

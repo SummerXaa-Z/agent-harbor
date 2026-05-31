@@ -25,9 +25,8 @@ import {
   TriangleAlert,
   Workflow
 } from "lucide-react";
-import { createAccessGrant, createAgent, createAgentKey, disableAgent, loadConsoleData, revokeAccessGrant, rotateAgentCredentials, updateAgent } from "./api";
+import { createAgent, createAgentKey, createRoutePolicy, disableAgent, disableRoutePolicy, loadConsoleData, rotateAgentCredentials, updateAgent } from "./api";
 import type {
-  AccessGrant,
   Agent,
   AgentStatus,
   AuditEvent,
@@ -74,7 +73,7 @@ const defaultAgentForm = {
 };
 const defaultKeyForm = { agentId: "", expiresInSeconds: "900", name: "console key" };
 const defaultRotateForm = { agentId: "", credentialName: "apiToken", credentialValue: "" };
-const defaultGrantForm = { callerAgentId: "", routeKey: "", routeType: "mcp", targetAgentId: "" };
+const defaultPolicyForm = { callerAgentId: "", effect: "allow", name: "", priority: "100", routeKey: "", routeType: "mcp", targetAgentId: "" };
 const defaultTraceFilters: TraceFilters = { callerAgentId: "", decision: "", runId: "", targetAgentId: "" };
 const mcpRouteKeyPresets = ["initialize", "tools/list", "tools/call"];
 
@@ -93,8 +92,8 @@ function App() {
   const [createdKey, setCreatedKey] = useState<CreateAgentKeyResponse | null>(null);
   const [rotateForm, setRotateForm] = useState(defaultRotateForm);
   const [rotateMessage, setRotateMessage] = useState("");
-  const [grantForm, setGrantForm] = useState(defaultGrantForm);
-  const [grantMessage, setGrantMessage] = useState("");
+  const [policyForm, setPolicyForm] = useState(defaultPolicyForm);
+  const [policyMessage, setPolicyMessage] = useState("");
   const [cleanupActionId, setCleanupActionId] = useState("");
   const [traceFilters, setTraceFilters] = useState<TraceFilters>(defaultTraceFilters);
 
@@ -192,15 +191,15 @@ function App() {
     }
   }
 
-  async function handleRevokeGrant(policy: RoutePolicy) {
-    setGrantMessage("");
+  async function handleDisablePolicy(policy: RoutePolicy) {
+    setPolicyMessage("");
     setCleanupActionId(policy.id);
     try {
-      await revokeAccessGrant(policy.id, adminKey);
-      setGrantMessage("Access grant revoked. Route Governance refreshed.");
+      await disableRoutePolicy(policy.id, adminKey);
+      setPolicyMessage("Route policy disabled. Governance refreshed.");
       await refresh();
     } catch (error) {
-      setGrantMessage(error instanceof Error ? error.message : "Unable to revoke access grant");
+      setPolicyMessage(error instanceof Error ? error.message : "Unable to disable route policy");
     } finally {
       setCleanupActionId("");
     }
@@ -258,36 +257,40 @@ function App() {
     }
   }
 
-  async function submitGrant(event: FormEvent<HTMLFormElement>) {
+  async function submitRoutePolicy(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setGrantMessage("");
+    setPolicyMessage("");
     try {
-      await createAccessGrant(
+      const priority = Number(policyForm.priority);
+      if (!Number.isInteger(priority) || priority < 0) {
+        setPolicyMessage("Priority must be a non-negative integer.");
+        return;
+      }
+      await createRoutePolicy(
         {
-          callerAgentId: grantForm.callerAgentId,
-          routeKey: grantForm.routeKey.trim() || undefined,
-          routeType: grantForm.routeType.trim() || undefined,
-          targetAgentId: grantForm.targetAgentId
+          callerAgentId: policyForm.callerAgentId,
+          effect: policyForm.effect as "allow" | "deny",
+          name: policyForm.name.trim() || undefined,
+          priority,
+          routeKey: policyForm.routeKey.trim() || undefined,
+          routeType: policyForm.routeType.trim(),
+          targetAgentId: policyForm.targetAgentId
         },
         adminKey
       );
-      setGrantMessage("Access grant created. Route Governance refreshed.");
-      setGrantForm({ ...defaultGrantForm, callerAgentId: grantForm.callerAgentId });
+      setPolicyMessage("Route policy created. Governance refreshed.");
+      setPolicyForm({ ...defaultPolicyForm, callerAgentId: policyForm.callerAgentId });
       await refresh();
     } catch (error) {
-      setGrantMessage(error instanceof Error ? error.message : "Unable to create grant");
+      setPolicyMessage(error instanceof Error ? error.message : "Unable to create route policy");
     }
   }
 
   const agents = data?.agents ?? [];
-  const grants = data?.accessGrants ?? [];
   const traces = data?.traces ?? [];
   const auditEvents = data?.auditEvents ?? [];
   const channels = data?.channels ?? [];
-  const policies = useMemo(
-    () => (data?.grantsLoadedFromApi ? grants.map(grantToPolicy) : data?.routePolicies ?? []),
-    [data?.grantsLoadedFromApi, data?.routePolicies, grants]
-  );
+  const policies = data?.routePolicies ?? [];
   const evidenceRuns = data?.evidenceRuns ?? [];
   const metrics = data?.systemMetrics ?? [];
   const localCallers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
@@ -300,7 +303,7 @@ function App() {
   }, [channels]);
 
   const activeAgents = agents.filter((agent) => agent.status === "active").length;
-  const activeGrants = policies.filter((policy) => policy.status === "enabled" && policy.effect === "allow").length;
+  const activePolicies = policies.filter((policy) => policy.status === "enabled").length;
   const deniedTraces = traces.filter((trace) => trace.decision === "denied").length;
   const allowedTraces = traces.filter((trace) => trace.decision === "allowed").length;
   const evidencePassed = evidenceRuns.filter((run) => run.status === "passed").length;
@@ -428,7 +431,7 @@ function App() {
 
         <section className="metric-grid" aria-label="Gateway metrics">
           <MetricCard icon={<ServerCog size={18} />} label="Managed Agents" value={String(agents.length)} detail={`${activeAgents} active`} tone="info" />
-          <MetricCard icon={<KeyRound size={18} />} label="Active Grants" value={String(activeGrants)} detail={data?.grantsLoadedFromApi ? "live access grants" : "sample fallback"} tone="success" />
+          <MetricCard icon={<KeyRound size={18} />} label="Active Policies" value={String(activePolicies)} detail={data?.routePoliciesLoadedFromApi ? "live route policies" : "sample fallback"} tone="success" />
           <MetricCard icon={<TriangleAlert size={18} />} label="Denied Traces" value={String(deniedTraces)} detail={`${allowedTraces} allowed`} tone={deniedTraces > 0 ? "warning" : "success"} />
           <MetricCard icon={<ClipboardCheck size={18} />} label="Evidence Health" value={`${evidencePassed}/${Math.max(evidenceRuns.length, 1)}`} detail="checks passed" tone="neutral" />
         </section>
@@ -449,8 +452,8 @@ function App() {
             />
           </Panel>
 
-          <Panel className="span-4" icon={<Route size={18} />} title="Create Grant">
-            <GrantCreateForm agents={agents} form={grantForm} message={grantMessage} onChange={setGrantForm} onSubmit={submitGrant} />
+          <Panel className="span-4" icon={<Route size={18} />} title="Create Policy">
+            <PolicyCreateForm agents={agents} form={policyForm} message={policyMessage} onChange={setPolicyForm} onSubmit={submitRoutePolicy} />
           </Panel>
 
           <Panel className="span-4" icon={<KeyRound size={18} />} title="Rotate Credential">
@@ -466,8 +469,8 @@ function App() {
           <Panel className="span-8" icon={<Workflow size={18} />} title="Route Governance" action={<IconMore />}>
             <PolicyTable
               agents={agents}
-              canRevoke={Boolean(data?.grantsLoadedFromApi)}
-              onRevoke={handleRevokeGrant}
+              canDisable={Boolean(data?.routePoliciesLoadedFromApi)}
+              onDisable={handleDisablePolicy}
               pendingActionId={cleanupActionId}
               policies={policies}
             />
@@ -597,7 +600,7 @@ function CredentialRotateForm({
   );
 }
 
-function GrantCreateForm({
+function PolicyCreateForm({
   agents,
   form,
   message,
@@ -605,13 +608,14 @@ function GrantCreateForm({
   onSubmit
 }: {
   agents: Agent[];
-  form: typeof defaultGrantForm;
+  form: typeof defaultPolicyForm;
   message: string;
-  onChange: (form: typeof defaultGrantForm) => void;
+  onChange: (form: typeof defaultPolicyForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
     <form className="control-form" onSubmit={onSubmit}>
+      <label>Name<input placeholder="Allow MCP tools/call" value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
       <label>Caller<select required value={form.callerAgentId} onChange={(event) => onChange({ ...form, callerAgentId: event.target.value })}><option value="">Select caller</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
       <label>Target<select required value={form.targetAgentId} onChange={(event) => onChange({ ...form, targetAgentId: event.target.value })}><option value="">Select target</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
       <div className="route-presets" aria-label="MCP route key presets">
@@ -637,7 +641,11 @@ function GrantCreateForm({
         <label>Route type<input value={form.routeType} onChange={(event) => onChange({ ...form, routeType: event.target.value })} /></label>
         <label>Route key<input value={form.routeKey} onChange={(event) => onChange({ ...form, routeKey: event.target.value })} /></label>
       </div>
-      <FormFooter message={message} submitLabel="Create grant" />
+      <div className="form-row">
+        <label>Effect<select value={form.effect} onChange={(event) => onChange({ ...form, effect: event.target.value })}><option value="allow">allow</option><option value="deny">deny</option></select></label>
+        <label>Priority<input inputMode="numeric" min={0} type="number" value={form.priority} onChange={(event) => onChange({ ...form, priority: event.target.value })} /></label>
+      </div>
+      <FormFooter message={message} submitLabel="Create policy" />
     </form>
   );
 }
@@ -737,14 +745,14 @@ function Panel({
 
 function PolicyTable({
   agents,
-  canRevoke,
-  onRevoke,
+  canDisable,
+  onDisable,
   pendingActionId,
   policies
 }: {
   agents: Agent[];
-  canRevoke: boolean;
-  onRevoke: (policy: RoutePolicy) => void;
+  canDisable: boolean;
+  onDisable: (policy: RoutePolicy) => void;
   pendingActionId: string;
   policies: RoutePolicy[];
 }) {
@@ -767,7 +775,7 @@ function PolicyTable({
           {policies.length === 0 ? (
             <tr>
               <td colSpan={6}>
-                <EmptyRow title="No route policies" detail="Create an access grant to populate governed routes." />
+                <EmptyRow title="No route policies" detail="Create a route policy to populate governed routes." />
               </td>
             </tr>
           ) : null}
@@ -780,22 +788,22 @@ function PolicyTable({
               <td>{names[policy.callerAgentId] ?? policy.callerAgentId}</td>
               <td>{names[policy.targetAgentId] ?? policy.targetAgentId}</td>
               <td>
-                <code>{policy.routeType}:{policy.routeKey || "default"}</code>
+                <code>{policy.routeType}:{policy.routeKey || "wildcard"}</code>
               </td>
               <td><Badge tone={policy.effect === "allow" ? "success" : "danger"}>{policy.effect}</Badge></td>
               <td>
-                {canRevoke && policy.status === "enabled" ? (
+                {canDisable && policy.status === "enabled" ? (
                   <button
                     className="table-action"
                     disabled={pendingActionId === policy.id}
-                    onClick={() => onRevoke(policy)}
+                    onClick={() => onDisable(policy)}
                     type="button"
                   >
                     <LockKeyhole size={13} />
-                    {pendingActionId === policy.id ? "Revoking" : "Revoke"}
+                    {pendingActionId === policy.id ? "Disabling" : "Disable"}
                   </button>
                 ) : (
-                  <span className="muted-action">{policy.status === "disabled" ? "revoked" : "sample"}</span>
+                  <span className="muted-action">{policy.status === "disabled" ? "disabled" : "sample"}</span>
                 )}
               </td>
             </tr>
@@ -1071,21 +1079,6 @@ function agentNameMap(agents: Agent[]) {
     acc[agent.id] = agent.name;
     return acc;
   }, {});
-}
-
-function grantToPolicy(grant: AccessGrant): RoutePolicy {
-  return {
-    callerAgentId: grant.callerAgentId,
-    createdAt: grant.createdAt,
-    effect: grant.revokedAt ? "deny" : "allow",
-    id: grant.id,
-    name: `${grant.routeType || "route"} grant`,
-    priority: 10,
-    routeKey: grant.routeKey,
-    routeType: grant.routeType || "default",
-    status: grant.revokedAt ? "disabled" : "enabled",
-    targetAgentId: grant.targetAgentId
-  };
 }
 
 function auditCredentialVersion(event: AuditEvent) {

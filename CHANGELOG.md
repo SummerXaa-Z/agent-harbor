@@ -1,3 +1,24 @@
+## [2026-05-31 14:42] Session: Contributor Workflow Docs
+
+### 完成
+- 新增 `CONTRIBUTING.md`，沉淀 clean-room 边界、分支/PR 流程、本地验证、CI 预期和文档更新规则。
+- 在 `README.md` 顶部补充贡献流程入口链接。
+
+### 决策
+- 将贡献者流程独立成根目录文档，不塞进 README 的运行说明里，避免 README 继续膨胀。
+- 文档只引用已经存在并验证过的 `make` targets，不引入新的工具依赖。
+
+### 血泪教训
+- 工程底座不仅是 CI 和脚本；新人第一天该怎么开分支、跑哪些检查、哪些代码不能碰，也需要成为仓库事实。
+
+### 待办
+- 后续可按需要补 CODEOWNERS 或 release checklist；当前先把贡献流程闭环。
+
+### 影响文件
+- `CONTRIBUTING.md`：新增贡献与验证流程。
+- `README.md`：增加贡献流程入口。
+- `CHANGELOG.md`：记录贡献流程文档沉淀。
+
 ## [2026-05-31 14:39] Session: CI Makefile Alignment
 
 ### 完成

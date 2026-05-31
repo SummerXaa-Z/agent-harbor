@@ -2,8 +2,9 @@
 
 ### 完成
 - 将 PR #2-#9 按 bottom-up 顺序逐层 retarget 到 `main` 并使用 merge commit 合入。
-- 将 PR #1 retarget 到 `main`，保留为 Sprint 10/11 + CI/governance 的最终 integration PR。
+- 将 PR #1 retarget 到 `main` 后合入，完成 Sprint 10/11 + CI/governance 的最终 integration PR。
 - 更新 `docs/engineering/stacked-pr-runbook.md`，记录 lower stack 已合入和 #1 当前 base。
+- 在最终 merge 后确认 `main` 分支 CI 全绿。
 
 ### 决策
 - lower stack 使用 merge commit 而不是 squash，以保留每个 sprint 分支的真实提交 SHA 和审查边界。
@@ -13,7 +14,7 @@
 - stacked PR 合并后要检查顶层 PR 的真实 diff 和 commit 列表：diff 才说明内容边界，commit 列表可能仍展示顶层分支自己的历史。
 
 ### 待办
-- 等待 #1 在 `main` base 上的新 CI 通过后，再合入最终 integration PR。
+- 下一步从最新 `main` 创建后续小 PR，让 CI 在默认分支上持续兜底。
 
 ### 影响文件
 - `docs/engineering/stacked-pr-runbook.md`：记录 #2-#9 merged 和 #1 retarget 到 `main`。

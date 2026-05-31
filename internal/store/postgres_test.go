@@ -112,6 +112,9 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	if !repo.HasGrant(ctx, caller.ID, target.ID, "mcp", "tools/call", now) {
 		t.Fatalf("expected grant match")
 	}
+	if repo.HasGrant(ctx, caller.ID, target.ID, "mcp", "TOOLS/CALL", now) {
+		t.Fatalf("route key matching should be case-sensitive")
+	}
 	grants, err := repo.ListAccessGrants(ctx, store.ManagementScope{TenantID: "test", WorkspaceID: "ws-pg"})
 	if err != nil {
 		t.Fatalf("list grants: %v", err)

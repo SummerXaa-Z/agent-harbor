@@ -1,8 +1,11 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
+	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -26,6 +29,11 @@ type Server struct {
 	now      func() time.Time
 	adminKey string
 }
+
+const (
+	defaultProxyTimeout = 10 * time.Second
+	maxProxyTimeout     = 30 * time.Second
+)
 
 type Option func(*Server)
 
@@ -186,6 +194,12 @@ func (s *Server) agentFromRequest(req domain.CreateAgentRequest) (domain.Agent, 
 	}
 	if security.ContainsSecretLikeKey(req.ChannelConfig) {
 		return domain.Agent{}, domain.BadRequest("VALIDATION_FAILED", "channelConfig must not contain secret-like keys")
+	}
+	if err := validateConfiguredHeaders(req.ChannelConfig); err != nil {
+		return domain.Agent{}, err
+	}
+	if _, err := proxyTimeoutFromConfig(req.ChannelConfig); err != nil {
+		return domain.Agent{}, err
 	}
 	for _, key := range []string{"endpoint", "specUrl"} {
 		if raw, exists := req.ChannelConfig[key]; exists {
@@ -434,7 +448,13 @@ func callerFromContext(ctx context.Context) domain.Agent {
 }
 
 func (s *Server) mcpRPC(w http.ResponseWriter, r *http.Request) {
-	s.handleDataPlane(w, r, "mcp", "tools/call")
+	routeKey, body, err := mcpRouteKeyFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	s.handleDataPlane(w, r, "mcp", routeKey)
 }
 
 func (s *Server) openapiOperation(w http.ResponseWriter, r *http.Request) {
@@ -527,14 +547,29 @@ func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Reques
 		}
 		method = r.Method
 	}
-	req, err := http.NewRequestWithContext(r.Context(), method, upstreamURL, r.Body)
+	timeout, err := proxyTimeoutFromConfig(target.ChannelConfig)
+	if err != nil {
+		writeError(w, err)
+		return true
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, method, upstreamURL, r.Body)
 	if err != nil {
 		writeError(w, domain.UpstreamError("upstream request could not be prepared"))
 		return true
 	}
 	copyUpstreamRequestHeaders(req.Header, r.Header)
+	if err := copyConfiguredHeaders(req.Header, target.ChannelConfig); err != nil {
+		writeError(w, err)
+		return true
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+			writeError(w, domain.UpstreamTimeout("upstream request timed out"))
+			return true
+		}
 		writeError(w, domain.UpstreamError("upstream request failed"))
 		return true
 	}
@@ -569,6 +604,95 @@ func copyUpstreamRequestHeaders(dst http.Header, src http.Header) {
 			dst.Set(key, value)
 		}
 	}
+}
+
+func mcpRouteKeyFromRequest(r *http.Request) (string, []byte, error) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return "", nil, domain.BadRequest("VALIDATION_FAILED", "mcp request body could not be read")
+	}
+	var payload struct {
+		Method *string `json:"method"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", nil, domain.BadRequest("VALIDATION_FAILED", "mcp request body must be valid JSON")
+	}
+	if payload.Method == nil || strings.TrimSpace(*payload.Method) == "" {
+		return "", nil, domain.BadRequest("VALIDATION_FAILED", "mcp request method is required")
+	}
+	return strings.TrimSpace(*payload.Method), body, nil
+}
+
+func validateConfiguredHeaders(config map[string]any) error {
+	raw, exists := config["headers"]
+	if !exists {
+		return nil
+	}
+	headers, ok := raw.(map[string]any)
+	if !ok {
+		return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers must be an object")
+	}
+	for name, value := range headers {
+		trimmedName := strings.TrimSpace(name)
+		if trimmedName == "" {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers names must be non-empty")
+		}
+		if security.IsSecretLikeKey(trimmedName) {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers must not contain secret-like names")
+		}
+		if _, ok := value.(string); !ok {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers values must be strings")
+		}
+	}
+	return nil
+}
+
+func copyConfiguredHeaders(dst http.Header, config map[string]any) error {
+	raw, exists := config["headers"]
+	if !exists {
+		return nil
+	}
+	headers, ok := raw.(map[string]any)
+	if !ok {
+		return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers must be an object")
+	}
+	for name, value := range headers {
+		headerValue, ok := value.(string)
+		if !ok {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers values must be strings")
+		}
+		trimmedName := strings.TrimSpace(name)
+		if trimmedName == "" || security.IsSecretLikeKey(trimmedName) {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers contains invalid header name")
+		}
+		dst.Set(trimmedName, headerValue)
+	}
+	return nil
+}
+
+func proxyTimeoutFromConfig(config map[string]any) (time.Duration, error) {
+	raw, exists := config["timeoutMs"]
+	if !exists {
+		return defaultProxyTimeout, nil
+	}
+	var timeoutMs int64
+	switch value := raw.(type) {
+	case int:
+		timeoutMs = int64(value)
+	case int64:
+		timeoutMs = value
+	case float64:
+		timeoutMs = int64(value)
+		if value != float64(timeoutMs) {
+			return 0, domain.BadRequest("VALIDATION_FAILED", "channelConfig.timeoutMs must be an integer")
+		}
+	default:
+		return 0, domain.BadRequest("VALIDATION_FAILED", "channelConfig.timeoutMs must be an integer")
+	}
+	if timeoutMs < 1 || timeoutMs > int64(maxProxyTimeout/time.Millisecond) {
+		return 0, domain.BadRequest("VALIDATION_FAILED", "channelConfig.timeoutMs must be between 1 and 30000")
+	}
+	return time.Duration(timeoutMs) * time.Millisecond, nil
 }
 
 func (s *Server) listTraces(w http.ResponseWriter, r *http.Request) {

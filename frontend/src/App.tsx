@@ -68,6 +68,7 @@ const defaultAgentForm = {
 const defaultKeyForm = { agentId: "", expiresInSeconds: "900", name: "console key" };
 const defaultGrantForm = { callerAgentId: "", routeKey: "", routeType: "mcp", targetAgentId: "" };
 const defaultTraceFilters: TraceFilters = { callerAgentId: "", decision: "", runId: "", targetAgentId: "" };
+const mcpRouteKeyPresets = ["initialize", "tools/list", "tools/call"];
 
 function App() {
   const [activeNav, setActiveNav] = useState("cockpit");
@@ -491,6 +492,25 @@ function GrantCreateForm({
     <form className="control-form" onSubmit={onSubmit}>
       <label>Caller<select required value={form.callerAgentId} onChange={(event) => onChange({ ...form, callerAgentId: event.target.value })}><option value="">Select caller</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
       <label>Target<select required value={form.targetAgentId} onChange={(event) => onChange({ ...form, targetAgentId: event.target.value })}><option value="">Select target</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
+      <div className="route-presets" aria-label="MCP route key presets">
+        {mcpRouteKeyPresets.map((preset) => (
+          <button
+            className={form.routeType === "mcp" && form.routeKey === preset ? "selected" : ""}
+            key={preset}
+            onClick={() => onChange({ ...form, routeKey: preset, routeType: "mcp" })}
+            type="button"
+          >
+            {preset}
+          </button>
+        ))}
+        <button
+          className={form.routeType === "mcp" && form.routeKey === "" ? "selected" : ""}
+          onClick={() => onChange({ ...form, routeKey: "", routeType: "mcp" })}
+          type="button"
+        >
+          wildcard
+        </button>
+      </div>
       <div className="form-row">
         <label>Route type<input value={form.routeType} onChange={(event) => onChange({ ...form, routeType: event.target.value })} /></label>
         <label>Route key<input value={form.routeKey} onChange={(event) => onChange({ ...form, routeKey: event.target.value })} /></label>

@@ -43,6 +43,7 @@ type traceResponse struct {
 	ID       string `json:"id"`
 	CallerID string `json:"callerAgentId"`
 	TargetID string `json:"targetAgentId"`
+	RouteKey string `json:"routeKey"`
 	Decision string `json:"decision"`
 	Reason   string `json:"reason"`
 	RunID    string `json:"runId"`
@@ -566,6 +567,72 @@ func TestRevokeAccessGrantDeniesLaterCalls(t *testing.T) {
 	}
 }
 
+func TestMCPMethodRouteKeyUsesJSONRPCMethod(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	caller, key := createLocalCallerWithKey(t, router, "MCP Method Caller")
+	target := createDirectAgent(t, repo, "Method MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, nil)
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/list")
+
+	allowed := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "list",
+		"method":  "tools/list",
+	}, key.Key, "run-method-policy")
+	if allowed.Code != http.StatusOK {
+		t.Fatalf("tools/list grant should allow tools/list call, got %d body=%s", allowed.Code, allowed.Body.String())
+	}
+	denied := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call",
+		"method":  "tools/call",
+	}, key.Key, "run-method-policy")
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("tools/list grant should not allow tools/call call, got %d body=%s", denied.Code, denied.Body.String())
+	}
+	upperCaseDenied := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "list-upper",
+		"method":  "TOOLS/LIST",
+	}, key.Key, "run-method-policy")
+	if upperCaseDenied.Code != http.StatusForbidden {
+		t.Fatalf("MCP route keys should be case-sensitive, got %d body=%s", upperCaseDenied.Code, upperCaseDenied.Body.String())
+	}
+
+	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces?runId=run-method-policy", nil, ""))
+	if len(traces) != 3 || traces[0].RouteKey != "tools/list" || traces[1].RouteKey != "tools/call" || traces[2].RouteKey != "TOOLS/LIST" {
+		t.Fatalf("expected traces with actual MCP methods, got %#v", traces)
+	}
+}
+
+func TestMCPInvalidMethodReturnsValidationErrorWithoutTrace(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	caller, key := createLocalCallerWithKey(t, router, "Bad MCP Caller")
+	target := createDirectAgent(t, repo, "Bad MCP Target", "default", "ws-1", "mcp", domain.AgentStatusActive, nil)
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "")
+
+	resp := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "bad",
+		"method":  "",
+	}, key.Key, "run-bad-method")
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("missing MCP method should be validation error, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	var env apiEnvelope
+	if err := json.Unmarshal(resp.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if env.Error != "VALIDATION_FAILED" {
+		t.Fatalf("expected validation error, got %#v", env)
+	}
+	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces?runId=run-bad-method", nil, ""))
+	if len(traces) != 0 {
+		t.Fatalf("invalid MCP body should not record trace, got %#v", traces)
+	}
+}
+
 func TestMCPProxyRelaysAllowedUpstreamResponse(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -604,6 +671,124 @@ func TestMCPProxyRelaysAllowedUpstreamResponse(t *testing.T) {
 	}
 	if strings.TrimSpace(resp.Body.String()) != `{"upstream":true}` {
 		t.Fatalf("expected raw upstream body, got %s", resp.Body.String())
+	}
+}
+
+func TestUpstreamProxyForwardsConfiguredHeaders(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-AgentHarbor-Tenant"); got != "default" {
+			t.Fatalf("expected configured tenant header, got %q", got)
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"headers":true}`))
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "Header Proxy Caller")
+	target := createDirectAgent(t, repo, "Header MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL + "/mcp",
+		"headers": map[string]any{
+			"X-AgentHarbor-Tenant": "default",
+		},
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	resp := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("expected upstream status, got %d body=%s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestAgentRejectsSecretLikeHeaders(t *testing.T) {
+	router := newRouter()
+	for _, headerName := range []string{"Authorization", "Cookie", "X-Api-Key"} {
+		resp := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+			"name":        "Secret Header MCP",
+			"workspaceId": "ws-1",
+			"channelType": "mcp",
+			"status":      "active",
+			"channelConfig": map[string]any{
+				"endpoint": "https://api.example.com/mcp",
+				"headers": map[string]any{
+					headerName: "should-not-live-here",
+				},
+			},
+		}, "")
+		if resp.Code != http.StatusBadRequest {
+			t.Fatalf("secret-like configured header %s should fail, got %d body=%s", headerName, resp.Code, resp.Body.String())
+		}
+	}
+}
+
+func TestAgentRejectsInvalidProxyConfig(t *testing.T) {
+	router := newRouter()
+	badHeaderValue := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Bad Header Value",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"headers": map[string]any{
+				"X-AgentHarbor-Tenant": 123,
+			},
+		},
+	}, "")
+	if badHeaderValue.Code != http.StatusBadRequest {
+		t.Fatalf("non-string configured header should fail, got %d body=%s", badHeaderValue.Code, badHeaderValue.Body.String())
+	}
+
+	badTimeout := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Bad Timeout",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"timeoutMs": 30001,
+		},
+	}, "")
+	if badTimeout.Code != http.StatusBadRequest {
+		t.Fatalf("out-of-range timeout should fail, got %d body=%s", badTimeout.Code, badTimeout.Body.String())
+	}
+}
+
+func TestUpstreamTimeoutReturnsGatewayTimeout(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(50 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "Timeout Caller")
+	target := createDirectAgent(t, repo, "Slow MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint":  upstream.URL + "/mcp",
+		"timeoutMs": 1,
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	resp := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key, "run-timeout")
+	if resp.Code != http.StatusGatewayTimeout {
+		t.Fatalf("expected upstream timeout to return 504, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	var env apiEnvelope
+	if err := json.Unmarshal(resp.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if env.Error != "UPSTREAM_TIMEOUT" {
+		t.Fatalf("expected UPSTREAM_TIMEOUT, got %#v", env)
+	}
+	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces?runId=run-timeout", nil, ""))
+	if len(traces) != 1 || traces[0].Decision != "allowed" {
+		t.Fatalf("expected allowed trace before timeout, got %#v", traces)
 	}
 }
 

@@ -236,7 +236,7 @@ func (p *Postgres) HasGrant(ctx context.Context, callerID string, targetID strin
 				and revoked_at is null
 				and (expires_at is null or expires_at > $5)
 				and (route_type='' or route_type=$3)
-				and (route_key='' or lower(route_key)=lower($4))
+				and (route_key='' or route_key=$4)
 		)
 	`, callerID, targetID, routeType, routeKey, now).Scan(&exists)
 	return err == nil && exists

@@ -90,6 +90,22 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	if len(credentialCiphertext) == 0 || bytes.Contains(credentialCiphertext, []byte("pg-secret")) {
 		t.Fatalf("expected encrypted credential ciphertext, got %x", credentialCiphertext)
 	}
+	target.Description = "rotated through update"
+	target.Credentials = map[string]string{"apiToken": "Bearer rotated-secret"}
+	target.UpdatedAt = now.Add(time.Minute)
+	updatedTarget, ok, err := repo.UpdateAgent(ctx, target)
+	if err != nil {
+		t.Fatalf("update target: %v", err)
+	}
+	if !ok || updatedTarget.Description != "rotated through update" || updatedTarget.Credentials["apiToken"] != "Bearer rotated-secret" {
+		t.Fatalf("expected updated target with rotated credential, ok=%v agent=%#v", ok, updatedTarget)
+	}
+	if err := pool.QueryRow(ctx, "select credentials_ciphertext from agents where id=$1", target.ID).Scan(&credentialCiphertext); err != nil {
+		t.Fatalf("read rotated credential ciphertext: %v", err)
+	}
+	if len(credentialCiphertext) == 0 || bytes.Contains(credentialCiphertext, []byte("rotated-secret")) {
+		t.Fatalf("expected rotated credential ciphertext, got %x", credentialCiphertext)
+	}
 
 	plaintext, prefix := security.NewAgentKey()
 	key := domain.AgentKey{

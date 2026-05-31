@@ -99,6 +99,36 @@ func (p *Postgres) GetAgent(ctx context.Context, id string) (domain.Agent, bool,
 	return agent, true, nil
 }
 
+func (p *Postgres) UpdateAgent(ctx context.Context, agent domain.Agent) (domain.Agent, bool, error) {
+	config, err := json.Marshal(agent.ChannelConfig)
+	if err != nil {
+		return domain.Agent{}, false, fmt.Errorf("marshal channel config: %w", err)
+	}
+	credentialsCiphertext, err := security.EncryptCredentials(agent.Credentials, p.credentialKey)
+	if err != nil {
+		return domain.Agent{}, false, fmt.Errorf("encrypt credentials: %w", err)
+	}
+	if credentialsCiphertext == nil {
+		credentialsCiphertext = []byte{}
+	}
+	row := p.pool.QueryRow(ctx, `
+		update agents
+		set name=$2, description=$3, owner_id=$4, channel_config=$5,
+			credentials_ciphertext=$6, status=$7, updated_at=$8
+		where id=$1
+		returning id, tenant_id, workspace_id, name, description, owner_id,
+			channel_type, channel_config, credentials_ciphertext, status, created_at, updated_at
+	`, agent.ID, agent.Name, agent.Description, agent.OwnerID, config, credentialsCiphertext, string(agent.Status), agent.UpdatedAt)
+	updated, err := p.scanAgent(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Agent{}, false, nil
+	}
+	if err != nil {
+		return domain.Agent{}, false, fmt.Errorf("update agent: %w", err)
+	}
+	return updated, true, nil
+}
+
 func (p *Postgres) DisableAgent(ctx context.Context, id string, now time.Time) (domain.Agent, bool, error) {
 	row := p.pool.QueryRow(ctx, `
 		update agents

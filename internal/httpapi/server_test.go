@@ -28,12 +28,15 @@ type apiEnvelope struct {
 }
 
 type agentResponse struct {
-	ID          string `json:"id"`
-	TenantID    string `json:"tenantId"`
-	Name        string `json:"name"`
-	WorkspaceID string `json:"workspaceId"`
-	ChannelType string `json:"channelType"`
-	Status      string `json:"status"`
+	ID            string         `json:"id"`
+	TenantID      string         `json:"tenantId"`
+	Name          string         `json:"name"`
+	Description   string         `json:"description"`
+	OwnerID       string         `json:"ownerId"`
+	WorkspaceID   string         `json:"workspaceId"`
+	ChannelType   string         `json:"channelType"`
+	ChannelConfig map[string]any `json:"channelConfig"`
+	Status        string         `json:"status"`
 }
 
 type keyResponse struct {
@@ -1132,6 +1135,150 @@ func TestAgentCredentialsAreAcceptedAndRedacted(t *testing.T) {
 	}
 	if strings.Contains(list.Body.String(), secret) || strings.Contains(list.Body.String(), "credentials") {
 		t.Fatalf("list response leaked credentials: %s", list.Body.String())
+	}
+}
+
+func TestPatchAgentUpdatesMutableFieldsAndValidatesConfig(t *testing.T) {
+	router := newRouter()
+	secret := "Bearer patch-secret"
+	createdResp := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Patchable MCP",
+		"workspaceId": "ws-1",
+		"channelType": "mcp",
+		"status":      "draft",
+		"channelConfig": map[string]any{
+			"endpoint": "https://api.example.com/mcp",
+			"credentialHeaders": map[string]any{
+				"Authorization": "apiToken",
+			},
+		},
+		"credentials": map[string]any{
+			"apiToken": secret,
+		},
+	}, "")
+	if createdResp.Code != http.StatusCreated {
+		t.Fatalf("create patchable agent failed: status=%d body=%s", createdResp.Code, createdResp.Body.String())
+	}
+	created := decodeData[agentResponse](t, createdResp)
+
+	updatedResp := request(t, router, http.MethodPatch, "/api/v1/agents/"+created.ID, map[string]any{
+		"name":        "Patched MCP",
+		"description": "updated through partial patch",
+		"ownerId":     "platform-team",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"endpoint": "https://api-updated.example.com/mcp",
+			"headers": map[string]any{
+				"X-AgentHarbor-Tenant": "default",
+			},
+			"credentialHeaders": map[string]any{
+				"Authorization": "apiToken",
+			},
+		},
+	}, "")
+	if updatedResp.Code != http.StatusOK {
+		t.Fatalf("patch agent should succeed, got %d body=%s", updatedResp.Code, updatedResp.Body.String())
+	}
+	if strings.Contains(updatedResp.Body.String(), secret) || strings.Contains(updatedResp.Body.String(), "credentials") {
+		t.Fatalf("patch response leaked credentials: %s", updatedResp.Body.String())
+	}
+	updated := decodeData[agentResponse](t, updatedResp)
+	if updated.Name != "Patched MCP" || updated.Description != "updated through partial patch" || updated.OwnerID != "platform-team" || updated.Status != "active" {
+		t.Fatalf("unexpected patched agent metadata: %#v", updated)
+	}
+	if updated.ChannelConfig["endpoint"] != "https://api-updated.example.com/mcp" {
+		t.Fatalf("unexpected patched channel config: %#v", updated.ChannelConfig)
+	}
+
+	secretConfig := request(t, router, http.MethodPatch, "/api/v1/agents/"+created.ID, map[string]any{
+		"channelConfig": map[string]any{
+			"endpoint":      "https://api.example.com/mcp",
+			"Authorization": "do-not-store-here",
+		},
+	}, "")
+	if secretConfig.Code != http.StatusBadRequest {
+		t.Fatalf("secret-like patch channelConfig should fail, got %d body=%s", secretConfig.Code, secretConfig.Body.String())
+	}
+
+	arraySecretConfig := request(t, router, http.MethodPatch, "/api/v1/agents/"+created.ID, map[string]any{
+		"channelConfig": map[string]any{
+			"endpoint": "https://api.example.com/mcp",
+			"metadata": []any{
+				map[string]any{"authorization": "Bearer should-not-echo"},
+			},
+		},
+	}, "")
+	if arraySecretConfig.Code != http.StatusBadRequest {
+		t.Fatalf("secret-like patch channelConfig inside arrays should fail, got %d body=%s", arraySecretConfig.Code, arraySecretConfig.Body.String())
+	}
+
+	unsafeEndpoint := request(t, router, http.MethodPatch, "/api/v1/agents/"+created.ID, map[string]any{
+		"channelConfig": map[string]any{
+			"endpoint": "http://127.0.0.1:8080/mcp",
+		},
+	}, "")
+	if unsafeEndpoint.Code != http.StatusBadRequest {
+		t.Fatalf("unsafe patch endpoint should fail, got %d body=%s", unsafeEndpoint.Code, unsafeEndpoint.Body.String())
+	}
+}
+
+func TestRotateAgentCredentialsTakesEffectOnNextProxyCall(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	seenAuthorizations := []string{}
+	originalTransport := http.DefaultClient.Transport
+	http.DefaultClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		seenAuthorizations = append(seenAuthorizations, r.Header.Get("Authorization"))
+		return &http.Response{
+			StatusCode: http.StatusAccepted,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"ok":true}`)),
+		}, nil
+	})
+	t.Cleanup(func() {
+		http.DefaultClient.Transport = originalTransport
+	})
+
+	caller, key := createLocalCallerWithKey(t, router, "Rotate Caller")
+	target := createDirectAgentWithCredentials(t, repo, "Rotate MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": "https://api.example.com/mcp",
+		"credentialHeaders": map[string]any{
+			"Authorization": "apiToken",
+		},
+	}, map[string]string{
+		"apiToken": "Bearer old-token",
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	beforeRotate := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if beforeRotate.Code != http.StatusAccepted {
+		t.Fatalf("expected proxy call before rotate, got %d body=%s", beforeRotate.Code, beforeRotate.Body.String())
+	}
+
+	rotateResp := request(t, router, http.MethodPost, "/api/v1/agents/"+target.ID+"/credentials:rotate", map[string]any{
+		"credentials": map[string]any{
+			"apiToken": "Bearer new-token",
+		},
+	}, "")
+	if rotateResp.Code != http.StatusOK {
+		t.Fatalf("rotate credentials should succeed, got %d body=%s", rotateResp.Code, rotateResp.Body.String())
+	}
+	if strings.Contains(rotateResp.Body.String(), "Bearer new-token") || strings.Contains(rotateResp.Body.String(), "credentials") {
+		t.Fatalf("rotate response leaked credentials: %s", rotateResp.Body.String())
+	}
+
+	afterRotate := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if afterRotate.Code != http.StatusAccepted {
+		t.Fatalf("expected proxy call after rotate, got %d body=%s", afterRotate.Code, afterRotate.Body.String())
+	}
+	if len(seenAuthorizations) != 2 || seenAuthorizations[0] != "Bearer old-token" || seenAuthorizations[1] != "Bearer new-token" {
+		t.Fatalf("unexpected Authorization headers after rotation: %#v", seenAuthorizations)
 	}
 }
 

@@ -25,7 +25,7 @@ import {
   TriangleAlert,
   Workflow
 } from "lucide-react";
-import { createAccessGrant, createAgent, createAgentKey, disableAgent, loadConsoleData, revokeAccessGrant } from "./api";
+import { createAccessGrant, createAgent, createAgentKey, loadConsoleData, revokeAccessGrant, rotateAgentCredentials, updateAgent } from "./api";
 import type {
   AccessGrant,
   Agent,
@@ -72,6 +72,7 @@ const defaultAgentForm = {
   status: "draft" as AgentStatus
 };
 const defaultKeyForm = { agentId: "", expiresInSeconds: "900", name: "console key" };
+const defaultRotateForm = { agentId: "", credentialName: "apiToken", credentialValue: "" };
 const defaultGrantForm = { callerAgentId: "", routeKey: "", routeType: "mcp", targetAgentId: "" };
 const defaultTraceFilters: TraceFilters = { callerAgentId: "", decision: "", runId: "", targetAgentId: "" };
 const mcpRouteKeyPresets = ["initialize", "tools/list", "tools/call"];
@@ -89,6 +90,8 @@ function App() {
   const [keyForm, setKeyForm] = useState(defaultKeyForm);
   const [keyMessage, setKeyMessage] = useState("");
   const [createdKey, setCreatedKey] = useState<CreateAgentKeyResponse | null>(null);
+  const [rotateForm, setRotateForm] = useState(defaultRotateForm);
+  const [rotateMessage, setRotateMessage] = useState("");
   const [grantForm, setGrantForm] = useState(defaultGrantForm);
   const [grantMessage, setGrantMessage] = useState("");
   const [cleanupActionId, setCleanupActionId] = useState("");
@@ -170,15 +173,15 @@ function App() {
     }
   }
 
-  async function handleDisableAgent(agent: Agent) {
+  async function handleAgentStatusChange(agent: Agent, status: AgentStatus) {
     setAgentMessage("");
     setCleanupActionId(agent.id);
     try {
-      await disableAgent(agent.id, adminKey);
-      setAgentMessage(`${agent.name} disabled. Registry refreshed.`);
+      await updateAgent(agent.id, { status }, adminKey);
+      setAgentMessage(`${agent.name} set to ${status}. Registry refreshed.`);
       await refresh();
     } catch (error) {
-      setAgentMessage(error instanceof Error ? error.message : "Unable to disable agent");
+      setAgentMessage(error instanceof Error ? error.message : "Unable to update agent status");
     } finally {
       setCleanupActionId("");
     }
@@ -221,6 +224,32 @@ function App() {
       setKeyForm({ ...defaultKeyForm, agentId: keyForm.agentId });
     } catch (error) {
       setKeyMessage(error instanceof Error ? error.message : "Unable to create key");
+    }
+  }
+
+  async function submitCredentialRotation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRotateMessage("");
+    try {
+      const credentialName = rotateForm.credentialName.trim();
+      if (!rotateForm.agentId) {
+        setRotateMessage("Select an Agent to rotate.");
+        return;
+      }
+      if (!credentialName || !rotateForm.credentialValue.trim()) {
+        setRotateMessage("Credential key and new secret are required.");
+        return;
+      }
+      await rotateAgentCredentials(
+        rotateForm.agentId,
+        { credentials: { [credentialName]: rotateForm.credentialValue } },
+        adminKey
+      );
+      setRotateForm({ ...defaultRotateForm, agentId: rotateForm.agentId, credentialName });
+      setRotateMessage("Credential rotated. Secret value cleared.");
+      await refresh();
+    } catch (error) {
+      setRotateMessage(error instanceof Error ? error.message : "Unable to rotate credential");
     }
   }
 
@@ -418,6 +447,16 @@ function App() {
             <GrantCreateForm agents={agents} form={grantForm} message={grantMessage} onChange={setGrantForm} onSubmit={submitGrant} />
           </Panel>
 
+          <Panel className="span-4" icon={<KeyRound size={18} />} title="Rotate Credential">
+            <CredentialRotateForm
+              agents={agents}
+              form={rotateForm}
+              message={rotateMessage}
+              onChange={setRotateForm}
+              onSubmit={submitCredentialRotation}
+            />
+          </Panel>
+
           <Panel className="span-8" icon={<Workflow size={18} />} title="Route Governance" action={<IconMore />}>
             <PolicyTable
               agents={agents}
@@ -436,7 +475,7 @@ function App() {
             <AgentTable
               agents={agents}
               channelLabels={channelLabels}
-              onDisable={handleDisableAgent}
+              onStatusChange={handleAgentStatusChange}
               pendingActionId={cleanupActionId}
             />
           </Panel>
@@ -521,6 +560,29 @@ function KeyCreateForm({
         </div>
       ) : null}
       <FormFooter message={message} submitLabel="Create key" />
+    </form>
+  );
+}
+
+function CredentialRotateForm({
+  agents,
+  form,
+  message,
+  onChange,
+  onSubmit
+}: {
+  agents: Agent[];
+  form: typeof defaultRotateForm;
+  message: string;
+  onChange: (form: typeof defaultRotateForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form className="control-form" onSubmit={onSubmit}>
+      <label>Agent<select required value={form.agentId} onChange={(event) => onChange({ ...form, agentId: event.target.value })}><option value="">Select Agent</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
+      <label>Credential key<input placeholder="apiToken" value={form.credentialName} onChange={(event) => onChange({ ...form, credentialName: event.target.value })} /></label>
+      <label>New secret<input placeholder="Bearer ..." type="password" value={form.credentialValue} onChange={(event) => onChange({ ...form, credentialValue: event.target.value })} /></label>
+      <FormFooter message={message} submitLabel="Rotate credential" />
     </form>
   );
 }
@@ -737,12 +799,12 @@ function PolicyTable({
 function AgentTable({
   agents,
   channelLabels,
-  onDisable,
+  onStatusChange,
   pendingActionId
 }: {
   agents: Agent[];
   channelLabels: Record<string, string>;
-  onDisable: (agent: Agent) => void;
+  onStatusChange: (agent: Agent, status: AgentStatus) => void;
   pendingActionId: string;
 }) {
   return (
@@ -778,15 +840,26 @@ function AgentTable({
               <td>{agent.ownerId || "platform"}</td>
               <td>
                 {agent.status !== "disabled" ? (
-                  <button
-                    className="table-action"
-                    disabled={pendingActionId === agent.id}
-                    onClick={() => onDisable(agent)}
-                    type="button"
-                  >
-                    <LockKeyhole size={13} />
-                    {pendingActionId === agent.id ? "Disabling" : "Disable"}
-                  </button>
+                  <div className="table-action-group">
+                    <button
+                      className="table-action"
+                      disabled={pendingActionId === agent.id}
+                      onClick={() => onStatusChange(agent, agent.status === "active" ? "draft" : "active")}
+                      type="button"
+                    >
+                      {agent.status === "active" ? <CircleDot size={13} /> : <CheckCircle2 size={13} />}
+                      {pendingActionId === agent.id ? "Updating" : agent.status === "active" ? "Draft" : "Activate"}
+                    </button>
+                    <button
+                      className="table-action"
+                      disabled={pendingActionId === agent.id}
+                      onClick={() => onStatusChange(agent, "disabled")}
+                      type="button"
+                    >
+                      <LockKeyhole size={13} />
+                      Disable
+                    </button>
+                  </div>
                 ) : (
                   <span className="muted-action">disabled</span>
                 )}

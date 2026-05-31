@@ -31,6 +31,18 @@ export interface CreateAgentRequest {
   status?: AgentStatus
 }
 
+export interface UpdateAgentRequest {
+  name?: string
+  description?: string
+  ownerId?: string
+  channelConfig?: JsonObject
+  status?: AgentStatus
+}
+
+export interface RotateAgentCredentialsRequest {
+  credentials: Record<string, string>
+}
+
 export interface ManagementScope {
   tenantId: string
   workspaceId: string

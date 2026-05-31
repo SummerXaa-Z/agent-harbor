@@ -1,3 +1,24 @@
+## [2026-05-31 12:45] Session: Sprint 7 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-7-credential-rotation` 分支补跑 focused verification，并将证据写入 PR #7。
+- 将 PR #7 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 7 credential rotation` 改为 `Sprint 7 credential rotation`。
+- 验证 Sprint 7 的 PATCH Agent、credential rotation demo、Sprint 1-6 demo 回归、PostgreSQL rotated credential ciphertext、Go 后端和前端 build。
+
+### 决策
+- 保留 #7 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 7 代码和历史，只更新 GitHub PR 元数据。
+- 修正 PR #7 的 review focus：Sprint 7 不引入 credential version history 或 key version metadata，rotation 语义是替换完整 credential bag。
+
+### 血泪教训
+- credential rotation 类 PR 的 ready evidence 必须证明“下一次 proxy call 用新 secret”而不只是 rotate endpoint 返回 200；否则无法确认运行时真的切换到了新凭据。
+
+### 待办
+- 下一步从 #8 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #7 ready evidence、验证结果和 credentialVersion 边界修正。
+
 ## [2026-05-31 04:52] Session: Sprint 6 Ready Evidence
 
 ### 完成

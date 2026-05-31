@@ -1,3 +1,24 @@
+## [2026-05-31 14:39] Session: CI Makefile Alignment
+
+### 完成
+- 将 GitHub Actions backend/frontend/PostgreSQL jobs 改为复用 `Makefile` targets。
+- 在 backend job 增加 `make demo-scripts-lint`，让 demo script 语法检查进入 CI。
+- 复跑 `make check`，确认本地入口和 CI 调用路径保持一致。
+
+### 决策
+- 保持 CI 的 Backend、Frontend、PostgreSQL 三个 job 拆分，只把每个 step 的命令收敛到 Makefile，兼顾并行速度和命令复用。
+- PostgreSQL integration 继续通过 `make test-postgres` 读取 `AGENT_HARBOR_TEST_DATABASE_URL`，不把数据库依赖塞进默认 `make check`。
+
+### 血泪教训
+- 本地入口合入后要立刻让 CI 复用它，否则 Makefile 会慢慢变成“文档命令”，而不是工程事实。
+
+### 待办
+- 后续可以考虑在 CI 增加 `make help` 或 README command smoke test，但当前先保持最小变更。
+
+### 影响文件
+- `.github/workflows/ci.yml`：复用 Makefile targets 并新增 demo script lint step。
+- `CHANGELOG.md`：记录 CI 与本地验证入口对齐。
+
 ## [2026-05-31 14:34] Session: Local Verification Entrypoints
 
 ### 完成

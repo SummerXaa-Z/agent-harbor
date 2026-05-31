@@ -2,23 +2,23 @@
 
 This repository uses a linear stacked PR review flow to preserve the already-pushed sprint branch history while keeping each review boundary small.
 
-As of 2026-05-31, #2-#9 are ready for review with focused local verification evidence in each PR body. #1 remains the top integration PR for Sprint 10, Sprint 11, CI, and review-governance changes.
+As of 2026-05-31, #2-#9 have been merged bottom-up into `main` with merge commits after focused local verification evidence was recorded in each PR body. #1 is now retargeted to `main` as the remaining top integration PR for Sprint 10, Sprint 11, CI, and review-governance changes.
 
 ## Current Stack
 
 | PR | State | Base | Head | Review Scope |
 | --- | --- | --- | --- | --- |
-| #2 | Ready | `main` | `codex/sprint-2-governance-proxy` | Sprint 2 governance proxy cleanup |
-| #3 | Ready | `codex/sprint-2-governance-proxy` | `codex/sprint-3-mcp-policy-controls` | Sprint 3 MCP method policy controls |
-| #4 | Ready | `codex/sprint-3-mcp-policy-controls` | `codex/sprint-4-secret-header-injection` | Sprint 4 secret header injection |
-| #5 | Ready | `codex/sprint-4-secret-header-injection` | `codex/sprint-5-proxy-retry-classification` | Sprint 5 proxy retry classification |
-| #6 | Ready | `codex/sprint-5-proxy-retry-classification` | `codex/sprint-6-runtime-metrics` | Sprint 6 runtime metrics |
-| #7 | Ready | `codex/sprint-6-runtime-metrics` | `codex/sprint-7-credential-rotation` | Sprint 7 credential rotation |
-| #8 | Ready | `codex/sprint-7-credential-rotation` | `codex/sprint-8-management-audit` | Sprint 8 management audit |
-| #9 | Ready | `codex/sprint-8-management-audit` | `codex/sprint-9-route-policies` | Sprint 9 route policy objects |
-| #1 | Top integration | `codex/sprint-9-route-policies` | `codex/sprint-10-route-policy-retry-overrides` | Sprint 10 retry, Sprint 11 transactional audit, CI, PR governance |
+| #2 | Merged | `main` | `codex/sprint-2-governance-proxy` | Sprint 2 governance proxy cleanup |
+| #3 | Merged | `main` | `codex/sprint-3-mcp-policy-controls` | Sprint 3 MCP method policy controls |
+| #4 | Merged | `main` | `codex/sprint-4-secret-header-injection` | Sprint 4 secret header injection |
+| #5 | Merged | `main` | `codex/sprint-5-proxy-retry-classification` | Sprint 5 proxy retry classification |
+| #6 | Merged | `main` | `codex/sprint-6-runtime-metrics` | Sprint 6 runtime metrics |
+| #7 | Merged | `main` | `codex/sprint-7-credential-rotation` | Sprint 7 credential rotation |
+| #8 | Merged | `main` | `codex/sprint-8-management-audit` | Sprint 8 management audit |
+| #9 | Merged | `main` | `codex/sprint-9-route-policies` | Sprint 9 route policy objects |
+| #1 | Ready integration | `main` | `codex/sprint-10-route-policy-retry-overrides` | Sprint 10 retry, Sprint 11 transactional audit, CI, PR governance |
 
-The branch ancestry is linear:
+The original branch ancestry was linear:
 
 ```text
 main
@@ -38,7 +38,7 @@ main
 Review and merge from bottom to top:
 
 1. Review #2 first, then merge or intentionally preserve it before moving higher.
-2. Continue upward through #9, retargeting the next PR when GitHub does not do so automatically.
+2. Continue upward through #9, retargeting the next PR to `main` after each merge.
 3. Review #1 last as the integration checkpoint for Sprint 10/11 plus CI and governance.
 4. Keep future higher PRs in draft while their base PRs are still materially changing.
 

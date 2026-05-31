@@ -83,6 +83,10 @@ export interface TraceEvent {
   routeKey?: string
   decision: TraceDecision
   reason?: string
+  durationMs?: number
+  upstreamAttempts?: number
+  upstreamStatus?: number
+  upstreamError?: string
   createdAt: string
 }
 

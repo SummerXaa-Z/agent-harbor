@@ -145,15 +145,19 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	}
 
 	trace := domain.TraceEvent{
-		ID:        security.NewID("trc"),
-		RunID:     "pg-run",
-		CallerID:  caller.ID,
-		TargetID:  target.ID,
-		RouteType: "mcp",
-		RouteKey:  "tools/call",
-		Decision:  domain.TraceDecisionAllowed,
-		Reason:    "integration",
-		CreatedAt: now,
+		ID:               security.NewID("trc"),
+		RunID:            "pg-run",
+		CallerID:         caller.ID,
+		TargetID:         target.ID,
+		RouteType:        "mcp",
+		RouteKey:         "tools/call",
+		Decision:         domain.TraceDecisionAllowed,
+		Reason:           "integration",
+		DurationMs:       42,
+		UpstreamAttempts: 2,
+		UpstreamStatus:   202,
+		UpstreamError:    "UPSTREAM_DNS_ERROR",
+		CreatedAt:        now,
 	}
 	if _, err := repo.AppendTrace(ctx, trace); err != nil {
 		t.Fatalf("append trace: %v", err)
@@ -169,6 +173,12 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	}
 	if len(traces) != 1 || traces[0].ID != trace.ID {
 		t.Fatalf("unexpected traces: %#v", traces)
+	}
+	if traces[0].DurationMs != trace.DurationMs ||
+		traces[0].UpstreamAttempts != trace.UpstreamAttempts ||
+		traces[0].UpstreamStatus != trace.UpstreamStatus ||
+		traces[0].UpstreamError != trace.UpstreamError {
+		t.Fatalf("unexpected trace metrics: %#v", traces[0])
 	}
 	if _, ok, err := repo.RevokeAccessGrant(ctx, grant.ID, now.Add(time.Minute)); err != nil {
 		t.Fatalf("revoke grant: %v", err)

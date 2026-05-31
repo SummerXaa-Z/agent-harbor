@@ -260,10 +260,12 @@ func (p *Postgres) HasGrant(ctx context.Context, callerID string, targetID strin
 func (p *Postgres) AppendTrace(ctx context.Context, event domain.TraceEvent) (domain.TraceEvent, error) {
 	_, err := p.pool.Exec(ctx, `
 		insert into trace_events (
-			id, run_id, caller_agent_id, target_agent_id, route_type, route_key, decision, reason, created_at
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+			id, run_id, caller_agent_id, target_agent_id, route_type, route_key, decision, reason,
+			duration_ms, upstream_attempts, upstream_status, upstream_error, created_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 	`, event.ID, event.RunID, event.CallerID, event.TargetID, event.RouteType,
-		event.RouteKey, string(event.Decision), event.Reason, event.CreatedAt)
+		event.RouteKey, string(event.Decision), event.Reason, event.DurationMs,
+		event.UpstreamAttempts, event.UpstreamStatus, event.UpstreamError, event.CreatedAt)
 	if err != nil {
 		return domain.TraceEvent{}, fmt.Errorf("insert trace event: %w", err)
 	}
@@ -272,7 +274,8 @@ func (p *Postgres) AppendTrace(ctx context.Context, event domain.TraceEvent) (do
 
 func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain.TraceEvent, error) {
 	query := `
-		select id, run_id, caller_agent_id, target_agent_id, route_type, route_key, decision, reason, created_at
+		select id, run_id, caller_agent_id, target_agent_id, route_type, route_key, decision, reason,
+			duration_ms, upstream_attempts, upstream_status, upstream_error, created_at
 		from trace_events
 		where 1=1
 	`
@@ -427,7 +430,8 @@ func scanTraceEvents(rows pgx.Rows) ([]domain.TraceEvent, error) {
 		var trace domain.TraceEvent
 		var decision string
 		if err := rows.Scan(&trace.ID, &trace.RunID, &trace.CallerID, &trace.TargetID, &trace.RouteType,
-			&trace.RouteKey, &decision, &trace.Reason, &trace.CreatedAt); err != nil {
+			&trace.RouteKey, &decision, &trace.Reason, &trace.DurationMs, &trace.UpstreamAttempts,
+			&trace.UpstreamStatus, &trace.UpstreamError, &trace.CreatedAt); err != nil {
 			return nil, err
 		}
 		trace.Decision = domain.TraceDecision(decision)

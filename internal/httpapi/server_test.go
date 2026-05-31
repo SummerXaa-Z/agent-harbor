@@ -2,7 +2,9 @@ package httpapi_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -42,13 +44,17 @@ type keyResponse struct {
 }
 
 type traceResponse struct {
-	ID       string `json:"id"`
-	CallerID string `json:"callerAgentId"`
-	TargetID string `json:"targetAgentId"`
-	RouteKey string `json:"routeKey"`
-	Decision string `json:"decision"`
-	Reason   string `json:"reason"`
-	RunID    string `json:"runId"`
+	ID               string `json:"id"`
+	CallerID         string `json:"callerAgentId"`
+	TargetID         string `json:"targetAgentId"`
+	RouteKey         string `json:"routeKey"`
+	Decision         string `json:"decision"`
+	Reason           string `json:"reason"`
+	RunID            string `json:"runId"`
+	DurationMs       int64  `json:"durationMs"`
+	UpstreamAttempts int    `json:"upstreamAttempts"`
+	UpstreamStatus   int    `json:"upstreamStatus"`
+	UpstreamError    string `json:"upstreamError"`
 }
 
 type grantResponse struct {
@@ -57,6 +63,16 @@ type grantResponse struct {
 	TargetID  string `json:"targetAgentId"`
 	RouteType string `json:"routeType"`
 	RouteKey  string `json:"routeKey"`
+}
+
+type metricResponse struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Value     int    `json:"value"`
+	Unit      string `json:"unit"`
+	Trend     string `json:"trend"`
+	Status    string `json:"status"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 func newRouter() http.Handler {
@@ -480,6 +496,47 @@ func TestManagementScopeFiltersLists(t *testing.T) {
 	}
 }
 
+func TestRuntimeMetricsSummarizeDataPlaneTraces(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	caller, key := createLocalCallerWithKey(t, router, "Runtime Metrics Caller")
+	target := createDirectAgent(t, repo, "Runtime Metrics Target", "default", "ws-1", "mcp", domain.AgentStatusActive, nil)
+
+	denied := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("expected denied call before grant, got %d body=%s", denied.Code, denied.Body.String())
+	}
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+	allowed := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if allowed.Code != http.StatusOK {
+		t.Fatalf("expected allowed call after grant, got %d body=%s", allowed.Code, allowed.Body.String())
+	}
+
+	metricsResp := request(t, router, http.MethodGet, "/api/v1/metrics/runtime?workspaceId=ws-1", nil, "")
+	if metricsResp.Code != http.StatusOK {
+		t.Fatalf("expected runtime metrics endpoint, got %d body=%s", metricsResp.Code, metricsResp.Body.String())
+	}
+	metrics := decodeData[[]metricResponse](t, metricsResp)
+	if got := metricByID(t, metrics, "gateway_calls_total").Value; got != 2 {
+		t.Fatalf("gateway_calls_total = %d, want 2; metrics=%#v", got, metrics)
+	}
+	if got := metricByID(t, metrics, "allowed_rate").Value; got != 50 {
+		t.Fatalf("allowed_rate = %d, want 50; metrics=%#v", got, metrics)
+	}
+	if got := metricByID(t, metrics, "upstream_error_rate").Value; got != 0 {
+		t.Fatalf("upstream_error_rate = %d, want 0; metrics=%#v", got, metrics)
+	}
+	if got := metricByID(t, metrics, "avg_latency_ms").Value; got != 0 {
+		t.Fatalf("avg_latency_ms = %d, want 0 for local stub calls; metrics=%#v", got, metrics)
+	}
+}
+
 func TestDisableAgentBlocksExistingKey(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -811,6 +868,89 @@ func TestUpstreamProxyRetriesRetryableStatusThenReturnsSuccess(t *testing.T) {
 	}
 	if strings.TrimSpace(resp.Body.String()) != `{"ok":true}` {
 		t.Fatalf("expected final upstream body, got %s", resp.Body.String())
+	}
+}
+
+func TestProxyTraceMetricsRecordAttemptsStatusAndDuration(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	attempts := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"temporary":true}`))
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "Trace Metrics Caller")
+	target := createDirectAgent(t, repo, "Trace Metrics MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL + "/mcp",
+		"retry": map[string]any{
+			"maxAttempts": 2,
+			"backoffMs":   0,
+			"statusCodes": []any{503},
+		},
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	resp := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key, "metrics-proxy")
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("expected upstream success after retry, got %d body=%s", resp.Code, resp.Body.String())
+	}
+
+	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces?runId=metrics-proxy", nil, ""))
+	if len(traces) != 1 {
+		t.Fatalf("expected one allowed trace, got %#v", traces)
+	}
+	trace := traces[0]
+	if trace.UpstreamAttempts != 2 {
+		t.Fatalf("upstreamAttempts = %d, want 2; trace=%#v", trace.UpstreamAttempts, trace)
+	}
+	if trace.UpstreamStatus != http.StatusAccepted {
+		t.Fatalf("upstreamStatus = %d, want 202; trace=%#v", trace.UpstreamStatus, trace)
+	}
+	if trace.UpstreamError != "" {
+		t.Fatalf("upstreamError = %q, want empty; trace=%#v", trace.UpstreamError, trace)
+	}
+	if trace.DurationMs <= 0 {
+		t.Fatalf("durationMs = %d, want positive; trace=%#v", trace.DurationMs, trace)
+	}
+}
+
+func TestProxySuccessDoesNotFailWhenTraceAppendFails(t *testing.T) {
+	memory := store.NewMemory()
+	repo := &failingAllowedTraceRepository{Repository: memory}
+	router := newRouterWithRepo(repo)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"accepted":true}`))
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "Trace Failure Caller")
+	target := createDirectAgent(t, repo, "Trace Failure MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL + "/mcp",
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	resp := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key, "trace-fail-after-upstream")
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("upstream success should not be converted to trace failure, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if strings.TrimSpace(resp.Body.String()) != `{"accepted":true}` {
+		t.Fatalf("expected upstream body despite trace failure, got %s", resp.Body.String())
 	}
 }
 
@@ -1237,6 +1377,9 @@ func TestProxyUpstreamConnectFailureRecordsTraceAndReturnsConnectError(t *testin
 	if len(traces) != 1 || traces[0].Decision != "allowed" || traces[0].TargetID != target.ID {
 		t.Fatalf("expected allowed trace recorded before proxy failure, got %#v", traces)
 	}
+	if traces[0].UpstreamAttempts != 1 || traces[0].UpstreamError != "UPSTREAM_CONNECT_ERROR" || traces[0].DurationMs <= 0 {
+		t.Fatalf("expected proxy failure metrics on trace, got %#v", traces[0])
+	}
 }
 
 func TestProxyUpstreamTLSFailureReturnsTLSError(t *testing.T) {
@@ -1391,4 +1534,26 @@ func decodeData[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 		t.Fatalf("decode data: %v raw=%s", err, string(env.Data))
 	}
 	return out
+}
+
+func metricByID(t *testing.T, metrics []metricResponse, id string) metricResponse {
+	t.Helper()
+	for _, metric := range metrics {
+		if metric.ID == id {
+			return metric
+		}
+	}
+	t.Fatalf("metric %q not found in %#v", id, metrics)
+	return metricResponse{}
+}
+
+type failingAllowedTraceRepository struct {
+	store.Repository
+}
+
+func (r *failingAllowedTraceRepository) AppendTrace(ctx context.Context, event domain.TraceEvent) (domain.TraceEvent, error) {
+	if event.Decision == domain.TraceDecisionAllowed {
+		return domain.TraceEvent{}, errors.New("trace append failed")
+	}
+	return r.Repository.AppendTrace(ctx, event)
 }

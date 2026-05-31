@@ -49,6 +49,13 @@ type proxyRetryPolicy struct {
 	retryStatusCodes map[int]struct{}
 }
 
+type proxyTraceResult struct {
+	durationMs       int64
+	upstreamAttempts int
+	upstreamStatus   int
+	upstreamError    string
+}
+
 type Option func(*Server)
 
 func WithAdminKey(key string) Option {
@@ -93,6 +100,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/access-grants", s.listAccessGrants)
 			r.Delete("/access-grants/{id}", s.revokeAccessGrant)
 			r.Get("/audit/traces", s.listTraces)
+			r.Get("/metrics/runtime", s.runtimeMetrics)
 		})
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAgentKey)
@@ -500,7 +508,7 @@ func (s *Server) handleDataPlane(w http.ResponseWriter, r *http.Request, routeTy
 	targetID := chi.URLParam(r, "targetId")
 	if !s.repo.HasGrant(r.Context(), caller.ID, targetID, routeType, routeKey, s.now()) {
 		reason := "caller has no access grant for target route"
-		if _, err := s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionDenied, reason); err != nil {
+		if _, err := s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionDenied, reason, proxyTraceResult{}); err != nil {
 			writeError(w, err)
 			return
 		}
@@ -518,19 +526,22 @@ func (s *Server) handleDataPlane(w http.ResponseWriter, r *http.Request, routeTy
 	}
 	if target.Status != domain.AgentStatusActive {
 		reason := "target agent is not active"
-		if _, err := s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionDenied, reason); err != nil {
+		if _, err := s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionDenied, reason, proxyTraceResult{}); err != nil {
 			writeError(w, err)
 			return
 		}
 		writeError(w, domain.PermissionDenied(reason))
 		return
 	}
-	trace, err := s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionAllowed, "access grant matched")
-	if err != nil {
-		writeError(w, err)
+	recordAllowedTrace := func(result proxyTraceResult) (domain.TraceEvent, error) {
+		return s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionAllowed, "access grant matched", result)
+	}
+	if s.proxyUpstreamIfConfigured(w, r, target, routeType, routeKey, recordAllowedTrace) {
 		return
 	}
-	if s.proxyUpstreamIfConfigured(w, r, target, routeType, routeKey) {
+	trace, err := recordAllowedTrace(proxyTraceResult{})
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -540,51 +551,56 @@ func (s *Server) handleDataPlane(w http.ResponseWriter, r *http.Request, routeTy
 	})
 }
 
-func (s *Server) recordDataPlaneTrace(r *http.Request, callerID string, targetID string, routeType string, routeKey string, decision domain.TraceDecision, reason string) (domain.TraceEvent, error) {
+func (s *Server) recordDataPlaneTrace(r *http.Request, callerID string, targetID string, routeType string, routeKey string, decision domain.TraceDecision, reason string, result proxyTraceResult) (domain.TraceEvent, error) {
 	trace := domain.TraceEvent{
-		ID:        security.NewID("trc"),
-		RunID:     r.Header.Get("X-Run-Id"),
-		CallerID:  callerID,
-		TargetID:  targetID,
-		RouteType: routeType,
-		RouteKey:  routeKey,
-		Decision:  decision,
-		Reason:    reason,
-		CreatedAt: s.now(),
+		ID:               security.NewID("trc"),
+		RunID:            r.Header.Get("X-Run-Id"),
+		CallerID:         callerID,
+		TargetID:         targetID,
+		RouteType:        routeType,
+		RouteKey:         routeKey,
+		Decision:         decision,
+		Reason:           reason,
+		DurationMs:       result.durationMs,
+		UpstreamAttempts: result.upstreamAttempts,
+		UpstreamStatus:   result.upstreamStatus,
+		UpstreamError:    result.upstreamError,
+		CreatedAt:        s.now(),
 	}
 	return s.repo.AppendTrace(r.Context(), trace)
 }
 
-func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Request, target domain.Agent, routeType string, routeKey string) bool {
+func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Request, target domain.Agent, routeType string, routeKey string, recordAllowedTrace func(proxyTraceResult) (domain.TraceEvent, error)) bool {
 	endpoint, ok := target.ChannelConfig["endpoint"].(string)
 	endpoint = strings.TrimSpace(endpoint)
 	if !ok || endpoint == "" {
 		return false
 	}
+	startedAt := time.Now()
 	upstreamURL := endpoint
 	method := http.MethodPost
 	if routeType == "openapi" {
 		var err error
 		upstreamURL, err = openAPIUpstreamURL(endpoint, routeKey, r.URL.RawQuery)
 		if err != nil {
-			writeError(w, err)
+			writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
 			return true
 		}
 		method = r.Method
 	}
 	timeout, err := proxyTimeoutFromConfig(target.ChannelConfig)
 	if err != nil {
-		writeError(w, err)
+		writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
 		return true
 	}
 	retryPolicy, err := proxyRetryPolicyFromConfig(target.ChannelConfig)
 	if err != nil {
-		writeError(w, err)
+		writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
 		return true
 	}
 	body, err := readProxyBody(r.Body)
 	if err != nil {
-		writeError(w, err)
+		writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
 		return true
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
@@ -593,16 +609,16 @@ func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Reques
 	for attempt := 1; attempt <= retryPolicy.maxAttempts; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, method, upstreamURL, bytes.NewReader(body))
 		if err != nil {
-			writeError(w, domain.UpstreamError("upstream request could not be prepared"))
+			writeProxyError(w, recordAllowedTrace, startedAt, 0, domain.UpstreamError("upstream request could not be prepared"))
 			return true
 		}
 		copyUpstreamRequestHeaders(req.Header, r.Header)
 		if err := copyConfiguredHeaders(req.Header, target.ChannelConfig); err != nil {
-			writeError(w, err)
+			writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
 			return true
 		}
 		if err := copyCredentialHeaders(req.Header, target.ChannelConfig, target.Credentials); err != nil {
-			writeError(w, err)
+			writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
 			return true
 		}
 		resp, err := http.DefaultClient.Do(req)
@@ -610,13 +626,13 @@ func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Reques
 			if shouldRetryUpstreamError(ctx, err) && attempt < retryPolicy.maxAttempts {
 				if !sleepBeforeRetry(ctx, retryPolicy.backoff) {
 					w.Header().Set("X-AgentHarbor-Upstream-Attempts", strconv.Itoa(attempt))
-					writeError(w, domain.UpstreamTimeout("upstream request timed out"))
+					writeProxyError(w, recordAllowedTrace, startedAt, attempt, domain.UpstreamTimeout("upstream request timed out"))
 					return true
 				}
 				continue
 			}
 			w.Header().Set("X-AgentHarbor-Upstream-Attempts", strconv.Itoa(attempt))
-			writeError(w, classifyUpstreamError(ctx, err))
+			writeProxyError(w, recordAllowedTrace, startedAt, attempt, classifyUpstreamError(ctx, err))
 			return true
 		}
 		if retryPolicy.shouldRetryStatus(resp.StatusCode) && attempt < retryPolicy.maxAttempts {
@@ -624,10 +640,18 @@ func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Reques
 			resp.Body.Close()
 			if !sleepBeforeRetry(ctx, retryPolicy.backoff) {
 				w.Header().Set("X-AgentHarbor-Upstream-Attempts", strconv.Itoa(attempt))
-				writeError(w, domain.UpstreamTimeout("upstream request timed out"))
+				writeProxyError(w, recordAllowedTrace, startedAt, attempt, domain.UpstreamTimeout("upstream request timed out"))
 				return true
 			}
 			continue
+		}
+		if _, err := recordAllowedTrace(proxyTraceResult{
+			durationMs:       elapsedProxyDurationMs(startedAt),
+			upstreamAttempts: attempt,
+			upstreamStatus:   resp.StatusCode,
+		}); err != nil {
+			// Upstream has already completed. Preserve its response to avoid
+			// encouraging callers to retry non-idempotent operations.
 		}
 		defer resp.Body.Close()
 		if contentType := resp.Header.Get("Content-Type"); contentType != "" {
@@ -638,8 +662,32 @@ func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Reques
 		_, _ = io.Copy(w, resp.Body)
 		return true
 	}
-	writeError(w, domain.UpstreamError("upstream retry policy exhausted unexpectedly"))
+	writeProxyError(w, recordAllowedTrace, startedAt, retryPolicy.maxAttempts, domain.UpstreamError("upstream retry policy exhausted unexpectedly"))
 	return true
+}
+
+func writeProxyError(w http.ResponseWriter, recordAllowedTrace func(proxyTraceResult) (domain.TraceEvent, error), startedAt time.Time, attempts int, err error) {
+	result := proxyTraceResult{
+		durationMs:       elapsedProxyDurationMs(startedAt),
+		upstreamAttempts: attempts,
+	}
+	var appErr domain.AppError
+	if errors.As(err, &appErr) && strings.HasPrefix(appErr.Code, "UPSTREAM_") {
+		result.upstreamError = appErr.Code
+	}
+	if _, recordErr := recordAllowedTrace(result); recordErr != nil {
+		writeError(w, recordErr)
+		return
+	}
+	writeError(w, err)
+}
+
+func elapsedProxyDurationMs(startedAt time.Time) int64 {
+	elapsed := time.Since(startedAt).Milliseconds()
+	if elapsed <= 0 {
+		return 1
+	}
+	return elapsed
 }
 
 func openAPIUpstreamURL(endpoint string, relativePath string, rawQuery string) (string, error) {
@@ -1083,6 +1131,138 @@ func (s *Server) listTraces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, rows)
+}
+
+func (s *Server) runtimeMetrics(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.repo.ListTraces(r.Context(), store.TraceFilter{ManagementScope: managementScopeFromRequest(r)})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, summarizeRuntimeMetrics(rows, s.now()))
+}
+
+func summarizeRuntimeMetrics(traces []domain.TraceEvent, updatedAt time.Time) []domain.SystemMetric {
+	total := len(traces)
+	allowed := 0
+	upstreamCalls := 0
+	upstreamErrors := 0
+	latencyCount := 0
+	var latencyTotal int64
+
+	for _, trace := range traces {
+		if trace.Decision == domain.TraceDecisionAllowed {
+			allowed++
+		}
+		if trace.Decision != domain.TraceDecisionAllowed || !hasUpstreamResult(trace) {
+			continue
+		}
+		upstreamCalls++
+		if trace.UpstreamError != "" || trace.UpstreamStatus >= 500 {
+			upstreamErrors++
+		}
+		if trace.DurationMs > 0 {
+			latencyCount++
+			latencyTotal += trace.DurationMs
+		}
+	}
+
+	allowedRate := percentage(allowed, total)
+	upstreamErrorRate := percentage(upstreamErrors, upstreamCalls)
+	avgLatency := averageInt64(latencyTotal, latencyCount)
+
+	return []domain.SystemMetric{
+		{
+			ID:        "gateway_calls_total",
+			Label:     "Gateway calls",
+			Value:     total,
+			Trend:     "flat",
+			Status:    gatewayCallStatus(total),
+			UpdatedAt: updatedAt,
+		},
+		{
+			ID:        "allowed_rate",
+			Label:     "Allowed rate",
+			Value:     allowedRate,
+			Unit:      "%",
+			Trend:     "flat",
+			Status:    allowedRateStatus(allowedRate),
+			UpdatedAt: updatedAt,
+		},
+		{
+			ID:        "upstream_error_rate",
+			Label:     "Upstream errors",
+			Value:     upstreamErrorRate,
+			Unit:      "%",
+			Trend:     "flat",
+			Status:    upstreamErrorRateStatus(upstreamErrorRate),
+			UpdatedAt: updatedAt,
+		},
+		{
+			ID:        "avg_latency_ms",
+			Label:     "Avg latency",
+			Value:     avgLatency,
+			Unit:      "ms",
+			Trend:     "flat",
+			Status:    latencyStatus(avgLatency),
+			UpdatedAt: updatedAt,
+		},
+	}
+}
+
+func hasUpstreamResult(trace domain.TraceEvent) bool {
+	return trace.UpstreamAttempts > 0 || trace.UpstreamStatus > 0 || trace.UpstreamError != "" || trace.DurationMs > 0
+}
+
+func percentage(numerator int, denominator int) int {
+	if denominator <= 0 {
+		return 0
+	}
+	return (numerator*100 + denominator/2) / denominator
+}
+
+func averageInt64(total int64, count int) int {
+	if count <= 0 {
+		return 0
+	}
+	return int((total + int64(count)/2) / int64(count))
+}
+
+func gatewayCallStatus(total int) string {
+	if total == 0 {
+		return "warning"
+	}
+	return "healthy"
+}
+
+func allowedRateStatus(rate int) string {
+	if rate >= 95 {
+		return "healthy"
+	}
+	if rate >= 80 {
+		return "warning"
+	}
+	return "critical"
+}
+
+func upstreamErrorRateStatus(rate int) string {
+	if rate <= 1 {
+		return "healthy"
+	}
+	if rate <= 5 {
+		return "warning"
+	}
+	return "critical"
+}
+
+func latencyStatus(avgLatencyMs int) string {
+	if avgLatencyMs <= 300 {
+		return "healthy"
+	}
+	if avgLatencyMs <= 1000 {
+		return "warning"
+	}
+	return "critical"
 }
 
 func managementScopeFromRequest(r *http.Request) store.ManagementScope {

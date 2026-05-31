@@ -22,9 +22,8 @@ Management APIs stay open by default for local tests and clean-room iteration. S
 ## Run
 
 ```bash
-go test ./...
-go build ./...
-go run ./cmd/agent-harbor
+make check
+make run
 ```
 
 The service listens on `:9090` by default. Override with:
@@ -33,12 +32,37 @@ The service listens on `:9090` by default. Override with:
 AGENT_HARBOR_ADDR=:9091 go run ./cmd/agent-harbor
 ```
 
+For individual local checks:
+
+```bash
+make test
+make test-fresh
+make vet
+make build
+make frontend-test
+make frontend-build
+make demo-scripts-lint
+```
+
+PostgreSQL integration remains opt-in and uses the same environment variable as CI:
+
+```bash
+AGENT_HARBOR_TEST_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' \
+  make test-postgres
+```
+
 ## Governance Loop Demo
 
 With the API running, use the governance-loop demo script to exercise the end-to-end control plane and data plane:
 
 ```bash
 bash scripts/demo-governance-loop.sh
+```
+
+To run the full Sprint 1-11 demo suite against a running API:
+
+```bash
+make demo-all
 ```
 
 The script defaults to `BASE_URL=http://127.0.0.1:9090`. It creates a local caller Agent, a governed local target, a short-lived Agent Key, proves the MCP data-plane call is denied before a grant, creates an Access Grant, proves the call is allowed, then checks run traces for both `denied` and `allowed` decisions. Targets without `channelConfig.endpoint` keep the local accepted stub response; MCP/OpenAPI targets with an endpoint are forwarded upstream after authorization.

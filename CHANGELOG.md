@@ -1,3 +1,25 @@
+## [2026-05-31 14:34] Session: Local Verification Entrypoints
+
+### 完成
+- 新增根目录 `Makefile`，提供 `make check`、`make test-postgres`、`make demo-all` 等本地验证入口。
+- 新增 `scripts/demo-all.sh`，串起 governance loop 与 Sprint 2-11 demo，支持复用 `BASE_URL` 和 `ADMIN_KEY`。
+- 更新 `README.md` 的 Run/Governance Demo 章节，让开发者从 `make check`、`make run`、`make demo-all` 开始。
+
+### 决策
+- 将 PostgreSQL integration 保持为显式 opt-in target，避免普通 `make check` 隐式依赖 Docker 或本地数据库。
+- `make demo-all` 只负责串联已有 demo，不自动启动服务，保持验证职责清晰。
+
+### 血泪教训
+- 默认分支有 CI 之后，本地开发入口也要同步产品化；否则新贡献者仍然需要从 README 长命令里手动拼出健康检查路径。
+
+### 待办
+- 后续可以把 `make demo-all` 拓展为可选的临时服务启动模式，但当前先保持最小、可审、可验证。
+
+### 影响文件
+- `Makefile`：新增标准化本地验证和运行目标。
+- `scripts/demo-all.sh`：新增 Sprint 1-11 demo 汇总入口。
+- `README.md`：补充 Makefile 入口与完整 demo suite 说明。
+
 ## [2026-05-31 14:26] Session: Lower Stack Merge
 
 ### 完成

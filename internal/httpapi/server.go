@@ -4,13 +4,18 @@ import (
 	"bytes"
 	"context"
 	"crypto/subtle"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -33,7 +38,16 @@ type Server struct {
 const (
 	defaultProxyTimeout = 10 * time.Second
 	maxProxyTimeout     = 30 * time.Second
+	maxRetryAttempts    = 4
+	maxRetryBackoff     = time.Second
+	maxProxyBodyBytes   = 4 << 20
 )
+
+type proxyRetryPolicy struct {
+	maxAttempts      int
+	backoff          time.Duration
+	retryStatusCodes map[int]struct{}
+}
 
 type Option func(*Server)
 
@@ -206,6 +220,9 @@ func (s *Server) agentFromRequest(req domain.CreateAgentRequest) (domain.Agent, 
 		return domain.Agent{}, err
 	}
 	if _, err := proxyTimeoutFromConfig(req.ChannelConfig); err != nil {
+		return domain.Agent{}, err
+	}
+	if _, err := proxyRetryPolicyFromConfig(req.ChannelConfig); err != nil {
 		return domain.Agent{}, err
 	}
 	for _, key := range []string{"endpoint", "specUrl"} {
@@ -560,37 +577,68 @@ func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Reques
 		writeError(w, err)
 		return true
 	}
+	retryPolicy, err := proxyRetryPolicyFromConfig(target.ChannelConfig)
+	if err != nil {
+		writeError(w, err)
+		return true
+	}
+	body, err := readProxyBody(r.Body)
+	if err != nil {
+		writeError(w, err)
+		return true
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, method, upstreamURL, r.Body)
-	if err != nil {
-		writeError(w, domain.UpstreamError("upstream request could not be prepared"))
-		return true
-	}
-	copyUpstreamRequestHeaders(req.Header, r.Header)
-	if err := copyConfiguredHeaders(req.Header, target.ChannelConfig); err != nil {
-		writeError(w, err)
-		return true
-	}
-	if err := copyCredentialHeaders(req.Header, target.ChannelConfig, target.Credentials); err != nil {
-		writeError(w, err)
-		return true
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
-			writeError(w, domain.UpstreamTimeout("upstream request timed out"))
+
+	for attempt := 1; attempt <= retryPolicy.maxAttempts; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, method, upstreamURL, bytes.NewReader(body))
+		if err != nil {
+			writeError(w, domain.UpstreamError("upstream request could not be prepared"))
 			return true
 		}
-		writeError(w, domain.UpstreamError("upstream request failed"))
+		copyUpstreamRequestHeaders(req.Header, r.Header)
+		if err := copyConfiguredHeaders(req.Header, target.ChannelConfig); err != nil {
+			writeError(w, err)
+			return true
+		}
+		if err := copyCredentialHeaders(req.Header, target.ChannelConfig, target.Credentials); err != nil {
+			writeError(w, err)
+			return true
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			if shouldRetryUpstreamError(ctx, err) && attempt < retryPolicy.maxAttempts {
+				if !sleepBeforeRetry(ctx, retryPolicy.backoff) {
+					w.Header().Set("X-AgentHarbor-Upstream-Attempts", strconv.Itoa(attempt))
+					writeError(w, domain.UpstreamTimeout("upstream request timed out"))
+					return true
+				}
+				continue
+			}
+			w.Header().Set("X-AgentHarbor-Upstream-Attempts", strconv.Itoa(attempt))
+			writeError(w, classifyUpstreamError(ctx, err))
+			return true
+		}
+		if retryPolicy.shouldRetryStatus(resp.StatusCode) && attempt < retryPolicy.maxAttempts {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			if !sleepBeforeRetry(ctx, retryPolicy.backoff) {
+				w.Header().Set("X-AgentHarbor-Upstream-Attempts", strconv.Itoa(attempt))
+				writeError(w, domain.UpstreamTimeout("upstream request timed out"))
+				return true
+			}
+			continue
+		}
+		defer resp.Body.Close()
+		if contentType := resp.Header.Get("Content-Type"); contentType != "" {
+			w.Header().Set("Content-Type", contentType)
+		}
+		w.Header().Set("X-AgentHarbor-Upstream-Attempts", strconv.Itoa(attempt))
+		w.WriteHeader(resp.StatusCode)
+		_, _ = io.Copy(w, resp.Body)
 		return true
 	}
-	defer resp.Body.Close()
-	if contentType := resp.Header.Get("Content-Type"); contentType != "" {
-		w.Header().Set("Content-Type", contentType)
-	}
-	w.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(w, resp.Body)
+	writeError(w, domain.UpstreamError("upstream retry policy exhausted unexpectedly"))
 	return true
 }
 
@@ -618,10 +666,22 @@ func copyUpstreamRequestHeaders(dst http.Header, src http.Header) {
 	}
 }
 
-func mcpRouteKeyFromRequest(r *http.Request) (string, []byte, error) {
-	body, err := io.ReadAll(r.Body)
+func readProxyBody(body io.Reader) ([]byte, error) {
+	limited := io.LimitReader(body, maxProxyBodyBytes+1)
+	payload, err := io.ReadAll(limited)
 	if err != nil {
-		return "", nil, domain.BadRequest("VALIDATION_FAILED", "mcp request body could not be read")
+		return nil, domain.BadRequest("VALIDATION_FAILED", "proxy request body could not be read")
+	}
+	if len(payload) > maxProxyBodyBytes {
+		return nil, domain.PayloadTooLarge("proxy request body exceeds 4MiB")
+	}
+	return payload, nil
+}
+
+func mcpRouteKeyFromRequest(r *http.Request) (string, []byte, error) {
+	body, err := readProxyBody(r.Body)
+	if err != nil {
+		return "", nil, err
 	}
 	var payload struct {
 		Method *string `json:"method"`
@@ -860,6 +920,147 @@ func proxyTimeoutFromConfig(config map[string]any) (time.Duration, error) {
 		return 0, domain.BadRequest("VALIDATION_FAILED", "channelConfig.timeoutMs must be between 1 and 30000")
 	}
 	return time.Duration(timeoutMs) * time.Millisecond, nil
+}
+
+func proxyRetryPolicyFromConfig(config map[string]any) (proxyRetryPolicy, error) {
+	policy := proxyRetryPolicy{
+		maxAttempts: 1,
+		retryStatusCodes: map[int]struct{}{
+			http.StatusBadGateway:         {},
+			http.StatusServiceUnavailable: {},
+			http.StatusGatewayTimeout:     {},
+		},
+	}
+	raw, exists := config["retry"]
+	if !exists {
+		return policy, nil
+	}
+	retry, ok := raw.(map[string]any)
+	if !ok {
+		return proxyRetryPolicy{}, domain.BadRequest("VALIDATION_FAILED", "channelConfig.retry must be an object")
+	}
+	if rawMaxAttempts, exists := retry["maxAttempts"]; exists {
+		maxAttempts, err := configInteger(rawMaxAttempts, "channelConfig.retry.maxAttempts")
+		if err != nil {
+			return proxyRetryPolicy{}, err
+		}
+		if maxAttempts < 1 || maxAttempts > maxRetryAttempts {
+			return proxyRetryPolicy{}, domain.BadRequest("VALIDATION_FAILED", "channelConfig.retry.maxAttempts must be between 1 and 4")
+		}
+		policy.maxAttempts = int(maxAttempts)
+	}
+	if rawBackoff, exists := retry["backoffMs"]; exists {
+		backoffMs, err := configInteger(rawBackoff, "channelConfig.retry.backoffMs")
+		if err != nil {
+			return proxyRetryPolicy{}, err
+		}
+		if backoffMs < 0 || backoffMs > int64(maxRetryBackoff/time.Millisecond) {
+			return proxyRetryPolicy{}, domain.BadRequest("VALIDATION_FAILED", "channelConfig.retry.backoffMs must be between 0 and 1000")
+		}
+		policy.backoff = time.Duration(backoffMs) * time.Millisecond
+	}
+	if rawStatusCodes, exists := retry["statusCodes"]; exists {
+		values, ok := rawStatusCodes.([]any)
+		if !ok {
+			return proxyRetryPolicy{}, domain.BadRequest("VALIDATION_FAILED", "channelConfig.retry.statusCodes must be an array")
+		}
+		statusCodes := make(map[int]struct{}, len(values))
+		for _, rawStatusCode := range values {
+			statusCode, err := configInteger(rawStatusCode, "channelConfig.retry.statusCodes")
+			if err != nil {
+				return proxyRetryPolicy{}, err
+			}
+			if statusCode < 500 || statusCode > 599 {
+				return proxyRetryPolicy{}, domain.BadRequest("VALIDATION_FAILED", "channelConfig.retry.statusCodes must contain 5xx status codes")
+			}
+			statusCodes[int(statusCode)] = struct{}{}
+		}
+		policy.retryStatusCodes = statusCodes
+	}
+	return policy, nil
+}
+
+func configInteger(raw any, field string) (int64, error) {
+	switch value := raw.(type) {
+	case int:
+		return int64(value), nil
+	case int64:
+		return value, nil
+	case float64:
+		integer := int64(value)
+		if value != float64(integer) {
+			return 0, domain.BadRequest("VALIDATION_FAILED", field+" must be an integer")
+		}
+		return integer, nil
+	default:
+		return 0, domain.BadRequest("VALIDATION_FAILED", field+" must be an integer")
+	}
+}
+
+func (p proxyRetryPolicy) shouldRetryStatus(statusCode int) bool {
+	_, ok := p.retryStatusCodes[statusCode]
+	return ok
+}
+
+func shouldRetryUpstreamError(ctx context.Context, err error) bool {
+	if ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return false
+	}
+	return true
+}
+
+func classifyUpstreamError(ctx context.Context, err error) domain.AppError {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+		return domain.UpstreamTimeout("upstream request timed out")
+	}
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {
+		return domain.UpstreamError("upstream request canceled")
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		err = urlErr.Err
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return domain.UpstreamDNSError("upstream DNS lookup failed")
+	}
+	var unknownAuthority x509.UnknownAuthorityError
+	var certificateInvalid x509.CertificateInvalidError
+	var hostnameInvalid x509.HostnameError
+	var tlsRecord tls.RecordHeaderError
+	if errors.As(err, &unknownAuthority) ||
+		errors.As(err, &certificateInvalid) ||
+		errors.As(err, &hostnameInvalid) ||
+		errors.As(err, &tlsRecord) ||
+		strings.Contains(strings.ToLower(err.Error()), "tls:") {
+		return domain.UpstreamTLSError("upstream TLS handshake failed")
+	}
+	if errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.ECONNABORTED) ||
+		errors.Is(err, syscall.EPIPE) ||
+		strings.Contains(strings.ToLower(err.Error()), "connection refused") ||
+		strings.Contains(strings.ToLower(err.Error()), "connection reset") {
+		return domain.UpstreamConnectError("upstream connection failed")
+	}
+	return domain.UpstreamError("upstream request failed")
+}
+
+func sleepBeforeRetry(ctx context.Context, backoff time.Duration) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	if backoff <= 0 {
+		return true
+	}
+	timer := time.NewTimer(backoff)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 func (s *Server) listTraces(w http.ResponseWriter, r *http.Request) {

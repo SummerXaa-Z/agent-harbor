@@ -1,3 +1,43 @@
+## [2026-05-30 17:30] Session: Sprint 5 Proxy Retry and Error Classification
+
+### 完成
+- 新增 Sprint 5 brief / design / implementation plan，范围聚焦在 per-target retry policy 和 upstream error classification。
+- `channelConfig.retry` 支持 `maxAttempts`、`backoffMs`、`statusCodes`，默认单次调用，显式 opt-in 后才重试。
+- MCP/OpenAPI proxy 会在 retryable 5xx 或网络错误时重建 upstream request 并重发，保留原 request body。
+- Proxied upstream response 新增 `X-AgentHarbor-Upstream-Attempts`，成功重试和重试耗尽都能看到实际尝试次数。
+- Proxy request body 缓冲上限设为 4MiB，超限返回 `413 PAYLOAD_TOO_LARGE`，避免 retry replay 带来无界内存占用。
+- Retry loop 遇到 canceled context 会停止，zero-backoff 也会检查 context 状态。
+- Gateway-generated upstream failures 细分为 `UPSTREAM_TIMEOUT`、`UPSTREAM_DNS_ERROR`、`UPSTREAM_TLS_ERROR`、`UPSTREAM_CONNECT_ERROR` 和 fallback `UPSTREAM_ERROR`。
+- 前端 Create Agent 表单新增 retry attempts / backoff ms 输入并阻止空值/NaN payload，contracts/catalog/sample data 暴露 `retry` 字段。
+- 新增 `scripts/demo-sprint5-retry-config.sh`，验证 retry config 创建成功和非法 retry config 拒绝。
+
+### 决策
+- 默认 `maxAttempts=1`，避免对非幂等 MCP tool call 造成意外重复执行。
+- Sprint 5 不引入 circuit breaker、jitter、全局 retry budget；这些等真实流量需求出现再做。
+- Retry 状态码限制为 5xx，避免对 4xx 调用方错误做无意义重试。
+
+### 待办
+- 下一轮把 attempts/error classification 接入 OTel spans/metrics，让 Runtime Signals 从 mock 转真实数据。
+- route-level retry override 等 route policy 对象成型后再做。
+
+### 验证
+- TDD targeted tests for retry success, retry exhaustion, invalid retry config, connect/TLS/DNS/timeout classification.
+- Reviewer P2 fixes targeted tests for oversized proxy body, data-plane DNS classification, canceled-context retry stop, zero-backoff context check.
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `go build ./...`
+- `pnpm -C frontend build`
+- `bash -n scripts/demo-governance-loop.sh scripts/demo-sprint2-cleanup.sh scripts/demo-sprint3-mcp-policy.sh scripts/demo-sprint4-credentials.sh scripts/demo-sprint5-retry-config.sh`
+- `AGENT_HARBOR_TEST_DATABASE_URL=... go test ./internal/store -run TestPostgresRepositoryRoundTrip -count=1`（临时 PostgreSQL 16 容器）
+- `scripts/demo-governance-loop.sh` + `scripts/demo-sprint2-cleanup.sh` + `scripts/demo-sprint3-mcp-policy.sh` + `scripts/demo-sprint4-credentials.sh` + `scripts/demo-sprint5-retry-config.sh` against local API with `AGENT_HARBOR_ADMIN_KEY`
+
+### 影响文件
+- `internal/httpapi/server.go` / `server_test.go` / `error_classification_test.go`：retry policy parsing、proxy retry loop、attempt header、error classification。
+- `internal/domain/errors.go`：新增 upstream DNS/TLS/connect error helpers。
+- `frontend/src/App.tsx` / `data.ts`：Create Agent retry fields 和 sample contract metadata。
+- `internal/contracts/catalog.go`：channel contract 暴露 `retry` 字段。
+- `scripts/demo-sprint5-retry-config.sh`、`README.md`、`docs/sprints/`、`docs/superpowers/`：Sprint 5 行为记录。
+
 ## [2026-05-30 16:10] Session: Sprint 4 Secret Header Injection
 
 ### 完成

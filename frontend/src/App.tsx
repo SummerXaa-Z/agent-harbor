@@ -67,6 +67,8 @@ const defaultAgentForm = {
   description: "",
   endpoint: "",
   name: "",
+  retryBackoffMs: "0",
+  retryMaxAttempts: "1",
   status: "draft" as AgentStatus
 };
 const defaultKeyForm = { agentId: "", expiresInSeconds: "900", name: "console key" };
@@ -114,6 +116,25 @@ function App() {
       const channelConfig: JsonObject = {};
       const endpoint = agentForm.endpoint.trim();
       if (endpoint) channelConfig.endpoint = endpoint;
+      const retryMaxAttempts = Number.parseInt(agentForm.retryMaxAttempts, 10);
+      const retryBackoffMs = Number.parseInt(agentForm.retryBackoffMs, 10);
+      const retryAttemptsText = agentForm.retryMaxAttempts.trim();
+      const retryBackoffText = agentForm.retryBackoffMs.trim();
+      const retryRequested = retryAttemptsText !== "1" || retryBackoffText !== "0";
+      if (!retryAttemptsText || Number.isNaN(retryMaxAttempts)) {
+        setAgentMessage("Retry attempts must be a number.");
+        return;
+      }
+      if (!retryBackoffText || Number.isNaN(retryBackoffMs)) {
+        setAgentMessage("Retry backoff must be a number.");
+        return;
+      }
+      if (retryRequested) {
+        channelConfig.retry = {
+          backoffMs: retryBackoffMs,
+          maxAttempts: retryMaxAttempts
+        };
+      }
       const credentialHeader = agentForm.credentialHeader.trim();
       const credentialName = agentForm.credentialName.trim();
       const credentialValue = agentForm.credentialValue;
@@ -462,6 +483,10 @@ function AgentCreateForm({
         <label>Credential key<input placeholder="apiToken" value={form.credentialName} onChange={(event) => onChange({ ...form, credentialName: event.target.value })} /></label>
       </div>
       <label>Secret value<input placeholder="Bearer ..." type="password" value={form.credentialValue} onChange={(event) => onChange({ ...form, credentialValue: event.target.value })} /></label>
+      <div className="form-row">
+        <label>Retry attempts<input inputMode="numeric" max={4} min={1} type="number" value={form.retryMaxAttempts} onChange={(event) => onChange({ ...form, retryMaxAttempts: event.target.value })} /></label>
+        <label>Backoff ms<input inputMode="numeric" max={1000} min={0} type="number" value={form.retryBackoffMs} onChange={(event) => onChange({ ...form, retryBackoffMs: event.target.value })} /></label>
+      </div>
       <label>Description<textarea rows={2} value={form.description} onChange={(event) => onChange({ ...form, description: event.target.value })} /></label>
       <FormFooter message={message} submitLabel="Create agent" />
     </form>

@@ -75,6 +75,14 @@ Sprint 4 separates upstream secrets from `channelConfig`. Against a running API,
 bash scripts/demo-sprint4-credentials.sh
 ```
 
+## Sprint 5 Retry Config Demo
+
+Sprint 5 adds bounded proxy retry controls and richer upstream error classification. Against a running API, this script proves valid retry config is accepted and invalid retry config is rejected:
+
+```bash
+bash scripts/demo-sprint5-retry-config.sh
+```
+
 ## Admin Key
 
 Management APIs are open by default for local clean-room iteration. If `AGENT_HARBOR_ADMIN_KEY` is set on the server, management endpoints require the same value in `X-Admin-Key`.
@@ -85,6 +93,7 @@ ADMIN_KEY=local-admin-key bash scripts/demo-governance-loop.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint2-cleanup.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint3-mcp-policy.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint4-credentials.sh
+ADMIN_KEY=local-admin-key bash scripts/demo-sprint5-retry-config.sh
 ```
 
 The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the admin key only protects management and audit APIs. Agent Key TTLs must be between 1 and 3600 seconds, with a 1800 second server default when omitted.
@@ -104,11 +113,18 @@ Target `channelConfig` also supports optional proxy controls:
   "credentialHeaders": {
     "Authorization": "apiToken"
   },
-  "timeoutMs": 10000
+  "timeoutMs": 10000,
+  "retry": {
+    "maxAttempts": 3,
+    "backoffMs": 50,
+    "statusCodes": [502, 503, 504]
+  }
 }
 ```
 
-`headers` must be string-to-string and cannot contain secret-like names such as authorization, token, cookie, or api key. Put secret header bindings in `credentialHeaders` instead, where the object maps an upstream header name to a key in the Agent-level `credentials` object submitted at create time. Credentials are never returned by management responses; PostgreSQL stores non-empty credentials as AES-GCM ciphertext. `timeoutMs` must be an integer from 1 to 30000. Upstream timeout returns `504 UPSTREAM_TIMEOUT`; other network failures return `502 UPSTREAM_ERROR`.
+`headers` must be string-to-string and cannot contain secret-like names such as authorization, token, cookie, or api key. Put secret header bindings in `credentialHeaders` instead, where the object maps an upstream header name to a key in the Agent-level `credentials` object submitted at create time. Credentials are never returned by management responses; PostgreSQL stores non-empty credentials as AES-GCM ciphertext. `timeoutMs` must be an integer from 1 to 30000.
+
+`retry` is opt-in. `maxAttempts` defaults to `1` and accepts `1` through `4`; `backoffMs` defaults to `0` and accepts `0` through `1000`; `statusCodes` defaults to `[502,503,504]` and only accepts 5xx codes. Proxied upstream responses include `X-AgentHarbor-Upstream-Attempts`. The proxy buffers request bodies up to 4MiB so retry attempts can replay the same payload; larger bodies return `413 PAYLOAD_TOO_LARGE`. Gateway-generated upstream failures use `UPSTREAM_TIMEOUT`, `UPSTREAM_DNS_ERROR`, `UPSTREAM_TLS_ERROR`, `UPSTREAM_CONNECT_ERROR`, or fallback `UPSTREAM_ERROR`.
 
 ## PostgreSQL Env
 
@@ -159,6 +175,6 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 
 ## Next Milestones
 
-- Add proxy retry policy and richer upstream error classification.
 - Add OTel spans and metrics for route/caller/target dimensions.
 - Add credential rotation and partial update APIs.
+- Add route-level retry overrides after route policy objects exist.

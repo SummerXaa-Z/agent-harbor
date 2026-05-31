@@ -65,6 +65,10 @@ Do not mark work complete until the relevant local checks and GitHub checks have
 
 For larger behavior changes, downstream handoffs, or tagged releases, use the release checklist in `docs/engineering/release-checklist.md`.
 
+## Dependency Updates
+
+Dependabot opens weekly update PRs for Go modules, frontend npm packages, and GitHub Actions. Review and merge them using `docs/engineering/dependency-updates.md`.
+
 ## Documentation
 
 Update docs alongside behavior changes:

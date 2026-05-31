@@ -1,3 +1,26 @@
+## [2026-05-31 14:53] Session: Dependency Update Automation
+
+### 完成
+- 新增 `.github/dependabot.yml`，为 Go modules、frontend npm packages、GitHub Actions 配置每周依赖更新 PR。
+- 新增 `docs/engineering/dependency-updates.md`，记录依赖 PR 的 review policy、验证命令和合并规则。
+- 更新 `CONTRIBUTING.md` 和 `.github/pull_request_template.md`，将依赖更新和 PR verification 入口收敛到 Makefile targets。
+
+### 决策
+- Dependabot 按生态分别开 PR，每个生态最多保留 5 个 open PR，避免一次性更新把 review 压成一团。
+- 暂不启用自动合并；依赖 PR 仍需人工确认 CI、local checks 和风险面。
+
+### 血泪教训
+- 有 CI 不等于依赖可持续；依赖更新必须有固定节奏和 review 规则，否则最终会变成一次大版本债务清算。
+
+### 待办
+- 等 Dependabot 产生第一批 PR 后，按实际噪音再考虑分组或忽略规则。
+
+### 影响文件
+- `.github/dependabot.yml`：新增 Go/npm/GitHub Actions 周更配置。
+- `docs/engineering/dependency-updates.md`：新增依赖更新处理流程。
+- `CONTRIBUTING.md`：补充 Dependabot 工作流入口。
+- `.github/pull_request_template.md`：将 verification checklist 改为 Makefile targets。
+
 ## [2026-05-31 14:47] Session: Release Checklist Guardrail
 
 ### 完成

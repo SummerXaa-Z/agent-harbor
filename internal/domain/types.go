@@ -11,18 +11,19 @@ const (
 )
 
 type Agent struct {
-	ID            string            `json:"id"`
-	TenantID      string            `json:"tenantId"`
-	WorkspaceID   string            `json:"workspaceId"`
-	Name          string            `json:"name"`
-	Description   string            `json:"description,omitempty"`
-	OwnerID       string            `json:"ownerId,omitempty"`
-	ChannelType   string            `json:"channelType"`
-	ChannelConfig map[string]any    `json:"channelConfig,omitempty"`
-	Credentials   map[string]string `json:"-"`
-	Status        AgentStatus       `json:"status"`
-	CreatedAt     time.Time         `json:"createdAt"`
-	UpdatedAt     time.Time         `json:"updatedAt"`
+	ID                string            `json:"id"`
+	TenantID          string            `json:"tenantId"`
+	WorkspaceID       string            `json:"workspaceId"`
+	Name              string            `json:"name"`
+	Description       string            `json:"description,omitempty"`
+	OwnerID           string            `json:"ownerId,omitempty"`
+	ChannelType       string            `json:"channelType"`
+	ChannelConfig     map[string]any    `json:"channelConfig,omitempty"`
+	Credentials       map[string]string `json:"-"`
+	CredentialVersion int               `json:"credentialVersion"`
+	Status            AgentStatus       `json:"status"`
+	CreatedAt         time.Time         `json:"createdAt"`
+	UpdatedAt         time.Time         `json:"updatedAt"`
 }
 
 type CreateAgentRequest struct {
@@ -47,6 +48,19 @@ type UpdateAgentRequest struct {
 
 type RotateAgentCredentialsRequest struct {
 	Credentials map[string]string `json:"credentials"`
+}
+
+type AuditEvent struct {
+	ID           string         `json:"id"`
+	TenantID     string         `json:"tenantId"`
+	WorkspaceID  string         `json:"workspaceId"`
+	Actor        string         `json:"actor"`
+	Action       string         `json:"action"`
+	ResourceType string         `json:"resourceType"`
+	ResourceID   string         `json:"resourceId"`
+	Summary      string         `json:"summary,omitempty"`
+	Metadata     map[string]any `json:"metadata,omitempty"`
+	CreatedAt    time.Time      `json:"createdAt"`
 }
 
 type AgentKey struct {

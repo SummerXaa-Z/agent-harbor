@@ -440,6 +440,10 @@ button {
   grid-column: span 8;
 }
 
+.span-12 {
+  grid-column: span 12;
+}
+
 .panel {
   min-width: 0;
   border: 1px solid var(--line);
@@ -663,7 +667,8 @@ table {
 }
 
 .policy-table,
-.agent-table {
+.agent-table,
+.audit-table {
   table-layout: fixed;
 }
 
@@ -673,6 +678,10 @@ table {
 
 .agent-table {
   min-width: 720px;
+}
+
+.audit-table {
+  min-width: 860px;
 }
 
 .policy-table th:nth-child(1),
@@ -733,6 +742,36 @@ table {
 .agent-table th:nth-child(6),
 .agent-table td:nth-child(6) {
   width: 10%;
+}
+
+.audit-table th:nth-child(1),
+.audit-table td:nth-child(1) {
+  width: 14%;
+}
+
+.audit-table th:nth-child(2),
+.audit-table td:nth-child(2) {
+  width: 20%;
+}
+
+.audit-table th:nth-child(3),
+.audit-table td:nth-child(3) {
+  width: 18%;
+}
+
+.audit-table th:nth-child(4),
+.audit-table td:nth-child(4) {
+  width: 16%;
+}
+
+.audit-table th:nth-child(5),
+.audit-table td:nth-child(5) {
+  width: 10%;
+}
+
+.audit-table th:nth-child(6),
+.audit-table td:nth-child(6) {
+  width: 22%;
 }
 
 .row-disabled td {
@@ -1111,7 +1150,8 @@ td code {
   .span-4,
   .span-5,
   .span-7,
-  .span-8 {
+  .span-8,
+  .span-12 {
     grid-column: span 12;
   }
 }

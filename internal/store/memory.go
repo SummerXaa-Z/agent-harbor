@@ -14,6 +14,7 @@ type Repository interface {
 	ListAgents(context.Context, AgentFilter) ([]domain.Agent, error)
 	GetAgent(context.Context, string) (domain.Agent, bool, error)
 	UpdateAgent(context.Context, domain.Agent) (domain.Agent, bool, error)
+	RotateAgentCredentials(context.Context, string, map[string]string, time.Time) (domain.Agent, bool, error)
 	DisableAgent(context.Context, string, time.Time) (domain.Agent, bool, error)
 	CreateAgentKey(context.Context, domain.AgentKey) (domain.AgentKey, error)
 	ListAgentKeys(context.Context, ManagementScope) ([]domain.AgentKey, error)
@@ -25,6 +26,8 @@ type Repository interface {
 	HasGrant(context.Context, string, string, string, string, time.Time) bool
 	AppendTrace(context.Context, domain.TraceEvent) (domain.TraceEvent, error)
 	ListTraces(context.Context, TraceFilter) ([]domain.TraceEvent, error)
+	AppendAuditEvent(context.Context, domain.AuditEvent) (domain.AuditEvent, error)
+	ListAuditEvents(context.Context, AuditEventFilter) ([]domain.AuditEvent, error)
 }
 
 type ManagementScope struct {
@@ -44,12 +47,21 @@ type TraceFilter struct {
 	TargetID string
 }
 
+type AuditEventFilter struct {
+	ManagementScope
+	Action       string
+	ResourceType string
+	ResourceID   string
+	Limit        int
+}
+
 type Memory struct {
 	mu     sync.RWMutex
 	agents map[string]domain.Agent
 	keys   map[string]domain.AgentKey
 	grants map[string]domain.AccessGrant
 	traces []domain.TraceEvent
+	audits []domain.AuditEvent
 }
 
 func NewMemory() *Memory {
@@ -96,10 +108,27 @@ func (m *Memory) GetAgent(_ context.Context, id string) (domain.Agent, bool, err
 func (m *Memory) UpdateAgent(_ context.Context, agent domain.Agent) (domain.Agent, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.agents[agent.ID]; !ok {
+	existing, ok := m.agents[agent.ID]
+	if !ok {
 		return domain.Agent{}, false, nil
 	}
+	agent.Credentials = existing.Credentials
+	agent.CredentialVersion = existing.CredentialVersion
 	m.agents[agent.ID] = agent
+	return agent, true, nil
+}
+
+func (m *Memory) RotateAgentCredentials(_ context.Context, id string, credentials map[string]string, now time.Time) (domain.Agent, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	agent, ok := m.agents[id]
+	if !ok {
+		return domain.Agent{}, false, nil
+	}
+	agent.Credentials = credentials
+	agent.CredentialVersion++
+	agent.UpdatedAt = now
+	m.agents[id] = agent
 	return agent, true, nil
 }
 
@@ -269,6 +298,44 @@ func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.Tra
 	return rows, nil
 }
 
+func (m *Memory) AppendAuditEvent(_ context.Context, event domain.AuditEvent) (domain.AuditEvent, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.audits = append(m.audits, event)
+	return event, nil
+}
+
+func (m *Memory) ListAuditEvents(_ context.Context, filter AuditEventFilter) ([]domain.AuditEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rows := make([]domain.AuditEvent, 0, len(m.audits))
+	for _, event := range m.audits {
+		if filter.Action != "" && event.Action != filter.Action {
+			continue
+		}
+		if filter.ResourceType != "" && event.ResourceType != filter.ResourceType {
+			continue
+		}
+		if filter.ResourceID != "" && event.ResourceID != filter.ResourceID {
+			continue
+		}
+		if !auditEventMatchesScope(event, filter.ManagementScope) {
+			continue
+		}
+		rows = append(rows, event)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
+	if filter.Limit > 0 && len(rows) > filter.Limit {
+		rows = rows[:filter.Limit]
+	}
+	return rows, nil
+}
+
 func (m *Memory) grantMatchesScope(grant domain.AccessGrant, scope ManagementScope) bool {
 	if scope.TenantID == "" && scope.WorkspaceID == "" {
 		return true
@@ -292,6 +359,16 @@ func agentMatchesScope(agent domain.Agent, scope ManagementScope) bool {
 		return false
 	}
 	if scope.WorkspaceID != "" && agent.WorkspaceID != scope.WorkspaceID {
+		return false
+	}
+	return true
+}
+
+func auditEventMatchesScope(event domain.AuditEvent, scope ManagementScope) bool {
+	if scope.TenantID != "" && event.TenantID != scope.TenantID {
+		return false
+	}
+	if scope.WorkspaceID != "" && event.WorkspaceID != scope.WorkspaceID {
 		return false
 	}
 	return true

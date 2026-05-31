@@ -45,10 +45,10 @@ func (p *Postgres) CreateAgent(ctx context.Context, agent domain.Agent) (domain.
 	_, err = p.pool.Exec(ctx, `
 		insert into agents (
 			id, tenant_id, workspace_id, name, description, owner_id,
-			channel_type, channel_config, credentials_ciphertext, status, created_at, updated_at
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+			channel_type, channel_config, credentials_ciphertext, credential_version, status, created_at, updated_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 	`, agent.ID, agent.TenantID, agent.WorkspaceID, agent.Name, agent.Description, agent.OwnerID,
-		agent.ChannelType, config, credentialsCiphertext, string(agent.Status), agent.CreatedAt, agent.UpdatedAt)
+		agent.ChannelType, config, credentialsCiphertext, agent.CredentialVersion, string(agent.Status), agent.CreatedAt, agent.UpdatedAt)
 	if err != nil {
 		return domain.Agent{}, fmt.Errorf("insert agent: %w", err)
 	}
@@ -58,7 +58,7 @@ func (p *Postgres) CreateAgent(ctx context.Context, agent domain.Agent) (domain.
 func (p *Postgres) ListAgents(ctx context.Context, filter AgentFilter) ([]domain.Agent, error) {
 	query := `
 		select id, tenant_id, workspace_id, name, description, owner_id,
-			channel_type, channel_config, credentials_ciphertext, status, created_at, updated_at
+			channel_type, channel_config, credentials_ciphertext, credential_version, status, created_at, updated_at
 		from agents
 		where 1=1
 	`
@@ -85,7 +85,7 @@ func (p *Postgres) ListAgents(ctx context.Context, filter AgentFilter) ([]domain
 func (p *Postgres) GetAgent(ctx context.Context, id string) (domain.Agent, bool, error) {
 	row := p.pool.QueryRow(ctx, `
 		select id, tenant_id, workspace_id, name, description, owner_id,
-			channel_type, channel_config, credentials_ciphertext, status, created_at, updated_at
+			channel_type, channel_config, credentials_ciphertext, credential_version, status, created_at, updated_at
 		from agents
 		where id=$1
 	`, id)
@@ -104,21 +104,13 @@ func (p *Postgres) UpdateAgent(ctx context.Context, agent domain.Agent) (domain.
 	if err != nil {
 		return domain.Agent{}, false, fmt.Errorf("marshal channel config: %w", err)
 	}
-	credentialsCiphertext, err := security.EncryptCredentials(agent.Credentials, p.credentialKey)
-	if err != nil {
-		return domain.Agent{}, false, fmt.Errorf("encrypt credentials: %w", err)
-	}
-	if credentialsCiphertext == nil {
-		credentialsCiphertext = []byte{}
-	}
 	row := p.pool.QueryRow(ctx, `
 		update agents
-		set name=$2, description=$3, owner_id=$4, channel_config=$5,
-			credentials_ciphertext=$6, status=$7, updated_at=$8
+		set name=$2, description=$3, owner_id=$4, channel_config=$5, status=$6, updated_at=$7
 		where id=$1
 		returning id, tenant_id, workspace_id, name, description, owner_id,
-			channel_type, channel_config, credentials_ciphertext, status, created_at, updated_at
-	`, agent.ID, agent.Name, agent.Description, agent.OwnerID, config, credentialsCiphertext, string(agent.Status), agent.UpdatedAt)
+			channel_type, channel_config, credentials_ciphertext, credential_version, status, created_at, updated_at
+	`, agent.ID, agent.Name, agent.Description, agent.OwnerID, config, string(agent.Status), agent.UpdatedAt)
 	updated, err := p.scanAgent(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Agent{}, false, nil
@@ -129,13 +121,40 @@ func (p *Postgres) UpdateAgent(ctx context.Context, agent domain.Agent) (domain.
 	return updated, true, nil
 }
 
+func (p *Postgres) RotateAgentCredentials(ctx context.Context, id string, credentials map[string]string, now time.Time) (domain.Agent, bool, error) {
+	credentialsCiphertext, err := security.EncryptCredentials(credentials, p.credentialKey)
+	if err != nil {
+		return domain.Agent{}, false, fmt.Errorf("encrypt credentials: %w", err)
+	}
+	if credentialsCiphertext == nil {
+		credentialsCiphertext = []byte{}
+	}
+	row := p.pool.QueryRow(ctx, `
+		update agents
+		set credentials_ciphertext=$2,
+			credential_version=credential_version + 1,
+			updated_at=$3
+		where id=$1
+		returning id, tenant_id, workspace_id, name, description, owner_id,
+			channel_type, channel_config, credentials_ciphertext, credential_version, status, created_at, updated_at
+	`, id, credentialsCiphertext, now)
+	updated, err := p.scanAgent(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Agent{}, false, nil
+	}
+	if err != nil {
+		return domain.Agent{}, false, fmt.Errorf("rotate agent credentials: %w", err)
+	}
+	return updated, true, nil
+}
+
 func (p *Postgres) DisableAgent(ctx context.Context, id string, now time.Time) (domain.Agent, bool, error) {
 	row := p.pool.QueryRow(ctx, `
 		update agents
 		set status=$2, updated_at=$3
 		where id=$1
 		returning id, tenant_id, workspace_id, name, description, owner_id,
-			channel_type, channel_config, credentials_ciphertext, status, created_at, updated_at
+			channel_type, channel_config, credentials_ciphertext, credential_version, status, created_at, updated_at
 	`, id, string(domain.AgentStatusDisabled), now)
 	agent, err := p.scanAgent(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -205,7 +224,7 @@ func (p *Postgres) RevokeAgentKey(ctx context.Context, id string, now time.Time)
 func (p *Postgres) FindAgentByKeyHash(ctx context.Context, hash string, now time.Time) (domain.Agent, bool, error) {
 	row := p.pool.QueryRow(ctx, `
 		select a.id, a.tenant_id, a.workspace_id, a.name, a.description, a.owner_id,
-			a.channel_type, a.channel_config, a.credentials_ciphertext, a.status, a.created_at, a.updated_at
+			a.channel_type, a.channel_config, a.credentials_ciphertext, a.credential_version, a.status, a.created_at, a.updated_at
 		from agent_keys k
 		join agents a on a.id = k.agent_id
 		where k.hash=$1 and k.revoked_at is null and k.expires_at > $2 and a.status=$3
@@ -349,6 +368,62 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 	return scanTraceEvents(rows)
 }
 
+func (p *Postgres) AppendAuditEvent(ctx context.Context, event domain.AuditEvent) (domain.AuditEvent, error) {
+	metadata, err := json.Marshal(event.Metadata)
+	if err != nil {
+		return domain.AuditEvent{}, fmt.Errorf("marshal audit metadata: %w", err)
+	}
+	_, err = p.pool.Exec(ctx, `
+		insert into audit_events (
+			id, tenant_id, workspace_id, actor, action, resource_type, resource_id, summary, metadata, created_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	`, event.ID, event.TenantID, event.WorkspaceID, event.Actor, event.Action, event.ResourceType,
+		event.ResourceID, event.Summary, metadata, event.CreatedAt)
+	if err != nil {
+		return domain.AuditEvent{}, fmt.Errorf("insert audit event: %w", err)
+	}
+	return event, nil
+}
+
+func (p *Postgres) ListAuditEvents(ctx context.Context, filter AuditEventFilter) ([]domain.AuditEvent, error) {
+	query := `
+		select id, tenant_id, workspace_id, actor, action, resource_type, resource_id, summary, metadata, created_at
+		from audit_events
+		where 1=1
+	`
+	args := []any{}
+	add := func(sql string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(" and "+sql, len(args))
+	}
+	if strings.TrimSpace(filter.TenantID) != "" {
+		add("tenant_id=$%d", strings.TrimSpace(filter.TenantID))
+	}
+	if strings.TrimSpace(filter.WorkspaceID) != "" {
+		add("workspace_id=$%d", strings.TrimSpace(filter.WorkspaceID))
+	}
+	if strings.TrimSpace(filter.Action) != "" {
+		add("action=$%d", strings.TrimSpace(filter.Action))
+	}
+	if strings.TrimSpace(filter.ResourceType) != "" {
+		add("resource_type=$%d", strings.TrimSpace(filter.ResourceType))
+	}
+	if strings.TrimSpace(filter.ResourceID) != "" {
+		add("resource_id=$%d", strings.TrimSpace(filter.ResourceID))
+	}
+	query += " order by created_at asc, id asc"
+	if filter.Limit > 0 {
+		args = append(args, filter.Limit)
+		query += fmt.Sprintf(" limit $%d", len(args))
+	}
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list audit events: %w", err)
+	}
+	defer rows.Close()
+	return scanAuditEvents(rows)
+}
+
 type scanner interface {
 	Scan(dest ...any) error
 }
@@ -374,7 +449,7 @@ func (p *Postgres) scanAgent(row scanner) (domain.Agent, error) {
 	var config []byte
 	var credentialsCiphertext []byte
 	if err := row.Scan(&agent.ID, &agent.TenantID, &agent.WorkspaceID, &agent.Name, &agent.Description,
-		&agent.OwnerID, &agent.ChannelType, &config, &credentialsCiphertext, &status, &agent.CreatedAt, &agent.UpdatedAt); err != nil {
+		&agent.OwnerID, &agent.ChannelType, &config, &credentialsCiphertext, &agent.CredentialVersion, &status, &agent.CreatedAt, &agent.UpdatedAt); err != nil {
 		return domain.Agent{}, err
 	}
 	if len(config) > 0 {
@@ -466,6 +541,31 @@ func scanTraceEvents(rows pgx.Rows) ([]domain.TraceEvent, error) {
 		}
 		trace.Decision = domain.TraceDecision(decision)
 		out = append(out, trace)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanAuditEvents(rows pgx.Rows) ([]domain.AuditEvent, error) {
+	var out []domain.AuditEvent
+	for rows.Next() {
+		var event domain.AuditEvent
+		var metadata []byte
+		if err := rows.Scan(&event.ID, &event.TenantID, &event.WorkspaceID, &event.Actor, &event.Action,
+			&event.ResourceType, &event.ResourceID, &event.Summary, &metadata, &event.CreatedAt); err != nil {
+			return nil, err
+		}
+		if len(metadata) > 0 {
+			if err := json.Unmarshal(metadata, &event.Metadata); err != nil {
+				return nil, fmt.Errorf("unmarshal audit metadata: %w", err)
+			}
+		}
+		if event.Metadata == nil {
+			event.Metadata = map[string]any{}
+		}
+		out = append(out, event)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

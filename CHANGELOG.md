@@ -1,3 +1,42 @@
+## [2026-05-30 21:10] Session: Sprint 8 Management Audit and Credential Versions
+
+### 完成
+- 新增 Sprint 8 brief / design / implementation plan，范围聚焦 management audit events 和 Agent credentialVersion。
+- `Agent` 响应新增 `credentialVersion`：无凭据为 0，创建时带凭据为 1，credential rotation 后递增。
+- 新增 `AuditEvent` domain model，Memory / PostgreSQL repository 支持 append/list/filter。
+- 新增 `GET /api/v1/audit/events?tenantId=&workspaceId=&action=&resourceType=&resourceId=` 管理审计查询接口。
+- Agent create/update/disable、credential rotate、Agent Key create/revoke、Access Grant create/revoke 均写入管理审计事件。
+- PostgreSQL 新增 `004_sprint8_management_audit.sql`，包含 `agents.credential_version` 和 `audit_events` 表与索引。
+- 新增 `scripts/demo-sprint8-management-audit.sh`，验证 create/patch/rotate 的 credentialVersion 和审计事件不泄露 secret values。
+- 根据 review 修复：已有 PostgreSQL credential rows backfill 到 version 1、rotation 版本递增下沉为 repository 原子更新、空 credential rotation 拒绝、audit listing 加 `limit`、前端 Disable 改走 DELETE 以记录 `agent.disabled`。
+
+### 决策
+- Sprint 8 只记录小型、无 secret 的 metadata，例如 credential key names 和 credentialVersion，不记录 credential values 或 Agent Key plaintext。
+- 控制面审计先使用 best-effort append，避免已提交副作用后因为 audit 写入失败让 API 返回 500；事务化 outbox 留到后续迭代。
+- Grant 审计事件使用 caller Agent 的 tenant/workspace 作为 scope，metadata 内记录 target Agent。
+
+### 验证
+- TDD red/green: `credentialVersion` 初始为 0 → credentialed Agent create 返回 1、rotation 返回 2。
+- TDD red/green: `/api/v1/audit/events` 404 → lifecycle 审计事件和过滤通过。
+- Review fix red/green: `limit=1` 起初被忽略 → audit event list 现在按 limit 截断。
+- Review fix red/green: 空 credential rotation 起初可让无凭据 Agent 版本变为 1 → 现在返回 400 且版本保持 0。
+- `go test ./internal/httpapi -run 'TestManagementAuditEvents|TestRotateAgentCredentials' -count=1`
+- `go test ./internal/store -count=1`
+- `go test ./internal/httpapi ./internal/store ./internal/db -count=1`
+- `go test -count=1 ./...`
+- `go vet ./... && go build ./... && git diff --check`
+- `npm --prefix frontend run build`
+- `scripts/demo-sprint8-management-audit.sh` against local API with `AGENT_HARBOR_ADMIN_KEY`
+- `AGENT_HARBOR_TEST_DATABASE_URL=... go test ./internal/store -run TestPostgresRepositoryRoundTrip -count=1`（临时 PostgreSQL 16 容器）
+- Playwright smoke for Management Audit table against live local API
+
+### 影响文件
+- `internal/domain/types.go`：新增 `CredentialVersion` 和 `AuditEvent`。
+- `internal/httpapi/server.go` / `server_test.go`：管理审计写入、查询 endpoint、credentialVersion 行为测试。
+- `internal/store/memory.go` / `postgres.go` / `postgres_test.go`：AuditEvent persistence/filtering 和 credential_version round-trip。
+- `internal/db/migrations/004_sprint8_management_audit.sql`：PostgreSQL schema。
+- `scripts/demo-sprint8-management-audit.sh`、`README.md`、`docs/sprints/`、`docs/superpowers/`：Sprint 8 行为记录。
+
 ## [2026-05-30 19:40] Session: Sprint 7 Agent Update and Credential Rotation
 
 ### 完成

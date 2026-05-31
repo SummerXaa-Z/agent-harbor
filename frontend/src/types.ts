@@ -14,6 +14,7 @@ export interface Agent {
   ownerId?: string
   channelType: string
   channelConfig?: JsonObject
+  credentialVersion: number
   status: AgentStatus
   createdAt: string
   updatedAt: string
@@ -102,6 +103,19 @@ export interface TraceEvent {
   createdAt: string
 }
 
+export interface AuditEvent {
+  id: string
+  tenantId: string
+  workspaceId: string
+  actor: string
+  action: string
+  resourceType: string
+  resourceId: string
+  summary?: string
+  metadata?: Record<string, JsonValue>
+  createdAt: string
+}
+
 export interface FieldContract {
   key: string
   type: string
@@ -186,6 +200,7 @@ export interface ConsoleData {
   agents: Agent[]
   accessGrants: AccessGrant[]
   traces: TraceEvent[]
+  auditEvents: AuditEvent[]
   routePolicies: RoutePolicy[]
   evidenceRuns: EvidenceRun[]
   systemMetrics: SystemMetric[]

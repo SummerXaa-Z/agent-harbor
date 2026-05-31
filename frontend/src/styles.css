@@ -302,7 +302,7 @@ button {
 
 .status-strip {
   display: grid;
-  grid-template-columns: 1.25fr 1fr 0.8fr auto;
+  grid-template-columns: 1.15fr 0.9fr 0.72fr 1.35fr auto;
   gap: 1px;
   margin-bottom: 14px;
   overflow: hidden;
@@ -341,6 +341,30 @@ button {
 .strip-error {
   color: var(--red);
   font-size: 12px;
+}
+
+.scope-control {
+  display: grid;
+  gap: 6px;
+}
+
+.scope-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.scope-inputs input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #d8e0e7;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 12px;
+  outline: 0;
 }
 
 .metric-grid {
@@ -518,7 +542,8 @@ button {
 }
 
 .primary-button,
-.secondary-button {
+.secondary-button,
+.table-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -540,6 +565,24 @@ button {
   border: 1px solid #cfd8e1;
   background: #ffffff;
   color: #40505f;
+}
+
+.table-action {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid #d7c4c6;
+  background: #fff7f7;
+  color: #9d333a;
+}
+
+.table-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.muted-action {
+  color: var(--soft);
+  font-size: 12px;
 }
 
 .one-time-key {
@@ -599,47 +642,52 @@ table {
 }
 
 .agent-table {
-  min-width: 760px;
+  min-width: 720px;
 }
 
 .policy-table th:nth-child(1),
 .policy-table td:nth-child(1) {
-  width: 28%;
+  width: 25%;
 }
 
 .policy-table th:nth-child(2),
 .policy-table td:nth-child(2) {
-  width: 24%;
+  width: 20%;
 }
 
 .policy-table th:nth-child(3),
 .policy-table td:nth-child(3) {
-  width: 18%;
+  width: 17%;
 }
 
 .policy-table th:nth-child(4),
 .policy-table td:nth-child(4) {
-  width: 19%;
+  width: 17%;
 }
 
 .policy-table th:nth-child(5),
 .policy-table td:nth-child(5) {
+  width: 10%;
+}
+
+.policy-table th:nth-child(6),
+.policy-table td:nth-child(6) {
   width: 11%;
 }
 
 .agent-table th:nth-child(1),
 .agent-table td:nth-child(1) {
-  width: 34%;
+  width: 28%;
 }
 
 .agent-table th:nth-child(2),
 .agent-table td:nth-child(2) {
-  width: 17%;
+  width: 16%;
 }
 
 .agent-table th:nth-child(3),
 .agent-table td:nth-child(3) {
-  width: 27%;
+  width: 24%;
 }
 
 .agent-table th:nth-child(4),
@@ -650,6 +698,20 @@ table {
 .agent-table th:nth-child(5),
 .agent-table td:nth-child(5) {
   width: 11%;
+}
+
+.agent-table th:nth-child(6),
+.agent-table td:nth-child(6) {
+  width: 10%;
+}
+
+.row-disabled td {
+  background: #fafbfc;
+  color: #778390;
+}
+
+.row-disabled td strong {
+  color: #5d6975;
 }
 
 th {

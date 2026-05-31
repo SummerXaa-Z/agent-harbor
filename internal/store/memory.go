@@ -12,20 +12,32 @@ import (
 
 type Repository interface {
 	CreateAgent(context.Context, domain.Agent) (domain.Agent, error)
-	ListAgents(context.Context, string) ([]domain.Agent, error)
+	ListAgents(context.Context, AgentFilter) ([]domain.Agent, error)
 	GetAgent(context.Context, string) (domain.Agent, bool, error)
+	DisableAgent(context.Context, string, time.Time) (domain.Agent, bool, error)
 	CreateAgentKey(context.Context, domain.AgentKey) (domain.AgentKey, error)
-	ListAgentKeys(context.Context) ([]domain.AgentKey, error)
+	ListAgentKeys(context.Context, ManagementScope) ([]domain.AgentKey, error)
 	RevokeAgentKey(context.Context, string, time.Time) (domain.AgentKey, bool, error)
 	FindAgentByKeyHash(context.Context, string, time.Time) (domain.Agent, bool, error)
 	CreateAccessGrant(context.Context, domain.AccessGrant) (domain.AccessGrant, error)
-	ListAccessGrants(context.Context) ([]domain.AccessGrant, error)
+	ListAccessGrants(context.Context, ManagementScope) ([]domain.AccessGrant, error)
+	RevokeAccessGrant(context.Context, string, time.Time) (domain.AccessGrant, bool, error)
 	HasGrant(context.Context, string, string, string, string, time.Time) bool
 	AppendTrace(context.Context, domain.TraceEvent) (domain.TraceEvent, error)
 	ListTraces(context.Context, TraceFilter) ([]domain.TraceEvent, error)
 }
 
+type ManagementScope struct {
+	TenantID    string
+	WorkspaceID string
+}
+
+type AgentFilter struct {
+	ManagementScope
+}
+
 type TraceFilter struct {
+	ManagementScope
 	RunID    string
 	Decision domain.TraceDecision
 	CallerID string
@@ -55,13 +67,13 @@ func (m *Memory) CreateAgent(_ context.Context, agent domain.Agent) (domain.Agen
 	return agent, nil
 }
 
-func (m *Memory) ListAgents(_ context.Context, workspaceID string) ([]domain.Agent, error) {
+func (m *Memory) ListAgents(_ context.Context, filter AgentFilter) ([]domain.Agent, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	rows := make([]domain.Agent, 0, len(m.agents))
 	for _, agent := range m.agents {
-		if workspaceID == "" || agent.WorkspaceID == workspaceID {
+		if agentMatchesScope(agent, filter.ManagementScope) {
 			rows = append(rows, agent)
 		}
 	}
@@ -81,6 +93,19 @@ func (m *Memory) GetAgent(_ context.Context, id string) (domain.Agent, bool, err
 	return agent, ok, nil
 }
 
+func (m *Memory) DisableAgent(_ context.Context, id string, now time.Time) (domain.Agent, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	agent, ok := m.agents[id]
+	if !ok {
+		return domain.Agent{}, false, nil
+	}
+	agent.Status = domain.AgentStatusDisabled
+	agent.UpdatedAt = now
+	m.agents[id] = agent
+	return agent, true, nil
+}
+
 func (m *Memory) CreateAgentKey(_ context.Context, key domain.AgentKey) (domain.AgentKey, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -88,11 +113,15 @@ func (m *Memory) CreateAgentKey(_ context.Context, key domain.AgentKey) (domain.
 	return key, nil
 }
 
-func (m *Memory) ListAgentKeys(_ context.Context) ([]domain.AgentKey, error) {
+func (m *Memory) ListAgentKeys(_ context.Context, scope ManagementScope) ([]domain.AgentKey, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	rows := make([]domain.AgentKey, 0, len(m.keys))
 	for _, key := range m.keys {
+		agent, ok := m.agents[key.AgentID]
+		if !ok || !agentMatchesScope(agent, scope) {
+			continue
+		}
 		rows = append(rows, key)
 	}
 	sort.Slice(rows, func(i, j int) bool {
@@ -127,6 +156,9 @@ func (m *Memory) FindAgentByKeyHash(_ context.Context, hash string, now time.Tim
 			return domain.Agent{}, false, nil
 		}
 		agent, ok := m.agents[key.AgentID]
+		if !ok || agent.Status != domain.AgentStatusActive {
+			return domain.Agent{}, false, nil
+		}
 		return agent, ok, nil
 	}
 	return domain.Agent{}, false, nil
@@ -139,11 +171,14 @@ func (m *Memory) CreateAccessGrant(_ context.Context, grant domain.AccessGrant) 
 	return grant, nil
 }
 
-func (m *Memory) ListAccessGrants(_ context.Context) ([]domain.AccessGrant, error) {
+func (m *Memory) ListAccessGrants(_ context.Context, scope ManagementScope) ([]domain.AccessGrant, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	rows := make([]domain.AccessGrant, 0, len(m.grants))
 	for _, grant := range m.grants {
+		if !m.grantMatchesScope(grant, scope) {
+			continue
+		}
 		rows = append(rows, grant)
 	}
 	sort.Slice(rows, func(i, j int) bool {
@@ -153,6 +188,18 @@ func (m *Memory) ListAccessGrants(_ context.Context) ([]domain.AccessGrant, erro
 		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
 	})
 	return rows, nil
+}
+
+func (m *Memory) RevokeAccessGrant(_ context.Context, id string, now time.Time) (domain.AccessGrant, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	grant, ok := m.grants[id]
+	if !ok {
+		return domain.AccessGrant{}, false, nil
+	}
+	grant.RevokedAt = now
+	m.grants[id] = grant
+	return grant, true, nil
 }
 
 func (m *Memory) HasGrant(_ context.Context, callerID string, targetID string, routeType string, routeKey string, now time.Time) bool {
@@ -198,6 +245,9 @@ func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.Tra
 		if filter.TargetID != "" && trace.TargetID != filter.TargetID {
 			continue
 		}
+		if !m.traceMatchesScope(trace, filter.ManagementScope) {
+			continue
+		}
 		rows = append(rows, trace)
 	}
 	sort.Slice(rows, func(i, j int) bool {
@@ -207,4 +257,32 @@ func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.Tra
 		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
 	})
 	return rows, nil
+}
+
+func (m *Memory) grantMatchesScope(grant domain.AccessGrant, scope ManagementScope) bool {
+	if scope.TenantID == "" && scope.WorkspaceID == "" {
+		return true
+	}
+	caller, callerOK := m.agents[grant.CallerID]
+	target, targetOK := m.agents[grant.TargetID]
+	return (callerOK && agentMatchesScope(caller, scope)) || (targetOK && agentMatchesScope(target, scope))
+}
+
+func (m *Memory) traceMatchesScope(trace domain.TraceEvent, scope ManagementScope) bool {
+	if scope.TenantID == "" && scope.WorkspaceID == "" {
+		return true
+	}
+	caller, callerOK := m.agents[trace.CallerID]
+	target, targetOK := m.agents[trace.TargetID]
+	return (callerOK && agentMatchesScope(caller, scope)) || (targetOK && agentMatchesScope(target, scope))
+}
+
+func agentMatchesScope(agent domain.Agent, scope ManagementScope) bool {
+	if scope.TenantID != "" && agent.TenantID != scope.TenantID {
+		return false
+	}
+	if scope.WorkspaceID != "" && agent.WorkspaceID != scope.WorkspaceID {
+		return false
+	}
+	return true
 }

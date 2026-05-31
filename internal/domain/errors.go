@@ -24,6 +24,10 @@ func PermissionDenied(message string) AppError {
 	return AppError{Status: 403, Code: "PERMISSION_DENIED", Message: message}
 }
 
+func UpstreamError(message string) AppError {
+	return AppError{Status: 502, Code: "UPSTREAM_ERROR", Message: message}
+}
+
 func NotFound(message string) AppError {
 	return AppError{Status: 404, Code: "NOT_FOUND", Message: message}
 }

@@ -30,6 +30,11 @@ export interface CreateAgentRequest {
   status?: AgentStatus
 }
 
+export interface ManagementScope {
+  tenantId: string
+  workspaceId: string
+}
+
 export interface AgentKey {
   id: string
   agentId: string

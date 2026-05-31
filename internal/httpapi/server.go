@@ -3,7 +3,10 @@ package httpapi
 import (
 	"context"
 	"crypto/subtle"
+	"io"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -59,12 +62,14 @@ func (s *Server) Router() http.Handler {
 			r.Post("/agents", s.createAgent)
 			r.Get("/agents", s.listAgents)
 			r.Get("/agents/{id}", s.getAgent)
+			r.Delete("/agents/{id}", s.disableAgent)
 			r.Post("/agent-keys", s.createAgentKey)
 			r.Get("/api-keys", s.listAgentKeys)
 			r.Post("/api-keys", s.createAgentKey)
 			r.Delete("/api-keys/{id}", s.revokeAgentKey)
 			r.Post("/access-grants", s.createAccessGrant)
 			r.Get("/access-grants", s.listAccessGrants)
+			r.Delete("/access-grants/{id}", s.revokeAccessGrant)
 			r.Get("/audit/traces", s.listTraces)
 		})
 		r.Group(func(r chi.Router) {
@@ -151,6 +156,7 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) agentFromRequest(req domain.CreateAgentRequest) (domain.Agent, error) {
 	req.Name = strings.TrimSpace(req.Name)
+	req.TenantID = strings.TrimSpace(req.TenantID)
 	req.WorkspaceID = strings.TrimSpace(req.WorkspaceID)
 	req.ChannelType = strings.TrimSpace(req.ChannelType)
 	if req.Name == "" {
@@ -215,8 +221,7 @@ func (s *Server) agentFromRequest(req domain.CreateAgentRequest) (domain.Agent, 
 }
 
 func (s *Server) listAgents(w http.ResponseWriter, r *http.Request) {
-	workspaceID := r.URL.Query().Get("workspaceId")
-	rows, err := s.repo.ListAgents(r.Context(), workspaceID)
+	rows, err := s.repo.ListAgents(r.Context(), store.AgentFilter{ManagementScope: managementScopeFromRequest(r)})
 	if err != nil {
 		writeError(w, err)
 		return
@@ -226,6 +231,19 @@ func (s *Server) listAgents(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getAgent(w http.ResponseWriter, r *http.Request) {
 	agent, ok, err := s.repo.GetAgent(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("agent not found"))
+		return
+	}
+	writeJSON(w, http.StatusOK, agent)
+}
+
+func (s *Server) disableAgent(w http.ResponseWriter, r *http.Request) {
+	agent, ok, err := s.repo.DisableAgent(r.Context(), chi.URLParam(r, "id"), s.now())
 	if err != nil {
 		writeError(w, err)
 		return
@@ -302,7 +320,7 @@ func (s *Server) createAgentKey(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listAgentKeys(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.repo.ListAgentKeys(r.Context())
+	rows, err := s.repo.ListAgentKeys(r.Context(), managementScopeFromRequest(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -368,12 +386,25 @@ func (s *Server) createAccessGrant(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listAccessGrants(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.repo.ListAccessGrants(r.Context())
+	rows, err := s.repo.ListAccessGrants(r.Context(), managementScopeFromRequest(r))
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, rows)
+}
+
+func (s *Server) revokeAccessGrant(w http.ResponseWriter, r *http.Request) {
+	grant, ok, err := s.repo.RevokeAccessGrant(r.Context(), chi.URLParam(r, "id"), s.now())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("access grant not found"))
+		return
+	}
+	writeJSON(w, http.StatusOK, grant)
 }
 
 func (s *Server) requireAgentKey(next http.Handler) http.Handler {
@@ -422,18 +453,53 @@ func (s *Server) openapiRelativePath(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDataPlane(w http.ResponseWriter, r *http.Request, routeType string, routeKey string) {
 	caller := callerFromContext(r.Context())
 	targetID := chi.URLParam(r, "targetId")
-	decision := domain.TraceDecisionAllowed
-	reason := "access grant matched"
-	status := http.StatusOK
 	if !s.repo.HasGrant(r.Context(), caller.ID, targetID, routeType, routeKey, s.now()) {
-		decision = domain.TraceDecisionDenied
-		reason = "caller has no access grant for target route"
-		status = http.StatusForbidden
+		reason := "caller has no access grant for target route"
+		if _, err := s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionDenied, reason); err != nil {
+			writeError(w, err)
+			return
+		}
+		writeError(w, domain.PermissionDenied(reason))
+		return
 	}
+	target, ok, err := s.repo.GetAgent(r.Context(), targetID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("target agent not found"))
+		return
+	}
+	if target.Status != domain.AgentStatusActive {
+		reason := "target agent is not active"
+		if _, err := s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionDenied, reason); err != nil {
+			writeError(w, err)
+			return
+		}
+		writeError(w, domain.PermissionDenied(reason))
+		return
+	}
+	trace, err := s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionAllowed, "access grant matched")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if s.proxyUpstreamIfConfigured(w, r, target, routeType, routeKey) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":  "accepted",
+		"traceId": trace.ID,
+		"route":   routeType,
+	})
+}
+
+func (s *Server) recordDataPlaneTrace(r *http.Request, callerID string, targetID string, routeType string, routeKey string, decision domain.TraceDecision, reason string) (domain.TraceEvent, error) {
 	trace := domain.TraceEvent{
 		ID:        security.NewID("trc"),
 		RunID:     r.Header.Get("X-Run-Id"),
-		CallerID:  caller.ID,
+		CallerID:  callerID,
 		TargetID:  targetID,
 		RouteType: routeType,
 		RouteKey:  routeKey,
@@ -441,26 +507,76 @@ func (s *Server) handleDataPlane(w http.ResponseWriter, r *http.Request, routeTy
 		Reason:    reason,
 		CreatedAt: s.now(),
 	}
-	if _, err := s.repo.AppendTrace(r.Context(), trace); err != nil {
-		writeError(w, err)
-		return
+	return s.repo.AppendTrace(r.Context(), trace)
+}
+
+func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Request, target domain.Agent, routeType string, routeKey string) bool {
+	endpoint, ok := target.ChannelConfig["endpoint"].(string)
+	endpoint = strings.TrimSpace(endpoint)
+	if !ok || endpoint == "" {
+		return false
 	}
-	if decision == domain.TraceDecisionDenied {
-		writeError(w, domain.PermissionDenied(reason))
-		return
+	upstreamURL := endpoint
+	method := http.MethodPost
+	if routeType == "openapi" {
+		var err error
+		upstreamURL, err = openAPIUpstreamURL(endpoint, routeKey, r.URL.RawQuery)
+		if err != nil {
+			writeError(w, err)
+			return true
+		}
+		method = r.Method
 	}
-	writeJSON(w, status, map[string]any{
-		"status":  "accepted",
-		"traceId": trace.ID,
-		"route":   routeType,
-	})
+	req, err := http.NewRequestWithContext(r.Context(), method, upstreamURL, r.Body)
+	if err != nil {
+		writeError(w, domain.UpstreamError("upstream request could not be prepared"))
+		return true
+	}
+	copyUpstreamRequestHeaders(req.Header, r.Header)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		writeError(w, domain.UpstreamError("upstream request failed"))
+		return true
+	}
+	defer resp.Body.Close()
+	if contentType := resp.Header.Get("Content-Type"); contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
+	return true
+}
+
+func openAPIUpstreamURL(endpoint string, relativePath string, rawQuery string) (string, error) {
+	if relativePath == "" || strings.Contains(relativePath, "..") || strings.Contains(relativePath, "://") {
+		return "", domain.BadRequest("VALIDATION_FAILED", "openapi relative path is invalid")
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", domain.UpstreamError("target endpoint is invalid")
+	}
+	parsed.Path = path.Join(parsed.Path, relativePath)
+	if !strings.HasPrefix(parsed.Path, "/") {
+		parsed.Path = "/" + parsed.Path
+	}
+	parsed.RawQuery = rawQuery
+	return parsed.String(), nil
+}
+
+func copyUpstreamRequestHeaders(dst http.Header, src http.Header) {
+	for _, key := range []string{"Content-Type", "Accept"} {
+		if value := src.Get(key); value != "" {
+			dst.Set(key, value)
+		}
+	}
 }
 
 func (s *Server) listTraces(w http.ResponseWriter, r *http.Request) {
 	filter := store.TraceFilter{
-		RunID:    r.URL.Query().Get("runId"),
-		CallerID: r.URL.Query().Get("callerAgentId"),
-		TargetID: r.URL.Query().Get("targetAgentId"),
+		ManagementScope: managementScopeFromRequest(r),
+		RunID:           r.URL.Query().Get("runId"),
+		CallerID:        r.URL.Query().Get("callerAgentId"),
+		TargetID:        r.URL.Query().Get("targetAgentId"),
 	}
 	switch decision := domain.TraceDecision(r.URL.Query().Get("decision")); decision {
 	case "", domain.TraceDecisionAllowed, domain.TraceDecisionDenied:
@@ -475,4 +591,11 @@ func (s *Server) listTraces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, rows)
+}
+
+func managementScopeFromRequest(r *http.Request) store.ManagementScope {
+	return store.ManagementScope{
+		TenantID:    strings.TrimSpace(r.URL.Query().Get("tenantId")),
+		WorkspaceID: strings.TrimSpace(r.URL.Query().Get("workspaceId")),
+	}
 }

@@ -33,7 +33,7 @@ The service listens on `:9090` by default. Override with:
 AGENT_HARBOR_ADDR=:9091 go run ./cmd/agent-harbor
 ```
 
-## Sprint 1 Demo
+## Governance Loop Demo
 
 With the API running, use the governance-loop demo script to exercise the end-to-end control plane and data plane:
 
@@ -41,13 +41,23 @@ With the API running, use the governance-loop demo script to exercise the end-to
 bash scripts/demo-governance-loop.sh
 ```
 
-The script defaults to `BASE_URL=http://127.0.0.1:9090`. It creates a local caller Agent, an MCP target Agent, a short-lived Agent Key, proves the MCP data-plane call is denied before a grant, creates an Access Grant, proves the call is allowed, then checks run traces for both `denied` and `allowed` decisions.
+The script defaults to `BASE_URL=http://127.0.0.1:9090`. It creates a local caller Agent, a governed local target, a short-lived Agent Key, proves the MCP data-plane call is denied before a grant, creates an Access Grant, proves the call is allowed, then checks run traces for both `denied` and `allowed` decisions. Targets without `channelConfig.endpoint` keep the local accepted stub response; MCP/OpenAPI targets with an endpoint are forwarded upstream after authorization.
 
 Override the target service or run id when needed:
 
 ```bash
 BASE_URL=http://127.0.0.1:9091 RUN_ID=demo-manual-1 bash scripts/demo-governance-loop.sh
 ```
+
+## Sprint 2 Cleanup Demo
+
+Sprint 2 adds scoped management reads plus cleanup controls. Against a running API, this script proves grant revoke and agent disable semantics:
+
+```bash
+bash scripts/demo-sprint2-cleanup.sh
+```
+
+It creates a caller/target pair in one workspace, confirms an allowed call, revokes the grant and sees the next call denied, recreates a grant, disables the caller Agent, sees its old Agent Key rejected, then verifies `tenantId`/`workspaceId` scoped agent listing.
 
 ## Admin Key
 
@@ -56,6 +66,7 @@ Management APIs are open by default for local clean-room iteration. If `AGENT_HA
 ```bash
 AGENT_HARBOR_ADMIN_KEY=local-admin-key go run ./cmd/agent-harbor
 ADMIN_KEY=local-admin-key bash scripts/demo-governance-loop.sh
+ADMIN_KEY=local-admin-key bash scripts/demo-sprint2-cleanup.sh
 ```
 
 The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the admin key only protects management and audit APIs. Agent Key TTLs must be between 1 and 3600 seconds, with a 1800 second server default when omitted.
@@ -90,24 +101,25 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 - `GET /api/v1/contracts/providers`
 - `GET /api/v1/contracts/channels`
 - `POST /api/v1/agents`
-- `GET /api/v1/agents`
+- `GET /api/v1/agents?tenantId=&workspaceId=`
 - `GET /api/v1/agents/{id}`
+- `DELETE /api/v1/agents/{id}`
 - `POST /api/v1/agent-keys`
-- `GET /api/v1/api-keys`
+- `GET /api/v1/api-keys?tenantId=&workspaceId=`
 - `POST /api/v1/api-keys`
 - `DELETE /api/v1/api-keys/{id}`
 - `POST /api/v1/access-grants`
-- `GET /api/v1/access-grants`
+- `GET /api/v1/access-grants?tenantId=&workspaceId=`
+- `DELETE /api/v1/access-grants/{id}`
 - `POST /api/v1/mcp/agents/{targetId}`
 - `POST /api/v1/mcp/agents/{targetId}/rpc`
 - `POST /api/v1/openapi/agents/{targetId}/operations/{operationId}`
 - `ANY /api/v1/openapi/agents/{targetId}/{relativePath...}`
-- `GET /api/v1/audit/traces`
+- `GET /api/v1/audit/traces?tenantId=&workspaceId=&runId=&decision=&callerAgentId=&targetAgentId=`
 
 ## Next Milestones
 
-- Add tenant/workspace scoping across management reads and writes.
-- Add OpenAPI relative-path proxying with traversal protection.
 - Add MCP `initialize`, `tools/list`, `tools/call` method-level policy.
-- Add agent/access-grant revoke APIs for cleanup residue checks.
+- Add per-agent upstream credentials and header injection.
+- Add proxy timeout/retry policy and upstream error classification.
 - Add OTel spans and metrics for route/caller/target dimensions.

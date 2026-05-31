@@ -1,3 +1,43 @@
+## [2026-05-29 17:45] Session: Sprint 2 Governance Proxy
+
+### 完成
+- 新增 Sprint 2 brief / design / execution plan，延续“轻 PRD + 组队直接实现”的节奏。
+- 后端管理读接口支持 `tenantId` / `workspaceId` scope：agents、api keys、access grants、audit traces 行为对齐 memory 与 PostgreSQL。
+- 新增 `DELETE /api/v1/agents/{id}` 软禁用 Agent；禁用 caller 的旧 Agent Key 不再认证，禁用 target 也会拒绝后续数据面调用并记录 denied trace。
+- 新增 `DELETE /api/v1/access-grants/{id}` 撤销授权；撤销后同一路由调用回到 403 denied。
+- MCP/OpenAPI 数据面在授权通过后可按 target `channelConfig.endpoint` 真实转发，并透传 upstream status / content-type / body；无 endpoint 的目标保留 Sprint 1 stub 响应。
+- OpenAPI relative path proxy 继续拒绝 traversal / URL 注入，upstream 网络失败返回 `502 UPSTREAM_ERROR` 并保留 allowed trace 证据。
+- 前端控制台新增 scope 输入、列表 scoped refresh、Agent Disable、Access Grant Revoke，revoked grants 以 disabled/deny 状态展示。
+- 调整两张主表桌面最小宽度，避免 1440 宽默认视野下为操作列横向滚动。
+- 更新 `scripts/demo-governance-loop.sh`，避免真实 proxy 误打外部示例 endpoint；新增 `scripts/demo-sprint2-cleanup.sh` 覆盖 revoke / disable / scoped list。
+
+### 决策
+- 本 sprint 的 proxy 单测使用 `httptest`，不把 loopback endpoint 暴露给公共 create-agent API；这样不绕开现有 SSRF/unsafe endpoint 防护。
+- Demo 脚本继续用无 endpoint 的 local target 验证治理闭环；真实 MCP/OpenAPI endpoint 转发由后端测试保证。
+- Cleanup controls 暂时是平台管理面动作，不引入完整 RBAC 审批流。
+
+### 血泪教训
+- 一旦 endpoint 从“配置字段”变成“真实转发”，旧 demo 里的 `https://api.example.com/mcp` 就会变成不稳定外部依赖；演示脚本必须避免假 endpoint。
+- UI 文本同时出现在隐藏 `<option>` 和表格里时，Playwright `get_by_text().first()` 会抓错对象；表格行为验证要用 scoped selector。
+- 禁用 caller 只挡住旧 key 还不够，禁用 target 后也应该停止接流量，否则 cleanup 语义不完整。
+
+### 验证
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `go build ./...`
+- `pnpm -C frontend build`
+- `bash -n scripts/demo-governance-loop.sh scripts/demo-sprint2-cleanup.sh`
+- `AGENT_HARBOR_TEST_DATABASE_URL=... go test ./internal/store -run TestPostgresRepositoryRoundTrip -count=1`（临时 PostgreSQL 16 容器）
+- `scripts/demo-governance-loop.sh` + `scripts/demo-sprint2-cleanup.sh` against local API with `AGENT_HARBOR_ADMIN_KEY`
+- Playwright live smoke（desktop/mobile）和 backend-down fallback smoke
+
+### 影响文件
+- `internal/httpapi/server.go` / `server_test.go`：scope parsing、cleanup routes、target disable denial、upstream proxy、trace tests。
+- `internal/store/memory.go` / `postgres.go` / `postgres_test.go`：scope filters、disable/revoke repository methods、PG round-trip。
+- `frontend/src/`：scope strip、disable/revoke API 和控制台动作。
+- `scripts/`：治理闭环 demo 兼容 Sprint 2，新增 cleanup demo。
+- `README.md` / `docs/sprints/` / `docs/superpowers/`：Sprint 2 用法和计划记录。
+
 ## [2026-05-29 17:04] Session: Sprint 1 Governance Loop
 
 ### 完成

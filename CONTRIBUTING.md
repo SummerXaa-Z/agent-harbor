@@ -1,0 +1,73 @@
+# Contributing
+
+AgentHarbor is a clean-room implementation track. Keep changes small, reviewable, and independently verifiable.
+
+## Clean-Room Boundary
+
+Do not copy source code, migrations, tests, deployment scripts, adapter code, generated assets, styles, or component structure from the existing Rust/React runtime. Use only product requirements, public protocols, and public product references.
+
+When a change depends on product behavior, record the requirement in docs, tests, or PR notes so reviewers can audit the source of the behavior without comparing against legacy implementation code.
+
+## Branches And PRs
+
+- Start from the latest `main`.
+- Use `codex/<short-topic>` for Codex-authored branches.
+- Keep each PR focused on one behavior, workflow, or documentation boundary.
+- Prefer a new small PR over a long-lived stack. If stacking is unavoidable, document the review order and retarget bottom-up.
+- Keep PR descriptions current with scope, verification, and follow-ups.
+
+## Local Verification
+
+Run the standard local checks before opening or updating a PR:
+
+```bash
+make check
+```
+
+This runs backend tests, vet, build, frontend tests/build, and demo script syntax checks.
+
+Use uncached Go tests before behavior-sensitive review:
+
+```bash
+make test-fresh
+```
+
+Run PostgreSQL integration when a change touches repository behavior, migrations, transactions, credentials, audit events, route policies, or CI database wiring:
+
+```bash
+AGENT_HARBOR_TEST_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' \
+  make test-postgres
+```
+
+With a local API already running, use the full demo suite for end-to-end smoke coverage:
+
+```bash
+make demo-all
+```
+
+If admin protection is enabled on the server, pass the same key to demo scripts:
+
+```bash
+ADMIN_KEY=local-admin-key make demo-all
+```
+
+## CI Expectations
+
+GitHub Actions runs the same Makefile targets used locally:
+
+- Backend: `make test`, `make vet`, `make build`, `make demo-scripts-lint`
+- PostgreSQL integration: `make test-postgres`
+- Frontend: `make frontend-test`, `make frontend-build`
+
+Do not mark work complete until the relevant local checks and GitHub checks have both passed.
+
+## Documentation
+
+Update docs alongside behavior changes:
+
+- `README.md` for user-facing runtime, API, and local development entrypoints.
+- `docs/sprints/` for sprint-level scope and acceptance notes.
+- `docs/engineering/` for process, review, or governance workflow.
+- `CHANGELOG.md` for session-level decisions, verification, and lessons learned.
+
+Keep examples executable. Prefer `make` targets and scripts over long command sequences that drift from CI.

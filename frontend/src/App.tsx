@@ -26,6 +26,7 @@ import {
   Workflow
 } from "lucide-react";
 import { createAgent, createAgentKey, createRoutePolicy, disableAgent, disableRoutePolicy, loadConsoleData, rotateAgentCredentials, updateAgent } from "./api";
+import { parseRetryFields } from "./retryForm";
 import type {
   Agent,
   AgentStatus,
@@ -73,7 +74,7 @@ const defaultAgentForm = {
 };
 const defaultKeyForm = { agentId: "", expiresInSeconds: "900", name: "console key" };
 const defaultRotateForm = { agentId: "", credentialName: "apiToken", credentialValue: "" };
-const defaultPolicyForm = { callerAgentId: "", effect: "allow", name: "", priority: "100", routeKey: "", routeType: "mcp", targetAgentId: "" };
+const defaultPolicyForm = { callerAgentId: "", effect: "allow", name: "", priority: "100", retryBackoffMs: "0", retryMaxAttempts: "1", routeKey: "", routeType: "mcp", targetAgentId: "" };
 const defaultTraceFilters: TraceFilters = { callerAgentId: "", decision: "", runId: "", targetAgentId: "" };
 const mcpRouteKeyPresets = ["initialize", "tools/list", "tools/call"];
 
@@ -119,23 +120,18 @@ function App() {
       const channelConfig: JsonObject = {};
       const endpoint = agentForm.endpoint.trim();
       if (endpoint) channelConfig.endpoint = endpoint;
-      const retryMaxAttempts = Number.parseInt(agentForm.retryMaxAttempts, 10);
-      const retryBackoffMs = Number.parseInt(agentForm.retryBackoffMs, 10);
-      const retryAttemptsText = agentForm.retryMaxAttempts.trim();
-      const retryBackoffText = agentForm.retryBackoffMs.trim();
-      const retryRequested = retryAttemptsText !== "1" || retryBackoffText !== "0";
-      if (!retryAttemptsText || Number.isNaN(retryMaxAttempts)) {
-        setAgentMessage("Retry attempts must be a number.");
+      const retry = parseRetryFields({
+        backoffMsText: agentForm.retryBackoffMs,
+        maxAttemptsText: agentForm.retryMaxAttempts
+      });
+      if (!retry.ok) {
+        setAgentMessage(retry.message);
         return;
       }
-      if (!retryBackoffText || Number.isNaN(retryBackoffMs)) {
-        setAgentMessage("Retry backoff must be a number.");
-        return;
-      }
-      if (retryRequested) {
+      if (retry.requested) {
         channelConfig.retry = {
-          backoffMs: retryBackoffMs,
-          maxAttempts: retryMaxAttempts
+          backoffMs: retry.backoffMs,
+          maxAttempts: retry.maxAttempts
         };
       }
       const credentialHeader = agentForm.credentialHeader.trim();
@@ -266,12 +262,23 @@ function App() {
         setPolicyMessage("Priority must be a non-negative integer.");
         return;
       }
+      const retry = parseRetryFields({
+        backoffMsText: policyForm.retryBackoffMs,
+        maxAttemptsText: policyForm.retryMaxAttempts
+      });
+      if (!retry.ok) {
+        setPolicyMessage(retry.message);
+        return;
+      }
       await createRoutePolicy(
         {
           callerAgentId: policyForm.callerAgentId,
           effect: policyForm.effect as "allow" | "deny",
           name: policyForm.name.trim() || undefined,
           priority,
+          retry: retry.requested
+            ? { backoffMs: retry.backoffMs, maxAttempts: retry.maxAttempts, statusCodes: [502, 503, 504] }
+            : undefined,
           routeKey: policyForm.routeKey.trim() || undefined,
           routeType: policyForm.routeType.trim(),
           targetAgentId: policyForm.targetAgentId
@@ -645,6 +652,10 @@ function PolicyCreateForm({
         <label>Effect<select value={form.effect} onChange={(event) => onChange({ ...form, effect: event.target.value })}><option value="allow">allow</option><option value="deny">deny</option></select></label>
         <label>Priority<input inputMode="numeric" min={0} type="number" value={form.priority} onChange={(event) => onChange({ ...form, priority: event.target.value })} /></label>
       </div>
+      <div className="form-row">
+        <label>Retry attempts<input inputMode="numeric" max={4} min={1} type="number" value={form.retryMaxAttempts} onChange={(event) => onChange({ ...form, retryMaxAttempts: event.target.value })} /></label>
+        <label>Retry backoff ms<input inputMode="numeric" max={1000} min={0} type="number" value={form.retryBackoffMs} onChange={(event) => onChange({ ...form, retryBackoffMs: event.target.value })} /></label>
+      </div>
       <FormFooter message={message} submitLabel="Create policy" />
     </form>
   );
@@ -783,7 +794,7 @@ function PolicyTable({
             <tr className={policy.status === "disabled" ? "row-disabled" : undefined} key={policy.id}>
               <td>
                 <strong>{policy.name}</strong>
-                <span>priority {policy.priority} · matched {formatDate(policy.lastMatchedAt ?? policy.createdAt)}</span>
+                <span>priority {policy.priority} · {policyRetryText(policy)} · matched {formatDate(policy.lastMatchedAt ?? policy.createdAt)}</span>
               </td>
               <td>{names[policy.callerAgentId] ?? policy.callerAgentId}</td>
               <td>{names[policy.targetAgentId] ?? policy.targetAgentId}</td>
@@ -1085,6 +1096,12 @@ function auditCredentialVersion(event: AuditEvent) {
   const value = event.metadata?.credentialVersion;
   if (typeof value === "number" || typeof value === "string") return String(value);
   return "-";
+}
+
+function policyRetryText(policy: RoutePolicy) {
+  if (!policy.retry) return "target retry";
+  const statuses = policy.retry.statusCodes.length > 0 ? policy.retry.statusCodes.join("/") : "none";
+  return `retry ${policy.retry.maxAttempts}x ${policy.retry.backoffMs}ms ${statuses}`;
 }
 
 function auditTone(action: string): Tone {

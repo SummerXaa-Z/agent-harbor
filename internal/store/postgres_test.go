@@ -249,6 +249,37 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	if !decision.Allowed || decision.Source != "access_grant" {
 		t.Fatalf("expected disabled route policy to fall back to access grant, got %#v", decision)
 	}
+	retryPolicy := domain.RoutePolicy{
+		ID:          security.NewID("rpl"),
+		TenantID:    caller.TenantID,
+		WorkspaceID: caller.WorkspaceID,
+		Name:        "PG allow call with retry",
+		CallerID:    caller.ID,
+		TargetID:    target.ID,
+		RouteType:   "mcp",
+		RouteKey:    "tools/call",
+		Effect:      domain.RoutePolicyEffectAllow,
+		Status:      domain.RoutePolicyStatusEnabled,
+		Priority:    200,
+		Retry: &domain.RoutePolicyRetry{
+			MaxAttempts: 2,
+			BackoffMs:   25,
+			StatusCodes: []int{502, 503},
+		},
+		CreatedAt: now.Add(3 * time.Minute),
+		UpdatedAt: now.Add(3 * time.Minute),
+	}
+	if _, err := repo.CreateRoutePolicy(ctx, retryPolicy); err != nil {
+		t.Fatalf("create retry route policy: %v", err)
+	}
+	decision, err = repo.EvaluateRouteAccess(ctx, caller.ID, target.ID, "mcp", "tools/call", now.Add(4*time.Minute))
+	if err != nil {
+		t.Fatalf("evaluate retry route policy: %v", err)
+	}
+	if !decision.Allowed || decision.PolicyID != retryPolicy.ID || decision.Retry == nil ||
+		decision.Retry.MaxAttempts != 2 || decision.Retry.BackoffMs != 25 || len(decision.Retry.StatusCodes) != 2 || decision.Retry.StatusCodes[1] != 503 {
+		t.Fatalf("expected retry policy decision, got %#v", decision)
+	}
 
 	trace := domain.TraceEvent{
 		ID:               security.NewID("trc"),
@@ -333,5 +364,73 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 		t.Fatalf("find disabled agent by key: %v", err)
 	} else if ok {
 		t.Fatalf("disabled agent key should no longer authenticate")
+	}
+}
+
+func TestPostgresAuditedCreateAgentRollsBackWhenAuditFails(t *testing.T) {
+	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set AGENT_HARBOR_TEST_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	defer pool.Close()
+	if err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	repo := store.NewPostgresWithCredentialKey(pool, []byte("0123456789abcdef0123456789abcdef"))
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	agent := domain.Agent{
+		ID:            security.NewID("agt"),
+		TenantID:      "test",
+		WorkspaceID:   "ws-pg-rollback",
+		Name:          "Rollback Agent",
+		ChannelType:   "local",
+		ChannelConfig: map[string]any{},
+		Status:        domain.AgentStatusActive,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	audit := domain.AuditEvent{
+		ID:           security.NewID("aud"),
+		TenantID:     agent.TenantID,
+		WorkspaceID:  agent.WorkspaceID,
+		Actor:        "test",
+		Action:       "agent.created",
+		ResourceType: "agent",
+		ResourceID:   agent.ID,
+		Summary:      "Agent created",
+		Metadata:     map[string]any{"source": "rollback-test"},
+		CreatedAt:    now,
+	}
+	if _, err := pool.Exec(ctx, `
+		insert into audit_events (
+			id, tenant_id, workspace_id, actor, action, resource_type, resource_id, summary, metadata, created_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	`, audit.ID, audit.TenantID, audit.WorkspaceID, audit.Actor, audit.Action, audit.ResourceType,
+		audit.ResourceID, audit.Summary, []byte(`{"source":"rollback-test"}`), audit.CreatedAt); err != nil {
+		t.Fatalf("seed duplicate audit event: %v", err)
+	}
+
+	if _, err := repo.CreateAgentWithAudit(ctx, agent, func(domain.Agent) domain.AuditEvent {
+		return audit
+	}); err == nil {
+		t.Fatalf("CreateAgentWithAudit should fail when audit insert conflicts")
+	}
+	if _, ok, err := repo.GetAgent(ctx, agent.ID); err != nil {
+		t.Fatalf("get rollback agent: %v", err)
+	} else if ok {
+		t.Fatalf("agent persisted even though audit insert failed")
+	}
+	var auditCount int
+	if err := pool.QueryRow(ctx, "select count(*) from audit_events where id=$1", audit.ID).Scan(&auditCount); err != nil {
+		t.Fatalf("count rollback audit event: %v", err)
+	}
+	if auditCount != 1 {
+		t.Fatalf("expected only seeded audit event after rollback, count=%d", auditCount)
 	}
 }

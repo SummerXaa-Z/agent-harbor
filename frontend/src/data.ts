@@ -273,6 +273,7 @@ export const routePolicies: RoutePolicy[] = [
     effect: 'allow',
     status: 'enabled',
     priority: 10,
+    retry: { maxAttempts: 2, backoffMs: 25, statusCodes: [502, 503, 504] },
     lastMatchedAt: '2026-05-29T08:45:11Z',
     createdAt: '2026-05-20T03:00:00Z',
     updatedAt: '2026-05-20T03:00:00Z',

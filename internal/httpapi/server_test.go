@@ -94,8 +94,13 @@ type routePolicyResponse struct {
 	Effect      string `json:"effect"`
 	Status      string `json:"status"`
 	Priority    int    `json:"priority"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	Retry       *struct {
+		MaxAttempts int   `json:"maxAttempts"`
+		BackoffMs   int   `json:"backoffMs"`
+		StatusCodes []int `json:"statusCodes"`
+	} `json:"retry"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 type metricResponse struct {
@@ -422,6 +427,20 @@ func TestRoutePolicyCRUDAndAudit(t *testing.T) {
 	if crossScopeResp.Code != http.StatusBadRequest {
 		t.Fatalf("cross-scope route policy should be rejected, got %d body=%s", crossScopeResp.Code, crossScopeResp.Body.String())
 	}
+	badRetryAttempts := request(t, router, http.MethodPost, "/api/v1/route-policies", map[string]any{
+		"name":          "Bad retry attempts",
+		"callerAgentId": caller.ID,
+		"targetAgentId": target.ID,
+		"routeType":     "mcp",
+		"routeKey":      "tools/list",
+		"effect":        "allow",
+		"retry": map[string]any{
+			"maxAttempts": 5,
+		},
+	}, "")
+	if badRetryAttempts.Code != http.StatusBadRequest {
+		t.Fatalf("route policy retry maxAttempts should be rejected, got %d body=%s", badRetryAttempts.Code, badRetryAttempts.Body.String())
+	}
 
 	createResp := request(t, router, http.MethodPost, "/api/v1/route-policies", map[string]any{
 		"name":          " Allow tool list ",
@@ -455,6 +474,14 @@ func TestRoutePolicyCRUDAndAudit(t *testing.T) {
 	}, ""))
 	if updated.Effect != "deny" || updated.Name != "Deny tool list" || updated.Priority != 40 || updated.Status != "enabled" {
 		t.Fatalf("unexpected updated route policy: %#v", updated)
+	}
+	badRetryStatus := request(t, router, http.MethodPatch, "/api/v1/route-policies/"+created.ID, map[string]any{
+		"retry": map[string]any{
+			"statusCodes": []any{429},
+		},
+	}, "")
+	if badRetryStatus.Code != http.StatusBadRequest {
+		t.Fatalf("route policy retry statusCodes should be rejected, got %d body=%s", badRetryStatus.Code, badRetryStatus.Body.String())
 	}
 
 	disabled := decodeData[routePolicyResponse](t, request(t, router, http.MethodDelete, "/api/v1/route-policies/"+created.ID, nil, ""))
@@ -1122,6 +1149,68 @@ func TestUpstreamProxyRetriesRetryableStatusThenReturnsSuccess(t *testing.T) {
 	}
 }
 
+func TestRoutePolicyRetryOverridesTargetRetry(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	attempts := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"temporary":true}`))
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"policyRetry":true}`))
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "Policy Retry Caller")
+	target := createDirectAgent(t, repo, "Policy Retry MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL + "/mcp",
+		"retry": map[string]any{
+			"maxAttempts": 1,
+		},
+	})
+	policy := decodeData[routePolicyResponse](t, request(t, router, http.MethodPost, "/api/v1/route-policies", map[string]any{
+		"name":          "Allow calls with retry",
+		"callerAgentId": caller.ID,
+		"targetAgentId": target.ID,
+		"routeType":     "mcp",
+		"routeKey":      "tools/call",
+		"effect":        "allow",
+		"priority":      100,
+		"retry": map[string]any{
+			"maxAttempts": 2,
+			"backoffMs":   0,
+			"statusCodes": []any{503},
+		},
+	}, ""))
+	if policy.Retry == nil || policy.Retry.MaxAttempts != 2 || policy.Retry.BackoffMs != 0 || len(policy.Retry.StatusCodes) != 1 || policy.Retry.StatusCodes[0] != 503 {
+		t.Fatalf("expected normalized retry on route policy response, got %#v", policy.Retry)
+	}
+
+	resp := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("policy retry should recover upstream status, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if attempts != 2 {
+		t.Fatalf("expected two upstream attempts from policy retry, got %d", attempts)
+	}
+	if got := resp.Header().Get("X-AgentHarbor-Upstream-Attempts"); got != "2" {
+		t.Fatalf("expected attempts header 2, got %q", got)
+	}
+	cleared := decodeData[routePolicyResponse](t, request(t, router, http.MethodPatch, "/api/v1/route-policies/"+policy.ID, map[string]any{
+		"retry": nil,
+	}, ""))
+	if cleared.Retry != nil {
+		t.Fatalf("expected retry override to clear, got %#v", cleared.Retry)
+	}
+}
+
 func TestProxyTraceMetricsRecordAttemptsStatusAndDuration(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -1312,6 +1401,52 @@ func TestProxyUpstreamDNSFailureReturnsDNSError(t *testing.T) {
 	}
 	if got := resp.Header().Get("X-AgentHarbor-Upstream-Attempts"); got != "1" {
 		t.Fatalf("expected attempts header 1, got %q", got)
+	}
+}
+
+func TestProxyDoesNotRetryCanceledContext(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	attempts := 0
+	originalTransport := http.DefaultClient.Transport
+	http.DefaultClient.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
+		attempts++
+		return nil, context.Canceled
+	})
+	t.Cleanup(func() {
+		http.DefaultClient.Transport = originalTransport
+	})
+
+	caller, key := createLocalCallerWithKey(t, router, "Canceled Proxy Caller")
+	target := createDirectAgent(t, repo, "Canceled Proxy MCP", "default", "ws-1", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": "https://api.example.com/mcp",
+		"retry": map[string]any{
+			"maxAttempts": 3,
+			"backoffMs":   0,
+			"statusCodes": []any{502, 503, 504},
+		},
+	})
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
+
+	resp := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/call",
+	}, key.Key)
+	if resp.Code != http.StatusBadGateway {
+		t.Fatalf("expected canceled upstream request to return 502, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if attempts != 1 {
+		t.Fatalf("expected canceled request not to retry, got %d attempts", attempts)
+	}
+	if got := resp.Header().Get("X-AgentHarbor-Upstream-Attempts"); got != "1" {
+		t.Fatalf("expected attempts header 1, got %q", got)
+	}
+	var env apiEnvelope
+	if err := json.Unmarshal(resp.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if env.Error != "UPSTREAM_ERROR" {
+		t.Fatalf("expected UPSTREAM_ERROR, got %#v", env)
 	}
 }
 
@@ -1615,6 +1750,64 @@ func TestManagementAuditEventsRecordAgentLifecycleWithoutSecrets(t *testing.T) {
 	keys, ok := rotation.Metadata["credentialKeys"].([]any)
 	if !ok || len(keys) != 1 || keys[0] != "apiToken" {
 		t.Fatalf("rotation audit event should include credential key names only, got %#v", rotation.Metadata)
+	}
+}
+
+func TestManagementAuditFailureBlocksAgentCreateAndUpdate(t *testing.T) {
+	base := store.NewMemory()
+	router := newRouterWithRepo(&failingAuditedAgentRepository{Repository: base})
+
+	createResp := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Audit Required Agent",
+		"tenantId":    "tenant-audit-failure",
+		"workspaceId": "ws-audit-failure",
+		"channelType": "local",
+		"status":      "active",
+	}, "")
+	if createResp.Code != http.StatusInternalServerError {
+		t.Fatalf("create should fail when audit persistence fails: status=%d body=%s", createResp.Code, createResp.Body.String())
+	}
+	agents, err := base.ListAgents(t.Context(), store.AgentFilter{ManagementScope: store.ManagementScope{
+		TenantID:    "tenant-audit-failure",
+		WorkspaceID: "ws-audit-failure",
+	}})
+	if err != nil {
+		t.Fatalf("list agents after failed create: %v", err)
+	}
+	if len(agents) != 0 {
+		t.Fatalf("failed audited create should not persist agent: %#v", agents)
+	}
+
+	existing := domain.Agent{
+		ID:            security.NewID("agt"),
+		TenantID:      "tenant-audit-failure",
+		WorkspaceID:   "ws-audit-failure",
+		Name:          "Original Agent",
+		ChannelType:   "local",
+		ChannelConfig: map[string]any{},
+		Status:        domain.AgentStatusActive,
+		CreatedAt:     time.Now().UTC(),
+		UpdatedAt:     time.Now().UTC(),
+	}
+	if _, err := base.CreateAgent(t.Context(), existing); err != nil {
+		t.Fatalf("seed existing agent: %v", err)
+	}
+
+	updateResp := request(t, router, http.MethodPatch, "/api/v1/agents/"+existing.ID, map[string]any{
+		"name": "Updated Agent",
+	}, "")
+	if updateResp.Code != http.StatusInternalServerError {
+		t.Fatalf("update should fail when audit persistence fails: status=%d body=%s", updateResp.Code, updateResp.Body.String())
+	}
+	after, ok, err := base.GetAgent(t.Context(), existing.ID)
+	if err != nil {
+		t.Fatalf("get agent after failed update: %v", err)
+	}
+	if !ok {
+		t.Fatalf("seeded agent disappeared after failed update")
+	}
+	if after.Name != "Original Agent" {
+		t.Fatalf("failed audited update should keep previous name, got %q", after.Name)
 	}
 }
 
@@ -2120,4 +2313,16 @@ func (r *failingAllowedTraceRepository) AppendTrace(ctx context.Context, event d
 		return domain.TraceEvent{}, errors.New("trace append failed")
 	}
 	return r.Repository.AppendTrace(ctx, event)
+}
+
+type failingAuditedAgentRepository struct {
+	store.Repository
+}
+
+func (r *failingAuditedAgentRepository) CreateAgentWithAudit(ctx context.Context, agent domain.Agent, build store.AgentAuditBuilder) (domain.Agent, error) {
+	return domain.Agent{}, errors.New("audit insert failed")
+}
+
+func (r *failingAuditedAgentRepository) UpdateAgentWithAudit(ctx context.Context, agent domain.Agent, build store.AgentAuditBuilder) (domain.Agent, bool, error) {
+	return domain.Agent{}, false, errors.New("audit insert failed")
 }

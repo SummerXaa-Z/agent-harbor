@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type AgentStatus string
 
@@ -134,19 +137,33 @@ type RoutePolicy struct {
 	Effect      RoutePolicyEffect `json:"effect"`
 	Status      RoutePolicyStatus `json:"status"`
 	Priority    int               `json:"priority"`
+	Retry       *RoutePolicyRetry `json:"retry,omitempty"`
 	CreatedAt   time.Time         `json:"createdAt"`
 	UpdatedAt   time.Time         `json:"updatedAt"`
 }
 
+type RoutePolicyRetry struct {
+	MaxAttempts int   `json:"maxAttempts"`
+	BackoffMs   int   `json:"backoffMs"`
+	StatusCodes []int `json:"statusCodes"`
+}
+
+type RoutePolicyRetryRequest struct {
+	MaxAttempts *int  `json:"maxAttempts"`
+	BackoffMs   *int  `json:"backoffMs"`
+	StatusCodes []int `json:"statusCodes"`
+}
+
 type CreateRoutePolicyRequest struct {
-	Name      string            `json:"name"`
-	CallerID  string            `json:"callerAgentId"`
-	TargetID  string            `json:"targetAgentId"`
-	RouteType string            `json:"routeType"`
-	RouteKey  string            `json:"routeKey"`
-	Effect    RoutePolicyEffect `json:"effect"`
-	Status    RoutePolicyStatus `json:"status"`
-	Priority  *int              `json:"priority"`
+	Name      string                   `json:"name"`
+	CallerID  string                   `json:"callerAgentId"`
+	TargetID  string                   `json:"targetAgentId"`
+	RouteType string                   `json:"routeType"`
+	RouteKey  string                   `json:"routeKey"`
+	Effect    RoutePolicyEffect        `json:"effect"`
+	Status    RoutePolicyStatus        `json:"status"`
+	Priority  *int                     `json:"priority"`
+	Retry     *RoutePolicyRetryRequest `json:"retry"`
 }
 
 type UpdateRoutePolicyRequest struct {
@@ -156,13 +173,15 @@ type UpdateRoutePolicyRequest struct {
 	Effect    *RoutePolicyEffect `json:"effect"`
 	Status    *RoutePolicyStatus `json:"status"`
 	Priority  *int               `json:"priority"`
+	Retry     json.RawMessage    `json:"retry"`
 }
 
 type RouteAccessDecision struct {
-	Allowed  bool   `json:"allowed"`
-	Source   string `json:"source"`
-	PolicyID string `json:"policyId,omitempty"`
-	Reason   string `json:"reason"`
+	Allowed  bool              `json:"allowed"`
+	Source   string            `json:"source"`
+	PolicyID string            `json:"policyId,omitempty"`
+	Reason   string            `json:"reason"`
+	Retry    *RoutePolicyRetry `json:"retry,omitempty"`
 }
 
 type TraceDecision string

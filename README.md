@@ -115,6 +115,22 @@ Sprint 9 promotes Route Governance into first-class route policy objects. Agains
 bash scripts/demo-sprint9-route-policies.sh
 ```
 
+## Sprint 10 Route Policy Retry Demo
+
+Sprint 10 adds per-policy retry overrides. Against a running API, this script creates an allow policy with retry, verifies normalized retry shape, confirms invalid retry values are rejected, and clears the override with PATCH:
+
+```bash
+bash scripts/demo-sprint10-route-policy-retry.sh
+```
+
+## Sprint 11 Transactional Audit Demo
+
+Sprint 11 makes covered management audit writes transactional with the management mutation. Against a running API, this script creates and rotates a credentialed Agent, verifies audit events are visible, and checks credential values remain redacted:
+
+```bash
+bash scripts/demo-sprint11-transactional-audit.sh
+```
+
 ## Admin Key
 
 Management APIs are open by default for local clean-room iteration. If `AGENT_HARBOR_ADMIN_KEY` is set on the server, management endpoints require the same value in `X-Admin-Key`.
@@ -130,6 +146,8 @@ ADMIN_KEY=local-admin-key bash scripts/demo-sprint6-runtime-metrics.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint7-credential-rotation.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint8-management-audit.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint9-route-policies.sh
+ADMIN_KEY=local-admin-key bash scripts/demo-sprint10-route-policy-retry.sh
+ADMIN_KEY=local-admin-key bash scripts/demo-sprint11-transactional-audit.sh
 ```
 
 The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the admin key only protects management and audit APIs. Agent Key TTLs must be between 1 and 3600 seconds, with a 1800 second server default when omitted.
@@ -137,6 +155,20 @@ The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the adm
 ## Proxy Controls
 
 MCP calls derive authorization from the JSON-RPC `method`. New control-plane flows should use `RoutePolicy.routeType=mcp` with route keys such as `initialize`, `tools/list`, or `tools/call`; an empty route key remains a wildcard. Route policies require caller and target Agents to share the same tenant and workspace. Enabled route policies are evaluated before legacy access grants: higher `priority` wins, `deny` wins ties, and disabled policies are ignored. If no matching route policy exists, the runtime falls back to existing `AccessGrant` rows for backward compatibility.
+
+Allow route policies may include a `retry` override:
+
+```json
+{
+  "retry": {
+    "maxAttempts": 2,
+    "backoffMs": 0,
+    "statusCodes": [503]
+  }
+}
+```
+
+When a matching allow policy has `retry`, the proxy uses that policy-level retry instead of the target Agent `channelConfig.retry`. Policies without retry, deny policies, and legacy access grants keep the existing target-level retry behavior.
 
 Target `channelConfig` also supports optional proxy controls:
 
@@ -165,6 +197,8 @@ Target `channelConfig` also supports optional proxy controls:
 `PATCH /api/v1/agents/{id}` updates mutable Agent metadata, status, and full `channelConfig` replacement while keeping `tenantId`, `workspaceId`, and `channelType` immutable. `POST /api/v1/agents/{id}/credentials:rotate` replaces the Agent credential bag; responses continue to omit plaintext credentials. Rotation reuses the existing credential validation and encrypted PostgreSQL persistence path. Agent responses include non-secret `credentialVersion`: `0` means no credential material has been stored, create-time credentials start at `1`, and each rotation increments the version.
 
 Management mutations append audit events to `GET /api/v1/audit/events`. Events record action, actor, resource, scope, summary, and small metadata such as `credentialVersion`, credential key names, route policy effect, and priority. Audit metadata must not contain credential values or Agent Key plaintext. Audit listing accepts `limit`, defaults to 100 events, and caps at 500 events.
+
+Management mutations that produce audit events commit the audit event with the business state change. If audit persistence fails, covered Agent, Agent Key, Access Grant, and Route Policy mutations fail instead of leaving unaudited state behind.
 
 ## PostgreSQL Env
 
@@ -224,5 +258,5 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 ## Next Milestones
 
 - Export runtime trace dimensions to OpenTelemetry spans and metrics.
-- Add route-level retry overrides to route policies.
-- Add transactional audit/outbox semantics for management mutations.
+- Add external audit outbox/export semantics for management mutations.
+- Add route policy import/export and dry-run simulation.

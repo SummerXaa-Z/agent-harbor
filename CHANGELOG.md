@@ -1,3 +1,441 @@
+## [2026-05-31 14:26] Session: Lower Stack Merge
+
+### 完成
+- 将 PR #2-#9 按 bottom-up 顺序逐层 retarget 到 `main` 并使用 merge commit 合入。
+- 将 PR #1 retarget 到 `main`，保留为 Sprint 10/11 + CI/governance 的最终 integration PR。
+- 更新 `docs/engineering/stacked-pr-runbook.md`，记录 lower stack 已合入和 #1 当前 base。
+
+### 决策
+- lower stack 使用 merge commit 而不是 squash，以保留每个 sprint 分支的真实提交 SHA 和审查边界。
+- 顶层 #1 在 retarget 后补一条文档提交触发新的 CI，避免只依赖 base 变更前的检查结果。
+
+### 血泪教训
+- stacked PR 合并后要检查顶层 PR 的真实 diff 和 commit 列表：diff 才说明内容边界，commit 列表可能仍展示顶层分支自己的历史。
+
+### 待办
+- 等待 #1 在 `main` base 上的新 CI 通过后，再合入最终 integration PR。
+
+### 影响文件
+- `docs/engineering/stacked-pr-runbook.md`：记录 #2-#9 merged 和 #1 retarget 到 `main`。
+- `CHANGELOG.md`：记录 lower stack merge 过程和 #1 retarget 决策。
+
+## [2026-05-31 13:46] Session: Top PR Ready Evidence
+
+### 完成
+- 在 `codex/sprint-10-route-policy-retry-overrides` 顶层分支补跑 Sprint 10/11 focused verification，并将证据写入 PR #1。
+- 将 PR #1 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 10-11 retry, transactional audit, and CI governance` 改为 `Sprint 10-11 retry, transactional audit, and CI governance`。
+- 更新 `docs/engineering/stacked-pr-runbook.md`，记录 #2-#9 lower stack 已全部 ready，#1 是 Sprint 10/11 + CI/governance integration PR。
+- 验证 route policy retry override、transactional management audit、PostgreSQL integration、前端 retry form test/build、Go 后端和 Sprint 1-11 demos。
+
+### 决策
+- 保留现有 stacked PR 拓扑，不重写历史、不 force-push；#2-#9 作为 lower ready PR，#1 作为顶层 integration PR 进入 review。
+- lower PR 没有 GitHub checks 的 caveat 继续保留；以 focused local evidence + #1 CI 作为当前审核信号。
+
+### 血泪教训
+- 顶层 integration PR 标 ready 前，runbook 必须同步状态；否则 GitHub ready 状态和文档里的 Draft 叙述会互相打架。
+
+### 待办
+- 后续按 runbook bottom-up merge：先合 #2，再逐层 retarget/merge 到 #9，最后处理 #1。
+
+### 影响文件
+- `docs/engineering/stacked-pr-runbook.md`：更新 lower stack ready 和顶层 PR ready 流程。
+- `CHANGELOG.md`：记录 PR #1 ready evidence 和验证结果。
+
+## [2026-05-31 13:41] Session: Sprint 9 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-9-route-policies` 分支补跑 focused verification，并将证据写入 PR #9。
+- 将 PR #9 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 9 route policy objects` 改为 `Sprint 9 route policy objects`。
+- 验证 Sprint 9 的 route policy CRUD/disable、allow/deny priority precedence、legacy access grant fallback、cross-scope policy handling、Sprint 1-8 demo 回归、PostgreSQL route_policies round-trip、Go 后端和前端 build。
+
+### 决策
+- 保留 #9 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 9 代码和历史，只更新 GitHub PR 元数据。
+- #2-#9 lower stack 已全部补齐 ready evidence；下一步可以回到顶层 #1 处理 integration PR 的 ready 边界。
+
+### 血泪教训
+- route policy 类 PR 的 ready evidence 必须同时证明优先级和回退路径；只验证 allow/deny 不够，还要证明 disabled policy 会被忽略并回退到 legacy grant。
+
+### 待办
+- 下一步检查顶层 PR #1 的 scope 和验证证据，决定是否继续保持 Draft 或拆出/标记 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #9 ready evidence 和 lower stack ready 里程碑。
+
+## [2026-05-31 13:30] Session: Sprint 8 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-8-management-audit` 分支补跑 focused verification，并将证据写入 PR #8。
+- 将 PR #8 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 8 management audit` 改为 `Sprint 8 management audit`。
+- 验证 Sprint 8 的 management audit demo、credentialVersion 递增、audit event 过滤/排序、Sprint 1-7 demo 回归、PostgreSQL audit_events round-trip、Go 后端和前端 build。
+
+### 决策
+- 保留 #8 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 8 代码和历史，只更新 GitHub PR 元数据。
+
+### 血泪教训
+- management audit 类 PR 的 ready evidence 必须证明 metadata 只含非 secret 证据；`credentialVersion=2` 和 `credentialKeys=["apiToken"]` 有用，但 plaintext secret 必须从 response 与 audit list 中同时缺席。
+
+### 待办
+- 下一步从 #9 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #8 ready evidence 和验证结果。
+
+## [2026-05-31 12:45] Session: Sprint 7 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-7-credential-rotation` 分支补跑 focused verification，并将证据写入 PR #7。
+- 将 PR #7 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 7 credential rotation` 改为 `Sprint 7 credential rotation`。
+- 验证 Sprint 7 的 PATCH Agent、credential rotation demo、Sprint 1-6 demo 回归、PostgreSQL rotated credential ciphertext、Go 后端和前端 build。
+
+### 决策
+- 保留 #7 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 7 代码和历史，只更新 GitHub PR 元数据。
+- 修正 PR #7 的 review focus：Sprint 7 不引入 credential version history 或 key version metadata，rotation 语义是替换完整 credential bag。
+
+### 血泪教训
+- credential rotation 类 PR 的 ready evidence 必须证明“下一次 proxy call 用新 secret”而不只是 rotate endpoint 返回 200；否则无法确认运行时真的切换到了新凭据。
+
+### 待办
+- 下一步从 #8 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #7 ready evidence、验证结果和 credentialVersion 边界修正。
+
+## [2026-05-31 04:52] Session: Sprint 6 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-6-runtime-metrics` 分支补跑 focused verification，并将证据写入 PR #6。
+- 将 PR #6 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 6 runtime metrics` 改为 `Sprint 6 runtime metrics`。
+- 验证 Sprint 6 的 runtime metrics demo、Sprint 1-5 demo 回归、PostgreSQL trace metrics round-trip、Go 后端和前端 build。
+
+### 决策
+- 保留 #6 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 6 代码和历史，只更新 GitHub PR 元数据。
+
+### 血泪教训
+- runtime metrics 类 PR 的 ready evidence 必须同时证明聚合结果和原始 trace 字段；`calls=2 allowed=50%` 证明 API 聚合，attempts/status/error/duration 证明可观测性来源。
+
+### 待办
+- 下一步从 #7 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #6 ready evidence 和验证结果。
+
+## [2026-05-31 04:49] Session: Sprint 5 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-5-proxy-retry-classification` 分支补跑 focused verification，并将证据写入 PR #5。
+- 将 PR #5 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 5 proxy retry classification` 改为 `Sprint 5 proxy retry classification`。
+- 验证 Sprint 5 的 retry config demo、Sprint 1-4 demo 回归、PostgreSQL store integration、Go 后端和前端 build。
+
+### 决策
+- 保留 #5 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 5 代码和历史，只更新 GitHub PR 元数据。
+
+### 血泪教训
+- retry/classification 类 PR 的 ready evidence 要同时包含 targeted unit tests 和真实 demo；attempt header、最终 retryable response、DNS/TLS/connect error code、配置校验分别证明不同风险面。
+
+### 待办
+- 下一步从 #6 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #5 ready evidence 和验证结果。
+
+## [2026-05-31 04:29] Session: Sprint 4 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-4-secret-header-injection` 分支补跑 focused verification，并将证据写入 PR #4。
+- 将 PR #4 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 4 secret header injection` 改为 `Sprint 4 secret header injection`。
+- 验证 Sprint 4 的 credential response redaction demo、governance loop demo、PostgreSQL credential encryption integration、Go 后端和前端 build。
+
+### 决策
+- 保留 #4 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 4 代码和历史，只更新 GitHub PR 元数据。
+
+### 血泪教训
+- secret/header 类 PR 的 ready evidence 不能只说“已脱敏”；必须跑真实 API demo，让 create/get/list response redacted 和 PostgreSQL ciphertext 不含明文 secret 都成为可复核证据。
+
+### 待办
+- 下一步从 #5 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #4 ready evidence 和验证结果。
+
+## [2026-05-31 04:25] Session: Sprint 3 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-3-mcp-policy-controls` 分支补跑 focused verification，并将证据写入 PR #3。
+- 将 PR #3 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 3 MCP method policy controls` 改为 `Sprint 3 MCP method policy controls`。
+- 验证 Sprint 3 的 MCP method policy demo、governance loop demo、PostgreSQL store integration、Go 后端和前端 build。
+
+### 决策
+- 保留 #3 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 3 代码和历史，只更新 GitHub PR 元数据。
+
+### 血泪教训
+- 方法级授权类 PR 的 ready evidence 必须包含真实 demo；单靠单元测试不能给 reviewer 直观看到 `tools/list` allowed / `tools/call` denied 的行为证据。
+
+### 待办
+- 下一步从 #4 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #3 ready evidence 和验证结果。
+
+## [2026-05-31 04:21] Session: Sprint 2 Ready Evidence
+
+### 完成
+- 在 `codex/sprint-2-governance-proxy` 分支补跑 focused verification，并将证据写入 PR #2。
+- 将 PR #2 从 Draft 标记为 ready for review，并把标题从 `Draft: Sprint 2 governance proxy cleanup` 改为 `Sprint 2 governance proxy cleanup`。
+- 验证 Sprint 2 的 governance loop demo、cleanup demo、PostgreSQL store integration、Go 后端和前端 build。
+
+### 决策
+- 保留 #2 无 GitHub checks 的事实说明：该分支早于 CI workflow；本轮以本地 focused verification 作为 ready evidence。
+- 不修改 Sprint 2 代码和历史，只更新 GitHub PR 元数据。
+
+### 血泪教训
+- lower stack PR 标 ready 时，标题也要去掉 `Draft:` 前缀；否则 GitHub 状态和人类阅读信号会互相打架。
+
+### 待办
+- 下一步从 #3 开始补 focused verification evidence，再决定是否 ready。
+
+### 影响文件
+- `CHANGELOG.md`：记录 PR #2 ready evidence 和验证结果。
+
+## [2026-05-31 04:17] Session: Stacked PR Runbook
+
+### 完成
+- 新增 `docs/engineering/stacked-pr-runbook.md`，记录 #1-#9 的当前 Draft PR stack、base/head 关系和 review scope。
+- 明确 lower PR #2-#9 当前 checks=0 的原因：CI workflow 是在顶部 PR 分支中引入的。
+- 写入 ready order、CI status caveat、CI-first review 可选策略和 bottom-up merge discipline。
+
+### 决策
+- 暂不重写或 force-push 已存在分支；先用 runbook 固化当前低扰动 stacked review 方案。
+- 将 #1 保持为完整 integration signal，lower PR 进入 ready 前需要补本地 focused verification 证据。
+
+### 血泪教训
+- PR stack 拆好以后，还必须写明 checks 缺口；否则 reviewer 看到 lower PR 没有 checks 时会以为 CI 配置坏了。
+
+### 待办
+- 如需自动化 lower PR checks，需要单独执行 CI-first stack strategy：先落 CI foundation，再重排或合并 sprint branches。
+- 下一步可从 #2 开始补 focused verification evidence，并决定是否 ready for review。
+
+### 影响文件
+- `docs/engineering/stacked-pr-runbook.md`：新增当前 PR stack 操作手册。
+- `CHANGELOG.md`：记录 stack runbook 和 lower PR checks caveat。
+
+## [2026-05-31 04:13] Session: Stacked PR Boundary Split
+
+### 完成
+- 为既有线性 Sprint 分支创建 Draft PR stack：#2 Sprint 2、#3 Sprint 3、#4 Sprint 4、#5 Sprint 5、#6 Sprint 6、#7 Sprint 7、#8 Sprint 8、#9 Sprint 9。
+- 将 Draft PR #1 的 base 从 `main` 改为 `codex/sprint-9-route-policies`，使其只覆盖 Sprint 10、Sprint 11、CI workflow 和 review governance。
+- 重写 PR #1 正文，补充 lower stack 列表、顶部 PR review order、风险关注点和验证证据。
+- 验证分支祖先关系为线性：`main -> sprint2 -> ... -> sprint9 -> sprint10/11`。
+
+### 决策
+- 不重写历史、不 rebase、不拆提交；本轮只调整 GitHub PR 拓扑，降低对已有分支的扰动。
+- 保留所有 PR 为 Draft，作为 review stack 和协作入口，而不是立即进入 ready-to-merge 状态。
+
+### 血泪教训
+- 大型集成 PR 最安全的第一步不是改代码，而是先把 base/head 拓扑调窄；这样 reviewer 可以从底层 Sprint 逐层审，而不是面对全量 diff。
+
+### 待办
+- 如果后续要逐个 ready，需要在各 Sprint PR 上补对应的最新验证证据；较早分支没有当前 CI workflow，需要按需回补或在合并后依赖主线 CI。
+- 决定最终合并策略：逐 PR merge、squash、还是保留 #1 作为 integration checkpoint。
+
+### 影响文件
+- `CHANGELOG.md`：记录 Draft PR stack 创建和 #1 retarget 决策。
+
+## [2026-05-31 04:08] Session: PR Review Governance
+
+### 完成
+- 新增 `.github/pull_request_template.md`，固定 Summary、Scope、Review Boundary、Verification、Data And Security、Follow-Ups 六个 PR 栏目。
+- 新增 `docs/engineering/review-guidelines.md`，沉淀 AgentHarbor sprint stack 的 review 顺序、验证证据、安全治理检查和拆分条件。
+- 新增 `docs/superpowers/plans/2026-05-31-pr-review-governance.md`，记录本次协作治理底座的实施计划。
+
+### 决策
+- PR 模板保持轻量，不引入强制 code owners 或 branch protection，避免在当前 stacked draft PR 阶段制造流程摩擦。
+- Review guide 明确区分 Draft integration checkpoint 和 Ready PR：前者可大，后者必须有窄 review path。
+
+### 血泪教训
+- 只有 CI 不够；大型工程分支还需要 review boundary 文档，否则绿色检查会掩盖“难以审”的协作风险。
+
+### 待办
+- 后续可在 PR #1 拆分前，用该模板重写各子 PR 描述。
+- 如团队成员增加，再考虑补 CODEOWNERS 和 branch protection。
+
+### 影响文件
+- `.github/pull_request_template.md`：新增未来 PR 的结构化描述模板。
+- `docs/engineering/review-guidelines.md`：新增工程 review 指南。
+- `docs/superpowers/plans/2026-05-31-pr-review-governance.md`：新增实施计划。
+- `CHANGELOG.md`：记录协作治理底座落地。
+
+## [2026-05-31 04:03] Session: CI Workflow Foundation
+
+### 完成
+- 新增 `.github/workflows/ci.yml`，在 PR 和 `main` / `codex/**` push 上运行 CI。
+- CI 拆为 Backend、PostgreSQL integration、Frontend 三个 job，分别覆盖 Go test/vet/build、PostgreSQL store integration、pnpm test/build。
+- 新增 `docs/superpowers/plans/2026-05-31-ci-workflow.md`，记录 workflow 结构和验证步骤。
+
+### 决策
+- 使用官方当前主版本 action：`actions/checkout@v6`、`actions/setup-go@v6`、`actions/setup-node@v6`、`pnpm/action-setup@v6`。
+- PostgreSQL integration 独立成 job，避免普通 backend job 依赖服务容器，也让失败边界更清楚。
+- pnpm 只由 `pnpm/action-setup` 安装，依赖缓存交给 `setup-node` 的 `cache: pnpm` 处理，避免重复缓存。
+
+### 血泪教训
+- GitHub Actions workflow 需要和本地验证命令一一对应；否则 PR 上的绿色检查容易给出比本地更弱的信号。
+
+### 待办
+- 推送后观察 Draft PR #1 的 CI checks，若 action 版本或 runner 环境有兼容问题，按失败日志修复。
+
+### 影响文件
+- `.github/workflows/ci.yml`：新增 PR/push 自动验证 workflow。
+- `docs/superpowers/plans/2026-05-31-ci-workflow.md`：新增 CI workflow 实施计划。
+- `CHANGELOG.md`：记录 CI 底座落地和验证策略。
+
+## [2026-05-31 03:57] Session: Draft PR Integration Checkpoint
+
+### 完成
+- 创建 Draft PR [#1](https://github.com/SummerXaa-Z/agent-harbor/pull/1)，作为 AgentHarbor governance foundation through Sprint 11 的协作入口。
+- PR 正文标注这是 large stacked branch，并写明建议 review 顺序、已验证命令和拆分前不要直接 merge 的语境。
+- 确认 PR base 为 `main`，head 为 `codex/sprint-10-route-policy-retry-overrides`，当前状态为 open draft。
+
+### 决策
+- 继续采用低风险集成策略：先用 Draft PR 建立协作与 CI 入口，再决定是否按 Sprint 拆成更小 PR。
+- 不在本轮做本地 merge，也不清理工作区或删除分支。
+
+### 血泪教训
+- 多个 Sprint 堆叠在一条分支上时，PR 正文必须把 review boundary 写清楚，否则 reviewer 很容易把它当成一个普通可合并改动。
+
+### 待办
+- 观察 GitHub CI；如果仓库没有 Actions，需要补 `.github/workflows` 作为后续工程底座任务。
+- 后续可把 PR #1 拆成按 Sprint/能力域分层的 review stack。
+
+### 影响文件
+- `CHANGELOG.md`：记录 Draft PR 创建、集成策略和后续 PR 边界治理事项。
+
+## [2026-05-31 03:51] Session: Sprint 11 Final Verification
+
+### 完成
+- 完成 Sprint 11 Task 5 inline code-quality review，确认 demo script、README、brief、CHANGELOG 与 transactional audit 目标一致。
+- 补充 README Next Milestones，将已落地的 transactional audit 改为后续 external audit outbox/export 方向。
+- 完成最终验证：后端聚焦测试、全量 Go 测试、vet/build、前端 test/build、静态检查、Sprint 11 demo against local API、临时 PostgreSQL integration。
+
+### 决策
+- 避免继续关闭已卡住的 reviewer subagent，改为当前线程 inline review 和验证，保证主线不被 graceful shutdown 阻塞。
+- 保留现有 Sprint 10 dirty worktree，不将其混入 Sprint 11 final verification 提交。
+
+### 血泪教训
+- `close_agent` 对异常或长尾子进程表现为无超时 graceful shutdown，可能卡住当前线程；遇到这种情况应停止重复 close，改用 inline verification 或新 reviewer 继续推进。
+
+### 待办
+- 下一步可整理 Sprint 10 dirty worktree，拆分 retry hardening 与 Sprint 11 transactional audit 的 PR 边界。
+
+### 影响文件
+- `CHANGELOG.md`：记录 Sprint 11 final verification 和智能体关闭卡住的处理经验。
+- `README.md`：更新 Sprint 11 后续路线图措辞。
+
+## [2026-05-31] Session: Sprint 11 Transactional Management Audit
+
+### 完成
+- 新增 audited repository mutation 方法，覆盖 Agent、Agent Key、Access Grant、Route Policy 管理写入。
+- Memory store 在同一把写锁内完成业务变更和 audit append。
+- PostgreSQL store 使用单事务提交业务变更和 `audit_events` 写入。
+- HTTP 管理 mutation 从 best-effort audit 改为事务化 audit 写入。
+- 新增 Sprint 11 demo，验证 audit 可见性和 credential redaction。
+
+### 决策
+- Sprint 11 不引入异步 outbox worker；`audit_events` 先作为本地事务化事件日志。
+- data-plane trace append 保持非阻塞，不纳入本次事务化范围。
+
+### 验证
+- `go test ./internal/httpapi -run 'TestManagementAuditFailureBlocksAgentCreateAndUpdate|TestManagementAuditEvents|TestRoutePolicyCRUDAndAudit' -count=1`
+- `go test ./internal/store -count=1`
+- `go test ./...`
+- `go vet ./...`
+- `go build ./...`
+- `pnpm --dir frontend test`
+- `pnpm --dir frontend build`
+- `git diff --check`
+- `bash -n scripts/demo-sprint11-transactional-audit.sh`
+
+### 影响文件
+- `internal/store/memory.go` / `internal/store/postgres.go`：事务化 audited mutations。
+- `internal/httpapi/server.go` / `server_test.go`：HTTP 管理写入改用 audited repository 方法并补失败注入测试。
+- `internal/store/postgres_test.go`：PostgreSQL rollback regression。
+- `scripts/demo-sprint11-transactional-audit.sh`、`README.md`、`docs/sprints/`：Sprint 11 文档与 demo。
+
+## [2026-05-31 01:47] Session: Sprint 10 Review Hardening
+
+### 完成
+- 根据 review 风险补强 retry 表单校验：新增 `frontend/src/retryForm.ts`，Agent / Route Policy 表单统一拒绝空 retry companion 字段，避免空值被静默序列化成 `0` / `null`。
+- 新增 `frontend/tests/retryForm.test.mjs` 和 `frontend/package.json` 的 `test` script，覆盖默认 retry omit、空字段拒绝、正常 retry 归一化。
+- 新增 `TestProxyDoesNotRetryCanceledContext`，锁定 data-plane 在 `context.Canceled` 时即使配置 retry 也只尝试一次。
+- 确认既有 Sprint 10 dirty worktree 已包含 4MiB proxy body cap、DNS failure、status retry success/exhaustion 等 regression tests。
+
+### 决策
+- 前端 retry 校验统一使用整数边界：`maxAttempts` 1-4，`backoffMs` 0-1000；默认 `1/0` 不发送 retry override。
+- Node 内置 `node:test` 测试放在 `frontend/tests/`，避免进入 Vite/tsc 的应用源码编译范围。
+
+### 血泪教训
+- 跨仓库续接时 `apply_patch` 会按当前线程 cwd 落文件；本次第一次把前端测试误落到 `ai-nexus/frontend/src/`，已删除。后续对 `agent-harbor` 打补丁优先使用绝对路径。
+
+### 验证
+- `go test ./...`
+- `go vet ./...`
+- `go build ./...`
+- `pnpm --dir frontend test`
+- `pnpm --dir frontend build`
+- `git diff --check`
+- `bash -n scripts/demo-governance-loop.sh ... scripts/demo-sprint10-route-policy-retry.sh`
+- `scripts/demo-sprint10-route-policy-retry.sh` against local API on `127.0.0.1:9090`
+
+### 待办
+- 如需提交 PR，建议下一轮 review 聚焦 retry precedence、body cap trace 形态、PostgreSQL JSONB retry persistence、前端 policy retry UX。
+
+### 影响文件
+- `frontend/src/retryForm.ts`：新增 retry 表单解析/校验 helper。
+- `frontend/tests/retryForm.test.mjs` / `frontend/package.json`：新增前端 regression test 和 test script。
+- `frontend/src/App.tsx`：Agent / Policy 表单复用 retry helper。
+- `internal/httpapi/server_test.go`：新增 cancel 不重试 regression test。
+
+## [2026-05-30 22:20] Session: Sprint 10 Route Policy Retry Overrides
+
+### 完成
+- 新增 Sprint 10 brief / design / implementation plan，范围聚焦 RoutePolicy 级 retry override。
+- `RoutePolicy` 新增可选 `retry`，包含 `maxAttempts`、`backoffMs`、`statusCodes`。
+- `POST /api/v1/route-policies` 支持创建 retry override；`PATCH /api/v1/route-policies/{id}` 支持替换或清空 retry。
+- `EvaluateRouteAccess` 在命中的 allow policy 上返回 retry override；deny policy 和 legacy access grant 不返回 override。
+- 数据面 proxy retry 解析顺序改为 policy retry → target Agent `channelConfig.retry` → 默认不重试。
+- PostgreSQL 新增 `006_sprint10_route_policy_retry.sql`，`route_policies.retry` 使用 JSONB 存储。
+- 前端 Create Policy 新增 retry attempts/backoff 字段，Route Governance 表显示 policy retry summary。
+- 新增 `scripts/demo-sprint10-route-policy-retry.sh`，覆盖 policy retry shape、非法参数拒绝和 `PATCH retry:null` 清空。
+
+### 决策
+- RoutePolicy retry 使用和 target Agent retry 相同的边界：`maxAttempts` 1-4、`backoffMs` 0-1000、`statusCodes` 只允许 5xx。
+- 创建 policy 时 retry 对象内缺失字段会归一化：attempts=1、backoff=0、statusCodes=[502,503,504]。
+- policy 没有 retry 时不改变既有行为，继续使用 target Agent retry；legacy access grant 不增加 retry override。
+
+### 验证
+- TDD red/green: policy retry 起初被 JSON unknown field 拒绝或不会影响 proxy → 现在 `maxAttempts=2` 可让 upstream 503 后第二次 202 成功。
+- TDD red/green: route policy retry invalid attempts/status 起初不会被校验 → 现在 create/patch 返回 400。
+- TDD red/green: PostgreSQL route policy retry 起初无类型/无字段 → 现在持久化并随 access decision 返回。
+- `go test ./...`
+- `npm --prefix frontend run build`
+- `ADMIN_KEY=local-admin-key bash scripts/demo-sprint10-route-policy-retry.sh` against local API
+- `go vet ./... && go build ./... && git diff --check`
+- `AGENT_HARBOR_TEST_DATABASE_URL=... go test ./internal/store -run TestPostgresRepositoryRoundTrip -count=1`（临时 PostgreSQL 16 容器）
+- Playwright smoke for Create Policy retry fields / Route Governance / Active Policies / Management Audit against live local backend + Vite dev server
+
+### 影响文件
+- `internal/domain/types.go`：新增 RoutePolicy retry 类型和 access decision retry。
+- `internal/httpapi/server.go` / `server_test.go`：policy retry validation、patch parsing、proxy retry precedence、HTTP tests。
+- `internal/store/memory.go` / `postgres.go` / `postgres_test.go`：policy retry persistence/evaluation。
+- `internal/db/migrations/006_sprint10_route_policy_retry.sql`：新增 retry JSONB 列。
+- `frontend/src/App.tsx` / `types.ts` / `data.ts`：Create Policy retry 字段和表格展示。
+- `scripts/demo-sprint10-route-policy-retry.sh`、`README.md`、`docs/sprints/`、`docs/superpowers/`：Sprint 10 行为记录。
+
 ## [2026-05-30 21:58] Session: Sprint 9 Route Policy Objects
 
 ### 完成

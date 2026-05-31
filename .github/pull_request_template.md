@@ -24,11 +24,8 @@ Name the highest-risk files, behaviors, or compatibility boundaries reviewers sh
 
 ## Verification
 
-- [ ] `go test ./...`
-- [ ] `go vet ./...`
-- [ ] `go build ./...`
-- [ ] `pnpm --dir frontend test`
-- [ ] `pnpm --dir frontend build`
+- [ ] `make check`
+- [ ] `make release-check`, when preparing larger behavior changes or release handoffs
 - [ ] `git diff --check`
 - [ ] PostgreSQL integration, when store or migration behavior changes
 - [ ] Demo script, when user-facing flows change

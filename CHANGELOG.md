@@ -1,3 +1,25 @@
+## [2026-06-01 10:51] Session: Security Policy
+
+### 完成
+- 新增 `SECURITY.md`，定义支持范围、私下报告路径、安全问题范围、修复验证和披露原则。
+- 更新 `README.md` 和 `CONTRIBUTING.md`，把安全报告从普通贡献流程中分离出来。
+
+### 决策
+- 仅声明 latest `main` 为当前支持版本；该 clean-room track 还没有稳定 release/backport 分支。
+- 不硬编码邮箱或外部系统，优先使用 GitHub private vulnerability reporting；不可用时要求先通过仓库 owner 建立私有报告通道。
+
+### 血泪教训
+- 对涉及 Agent Key、凭据、路由授权和审计的项目，缺少 `SECURITY.md` 会让安全报告落入 public issue 或普通 PR 流程，增加泄露面。
+
+### 待办
+- 如果仓库启用正式安全公告或专用响应邮箱，更新 `SECURITY.md` 的报告入口。
+
+### 影响文件
+- `SECURITY.md`：新增安全报告和修复策略。
+- `README.md`：增加安全策略入口。
+- `CONTRIBUTING.md`：补充不要公开提交安全问题。
+- `CHANGELOG.md`：记录安全策略决策。
+
 ## [2026-06-01 10:45] Session: CODEOWNERS Review Routing
 
 ### 完成

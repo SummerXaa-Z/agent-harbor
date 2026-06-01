@@ -7,6 +7,7 @@ AgentHarbor changes should be easy to review in small slices, even when the bran
 - One PR should represent one behavior slice: a domain contract, a management API, a data-plane behavior, a frontend workflow, or a documentation/demo update.
 - A stacked/integration PR is acceptable as a draft checkpoint, but the PR description must say so and list the review order.
 - If a PR changes more than one runtime surface and the review order is not obvious, split it before marking it ready.
+- CODEOWNERS is intentionally coarse today: all paths route to `@SummerXaa-Z` until the project has stable maintainers for backend, frontend, and engineering process surfaces.
 
 ## Review Order For Sprint Stacks
 

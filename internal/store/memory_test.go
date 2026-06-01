@@ -87,6 +87,7 @@ func TestMemoryCapabilityAssignmentEvaluation(t *testing.T) {
 		TenantID:              caller.TenantID,
 		WorkspaceID:           caller.WorkspaceID,
 		CallerInstanceID:      caller.ID,
+		SubjectSelector:       "user:*",
 		Effect:                domain.PolicyEffectAllow,
 		Status:                domain.PolicyStatusEnabled,
 		CreatedAt:             now,
@@ -100,6 +101,7 @@ func TestMemoryCapabilityAssignmentEvaluation(t *testing.T) {
 		TenantID:         caller.TenantID,
 		WorkspaceID:      caller.WorkspaceID,
 		CallerInstanceID: caller.ID,
+		SubjectID:        "user:ops",
 		TargetID:         target.ID,
 		CapabilityID:     capability.ID,
 		Now:              now,
@@ -109,5 +111,51 @@ func TestMemoryCapabilityAssignmentEvaluation(t *testing.T) {
 	}
 	if !allowed.Allowed || allowed.EntitlementID != entitlement.ID || allowed.WorkspaceAssignmentID != workspaceAssignment.ID || allowed.InstanceAssignmentID != instanceAssignment.ID {
 		t.Fatalf("unexpected allowed decision: %#v", allowed)
+	}
+
+	withoutSubject, err := repo.EvaluateCapabilityAccess(ctx, CapabilityAccessRequest{
+		TenantID:         caller.TenantID,
+		WorkspaceID:      caller.WorkspaceID,
+		CallerInstanceID: caller.ID,
+		TargetID:         target.ID,
+		CapabilityID:     capability.ID,
+		Now:              now,
+	})
+	if err != nil {
+		t.Fatalf("evaluate without subject: %v", err)
+	}
+	if withoutSubject.Allowed {
+		t.Fatalf("subject-scoped assignment should deny missing subject: %#v", withoutSubject)
+	}
+
+	denyAssignment, err := repo.CreateInstanceAssignment(ctx, domain.InstanceAssignment{
+		ID:                    "ina_search_deny",
+		WorkspaceAssignmentID: workspaceAssignment.ID,
+		TenantID:              caller.TenantID,
+		WorkspaceID:           caller.WorkspaceID,
+		CallerInstanceID:      caller.ID,
+		SubjectSelector:       "user:ops",
+		Effect:                domain.PolicyEffectDeny,
+		Status:                domain.PolicyStatusEnabled,
+		CreatedAt:             now.Add(time.Minute),
+		UpdatedAt:             now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("create deny instance assignment: %v", err)
+	}
+	deniedBySubject, err := repo.EvaluateCapabilityAccess(ctx, CapabilityAccessRequest{
+		TenantID:         caller.TenantID,
+		WorkspaceID:      caller.WorkspaceID,
+		CallerInstanceID: caller.ID,
+		SubjectID:        "user:ops",
+		TargetID:         target.ID,
+		CapabilityID:     capability.ID,
+		Now:              now,
+	})
+	if err != nil {
+		t.Fatalf("evaluate subject deny: %v", err)
+	}
+	if deniedBySubject.Allowed || deniedBySubject.InstanceAssignmentID != denyAssignment.ID {
+		t.Fatalf("exact deny assignment should take precedence over wildcard allow: %#v", deniedBySubject)
 	}
 }

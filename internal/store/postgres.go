@@ -752,8 +752,12 @@ func (p *Postgres) matchInstanceAssignment(ctx context.Context, req CapabilityAc
 			and workspace_id=$3
 			and caller_instance_id=$4
 			and status=$5
-			and (subject_selector='' or subject_selector=$6)
-		order by case when effect=$7 then 0 else 1 end asc, created_at asc, id asc
+				and (
+					subject_selector=''
+					or subject_selector=$6
+					or (right(subject_selector, 1)='*' and $6 like left(subject_selector, length(subject_selector)-1) || '%')
+				)
+			order by case when effect=$7 then 0 else 1 end asc, created_at asc, id asc
 		limit 1
 	`, workspaceAssignmentID, req.TenantID, req.WorkspaceID, req.CallerInstanceID,
 		string(domain.PolicyStatusEnabled), req.SubjectID, string(domain.PolicyEffectDeny))

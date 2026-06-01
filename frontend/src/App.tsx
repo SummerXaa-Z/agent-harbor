@@ -98,7 +98,7 @@ const defaultPolicyForm = { callerAgentId: "", effect: "allow", name: "", priori
 const defaultCapabilityGrantForm = {
   callerInstanceId: "",
   capabilityId: "",
-  subjectSelector: "user:*",
+  subjectSelector: "",
   targetId: "",
   tenantId: defaultManagementScope.tenantId,
   workspaceId: defaultManagementScope.workspaceId
@@ -1420,7 +1420,7 @@ function CapabilityGovernanceView({
                 ))}
               </select>
             </label>
-            <label>Subject selector<input value={form.subjectSelector} onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })} /></label>
+            <label>Subject selector<input placeholder="optional, e.g. user:*" value={form.subjectSelector} onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })} /></label>
           </div>
           <div className="capability-scope-strip">
             <span>{selectedCapability?.sensitivity ?? "sensitivity"}</span>

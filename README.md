@@ -306,6 +306,8 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 - `POST /api/v1/mcp/agents/{targetId}/rpc`
 - `POST /api/v1/openapi/agents/{targetId}/operations/{operationId}`
 - `ANY /api/v1/openapi/agents/{targetId}/{relativePath...}`
+
+`instance-assignments.subjectSelector` is optional. Empty selectors match any subject for the caller instance; suffix `*` selectors such as `user:*` match subjects with that prefix from `X-AgentHarbor-Subject-Id`.
 - `GET /api/v1/audit/events?tenantId=&workspaceId=&action=&resourceType=&resourceId=&limit=`
 - `GET /api/v1/audit/traces?tenantId=&workspaceId=&runId=&decision=&callerAgentId=&targetAgentId=`
 - `GET /api/v1/metrics/runtime?tenantId=&workspaceId=`

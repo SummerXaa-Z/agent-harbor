@@ -214,6 +214,8 @@ InstanceAssignment {
 }
 ```
 
+`subjectSelector` is optional. Empty selectors match any subject behind the caller instance. Suffix `*` selectors, for example `user:*`, match subjects with the same prefix.
+
 Initial caller instance types:
 
 - `agent`

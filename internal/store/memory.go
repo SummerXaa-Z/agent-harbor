@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -948,7 +949,7 @@ func (m *Memory) matchWorkspaceAssignmentLocked(req CapabilityAccessRequest, ent
 		if assignment.Status != domain.PolicyStatusEnabled {
 			continue
 		}
-		if !found || policyEffectPrecedes(assignment.Effect, best.Effect) || assignment.CreatedAt.Before(best.CreatedAt) {
+		if !found || assignmentPrecedes(assignment.Effect, assignment.CreatedAt, assignment.ID, best.Effect, best.CreatedAt, best.ID) {
 			best = assignment
 			found = true
 		}
@@ -966,10 +967,10 @@ func (m *Memory) matchInstanceAssignmentLocked(req CapabilityAccessRequest, work
 		if assignment.Status != domain.PolicyStatusEnabled {
 			continue
 		}
-		if assignment.SubjectSelector != "" && assignment.SubjectSelector != req.SubjectID {
+		if !subjectSelectorMatches(assignment.SubjectSelector, req.SubjectID) {
 			continue
 		}
-		if !found || policyEffectPrecedes(assignment.Effect, best.Effect) || assignment.CreatedAt.Before(best.CreatedAt) {
+		if !found || assignmentPrecedes(assignment.Effect, assignment.CreatedAt, assignment.ID, best.Effect, best.CreatedAt, best.ID) {
 			best = assignment
 			found = true
 		}
@@ -992,6 +993,31 @@ func tenantEntitlementPrecedes(left domain.TenantEntitlement, right domain.Tenan
 
 func policyEffectPrecedes(left domain.PolicyEffect, right domain.PolicyEffect) bool {
 	return left == domain.PolicyEffectDeny && right != domain.PolicyEffectDeny
+}
+
+func assignmentPrecedes(leftEffect domain.PolicyEffect, leftCreatedAt time.Time, leftID string, rightEffect domain.PolicyEffect, rightCreatedAt time.Time, rightID string) bool {
+	if leftEffect != rightEffect {
+		return leftEffect == domain.PolicyEffectDeny
+	}
+	if !leftCreatedAt.Equal(rightCreatedAt) {
+		return leftCreatedAt.Before(rightCreatedAt)
+	}
+	return leftID < rightID
+}
+
+func subjectSelectorMatches(selector string, subjectID string) bool {
+	selector = strings.TrimSpace(selector)
+	subjectID = strings.TrimSpace(subjectID)
+	if selector == "" {
+		return true
+	}
+	if selector == subjectID {
+		return true
+	}
+	if strings.HasSuffix(selector, "*") {
+		return strings.HasPrefix(subjectID, strings.TrimSuffix(selector, "*"))
+	}
+	return false
 }
 
 func routePolicyMatchesScope(policy domain.RoutePolicy, scope ManagementScope) bool {

@@ -2713,6 +2713,12 @@ func (s *Server) discoverMCPCapabilities(ctx context.Context, target domain.Agen
 	if err != nil {
 		return nil, domain.UpstreamError("capability discovery request could not be prepared")
 	}
+	timeout, err := proxyTimeoutFromConfig(target.ChannelConfig)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, domain.UpstreamError("capability discovery request could not be prepared")
@@ -2733,8 +2739,15 @@ func (s *Server) discoverMCPCapabilities(ctx context.Context, target domain.Agen
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, domain.UpstreamError("capability discovery upstream returned non-2xx status")
 	}
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, maxProxyBodyBytes+1))
+	if err != nil {
+		return nil, domain.UpstreamError("capability discovery response could not be read")
+	}
+	if len(responseBody) > maxProxyBodyBytes {
+		return nil, domain.PayloadTooLarge("capability discovery response exceeds 4MiB")
+	}
 	var result mcpToolsListResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxProxyBodyBytes)).Decode(&result); err != nil {
+	if err := json.Unmarshal(responseBody, &result); err != nil {
 		return nil, domain.BadRequest("VALIDATION_FAILED", "capability discovery response must be valid MCP tools/list JSON")
 	}
 	existing, err := s.repo.ListCapabilities(ctx, store.CapabilityFilter{TargetID: target.ID})

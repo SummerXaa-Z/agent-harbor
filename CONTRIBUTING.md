@@ -8,6 +8,8 @@ Do not copy source code, migrations, tests, deployment scripts, adapter code, ge
 
 When a change depends on product behavior, record the requirement in docs, tests, or PR notes so reviewers can audit the source of the behavior without comparing against legacy implementation code.
 
+Do not file public issues for suspected vulnerabilities, credential leaks, authorization bypasses, or audit integrity failures. Follow the private reporting path in `SECURITY.md`.
+
 ## Branches And PRs
 
 - Start from the latest `main`.

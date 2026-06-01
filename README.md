@@ -4,7 +4,7 @@ Clean-room Go implementation track for the AgentHarbor Agent Gateway product mod
 
 This module is intentionally isolated from the existing Rust/React runtime. Do not copy source code, migrations, tests, deployment scripts, adapter code, or generated assets from the existing implementation into this directory. Use only product requirements, public protocols, and public product references.
 
-For contribution workflow, verification expectations, and clean-room guardrails, see [CONTRIBUTING.md](CONTRIBUTING.md).
+For contribution workflow, verification expectations, and clean-room guardrails, see [CONTRIBUTING.md](CONTRIBUTING.md). For private vulnerability reporting and security handling, see [SECURITY.md](SECURITY.md).
 
 ## Scope
 

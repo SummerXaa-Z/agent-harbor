@@ -1,3 +1,25 @@
+## [2026-06-01 11:49] Session: CI Job Timeouts
+
+### 完成
+- 为 `.github/workflows/ci.yml` 的 Backend、PostgreSQL integration、Frontend jobs 增加显式 `timeout-minutes`。
+- 更新 `CONTRIBUTING.md` 和 `docs/engineering/release-checklist.md`，说明 CI timeout 应视为 workflow 或测试路径问题。
+
+### 决策
+- Backend 和 Frontend 设置 10 分钟，PostgreSQL integration 设置 15 分钟；当前实际运行远低于该值，预算保守且足以避免异常挂起。
+- 不给单个 step 设置 timeout，先用 job-level timeout 控制整体队列占用。
+
+### 血泪教训
+- 只有 concurrency 只能取消新旧 run，不能处理单个 job 卡死；CI 需要同时有取消策略和超时预算。
+
+### 待办
+- 如果后续新增更重的 integration 或 e2e job，需要单独定义 timeout，而不是沿用默认值。
+
+### 影响文件
+- `.github/workflows/ci.yml`：新增 job-level timeout。
+- `CONTRIBUTING.md`：补充 CI timeout 语义。
+- `docs/engineering/release-checklist.md`：补充 timeout 检查项。
+- `CHANGELOG.md`：记录 CI timeout 策略。
+
 ## [2026-06-01 11:43] Session: Issue Templates
 
 ### 完成

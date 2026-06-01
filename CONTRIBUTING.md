@@ -22,6 +22,8 @@ Do not file public issues for suspected vulnerabilities, credential leaks, autho
 
 ## Local Verification
 
+Editors should honor the root `.editorconfig`: keep text files UTF-8 with LF endings and final newlines, use tabs for Go files and `Makefile`, and use two-space indentation elsewhere. Git also normalizes text files to LF via `.gitattributes`.
+
 Run the standard local checks before opening or updating a PR:
 
 ```bash

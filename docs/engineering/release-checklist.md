@@ -10,6 +10,8 @@ Run the uncached local release gate:
 make release-check
 ```
 
+Use the checked-in Go, Node, and pnpm pins when running release checks locally or in CI.
+
 This covers:
 
 - uncached Go tests via `make test-fresh`

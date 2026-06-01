@@ -24,6 +24,8 @@ Do not file public issues for suspected vulnerabilities, credential leaks, autho
 
 Editors should honor the root `.editorconfig`: keep text files UTF-8 with LF endings and final newlines, use tabs for Go files and `Makefile`, and use two-space indentation elsewhere. Git also normalizes text files to LF via `.gitattributes`.
 
+Use the checked-in toolchain pins for local verification: Go is declared in `go.mod`, Node is declared in `.node-version`, and the frontend pnpm version is declared in `frontend/package.json`.
+
 Run the standard local checks before opening or updating a PR:
 
 ```bash

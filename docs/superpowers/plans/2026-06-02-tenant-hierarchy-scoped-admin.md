@@ -1,6 +1,6 @@
 # Tenant Hierarchy and Scoped Administration Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add explicit three-level tenant hierarchy, subtree-scoped management reads, and parent-to-child capability entitlement validation.
 
@@ -16,7 +16,7 @@
 - Modify: `internal/domain/types.go`
 - Modify: `internal/store/memory.go`
 
-- [ ] Add tenant types in `internal/domain/types.go`:
+- [x] Add tenant types in `internal/domain/types.go`:
 
 ```go
 type TenantStatus string
@@ -44,7 +44,7 @@ type CreateTenantRequest struct {
 }
 ```
 
-- [ ] Add store filter and repository methods in `internal/store/memory.go`:
+- [x] Add store filter and repository methods in `internal/store/memory.go`:
 
 ```go
 type TenantFilter struct {
@@ -66,9 +66,9 @@ GetTenant(context.Context, string) (domain.Tenant, bool, error)
 - Modify: `internal/store/memory.go`
 - Modify: `internal/store/memory_test.go`
 
-- [ ] Add `tenants map[string]domain.Tenant` to `Memory` and initialize it.
-- [ ] Implement create/list/get tenant methods. `ListTenants(TenantFilter{TenantID: "root"})` returns root plus descendants; `ParentTenantID` filters direct children.
-- [ ] Add helper:
+- [x] Add `tenants map[string]domain.Tenant` to `Memory` and initialize it.
+- [x] Implement create/list/get tenant methods. `ListTenants(TenantFilter{TenantID: "root"})` returns root plus descendants; `ParentTenantID` filters direct children.
+- [x] Add helper:
 
 ```go
 func (m *Memory) tenantIDsForScopeLocked(tenantID string) map[string]struct{} {
@@ -96,8 +96,8 @@ func (m *Memory) tenantIDsForScopeLocked(tenantID string) map[string]struct{} {
 }
 ```
 
-- [ ] Update memory list filters to use descendant tenant sets where applicable.
-- [ ] Add tests proving registered root scope includes descendant agents and unregistered flat scope remains exact.
+- [x] Update memory list filters to use descendant tenant sets where applicable.
+- [x] Add tests proving registered root scope includes descendant agents and unregistered flat scope remains exact.
 
 ### Task 3: PostgreSQL Tenant Persistence
 
@@ -106,7 +106,7 @@ func (m *Memory) tenantIDsForScopeLocked(tenantID string) map[string]struct{} {
 - Modify: `internal/store/postgres.go`
 - Modify: `internal/store/postgres_test.go`
 
-- [ ] Add migration:
+- [x] Add migration:
 
 ```sql
 create table if not exists tenants (
@@ -122,10 +122,10 @@ create table if not exists tenants (
 create index if not exists tenants_parent_idx on tenants(parent_tenant_id);
 ```
 
-- [ ] Implement Postgres tenant create/list/get and audit transaction method.
-- [ ] Add Postgres descendant helper using recursive CTE and fallback exact-match when no tenant row exists.
-- [ ] Update Postgres list methods to use descendant tenant arrays.
-- [ ] Extend Postgres tests with tenant hierarchy round trip and descendant agent list scope.
+- [x] Implement Postgres tenant create/list/get and audit transaction method.
+- [x] Add Postgres descendant helper using recursive CTE and fallback exact-match when no tenant row exists.
+- [x] Update Postgres list methods to use descendant tenant arrays.
+- [x] Extend Postgres tests with tenant hierarchy round trip and descendant agent list scope.
 
 ### Task 4: Tenant HTTP API
 
@@ -133,7 +133,7 @@ create index if not exists tenants_parent_idx on tenants(parent_tenant_id);
 - Modify: `internal/httpapi/server.go`
 - Modify: `internal/httpapi/server_test.go`
 
-- [ ] Register routes inside the admin group:
+- [x] Register routes inside the admin group:
 
 ```go
 r.Post("/tenants", s.createTenant)
@@ -141,13 +141,13 @@ r.Get("/tenants", s.listTenants)
 r.Get("/tenants/{id}", s.getTenant)
 ```
 
-- [ ] Add request normalization:
+- [x] Add request normalization:
 
 ```go
 func normalizeTenantStatus(value domain.TenantStatus, fallback domain.TenantStatus) (domain.TenantStatus, error)
 ```
 
-- [ ] Implement `tenantFromRequest`:
+- [x] Implement `tenantFromRequest`:
   - Trim ID, parent, and name.
   - Generate `security.NewID("ten")` when ID is empty.
   - Require name.
@@ -155,8 +155,8 @@ func normalizeTenantStatus(value domain.TenantStatus, fallback domain.TenantStat
   - Parent must exist, be active, and have level lower than 3.
   - Child level is parent level + 1.
 
-- [ ] Implement create/list/get handlers and management audit event `tenant.created`.
-- [ ] Add HTTP tests for root/child/grandchild creation, fourth-level rejection, and tenant subtree listing.
+- [x] Implement create/list/get handlers and management audit event `tenant.created`.
+- [x] Add HTTP tests for root/child/grandchild creation, fourth-level rejection, and tenant subtree listing.
 
 ### Task 5: Parent-to-Child Entitlement Validation
 
@@ -164,7 +164,7 @@ func normalizeTenantStatus(value domain.TenantStatus, fallback domain.TenantStat
 - Modify: `internal/httpapi/server.go`
 - Modify: `internal/httpapi/server_test.go`
 
-- [ ] Replace same-tenant-only validation in `createTenantEntitlement` with:
+- [x] Replace same-tenant-only validation in `createTenantEntitlement` with:
 
 ```go
 allowed, err := s.tenantCanReceiveTargetEntitlement(r.Context(), target.TenantID, req.TenantID)
@@ -178,7 +178,7 @@ if !allowed {
 }
 ```
 
-- [ ] Implement ancestry helper:
+- [x] Implement ancestry helper:
 
 ```go
 func (s *Server) tenantCanReceiveTargetEntitlement(ctx context.Context, targetTenantID string, granteeTenantID string) (bool, error) {
@@ -203,7 +203,7 @@ func (s *Server) tenantCanReceiveTargetEntitlement(ctx context.Context, targetTe
 }
 ```
 
-- [ ] Add HTTP tests:
+- [x] Add HTTP tests:
   - Root target can grant approved capability to descendant tenant.
   - Root target cannot grant approved capability to unrelated registered tenant.
   - Same-tenant legacy grant still works without tenant records.
@@ -216,36 +216,36 @@ func (s *Server) tenantCanReceiveTargetEntitlement(ctx context.Context, targetTe
 - Modify: `scripts/demo-all.sh`
 - Create: `scripts/demo-sprint14-tenant-hierarchy.sh`
 
-- [ ] Document tenant API and grant semantics.
-- [ ] Add demo script that creates root/child/grandchild tenants, rejects level 4, and proves root target can grant to child tenant.
-- [ ] Add the script to demo lint and demo-all.
+- [x] Document tenant API and grant semantics.
+- [x] Add demo script that creates root/child/grandchild tenants, rejects level 4, and proves root target can grant to child tenant.
+- [x] Add the script to demo lint and demo-all.
 
 ### Task 7: Verification and Finish
 
-- [ ] Run focused tests:
+- [x] Run focused tests:
 
 ```sh
 go test ./internal/store ./internal/httpapi
 ```
 
-- [ ] Run full tests:
+- [x] Run full tests:
 
 ```sh
 go test ./...
 ```
 
-- [ ] Run demo lint:
+- [x] Run demo lint:
 
 ```sh
 make demo-scripts-lint
 ```
 
-- [ ] Run diff checks:
+- [x] Run diff checks:
 
 ```sh
 git diff --check
 git status --short
 ```
 
-- [ ] Commit, push, and create a stacked PR on top of `codex/data-permission-enforcement`.
+- [x] Commit, push, and create a stacked PR on top of `codex/data-permission-enforcement`.
 

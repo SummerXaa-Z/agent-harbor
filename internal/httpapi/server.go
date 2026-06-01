@@ -93,6 +93,9 @@ func (s *Server) Router() http.Handler {
 		r.Get("/contracts/channels", s.listChannelContracts)
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAdmin)
+			r.Post("/tenants", s.createTenant)
+			r.Get("/tenants", s.listTenants)
+			r.Get("/tenants/{id}", s.getTenant)
 			r.Post("/agents", s.createAgent)
 			r.Get("/agents", s.listAgents)
 			r.Get("/agents/{id}", s.getAgent)
@@ -184,6 +187,102 @@ func (s *Server) listProviderContracts(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) listChannelContracts(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, contracts.Channels())
+}
+
+func (s *Server) createTenant(w http.ResponseWriter, r *http.Request) {
+	var req domain.CreateTenantRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	tenant, err := s.tenantFromRequest(r.Context(), req)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	created, err := s.repo.CreateTenantWithAudit(r.Context(), tenant, func(created domain.Tenant) domain.AuditEvent {
+		return s.managementAuditEvent(r, created.ID, "", "tenant.created", "tenant", created.ID, "Tenant created", map[string]any{
+			"parentTenantId": created.ParentTenantID,
+			"level":          created.Level,
+			"status":         created.Status,
+		})
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) tenantFromRequest(ctx context.Context, req domain.CreateTenantRequest) (domain.Tenant, error) {
+	req.ID = strings.TrimSpace(req.ID)
+	req.ParentTenantID = strings.TrimSpace(req.ParentTenantID)
+	req.Name = strings.TrimSpace(req.Name)
+	if req.ID == "" {
+		req.ID = security.NewID("ten")
+	}
+	if !validTenantID(req.ID) {
+		return domain.Tenant{}, domain.BadRequest("VALIDATION_FAILED", "tenant id is invalid")
+	}
+	if req.Name == "" {
+		return domain.Tenant{}, domain.BadRequest("VALIDATION_FAILED", "name is required")
+	}
+	status, err := normalizeTenantStatus(req.Status, domain.TenantStatusActive)
+	if err != nil {
+		return domain.Tenant{}, err
+	}
+	level := 1
+	if req.ParentTenantID != "" {
+		parent, ok, err := s.repo.GetTenant(ctx, req.ParentTenantID)
+		if err != nil {
+			return domain.Tenant{}, err
+		}
+		if !ok {
+			return domain.Tenant{}, domain.NotFound("parent tenant not found")
+		}
+		if parent.Status != domain.TenantStatusActive {
+			return domain.Tenant{}, domain.BadRequest("VALIDATION_FAILED", "parent tenant must be active")
+		}
+		if parent.Level >= 3 {
+			return domain.Tenant{}, domain.BadRequest("VALIDATION_FAILED", "tenant hierarchy supports at most three levels")
+		}
+		level = parent.Level + 1
+	}
+	now := s.now()
+	return domain.Tenant{
+		ID:             req.ID,
+		ParentTenantID: req.ParentTenantID,
+		Level:          level,
+		Name:           req.Name,
+		Status:         status,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}, nil
+}
+
+func (s *Server) listTenants(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.repo.ListTenants(r.Context(), store.TenantFilter{
+		TenantID:       strings.TrimSpace(r.URL.Query().Get("tenantId")),
+		ParentTenantID: strings.TrimSpace(r.URL.Query().Get("parentTenantId")),
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
+func (s *Server) getTenant(w http.ResponseWriter, r *http.Request) {
+	tenant, ok, err := s.repo.GetTenant(r.Context(), strings.TrimSpace(chi.URLParam(r, "id")))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("tenant not found"))
+		return
+	}
+	writeJSON(w, http.StatusOK, tenant)
 }
 
 func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
@@ -1054,8 +1153,13 @@ func (s *Server) createTenantEntitlement(w http.ResponseWriter, r *http.Request)
 		writeError(w, domain.NotFound("target agent not found"))
 		return
 	}
-	if target.TenantID != req.TenantID {
-		writeError(w, domain.BadRequest("VALIDATION_FAILED", "tenant entitlement tenantId must match target tenantId for this MVP"))
+	allowedTenant, err := s.tenantCanReceiveTargetEntitlement(r.Context(), target.TenantID, req.TenantID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !allowedTenant {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "tenantId must match target tenantId or be a descendant tenant"))
 		return
 	}
 	capability, ok, err := s.repo.GetCapability(r.Context(), req.CapabilityID)
@@ -2994,6 +3098,23 @@ func normalizePolicyStatus(value domain.PolicyStatus, fallback domain.PolicyStat
 	return value, nil
 }
 
+func normalizeTenantStatus(value domain.TenantStatus, fallback domain.TenantStatus) (domain.TenantStatus, error) {
+	if value == "" {
+		return fallback, nil
+	}
+	if value != domain.TenantStatusActive && value != domain.TenantStatusDisabled {
+		return "", domain.BadRequest("VALIDATION_FAILED", "status must be active or disabled")
+	}
+	return value, nil
+}
+
+func validTenantID(value string) bool {
+	if value == "" || len(value) > 128 {
+		return false
+	}
+	return !strings.ContainsAny(value, " \t\r\n/")
+}
+
 func normalizePolicyPriority(value *int) (int, error) {
 	if value == nil {
 		return 100, nil
@@ -3047,6 +3168,32 @@ func (s *Server) effectiveWorkspaceAssignmentDataScopes(ctx context.Context, ent
 		return nil, domain.BadRequest("VALIDATION_FAILED", "workspace assignment dataScopes exceed tenant entitlement dataScopes")
 	}
 	return scopes, nil
+}
+
+func (s *Server) tenantCanReceiveTargetEntitlement(ctx context.Context, targetTenantID string, granteeTenantID string) (bool, error) {
+	targetTenantID = strings.TrimSpace(targetTenantID)
+	granteeTenantID = strings.TrimSpace(granteeTenantID)
+	if targetTenantID == "" || granteeTenantID == "" {
+		return false, nil
+	}
+	if targetTenantID == granteeTenantID {
+		return true, nil
+	}
+	current, ok, err := s.repo.GetTenant(ctx, granteeTenantID)
+	if err != nil || !ok {
+		return false, err
+	}
+	for current.ParentTenantID != "" {
+		if current.ParentTenantID == targetTenantID {
+			return true, nil
+		}
+		parent, ok, err := s.repo.GetTenant(ctx, current.ParentTenantID)
+		if err != nil || !ok {
+			return false, err
+		}
+		current = parent
+	}
+	return false, nil
 }
 
 func normalizeRoutePolicyEffect(value domain.RoutePolicyEffect, fallback domain.RoutePolicyEffect) (domain.RoutePolicyEffect, error) {

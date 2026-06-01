@@ -564,6 +564,71 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPostgresTenantHierarchyRoundTrip(t *testing.T) {
+	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set AGENT_HARBOR_TEST_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	defer pool.Close()
+	if err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	repo := store.NewPostgresWithCredentialKey(pool, []byte("0123456789abcdef0123456789abcdef"))
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	rootID := security.NewID("tenant")
+	childID := security.NewID("tenant")
+	grandchildID := security.NewID("tenant")
+	unrelatedID := security.NewID("tenant")
+
+	for _, tenant := range []domain.Tenant{
+		{ID: rootID, Name: "PG Root", Level: 1, Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: childID, ParentTenantID: rootID, Name: "PG Child", Level: 2, Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: grandchildID, ParentTenantID: childID, Name: "PG Grandchild", Level: 3, Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: unrelatedID, Name: "PG Unrelated", Level: 1, Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now},
+	} {
+		if _, err := repo.CreateTenant(ctx, tenant); err != nil {
+			t.Fatalf("create tenant %s: %v", tenant.ID, err)
+		}
+	}
+	for _, agent := range []domain.Agent{
+		{ID: security.NewID("agt"), TenantID: rootID, WorkspaceID: "ws-pg-tree", Name: "Root Agent", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: security.NewID("agt"), TenantID: childID, WorkspaceID: "ws-pg-tree", Name: "Child Agent", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: security.NewID("agt"), TenantID: grandchildID, WorkspaceID: "ws-pg-tree", Name: "Grandchild Agent", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: security.NewID("agt"), TenantID: unrelatedID, WorkspaceID: "ws-pg-tree", Name: "Unrelated Agent", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now},
+	} {
+		if _, err := repo.CreateAgent(ctx, agent); err != nil {
+			t.Fatalf("create agent %s: %v", agent.ID, err)
+		}
+	}
+
+	tenants, err := repo.ListTenants(ctx, store.TenantFilter{TenantID: rootID})
+	if err != nil {
+		t.Fatalf("list tenants: %v", err)
+	}
+	if got := len(tenants); got != 3 {
+		t.Fatalf("tenant subtree length = %d, want 3; rows=%#v", got, tenants)
+	}
+	child, ok, err := repo.GetTenant(ctx, childID)
+	if err != nil {
+		t.Fatalf("get child tenant: %v", err)
+	}
+	if !ok || child.ParentTenantID != rootID || child.Level != 2 {
+		t.Fatalf("unexpected child tenant: ok=%v row=%#v", ok, child)
+	}
+	agents, err := repo.ListAgents(ctx, store.AgentFilter{ManagementScope: store.ManagementScope{TenantID: rootID, WorkspaceID: "ws-pg-tree"}})
+	if err != nil {
+		t.Fatalf("list agents by tenant subtree: %v", err)
+	}
+	if got := len(agents); got != 3 {
+		t.Fatalf("subtree agent length = %d, want 3; rows=%#v", got, agents)
+	}
+}
+
 func TestPostgresAuditedCreateAgentRollsBackWhenAuditFails(t *testing.T) {
 	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
 	if databaseURL == "" {

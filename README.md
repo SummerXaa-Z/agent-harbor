@@ -188,6 +188,18 @@ ALLOWED_TOOL=search_customer \
   bash scripts/demo-sprint13-data-permission-enforcement.sh
 ```
 
+## Sprint 14 Tenant Hierarchy Demo
+
+Sprint 14 adds explicit tenant hierarchy for the primary governance journey. Tenants can now be registered as a three-level tree, parent tenant management filters include descendants, and a target owned by a parent tenant can grant approved capabilities to a descendant tenant. Existing flat tenant IDs keep exact-match behavior until they are registered as tenants.
+
+```bash
+bash scripts/demo-sprint14-tenant-hierarchy.sh
+
+MCP_ENDPOINT=https://mcp.example.test/rpc \
+ALLOWED_TOOL=search_customer \
+  bash scripts/demo-sprint14-tenant-hierarchy.sh
+```
+
 ## Admin Key
 
 Management APIs are open by default for local clean-room iteration. If `AGENT_HARBOR_ADMIN_KEY` is set on the server, management endpoints require the same value in `X-Admin-Key`.
@@ -207,6 +219,7 @@ ADMIN_KEY=local-admin-key bash scripts/demo-sprint10-route-policy-retry.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint11-transactional-audit.sh
 ADMIN_KEY=local-admin-key MCP_ENDPOINT=https://mcp.example.test/rpc bash scripts/demo-sprint12-mcp-capability-governance.sh
 ADMIN_KEY=local-admin-key MCP_ENDPOINT=https://mcp.example.test/rpc bash scripts/demo-sprint13-data-permission-enforcement.sh
+ADMIN_KEY=local-admin-key MCP_ENDPOINT=https://mcp.example.test/rpc bash scripts/demo-sprint14-tenant-hierarchy.sh
 ```
 
 The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the admin key only protects management and audit APIs. Agent Key TTLs must be between 1 and 3600 seconds, with a 1800 second server default when omitted.
@@ -289,6 +302,9 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 - `GET /healthz`
 - `GET /api/v1/contracts/providers`
 - `GET /api/v1/contracts/channels`
+- `POST /api/v1/tenants`
+- `GET /api/v1/tenants?tenantId=&parentTenantId=`
+- `GET /api/v1/tenants/{id}`
 - `POST /api/v1/agents`
 - `GET /api/v1/agents?tenantId=&workspaceId=`
 - `GET /api/v1/agents/{id}`
@@ -323,6 +339,8 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 `instance-assignments.subjectSelector` is optional. Empty selectors match any subject for the caller instance; suffix `*` selectors such as `user:*` match subjects with that prefix from `X-AgentHarbor-Subject-Id`.
 
 `dataScopes` are hierarchical. A child assignment may fill an empty parent dimension such as `table`, but it cannot change a fixed parent dimension such as `region` or `tenantFilter`. The runtime trace records the effective inherited scope list, and governed MCP `tools/call` forwards that same list in `X-AgentHarbor-Context`. Caller-supplied, static target, and credential-backed values for `X-AgentHarbor-Context` are reserved and not forwarded.
+
+Registered tenants are hierarchical with a maximum depth of three. `GET` list APIs that accept `tenantId` include descendants when the tenant exists in the registry; unregistered tenant strings keep the previous exact-match behavior. Tenant entitlements may grant a target capability to the target tenant itself or to a registered descendant tenant.
 - `GET /api/v1/audit/events?tenantId=&workspaceId=&action=&resourceType=&resourceId=&limit=`
 - `GET /api/v1/audit/traces?tenantId=&workspaceId=&runId=&decision=&callerAgentId=&targetAgentId=`
 - `GET /api/v1/metrics/runtime?tenantId=&workspaceId=`

@@ -176,6 +176,18 @@ DENIED_TOOL=export_contracts \
   bash scripts/demo-sprint12-mcp-capability-governance.sh
 ```
 
+## Sprint 13 Data Permission Enforcement Demo
+
+Sprint 13 adds hierarchical data permission enforcement for MCP capabilities. Capability, tenant entitlement, workspace assignment, and instance assignment `dataScopes` form OR alternatives. Each child scope must be equal to or narrower than a parent scope; omitted child scopes inherit the parent boundary. Governed MCP `tools/call` requests also send a reserved `X-AgentHarbor-Context` header containing tenant/workspace/caller/capability identity and the effective `dataScopes` as base64url JSON.
+
+AgentHarbor still does not rewrite arbitrary tool arguments. Downstream MCP servers, agents, data lakes, warehouses, and databases should apply concrete predicates from the trusted context envelope.
+
+```bash
+MCP_ENDPOINT=https://mcp.example.test/rpc \
+ALLOWED_TOOL=search_customer \
+  bash scripts/demo-sprint13-data-permission-enforcement.sh
+```
+
 ## Admin Key
 
 Management APIs are open by default for local clean-room iteration. If `AGENT_HARBOR_ADMIN_KEY` is set on the server, management endpoints require the same value in `X-Admin-Key`.
@@ -194,6 +206,7 @@ ADMIN_KEY=local-admin-key bash scripts/demo-sprint9-route-policies.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint10-route-policy-retry.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint11-transactional-audit.sh
 ADMIN_KEY=local-admin-key MCP_ENDPOINT=https://mcp.example.test/rpc bash scripts/demo-sprint12-mcp-capability-governance.sh
+ADMIN_KEY=local-admin-key MCP_ENDPOINT=https://mcp.example.test/rpc bash scripts/demo-sprint13-data-permission-enforcement.sh
 ```
 
 The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the admin key only protects management and audit APIs. Agent Key TTLs must be between 1 and 3600 seconds, with a 1800 second server default when omitted.
@@ -308,6 +321,8 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 - `ANY /api/v1/openapi/agents/{targetId}/{relativePath...}`
 
 `instance-assignments.subjectSelector` is optional. Empty selectors match any subject for the caller instance; suffix `*` selectors such as `user:*` match subjects with that prefix from `X-AgentHarbor-Subject-Id`.
+
+`dataScopes` are hierarchical. A child assignment may fill an empty parent dimension such as `table`, but it cannot change a fixed parent dimension such as `region` or `tenantFilter`. The runtime trace records the effective inherited scope list, and governed MCP `tools/call` forwards that same list in `X-AgentHarbor-Context`. Caller-supplied, static target, and credential-backed values for `X-AgentHarbor-Context` are reserved and not forwarded.
 - `GET /api/v1/audit/events?tenantId=&workspaceId=&action=&resourceType=&resourceId=&limit=`
 - `GET /api/v1/audit/traces?tenantId=&workspaceId=&runId=&decision=&callerAgentId=&targetAgentId=`
 - `GET /api/v1/metrics/runtime?tenantId=&workspaceId=`

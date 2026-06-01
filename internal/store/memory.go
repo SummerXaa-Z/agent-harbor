@@ -571,6 +571,10 @@ func (m *Memory) EvaluateCapabilityAccess(_ context.Context, req CapabilityAcces
 	if entitlement.Effect == domain.PolicyEffectDeny {
 		return domain.CapabilityAccessDecision{Allowed: false, Source: "tenant_entitlement", CapabilityID: capability.ID, EntitlementID: entitlement.ID, Reason: "tenant entitlement denies capability"}, nil
 	}
+	entitlementScopes, ok := domain.EffectiveDataScopes(capability.DataScopes, entitlement.DataScopes)
+	if !ok {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "tenant_entitlement", CapabilityID: capability.ID, EntitlementID: entitlement.ID, Reason: "tenant entitlement data scopes exceed capability boundary"}, nil
+	}
 	workspaceAssignment, ok := m.matchWorkspaceAssignmentLocked(req, entitlement.ID)
 	if !ok {
 		return domain.CapabilityAccessDecision{Allowed: false, Source: "workspace_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, Reason: "workspace has no assignment for capability"}, nil
@@ -578,12 +582,20 @@ func (m *Memory) EvaluateCapabilityAccess(_ context.Context, req CapabilityAcces
 	if workspaceAssignment.Effect == domain.PolicyEffectDeny {
 		return domain.CapabilityAccessDecision{Allowed: false, Source: "workspace_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, Reason: "workspace assignment denies capability"}, nil
 	}
+	workspaceScopes, ok := domain.EffectiveDataScopes(entitlementScopes, workspaceAssignment.DataScopes)
+	if !ok {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "workspace_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, Reason: "workspace assignment data scopes exceed tenant entitlement boundary"}, nil
+	}
 	instanceAssignment, ok := m.matchInstanceAssignmentLocked(req, workspaceAssignment.ID)
 	if !ok {
 		return domain.CapabilityAccessDecision{Allowed: false, Source: "instance_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, Reason: "caller instance has no assignment for capability"}, nil
 	}
 	if instanceAssignment.Effect == domain.PolicyEffectDeny {
 		return domain.CapabilityAccessDecision{Allowed: false, Source: "instance_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, InstanceAssignmentID: instanceAssignment.ID, Reason: "caller instance assignment denies capability"}, nil
+	}
+	instanceScopes, ok := domain.EffectiveDataScopes(workspaceScopes, instanceAssignment.DataScopes)
+	if !ok {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "instance_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, InstanceAssignmentID: instanceAssignment.ID, Reason: "caller instance assignment data scopes exceed workspace assignment boundary"}, nil
 	}
 	return domain.CapabilityAccessDecision{
 		Allowed:               true,
@@ -593,7 +605,7 @@ func (m *Memory) EvaluateCapabilityAccess(_ context.Context, req CapabilityAcces
 		WorkspaceAssignmentID: workspaceAssignment.ID,
 		InstanceAssignmentID:  instanceAssignment.ID,
 		Reason:                "capability assignment matched",
-		DataScopes:            cloneDataScopes(instanceAssignment.DataScopes),
+		DataScopes:            instanceScopes,
 	}, nil
 }
 

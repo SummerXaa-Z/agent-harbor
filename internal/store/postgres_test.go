@@ -367,6 +367,135 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
+	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set AGENT_HARBOR_TEST_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	defer pool.Close()
+	if err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	repo := store.NewPostgresWithCredentialKey(pool, []byte("0123456789abcdef0123456789abcdef"))
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	caller := domain.Agent{
+		ID:          security.NewID("agt"),
+		TenantID:    "tenant-pg-cap",
+		WorkspaceID: "ws-pg-cap",
+		Name:        "PG Capability Caller",
+		ChannelType: "local",
+		Status:      domain.AgentStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	target := domain.Agent{
+		ID:          security.NewID("agt"),
+		TenantID:    "tenant-pg-cap",
+		WorkspaceID: "ws-pg-cap",
+		Name:        "PG Capability Target",
+		ChannelType: "mcp",
+		ChannelConfig: map[string]any{
+			"endpoint": "https://api.example.com/mcp",
+		},
+		Status:    domain.AgentStatusActive,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if _, err := repo.CreateAgent(ctx, caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	if _, err := repo.CreateAgent(ctx, target); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+	capability := domain.Capability{
+		ID:              security.NewID("cap"),
+		TargetID:        target.ID,
+		Type:            domain.CapabilityTypeMCPTool,
+		Key:             "search_customer",
+		DisplayName:     "search_customer",
+		Action:          domain.CapabilityActionRead,
+		InputSchema:     map[string]any{"type": "object"},
+		OutputSchema:    map[string]any{},
+		Sensitivity:     domain.CapabilitySensitivityInternal,
+		RiskLevel:       domain.CapabilityRiskLow,
+		EnforcementMode: domain.CapabilityEnforcementGateway,
+		DiscoveryStatus: domain.CapabilityDiscoveryApproved,
+		Version:         1,
+		DiscoveredAt:    now,
+		UpdatedAt:       now,
+	}
+	if _, err := repo.UpsertCapability(ctx, capability); err != nil {
+		t.Fatalf("upsert capability: %v", err)
+	}
+	caps, err := repo.ListCapabilities(ctx, store.CapabilityFilter{TargetID: target.ID})
+	if err != nil {
+		t.Fatalf("list capabilities: %v", err)
+	}
+	if len(caps) != 1 || caps[0].ID != capability.ID {
+		t.Fatalf("unexpected capabilities: %#v", caps)
+	}
+	entitlement, err := repo.CreateTenantEntitlement(ctx, domain.TenantEntitlement{
+		ID:           security.NewID("ent"),
+		TenantID:     caller.TenantID,
+		TargetID:     target.ID,
+		CapabilityID: capability.ID,
+		Effect:       domain.PolicyEffectAllow,
+		Status:       domain.PolicyStatusEnabled,
+		Priority:     100,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("create entitlement: %v", err)
+	}
+	workspaceAssignment, err := repo.CreateWorkspaceAssignment(ctx, domain.WorkspaceAssignment{
+		ID:                  security.NewID("wsa"),
+		TenantEntitlementID: entitlement.ID,
+		TenantID:            caller.TenantID,
+		WorkspaceID:         caller.WorkspaceID,
+		Effect:              domain.PolicyEffectAllow,
+		Status:              domain.PolicyStatusEnabled,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	})
+	if err != nil {
+		t.Fatalf("create workspace assignment: %v", err)
+	}
+	instanceAssignment, err := repo.CreateInstanceAssignment(ctx, domain.InstanceAssignment{
+		ID:                    security.NewID("ina"),
+		WorkspaceAssignmentID: workspaceAssignment.ID,
+		TenantID:              caller.TenantID,
+		WorkspaceID:           caller.WorkspaceID,
+		CallerInstanceID:      caller.ID,
+		Effect:                domain.PolicyEffectAllow,
+		Status:                domain.PolicyStatusEnabled,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	})
+	if err != nil {
+		t.Fatalf("create instance assignment: %v", err)
+	}
+	decision, err := repo.EvaluateCapabilityAccess(ctx, store.CapabilityAccessRequest{
+		TenantID:         caller.TenantID,
+		WorkspaceID:      caller.WorkspaceID,
+		CallerInstanceID: caller.ID,
+		TargetID:         target.ID,
+		CapabilityID:     capability.ID,
+		Now:              now,
+	})
+	if err != nil {
+		t.Fatalf("evaluate capability access: %v", err)
+	}
+	if !decision.Allowed || decision.EntitlementID != entitlement.ID || decision.WorkspaceAssignmentID != workspaceAssignment.ID || decision.InstanceAssignmentID != instanceAssignment.ID {
+		t.Fatalf("unexpected decision: %#v", decision)
+	}
+}
+
 func TestPostgresAuditedCreateAgentRollsBackWhenAuditFails(t *testing.T) {
 	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
 	if databaseURL == "" {

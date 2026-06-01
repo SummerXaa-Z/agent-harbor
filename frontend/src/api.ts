@@ -3,9 +3,13 @@ import {
   routePolicies,
   sampleAgents,
   sampleAuditEvents,
+  sampleCapabilities,
   sampleChannels,
+  sampleInstanceAssignments,
   sampleProviders,
+  sampleTenantEntitlements,
   sampleTraces,
+  sampleWorkspaceAssignments,
   systemMetrics,
 } from './data'
 import type {
@@ -13,6 +17,8 @@ import type {
   Agent,
   ApiEnvelope,
   AuditEvent,
+  Capability,
+  CapabilityDiscoveryStatus,
   CatalogData,
   ChannelContract,
   ConsoleData,
@@ -20,15 +26,22 @@ import type {
   CreateAgentKeyRequest,
   CreateAgentKeyResponse,
   CreateAgentRequest,
+  CreateInstanceAssignmentRequest,
   CreateRoutePolicyRequest,
+  CreateTenantEntitlementRequest,
+  CreateWorkspaceAssignmentRequest,
+  InstanceAssignment,
   ManagementScope,
   ProviderContract,
   RotateAgentCredentialsRequest,
   RoutePolicy,
   SystemMetric,
+  TenantEntitlement,
   TraceEvent,
   TraceFilters,
   UpdateAgentRequest,
+  UpdateCapabilityRequest,
+  WorkspaceAssignment,
 } from './types'
 
 const DEFAULT_API_BASE = 'http://127.0.0.1:9090'
@@ -206,6 +219,25 @@ type AuditEventScope = Partial<ManagementScope> & {
   resourceId?: string
 }
 
+type CapabilityFilter = {
+  targetId?: string
+  status?: CapabilityDiscoveryStatus | ''
+}
+
+type EntitlementFilter = {
+  targetId?: string
+  capabilityId?: string
+}
+
+type WorkspaceAssignmentFilter = {
+  entitlementId?: string
+}
+
+type InstanceAssignmentFilter = {
+  callerInstanceId?: string
+  capabilityId?: string
+}
+
 export async function fetchAuditEvents(
   scope?: AuditEventScope,
   adminKey?: string,
@@ -231,6 +263,72 @@ export async function fetchRuntimeMetrics(
     workspaceId: scope?.workspaceId,
   })
   return request<SystemMetric[]>(`/api/v1/metrics/runtime${query}`, { adminKey, signal })
+}
+
+export async function refreshTargetCapabilities(targetId: string, adminKey?: string): Promise<Capability[]> {
+  return request<Capability[]>(`/api/v1/targets/${encodeURIComponent(targetId)}/capabilities:refresh`, {
+    adminKey,
+    method: 'POST',
+  })
+}
+
+export async function fetchCapabilities(
+  scope?: ManagementScope,
+  adminKey?: string,
+  filter: CapabilityFilter = {},
+  signal?: AbortSignal,
+): Promise<Capability[]> {
+  const query = queryString({
+    status: filter.status || undefined,
+    targetId: filter.targetId,
+    tenantId: scope?.tenantId,
+    workspaceId: scope?.workspaceId,
+  })
+  return request<Capability[]>(`/api/v1/capabilities${query}`, { adminKey, signal })
+}
+
+export async function fetchTenantEntitlements(
+  scope?: ManagementScope,
+  adminKey?: string,
+  filter: EntitlementFilter = {},
+  signal?: AbortSignal,
+): Promise<TenantEntitlement[]> {
+  const query = queryString({
+    capabilityId: filter.capabilityId,
+    targetId: filter.targetId,
+    tenantId: scope?.tenantId,
+    workspaceId: scope?.workspaceId,
+  })
+  return request<TenantEntitlement[]>(`/api/v1/tenant-entitlements${query}`, { adminKey, signal })
+}
+
+export async function fetchWorkspaceAssignments(
+  scope?: ManagementScope,
+  adminKey?: string,
+  filter: WorkspaceAssignmentFilter = {},
+  signal?: AbortSignal,
+): Promise<WorkspaceAssignment[]> {
+  const query = queryString({
+    entitlementId: filter.entitlementId,
+    tenantId: scope?.tenantId,
+    workspaceId: scope?.workspaceId,
+  })
+  return request<WorkspaceAssignment[]>(`/api/v1/workspace-assignments${query}`, { adminKey, signal })
+}
+
+export async function fetchInstanceAssignments(
+  scope?: ManagementScope,
+  adminKey?: string,
+  filter: InstanceAssignmentFilter = {},
+  signal?: AbortSignal,
+): Promise<InstanceAssignment[]> {
+  const query = queryString({
+    callerInstanceId: filter.callerInstanceId,
+    capabilityId: filter.capabilityId,
+    tenantId: scope?.tenantId,
+    workspaceId: scope?.workspaceId,
+  })
+  return request<InstanceAssignment[]>(`/api/v1/instance-assignments${query}`, { adminKey, signal })
 }
 
 export async function createAgent(body: CreateAgentRequest, adminKey?: string): Promise<Agent> {
@@ -281,6 +379,39 @@ export async function createRoutePolicy(
   return request<RoutePolicy>('/api/v1/route-policies', { adminKey, body })
 }
 
+export async function updateCapability(
+  id: string,
+  body: UpdateCapabilityRequest,
+  adminKey?: string,
+): Promise<Capability> {
+  return request<Capability>(`/api/v1/capabilities/${encodeURIComponent(id)}`, {
+    adminKey,
+    body,
+    method: 'PATCH',
+  })
+}
+
+export async function createTenantEntitlement(
+  body: CreateTenantEntitlementRequest,
+  adminKey?: string,
+): Promise<TenantEntitlement> {
+  return request<TenantEntitlement>('/api/v1/tenant-entitlements', { adminKey, body })
+}
+
+export async function createWorkspaceAssignment(
+  body: CreateWorkspaceAssignmentRequest,
+  adminKey?: string,
+): Promise<WorkspaceAssignment> {
+  return request<WorkspaceAssignment>('/api/v1/workspace-assignments', { adminKey, body })
+}
+
+export async function createInstanceAssignment(
+  body: CreateInstanceAssignmentRequest,
+  adminKey?: string,
+): Promise<InstanceAssignment> {
+  return request<InstanceAssignment>('/api/v1/instance-assignments', { adminKey, body })
+}
+
 export async function disableRoutePolicy(id: string, adminKey?: string): Promise<RoutePolicy> {
   return request<RoutePolicy>(`/api/v1/route-policies/${encodeURIComponent(id)}`, {
     adminKey,
@@ -293,13 +424,29 @@ export async function loadConsoleData(
   traceFilters: TraceFilters = {},
   scope?: ManagementScope,
 ): Promise<ConsoleData> {
-  const [catalogResult, agentsResult, grantsResult, policiesResult, tracesResult, auditEventsResult, metricsResult] = await Promise.all([
+  const [
+    catalogResult,
+    agentsResult,
+    grantsResult,
+    capabilitiesResult,
+    entitlementResult,
+    workspaceAssignmentResult,
+    instanceAssignmentResult,
+    policiesResult,
+    tracesResult,
+    auditEventsResult,
+    metricsResult,
+  ] = await Promise.all([
     withFallback(() => fetchCatalog(), {
       providers: sampleProviders,
       channels: sampleChannels,
     }),
     withFallback(() => fetchAgents(scope, adminKey), sampleAgents),
     withFallback(() => fetchAccessGrants(scope, adminKey), []),
+    withFallback(() => fetchCapabilities(scope, adminKey), sampleCapabilities),
+    withFallback(() => fetchTenantEntitlements(scope, adminKey), sampleTenantEntitlements),
+    withFallback(() => fetchWorkspaceAssignments(scope, adminKey), sampleWorkspaceAssignments),
+    withFallback(() => fetchInstanceAssignments(scope, adminKey), sampleInstanceAssignments),
     withFallback(() => fetchRoutePolicies(scope, adminKey), routePolicies),
     withFallback(() => fetchTraces(traceFilters, scope, adminKey), sampleTraces),
     withFallback(() => fetchAuditEvents(scope, adminKey), sampleAuditEvents),
@@ -311,6 +458,10 @@ export async function loadConsoleData(
     channels: catalogResult.data.channels,
     agents: agentsResult.data,
     accessGrants: grantsResult.data,
+    capabilities: capabilitiesResult.data,
+    tenantEntitlements: entitlementResult.data,
+    workspaceAssignments: workspaceAssignmentResult.data,
+    instanceAssignments: instanceAssignmentResult.data,
     traces: tracesResult.data,
     auditEvents: auditEventsResult.data,
     routePolicies: policiesResult.data,
@@ -320,11 +471,18 @@ export async function loadConsoleData(
       catalogResult.ok &&
       agentsResult.ok &&
       grantsResult.ok &&
+      capabilitiesResult.ok &&
+      entitlementResult.ok &&
+      workspaceAssignmentResult.ok &&
+      instanceAssignmentResult.ok &&
       policiesResult.ok &&
       tracesResult.ok &&
       auditEventsResult.ok &&
       metricsResult.ok,
     grantsLoadedFromApi: grantsResult.ok,
+    capabilitiesLoadedFromApi: capabilitiesResult.ok,
+    capabilityAssignmentsLoadedFromApi:
+      entitlementResult.ok && workspaceAssignmentResult.ok && instanceAssignmentResult.ok,
     routePoliciesLoadedFromApi: policiesResult.ok,
     apiBase,
   }

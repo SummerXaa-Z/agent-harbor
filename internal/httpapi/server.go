@@ -108,6 +108,15 @@ func (s *Server) Router() http.Handler {
 			r.Get("/route-policies", s.listRoutePolicies)
 			r.Patch("/route-policies/{id}", s.updateRoutePolicy)
 			r.Delete("/route-policies/{id}", s.disableRoutePolicy)
+			r.Post("/targets/{targetId}/capabilities:refresh", s.refreshTargetCapabilities)
+			r.Get("/capabilities", s.listCapabilities)
+			r.Patch("/capabilities/{id}", s.updateCapability)
+			r.Post("/tenant-entitlements", s.createTenantEntitlement)
+			r.Get("/tenant-entitlements", s.listTenantEntitlements)
+			r.Post("/workspace-assignments", s.createWorkspaceAssignment)
+			r.Get("/workspace-assignments", s.listWorkspaceAssignments)
+			r.Post("/instance-assignments", s.createInstanceAssignment)
+			r.Get("/instance-assignments", s.listInstanceAssignments)
 			r.Get("/audit/events", s.listAuditEvents)
 			r.Get("/audit/traces", s.listTraces)
 			r.Get("/metrics/runtime", s.runtimeMetrics)
@@ -890,6 +899,390 @@ func (s *Server) disableRoutePolicy(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, policy)
 }
 
+func (s *Server) refreshTargetCapabilities(w http.ResponseWriter, r *http.Request) {
+	targetID := strings.TrimSpace(chi.URLParam(r, "targetId"))
+	target, ok, err := s.repo.GetAgent(r.Context(), targetID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("target agent not found"))
+		return
+	}
+	if target.ChannelType != "mcp" {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "capability refresh currently supports mcp targets only"))
+		return
+	}
+	discovered, err := s.discoverMCPCapabilities(r.Context(), target)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, target.TenantID, target.WorkspaceID, "capabilities.refreshed", "agent", target.ID, "Capabilities refreshed", map[string]any{
+		"targetId":        target.ID,
+		"capabilityCount": len(discovered),
+	})); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, discovered)
+}
+
+func (s *Server) listCapabilities(w http.ResponseWriter, r *http.Request) {
+	status := domain.CapabilityDiscoveryStatus(strings.TrimSpace(r.URL.Query().Get("status")))
+	if status != "" && !validCapabilityDiscoveryStatus(status) {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "status must be pending_review, approved, deprecated, or removed"))
+		return
+	}
+	rows, err := s.repo.ListCapabilities(r.Context(), store.CapabilityFilter{
+		ManagementScope: managementScopeFromRequest(r),
+		TargetID:        strings.TrimSpace(r.URL.Query().Get("targetId")),
+		Status:          status,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
+func (s *Server) updateCapability(w http.ResponseWriter, r *http.Request) {
+	existing, ok, err := s.repo.GetCapability(r.Context(), strings.TrimSpace(chi.URLParam(r, "id")))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("capability not found"))
+		return
+	}
+	var req domain.UpdateCapabilityRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	updated := existing
+	if req.DiscoveryStatus != nil {
+		if !validCapabilityDiscoveryStatus(*req.DiscoveryStatus) {
+			writeError(w, domain.BadRequest("VALIDATION_FAILED", "discoveryStatus must be pending_review, approved, deprecated, or removed"))
+			return
+		}
+		updated.DiscoveryStatus = *req.DiscoveryStatus
+	}
+	if req.Sensitivity != nil {
+		if !validCapabilitySensitivity(*req.Sensitivity) {
+			writeError(w, domain.BadRequest("VALIDATION_FAILED", "sensitivity must be public, internal, confidential, or restricted"))
+			return
+		}
+		updated.Sensitivity = *req.Sensitivity
+	}
+	if req.RiskLevel != nil {
+		if !validCapabilityRisk(*req.RiskLevel) {
+			writeError(w, domain.BadRequest("VALIDATION_FAILED", "riskLevel must be low, medium, high, or critical"))
+			return
+		}
+		updated.RiskLevel = *req.RiskLevel
+	}
+	if req.DataScopes != nil {
+		updated.DataScopes = req.DataScopes
+	}
+	updated.UpdatedAt = s.now()
+	saved, ok, err := s.repo.UpdateCapability(r.Context(), updated)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("capability not found"))
+		return
+	}
+	if target, ok, err := s.repo.GetAgent(r.Context(), saved.TargetID); err != nil {
+		writeError(w, err)
+		return
+	} else if ok {
+		if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, target.TenantID, target.WorkspaceID, "capability.updated", "capability", saved.ID, "Capability updated", map[string]any{
+			"targetId":        saved.TargetID,
+			"capabilityKey":   saved.Key,
+			"discoveryStatus": saved.DiscoveryStatus,
+			"sensitivity":     saved.Sensitivity,
+			"riskLevel":       saved.RiskLevel,
+		})); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, saved)
+}
+
+func (s *Server) createTenantEntitlement(w http.ResponseWriter, r *http.Request) {
+	var req domain.CreateTenantEntitlementRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	req.TenantID = strings.TrimSpace(req.TenantID)
+	req.TargetID = strings.TrimSpace(req.TargetID)
+	req.CapabilityID = strings.TrimSpace(req.CapabilityID)
+	if req.TenantID == "" || req.TargetID == "" || req.CapabilityID == "" {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "tenantId, targetId, and capabilityId are required"))
+		return
+	}
+	effect, err := normalizePolicyEffect(req.Effect, domain.PolicyEffectAllow)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	status, err := normalizePolicyStatus(req.Status, domain.PolicyStatusEnabled)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	priority, err := normalizePolicyPriority(req.Priority)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	target, ok, err := s.repo.GetAgent(r.Context(), req.TargetID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("target agent not found"))
+		return
+	}
+	if target.TenantID != req.TenantID {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "tenant entitlement tenantId must match target tenantId for this MVP"))
+		return
+	}
+	capability, ok, err := s.repo.GetCapability(r.Context(), req.CapabilityID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok || capability.TargetID != target.ID {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "capabilityId must belong to targetId"))
+		return
+	}
+	now := s.now()
+	entitlement := domain.TenantEntitlement{
+		ID:           security.NewID("ent"),
+		TenantID:     req.TenantID,
+		TargetID:     req.TargetID,
+		CapabilityID: req.CapabilityID,
+		Effect:       effect,
+		DataScopes:   req.DataScopes,
+		Status:       status,
+		Priority:     priority,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	created, err := s.repo.CreateTenantEntitlement(r.Context(), entitlement)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, target.TenantID, target.WorkspaceID, "tenant_entitlement.created", "tenant_entitlement", created.ID, "Tenant entitlement created", map[string]any{
+		"targetId":      created.TargetID,
+		"capabilityId":  created.CapabilityID,
+		"capabilityKey": capability.Key,
+		"effect":        created.Effect,
+		"status":        created.Status,
+		"priority":      created.Priority,
+	})); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) listTenantEntitlements(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.repo.ListTenantEntitlements(r.Context(), store.EntitlementFilter{
+		ManagementScope: managementScopeFromRequest(r),
+		TargetID:        strings.TrimSpace(r.URL.Query().Get("targetId")),
+		CapabilityID:    strings.TrimSpace(r.URL.Query().Get("capabilityId")),
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
+func (s *Server) createWorkspaceAssignment(w http.ResponseWriter, r *http.Request) {
+	var req domain.CreateWorkspaceAssignmentRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	req.TenantEntitlementID = strings.TrimSpace(req.TenantEntitlementID)
+	req.WorkspaceID = strings.TrimSpace(req.WorkspaceID)
+	if req.TenantEntitlementID == "" || req.WorkspaceID == "" {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "tenantEntitlementId and workspaceId are required"))
+		return
+	}
+	effect, err := normalizePolicyEffect(req.Effect, domain.PolicyEffectAllow)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	status, err := normalizePolicyStatus(req.Status, domain.PolicyStatusEnabled)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	entitlements, err := s.repo.ListTenantEntitlements(r.Context(), store.EntitlementFilter{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	entitlement, ok := findTenantEntitlement(entitlements, req.TenantEntitlementID)
+	if !ok {
+		writeError(w, domain.NotFound("tenant entitlement not found"))
+		return
+	}
+	target, ok, err := s.repo.GetAgent(r.Context(), entitlement.TargetID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("target agent not found"))
+		return
+	}
+	now := s.now()
+	assignment := domain.WorkspaceAssignment{
+		ID:                  security.NewID("wsa"),
+		TenantEntitlementID: entitlement.ID,
+		TenantID:            entitlement.TenantID,
+		WorkspaceID:         req.WorkspaceID,
+		Effect:              effect,
+		DataScopes:          req.DataScopes,
+		Status:              status,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}
+	created, err := s.repo.CreateWorkspaceAssignment(r.Context(), assignment)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, created.TenantID, created.WorkspaceID, "workspace_assignment.created", "workspace_assignment", created.ID, "Workspace assignment created", map[string]any{
+		"tenantEntitlementId": created.TenantEntitlementID,
+		"targetId":            target.ID,
+		"capabilityId":        entitlement.CapabilityID,
+		"effect":              created.Effect,
+		"status":              created.Status,
+	})); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) listWorkspaceAssignments(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.repo.ListWorkspaceAssignments(r.Context(), store.AssignmentFilter{
+		ManagementScope: managementScopeFromRequest(r),
+		EntitlementID:   strings.TrimSpace(r.URL.Query().Get("entitlementId")),
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
+func (s *Server) createInstanceAssignment(w http.ResponseWriter, r *http.Request) {
+	var req domain.CreateInstanceAssignmentRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	req.WorkspaceAssignmentID = strings.TrimSpace(req.WorkspaceAssignmentID)
+	req.CallerInstanceID = strings.TrimSpace(req.CallerInstanceID)
+	req.SubjectSelector = strings.TrimSpace(req.SubjectSelector)
+	if req.WorkspaceAssignmentID == "" || req.CallerInstanceID == "" {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "workspaceAssignmentId and callerInstanceId are required"))
+		return
+	}
+	effect, err := normalizePolicyEffect(req.Effect, domain.PolicyEffectAllow)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	status, err := normalizePolicyStatus(req.Status, domain.PolicyStatusEnabled)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	workspaceAssignments, err := s.repo.ListWorkspaceAssignments(r.Context(), store.AssignmentFilter{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	workspaceAssignment, ok := findWorkspaceAssignment(workspaceAssignments, req.WorkspaceAssignmentID)
+	if !ok {
+		writeError(w, domain.NotFound("workspace assignment not found"))
+		return
+	}
+	caller, ok, err := s.repo.GetAgent(r.Context(), req.CallerInstanceID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("caller instance not found"))
+		return
+	}
+	if caller.TenantID != workspaceAssignment.TenantID || caller.WorkspaceID != workspaceAssignment.WorkspaceID {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "caller instance must match workspace assignment tenant and workspace"))
+		return
+	}
+	now := s.now()
+	assignment := domain.InstanceAssignment{
+		ID:                    security.NewID("ina"),
+		WorkspaceAssignmentID: workspaceAssignment.ID,
+		TenantID:              workspaceAssignment.TenantID,
+		WorkspaceID:           workspaceAssignment.WorkspaceID,
+		CallerInstanceID:      caller.ID,
+		SubjectSelector:       req.SubjectSelector,
+		Effect:                effect,
+		DataScopes:            req.DataScopes,
+		Status:                status,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	}
+	created, err := s.repo.CreateInstanceAssignment(r.Context(), assignment)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, created.TenantID, created.WorkspaceID, "instance_assignment.created", "instance_assignment", created.ID, "Instance assignment created", map[string]any{
+		"workspaceAssignmentId": created.WorkspaceAssignmentID,
+		"callerInstanceId":      created.CallerInstanceID,
+		"effect":                created.Effect,
+		"status":                created.Status,
+	})); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) listInstanceAssignments(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.repo.ListInstanceAssignments(r.Context(), store.InstanceAssignmentFilter{
+		ManagementScope:  managementScopeFromRequest(r),
+		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
+		CapabilityID:     strings.TrimSpace(r.URL.Query().Get("capabilityId")),
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
 func (s *Server) requireAgentKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := security.BearerToken(r.Header.Get("Authorization"))
@@ -917,13 +1310,23 @@ func callerFromContext(ctx context.Context) domain.Agent {
 }
 
 func (s *Server) mcpRPC(w http.ResponseWriter, r *http.Request) {
-	routeKey, body, err := mcpRouteKeyFromRequest(r)
+	info, err := mcpRequestInfoFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	r.Body = io.NopCloser(bytes.NewReader(body))
-	s.handleDataPlane(w, r, "mcp", routeKey)
+	r.Body = io.NopCloser(bytes.NewReader(info.Body))
+	if info.Method == "tools/list" {
+		if s.handleMCPToolsList(w, r, info) {
+			return
+		}
+	}
+	if info.Method == "tools/call" && info.ToolName != "" {
+		if s.handleMCPToolCall(w, r, info) {
+			return
+		}
+	}
+	s.handleDataPlane(w, r, "mcp", info.Method)
 }
 
 func (s *Server) openapiOperation(w http.ResponseWriter, r *http.Request) {
@@ -999,6 +1402,285 @@ func (s *Server) handleDataPlane(w http.ResponseWriter, r *http.Request, routeTy
 	})
 }
 
+type runtimeIdentity struct {
+	PlatformID       string
+	TenantID         string
+	WorkspaceID      string
+	CallerInstanceID string
+	SubjectID        string
+}
+
+type traceRecordInput struct {
+	Identity           runtimeIdentity
+	CallerID           string
+	TargetID           string
+	RouteType          string
+	RouteKey           string
+	Decision           domain.TraceDecision
+	Reason             string
+	Capability         domain.Capability
+	CapabilityDecision domain.CapabilityAccessDecision
+	ProxyResult        proxyTraceResult
+}
+
+func identityFromRequest(r *http.Request, caller domain.Agent) runtimeIdentity {
+	return runtimeIdentity{
+		PlatformID:       "default",
+		TenantID:         caller.TenantID,
+		WorkspaceID:      caller.WorkspaceID,
+		CallerInstanceID: caller.ID,
+		SubjectID:        strings.TrimSpace(r.Header.Get("X-AgentHarbor-Subject-Id")),
+	}
+}
+
+func (s *Server) handleMCPToolCall(w http.ResponseWriter, r *http.Request, info mcpRequestInfo) bool {
+	caller := callerFromContext(r.Context())
+	targetID := chi.URLParam(r, "targetId")
+	capability, found, hasCatalog, err := s.mcpToolCapability(r.Context(), targetID, info.ToolName)
+	if err != nil {
+		writeError(w, err)
+		return true
+	}
+	if !hasCatalog {
+		return false
+	}
+	identity := identityFromRequest(r, caller)
+	if !found {
+		reason := "capability is not registered for target"
+		if _, err := s.recordCapabilityTrace(r, traceRecordInput{
+			Identity:  identity,
+			CallerID:  caller.ID,
+			TargetID:  targetID,
+			RouteType: "mcp",
+			RouteKey:  info.Method,
+			Decision:  domain.TraceDecisionDenied,
+			Reason:    reason,
+		}); err != nil {
+			writeError(w, err)
+			return true
+		}
+		writeError(w, domain.PermissionDenied(reason))
+		return true
+	}
+	decision, err := s.repo.EvaluateCapabilityAccess(r.Context(), store.CapabilityAccessRequest{
+		TenantID:         identity.TenantID,
+		WorkspaceID:      identity.WorkspaceID,
+		CallerInstanceID: identity.CallerInstanceID,
+		SubjectID:        identity.SubjectID,
+		TargetID:         targetID,
+		CapabilityID:     capability.ID,
+		Now:              s.now(),
+	})
+	if err != nil {
+		writeError(w, err)
+		return true
+	}
+	if !decision.Allowed {
+		if _, err := s.recordCapabilityTrace(r, traceRecordInput{
+			Identity:           identity,
+			CallerID:           caller.ID,
+			TargetID:           targetID,
+			RouteType:          "mcp",
+			RouteKey:           info.Method,
+			Decision:           domain.TraceDecisionDenied,
+			Reason:             decision.Reason,
+			Capability:         capability,
+			CapabilityDecision: decision,
+		}); err != nil {
+			writeError(w, err)
+			return true
+		}
+		writeError(w, domain.PermissionDenied(decision.Reason))
+		return true
+	}
+	target, ok, err := s.repo.GetAgent(r.Context(), targetID)
+	if err != nil {
+		writeError(w, err)
+		return true
+	}
+	if !ok {
+		writeError(w, domain.NotFound("target agent not found"))
+		return true
+	}
+	if target.Status != domain.AgentStatusActive {
+		reason := "target agent is not active"
+		if _, err := s.recordCapabilityTrace(r, traceRecordInput{
+			Identity:           identity,
+			CallerID:           caller.ID,
+			TargetID:           targetID,
+			RouteType:          "mcp",
+			RouteKey:           info.Method,
+			Decision:           domain.TraceDecisionDenied,
+			Reason:             reason,
+			Capability:         capability,
+			CapabilityDecision: decision,
+		}); err != nil {
+			writeError(w, err)
+			return true
+		}
+		writeError(w, domain.PermissionDenied(reason))
+		return true
+	}
+	recordAllowedTrace := func(result proxyTraceResult) (domain.TraceEvent, error) {
+		return s.recordCapabilityTrace(r, traceRecordInput{
+			Identity:           identity,
+			CallerID:           caller.ID,
+			TargetID:           target.ID,
+			RouteType:          "mcp",
+			RouteKey:           info.Method,
+			Decision:           domain.TraceDecisionAllowed,
+			Reason:             decision.Reason,
+			Capability:         capability,
+			CapabilityDecision: decision,
+			ProxyResult:        result,
+		})
+	}
+	r.Body = io.NopCloser(bytes.NewReader(info.Body))
+	if s.proxyUpstreamIfConfigured(w, r, target, "mcp", info.Method, nil, recordAllowedTrace) {
+		return true
+	}
+	trace, err := recordAllowedTrace(proxyTraceResult{})
+	if err != nil {
+		writeError(w, err)
+		return true
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":       "accepted",
+		"traceId":      trace.ID,
+		"route":        "mcp",
+		"capabilityId": capability.ID,
+	})
+	return true
+}
+
+func (s *Server) handleMCPToolsList(w http.ResponseWriter, r *http.Request, info mcpRequestInfo) bool {
+	caller := callerFromContext(r.Context())
+	targetID := chi.URLParam(r, "targetId")
+	capabilities, err := s.repo.ListCapabilities(r.Context(), store.CapabilityFilter{TargetID: targetID})
+	if err != nil {
+		writeError(w, err)
+		return true
+	}
+	if len(capabilities) == 0 {
+		return false
+	}
+	target, ok, err := s.repo.GetAgent(r.Context(), targetID)
+	if err != nil {
+		writeError(w, err)
+		return true
+	}
+	if !ok {
+		writeError(w, domain.NotFound("target agent not found"))
+		return true
+	}
+	if target.Status != domain.AgentStatusActive {
+		reason := "target agent is not active"
+		if _, err := s.recordCapabilityTrace(r, traceRecordInput{
+			Identity:  identityFromRequest(r, caller),
+			CallerID:  caller.ID,
+			TargetID:  targetID,
+			RouteType: "mcp",
+			RouteKey:  info.Method,
+			Decision:  domain.TraceDecisionDenied,
+			Reason:    reason,
+		}); err != nil {
+			writeError(w, err)
+			return true
+		}
+		writeError(w, domain.PermissionDenied(reason))
+		return true
+	}
+	identity := identityFromRequest(r, caller)
+	allowedTools := map[string]domain.Capability{}
+	for _, capability := range capabilities {
+		if capability.Type != domain.CapabilityTypeMCPTool {
+			continue
+		}
+		decision, err := s.repo.EvaluateCapabilityAccess(r.Context(), store.CapabilityAccessRequest{
+			TenantID:         identity.TenantID,
+			WorkspaceID:      identity.WorkspaceID,
+			CallerInstanceID: identity.CallerInstanceID,
+			SubjectID:        identity.SubjectID,
+			TargetID:         targetID,
+			CapabilityID:     capability.ID,
+			Now:              s.now(),
+		})
+		if err != nil {
+			writeError(w, err)
+			return true
+		}
+		if decision.Allowed {
+			allowedTools[capability.Key] = capability
+		}
+	}
+	if endpoint, _ := target.ChannelConfig["endpoint"].(string); strings.TrimSpace(endpoint) != "" {
+		body, statusCode, contentType, result, err := s.callMCPUpstream(r, target, info.Body)
+		if err != nil {
+			if _, recordErr := s.recordCapabilityTrace(r, traceRecordInput{
+				Identity:    identity,
+				CallerID:    caller.ID,
+				TargetID:    targetID,
+				RouteType:   "mcp",
+				RouteKey:    info.Method,
+				Decision:    domain.TraceDecisionAllowed,
+				Reason:      "filtered tools/list by capability assignments",
+				ProxyResult: result,
+			}); recordErr != nil {
+				writeError(w, recordErr)
+				return true
+			}
+			writeError(w, err)
+			return true
+		}
+		filtered, err := filterMCPToolsListBody(body, allowedTools)
+		if err != nil {
+			writeError(w, err)
+			return true
+		}
+		if _, err := s.recordCapabilityTrace(r, traceRecordInput{
+			Identity:    identity,
+			CallerID:    caller.ID,
+			TargetID:    targetID,
+			RouteType:   "mcp",
+			RouteKey:    info.Method,
+			Decision:    domain.TraceDecisionAllowed,
+			Reason:      "filtered tools/list by capability assignments",
+			ProxyResult: result,
+		}); err != nil {
+			writeError(w, err)
+			return true
+		}
+		if contentType != "" {
+			w.Header().Set("Content-Type", contentType)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+		}
+		w.WriteHeader(statusCode)
+		_, _ = w.Write(filtered)
+		return true
+	}
+	if _, err := s.recordCapabilityTrace(r, traceRecordInput{
+		Identity:  identity,
+		CallerID:  caller.ID,
+		TargetID:  targetID,
+		RouteType: "mcp",
+		RouteKey:  info.Method,
+		Decision:  domain.TraceDecisionAllowed,
+		Reason:    "filtered tools/list by capability assignments",
+	}); err != nil {
+		writeError(w, err)
+		return true
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      requestJSONRPCID(info.Body),
+		"result": map[string]any{
+			"tools": capabilitiesForToolsList(allowedTools),
+		},
+	})
+	return true
+}
+
 func (s *Server) recordDataPlaneTrace(r *http.Request, callerID string, targetID string, routeType string, routeKey string, decision domain.TraceDecision, reason string, result proxyTraceResult) (domain.TraceEvent, error) {
 	trace := domain.TraceEvent{
 		ID:               security.NewID("trc"),
@@ -1014,6 +1696,35 @@ func (s *Server) recordDataPlaneTrace(r *http.Request, callerID string, targetID
 		UpstreamStatus:   result.upstreamStatus,
 		UpstreamError:    result.upstreamError,
 		CreatedAt:        s.now(),
+	}
+	return s.repo.AppendTrace(r.Context(), trace)
+}
+
+func (s *Server) recordCapabilityTrace(r *http.Request, input traceRecordInput) (domain.TraceEvent, error) {
+	trace := domain.TraceEvent{
+		ID:                    security.NewID("trc"),
+		RunID:                 r.Header.Get("X-Run-Id"),
+		CallerID:              input.CallerID,
+		TargetID:              input.TargetID,
+		RouteType:             input.RouteType,
+		RouteKey:              input.RouteKey,
+		TenantID:              input.Identity.TenantID,
+		WorkspaceID:           input.Identity.WorkspaceID,
+		CallerInstanceID:      input.Identity.CallerInstanceID,
+		SubjectID:             input.Identity.SubjectID,
+		CapabilityID:          input.Capability.ID,
+		CapabilityVersion:     input.Capability.Version,
+		EntitlementID:         input.CapabilityDecision.EntitlementID,
+		WorkspaceAssignmentID: input.CapabilityDecision.WorkspaceAssignmentID,
+		InstanceAssignmentID:  input.CapabilityDecision.InstanceAssignmentID,
+		DataScopes:            input.CapabilityDecision.DataScopes,
+		Decision:              input.Decision,
+		Reason:                input.Reason,
+		DurationMs:            input.ProxyResult.durationMs,
+		UpstreamAttempts:      input.ProxyResult.upstreamAttempts,
+		UpstreamStatus:        input.ProxyResult.upstreamStatus,
+		UpstreamError:         input.ProxyResult.upstreamError,
+		CreatedAt:             s.now(),
 	}
 	return s.repo.AppendTrace(r.Context(), trace)
 }
@@ -1178,21 +1889,178 @@ func readProxyBody(body io.Reader) ([]byte, error) {
 	return payload, nil
 }
 
-func mcpRouteKeyFromRequest(r *http.Request) (string, []byte, error) {
+type mcpRequestInfo struct {
+	Method   string
+	ToolName string
+	Body     []byte
+}
+
+func mcpRequestInfoFromRequest(r *http.Request) (mcpRequestInfo, error) {
 	body, err := readProxyBody(r.Body)
 	if err != nil {
-		return "", nil, err
+		return mcpRequestInfo{}, err
 	}
 	var payload struct {
 		Method *string `json:"method"`
+		Params struct {
+			Name string `json:"name"`
+		} `json:"params"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return "", nil, domain.BadRequest("VALIDATION_FAILED", "mcp request body must be valid JSON")
+		return mcpRequestInfo{}, domain.BadRequest("VALIDATION_FAILED", "mcp request body must be valid JSON")
 	}
 	if payload.Method == nil || strings.TrimSpace(*payload.Method) == "" {
-		return "", nil, domain.BadRequest("VALIDATION_FAILED", "mcp request method is required")
+		return mcpRequestInfo{}, domain.BadRequest("VALIDATION_FAILED", "mcp request method is required")
 	}
-	return strings.TrimSpace(*payload.Method), body, nil
+	return mcpRequestInfo{
+		Method:   strings.TrimSpace(*payload.Method),
+		ToolName: strings.TrimSpace(payload.Params.Name),
+		Body:     body,
+	}, nil
+}
+
+func (s *Server) mcpToolCapability(ctx context.Context, targetID string, toolName string) (domain.Capability, bool, bool, error) {
+	capabilities, err := s.repo.ListCapabilities(ctx, store.CapabilityFilter{TargetID: targetID})
+	if err != nil {
+		return domain.Capability{}, false, false, err
+	}
+	hasCatalog := false
+	for _, capability := range capabilities {
+		if capability.Type != domain.CapabilityTypeMCPTool {
+			continue
+		}
+		hasCatalog = true
+		if capability.Key == toolName {
+			return capability, true, true, nil
+		}
+	}
+	return domain.Capability{}, false, hasCatalog, nil
+}
+
+func (s *Server) callMCPUpstream(r *http.Request, target domain.Agent, body []byte) ([]byte, int, string, proxyTraceResult, error) {
+	startedAt := time.Now()
+	endpoint, ok := target.ChannelConfig["endpoint"].(string)
+	endpoint = strings.TrimSpace(endpoint)
+	if !ok || endpoint == "" {
+		return nil, 0, "", proxyTraceResult{}, domain.UpstreamError("target endpoint is missing")
+	}
+	timeout, err := proxyTimeoutFromConfig(target.ChannelConfig)
+	if err != nil {
+		return nil, 0, "", proxyTraceResult{}, err
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, "", proxyTraceResult{}, domain.UpstreamError("upstream request could not be prepared")
+	}
+	copyUpstreamRequestHeaders(req.Header, r.Header)
+	if err := copyConfiguredHeaders(req.Header, target.ChannelConfig); err != nil {
+		return nil, 0, "", proxyTraceResult{}, err
+	}
+	if err := copyCredentialHeaders(req.Header, target.ChannelConfig, target.Credentials); err != nil {
+		return nil, 0, "", proxyTraceResult{}, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		classified := classifyUpstreamError(ctx, err)
+		result := proxyTraceResult{
+			durationMs:       elapsedProxyDurationMs(startedAt),
+			upstreamAttempts: 1,
+		}
+		var appErr domain.AppError
+		if errors.As(classified, &appErr) {
+			result.upstreamError = appErr.Code
+		}
+		return nil, 0, "", result, classified
+	}
+	defer resp.Body.Close()
+	payload, err := io.ReadAll(io.LimitReader(resp.Body, maxProxyBodyBytes+1))
+	if err != nil {
+		return nil, 0, "", proxyTraceResult{}, domain.UpstreamError("upstream response could not be read")
+	}
+	if len(payload) > maxProxyBodyBytes {
+		return nil, 0, "", proxyTraceResult{}, domain.PayloadTooLarge("upstream response exceeds 4MiB")
+	}
+	return payload, resp.StatusCode, resp.Header.Get("Content-Type"), proxyTraceResult{
+		durationMs:       elapsedProxyDurationMs(startedAt),
+		upstreamAttempts: 1,
+		upstreamStatus:   resp.StatusCode,
+	}, nil
+}
+
+func filterMCPToolsListBody(body []byte, allowed map[string]domain.Capability) ([]byte, error) {
+	var payload struct {
+		JSONRPC string          `json:"jsonrpc,omitempty"`
+		ID      any             `json:"id,omitempty"`
+		Result  json.RawMessage `json:"result"`
+		Error   any             `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, domain.BadRequest("VALIDATION_FAILED", "mcp tools/list response must be valid JSON")
+	}
+	if payload.Error != nil {
+		return body, nil
+	}
+	var result struct {
+		Tools []map[string]any `json:"tools"`
+	}
+	if err := json.Unmarshal(payload.Result, &result); err != nil {
+		return nil, domain.BadRequest("VALIDATION_FAILED", "mcp tools/list result must include tools")
+	}
+	filtered := make([]map[string]any, 0, len(result.Tools))
+	for _, tool := range result.Tools {
+		name, _ := tool["name"].(string)
+		if _, ok := allowed[name]; ok {
+			filtered = append(filtered, tool)
+		}
+	}
+	result.Tools = filtered
+	payload.Result = nil
+	out := map[string]any{
+		"jsonrpc": payload.JSONRPC,
+		"id":      payload.ID,
+		"result":  result,
+	}
+	if out["jsonrpc"] == "" {
+		delete(out, "jsonrpc")
+	}
+	if out["id"] == nil {
+		delete(out, "id")
+	}
+	return json.Marshal(out)
+}
+
+func requestJSONRPCID(body []byte) any {
+	var payload struct {
+		ID any `json:"id"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil
+	}
+	return payload.ID
+}
+
+func capabilitiesForToolsList(capabilities map[string]domain.Capability) []map[string]any {
+	keys := make([]string, 0, len(capabilities))
+	for key := range capabilities {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	tools := make([]map[string]any, 0, len(keys))
+	for _, key := range keys {
+		capability := capabilities[key]
+		tool := map[string]any{
+			"name":        capability.Key,
+			"description": capability.Description,
+			"inputSchema": capability.InputSchema,
+		}
+		if capability.DisplayName != "" {
+			tool["title"] = capability.DisplayName
+		}
+		tools = append(tools, tool)
+	}
+	return tools
 }
 
 func validateConfiguredHeaders(config map[string]any) error {
@@ -1813,6 +2681,272 @@ func managementActor(r *http.Request) string {
 		return "admin-key"
 	}
 	return "local-dev"
+}
+
+type mcpToolsListResponse struct {
+	Result struct {
+		Tools []mcpToolDescription `json:"tools"`
+	} `json:"result"`
+}
+
+type mcpToolDescription struct {
+	Name         string         `json:"name"`
+	Title        string         `json:"title"`
+	Description  string         `json:"description"`
+	InputSchema  map[string]any `json:"inputSchema"`
+	OutputSchema map[string]any `json:"outputSchema"`
+}
+
+func (s *Server) discoverMCPCapabilities(ctx context.Context, target domain.Agent) ([]domain.Capability, error) {
+	endpoint, ok := target.ChannelConfig["endpoint"].(string)
+	endpoint = strings.TrimSpace(endpoint)
+	if !ok || endpoint == "" {
+		return nil, domain.BadRequest("VALIDATION_FAILED", "mcp target requires channelConfig.endpoint for capability discovery")
+	}
+	payload := map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "capability-discovery",
+		"method":  "tools/list",
+		"params":  map[string]any{},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, domain.UpstreamError("capability discovery request could not be prepared")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, domain.UpstreamError("capability discovery request could not be prepared")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	if err := copyConfiguredHeaders(req.Header, target.ChannelConfig); err != nil {
+		return nil, err
+	}
+	if err := copyCredentialHeaders(req.Header, target.ChannelConfig, target.Credentials); err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, classifyUpstreamError(ctx, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, domain.UpstreamError("capability discovery upstream returned non-2xx status")
+	}
+	var result mcpToolsListResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxProxyBodyBytes)).Decode(&result); err != nil {
+		return nil, domain.BadRequest("VALIDATION_FAILED", "capability discovery response must be valid MCP tools/list JSON")
+	}
+	existing, err := s.repo.ListCapabilities(ctx, store.CapabilityFilter{TargetID: target.ID})
+	if err != nil {
+		return nil, err
+	}
+	existingByKey := map[string]domain.Capability{}
+	for _, capability := range existing {
+		if capability.Type == domain.CapabilityTypeMCPTool {
+			existingByKey[capability.Key] = capability
+		}
+	}
+	now := s.now()
+	seen := map[string]struct{}{}
+	out := make([]domain.Capability, 0, len(result.Result.Tools))
+	for _, tool := range result.Result.Tools {
+		name := strings.TrimSpace(tool.Name)
+		if name == "" {
+			continue
+		}
+		seen[name] = struct{}{}
+		capability := capabilityFromMCPTool(target.ID, tool, now)
+		if current, ok := existingByKey[name]; ok {
+			capability.ID = current.ID
+			capability.DiscoveredAt = current.DiscoveredAt
+			capability.Version = current.Version
+			capability.DiscoveryStatus = current.DiscoveryStatus
+			if mcpCapabilityChanged(current, capability) {
+				capability.Version++
+				capability.DiscoveryStatus = domain.CapabilityDiscoveryPendingReview
+			}
+		}
+		saved, err := s.repo.UpsertCapability(ctx, capability)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, saved)
+	}
+	for key, current := range existingByKey {
+		if _, ok := seen[key]; ok || current.DiscoveryStatus == domain.CapabilityDiscoveryRemoved {
+			continue
+		}
+		current.DiscoveryStatus = domain.CapabilityDiscoveryRemoved
+		current.UpdatedAt = now
+		saved, ok, err := s.repo.UpdateCapability(ctx, current)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, saved)
+		}
+	}
+	return out, nil
+}
+
+func capabilityFromMCPTool(targetID string, tool mcpToolDescription, now time.Time) domain.Capability {
+	name := strings.TrimSpace(tool.Name)
+	displayName := strings.TrimSpace(tool.Title)
+	if displayName == "" {
+		displayName = name
+	}
+	action := inferCapabilityAction(name)
+	return domain.Capability{
+		ID:              security.NewID("cap"),
+		TargetID:        targetID,
+		Type:            domain.CapabilityTypeMCPTool,
+		Key:             name,
+		DisplayName:     displayName,
+		Description:     strings.TrimSpace(tool.Description),
+		Action:          action,
+		InputSchema:     nonNilMap(tool.InputSchema),
+		OutputSchema:    nonNilMap(tool.OutputSchema),
+		Sensitivity:     domain.CapabilitySensitivityInternal,
+		RiskLevel:       riskForCapabilityAction(action),
+		EnforcementMode: domain.CapabilityEnforcementGateway,
+		DiscoveryStatus: domain.CapabilityDiscoveryPendingReview,
+		Version:         1,
+		DiscoveredAt:    now,
+		UpdatedAt:       now,
+	}
+}
+
+func mcpCapabilityChanged(left domain.Capability, right domain.Capability) bool {
+	return left.DisplayName != right.DisplayName ||
+		left.Description != right.Description ||
+		left.Action != right.Action ||
+		jsonStable(left.InputSchema) != jsonStable(right.InputSchema) ||
+		jsonStable(left.OutputSchema) != jsonStable(right.OutputSchema)
+}
+
+func inferCapabilityAction(name string) domain.CapabilityAction {
+	lower := strings.ToLower(name)
+	for _, prefix := range []string{"search", "list", "get", "query", "read"} {
+		if strings.HasPrefix(lower, prefix) {
+			return domain.CapabilityActionRead
+		}
+	}
+	if strings.HasPrefix(lower, "export") || strings.Contains(lower, "export") {
+		return domain.CapabilityActionExport
+	}
+	for _, prefix := range []string{"delete", "remove"} {
+		if strings.HasPrefix(lower, prefix) {
+			return domain.CapabilityActionDelete
+		}
+	}
+	for _, prefix := range []string{"update", "create", "write", "patch"} {
+		if strings.HasPrefix(lower, prefix) {
+			return domain.CapabilityActionWrite
+		}
+	}
+	return domain.CapabilityActionExecute
+}
+
+func riskForCapabilityAction(action domain.CapabilityAction) domain.CapabilityRisk {
+	switch action {
+	case domain.CapabilityActionRead:
+		return domain.CapabilityRiskLow
+	case domain.CapabilityActionExport, domain.CapabilityActionDelete, domain.CapabilityActionAdmin:
+		return domain.CapabilityRiskHigh
+	default:
+		return domain.CapabilityRiskMedium
+	}
+}
+
+func nonNilMap(value map[string]any) map[string]any {
+	if value == nil {
+		return map[string]any{}
+	}
+	return value
+}
+
+func jsonStable(value any) string {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func validCapabilityDiscoveryStatus(status domain.CapabilityDiscoveryStatus) bool {
+	switch status {
+	case domain.CapabilityDiscoveryPendingReview, domain.CapabilityDiscoveryApproved, domain.CapabilityDiscoveryDeprecated, domain.CapabilityDiscoveryRemoved:
+		return true
+	default:
+		return false
+	}
+}
+
+func validCapabilitySensitivity(sensitivity domain.CapabilitySensitivity) bool {
+	switch sensitivity {
+	case domain.CapabilitySensitivityPublic, domain.CapabilitySensitivityInternal, domain.CapabilitySensitivityConfidential, domain.CapabilitySensitivityRestricted:
+		return true
+	default:
+		return false
+	}
+}
+
+func validCapabilityRisk(risk domain.CapabilityRisk) bool {
+	switch risk {
+	case domain.CapabilityRiskLow, domain.CapabilityRiskMedium, domain.CapabilityRiskHigh, domain.CapabilityRiskCritical:
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizePolicyEffect(value domain.PolicyEffect, fallback domain.PolicyEffect) (domain.PolicyEffect, error) {
+	if value == "" {
+		return fallback, nil
+	}
+	if value != domain.PolicyEffectAllow && value != domain.PolicyEffectDeny {
+		return "", domain.BadRequest("VALIDATION_FAILED", "effect must be allow or deny")
+	}
+	return value, nil
+}
+
+func normalizePolicyStatus(value domain.PolicyStatus, fallback domain.PolicyStatus) (domain.PolicyStatus, error) {
+	if value == "" {
+		return fallback, nil
+	}
+	if value != domain.PolicyStatusEnabled && value != domain.PolicyStatusDisabled {
+		return "", domain.BadRequest("VALIDATION_FAILED", "status must be enabled or disabled")
+	}
+	return value, nil
+}
+
+func normalizePolicyPriority(value *int) (int, error) {
+	if value == nil {
+		return 100, nil
+	}
+	if *value < 0 {
+		return 0, domain.BadRequest("VALIDATION_FAILED", "priority must be zero or greater")
+	}
+	return *value, nil
+}
+
+func findTenantEntitlement(rows []domain.TenantEntitlement, id string) (domain.TenantEntitlement, bool) {
+	for _, row := range rows {
+		if row.ID == id {
+			return row, true
+		}
+	}
+	return domain.TenantEntitlement{}, false
+}
+
+func findWorkspaceAssignment(rows []domain.WorkspaceAssignment, id string) (domain.WorkspaceAssignment, bool) {
+	for _, row := range rows {
+		if row.ID == id {
+			return row, true
+		}
+	}
+	return domain.WorkspaceAssignment{}, false
 }
 
 func normalizeRoutePolicyEffect(value domain.RoutePolicyEffect, fallback domain.RoutePolicyEffect) (domain.RoutePolicyEffect, error) {

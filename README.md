@@ -163,6 +163,19 @@ Sprint 11 makes covered management audit writes transactional with the managemen
 bash scripts/demo-sprint11-transactional-audit.sh
 ```
 
+## Sprint 12 MCP Capability Governance Demo
+
+Sprint 12 introduces tenant-scoped MCP capability governance. It discovers MCP tools, keeps new tools denied until approval, grants an approved tool to a tenant/workspace/caller instance chain, filters `tools/list`, denies unassigned `tools/call`, and records capability evidence in traces.
+
+Because AgentHarbor rejects loopback and private-network target endpoints by design, the demo requires a safe test MCP HTTP endpoint:
+
+```bash
+MCP_ENDPOINT=https://mcp.example.test/rpc \
+ALLOWED_TOOL=search_customer \
+DENIED_TOOL=export_contracts \
+  bash scripts/demo-sprint12-mcp-capability-governance.sh
+```
+
 ## Admin Key
 
 Management APIs are open by default for local clean-room iteration. If `AGENT_HARBOR_ADMIN_KEY` is set on the server, management endpoints require the same value in `X-Admin-Key`.
@@ -180,6 +193,7 @@ ADMIN_KEY=local-admin-key bash scripts/demo-sprint8-management-audit.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint9-route-policies.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint10-route-policy-retry.sh
 ADMIN_KEY=local-admin-key bash scripts/demo-sprint11-transactional-audit.sh
+ADMIN_KEY=local-admin-key MCP_ENDPOINT=https://mcp.example.test/rpc bash scripts/demo-sprint12-mcp-capability-governance.sh
 ```
 
 The Agent Key data plane still uses `Authorization: Bearer <agent-key>`; the admin key only protects management and audit APIs. Agent Key TTLs must be between 1 and 3600 seconds, with a 1800 second server default when omitted.
@@ -279,6 +293,15 @@ The frontend reads `VITE_API_BASE` for the Go API base URL. If it is not set, it
 - `GET /api/v1/route-policies?tenantId=&workspaceId=`
 - `PATCH /api/v1/route-policies/{id}`
 - `DELETE /api/v1/route-policies/{id}`
+- `POST /api/v1/targets/{targetId}/capabilities:refresh`
+- `GET /api/v1/capabilities?tenantId=&workspaceId=&targetId=&status=`
+- `PATCH /api/v1/capabilities/{id}`
+- `POST /api/v1/tenant-entitlements`
+- `GET /api/v1/tenant-entitlements?tenantId=&workspaceId=&targetId=&capabilityId=`
+- `POST /api/v1/workspace-assignments`
+- `GET /api/v1/workspace-assignments?tenantId=&workspaceId=&entitlementId=`
+- `POST /api/v1/instance-assignments`
+- `GET /api/v1/instance-assignments?tenantId=&workspaceId=&callerInstanceId=&capabilityId=`
 - `POST /api/v1/mcp/agents/{targetId}`
 - `POST /api/v1/mcp/agents/{targetId}/rpc`
 - `POST /api/v1/openapi/agents/{targetId}/operations/{operationId}`

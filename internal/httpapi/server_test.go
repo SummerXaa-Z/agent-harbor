@@ -48,17 +48,25 @@ type keyResponse struct {
 }
 
 type traceResponse struct {
-	ID               string `json:"id"`
-	CallerID         string `json:"callerAgentId"`
-	TargetID         string `json:"targetAgentId"`
-	RouteKey         string `json:"routeKey"`
-	Decision         string `json:"decision"`
-	Reason           string `json:"reason"`
-	RunID            string `json:"runId"`
-	DurationMs       int64  `json:"durationMs"`
-	UpstreamAttempts int    `json:"upstreamAttempts"`
-	UpstreamStatus   int    `json:"upstreamStatus"`
-	UpstreamError    string `json:"upstreamError"`
+	ID                    string `json:"id"`
+	CallerID              string `json:"callerAgentId"`
+	TargetID              string `json:"targetAgentId"`
+	RouteKey              string `json:"routeKey"`
+	TenantID              string `json:"tenantId"`
+	WorkspaceID           string `json:"workspaceId"`
+	CallerInstanceID      string `json:"callerInstanceId"`
+	CapabilityID          string `json:"capabilityId"`
+	CapabilityVersion     int    `json:"capabilityVersion"`
+	EntitlementID         string `json:"entitlementId"`
+	WorkspaceAssignmentID string `json:"workspaceAssignmentId"`
+	InstanceAssignmentID  string `json:"instanceAssignmentId"`
+	Decision              string `json:"decision"`
+	Reason                string `json:"reason"`
+	RunID                 string `json:"runId"`
+	DurationMs            int64  `json:"durationMs"`
+	UpstreamAttempts      int    `json:"upstreamAttempts"`
+	UpstreamStatus        int    `json:"upstreamStatus"`
+	UpstreamError         string `json:"upstreamError"`
 }
 
 type auditEventResponse struct {
@@ -111,6 +119,50 @@ type metricResponse struct {
 	Trend     string `json:"trend"`
 	Status    string `json:"status"`
 	UpdatedAt string `json:"updatedAt"`
+}
+
+type capabilityResponse struct {
+	ID              string `json:"id"`
+	TargetID        string `json:"targetId"`
+	Type            string `json:"type"`
+	Key             string `json:"key"`
+	DisplayName     string `json:"displayName"`
+	Description     string `json:"description"`
+	Action          string `json:"action"`
+	Sensitivity     string `json:"sensitivity"`
+	RiskLevel       string `json:"riskLevel"`
+	EnforcementMode string `json:"enforcementMode"`
+	DiscoveryStatus string `json:"discoveryStatus"`
+	Version         int    `json:"version"`
+}
+
+type tenantEntitlementResponse struct {
+	ID           string `json:"id"`
+	TenantID     string `json:"tenantId"`
+	TargetID     string `json:"targetId"`
+	CapabilityID string `json:"capabilityId"`
+	Effect       string `json:"effect"`
+	Status       string `json:"status"`
+	Priority     int    `json:"priority"`
+}
+
+type workspaceAssignmentResponse struct {
+	ID                  string `json:"id"`
+	TenantEntitlementID string `json:"tenantEntitlementId"`
+	TenantID            string `json:"tenantId"`
+	WorkspaceID         string `json:"workspaceId"`
+	Effect              string `json:"effect"`
+	Status              string `json:"status"`
+}
+
+type instanceAssignmentResponse struct {
+	ID                    string `json:"id"`
+	WorkspaceAssignmentID string `json:"workspaceAssignmentId"`
+	TenantID              string `json:"tenantId"`
+	WorkspaceID           string `json:"workspaceId"`
+	CallerInstanceID      string `json:"callerInstanceId"`
+	Effect                string `json:"effect"`
+	Status                string `json:"status"`
 }
 
 func newRouter() http.Handler {
@@ -2156,6 +2208,182 @@ func TestProxyUpstreamTLSFailureReturnsTLSError(t *testing.T) {
 	}
 }
 
+func TestMCPCapabilityDiscoveryAndAssignmentManagement(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":"capability-discovery","result":{"tools":[{"name":"search_customer","description":"Search customers","inputSchema":{"type":"object"}},{"name":"export_contracts","description":"Export contracts","inputSchema":{"type":"object"}}]}}`))
+	}))
+	defer upstream.Close()
+
+	now := time.Now().UTC()
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-a", WorkspaceID: "ws-sales", Name: "Capability Caller", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Capability MCP", "tenant-a", "ws-sales", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL,
+	})
+
+	capabilities := decodeData[[]capabilityResponse](t, request(t, router, http.MethodPost, "/api/v1/targets/"+target.ID+"/capabilities:refresh", nil, ""))
+	if len(capabilities) != 2 {
+		t.Fatalf("expected two discovered capabilities, got %#v", capabilities)
+	}
+	search := capabilityByKey(t, capabilities, "search_customer")
+	if search.DiscoveryStatus != "pending_review" || search.Action != "read" {
+		t.Fatalf("unexpected search capability defaults: %#v", search)
+	}
+	export := capabilityByKey(t, capabilities, "export_contracts")
+	if export.DiscoveryStatus != "pending_review" || export.Action != "export" || export.RiskLevel != "high" {
+		t.Fatalf("unexpected export capability defaults: %#v", export)
+	}
+
+	approved := decodeData[capabilityResponse](t, request(t, router, http.MethodPatch, "/api/v1/capabilities/"+search.ID, map[string]any{
+		"discoveryStatus": "approved",
+	}, ""))
+	if approved.DiscoveryStatus != "approved" {
+		t.Fatalf("capability should be approved, got %#v", approved)
+	}
+	entitlement := decodeData[tenantEntitlementResponse](t, request(t, router, http.MethodPost, "/api/v1/tenant-entitlements", map[string]any{
+		"tenantId":     "tenant-a",
+		"targetId":     target.ID,
+		"capabilityId": search.ID,
+		"effect":       "allow",
+		"status":       "enabled",
+	}, ""))
+	if entitlement.TenantID != "tenant-a" || entitlement.CapabilityID != search.ID {
+		t.Fatalf("unexpected entitlement: %#v", entitlement)
+	}
+	workspaceAssignment := decodeData[workspaceAssignmentResponse](t, request(t, router, http.MethodPost, "/api/v1/workspace-assignments", map[string]any{
+		"tenantEntitlementId": entitlement.ID,
+		"workspaceId":         "ws-sales",
+		"effect":              "allow",
+		"status":              "enabled",
+	}, ""))
+	if workspaceAssignment.WorkspaceID != "ws-sales" {
+		t.Fatalf("unexpected workspace assignment: %#v", workspaceAssignment)
+	}
+	instanceAssignment := decodeData[instanceAssignmentResponse](t, request(t, router, http.MethodPost, "/api/v1/instance-assignments", map[string]any{
+		"workspaceAssignmentId": workspaceAssignment.ID,
+		"callerInstanceId":      caller.ID,
+		"effect":                "allow",
+		"status":                "enabled",
+	}, ""))
+	if instanceAssignment.CallerInstanceID != caller.ID {
+		t.Fatalf("unexpected instance assignment: %#v", instanceAssignment)
+	}
+}
+
+func TestMCPCapabilityGovernanceFiltersToolsListDeniesUnassignedToolAndTracesEvidence(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			ID     any    `json:"id"`
+			Method string `json:"method"`
+			Params struct {
+				Name string `json:"name"`
+			} `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode upstream request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch payload.Method {
+		case "tools/list":
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":"list-1","result":{"tools":[{"name":"search_customer","description":"Search customers","inputSchema":{"type":"object"}},{"name":"export_contracts","description":"Export contracts","inputSchema":{"type":"object"}}]}}`))
+		case "tools/call":
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":"call-1","result":{"ok":true,"tool":"` + payload.Params.Name + `"}}`))
+		default:
+			t.Fatalf("unexpected upstream method %q", payload.Method)
+		}
+	}))
+	defer upstream.Close()
+
+	caller := createAgent(t, router, map[string]any{
+		"tenantId":    "tenant-a",
+		"workspaceId": "ws-sales",
+		"name":        "Capability Runtime Caller",
+		"channelType": "local",
+		"status":      "active",
+	})
+	key := decodeData[keyResponse](t, request(t, router, http.MethodPost, "/api/v1/agent-keys", map[string]any{"agentId": caller.ID}, ""))
+	target := createDirectAgent(t, repo, "Capability Runtime MCP", "tenant-a", "ws-sales", "mcp", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL,
+	})
+	capabilities := decodeData[[]capabilityResponse](t, request(t, router, http.MethodPost, "/api/v1/targets/"+target.ID+"/capabilities:refresh", nil, ""))
+	search := capabilityByKey(t, capabilities, "search_customer")
+	_ = decodeData[capabilityResponse](t, request(t, router, http.MethodPatch, "/api/v1/capabilities/"+search.ID, map[string]any{
+		"discoveryStatus": "approved",
+	}, ""))
+	entitlement := decodeData[tenantEntitlementResponse](t, request(t, router, http.MethodPost, "/api/v1/tenant-entitlements", map[string]any{
+		"tenantId":     "tenant-a",
+		"targetId":     target.ID,
+		"capabilityId": search.ID,
+		"effect":       "allow",
+		"status":       "enabled",
+	}, ""))
+	workspaceAssignment := decodeData[workspaceAssignmentResponse](t, request(t, router, http.MethodPost, "/api/v1/workspace-assignments", map[string]any{
+		"tenantEntitlementId": entitlement.ID,
+		"workspaceId":         "ws-sales",
+		"effect":              "allow",
+		"status":              "enabled",
+	}, ""))
+	instanceAssignment := decodeData[instanceAssignmentResponse](t, request(t, router, http.MethodPost, "/api/v1/instance-assignments", map[string]any{
+		"workspaceAssignmentId": workspaceAssignment.ID,
+		"callerInstanceId":      caller.ID,
+		"effect":                "allow",
+		"status":                "enabled",
+	}, ""))
+
+	listResp := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "list-1",
+		"method":  "tools/list",
+	}, key.Key, "cap-list-run")
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("tools/list failed: status=%d body=%s", listResp.Code, listResp.Body.String())
+	}
+	if !strings.Contains(listResp.Body.String(), "search_customer") || strings.Contains(listResp.Body.String(), "export_contracts") {
+		t.Fatalf("tools/list should include only assigned tool, got %s", listResp.Body.String())
+	}
+
+	denied := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-denied",
+		"method":  "tools/call",
+		"params":  map[string]any{"name": "export_contracts", "arguments": map[string]any{}},
+	}, key.Key, "cap-denied-run")
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("unassigned tool should be denied, got %d body=%s", denied.Code, denied.Body.String())
+	}
+
+	allowed := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-allowed",
+		"method":  "tools/call",
+		"params":  map[string]any{"name": "search_customer", "arguments": map[string]any{"query": "Acme"}},
+	}, key.Key, "cap-allowed-run")
+	if allowed.Code != http.StatusAccepted {
+		t.Fatalf("assigned tool should be allowed, got %d body=%s", allowed.Code, allowed.Body.String())
+	}
+
+	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces?runId=cap-allowed-run", nil, ""))
+	if len(traces) != 1 {
+		t.Fatalf("expected one allowed trace, got %#v", traces)
+	}
+	trace := traces[0]
+	if trace.TenantID != "tenant-a" || trace.WorkspaceID != "ws-sales" || trace.CallerInstanceID != caller.ID {
+		t.Fatalf("trace missing runtime identity: %#v", trace)
+	}
+	if trace.CapabilityID != search.ID || trace.CapabilityVersion != 1 || trace.EntitlementID != entitlement.ID || trace.WorkspaceAssignmentID != workspaceAssignment.ID || trace.InstanceAssignmentID != instanceAssignment.ID {
+		t.Fatalf("trace missing capability evidence: %#v", trace)
+	}
+}
+
 func createAgent(t *testing.T, router http.Handler, body map[string]any) agentResponse {
 	t.Helper()
 	resp := request(t, router, http.MethodPost, "/api/v1/agents", body, "")
@@ -2228,6 +2456,17 @@ func grantRoute(t *testing.T, router http.Handler, callerID string, targetID str
 		"routeType":     routeType,
 		"routeKey":      routeKey,
 	}, ""))
+}
+
+func capabilityByKey(t *testing.T, capabilities []capabilityResponse, key string) capabilityResponse {
+	t.Helper()
+	for _, capability := range capabilities {
+		if capability.Key == key {
+			return capability
+		}
+	}
+	t.Fatalf("capability %q not found in %#v", key, capabilities)
+	return capabilityResponse{}
 }
 
 func auditActions(events []auditEventResponse) []string {

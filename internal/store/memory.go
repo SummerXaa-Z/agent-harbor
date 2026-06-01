@@ -32,6 +32,17 @@ type Repository interface {
 	RevokeAccessGrant(context.Context, string, time.Time) (domain.AccessGrant, bool, error)
 	RevokeAccessGrantWithAudit(context.Context, string, time.Time, AccessGrantAuditBuilder) (domain.AccessGrant, bool, error)
 	HasGrant(context.Context, string, string, string, string, time.Time) bool
+	UpsertCapability(context.Context, domain.Capability) (domain.Capability, error)
+	ListCapabilities(context.Context, CapabilityFilter) ([]domain.Capability, error)
+	GetCapability(context.Context, string) (domain.Capability, bool, error)
+	UpdateCapability(context.Context, domain.Capability) (domain.Capability, bool, error)
+	CreateTenantEntitlement(context.Context, domain.TenantEntitlement) (domain.TenantEntitlement, error)
+	ListTenantEntitlements(context.Context, EntitlementFilter) ([]domain.TenantEntitlement, error)
+	CreateWorkspaceAssignment(context.Context, domain.WorkspaceAssignment) (domain.WorkspaceAssignment, error)
+	ListWorkspaceAssignments(context.Context, AssignmentFilter) ([]domain.WorkspaceAssignment, error)
+	CreateInstanceAssignment(context.Context, domain.InstanceAssignment) (domain.InstanceAssignment, error)
+	ListInstanceAssignments(context.Context, InstanceAssignmentFilter) ([]domain.InstanceAssignment, error)
+	EvaluateCapabilityAccess(context.Context, CapabilityAccessRequest) (domain.CapabilityAccessDecision, error)
 	CreateRoutePolicy(context.Context, domain.RoutePolicy) (domain.RoutePolicy, error)
 	CreateRoutePolicyWithAudit(context.Context, domain.RoutePolicy, RoutePolicyAuditBuilder) (domain.RoutePolicy, error)
 	ListRoutePolicies(context.Context, ManagementScope) ([]domain.RoutePolicy, error)
@@ -77,22 +88,63 @@ type AuditEventFilter struct {
 	Limit        int
 }
 
+type CapabilityFilter struct {
+	ManagementScope
+	TargetID string
+	Status   domain.CapabilityDiscoveryStatus
+}
+
+type EntitlementFilter struct {
+	ManagementScope
+	TargetID     string
+	CapabilityID string
+}
+
+type AssignmentFilter struct {
+	ManagementScope
+	EntitlementID string
+}
+
+type InstanceAssignmentFilter struct {
+	ManagementScope
+	CallerInstanceID string
+	CapabilityID     string
+}
+
+type CapabilityAccessRequest struct {
+	TenantID         string
+	WorkspaceID      string
+	CallerInstanceID string
+	SubjectID        string
+	TargetID         string
+	CapabilityID     string
+	Now              time.Time
+}
+
 type Memory struct {
-	mu       sync.RWMutex
-	agents   map[string]domain.Agent
-	keys     map[string]domain.AgentKey
-	grants   map[string]domain.AccessGrant
-	policies map[string]domain.RoutePolicy
-	traces   []domain.TraceEvent
-	audits   []domain.AuditEvent
+	mu                   sync.RWMutex
+	agents               map[string]domain.Agent
+	keys                 map[string]domain.AgentKey
+	grants               map[string]domain.AccessGrant
+	capabilities         map[string]domain.Capability
+	entitlements         map[string]domain.TenantEntitlement
+	workspaceAssignments map[string]domain.WorkspaceAssignment
+	instanceAssignments  map[string]domain.InstanceAssignment
+	policies             map[string]domain.RoutePolicy
+	traces               []domain.TraceEvent
+	audits               []domain.AuditEvent
 }
 
 func NewMemory() *Memory {
 	return &Memory{
-		agents:   make(map[string]domain.Agent),
-		keys:     make(map[string]domain.AgentKey),
-		grants:   make(map[string]domain.AccessGrant),
-		policies: make(map[string]domain.RoutePolicy),
+		agents:               make(map[string]domain.Agent),
+		keys:                 make(map[string]domain.AgentKey),
+		grants:               make(map[string]domain.AccessGrant),
+		capabilities:         make(map[string]domain.Capability),
+		entitlements:         make(map[string]domain.TenantEntitlement),
+		workspaceAssignments: make(map[string]domain.WorkspaceAssignment),
+		instanceAssignments:  make(map[string]domain.InstanceAssignment),
+		policies:             make(map[string]domain.RoutePolicy),
 	}
 }
 
@@ -364,6 +416,186 @@ func (m *Memory) HasGrant(_ context.Context, callerID string, targetID string, r
 	return m.hasGrantLocked(callerID, targetID, routeType, routeKey, now)
 }
 
+func (m *Memory) UpsertCapability(_ context.Context, capability domain.Capability) (domain.Capability, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	capability = cloneCapability(capability)
+	for id, existing := range m.capabilities {
+		if existing.TargetID == capability.TargetID && existing.Type == capability.Type && existing.Key == capability.Key && id != capability.ID {
+			delete(m.capabilities, id)
+			break
+		}
+	}
+	m.capabilities[capability.ID] = capability
+	return cloneCapability(capability), nil
+}
+
+func (m *Memory) ListCapabilities(_ context.Context, filter CapabilityFilter) ([]domain.Capability, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rows := make([]domain.Capability, 0, len(m.capabilities))
+	for _, capability := range m.capabilities {
+		if !m.capabilityMatchesFilter(capability, filter) {
+			continue
+		}
+		rows = append(rows, cloneCapability(capability))
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].UpdatedAt.Equal(rows[j].UpdatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].UpdatedAt.Before(rows[j].UpdatedAt)
+	})
+	return rows, nil
+}
+
+func (m *Memory) GetCapability(_ context.Context, id string) (domain.Capability, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	capability, ok := m.capabilities[id]
+	return cloneCapability(capability), ok, nil
+}
+
+func (m *Memory) UpdateCapability(_ context.Context, capability domain.Capability) (domain.Capability, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	existing, ok := m.capabilities[capability.ID]
+	if !ok {
+		return domain.Capability{}, false, nil
+	}
+	capability.TargetID = existing.TargetID
+	capability.Type = existing.Type
+	capability.Key = existing.Key
+	capability.DiscoveredAt = existing.DiscoveredAt
+	capability = cloneCapability(capability)
+	m.capabilities[capability.ID] = capability
+	return cloneCapability(capability), true, nil
+}
+
+func (m *Memory) CreateTenantEntitlement(_ context.Context, entitlement domain.TenantEntitlement) (domain.TenantEntitlement, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entitlement = cloneTenantEntitlement(entitlement)
+	m.entitlements[entitlement.ID] = entitlement
+	return cloneTenantEntitlement(entitlement), nil
+}
+
+func (m *Memory) ListTenantEntitlements(_ context.Context, filter EntitlementFilter) ([]domain.TenantEntitlement, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rows := make([]domain.TenantEntitlement, 0, len(m.entitlements))
+	for _, entitlement := range m.entitlements {
+		if !tenantEntitlementMatchesFilter(entitlement, filter) {
+			continue
+		}
+		rows = append(rows, cloneTenantEntitlement(entitlement))
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
+	return rows, nil
+}
+
+func (m *Memory) CreateWorkspaceAssignment(_ context.Context, assignment domain.WorkspaceAssignment) (domain.WorkspaceAssignment, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	assignment = cloneWorkspaceAssignment(assignment)
+	m.workspaceAssignments[assignment.ID] = assignment
+	return cloneWorkspaceAssignment(assignment), nil
+}
+
+func (m *Memory) ListWorkspaceAssignments(_ context.Context, filter AssignmentFilter) ([]domain.WorkspaceAssignment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rows := make([]domain.WorkspaceAssignment, 0, len(m.workspaceAssignments))
+	for _, assignment := range m.workspaceAssignments {
+		if !workspaceAssignmentMatchesFilter(assignment, filter) {
+			continue
+		}
+		rows = append(rows, cloneWorkspaceAssignment(assignment))
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
+	return rows, nil
+}
+
+func (m *Memory) CreateInstanceAssignment(_ context.Context, assignment domain.InstanceAssignment) (domain.InstanceAssignment, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	assignment = cloneInstanceAssignment(assignment)
+	m.instanceAssignments[assignment.ID] = assignment
+	return cloneInstanceAssignment(assignment), nil
+}
+
+func (m *Memory) ListInstanceAssignments(_ context.Context, filter InstanceAssignmentFilter) ([]domain.InstanceAssignment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rows := make([]domain.InstanceAssignment, 0, len(m.instanceAssignments))
+	for _, assignment := range m.instanceAssignments {
+		if !m.instanceAssignmentMatchesFilter(assignment, filter) {
+			continue
+		}
+		rows = append(rows, cloneInstanceAssignment(assignment))
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
+	return rows, nil
+}
+
+func (m *Memory) EvaluateCapabilityAccess(_ context.Context, req CapabilityAccessRequest) (domain.CapabilityAccessDecision, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	capability, ok := m.capabilities[req.CapabilityID]
+	if !ok || capability.TargetID != req.TargetID {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "capability", Reason: "capability is not registered for target"}, nil
+	}
+	if capability.DiscoveryStatus != domain.CapabilityDiscoveryApproved {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "capability", CapabilityID: capability.ID, Reason: "capability is not approved"}, nil
+	}
+	entitlement, ok := m.matchTenantEntitlementLocked(req, capability.ID)
+	if !ok {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "tenant_entitlement", CapabilityID: capability.ID, Reason: "tenant has no entitlement for capability"}, nil
+	}
+	if entitlement.Effect == domain.PolicyEffectDeny {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "tenant_entitlement", CapabilityID: capability.ID, EntitlementID: entitlement.ID, Reason: "tenant entitlement denies capability"}, nil
+	}
+	workspaceAssignment, ok := m.matchWorkspaceAssignmentLocked(req, entitlement.ID)
+	if !ok {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "workspace_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, Reason: "workspace has no assignment for capability"}, nil
+	}
+	if workspaceAssignment.Effect == domain.PolicyEffectDeny {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "workspace_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, Reason: "workspace assignment denies capability"}, nil
+	}
+	instanceAssignment, ok := m.matchInstanceAssignmentLocked(req, workspaceAssignment.ID)
+	if !ok {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "instance_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, Reason: "caller instance has no assignment for capability"}, nil
+	}
+	if instanceAssignment.Effect == domain.PolicyEffectDeny {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "instance_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, InstanceAssignmentID: instanceAssignment.ID, Reason: "caller instance assignment denies capability"}, nil
+	}
+	return domain.CapabilityAccessDecision{
+		Allowed:               true,
+		Source:                "capability_governance",
+		CapabilityID:          capability.ID,
+		EntitlementID:         entitlement.ID,
+		WorkspaceAssignmentID: workspaceAssignment.ID,
+		InstanceAssignmentID:  instanceAssignment.ID,
+		Reason:                "capability assignment matched",
+		DataScopes:            cloneDataScopes(instanceAssignment.DataScopes),
+	}, nil
+}
+
 func (m *Memory) CreateRoutePolicy(_ context.Context, policy domain.RoutePolicy) (domain.RoutePolicy, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -613,9 +845,153 @@ func (m *Memory) traceMatchesScope(trace domain.TraceEvent, scope ManagementScop
 	if scope.TenantID == "" && scope.WorkspaceID == "" {
 		return true
 	}
+	if trace.TenantID != "" || trace.WorkspaceID != "" {
+		if scope.TenantID != "" && trace.TenantID != scope.TenantID {
+			return false
+		}
+		if scope.WorkspaceID != "" && trace.WorkspaceID != scope.WorkspaceID {
+			return false
+		}
+		return true
+	}
 	caller, callerOK := m.agents[trace.CallerID]
 	target, targetOK := m.agents[trace.TargetID]
 	return (callerOK && agentMatchesScope(caller, scope)) || (targetOK && agentMatchesScope(target, scope))
+}
+
+func (m *Memory) capabilityMatchesFilter(capability domain.Capability, filter CapabilityFilter) bool {
+	if filter.TargetID != "" && capability.TargetID != filter.TargetID {
+		return false
+	}
+	if filter.Status != "" && capability.DiscoveryStatus != filter.Status {
+		return false
+	}
+	if filter.TenantID == "" && filter.WorkspaceID == "" {
+		return true
+	}
+	target, ok := m.agents[capability.TargetID]
+	return ok && agentMatchesScope(target, filter.ManagementScope)
+}
+
+func tenantEntitlementMatchesFilter(entitlement domain.TenantEntitlement, filter EntitlementFilter) bool {
+	if filter.TenantID != "" && entitlement.TenantID != filter.TenantID {
+		return false
+	}
+	if filter.TargetID != "" && entitlement.TargetID != filter.TargetID {
+		return false
+	}
+	if filter.CapabilityID != "" && entitlement.CapabilityID != filter.CapabilityID {
+		return false
+	}
+	return true
+}
+
+func workspaceAssignmentMatchesFilter(assignment domain.WorkspaceAssignment, filter AssignmentFilter) bool {
+	if filter.TenantID != "" && assignment.TenantID != filter.TenantID {
+		return false
+	}
+	if filter.WorkspaceID != "" && assignment.WorkspaceID != filter.WorkspaceID {
+		return false
+	}
+	if filter.EntitlementID != "" && assignment.TenantEntitlementID != filter.EntitlementID {
+		return false
+	}
+	return true
+}
+
+func (m *Memory) instanceAssignmentMatchesFilter(assignment domain.InstanceAssignment, filter InstanceAssignmentFilter) bool {
+	if filter.TenantID != "" && assignment.TenantID != filter.TenantID {
+		return false
+	}
+	if filter.WorkspaceID != "" && assignment.WorkspaceID != filter.WorkspaceID {
+		return false
+	}
+	if filter.CallerInstanceID != "" && assignment.CallerInstanceID != filter.CallerInstanceID {
+		return false
+	}
+	if filter.CapabilityID == "" {
+		return true
+	}
+	workspaceAssignment, ok := m.workspaceAssignments[assignment.WorkspaceAssignmentID]
+	if !ok {
+		return false
+	}
+	entitlement, ok := m.entitlements[workspaceAssignment.TenantEntitlementID]
+	return ok && entitlement.CapabilityID == filter.CapabilityID
+}
+
+func (m *Memory) matchTenantEntitlementLocked(req CapabilityAccessRequest, capabilityID string) (domain.TenantEntitlement, bool) {
+	var best domain.TenantEntitlement
+	found := false
+	for _, entitlement := range m.entitlements {
+		if entitlement.TenantID != req.TenantID || entitlement.TargetID != req.TargetID || entitlement.CapabilityID != capabilityID {
+			continue
+		}
+		if entitlement.Status != domain.PolicyStatusEnabled {
+			continue
+		}
+		if !found || tenantEntitlementPrecedes(entitlement, best) {
+			best = entitlement
+			found = true
+		}
+	}
+	return cloneTenantEntitlement(best), found
+}
+
+func (m *Memory) matchWorkspaceAssignmentLocked(req CapabilityAccessRequest, entitlementID string) (domain.WorkspaceAssignment, bool) {
+	var best domain.WorkspaceAssignment
+	found := false
+	for _, assignment := range m.workspaceAssignments {
+		if assignment.TenantEntitlementID != entitlementID || assignment.TenantID != req.TenantID || assignment.WorkspaceID != req.WorkspaceID {
+			continue
+		}
+		if assignment.Status != domain.PolicyStatusEnabled {
+			continue
+		}
+		if !found || policyEffectPrecedes(assignment.Effect, best.Effect) || assignment.CreatedAt.Before(best.CreatedAt) {
+			best = assignment
+			found = true
+		}
+	}
+	return cloneWorkspaceAssignment(best), found
+}
+
+func (m *Memory) matchInstanceAssignmentLocked(req CapabilityAccessRequest, workspaceAssignmentID string) (domain.InstanceAssignment, bool) {
+	var best domain.InstanceAssignment
+	found := false
+	for _, assignment := range m.instanceAssignments {
+		if assignment.WorkspaceAssignmentID != workspaceAssignmentID || assignment.TenantID != req.TenantID || assignment.WorkspaceID != req.WorkspaceID || assignment.CallerInstanceID != req.CallerInstanceID {
+			continue
+		}
+		if assignment.Status != domain.PolicyStatusEnabled {
+			continue
+		}
+		if assignment.SubjectSelector != "" && assignment.SubjectSelector != req.SubjectID {
+			continue
+		}
+		if !found || policyEffectPrecedes(assignment.Effect, best.Effect) || assignment.CreatedAt.Before(best.CreatedAt) {
+			best = assignment
+			found = true
+		}
+	}
+	return cloneInstanceAssignment(best), found
+}
+
+func tenantEntitlementPrecedes(left domain.TenantEntitlement, right domain.TenantEntitlement) bool {
+	if left.Priority != right.Priority {
+		return left.Priority > right.Priority
+	}
+	if left.Effect != right.Effect {
+		return left.Effect == domain.PolicyEffectDeny
+	}
+	if !left.CreatedAt.Equal(right.CreatedAt) {
+		return left.CreatedAt.Before(right.CreatedAt)
+	}
+	return left.ID < right.ID
+}
+
+func policyEffectPrecedes(left domain.PolicyEffect, right domain.PolicyEffect) bool {
+	return left == domain.PolicyEffectDeny && right != domain.PolicyEffectDeny
 }
 
 func routePolicyMatchesScope(policy domain.RoutePolicy, scope ManagementScope) bool {
@@ -714,4 +1090,53 @@ func auditEventMatchesScope(event domain.AuditEvent, scope ManagementScope) bool
 		return false
 	}
 	return true
+}
+
+func cloneCapability(capability domain.Capability) domain.Capability {
+	capability.InputSchema = cloneMap(capability.InputSchema)
+	capability.OutputSchema = cloneMap(capability.OutputSchema)
+	capability.NativeScopes = cloneStrings(capability.NativeScopes)
+	capability.DataDomains = cloneStrings(capability.DataDomains)
+	capability.DataScopes = cloneDataScopes(capability.DataScopes)
+	return capability
+}
+
+func cloneTenantEntitlement(entitlement domain.TenantEntitlement) domain.TenantEntitlement {
+	entitlement.DataScopes = cloneDataScopes(entitlement.DataScopes)
+	return entitlement
+}
+
+func cloneWorkspaceAssignment(assignment domain.WorkspaceAssignment) domain.WorkspaceAssignment {
+	assignment.DataScopes = cloneDataScopes(assignment.DataScopes)
+	return assignment
+}
+
+func cloneInstanceAssignment(assignment domain.InstanceAssignment) domain.InstanceAssignment {
+	assignment.DataScopes = cloneDataScopes(assignment.DataScopes)
+	return assignment
+}
+
+func cloneMap(value map[string]any) map[string]any {
+	if value == nil {
+		return nil
+	}
+	copied := make(map[string]any, len(value))
+	for key, item := range value {
+		copied[key] = item
+	}
+	return copied
+}
+
+func cloneStrings(value []string) []string {
+	if value == nil {
+		return nil
+	}
+	return append([]string(nil), value...)
+}
+
+func cloneDataScopes(value []domain.DataScope) []domain.DataScope {
+	if value == nil {
+		return nil
+	}
+	return append([]domain.DataScope(nil), value...)
 }

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/SummerXaa-Z/agent-harbor/blob/main/SECURITY.md
+    about: Do not open public issues for suspected vulnerabilities, credential leaks, authorization bypasses, or audit integrity failures.

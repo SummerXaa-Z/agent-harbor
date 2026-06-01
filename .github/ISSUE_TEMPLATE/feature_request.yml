@@ -1,0 +1,57 @@
+name: Feature proposal
+description: Propose a scoped AgentHarbor behavior, workflow, or engineering improvement.
+title: "proposal: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Keep proposals small enough to review independently. For clean-room work, describe product behavior or public protocol expectations without copying source code or internal implementation details from another runtime.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user, operator, or engineering problem this would solve.
+      placeholder: Today, contributors cannot ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the smallest useful change.
+      placeholder: Add ...
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Primary surface
+      options:
+        - Backend API
+        - Data plane / proxy
+        - PostgreSQL persistence
+        - Frontend console
+        - CI / dependency workflow
+        - Documentation / demo scripts
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List concrete checks that would prove the proposal is done.
+      placeholder: |
+        - `make check` passes
+        - demo script proves ...
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: Name related work that should stay out of scope.
+      placeholder: This proposal does not include ...
+    validations:
+      required: false

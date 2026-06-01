@@ -18,6 +18,7 @@ Do not file public issues for suspected vulnerabilities, credential leaks, autho
 - Prefer a new small PR over a long-lived stack. If stacking is unavoidable, document the review order and retarget bottom-up.
 - Keep PR descriptions current with scope, verification, and follow-ups.
 - CODEOWNERS currently routes all review ownership to `@SummerXaa-Z`; split ownership by surface only when there are stable additional maintainers.
+- Use GitHub issue forms for public bug reports and feature proposals; blank issues are disabled so reports keep scope, reproduction, and acceptance details.
 
 ## Local Verification
 

@@ -1,3 +1,28 @@
+## [2026-06-01 11:43] Session: Issue Templates
+
+### 完成
+- 新增 `.github/ISSUE_TEMPLATE/bug_report.yml`，要求公开 bug 报告包含复现、影响表面和已运行检查。
+- 新增 `.github/ISSUE_TEMPLATE/feature_request.yml`，要求功能提案包含问题、方案、验收标准和非目标。
+- 新增 `.github/ISSUE_TEMPLATE/config.yml`，禁用 blank issues，并将安全问题引导到 `SECURITY.md`。
+- 更新 `CONTRIBUTING.md`，说明 public issue 入口和安全报告分流。
+
+### 决策
+- 只提供 bug report 和 feature proposal 两个公开入口，避免 issue 类型膨胀。
+- 安全问题不进入公开 issue；使用 contact link 指向 `SECURITY.md`。
+
+### 血泪教训
+- 没有 issue form 时，复现步骤、验收标准和安全分流都依赖提交者自觉，后续 triage 成本会持续上升。
+
+### 待办
+- 如果后续开始使用 milestones 或 labels 自动化，再补充 label taxonomy 和 issue triage runbook。
+
+### 影响文件
+- `.github/ISSUE_TEMPLATE/bug_report.yml`：新增公开 bug 报告表单。
+- `.github/ISSUE_TEMPLATE/feature_request.yml`：新增功能提案表单。
+- `.github/ISSUE_TEMPLATE/config.yml`：禁用 blank issues 并路由安全报告。
+- `CONTRIBUTING.md`：补充 issue form 使用规则。
+- `CHANGELOG.md`：记录 issue triage 入口。
+
 ## [2026-06-01 10:51] Session: Security Policy
 
 ### 完成

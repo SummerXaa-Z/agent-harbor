@@ -1,0 +1,61 @@
+name: Bug report
+description: Report a reproducible AgentHarbor defect that is not security-sensitive.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for public, non-security defects. Do not include live secrets, Agent Keys, tokens, private customer data, or suspected vulnerability details.
+        If the issue involves credential exposure, authorization bypass, audit integrity, or security-sensitive behavior, stop here and follow SECURITY.md instead.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: State the observed defect and the expected behavior.
+      placeholder: The management API returns ... but should ...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide the smallest command sequence, request payload, or UI flow that reproduces the issue.
+      placeholder: |
+        1. Run `make run`
+        2. Call `...`
+        3. Observe `...`
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Paste redacted logs, responses, screenshots, or failing test output.
+      placeholder: Redact credentials and tokens before pasting.
+    validations:
+      required: false
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - Backend API
+        - Data plane / proxy
+        - PostgreSQL persistence
+        - Frontend console
+        - CI / dependency workflow
+        - Documentation / demo scripts
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Local checks
+      description: List any checks you ran before opening this issue.
+      placeholder: |
+        - `make check`
+        - relevant demo script
+    validations:
+      required: false

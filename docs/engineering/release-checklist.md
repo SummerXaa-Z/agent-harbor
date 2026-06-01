@@ -37,6 +37,7 @@ ADMIN_KEY=local-admin-key make demo-all
 Before merging:
 
 - Confirm the PR CI is green for Backend, PostgreSQL integration, and Frontend.
+- Confirm no job reached its timeout budget; timeouts indicate a workflow defect or unexpectedly slow test path that needs investigation.
 - Confirm the PR description lists the local verification commands that were run.
 - Confirm docs and demos describe behavior that exists in the current diff.
 

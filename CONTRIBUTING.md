@@ -67,6 +67,8 @@ GitHub Actions runs the same Makefile targets used locally:
 
 CI runs on pull requests and on pushes to `main`. It uses one concurrency group per workflow and branch, so new commits cancel superseded runs on the same branch. Reviewers should rely on the latest run for the branch or PR.
 
+CI jobs have explicit timeout budgets: 10 minutes for Backend, 15 minutes for PostgreSQL integration, and 10 minutes for Frontend. Treat a timeout as a workflow defect or unexpectedly slow test path, not as a flaky pass.
+
 Do not mark work complete until the relevant local checks and GitHub checks have both passed.
 
 For larger behavior changes, downstream handoffs, or tagged releases, use the release checklist in `docs/engineering/release-checklist.md`.

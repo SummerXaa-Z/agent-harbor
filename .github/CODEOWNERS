@@ -1,0 +1,14 @@
+# Default review owner for AgentHarbor clean-room work.
+* @SummerXaa-Z
+
+# Keep engineering process changes visible to the repository owner.
+/.github/ @SummerXaa-Z
+/docs/engineering/ @SummerXaa-Z
+/CONTRIBUTING.md @SummerXaa-Z
+/CHANGELOG.md @SummerXaa-Z
+
+# Runtime surfaces can be split into finer owners when the team grows.
+/cmd/ @SummerXaa-Z
+/internal/ @SummerXaa-Z
+/frontend/ @SummerXaa-Z
+/scripts/ @SummerXaa-Z

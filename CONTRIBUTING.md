@@ -15,6 +15,7 @@ When a change depends on product behavior, record the requirement in docs, tests
 - Keep each PR focused on one behavior, workflow, or documentation boundary.
 - Prefer a new small PR over a long-lived stack. If stacking is unavoidable, document the review order and retarget bottom-up.
 - Keep PR descriptions current with scope, verification, and follow-ups.
+- CODEOWNERS currently routes all review ownership to `@SummerXaa-Z`; split ownership by surface only when there are stable additional maintainers.
 
 ## Local Verification
 

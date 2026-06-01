@@ -1,3 +1,25 @@
+## [2026-06-01 10:45] Session: CODEOWNERS Review Routing
+
+### 完成
+- 新增 `.github/CODEOWNERS`，为全仓和主要工程表面配置默认 review owner。
+- 更新 `CONTRIBUTING.md` 和 `docs/engineering/review-guidelines.md`，说明当前 owner 策略和后续拆分条件。
+
+### 决策
+- 当前只有一个稳定仓库 owner，先使用 `@SummerXaa-Z` 覆盖全仓，避免虚假的细粒度 ownership。
+- 保留 `.github/`、`docs/engineering/`、后端、前端、脚本等路径分组，后续有稳定维护者后可以直接替换对应 owner。
+
+### 血泪教训
+- PR 模板和 review 指南只能说明“应该找谁看”，CODEOWNERS 才能把 review routing 变成 GitHub 层面的仓库事实。
+
+### 待办
+- 当后端、前端或工程流程有稳定维护者时，再拆分 `.github/CODEOWNERS` 的路径 owner。
+
+### 影响文件
+- `.github/CODEOWNERS`：新增默认 review owner 和路径分组。
+- `CONTRIBUTING.md`：补充 CODEOWNERS 策略。
+- `docs/engineering/review-guidelines.md`：补充 review ownership 说明。
+- `CHANGELOG.md`：记录 review routing 决策。
+
 ## [2026-06-01 10:34] Session: CI Run Concurrency
 
 ### 完成

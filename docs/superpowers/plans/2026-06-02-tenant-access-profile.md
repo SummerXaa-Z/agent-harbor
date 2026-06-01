@@ -1,6 +1,6 @@
 # Tenant Access Profile Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add a read-only tenant access profile API that explains configured capability grants, effective data scopes, and recent runtime trace evidence for a tenant scope.
 
@@ -15,7 +15,7 @@
 **Files:**
 - Create: `internal/httpapi/access_profile_test.go`
 
-- [ ] **Step 1: Write failing test coverage**
+- [x] **Step 1: Write failing test coverage**
 
 Add `access_profile_test.go` in package `httpapi_test` with local response structs:
 
@@ -97,7 +97,7 @@ Add `TestTenantAccessProfileReportsInvalidScopeAndValidatesTraceLimit`:
 - Request the profile and assert the grant exists with a workspace row whose `scopeStatus == "invalid"`.
 - Request `traceLimit=101` and assert `400 VALIDATION_FAILED`.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run:
 
@@ -113,7 +113,7 @@ Expected result: FAIL because `/api/v1/tenants/{id}/access-profile` is not regis
 - Create: `internal/httpapi/access_profile.go`
 - Modify: `internal/httpapi/server.go`
 
-- [ ] **Step 1: Add the admin route**
+- [x] **Step 1: Add the admin route**
 
 In `Server.Router`, register this route in the admin group next to the tenant routes:
 
@@ -121,7 +121,7 @@ In `Server.Router`, register this route in the admin group next to the tenant ro
 r.Get("/tenants/{id}/access-profile", s.getTenantAccessProfile)
 ```
 
-- [ ] **Step 2: Implement query parsing**
+- [x] **Step 2: Implement query parsing**
 
 In `access_profile.go`, add `accessProfileQueryFromRequest`:
 
@@ -147,7 +147,7 @@ Rules:
 - Allow `0` through `100`.
 - Return `domain.BadRequest("VALIDATION_FAILED", "traceLimit must be between 0 and 100")` for invalid values.
 
-- [ ] **Step 3: Implement response structs**
+- [x] **Step 3: Implement response structs**
 
 In `access_profile.go`, define response structs mirroring the spec:
 
@@ -164,7 +164,7 @@ type tenantAccessProfileResponse struct {
 
 Use nested structs for grant, workspace assignment, and instance assignment with `scopeStatus` and `scopeReason`.
 
-- [ ] **Step 4: Implement profile building**
+- [x] **Step 4: Implement profile building**
 
 Implement:
 
@@ -183,7 +183,7 @@ Builder requirements:
 - Return recent traces newest-first after all filters are applied.
 - Compute summary counts from the filtered response.
 
-- [ ] **Step 5: Run focused tests and verify GREEN**
+- [x] **Step 5: Run focused tests and verify GREEN**
 
 Run:
 
@@ -202,7 +202,7 @@ Expected result: PASS.
 - Create: `scripts/demo-sprint15-tenant-access-profile.sh`
 - Modify: `docs/superpowers/plans/2026-06-02-tenant-access-profile.md`
 
-- [ ] **Step 1: Add README API docs**
+- [x] **Step 1: Add README API docs**
 
 Document:
 
@@ -212,7 +212,7 @@ GET /api/v1/tenants/{id}/access-profile?workspaceId=&targetId=&capabilityId=&cal
 
 Explain that it is a read-only explanation endpoint and preserves registered-subtree plus flat exact-match tenant scope semantics.
 
-- [ ] **Step 2: Add Sprint 15 demo**
+- [x] **Step 2: Add Sprint 15 demo**
 
 Create `scripts/demo-sprint15-tenant-access-profile.sh`:
 
@@ -222,11 +222,11 @@ Create `scripts/demo-sprint15-tenant-access-profile.sh`:
 - Create tenant entitlement, workspace assignment, and instance assignment with data scopes.
 - Fetch the profile and assert grant chain and effective data scopes using Python JSON checks.
 
-- [ ] **Step 3: Register demo script**
+- [x] **Step 3: Register demo script**
 
 Add the script to `DEMO_SCRIPTS` in `Makefile` and to `scripts/demo-all.sh`.
 
-- [ ] **Step 4: Run verification**
+- [x] **Step 4: Run verification**
 
 Run:
 
@@ -239,7 +239,7 @@ git diff --check
 
 Expected result: all commands pass.
 
-- [ ] **Step 5: Mark plan complete and commit**
+- [x] **Step 5: Mark plan complete and commit**
 
 Mark this plan's checkboxes complete as tasks finish, then commit implementation changes with:
 

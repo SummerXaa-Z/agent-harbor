@@ -1,3 +1,33 @@
+## [2026-06-02 01:04] Session: Tenant Access Profile
+
+### 完成
+- 新增 `GET /api/v1/tenants/{id}/access-profile`，以只读方式聚合租户子树、target、capability、tenant entitlement、workspace assignment、instance assignment、有效 `dataScopes` 和最近 trace。
+- 新增 `internal/httpapi/access_profile.go`，把 profile builder 从已经很大的 `server.go` 中拆出，复用现有 repository 与 `domain.EffectiveDataScopes`。
+- 新增 `internal/httpapi/access_profile_test.go`，按 TDD 覆盖注册租户子树、flat tenant 精确匹配、查询过滤器、最新 trace 顺序、无效历史 scope 标记和 `traceLimit` 校验。
+- 新增 Sprint 15 demo 脚本，并接入 `Makefile` / `scripts/demo-all.sh`；README 增加 API 与 demo 说明。
+- 新增并完成 `docs/superpowers/plans/2026-06-02-tenant-access-profile.md`。
+
+### 决策
+- Access Profile 第一版只做解释型只读 API，不新增写入能力，也不替代 runtime `EvaluateCapabilityAccess`。
+- Profile 包含 deny/disabled/invalid 配置证据；无效历史数据通过 `scopeStatus=invalid` 暴露，不静默隐藏。
+- 最近 trace 使用现有升序 list 结果，profile 截取最新 `traceLimit` 条并按新到旧返回。
+
+### 血泪教训
+- 不能把 profile 做成简单 list 拼接；必须按 entitlement → workspace assignment → instance assignment 展示有效链路，否则无法解释权限来源。
+- 当前公开 API 不能手工创建 capability，demo 在没有 `MCP_ENDPOINT` 时只能验证空 profile 路径；完整 grant chain 仍依赖 MCP discovery。
+- 当前工具策略不允许未被用户显式要求时启动 subagent review，因此本轮使用本地代码审查和完整验证替代。
+
+### 待办
+- 后续 UI 应直接消费 access profile，而不是在前端拼多个治理列表接口。
+- 后续可补一个显式 dry-run / simulation API，用于回答具体 caller/subject/tool 的“此刻能否调用”。
+
+### 影响文件
+- `internal/httpapi/access_profile.go`：新增 profile handler、query parser、builder、summary 和 trace 截取逻辑。
+- `internal/httpapi/access_profile_test.go`：新增 profile 行为测试和测试数据构造 helper。
+- `internal/httpapi/server.go`：注册租户 access profile 管理路由。
+- `README.md` / `Makefile` / `scripts/demo-all.sh` / `scripts/demo-sprint15-tenant-access-profile.sh`：补充 Sprint 15 文档和 demo 集成。
+- `docs/superpowers/specs/2026-06-02-tenant-access-profile-design.md` / `docs/superpowers/plans/2026-06-02-tenant-access-profile.md`：记录设计与执行计划。
+
 ## [2026-06-02 00:29] Session: Tenant Hierarchy Scoped Admin
 
 ### 完成

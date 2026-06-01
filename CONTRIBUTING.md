@@ -61,6 +61,8 @@ GitHub Actions runs the same Makefile targets used locally:
 - PostgreSQL integration: `make test-postgres`
 - Frontend: `make frontend-test`, `make frontend-build`
 
+CI runs on pull requests and on pushes to `main`. It uses one concurrency group per workflow and branch, so new commits cancel superseded runs on the same branch. Reviewers should rely on the latest run for the branch or PR.
+
 Do not mark work complete until the relevant local checks and GitHub checks have both passed.
 
 For larger behavior changes, downstream handoffs, or tagged releases, use the release checklist in `docs/engineering/release-checklist.md`.

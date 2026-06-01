@@ -25,6 +25,8 @@ make check
 git diff --check
 ```
 
+CI runs on pull requests and on pushes to `main`. If GitHub cancels an older CI run after a new commit, treat the latest run on the PR branch as authoritative. Do not carry verification evidence forward from a superseded run.
+
 Run PostgreSQL integration when a PR changes store behavior, migrations, audit persistence, credentials, or route policy evaluation:
 
 ```bash

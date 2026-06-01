@@ -1,3 +1,27 @@
+## [2026-06-01 10:34] Session: CI Run Concurrency
+
+### 完成
+- 将 `.github/workflows/ci.yml` 调整为 pull request 和 `main` push 触发，避免 PR 分支同时跑 push 与 pull_request 两套 CI。
+- 为 `.github/workflows/ci.yml` 增加 workflow-level concurrency，同一分支的新 run 会取消旧 run。
+- 更新 `CONTRIBUTING.md` 和 `docs/engineering/review-guidelines.md`，说明 reviewers 应以最新 PR 分支 run 为准。
+
+### 决策
+- PR 分支依赖 pull_request 事件提供审核信号，`push` 只保留给 `main`，避免 cancelled push run 污染 PR check rollup。
+- 使用 `${{ github.head_ref || github.ref_name }}` 作为分支维度，让 pull request 和 main push 事件都能落到稳定的分支并发组。
+- `cancel-in-progress` 设为 `true`，减少重复 CI 占用，保留最新 commit 的反馈。
+
+### 血泪教训
+- 同一分支上的 push 和 pull_request 事件可能为同一 commit 触发重复 CI；如果只取消 push run，GitHub PR check rollup 仍会展示 cancelled checks，影响合并判断。
+
+### 待办
+- 观察后续 PR 是否仍出现重复 run；如 GitHub 事件顺序导致残留重复，再收紧触发条件或分离 push/PR 策略。
+
+### 影响文件
+- `.github/workflows/ci.yml`：新增 workflow-level concurrency。
+- `CONTRIBUTING.md`：补充 CI run 取消规则。
+- `docs/engineering/review-guidelines.md`：补充最新 run 作为审核依据。
+- `CHANGELOG.md`：记录 CI 并发策略。
+
 ## [2026-05-31 15:15] Session: Dependency Update Cycle Closure
 
 ### 完成

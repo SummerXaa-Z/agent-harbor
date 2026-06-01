@@ -32,8 +32,10 @@ Run the standard local checks before opening or updating a PR:
 make check
 ```
 
-This runs backend tests, vet, build, frontend tests/build, and demo script syntax checks.
+This runs Go formatting checks, backend tests, vet, build, frontend tests/build, and demo script syntax checks.
 It also parse-checks GitHub YAML configuration via `make github-config-lint`.
+
+Use `make fmt` before committing Go changes when `make gofmt-check` reports files that need formatting.
 
 Use uncached Go tests before behavior-sensitive review:
 
@@ -41,7 +43,7 @@ Use uncached Go tests before behavior-sensitive review:
 make release-check
 ```
 
-`make release-check` runs the uncached Go test path plus vet, build, frontend test/build, and demo script syntax checks.
+`make release-check` runs Go formatting checks, the uncached Go test path, vet, build, frontend test/build, and demo script syntax checks.
 
 Run PostgreSQL integration when a change touches repository behavior, migrations, transactions, credentials, audit events, route policies, or CI database wiring:
 
@@ -66,7 +68,7 @@ ADMIN_KEY=local-admin-key make demo-all
 
 GitHub Actions runs the same Makefile targets used locally:
 
-- Backend: `make test`, `make vet`, `make build`, `make demo-scripts-lint`
+- Backend: `make gofmt-check`, `make test`, `make vet`, `make build`, `make demo-scripts-lint`
 - GitHub configuration lint: `make github-config-lint`
 - PostgreSQL integration: `make test-postgres`
 - Frontend: `make frontend-test`, `make frontend-build`

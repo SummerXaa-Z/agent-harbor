@@ -14,6 +14,7 @@ Use the checked-in Go, Node, and pnpm pins when running release checks locally o
 
 This covers:
 
+- Go formatting via `make gofmt-check`
 - uncached Go tests via `make test-fresh`
 - `go vet` via `make vet`
 - Go package build via `make build`

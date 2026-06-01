@@ -1,5 +1,7 @@
 SHELL := /bin/bash
 
+GO_FILES := $(shell git ls-files '*.go')
+
 DEMO_SCRIPTS := \
 	scripts/demo-governance-loop.sh \
 	scripts/demo-sprint2-cleanup.sh \
@@ -13,13 +15,15 @@ DEMO_SCRIPTS := \
 	scripts/demo-sprint10-route-policy-retry.sh \
 	scripts/demo-sprint11-transactional-audit.sh
 
-.PHONY: help check release-check test test-fresh vet build frontend-test frontend-build demo-scripts-lint github-config-lint test-postgres run demo-all
+.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-test frontend-build demo-scripts-lint github-config-lint test-postgres run demo-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
 	@printf '\n'
 	@printf '  make check              Run local backend, frontend, and demo-script checks\n'
 	@printf '  make release-check      Run uncached release/merge readiness checks\n'
+	@printf '  make fmt                Format Go files with gofmt\n'
+	@printf '  make gofmt-check        Verify Go files are gofmt-formatted\n'
 	@printf '  make test               Run Go tests\n'
 	@printf '  make test-fresh         Run uncached Go tests\n'
 	@printf '  make vet                Run go vet\n'
@@ -32,9 +36,20 @@ help:
 	@printf '  make run                Start the local API server\n'
 	@printf '  make demo-all           Run all demos against BASE_URL\n'
 
-check: test vet build frontend-test frontend-build demo-scripts-lint github-config-lint
+check: gofmt-check test vet build frontend-test frontend-build demo-scripts-lint github-config-lint
 
-release-check: test-fresh vet build frontend-test frontend-build demo-scripts-lint github-config-lint
+release-check: gofmt-check test-fresh vet build frontend-test frontend-build demo-scripts-lint github-config-lint
+
+fmt:
+	gofmt -w $(GO_FILES)
+
+gofmt-check:
+	@files="$$(gofmt -l $(GO_FILES))"; \
+	if [[ -n "$$files" ]]; then \
+		echo "Go files need gofmt:"; \
+		echo "$$files"; \
+		exit 1; \
+	fi
 
 test:
 	go test ./...

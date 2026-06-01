@@ -1,3 +1,28 @@
+## [2026-06-01 16:24] Session: Go Format Gate
+
+### 完成
+- 新增 `make fmt`，用 `gofmt` 格式化仓库内 tracked Go files。
+- 新增 `make gofmt-check`，在 Go 文件格式不符合 `gofmt` 时输出文件列表并失败。
+- 将 `gofmt-check` 纳入 `make check`、`make release-check` 和 CI Backend job。
+- 更新 `CONTRIBUTING.md` 和 `docs/engineering/release-checklist.md`，说明 Go 格式检查已经进入标准 gate。
+
+### 决策
+- 使用 Go 标准工具 `gofmt`，不引入额外 formatter 或 lint 依赖。
+- `fmt` 只处理 `git ls-files '*.go'` 中的 tracked Go files，避免修改临时文件、vendor 或未纳入仓库的实验文件。
+
+### 血泪教训
+- 只依赖 review 检查 Go 格式会把机械问题转嫁给人；格式要求应该由 Makefile 和 CI 统一执行。
+
+### 待办
+- 后续如果引入前端 formatter，再补独立的 frontend format/check target，不把 Go 格式 gate 和前端格式策略混在一起。
+
+### 影响文件
+- `Makefile`：新增 `fmt` / `gofmt-check`，并接入 `check` / `release-check`。
+- `.github/workflows/ci.yml`：Backend job 增加 Go format check step。
+- `CONTRIBUTING.md`：补充 Go 格式 gate 和 `make fmt` 使用说明。
+- `docs/engineering/release-checklist.md`：补充 release gate 中的 Go 格式检查。
+- `CHANGELOG.md`：记录 Go 格式 gate 决策。
+
 ## [2026-06-01 13:41] Session: Dependabot Update Groups
 
 ### 完成

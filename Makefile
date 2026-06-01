@@ -13,7 +13,7 @@ DEMO_SCRIPTS := \
 	scripts/demo-sprint10-route-policy-retry.sh \
 	scripts/demo-sprint11-transactional-audit.sh
 
-.PHONY: help check release-check test test-fresh vet build frontend-test frontend-build demo-scripts-lint test-postgres run demo-all
+.PHONY: help check release-check test test-fresh vet build frontend-test frontend-build demo-scripts-lint github-config-lint test-postgres run demo-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -27,13 +27,14 @@ help:
 	@printf '  make frontend-test      Run frontend unit tests\n'
 	@printf '  make frontend-build     Build frontend assets\n'
 	@printf '  make demo-scripts-lint  Syntax-check demo scripts\n'
+	@printf '  make github-config-lint Parse-check GitHub YAML configuration\n'
 	@printf '  make test-postgres      Run store tests using AGENT_HARBOR_TEST_DATABASE_URL\n'
 	@printf '  make run                Start the local API server\n'
 	@printf '  make demo-all           Run all demos against BASE_URL\n'
 
-check: test vet build frontend-test frontend-build demo-scripts-lint
+check: test vet build frontend-test frontend-build demo-scripts-lint github-config-lint
 
-release-check: test-fresh vet build frontend-test frontend-build demo-scripts-lint
+release-check: test-fresh vet build frontend-test frontend-build demo-scripts-lint github-config-lint
 
 test:
 	go test ./...
@@ -55,6 +56,9 @@ frontend-build:
 
 demo-scripts-lint:
 	bash -n $(DEMO_SCRIPTS) scripts/demo-all.sh
+
+github-config-lint:
+	ruby -e 'require "yaml"; Dir[".github/**/*.yml"].sort.each { |file| YAML.load_file(file); puts "#{file} ok" }'
 
 test-postgres:
 	@if [[ -z "$$AGENT_HARBOR_TEST_DATABASE_URL" ]]; then \

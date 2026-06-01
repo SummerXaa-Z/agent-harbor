@@ -18,6 +18,7 @@ This covers:
 - frontend unit tests via `make frontend-test`
 - frontend production build via `make frontend-build`
 - demo script syntax checks via `make demo-scripts-lint`
+- GitHub YAML configuration parse checks via `make github-config-lint`
 
 Run PostgreSQL integration when the change touches persistence, migrations, audit behavior, credential storage, route policies, or CI database wiring:
 

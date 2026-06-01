@@ -40,6 +40,9 @@ jobs:
       - name: Demo script lint
         run: make demo-scripts-lint
 
+      - name: GitHub config lint
+        run: make github-config-lint
+
   postgres:
     name: PostgreSQL integration
     runs-on: ubuntu-latest

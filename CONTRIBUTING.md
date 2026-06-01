@@ -29,6 +29,7 @@ make check
 ```
 
 This runs backend tests, vet, build, frontend tests/build, and demo script syntax checks.
+It also parse-checks GitHub YAML configuration via `make github-config-lint`.
 
 Use uncached Go tests before behavior-sensitive review:
 
@@ -62,6 +63,7 @@ ADMIN_KEY=local-admin-key make demo-all
 GitHub Actions runs the same Makefile targets used locally:
 
 - Backend: `make test`, `make vet`, `make build`, `make demo-scripts-lint`
+- GitHub configuration lint: `make github-config-lint`
 - PostgreSQL integration: `make test-postgres`
 - Frontend: `make frontend-test`, `make frontend-build`
 

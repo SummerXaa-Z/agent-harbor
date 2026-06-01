@@ -1,3 +1,28 @@
+## [2026-06-01 11:55] Session: GitHub Config Lint
+
+### 完成
+- 新增 `make github-config-lint`，解析检查 `.github/**/*.yml`。
+- 将 `github-config-lint` 纳入 `make check` 和 `make release-check`。
+- 在 CI Backend job 中增加 GitHub config lint step。
+- 更新 `CONTRIBUTING.md` 和 `docs/engineering/release-checklist.md`，说明 GitHub 配置 lint 已进入标准验证入口。
+
+### 决策
+- 当前先做 YAML parse check，不引入额外 action linter 依赖；目标是捕获语法错误和缩进错误，保持底座轻量。
+- 使用 Ruby 标准 YAML parser，因为本地环境和 GitHub hosted runner 都可直接运行，不增加仓库依赖。
+
+### 血泪教训
+- `.github` 配置增长后，手动 spot-check 不足以支撑长期演进；配置文件也需要进入 Makefile 和 CI 的事实验证入口。
+
+### 待办
+- 后续如果 workflow 复杂度继续上升，再评估引入 actionlint 或更严格的 issue form schema 检查。
+
+### 影响文件
+- `Makefile`：新增 `github-config-lint` target，并纳入 `check` / `release-check`。
+- `.github/workflows/ci.yml`：Backend job 增加 GitHub config lint step。
+- `CONTRIBUTING.md`：补充 GitHub config lint 验证说明。
+- `docs/engineering/release-checklist.md`：补充 release gate 覆盖面。
+- `CHANGELOG.md`：记录 GitHub 配置 lint 决策。
+
 ## [2026-06-01 11:49] Session: CI Job Timeouts
 
 ### 完成

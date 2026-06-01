@@ -23,6 +23,12 @@ Management APIs stay open by default for local tests and clean-room iteration. S
 
 ## Run
 
+Use the repository toolchain pins before running local checks:
+
+- Go version comes from `go.mod`.
+- Node major version comes from `.node-version`.
+- Frontend package manager comes from `frontend/package.json` (`packageManager`).
+
 ```bash
 make check
 make run

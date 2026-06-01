@@ -1,3 +1,30 @@
+## [2026-06-01 13:30] Session: Frontend Toolchain Pins
+
+### 完成
+- 新增 `.node-version`，把前端 CI 的 Node 版本来源移到仓库根目录。
+- 在 `frontend/package.json` 增加 `packageManager` 和 `engines`，声明 pnpm 与 Node 支持范围。
+- 更新 `.github/workflows/ci.yml`，让 Frontend job 使用 `.node-version` 并固定 pnpm 10.30.3。
+- 更新 `README.md`、`CONTRIBUTING.md` 和 `docs/engineering/release-checklist.md`，说明本地与 CI 应使用同一组工具链版本。
+
+### 决策
+- Node 先按 CI 当前主版本固定为 24；pnpm 固定到当前本地验证版本 10.30.3，避免安装器 minor/patch 漂移影响前端锁文件和构建行为。
+- Go 继续由 `go.mod` 作为单一来源，不新增重复的 Go 版本文件。
+
+### 血泪教训
+- 只在 CI YAML 里写 Node/pnpm 版本会让本地开发者和 CI 使用不同工具链；版本锚点应该进仓库入口文件。
+
+### 待办
+- 后续升级 Node 或 pnpm 时，同步更新 `.node-version`、`frontend/package.json`、CI 和 changelog。
+
+### 影响文件
+- `.node-version`：新增 Node 主版本声明。
+- `.github/workflows/ci.yml`：Frontend job 改用仓库 Node 版本文件，并固定 pnpm patch 版本。
+- `frontend/package.json`：新增 pnpm package manager 与 engines 声明。
+- `README.md`：补充工具链入口。
+- `CONTRIBUTING.md`：补充本地验证工具链约定。
+- `docs/engineering/release-checklist.md`：补充 release gate 工具链约束。
+- `CHANGELOG.md`：记录工具链 pinning 决策。
+
 ## [2026-06-01 12:12] Session: Editor And Line Ending Defaults
 
 ### 完成

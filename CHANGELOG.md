@@ -1,3 +1,27 @@
+## [2026-06-01 12:12] Session: Editor And Line Ending Defaults
+
+### 完成
+- 新增 `.editorconfig`，统一 UTF-8、LF、final newline、trim trailing whitespace 和主要文件类型缩进规则。
+- 新增 `.gitattributes`，让 Git 对文本文件统一使用 LF，并明确常见二进制资产类型。
+- 更新 `CONTRIBUTING.md`，把编辑器和换行规则纳入贡献入口。
+
+### 决策
+- Go 和 `Makefile` 保持 tab 缩进，前端、shell、YAML、JSON、Markdown 等默认使用两空格。
+- Markdown 保留行尾空格例外，避免破坏有意使用的硬换行。
+- 先只做轻量规范化，不批量重写历史文件，降低无关 diff。
+
+### 血泪教训
+- 工程底座不只靠 CI；编辑器默认值和 Git 换行策略不统一时，小改动会持续制造 review 噪音。
+
+### 待办
+- 后续如果新增文档二进制资产类型，再扩展 `.gitattributes` 的 binary 列表。
+
+### 影响文件
+- `.editorconfig`：新增跨编辑器文本格式规则。
+- `.gitattributes`：新增 Git 换行和二进制资产规则。
+- `CONTRIBUTING.md`：补充本地编辑约定。
+- `CHANGELOG.md`：记录编辑器和换行策略。
+
 ## [2026-06-01 11:55] Session: GitHub Config Lint
 
 ### 完成

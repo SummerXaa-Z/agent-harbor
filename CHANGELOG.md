@@ -1,3 +1,25 @@
+## [2026-06-01 13:41] Session: Dependabot Update Groups
+
+### 完成
+- 在 `.github/dependabot.yml` 为 Go modules、frontend npm packages 和 GitHub Actions 增加 minor/patch update groups。
+- 更新 `docs/engineering/dependency-updates.md`，说明 grouped PR 的命名、review 节奏和 major update 分流规则。
+
+### 决策
+- minor/patch 更新按生态聚合，减少例行依赖 PR 噪音。
+- major 更新不进常规分组，继续作为单独兼容性工作审查。
+- 保留每个生态 `open-pull-requests-limit: 5`，先通过 grouping 降噪，不额外收紧队列容量。
+
+### 血泪教训
+- Dependabot 只开启不分组，会把维护节奏变成 PR 洪峰；自动化需要同时定义更新频率和审查颗粒度。
+
+### 待办
+- 如果后续 grouped PR 仍然过大，再按 production/development 或关键依赖拆分更细的 group。
+
+### 影响文件
+- `.github/dependabot.yml`：新增每个依赖生态的 minor/patch 分组。
+- `docs/engineering/dependency-updates.md`：补充分组策略和 major update 分流规则。
+- `CHANGELOG.md`：记录 Dependabot 分组决策。
+
 ## [2026-06-01 13:30] Session: Frontend Toolchain Pins
 
 ### 完成

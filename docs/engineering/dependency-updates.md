@@ -8,12 +8,20 @@ AgentHarbor uses Dependabot to open weekly dependency update PRs for:
 
 Dependabot runs on Monday morning in the `Asia/Shanghai` timezone and limits each ecosystem to five open PRs.
 
+Routine minor and patch updates are grouped per ecosystem:
+
+- `go-minor-patch` for Go modules
+- `frontend-minor-patch` for frontend npm packages
+- `actions-minor-patch` for GitHub Actions
+
+Major updates stay outside these groups so they can be reviewed as planned compatibility work.
+
 ## Review Policy
 
 Treat dependency PRs like normal code changes:
 
 - Read the changed package, version, and changelog when the impact is not obvious.
-- Prefer one ecosystem update PR at a time unless the updates are clearly coupled.
+- Prefer one ecosystem update PR at a time unless the updates are clearly coupled or already grouped by Dependabot.
 - Keep major-version updates separate from routine patch/minor updates.
 - Do not merge dependency PRs that change generated lockfiles or manifests without green CI.
 

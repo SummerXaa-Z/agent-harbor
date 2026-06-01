@@ -8,6 +8,13 @@ updates:
       time: "09:00"
       timezone: Asia/Shanghai
     open-pull-requests-limit: 5
+    groups:
+      go-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     commit-message:
       prefix: deps
 
@@ -19,6 +26,13 @@ updates:
       time: "09:15"
       timezone: Asia/Shanghai
     open-pull-requests-limit: 5
+    groups:
+      frontend-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     commit-message:
       prefix: deps
 
@@ -30,5 +44,12 @@ updates:
       time: "09:30"
       timezone: Asia/Shanghai
     open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     commit-message:
       prefix: deps

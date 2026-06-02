@@ -4,6 +4,10 @@ AgentHarbor is a tenant-first access control plane for AI agents, MCP servers, O
 
 It gives platform teams one place to register agents, discover MCP capabilities, assign tenant/workspace/caller permissions, enforce data scopes, and inspect audit evidence for every allowed or denied runtime decision.
 
+## Project Status
+
+AgentHarbor is in developer preview. It is ready for local evaluation, design feedback, and early contribution, but it is not yet recommended for production traffic.
+
 ## What It Provides
 
 - **Tenant-first governance**: register a three-level tenant tree and scope management views by tenant subtree.
@@ -49,6 +53,24 @@ The API listens on `:9090` by default. Override it with:
 AGENT_HARBOR_ADDR=:9091 go run ./cmd/agent-harbor
 ```
 
+## Try the Core Journey in 10 Minutes
+
+This local scenario runs the most important AgentHarbor workflow: create a three-level tenant tree, register a mock MCP target, discover tools, approve one tool, assign it to a tenant/workspace/caller instance, run allowed and denied calls, and verify access-profile plus audit evidence.
+
+Terminal 1:
+
+```bash
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
+```
+
+Terminal 2:
+
+```bash
+make core-journey
+```
+
+The scenario starts `scripts/mock-mcp-server.py` automatically and points AgentHarbor at `http://127.0.0.1:8787/mcp`. The `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` flag is required only for local development scenarios that use loopback or private-network upstreams; do not enable it for production deployments.
+
 ## Web Console
 
 ```bash
@@ -67,6 +89,7 @@ Use `.env.example` as the local configuration template.
 | --- | --- |
 | `AGENT_HARBOR_ADDR` | API listen address. Defaults to `:9090`. |
 | `AGENT_HARBOR_ADMIN_KEY` | Optional management API key. When set, management and audit endpoints require `X-Admin-Key`. |
+| `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` | Development-only boolean. Allows loopback/private upstream endpoints for local scenarios when set to `true`. Defaults to `false`. |
 | `AGENT_HARBOR_DATABASE_URL` | Optional PostgreSQL connection string. If unset, AgentHarbor uses the in-memory repository. |
 | `AGENT_HARBOR_CREDENTIAL_KEY` | 32-byte raw or base64 key used to encrypt persisted agent credentials. Required with PostgreSQL. |
 | `AGENT_HARBOR_TEST_DATABASE_URL` | PostgreSQL connection string used by integration tests. |
@@ -106,6 +129,13 @@ The repository includes executable scenario scripts under `scripts/` for local e
 
 ```bash
 make scenario-all
+```
+
+The core journey has its own script because it intentionally uses a local mock MCP endpoint:
+
+```bash
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
+make core-journey
 ```
 
 With admin protection enabled:

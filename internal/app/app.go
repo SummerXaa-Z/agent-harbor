@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -39,9 +41,18 @@ func New(ctx context.Context) (*App, error) {
 		repo = store.NewPostgresWithCredentialKey(pool, credentialKey)
 		closeFn = pool.Close
 	}
+	allowPrivateUpstreams, err := privateUpstreamsAllowedFromEnv()
+	if err != nil {
+		closeFn()
+		return nil, err
+	}
 	return &App{
-		server: httpapi.New(repo, httpapi.WithAdminKey(os.Getenv("AGENT_HARBOR_ADMIN_KEY"))),
-		close:  closeFn,
+		server: httpapi.New(
+			repo,
+			httpapi.WithAdminKey(os.Getenv("AGENT_HARBOR_ADMIN_KEY")),
+			httpapi.WithPrivateUpstreamsAllowed(allowPrivateUpstreams),
+		),
+		close: closeFn,
 	}, nil
 }
 
@@ -59,4 +70,16 @@ func postgresCredentialKeyFromEnv() ([]byte, error) {
 		return nil, fmt.Errorf("AGENT_HARBOR_CREDENTIAL_KEY is required when AGENT_HARBOR_DATABASE_URL is set")
 	}
 	return security.ParseCredentialKey(raw)
+}
+
+func privateUpstreamsAllowedFromEnv() (bool, error) {
+	raw := strings.TrimSpace(os.Getenv("AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS"))
+	if raw == "" {
+		return false, nil
+	}
+	allowed, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS must be a boolean")
+	}
+	return allowed, nil
 }

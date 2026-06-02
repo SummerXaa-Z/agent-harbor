@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+type EndpointValidationOptions struct {
+	AllowPrivateHosts bool
+}
+
 var secretKeyFragments = []string{
 	"token",
 	"secret",
@@ -44,7 +48,11 @@ func IsSecretLikeKey(key string) bool {
 	return false
 }
 
-func ValidateOutboundEndpoint(raw string) error {
+func ValidateOutboundEndpoint(raw string, options ...EndpointValidationOptions) error {
+	validation := EndpointValidationOptions{}
+	if len(options) > 0 {
+		validation = options[0]
+	}
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return nil
@@ -58,13 +66,25 @@ func ValidateOutboundEndpoint(raw string) error {
 	}
 
 	host := strings.ToLower(parsed.Hostname())
-	if host == "localhost" || host == "metadata.google.internal" {
+	if host == "metadata.google.internal" {
+		return fmt.Errorf("endpoint host is not allowed")
+	}
+	if host == "localhost" {
+		if validation.AllowPrivateHosts {
+			return nil
+		}
 		return fmt.Errorf("endpoint host is not allowed")
 	}
 	if ip := net.ParseIP(host); ip != nil {
 		addr, ok := netip.AddrFromSlice(ip)
-		if ok && isUnsafeAddress(addr.Unmap()) {
-			return fmt.Errorf("endpoint host is not allowed")
+		if ok {
+			normalized := addr.Unmap()
+			if isUnsafeAddress(normalized) {
+				if validation.AllowPrivateHosts && (normalized.IsLoopback() || normalized.IsPrivate()) {
+					return nil
+				}
+				return fmt.Errorf("endpoint host is not allowed")
+			}
 		}
 	}
 	return nil

@@ -31,9 +31,10 @@ import (
 type callerContextKey struct{}
 
 type Server struct {
-	repo     store.Repository
-	now      func() time.Time
-	adminKey string
+	repo                  store.Repository
+	now                   func() time.Time
+	adminKey              string
+	allowPrivateUpstreams bool
 }
 
 const (
@@ -66,6 +67,12 @@ type Option func(*Server)
 func WithAdminKey(key string) Option {
 	return func(s *Server) {
 		s.adminKey = strings.TrimSpace(key)
+	}
+}
+
+func WithPrivateUpstreamsAllowed(allowed bool) Option {
+	return func(s *Server) {
+		s.allowPrivateUpstreams = allowed
 	}
 }
 
@@ -350,13 +357,13 @@ func (s *Server) agentFromRequest(req domain.CreateAgentRequest) (domain.Agent, 
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
-	if err := validateAgentForSave(agent); err != nil {
+	if err := validateAgentForSave(agent, s.allowPrivateUpstreams); err != nil {
 		return domain.Agent{}, err
 	}
 	return agent, nil
 }
 
-func validateAgentForSave(agent domain.Agent) error {
+func validateAgentForSave(agent domain.Agent, allowPrivateUpstreams bool) error {
 	if strings.TrimSpace(agent.Name) == "" {
 		return domain.BadRequest("VALIDATION_FAILED", "name is required")
 	}
@@ -394,7 +401,7 @@ func validateAgentForSave(agent domain.Agent) error {
 			if !ok {
 				return domain.BadRequest("VALIDATION_FAILED", key+" must be a string URL")
 			}
-			if err := security.ValidateOutboundEndpoint(value); err != nil {
+			if err := security.ValidateOutboundEndpoint(value, security.EndpointValidationOptions{AllowPrivateHosts: allowPrivateUpstreams}); err != nil {
 				return domain.BadRequest("VALIDATION_FAILED", err.Error())
 			}
 		}
@@ -465,7 +472,7 @@ func (s *Server) updateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	updated.UpdatedAt = s.now()
-	if err := validateAgentForSave(updated); err != nil {
+	if err := validateAgentForSave(updated, s.allowPrivateUpstreams); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -514,7 +521,7 @@ func (s *Server) rotateAgentCredentials(w http.ResponseWriter, r *http.Request) 
 	}
 	effective := agent
 	effective.Credentials = credentials
-	if err := validateAgentForSave(effective); err != nil {
+	if err := validateAgentForSave(effective, s.allowPrivateUpstreams); err != nil {
 		writeError(w, err)
 		return
 	}

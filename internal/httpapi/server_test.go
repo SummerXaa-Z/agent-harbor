@@ -187,6 +187,10 @@ func newRouterWithRepo(repo store.Repository) http.Handler {
 	return httpapi.New(repo).Router()
 }
 
+func newRouterWithPrivateUpstreams() http.Handler {
+	return httpapi.New(store.NewMemory(), httpapi.WithPrivateUpstreamsAllowed(true)).Router()
+}
+
 func TestHealthAndContracts(t *testing.T) {
 	router := newRouter()
 
@@ -359,6 +363,23 @@ func TestAgentRegistryValidation(t *testing.T) {
 	}, "")
 	if badEndpointType.Code != http.StatusBadRequest {
 		t.Fatalf("non-string endpoint should fail, got %d", badEndpointType.Code)
+	}
+}
+
+func TestCreateAgentAllowsPrivateEndpointWhenExplicit(t *testing.T) {
+	router := newRouterWithPrivateUpstreams()
+
+	resp := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Local MCP Target",
+		"workspaceId": "ws-1",
+		"channelType": "mcp",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"endpoint": "http://127.0.0.1:8080/mcp",
+		},
+	}, "")
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("private endpoint should be allowed when explicit option is enabled, got %d body=%s", resp.Code, resp.Body.String())
 	}
 }
 

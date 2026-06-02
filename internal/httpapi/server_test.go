@@ -276,7 +276,7 @@ func TestAgentRegistryValidation(t *testing.T) {
 	router := newRouter()
 
 	created := createAgent(t, router, map[string]any{
-		"name":        "Local Codex Agent",
+		"name":        "Local Test Agent",
 		"workspaceId": "ws-1",
 		"channelType": "local",
 		"status":      "active",
@@ -291,7 +291,7 @@ func TestAgentRegistryValidation(t *testing.T) {
 	}
 
 	read := decodeData[agentResponse](t, request(t, router, http.MethodGet, "/api/v1/agents/"+created.ID, nil, ""))
-	if read.Name != "Local Codex Agent" {
+	if read.Name != "Local Test Agent" {
 		t.Fatalf("unexpected get response: %#v", read)
 	}
 
@@ -366,7 +366,7 @@ func TestDataPlaneAllowedDeniedTraces(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
 	caller := createAgent(t, router, map[string]any{
-		"name":        "Local Codex Agent",
+		"name":        "Local Test Agent",
 		"workspaceId": "ws-1",
 		"channelType": "local",
 		"status":      "active",
@@ -1234,7 +1234,7 @@ func TestUpstreamProxyInjectsCredentialHeaders(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "Bearer sprint4-secret" {
+		if got := r.Header.Get("Authorization"); got != "Bearer credential-redaction-secret" {
 			t.Fatalf("expected credential Authorization header, got %q", got)
 		}
 		if got := r.Header.Get("X-AgentHarbor-Tenant"); got != "default" {
@@ -1255,7 +1255,7 @@ func TestUpstreamProxyInjectsCredentialHeaders(t *testing.T) {
 			"Authorization": "apiToken",
 		},
 	}, map[string]string{
-		"apiToken": "Bearer sprint4-secret",
+		"apiToken": "Bearer credential-redaction-secret",
 	})
 	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/call")
 
@@ -1811,7 +1811,7 @@ func TestAgentRejectsSecretLikeHeaders(t *testing.T) {
 
 func TestAgentCredentialsAreAcceptedAndRedacted(t *testing.T) {
 	router := newRouter()
-	secret := "Bearer sprint4-secret"
+	secret := "Bearer credential-redaction-secret"
 
 	resp := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
 		"name":        "Credentialed MCP",
@@ -2271,7 +2271,7 @@ func TestAgentRejectsInvalidProxyConfig(t *testing.T) {
 			},
 		},
 		"credentials": map[string]any{
-			"Bearer copied-secret": "Bearer sprint4-secret",
+			"Bearer copied-secret": "Bearer credential-redaction-secret",
 		},
 	}, "")
 	if badCredentialKey.Code != http.StatusBadRequest {

@@ -46,7 +46,7 @@ body:
         - PostgreSQL persistence
         - Frontend console
         - CI / dependency workflow
-        - Documentation / demo scripts
+        - Documentation / scenario scripts
     validations:
       required: true
   - type: textarea
@@ -56,6 +56,6 @@ body:
       description: List any checks you ran before opening this issue.
       placeholder: |
         - `make check`
-        - relevant demo script
+        - relevant scenario script
     validations:
       required: false

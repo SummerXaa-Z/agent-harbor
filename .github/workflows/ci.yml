@@ -40,8 +40,8 @@ jobs:
       - name: Build
         run: make build
 
-      - name: Demo script lint
-        run: make demo-scripts-lint
+      - name: Scenario script lint
+        run: make scenario-scripts-lint
 
       - name: GitHub config lint
         run: make github-config-lint

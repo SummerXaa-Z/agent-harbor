@@ -47,7 +47,7 @@ AGENT_HARBOR_TEST_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5
   make test-postgres
 ```
 
-Run `make demo-all` against a local API when updates touch HTTP routing, frontend runtime behavior, or demo tooling.
+Run `make scenario-all` against a local API when updates touch HTTP routing, frontend runtime behavior, or scenario tooling.
 
 ## Merge Rule
 

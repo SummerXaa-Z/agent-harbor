@@ -154,7 +154,7 @@ export const sampleAgents: Agent[] = [
   {
     id: 'agt_console_ops',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     name: 'Operations Console Caller',
     description: 'Internal caller used by console workflows and operational playbooks.',
     ownerId: 'platform-team',
@@ -168,7 +168,7 @@ export const sampleAgents: Agent[] = [
   {
     id: 'agt_policy_router',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     name: 'Policy Router',
     description: 'Routes approved requests to downstream business automation agents.',
     ownerId: 'automation-team',
@@ -186,7 +186,7 @@ export const sampleAgents: Agent[] = [
   {
     id: 'agt_knowledge_gateway',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     name: 'Knowledge Gateway',
     description: 'Read-only gateway for enterprise knowledge retrieval.',
     ownerId: 'knowledge-team',
@@ -204,7 +204,7 @@ export const sampleAgents: Agent[] = [
   {
     id: 'agt_review_webhook',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     name: 'Review Webhook',
     description: 'Receives asynchronous review notifications from approved services.',
     ownerId: 'integration-team',
@@ -297,7 +297,7 @@ export const sampleWorkspaceAssignments: WorkspaceAssignment[] = [
     id: 'wsa_search_customer',
     tenantEntitlementId: 'ent_search_customer',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     effect: 'allow',
     dataScopes: sampleCapabilities[0].dataScopes,
     status: 'enabled',
@@ -311,7 +311,7 @@ export const sampleInstanceAssignments: InstanceAssignment[] = [
     id: 'ina_search_customer',
     workspaceAssignmentId: 'wsa_search_customer',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     callerInstanceId: 'agt_console_ops',
     subjectSelector: 'user:*',
     effect: 'allow',
@@ -331,7 +331,7 @@ export const sampleTraces: TraceEvent[] = [
     routeType: 'mcp',
     routeKey: 'tools/call',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     callerInstanceId: 'agt_console_ops',
     subjectId: 'user:ops-console',
     capabilityId: 'cap_search_customer',
@@ -413,7 +413,7 @@ export const sampleAuditEvents: AuditEvent[] = [
   {
     id: 'aud_1001',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     actor: 'platform-admin',
     action: 'agent.created',
     resourceType: 'agent',
@@ -425,7 +425,7 @@ export const sampleAuditEvents: AuditEvent[] = [
   {
     id: 'aud_1002',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     actor: 'ops-console',
     action: 'agent.credentials_rotated',
     resourceType: 'agent',
@@ -437,7 +437,7 @@ export const sampleAuditEvents: AuditEvent[] = [
   {
     id: 'aud_1003',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     actor: 'platform-admin',
     action: 'access_grant.created',
     resourceType: 'access_grant',
@@ -452,7 +452,7 @@ export const routePolicies: RoutePolicy[] = [
   {
     id: 'pol_001',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     name: 'Console to policy router',
     callerAgentId: 'agt_console_ops',
     targetAgentId: 'agt_policy_router',
@@ -469,7 +469,7 @@ export const routePolicies: RoutePolicy[] = [
   {
     id: 'pol_002',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     name: 'Console knowledge search',
     callerAgentId: 'agt_console_ops',
     targetAgentId: 'agt_knowledge_gateway',
@@ -485,7 +485,7 @@ export const routePolicies: RoutePolicy[] = [
   {
     id: 'pol_003',
     tenantId: 'default',
-    workspaceId: 'workspace-demo',
+    workspaceId: 'workspace-sandbox',
     name: 'Webhook export safeguard',
     callerAgentId: 'agt_review_webhook',
     targetAgentId: 'agt_knowledge_gateway',

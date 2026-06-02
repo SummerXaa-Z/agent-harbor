@@ -25,6 +25,12 @@ This project uses Keep a Changelog-style sections and will adopt semantic versio
 - Renamed local smoke scripts to scenario naming.
 - Renamed PostgreSQL migration files to stable schema-area filenames.
 - Rewrote the frontend design reference as public console design guidance.
+- Updated console metrics so live runtime evidence is shown from real allowed/denied traces instead of sample evidence runs.
+
+### Fixed
+
+- Prevented the Tenant Permission Console from blanking when access-profile collection fields are returned as `null`.
+- Added accessible names and titles to icon-only primary navigation buttons.
 
 ### Removed
 

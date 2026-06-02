@@ -488,6 +488,19 @@ export async function loadConsoleData(
     withFallback(() => fetchRuntimeMetrics(scope, adminKey), systemMetrics),
   ])
 
+  const loadedFromApi =
+    catalogResult.ok &&
+    agentsResult.ok &&
+    grantsResult.ok &&
+    capabilitiesResult.ok &&
+    entitlementResult.ok &&
+    workspaceAssignmentResult.ok &&
+    instanceAssignmentResult.ok &&
+    policiesResult.ok &&
+    tracesResult.ok &&
+    auditEventsResult.ok &&
+    metricsResult.ok
+
   return {
     providers: catalogResult.data.providers,
     channels: catalogResult.data.channels,
@@ -500,20 +513,9 @@ export async function loadConsoleData(
     traces: tracesResult.data,
     auditEvents: auditEventsResult.data,
     routePolicies: policiesResult.data,
-    evidenceRuns,
+    evidenceRuns: loadedFromApi ? [] : evidenceRuns,
     systemMetrics: metricsResult.data,
-    loadedFromApi:
-      catalogResult.ok &&
-      agentsResult.ok &&
-      grantsResult.ok &&
-      capabilitiesResult.ok &&
-      entitlementResult.ok &&
-      workspaceAssignmentResult.ok &&
-      instanceAssignmentResult.ok &&
-      policiesResult.ok &&
-      tracesResult.ok &&
-      auditEventsResult.ok &&
-      metricsResult.ok,
+    loadedFromApi,
     grantsLoadedFromApi: grantsResult.ok,
     capabilitiesLoadedFromApi: capabilitiesResult.ok,
     capabilityAssignmentsLoadedFromApi:

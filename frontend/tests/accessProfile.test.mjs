@@ -92,3 +92,34 @@ test("countInvalidAccessProfileRows includes grant, workspace, and instance rows
     3
   );
 });
+
+test("countInvalidAccessProfileRows tolerates null collection fields", () => {
+  assert.equal(
+    countInvalidAccessProfileRows({
+      generatedAt: "2026-06-02T00:00:00Z",
+      grants: null,
+      recentTraces: null,
+      scopeTenants: null,
+      summary: {},
+      tenant: {}
+    }),
+    0
+  );
+  assert.equal(
+    countInvalidAccessProfileRows({
+      generatedAt: "2026-06-02T00:00:00Z",
+      grants: [
+        {
+          scopeStatus: "invalid",
+          tenantEntitlement: {},
+          workspaceAssignments: null
+        }
+      ],
+      recentTraces: [],
+      scopeTenants: [],
+      summary: {},
+      tenant: {}
+    }),
+    1
+  );
+});

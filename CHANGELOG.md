@@ -13,6 +13,8 @@ This project uses Keep a Changelog-style sections and will adopt semantic versio
 - Product-oriented README covering AgentHarbor's tenant-first access control model, local setup, runtime configuration, API overview, policy semantics, and project docs.
 - Local `.env.example` configuration template.
 - Public roadmap for near-term and future product direction.
+- Developer-preview core journey scenario with a dependency-free mock MCP server.
+- Development-only `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` switch for local loopback/private upstream evaluation.
 
 ### Changed
 

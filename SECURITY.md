@@ -43,6 +43,12 @@ Security reports should focus on confidentiality, integrity, availability, or au
 
 General bugs, documentation gaps, and local setup issues can use normal issues or pull requests unless they expose one of the risks above.
 
+## Local Development Upstreams
+
+AgentHarbor rejects loopback, link-local, metadata, and private-network upstream endpoints by default. This protects operators from accidentally proxying to local services, cloud metadata endpoints, or private infrastructure.
+
+`AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true` exists only for local development scenarios that use a mock MCP server on `127.0.0.1`. Do not enable it for production or shared environments.
+
 ## Fix Handling
 
 Security fixes should stay narrow and include verification evidence. At minimum, run:

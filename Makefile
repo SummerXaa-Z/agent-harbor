@@ -3,6 +3,7 @@ SHELL := /bin/bash
 GO_FILES := $(shell git ls-files '*.go')
 
 SCENARIO_SCRIPTS := \
+	scripts/scenario-core-journey.sh \
 	scripts/scenario-governance-loop.sh \
 	scripts/scenario-registry-cleanup.sh \
 	scripts/scenario-mcp-policy.sh \
@@ -19,7 +20,7 @@ SCENARIO_SCRIPTS := \
 	scripts/scenario-tenant-hierarchy.sh \
 	scripts/scenario-tenant-access-profile.sh
 
-.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-test frontend-build scenario-scripts-lint github-config-lint test-postgres run scenario-all
+.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-test frontend-build scenario-scripts-lint github-config-lint test-postgres run core-journey scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -38,6 +39,7 @@ help:
 	@printf '  make github-config-lint    Parse-check GitHub YAML configuration\n'
 	@printf '  make test-postgres         Run store tests using AGENT_HARBOR_TEST_DATABASE_URL\n'
 	@printf '  make run                   Start the local API server\n'
+	@printf '  make core-journey          Run the 10-minute local core journey scenario\n'
 	@printf '  make scenario-all          Run all scenarios against BASE_URL\n'
 
 check: gofmt-check test vet build frontend-test frontend-build scenario-scripts-lint github-config-lint
@@ -88,6 +90,9 @@ test-postgres:
 
 run:
 	go run ./cmd/agent-harbor
+
+core-journey:
+	bash scripts/scenario-core-journey.sh
 
 scenario-all:
 	bash scripts/scenario-all.sh

@@ -48,9 +48,15 @@ import {
   scopeStatusTone,
   summarizeDataScopes
 } from "./accessProfile";
+import {
+  consoleDataSourceLabel,
+  runtimeEvidenceMetric,
+  type MetricTone
+} from "./consoleMetrics";
 import { parseRetryFields } from "./retryForm";
 import type {
   AccessProfileFilters,
+  AccessProfileSummary,
   Agent,
   AgentStatus,
   AuditEvent,
@@ -76,7 +82,7 @@ import type {
   WorkspaceAssignment
 } from "./types";
 
-type Tone = "success" | "warning" | "danger" | "info" | "neutral";
+type Tone = MetricTone;
 
 const navItems = [
   { key: "cockpit", label: "Cockpit", icon: Gauge },
@@ -88,6 +94,17 @@ const navItems = [
   { key: "traces", label: "Traces", icon: FileSearch },
   { key: "evidence", label: "Evidence", icon: ClipboardCheck }
 ];
+
+const emptyAccessProfileSummary: AccessProfileSummary = {
+  tenantCount: 0,
+  grantCount: 0,
+  targetCount: 0,
+  capabilityCount: 0,
+  workspaceAssignmentCount: 0,
+  instanceAssignmentCount: 0,
+  recentAllowedTraceCount: 0,
+  recentDeniedTraceCount: 0
+};
 
 const workspaceTabs = ["Prod", "Staging", "Sandbox"];
 const defaultManagementScope: ManagementScope = {
@@ -568,8 +585,8 @@ function App() {
   const deniedTraces = traces.filter((trace) => trace.decision === "denied").length;
   const allowedTraces = traces.filter((trace) => trace.decision === "allowed").length;
   const pendingCapabilities = capabilities.filter((capability) => capability.discoveryStatus === "pending_review").length;
-  const evidencePassed = evidenceRuns.filter((run) => run.status === "passed").length;
-  const dataSourceLabel = loadError ? "API error" : data?.loadedFromApi ? "Go runtime + samples" : "Fallback dataset";
+  const runtimeEvidence = runtimeEvidenceMetric(allowedTraces, deniedTraces);
+  const dataSourceLabel = consoleDataSourceLabel(loadError, data?.loadedFromApi);
   const activeNavLabel = navItems.find((item) => item.key === activeNav)?.label ?? "Cockpit";
   const isCapabilitiesView = activeNav === "capabilities";
   const isAccessView = activeNav === "access";
@@ -599,9 +616,11 @@ function App() {
             const Icon = item.icon;
             return (
               <button
+                aria-label={item.label}
                 className={activeNav === item.key ? "nav-item active" : "nav-item"}
                 key={item.key}
                 onClick={() => setActiveNav(item.key)}
+                title={item.label}
                 type="button"
               >
                 <Icon size={17} />
@@ -725,10 +744,10 @@ function App() {
           />
           <MetricCard
             icon={<ClipboardCheck size={18} />}
-            label={isAccessView ? "Trace Evidence" : "Evidence Health"}
-            value={isAccessView ? String((accessSummary?.recentAllowedTraceCount ?? 0) + (accessSummary?.recentDeniedTraceCount ?? 0)) : `${evidencePassed}/${Math.max(evidenceRuns.length, 1)}`}
-            detail={isAccessView ? `${accessSummary?.recentDeniedTraceCount ?? 0} denied` : "checks passed"}
-            tone="neutral"
+            label={isAccessView ? "Trace Evidence" : runtimeEvidence.label}
+            value={isAccessView ? String((accessSummary?.recentAllowedTraceCount ?? 0) + (accessSummary?.recentDeniedTraceCount ?? 0)) : runtimeEvidence.value}
+            detail={isAccessView ? `${accessSummary?.recentDeniedTraceCount ?? 0} denied` : runtimeEvidence.detail}
+            tone={isAccessView ? "neutral" : runtimeEvidence.tone}
           />
         </section>
 
@@ -1365,6 +1384,10 @@ function TenantAccessProfileView({
     ? capabilities.filter((capability) => capability.targetId === filters.targetId)
     : capabilities;
   const sourceLabel = profile ? (profile.loadedFromApi ? "Live access profile" : "Fallback access profile") : "Not loaded";
+  const profileSummary = profile?.summary ?? emptyAccessProfileSummary;
+  const profileScopeTenants = profile?.scopeTenants ?? [];
+  const profileGrants = profile?.grants ?? [];
+  const profileRecentTraces = profile?.recentTraces ?? [];
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1456,14 +1479,14 @@ function TenantAccessProfileView({
       ) : (
         <>
           <div className="access-summary-grid">
-            <AccessSummaryCell label="Tenant Scope" value={String(profile.summary.tenantCount)} detail={profile.tenant.name} />
-            <AccessSummaryCell label="Grants" value={String(profile.summary.grantCount)} detail={`${profile.summary.capabilityCount} capabilities`} />
-            <AccessSummaryCell label="Assignments" value={`${profile.summary.workspaceAssignmentCount}/${profile.summary.instanceAssignmentCount}`} detail="workspace / caller" />
-            <AccessSummaryCell label="Recent Decisions" value={`${profile.summary.recentAllowedTraceCount}/${profile.summary.recentDeniedTraceCount}`} detail="allowed / denied" />
+            <AccessSummaryCell label="Tenant Scope" value={String(profileSummary.tenantCount ?? profileScopeTenants.length)} detail={profile.tenant.name} />
+            <AccessSummaryCell label="Grants" value={String(profileSummary.grantCount ?? profileGrants.length)} detail={`${profileSummary.capabilityCount ?? 0} capabilities`} />
+            <AccessSummaryCell label="Assignments" value={`${profileSummary.workspaceAssignmentCount ?? 0}/${profileSummary.instanceAssignmentCount ?? 0}`} detail="workspace / caller" />
+            <AccessSummaryCell label="Recent Decisions" value={`${profileSummary.recentAllowedTraceCount ?? 0}/${profileSummary.recentDeniedTraceCount ?? 0}`} detail="allowed / denied" />
           </div>
 
           <div className="access-tenant-list" aria-label="Tenant scope">
-            {profile.scopeTenants.map((tenant) => (
+            {profileScopeTenants.map((tenant) => (
               <div className="access-tenant-row" key={tenant.id}>
                 <Badge tone={tenant.status === "active" ? "success" : "neutral"}>L{tenant.level}</Badge>
                 <div>
@@ -1480,10 +1503,10 @@ function TenantAccessProfileView({
                 <strong>Effective Grant Chain</strong>
                 <span>{countInvalidAccessProfileRows(profile)} invalid rows</span>
               </header>
-              {profile.grants.length === 0 ? (
+              {profileGrants.length === 0 ? (
                 <EmptyRow title="No grant chains" detail="No tenant entitlement matched the current profile filters." />
               ) : null}
-              {profile.grants.map((grant) => (
+              {profileGrants.map((grant) => (
                 <AccessGrantRow grant={grant} key={grant.tenantEntitlement.id} />
               ))}
             </section>
@@ -1491,12 +1514,12 @@ function TenantAccessProfileView({
             <section className="access-trace-evidence" aria-label="Recent trace evidence">
               <header>
                 <strong>Trace Evidence</strong>
-                <span>{profile.recentTraces.length} recent traces</span>
+                <span>{profileRecentTraces.length} recent traces</span>
               </header>
-              {profile.recentTraces.length === 0 ? (
+              {profileRecentTraces.length === 0 ? (
                 <EmptyRow title="No trace evidence" detail="Set trace limit above 0 to include recent runtime decisions." />
               ) : null}
-              {profile.recentTraces.map((trace) => (
+              {profileRecentTraces.map((trace) => (
                 <article className="access-trace-row" key={trace.id}>
                   <div className={`trace-decision tone-${trace.decision === "allowed" ? "success" : "danger"}`}>
                     {trace.decision === "allowed" ? <CheckCircle2 size={15} /> : <LockKeyhole size={15} />}

@@ -668,12 +668,17 @@ table {
 
 .policy-table,
 .agent-table,
-.audit-table {
+.audit-table,
+.capability-table {
   table-layout: fixed;
 }
 
 .policy-table {
   min-width: 720px;
+}
+
+.capability-table {
+  min-width: 980px;
 }
 
 .agent-table {
@@ -712,6 +717,35 @@ table {
 .policy-table th:nth-child(6),
 .policy-table td:nth-child(6) {
   width: 11%;
+}
+
+.capability-table th:nth-child(1),
+.capability-table td:nth-child(1) {
+  width: 26%;
+}
+
+.capability-table th:nth-child(2),
+.capability-table td:nth-child(2) {
+  width: 17%;
+}
+
+.capability-table th:nth-child(3),
+.capability-table td:nth-child(3),
+.capability-table th:nth-child(4),
+.capability-table td:nth-child(4),
+.capability-table th:nth-child(5),
+.capability-table td:nth-child(5) {
+  width: 11%;
+}
+
+.capability-table th:nth-child(6),
+.capability-table td:nth-child(6) {
+  width: 13%;
+}
+
+.capability-table th:nth-child(7),
+.capability-table td:nth-child(7) {
+  width: 10%;
 }
 
 .agent-table th:nth-child(1),
@@ -1116,6 +1150,139 @@ td code {
   text-align: right;
 }
 
+.capability-governance {
+  min-width: 0;
+}
+
+.capability-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 360px) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: end;
+  padding: 12px 14px;
+  border-bottom: 1px solid #edf1f4;
+}
+
+.capability-toolbar label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.capability-toolbar select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid #d8e0e7;
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 13px;
+  outline: 0;
+}
+
+.capability-message {
+  min-width: 0;
+  overflow: hidden;
+  padding-bottom: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capability-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(330px, 0.85fr);
+  grid-template-areas:
+    "catalog grant"
+    "catalog assignments";
+  min-width: 0;
+}
+
+.capability-catalog {
+  grid-area: catalog;
+  min-width: 0;
+  border-right: 1px solid #edf1f4;
+}
+
+.capability-grant-form {
+  grid-area: grant;
+  border-bottom: 1px solid #edf1f4;
+}
+
+.capability-scope-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.capability-scope-strip span {
+  min-height: 26px;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 5px 8px;
+  border: 1px solid #dbe2e8;
+  border-radius: 999px;
+  background: #f8fafb;
+  color: #566575;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assignment-list {
+  display: grid;
+  grid-area: assignments;
+  align-content: start;
+  gap: 8px;
+  padding: 10px 14px 14px;
+}
+
+.assignment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 54px;
+  padding: 9px 10px;
+  border: 1px solid #dfe6ec;
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.assignment-row strong,
+.assignment-row span,
+.assignment-metrics span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assignment-row strong {
+  color: #1f2a34;
+  font-size: 13px;
+}
+
+.assignment-row span,
+.assignment-metrics span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.assignment-metrics {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+
 @media (max-width: 1120px) {
   .app-shell {
     grid-template-columns: 72px minmax(0, 1fr);
@@ -1145,6 +1312,19 @@ td code {
 
   .trace-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .capability-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "grant"
+      "catalog"
+      "assignments";
+  }
+
+  .capability-catalog {
+    border-right: 0;
+    border-bottom: 1px solid #edf1f4;
   }
 
   .span-4,
@@ -1205,7 +1385,9 @@ td code {
   .metric-grid,
   .signal-grid,
   .form-row,
-  .trace-filters {
+  .trace-filters,
+  .capability-toolbar,
+  .assignment-row {
     grid-template-columns: 1fr;
   }
 

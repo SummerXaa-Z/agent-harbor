@@ -1,12 +1,16 @@
 import type {
   Agent,
   AuditEvent,
+  Capability,
   ChannelContract,
   EvidenceRun,
+  InstanceAssignment,
   ProviderContract,
   RoutePolicy,
   SystemMetric,
+  TenantEntitlement,
   TraceEvent,
+  WorkspaceAssignment,
 } from './types'
 
 const now = '2026-05-29T09:30:00Z'
@@ -185,6 +189,108 @@ export const sampleAgents: Agent[] = [
   },
 ]
 
+export const sampleCapabilities: Capability[] = [
+  {
+    id: 'cap_search_customer',
+    targetId: 'agt_policy_router',
+    type: 'mcp_tool',
+    key: 'search_customer',
+    displayName: 'search_customer',
+    description: 'Search customer records by account, owner, or lifecycle stage.',
+    action: 'read',
+    inputSchema: { type: 'object' },
+    outputSchema: { type: 'object' },
+    dataDomains: ['crm'],
+    dataScopes: [
+      {
+        dataDomain: 'crm',
+        dataset: 'customers',
+        classification: 'internal',
+        tenantFilter: 'tenantId = default',
+      },
+    ],
+    sensitivity: 'internal',
+    riskLevel: 'low',
+    enforcementMode: 'gateway',
+    discoveryStatus: 'approved',
+    version: 1,
+    discoveredAt: '2026-05-29T08:40:00Z',
+    updatedAt: '2026-05-29T08:42:00Z',
+  },
+  {
+    id: 'cap_export_contracts',
+    targetId: 'agt_policy_router',
+    type: 'mcp_tool',
+    key: 'export_contracts',
+    displayName: 'export_contracts',
+    description: 'Export contract packages and attached commercial terms.',
+    action: 'export',
+    inputSchema: { type: 'object' },
+    outputSchema: { type: 'object' },
+    dataDomains: ['contracts'],
+    dataScopes: [
+      {
+        dataDomain: 'contracts',
+        dataset: 'contract_packages',
+        classification: 'confidential',
+        maskingPolicy: 'redact-commercial-terms',
+      },
+    ],
+    sensitivity: 'confidential',
+    riskLevel: 'high',
+    enforcementMode: 'gateway',
+    discoveryStatus: 'pending_review',
+    version: 1,
+    discoveredAt: '2026-05-29T08:40:00Z',
+    updatedAt: '2026-05-29T08:40:00Z',
+  },
+]
+
+export const sampleTenantEntitlements: TenantEntitlement[] = [
+  {
+    id: 'ent_search_customer',
+    tenantId: 'default',
+    targetId: 'agt_policy_router',
+    capabilityId: 'cap_search_customer',
+    effect: 'allow',
+    dataScopes: sampleCapabilities[0].dataScopes,
+    status: 'enabled',
+    priority: 50,
+    createdAt: '2026-05-29T08:43:00Z',
+    updatedAt: '2026-05-29T08:43:00Z',
+  },
+]
+
+export const sampleWorkspaceAssignments: WorkspaceAssignment[] = [
+  {
+    id: 'wsa_search_customer',
+    tenantEntitlementId: 'ent_search_customer',
+    tenantId: 'default',
+    workspaceId: 'workspace-demo',
+    effect: 'allow',
+    dataScopes: sampleCapabilities[0].dataScopes,
+    status: 'enabled',
+    createdAt: '2026-05-29T08:44:00Z',
+    updatedAt: '2026-05-29T08:44:00Z',
+  },
+]
+
+export const sampleInstanceAssignments: InstanceAssignment[] = [
+  {
+    id: 'ina_search_customer',
+    workspaceAssignmentId: 'wsa_search_customer',
+    tenantId: 'default',
+    workspaceId: 'workspace-demo',
+    callerInstanceId: 'agt_console_ops',
+    subjectSelector: 'user:*',
+    effect: 'allow',
+    dataScopes: sampleCapabilities[0].dataScopes,
+    status: 'enabled',
+    createdAt: '2026-05-29T08:45:00Z',
+    updatedAt: '2026-05-29T08:45:00Z',
+  },
+]
+
 export const sampleTraces: TraceEvent[] = [
   {
     id: 'trc_1001',
@@ -193,8 +299,18 @@ export const sampleTraces: TraceEvent[] = [
     targetAgentId: 'agt_policy_router',
     routeType: 'mcp',
     routeKey: 'tools/call',
+    tenantId: 'default',
+    workspaceId: 'workspace-demo',
+    callerInstanceId: 'agt_console_ops',
+    subjectId: 'user:ops-console',
+    capabilityId: 'cap_search_customer',
+    capabilityVersion: 1,
+    entitlementId: 'ent_search_customer',
+    workspaceAssignmentId: 'wsa_search_customer',
+    instanceAssignmentId: 'ina_search_customer',
+    dataScopes: sampleCapabilities[0].dataScopes,
     decision: 'allowed',
-    reason: 'access grant matched',
+    reason: 'capability grant chain matched',
     createdAt: '2026-05-29T08:45:11Z',
   },
   {

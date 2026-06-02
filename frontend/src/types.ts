@@ -89,6 +89,12 @@ export interface CreateAccessGrantRequest {
 
 export type RoutePolicyEffect = 'allow' | 'deny'
 export type RoutePolicyStatus = 'enabled' | 'disabled'
+export type CapabilityType = 'mcp_tool' | 'mcp_method'
+export type CapabilityAction = 'read' | 'write' | 'delete' | 'execute' | 'export' | 'admin'
+export type CapabilitySensitivity = 'public' | 'internal' | 'confidential' | 'restricted'
+export type CapabilityRisk = 'low' | 'medium' | 'high' | 'critical'
+export type CapabilityEnforcementMode = 'gateway' | 'context_forwarded' | 'downstream_native' | 'advisory'
+export type CapabilityDiscoveryStatus = 'pending_review' | 'approved' | 'deprecated' | 'removed'
 
 export interface CreateRoutePolicyRequest {
   name?: string
@@ -115,6 +121,16 @@ export interface TraceEvent {
   targetAgentId: string
   routeType: string
   routeKey?: string
+  tenantId?: string
+  workspaceId?: string
+  callerInstanceId?: string
+  subjectId?: string
+  capabilityId?: string
+  capabilityVersion?: number
+  entitlementId?: string
+  workspaceAssignmentId?: string
+  instanceAssignmentId?: string
+  dataScopes?: DataScope[]
   decision: TraceDecision
   reason?: string
   durationMs?: number
@@ -191,6 +207,114 @@ export interface RoutePolicy {
   updatedAt: string
 }
 
+export interface DataScope {
+  dataDomain?: string
+  dataset?: string
+  schema?: string
+  table?: string
+  field?: string
+  classification?: string
+  region?: string
+  tenantFilter?: string
+  maskingPolicy?: string
+  rowFilter?: string
+}
+
+export interface Capability {
+  id: string
+  targetId: string
+  type: CapabilityType
+  key: string
+  displayName: string
+  description?: string
+  action: CapabilityAction
+  inputSchema?: JsonObject
+  outputSchema?: JsonObject
+  nativeScopes?: string[]
+  dataDomains?: string[]
+  dataScopes?: DataScope[]
+  sensitivity: CapabilitySensitivity
+  riskLevel: CapabilityRisk
+  enforcementMode: CapabilityEnforcementMode
+  discoveryStatus: CapabilityDiscoveryStatus
+  version: number
+  discoveredAt: string
+  updatedAt: string
+}
+
+export interface UpdateCapabilityRequest {
+  discoveryStatus?: CapabilityDiscoveryStatus
+  sensitivity?: CapabilitySensitivity
+  riskLevel?: CapabilityRisk
+  dataScopes?: DataScope[]
+}
+
+export interface TenantEntitlement {
+  id: string
+  tenantId: string
+  targetId: string
+  capabilityId: string
+  effect: RoutePolicyEffect
+  dataScopes?: DataScope[]
+  status: RoutePolicyStatus
+  priority: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateTenantEntitlementRequest {
+  tenantId: string
+  targetId: string
+  capabilityId: string
+  effect?: RoutePolicyEffect
+  dataScopes?: DataScope[]
+  status?: RoutePolicyStatus
+  priority?: number
+}
+
+export interface WorkspaceAssignment {
+  id: string
+  tenantEntitlementId: string
+  tenantId: string
+  workspaceId: string
+  effect: RoutePolicyEffect
+  dataScopes?: DataScope[]
+  status: RoutePolicyStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateWorkspaceAssignmentRequest {
+  tenantEntitlementId: string
+  workspaceId: string
+  effect?: RoutePolicyEffect
+  dataScopes?: DataScope[]
+  status?: RoutePolicyStatus
+}
+
+export interface InstanceAssignment {
+  id: string
+  workspaceAssignmentId: string
+  tenantId: string
+  workspaceId: string
+  callerInstanceId: string
+  subjectSelector?: string
+  effect: RoutePolicyEffect
+  dataScopes?: DataScope[]
+  status: RoutePolicyStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateInstanceAssignmentRequest {
+  workspaceAssignmentId: string
+  callerInstanceId: string
+  subjectSelector?: string
+  effect?: RoutePolicyEffect
+  dataScopes?: DataScope[]
+  status?: RoutePolicyStatus
+}
+
 export interface EvidenceRun {
   id: string
   runId: string
@@ -224,6 +348,10 @@ export interface ConsoleData {
   channels: ChannelContract[]
   agents: Agent[]
   accessGrants: AccessGrant[]
+  capabilities: Capability[]
+  tenantEntitlements: TenantEntitlement[]
+  workspaceAssignments: WorkspaceAssignment[]
+  instanceAssignments: InstanceAssignment[]
   traces: TraceEvent[]
   auditEvents: AuditEvent[]
   routePolicies: RoutePolicy[]
@@ -231,6 +359,8 @@ export interface ConsoleData {
   systemMetrics: SystemMetric[]
   loadedFromApi: boolean
   grantsLoadedFromApi: boolean
+  capabilitiesLoadedFromApi: boolean
+  capabilityAssignmentsLoadedFromApi: boolean
   routePoliciesLoadedFromApi: boolean
   apiBase: string
 }

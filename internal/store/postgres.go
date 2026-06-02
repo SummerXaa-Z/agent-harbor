@@ -359,6 +359,418 @@ func (p *Postgres) HasGrant(ctx context.Context, callerID string, targetID strin
 	return err == nil && exists
 }
 
+func (p *Postgres) UpsertCapability(ctx context.Context, capability domain.Capability) (domain.Capability, error) {
+	inputSchema, err := json.Marshal(capability.InputSchema)
+	if err != nil {
+		return domain.Capability{}, fmt.Errorf("marshal capability input schema: %w", err)
+	}
+	outputSchema, err := json.Marshal(capability.OutputSchema)
+	if err != nil {
+		return domain.Capability{}, fmt.Errorf("marshal capability output schema: %w", err)
+	}
+	nativeScopes, err := json.Marshal(capability.NativeScopes)
+	if err != nil {
+		return domain.Capability{}, fmt.Errorf("marshal capability native scopes: %w", err)
+	}
+	dataDomains, err := json.Marshal(capability.DataDomains)
+	if err != nil {
+		return domain.Capability{}, fmt.Errorf("marshal capability data domains: %w", err)
+	}
+	dataScopes, err := json.Marshal(capability.DataScopes)
+	if err != nil {
+		return domain.Capability{}, fmt.Errorf("marshal capability data scopes: %w", err)
+	}
+	row := p.pool.QueryRow(ctx, `
+		insert into capabilities (
+			id, target_agent_id, type, key, display_name, description, action,
+			input_schema, output_schema, native_scopes, data_domains, data_scopes,
+			sensitivity, risk_level, enforcement_mode, discovery_status, version, discovered_at, updated_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+		on conflict(target_agent_id, type, key) do update
+		set display_name=excluded.display_name,
+			description=excluded.description,
+			action=excluded.action,
+			input_schema=excluded.input_schema,
+			output_schema=excluded.output_schema,
+			native_scopes=excluded.native_scopes,
+			data_domains=excluded.data_domains,
+			data_scopes=excluded.data_scopes,
+			sensitivity=excluded.sensitivity,
+			risk_level=excluded.risk_level,
+			enforcement_mode=excluded.enforcement_mode,
+			discovery_status=excluded.discovery_status,
+			version=excluded.version,
+			updated_at=excluded.updated_at
+		returning id, target_agent_id, type, key, display_name, description, action,
+			input_schema, output_schema, native_scopes, data_domains, data_scopes,
+			sensitivity, risk_level, enforcement_mode, discovery_status, version, discovered_at, updated_at
+	`, capability.ID, capability.TargetID, string(capability.Type), capability.Key, capability.DisplayName,
+		capability.Description, string(capability.Action), inputSchema, outputSchema, nativeScopes,
+		dataDomains, dataScopes, string(capability.Sensitivity), string(capability.RiskLevel),
+		string(capability.EnforcementMode), string(capability.DiscoveryStatus), capability.Version,
+		capability.DiscoveredAt, capability.UpdatedAt)
+	created, err := scanCapability(row)
+	if err != nil {
+		return domain.Capability{}, fmt.Errorf("upsert capability: %w", err)
+	}
+	return created, nil
+}
+
+func (p *Postgres) ListCapabilities(ctx context.Context, filter CapabilityFilter) ([]domain.Capability, error) {
+	query := `
+		select c.id, c.target_agent_id, c.type, c.key, c.display_name, c.description, c.action,
+			c.input_schema, c.output_schema, c.native_scopes, c.data_domains, c.data_scopes,
+			c.sensitivity, c.risk_level, c.enforcement_mode, c.discovery_status, c.version, c.discovered_at, c.updated_at
+		from capabilities c
+		join agents target on target.id = c.target_agent_id
+		where 1=1
+	`
+	args := []any{}
+	add := func(sql string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(" and "+sql, len(args))
+	}
+	if strings.TrimSpace(filter.TargetID) != "" {
+		add("c.target_agent_id=$%d", strings.TrimSpace(filter.TargetID))
+	}
+	if strings.TrimSpace(string(filter.Status)) != "" {
+		add("c.discovery_status=$%d", string(filter.Status))
+	}
+	if strings.TrimSpace(filter.TenantID) != "" {
+		add("target.tenant_id=$%d", strings.TrimSpace(filter.TenantID))
+	}
+	if strings.TrimSpace(filter.WorkspaceID) != "" {
+		add("target.workspace_id=$%d", strings.TrimSpace(filter.WorkspaceID))
+	}
+	query += " order by c.updated_at asc, c.id asc"
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list capabilities: %w", err)
+	}
+	defer rows.Close()
+	return scanCapabilities(rows)
+}
+
+func (p *Postgres) GetCapability(ctx context.Context, id string) (domain.Capability, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select id, target_agent_id, type, key, display_name, description, action,
+			input_schema, output_schema, native_scopes, data_domains, data_scopes,
+			sensitivity, risk_level, enforcement_mode, discovery_status, version, discovered_at, updated_at
+		from capabilities
+		where id=$1
+	`, id)
+	capability, err := scanCapability(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Capability{}, false, nil
+	}
+	if err != nil {
+		return domain.Capability{}, false, fmt.Errorf("get capability: %w", err)
+	}
+	return capability, true, nil
+}
+
+func (p *Postgres) UpdateCapability(ctx context.Context, capability domain.Capability) (domain.Capability, bool, error) {
+	dataScopes, err := json.Marshal(capability.DataScopes)
+	if err != nil {
+		return domain.Capability{}, false, fmt.Errorf("marshal capability data scopes: %w", err)
+	}
+	row := p.pool.QueryRow(ctx, `
+		update capabilities
+		set display_name=$2, description=$3, sensitivity=$4, risk_level=$5, discovery_status=$6, data_scopes=$7, updated_at=$8
+		where id=$1
+		returning id, target_agent_id, type, key, display_name, description, action,
+			input_schema, output_schema, native_scopes, data_domains, data_scopes,
+			sensitivity, risk_level, enforcement_mode, discovery_status, version, discovered_at, updated_at
+	`, capability.ID, capability.DisplayName, capability.Description, string(capability.Sensitivity),
+		string(capability.RiskLevel), string(capability.DiscoveryStatus), dataScopes, capability.UpdatedAt)
+	updated, err := scanCapability(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Capability{}, false, nil
+	}
+	if err != nil {
+		return domain.Capability{}, false, fmt.Errorf("update capability: %w", err)
+	}
+	return updated, true, nil
+}
+
+func (p *Postgres) CreateTenantEntitlement(ctx context.Context, entitlement domain.TenantEntitlement) (domain.TenantEntitlement, error) {
+	dataScopes, err := json.Marshal(entitlement.DataScopes)
+	if err != nil {
+		return domain.TenantEntitlement{}, fmt.Errorf("marshal entitlement data scopes: %w", err)
+	}
+	_, err = p.pool.Exec(ctx, `
+		insert into tenant_entitlements (
+			id, tenant_id, target_agent_id, capability_id, effect, data_scopes, status, priority, created_at, updated_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	`, entitlement.ID, entitlement.TenantID, entitlement.TargetID, entitlement.CapabilityID,
+		string(entitlement.Effect), dataScopes, string(entitlement.Status), entitlement.Priority,
+		entitlement.CreatedAt, entitlement.UpdatedAt)
+	if err != nil {
+		return domain.TenantEntitlement{}, fmt.Errorf("insert tenant entitlement: %w", err)
+	}
+	return entitlement, nil
+}
+
+func (p *Postgres) ListTenantEntitlements(ctx context.Context, filter EntitlementFilter) ([]domain.TenantEntitlement, error) {
+	query := `
+		select id, tenant_id, target_agent_id, capability_id, effect, data_scopes, status, priority, created_at, updated_at
+		from tenant_entitlements
+		where 1=1
+	`
+	args := []any{}
+	add := func(sql string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(" and "+sql, len(args))
+	}
+	if strings.TrimSpace(filter.TenantID) != "" {
+		add("tenant_id=$%d", strings.TrimSpace(filter.TenantID))
+	}
+	if strings.TrimSpace(filter.TargetID) != "" {
+		add("target_agent_id=$%d", strings.TrimSpace(filter.TargetID))
+	}
+	if strings.TrimSpace(filter.CapabilityID) != "" {
+		add("capability_id=$%d", strings.TrimSpace(filter.CapabilityID))
+	}
+	query += " order by created_at asc, id asc"
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list tenant entitlements: %w", err)
+	}
+	defer rows.Close()
+	return scanTenantEntitlements(rows)
+}
+
+func (p *Postgres) CreateWorkspaceAssignment(ctx context.Context, assignment domain.WorkspaceAssignment) (domain.WorkspaceAssignment, error) {
+	dataScopes, err := json.Marshal(assignment.DataScopes)
+	if err != nil {
+		return domain.WorkspaceAssignment{}, fmt.Errorf("marshal workspace assignment data scopes: %w", err)
+	}
+	_, err = p.pool.Exec(ctx, `
+		insert into workspace_assignments (
+			id, tenant_entitlement_id, tenant_id, workspace_id, effect, data_scopes, status, created_at, updated_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+	`, assignment.ID, assignment.TenantEntitlementID, assignment.TenantID, assignment.WorkspaceID,
+		string(assignment.Effect), dataScopes, string(assignment.Status), assignment.CreatedAt, assignment.UpdatedAt)
+	if err != nil {
+		return domain.WorkspaceAssignment{}, fmt.Errorf("insert workspace assignment: %w", err)
+	}
+	return assignment, nil
+}
+
+func (p *Postgres) ListWorkspaceAssignments(ctx context.Context, filter AssignmentFilter) ([]domain.WorkspaceAssignment, error) {
+	query := `
+		select id, tenant_entitlement_id, tenant_id, workspace_id, effect, data_scopes, status, created_at, updated_at
+		from workspace_assignments
+		where 1=1
+	`
+	args := []any{}
+	add := func(sql string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(" and "+sql, len(args))
+	}
+	if strings.TrimSpace(filter.TenantID) != "" {
+		add("tenant_id=$%d", strings.TrimSpace(filter.TenantID))
+	}
+	if strings.TrimSpace(filter.WorkspaceID) != "" {
+		add("workspace_id=$%d", strings.TrimSpace(filter.WorkspaceID))
+	}
+	if strings.TrimSpace(filter.EntitlementID) != "" {
+		add("tenant_entitlement_id=$%d", strings.TrimSpace(filter.EntitlementID))
+	}
+	query += " order by created_at asc, id asc"
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list workspace assignments: %w", err)
+	}
+	defer rows.Close()
+	return scanWorkspaceAssignments(rows)
+}
+
+func (p *Postgres) CreateInstanceAssignment(ctx context.Context, assignment domain.InstanceAssignment) (domain.InstanceAssignment, error) {
+	dataScopes, err := json.Marshal(assignment.DataScopes)
+	if err != nil {
+		return domain.InstanceAssignment{}, fmt.Errorf("marshal instance assignment data scopes: %w", err)
+	}
+	_, err = p.pool.Exec(ctx, `
+		insert into instance_assignments (
+			id, workspace_assignment_id, tenant_id, workspace_id, caller_instance_id, subject_selector,
+			effect, data_scopes, status, created_at, updated_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+	`, assignment.ID, assignment.WorkspaceAssignmentID, assignment.TenantID, assignment.WorkspaceID,
+		assignment.CallerInstanceID, assignment.SubjectSelector, string(assignment.Effect),
+		dataScopes, string(assignment.Status), assignment.CreatedAt, assignment.UpdatedAt)
+	if err != nil {
+		return domain.InstanceAssignment{}, fmt.Errorf("insert instance assignment: %w", err)
+	}
+	return assignment, nil
+}
+
+func (p *Postgres) ListInstanceAssignments(ctx context.Context, filter InstanceAssignmentFilter) ([]domain.InstanceAssignment, error) {
+	query := `
+		select ia.id, ia.workspace_assignment_id, ia.tenant_id, ia.workspace_id, ia.caller_instance_id,
+			ia.subject_selector, ia.effect, ia.data_scopes, ia.status, ia.created_at, ia.updated_at
+		from instance_assignments ia
+	`
+	args := []any{}
+	if strings.TrimSpace(filter.CapabilityID) != "" {
+		query += `
+			join workspace_assignments wa on wa.id = ia.workspace_assignment_id
+			join tenant_entitlements te on te.id = wa.tenant_entitlement_id
+		`
+	}
+	query += " where 1=1"
+	add := func(sql string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(" and "+sql, len(args))
+	}
+	if strings.TrimSpace(filter.TenantID) != "" {
+		add("ia.tenant_id=$%d", strings.TrimSpace(filter.TenantID))
+	}
+	if strings.TrimSpace(filter.WorkspaceID) != "" {
+		add("ia.workspace_id=$%d", strings.TrimSpace(filter.WorkspaceID))
+	}
+	if strings.TrimSpace(filter.CallerInstanceID) != "" {
+		add("ia.caller_instance_id=$%d", strings.TrimSpace(filter.CallerInstanceID))
+	}
+	if strings.TrimSpace(filter.CapabilityID) != "" {
+		add("te.capability_id=$%d", strings.TrimSpace(filter.CapabilityID))
+	}
+	query += " order by ia.created_at asc, ia.id asc"
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list instance assignments: %w", err)
+	}
+	defer rows.Close()
+	return scanInstanceAssignments(rows)
+}
+
+func (p *Postgres) EvaluateCapabilityAccess(ctx context.Context, req CapabilityAccessRequest) (domain.CapabilityAccessDecision, error) {
+	capability, ok, err := p.GetCapability(ctx, req.CapabilityID)
+	if err != nil {
+		return domain.CapabilityAccessDecision{}, err
+	}
+	if !ok || capability.TargetID != req.TargetID {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "capability", Reason: "capability is not registered for target"}, nil
+	}
+	if capability.DiscoveryStatus != domain.CapabilityDiscoveryApproved {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "capability", CapabilityID: capability.ID, Reason: "capability is not approved"}, nil
+	}
+	entitlement, ok, err := p.matchTenantEntitlement(ctx, req, capability.ID)
+	if err != nil {
+		return domain.CapabilityAccessDecision{}, err
+	}
+	if !ok {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "tenant_entitlement", CapabilityID: capability.ID, Reason: "tenant has no entitlement for capability"}, nil
+	}
+	if entitlement.Effect == domain.PolicyEffectDeny {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "tenant_entitlement", CapabilityID: capability.ID, EntitlementID: entitlement.ID, Reason: "tenant entitlement denies capability"}, nil
+	}
+	workspaceAssignment, ok, err := p.matchWorkspaceAssignment(ctx, req, entitlement.ID)
+	if err != nil {
+		return domain.CapabilityAccessDecision{}, err
+	}
+	if !ok {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "workspace_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, Reason: "workspace has no assignment for capability"}, nil
+	}
+	if workspaceAssignment.Effect == domain.PolicyEffectDeny {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "workspace_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, Reason: "workspace assignment denies capability"}, nil
+	}
+	instanceAssignment, ok, err := p.matchInstanceAssignment(ctx, req, workspaceAssignment.ID)
+	if err != nil {
+		return domain.CapabilityAccessDecision{}, err
+	}
+	if !ok {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "instance_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, Reason: "caller instance has no assignment for capability"}, nil
+	}
+	if instanceAssignment.Effect == domain.PolicyEffectDeny {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "instance_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, InstanceAssignmentID: instanceAssignment.ID, Reason: "caller instance assignment denies capability"}, nil
+	}
+	return domain.CapabilityAccessDecision{
+		Allowed:               true,
+		Source:                "capability_governance",
+		CapabilityID:          capability.ID,
+		EntitlementID:         entitlement.ID,
+		WorkspaceAssignmentID: workspaceAssignment.ID,
+		InstanceAssignmentID:  instanceAssignment.ID,
+		Reason:                "capability assignment matched",
+		DataScopes:            instanceAssignment.DataScopes,
+	}, nil
+}
+
+func (p *Postgres) matchTenantEntitlement(ctx context.Context, req CapabilityAccessRequest, capabilityID string) (domain.TenantEntitlement, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select id, tenant_id, target_agent_id, capability_id, effect, data_scopes, status, priority, created_at, updated_at
+		from tenant_entitlements
+		where tenant_id=$1
+			and target_agent_id=$2
+			and capability_id=$3
+			and status=$4
+		order by priority desc,
+			case when effect=$5 then 0 else 1 end asc,
+			created_at asc,
+			id asc
+		limit 1
+	`, req.TenantID, req.TargetID, capabilityID, string(domain.PolicyStatusEnabled), string(domain.PolicyEffectDeny))
+	entitlement, err := scanTenantEntitlement(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.TenantEntitlement{}, false, nil
+	}
+	if err != nil {
+		return domain.TenantEntitlement{}, false, fmt.Errorf("match tenant entitlement: %w", err)
+	}
+	return entitlement, true, nil
+}
+
+func (p *Postgres) matchWorkspaceAssignment(ctx context.Context, req CapabilityAccessRequest, entitlementID string) (domain.WorkspaceAssignment, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select id, tenant_entitlement_id, tenant_id, workspace_id, effect, data_scopes, status, created_at, updated_at
+		from workspace_assignments
+		where tenant_entitlement_id=$1
+			and tenant_id=$2
+			and workspace_id=$3
+			and status=$4
+		order by case when effect=$5 then 0 else 1 end asc, created_at asc, id asc
+		limit 1
+	`, entitlementID, req.TenantID, req.WorkspaceID, string(domain.PolicyStatusEnabled), string(domain.PolicyEffectDeny))
+	assignment, err := scanWorkspaceAssignment(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.WorkspaceAssignment{}, false, nil
+	}
+	if err != nil {
+		return domain.WorkspaceAssignment{}, false, fmt.Errorf("match workspace assignment: %w", err)
+	}
+	return assignment, true, nil
+}
+
+func (p *Postgres) matchInstanceAssignment(ctx context.Context, req CapabilityAccessRequest, workspaceAssignmentID string) (domain.InstanceAssignment, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select id, workspace_assignment_id, tenant_id, workspace_id, caller_instance_id, subject_selector,
+			effect, data_scopes, status, created_at, updated_at
+		from instance_assignments
+		where workspace_assignment_id=$1
+			and tenant_id=$2
+			and workspace_id=$3
+			and caller_instance_id=$4
+			and status=$5
+				and (
+					subject_selector=''
+					or subject_selector=$6
+					or (right(subject_selector, 1)='*' and $6 like left(subject_selector, length(subject_selector)-1) || '%')
+				)
+			order by case when effect=$7 then 0 else 1 end asc, created_at asc, id asc
+		limit 1
+	`, workspaceAssignmentID, req.TenantID, req.WorkspaceID, req.CallerInstanceID,
+		string(domain.PolicyStatusEnabled), req.SubjectID, string(domain.PolicyEffectDeny))
+	assignment, err := scanInstanceAssignment(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.InstanceAssignment{}, false, nil
+	}
+	if err != nil {
+		return domain.InstanceAssignment{}, false, fmt.Errorf("match instance assignment: %w", err)
+	}
+	return assignment, true, nil
+}
+
 func (p *Postgres) CreateRoutePolicy(ctx context.Context, policy domain.RoutePolicy) (domain.RoutePolicy, error) {
 	return p.createRoutePolicy(ctx, p.pool, policy)
 }
@@ -522,14 +934,24 @@ func (p *Postgres) EvaluateRouteAccess(ctx context.Context, callerID string, tar
 }
 
 func (p *Postgres) AppendTrace(ctx context.Context, event domain.TraceEvent) (domain.TraceEvent, error) {
-	_, err := p.pool.Exec(ctx, `
+	dataScopes, err := json.Marshal(event.DataScopes)
+	if err != nil {
+		return domain.TraceEvent{}, fmt.Errorf("marshal trace data scopes: %w", err)
+	}
+	_, err = p.pool.Exec(ctx, `
 		insert into trace_events (
 			id, run_id, caller_agent_id, target_agent_id, route_type, route_key, decision, reason,
-			duration_ms, upstream_attempts, upstream_status, upstream_error, created_at
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+			duration_ms, upstream_attempts, upstream_status, upstream_error,
+			tenant_id, workspace_id, caller_instance_id, subject_id,
+			capability_id, capability_version, entitlement_id, workspace_assignment_id,
+			instance_assignment_id, data_scopes, created_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
 	`, event.ID, event.RunID, event.CallerID, event.TargetID, event.RouteType,
 		event.RouteKey, string(event.Decision), event.Reason, event.DurationMs,
-		event.UpstreamAttempts, event.UpstreamStatus, event.UpstreamError, event.CreatedAt)
+		event.UpstreamAttempts, event.UpstreamStatus, event.UpstreamError,
+		event.TenantID, event.WorkspaceID, event.CallerInstanceID, event.SubjectID,
+		event.CapabilityID, event.CapabilityVersion, event.EntitlementID,
+		event.WorkspaceAssignmentID, event.InstanceAssignmentID, dataScopes, event.CreatedAt)
 	if err != nil {
 		return domain.TraceEvent{}, fmt.Errorf("insert trace event: %w", err)
 	}
@@ -539,7 +961,10 @@ func (p *Postgres) AppendTrace(ctx context.Context, event domain.TraceEvent) (do
 func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain.TraceEvent, error) {
 	query := `
 		select id, run_id, caller_agent_id, target_agent_id, route_type, route_key, decision, reason,
-			duration_ms, upstream_attempts, upstream_status, upstream_error, created_at
+			duration_ms, upstream_attempts, upstream_status, upstream_error,
+			tenant_id, workspace_id, caller_instance_id, subject_id,
+			capability_id, capability_version, entitlement_id, workspace_assignment_id,
+			instance_assignment_id, data_scopes, created_at
 		from trace_events
 		where 1=1
 	`
@@ -565,14 +990,17 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 		tenantIndex := len(args) - 1
 		workspaceIndex := len(args)
 		query += fmt.Sprintf(`
-			and exists (
-				select 1
-				from agents scoped
-				where scoped.id in (trace_events.caller_agent_id, trace_events.target_agent_id)
-					and ($%d = '' or scoped.tenant_id = $%d)
-					and ($%d = '' or scoped.workspace_id = $%d)
+			and (
+				(($%d = '' or trace_events.tenant_id = $%d) and ($%d = '' or trace_events.workspace_id = $%d) and (trace_events.tenant_id <> '' or trace_events.workspace_id <> ''))
+				or exists (
+					select 1
+					from agents scoped
+					where scoped.id in (trace_events.caller_agent_id, trace_events.target_agent_id)
+						and ($%d = '' or scoped.tenant_id = $%d)
+						and ($%d = '' or scoped.workspace_id = $%d)
+				)
 			)
-		`, tenantIndex, tenantIndex, workspaceIndex, workspaceIndex)
+		`, tenantIndex, tenantIndex, workspaceIndex, workspaceIndex, tenantIndex, tenantIndex, workspaceIndex, workspaceIndex)
 	}
 	query += " order by created_at asc, id asc"
 	rows, err := p.pool.Query(ctx, query, args...)
@@ -920,6 +1348,169 @@ func scanAccessGrant(row scanner) (domain.AccessGrant, error) {
 	return grant, nil
 }
 
+func scanCapabilities(rows pgx.Rows) ([]domain.Capability, error) {
+	var out []domain.Capability
+	for rows.Next() {
+		capability, err := scanCapability(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, capability)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanCapability(row scanner) (domain.Capability, error) {
+	var capability domain.Capability
+	var typ string
+	var action string
+	var inputSchema []byte
+	var outputSchema []byte
+	var nativeScopes []byte
+	var dataDomains []byte
+	var dataScopes []byte
+	var sensitivity string
+	var riskLevel string
+	var enforcementMode string
+	var discoveryStatus string
+	if err := row.Scan(&capability.ID, &capability.TargetID, &typ, &capability.Key, &capability.DisplayName,
+		&capability.Description, &action, &inputSchema, &outputSchema, &nativeScopes, &dataDomains,
+		&dataScopes, &sensitivity, &riskLevel, &enforcementMode, &discoveryStatus,
+		&capability.Version, &capability.DiscoveredAt, &capability.UpdatedAt); err != nil {
+		return domain.Capability{}, err
+	}
+	capability.Type = domain.CapabilityType(typ)
+	capability.Action = domain.CapabilityAction(action)
+	capability.Sensitivity = domain.CapabilitySensitivity(sensitivity)
+	capability.RiskLevel = domain.CapabilityRisk(riskLevel)
+	capability.EnforcementMode = domain.CapabilityEnforcementMode(enforcementMode)
+	capability.DiscoveryStatus = domain.CapabilityDiscoveryStatus(discoveryStatus)
+	if err := unmarshalJSON(inputSchema, &capability.InputSchema, "capability input schema"); err != nil {
+		return domain.Capability{}, err
+	}
+	if err := unmarshalJSON(outputSchema, &capability.OutputSchema, "capability output schema"); err != nil {
+		return domain.Capability{}, err
+	}
+	if err := unmarshalJSON(nativeScopes, &capability.NativeScopes, "capability native scopes"); err != nil {
+		return domain.Capability{}, err
+	}
+	if err := unmarshalJSON(dataDomains, &capability.DataDomains, "capability data domains"); err != nil {
+		return domain.Capability{}, err
+	}
+	if err := unmarshalJSON(dataScopes, &capability.DataScopes, "capability data scopes"); err != nil {
+		return domain.Capability{}, err
+	}
+	if capability.InputSchema == nil {
+		capability.InputSchema = map[string]any{}
+	}
+	if capability.OutputSchema == nil {
+		capability.OutputSchema = map[string]any{}
+	}
+	return capability, nil
+}
+
+func scanTenantEntitlements(rows pgx.Rows) ([]domain.TenantEntitlement, error) {
+	var out []domain.TenantEntitlement
+	for rows.Next() {
+		entitlement, err := scanTenantEntitlement(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, entitlement)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanTenantEntitlement(row scanner) (domain.TenantEntitlement, error) {
+	var entitlement domain.TenantEntitlement
+	var effect string
+	var dataScopes []byte
+	var status string
+	if err := row.Scan(&entitlement.ID, &entitlement.TenantID, &entitlement.TargetID,
+		&entitlement.CapabilityID, &effect, &dataScopes, &status, &entitlement.Priority,
+		&entitlement.CreatedAt, &entitlement.UpdatedAt); err != nil {
+		return domain.TenantEntitlement{}, err
+	}
+	entitlement.Effect = domain.PolicyEffect(effect)
+	entitlement.Status = domain.PolicyStatus(status)
+	if err := unmarshalJSON(dataScopes, &entitlement.DataScopes, "tenant entitlement data scopes"); err != nil {
+		return domain.TenantEntitlement{}, err
+	}
+	return entitlement, nil
+}
+
+func scanWorkspaceAssignments(rows pgx.Rows) ([]domain.WorkspaceAssignment, error) {
+	var out []domain.WorkspaceAssignment
+	for rows.Next() {
+		assignment, err := scanWorkspaceAssignment(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, assignment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanWorkspaceAssignment(row scanner) (domain.WorkspaceAssignment, error) {
+	var assignment domain.WorkspaceAssignment
+	var effect string
+	var dataScopes []byte
+	var status string
+	if err := row.Scan(&assignment.ID, &assignment.TenantEntitlementID, &assignment.TenantID,
+		&assignment.WorkspaceID, &effect, &dataScopes, &status, &assignment.CreatedAt,
+		&assignment.UpdatedAt); err != nil {
+		return domain.WorkspaceAssignment{}, err
+	}
+	assignment.Effect = domain.PolicyEffect(effect)
+	assignment.Status = domain.PolicyStatus(status)
+	if err := unmarshalJSON(dataScopes, &assignment.DataScopes, "workspace assignment data scopes"); err != nil {
+		return domain.WorkspaceAssignment{}, err
+	}
+	return assignment, nil
+}
+
+func scanInstanceAssignments(rows pgx.Rows) ([]domain.InstanceAssignment, error) {
+	var out []domain.InstanceAssignment
+	for rows.Next() {
+		assignment, err := scanInstanceAssignment(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, assignment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanInstanceAssignment(row scanner) (domain.InstanceAssignment, error) {
+	var assignment domain.InstanceAssignment
+	var effect string
+	var dataScopes []byte
+	var status string
+	if err := row.Scan(&assignment.ID, &assignment.WorkspaceAssignmentID, &assignment.TenantID,
+		&assignment.WorkspaceID, &assignment.CallerInstanceID, &assignment.SubjectSelector,
+		&effect, &dataScopes, &status, &assignment.CreatedAt, &assignment.UpdatedAt); err != nil {
+		return domain.InstanceAssignment{}, err
+	}
+	assignment.Effect = domain.PolicyEffect(effect)
+	assignment.Status = domain.PolicyStatus(status)
+	if err := unmarshalJSON(dataScopes, &assignment.DataScopes, "instance assignment data scopes"); err != nil {
+		return domain.InstanceAssignment{}, err
+	}
+	return assignment, nil
+}
+
 func scanRoutePolicies(rows pgx.Rows) ([]domain.RoutePolicy, error) {
 	var out []domain.RoutePolicy
 	for rows.Next() {
@@ -973,12 +1564,19 @@ func scanTraceEvents(rows pgx.Rows) ([]domain.TraceEvent, error) {
 	for rows.Next() {
 		var trace domain.TraceEvent
 		var decision string
+		var dataScopes []byte
 		if err := rows.Scan(&trace.ID, &trace.RunID, &trace.CallerID, &trace.TargetID, &trace.RouteType,
 			&trace.RouteKey, &decision, &trace.Reason, &trace.DurationMs, &trace.UpstreamAttempts,
-			&trace.UpstreamStatus, &trace.UpstreamError, &trace.CreatedAt); err != nil {
+			&trace.UpstreamStatus, &trace.UpstreamError, &trace.TenantID, &trace.WorkspaceID,
+			&trace.CallerInstanceID, &trace.SubjectID, &trace.CapabilityID, &trace.CapabilityVersion,
+			&trace.EntitlementID, &trace.WorkspaceAssignmentID, &trace.InstanceAssignmentID,
+			&dataScopes, &trace.CreatedAt); err != nil {
 			return nil, err
 		}
 		trace.Decision = domain.TraceDecision(decision)
+		if err := unmarshalJSON(dataScopes, &trace.DataScopes, "trace data scopes"); err != nil {
+			return nil, err
+		}
 		out = append(out, trace)
 	}
 	if err := rows.Err(); err != nil {
@@ -1017,4 +1615,14 @@ func nullTime(value time.Time) any {
 		return nil
 	}
 	return value
+}
+
+func unmarshalJSON(data []byte, target any, label string) error {
+	if len(data) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(data, target); err != nil {
+		return fmt.Errorf("unmarshal %s: %w", label, err)
+	}
+	return nil
 }

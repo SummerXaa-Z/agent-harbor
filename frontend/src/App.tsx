@@ -35,13 +35,22 @@ import {
   disableAgent,
   disableRoutePolicy,
   loadConsoleData,
+  loadTenantAccessProfile,
   refreshTargetCapabilities,
   rotateAgentCredentials,
   updateAgent,
   updateCapability
 } from "./api";
+import {
+  countInvalidAccessProfileRows,
+  countInvalidGrantRows,
+  parseAccessProfileTraceLimit,
+  scopeStatusTone,
+  summarizeDataScopes
+} from "./accessProfile";
 import { parseRetryFields } from "./retryForm";
 import type {
+  AccessProfileFilters,
   Agent,
   AgentStatus,
   AuditEvent,
@@ -56,6 +65,10 @@ import type {
   ManagementScope,
   RoutePolicy,
   SystemMetric,
+  TenantAccessProfileData,
+  TenantAccessProfileGrant,
+  TenantAccessProfileInstance,
+  TenantAccessProfileWorkspace,
   TenantEntitlement,
   TraceDecision,
   TraceEvent,
@@ -71,6 +84,7 @@ const navItems = [
   { key: "routes", label: "Routes", icon: Route },
   { key: "policies", label: "Policies", icon: ShieldCheck },
   { key: "capabilities", label: "Capabilities", icon: DatabaseZap },
+  { key: "access", label: "Access", icon: LockKeyhole },
   { key: "traces", label: "Traces", icon: FileSearch },
   { key: "evidence", label: "Evidence", icon: ClipboardCheck }
 ];
@@ -104,6 +118,13 @@ const defaultCapabilityGrantForm = {
   workspaceId: defaultManagementScope.workspaceId
 };
 const defaultTraceFilters: TraceFilters = { callerAgentId: "", decision: "", runId: "", targetAgentId: "" };
+const defaultAccessProfileFilters: AccessProfileFilters = {
+  callerInstanceId: "",
+  capabilityId: "",
+  targetId: "",
+  traceLimit: "20",
+  workspaceId: ""
+};
 const mcpRouteKeyPresets = ["initialize", "tools/list", "tools/call"];
 
 function App() {
@@ -128,10 +149,20 @@ function App() {
   const [capabilityActionId, setCapabilityActionId] = useState("");
   const [cleanupActionId, setCleanupActionId] = useState("");
   const [traceFilters, setTraceFilters] = useState<TraceFilters>(defaultTraceFilters);
+  const [accessFilters, setAccessFilters] = useState<AccessProfileFilters>(defaultAccessProfileFilters);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessMessage, setAccessMessage] = useState("");
+  const [accessProfile, setAccessProfile] = useState<TenantAccessProfileData | null>(null);
 
   useEffect(() => {
     void refresh();
   }, []);
+
+  useEffect(() => {
+    if (activeNav === "access" && !accessProfile && !accessLoading) {
+      void refreshAccessProfile();
+    }
+  }, [activeNav]);
 
   useEffect(() => {
     if (!data) return;
@@ -166,6 +197,32 @@ function App() {
       setLastRefresh(new Date());
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "console data unavailable");
+    }
+    if (activeNav === "access") {
+      await refreshAccessProfile();
+    }
+  }
+
+  async function refreshAccessProfile() {
+    const traceLimit = parseAccessProfileTraceLimit(accessFilters.traceLimit);
+    if (!traceLimit.ok) {
+      setAccessMessage(traceLimit.message);
+      return;
+    }
+    const requestScope = normalizedScope(scope);
+    setAccessLoading(true);
+    setAccessMessage("");
+    try {
+      const next = await loadTenantAccessProfile(requestScope.tenantId, adminKey, {
+        ...accessFilters,
+        traceLimit: traceLimit.value
+      });
+      setAccessProfile(next);
+      setAccessMessage(next.loadedFromApi ? "Access profile refreshed." : "Using fallback access profile.");
+    } catch (error) {
+      setAccessMessage(error instanceof Error ? error.message : "Unable to load tenant access profile");
+    } finally {
+      setAccessLoading(false);
     }
   }
 
@@ -515,6 +572,14 @@ function App() {
   const dataSourceLabel = loadError ? "API error" : data?.loadedFromApi ? "Go runtime + samples" : "Fallback dataset";
   const activeNavLabel = navItems.find((item) => item.key === activeNav)?.label ?? "Cockpit";
   const isCapabilitiesView = activeNav === "capabilities";
+  const isAccessView = activeNav === "access";
+  const accessSummary = accessProfile?.summary;
+  const invalidAccessRows = countInvalidAccessProfileRows(accessProfile);
+  const pageTitle = isAccessView
+    ? "Tenant Permission Console"
+    : isCapabilitiesView
+      ? "Capability Governance"
+      : "Agent Gateway Cockpit";
 
   return (
     <div className="app-shell">
@@ -576,7 +641,7 @@ function App() {
         <header className="topbar">
           <div className="topbar-title">
             <div className="breadcrumb">Gateway / {activeWorkspace} / {activeNavLabel}</div>
-            <h1>{isCapabilitiesView ? "Capability Governance" : "Agent Gateway Cockpit"}</h1>
+            <h1>{pageTitle}</h1>
           </div>
           <div className="topbar-actions">
             <label className="admin-key-box">
@@ -637,13 +702,57 @@ function App() {
         </section>
 
         <section className="metric-grid" aria-label="Gateway metrics">
-          <MetricCard icon={<ServerCog size={18} />} label="Managed Agents" value={String(agents.length)} detail={`${activeAgents} active`} tone="info" />
-          <MetricCard icon={<KeyRound size={18} />} label="Active Policies" value={String(activePolicies)} detail={data?.routePoliciesLoadedFromApi ? "live route policies" : "sample fallback"} tone="success" />
-          <MetricCard icon={<TriangleAlert size={18} />} label={isCapabilitiesView ? "Pending Caps" : "Denied Traces"} value={String(isCapabilitiesView ? pendingCapabilities : deniedTraces)} detail={isCapabilitiesView ? `${capabilities.length} discovered` : `${allowedTraces} allowed`} tone={(isCapabilitiesView ? pendingCapabilities : deniedTraces) > 0 ? "warning" : "success"} />
-          <MetricCard icon={<ClipboardCheck size={18} />} label="Evidence Health" value={`${evidencePassed}/${Math.max(evidenceRuns.length, 1)}`} detail="checks passed" tone="neutral" />
+          <MetricCard
+            icon={<ServerCog size={18} />}
+            label={isAccessView ? "Scope Tenants" : "Managed Agents"}
+            value={String(isAccessView ? accessSummary?.tenantCount ?? 0 : agents.length)}
+            detail={isAccessView ? accessProfile?.tenant.name ?? normalizedScope(scope).tenantId : `${activeAgents} active`}
+            tone="info"
+          />
+          <MetricCard
+            icon={<KeyRound size={18} />}
+            label={isAccessView ? "Grant Chains" : "Active Policies"}
+            value={String(isAccessView ? accessSummary?.grantCount ?? 0 : activePolicies)}
+            detail={isAccessView ? `${accessSummary?.targetCount ?? 0} targets` : data?.routePoliciesLoadedFromApi ? "live route policies" : "sample fallback"}
+            tone="success"
+          />
+          <MetricCard
+            icon={<TriangleAlert size={18} />}
+            label={isAccessView ? "Invalid Rows" : isCapabilitiesView ? "Pending Caps" : "Denied Traces"}
+            value={String(isAccessView ? invalidAccessRows : isCapabilitiesView ? pendingCapabilities : deniedTraces)}
+            detail={isAccessView ? `${accessSummary?.workspaceAssignmentCount ?? 0} workspaces` : isCapabilitiesView ? `${capabilities.length} discovered` : `${allowedTraces} allowed`}
+            tone={(isAccessView ? invalidAccessRows : isCapabilitiesView ? pendingCapabilities : deniedTraces) > 0 ? "warning" : "success"}
+          />
+          <MetricCard
+            icon={<ClipboardCheck size={18} />}
+            label={isAccessView ? "Trace Evidence" : "Evidence Health"}
+            value={isAccessView ? String((accessSummary?.recentAllowedTraceCount ?? 0) + (accessSummary?.recentDeniedTraceCount ?? 0)) : `${evidencePassed}/${Math.max(evidenceRuns.length, 1)}`}
+            detail={isAccessView ? `${accessSummary?.recentDeniedTraceCount ?? 0} denied` : "checks passed"}
+            tone="neutral"
+          />
         </section>
 
-        {isCapabilitiesView ? (
+        {isAccessView ? (
+          <section className="content-grid">
+            <Panel className="span-12" icon={<LockKeyhole size={18} />} title="Tenant Access Profile" action={<IconOpen />}>
+              <TenantAccessProfileView
+                agents={agents}
+                capabilities={capabilities}
+                filters={accessFilters}
+                loading={accessLoading}
+                message={accessMessage}
+                onChange={setAccessFilters}
+                onRefresh={() => void refreshAccessProfile()}
+                onTenantChange={(tenantId) => {
+                  setScope((current) => ({ ...current, tenantId }));
+                  setAccessProfile(null);
+                }}
+                profile={accessProfile}
+                scope={scope}
+              />
+            </Panel>
+          </section>
+        ) : isCapabilitiesView ? (
           <section className="content-grid">
             <Panel className="span-12" icon={<DatabaseZap size={18} />} title="MCP Capabilities" action={<IconMore />}>
               <CapabilityGovernanceView
@@ -1223,6 +1332,264 @@ function TraceTable({ traces, agents }: { traces: TraceEvent[]; agents: Agent[] 
           <time>{formatDate(trace.createdAt)}</time>
         </article>
       ))}
+    </div>
+  );
+}
+
+function TenantAccessProfileView({
+  agents,
+  capabilities,
+  filters,
+  loading,
+  message,
+  onChange,
+  onRefresh,
+  onTenantChange,
+  profile,
+  scope
+}: {
+  agents: Agent[];
+  capabilities: Capability[];
+  filters: AccessProfileFilters;
+  loading: boolean;
+  message: string;
+  onChange: (filters: AccessProfileFilters) => void;
+  onRefresh: () => void;
+  onTenantChange: (tenantId: string) => void;
+  profile: TenantAccessProfileData | null;
+  scope: ManagementScope;
+}) {
+  const names = useMemo(() => agentNameMap(agents), [agents]);
+  const targetAgents = agents.filter((agent) => agent.channelType !== "local");
+  const visibleCapabilities = filters.targetId
+    ? capabilities.filter((capability) => capability.targetId === filters.targetId)
+    : capabilities;
+  const sourceLabel = profile ? (profile.loadedFromApi ? "Live access profile" : "Fallback access profile") : "Not loaded";
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onRefresh();
+  }
+
+  return (
+    <div className="access-profile">
+      <form className="access-toolbar" onSubmit={submit}>
+        <label>
+          Tenant
+          <input value={scope.tenantId} onChange={(event) => onTenantChange(event.target.value)} />
+        </label>
+        <label>
+          Workspace
+          <input
+            placeholder="all workspaces"
+            value={filters.workspaceId ?? ""}
+            onChange={(event) => onChange({ ...filters, workspaceId: event.target.value })}
+          />
+        </label>
+        <label>
+          Target
+          <select
+            value={filters.targetId ?? ""}
+            onChange={(event) => onChange({ ...filters, capabilityId: "", targetId: event.target.value })}
+          >
+            <option value="">Any target</option>
+            {targetAgents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Capability
+          <select
+            value={filters.capabilityId ?? ""}
+            onChange={(event) => onChange({ ...filters, capabilityId: event.target.value })}
+          >
+            <option value="">Any capability</option>
+            {visibleCapabilities.map((capability) => (
+              <option key={capability.id} value={capability.id}>
+                {capability.key}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Caller
+          <select
+            value={filters.callerInstanceId ?? ""}
+            onChange={(event) => onChange({ ...filters, callerInstanceId: event.target.value })}
+          >
+            <option value="">Any caller</option>
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Traces
+          <input
+            inputMode="numeric"
+            max={100}
+            min={0}
+            type="number"
+            value={String(filters.traceLimit ?? "")}
+            onChange={(event) => onChange({ ...filters, traceLimit: event.target.value })}
+          />
+        </label>
+        <button className="secondary-button" disabled={loading} type="submit">
+          <RefreshCw size={14} />
+          {loading ? "Loading" : "Load profile"}
+        </button>
+      </form>
+
+      <div className="access-source-line">
+        <span>{sourceLabel}</span>
+        {profile ? <span>Generated {formatDate(profile.generatedAt)}</span> : null}
+        {message ? <strong>{message}</strong> : null}
+      </div>
+
+      {!profile ? (
+        <EmptyRow title="No access profile loaded" detail="Load a tenant profile to inspect effective permissions." />
+      ) : (
+        <>
+          <div className="access-summary-grid">
+            <AccessSummaryCell label="Tenant Scope" value={String(profile.summary.tenantCount)} detail={profile.tenant.name} />
+            <AccessSummaryCell label="Grants" value={String(profile.summary.grantCount)} detail={`${profile.summary.capabilityCount} capabilities`} />
+            <AccessSummaryCell label="Assignments" value={`${profile.summary.workspaceAssignmentCount}/${profile.summary.instanceAssignmentCount}`} detail="workspace / caller" />
+            <AccessSummaryCell label="Recent Decisions" value={`${profile.summary.recentAllowedTraceCount}/${profile.summary.recentDeniedTraceCount}`} detail="allowed / denied" />
+          </div>
+
+          <div className="access-tenant-list" aria-label="Tenant scope">
+            {profile.scopeTenants.map((tenant) => (
+              <div className="access-tenant-row" key={tenant.id}>
+                <Badge tone={tenant.status === "active" ? "success" : "neutral"}>L{tenant.level}</Badge>
+                <div>
+                  <strong>{tenant.name}</strong>
+                  <span>{tenant.id}{tenant.parentTenantId ? ` · parent ${tenant.parentTenantId}` : ""}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="access-layout">
+            <section className="access-grant-chain" aria-label="Effective grant chain">
+              <header>
+                <strong>Effective Grant Chain</strong>
+                <span>{countInvalidAccessProfileRows(profile)} invalid rows</span>
+              </header>
+              {profile.grants.length === 0 ? (
+                <EmptyRow title="No grant chains" detail="No tenant entitlement matched the current profile filters." />
+              ) : null}
+              {profile.grants.map((grant) => (
+                <AccessGrantRow grant={grant} key={grant.tenantEntitlement.id} />
+              ))}
+            </section>
+
+            <section className="access-trace-evidence" aria-label="Recent trace evidence">
+              <header>
+                <strong>Trace Evidence</strong>
+                <span>{profile.recentTraces.length} recent traces</span>
+              </header>
+              {profile.recentTraces.length === 0 ? (
+                <EmptyRow title="No trace evidence" detail="Set trace limit above 0 to include recent runtime decisions." />
+              ) : null}
+              {profile.recentTraces.map((trace) => (
+                <article className="access-trace-row" key={trace.id}>
+                  <div className={`trace-decision tone-${trace.decision === "allowed" ? "success" : "danger"}`}>
+                    {trace.decision === "allowed" ? <CheckCircle2 size={15} /> : <LockKeyhole size={15} />}
+                  </div>
+                  <div>
+                    <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? "anonymous"} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
+                    <span>{trace.capabilityId ?? `${trace.routeType}:${trace.routeKey || "default"}`} · {summarizeDataScopes(trace.dataScopes)} · {trace.reason || trace.decision}</span>
+                  </div>
+                  <time>{formatDate(trace.createdAt)}</time>
+                </article>
+              ))}
+            </section>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AccessSummaryCell({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="access-summary-cell">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </div>
+  );
+}
+
+function AccessGrantRow({ grant }: { grant: TenantAccessProfileGrant }) {
+  const invalidRows = countInvalidGrantRows(grant);
+  return (
+    <article className={invalidRows > 0 ? "access-grant-row invalid" : "access-grant-row"}>
+      <div className="access-grant-header">
+        <div>
+          <strong>{grant.capability?.displayName ?? grant.capability?.key ?? grant.tenantEntitlement.capabilityId}</strong>
+          <span>{grant.target?.name ?? grant.tenantEntitlement.targetId}</span>
+        </div>
+        <div className="access-badge-group">
+          <Badge tone={scopeStatusTone(grant.scopeStatus)}>{grant.scopeStatus}</Badge>
+          <Badge tone={grant.tenantEntitlement.effect === "allow" ? "success" : "danger"}>{grant.tenantEntitlement.effect}</Badge>
+        </div>
+      </div>
+      <div className="access-scope-line">
+        <span>Tenant entitlement</span>
+        <code>{grant.tenantEntitlement.id}</code>
+        <span>{summarizeDataScopes(grant.effectiveTenantDataScopes)}</span>
+      </div>
+      {grant.scopeReason ? <p className="access-invalid-reason">{grant.scopeReason}</p> : null}
+      <div className="access-nested-list">
+        {grant.workspaceAssignments.length === 0 ? (
+          <EmptyRow title="No workspace assignments" detail="No workspace assignment matched this entitlement." />
+        ) : null}
+        {grant.workspaceAssignments.map((workspace) => (
+          <AccessWorkspaceRow key={workspace.workspaceAssignment.id} workspace={workspace} />
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function AccessWorkspaceRow({ workspace }: { workspace: TenantAccessProfileWorkspace }) {
+  return (
+    <div className="access-workspace-row">
+      <div className="access-row-main">
+        <div>
+          <strong>{workspace.workspaceAssignment.workspaceId}</strong>
+          <span>{summarizeDataScopes(workspace.effectiveWorkspaceDataScopes)}</span>
+        </div>
+        <Badge tone={scopeStatusTone(workspace.scopeStatus)}>{workspace.scopeStatus}</Badge>
+      </div>
+      {workspace.scopeReason ? <p className="access-invalid-reason">{workspace.scopeReason}</p> : null}
+      <div className="access-instance-list">
+        {workspace.instanceAssignments.length === 0 ? (
+          <span className="access-empty-inline">No caller instances</span>
+        ) : null}
+        {workspace.instanceAssignments.map((instance) => (
+          <AccessInstanceRow instance={instance} key={instance.instanceAssignment.id} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AccessInstanceRow({ instance }: { instance: TenantAccessProfileInstance }) {
+  return (
+    <div className="access-instance-row">
+      <div>
+        <strong>{instance.callerInstance?.name ?? instance.instanceAssignment.callerInstanceId}</strong>
+        <span>{instance.instanceAssignment.subjectSelector || "all subjects"} · {summarizeDataScopes(instance.effectiveInstanceDataScopes)}</span>
+      </div>
+      <Badge tone={scopeStatusTone(instance.scopeStatus)}>{instance.scopeStatus}</Badge>
+      {instance.scopeReason ? <p className="access-invalid-reason">{instance.scopeReason}</p> : null}
     </div>
   );
 }

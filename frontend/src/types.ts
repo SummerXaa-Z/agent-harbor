@@ -49,6 +49,18 @@ export interface ManagementScope {
   workspaceId: string
 }
 
+export type TenantStatus = 'active' | 'disabled'
+
+export interface Tenant {
+  id: string
+  parentTenantId?: string
+  level: number
+  name: string
+  status: TenantStatus
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AgentKey {
   id: string
   agentId: string
@@ -362,6 +374,67 @@ export interface ConsoleData {
   capabilitiesLoadedFromApi: boolean
   capabilityAssignmentsLoadedFromApi: boolean
   routePoliciesLoadedFromApi: boolean
+  apiBase: string
+}
+
+export type AccessProfileScopeStatus = 'valid' | 'invalid'
+
+export interface AccessProfileFilters {
+  workspaceId?: string
+  targetId?: string
+  capabilityId?: string
+  callerInstanceId?: string
+  traceLimit?: number | string
+}
+
+export interface AccessProfileSummary {
+  tenantCount: number
+  grantCount: number
+  targetCount: number
+  capabilityCount: number
+  workspaceAssignmentCount: number
+  instanceAssignmentCount: number
+  recentAllowedTraceCount: number
+  recentDeniedTraceCount: number
+}
+
+export interface TenantAccessProfileInstance {
+  instanceAssignment: InstanceAssignment
+  callerInstance?: Agent
+  effectiveInstanceDataScopes?: DataScope[]
+  scopeStatus: AccessProfileScopeStatus
+  scopeReason?: string
+}
+
+export interface TenantAccessProfileWorkspace {
+  workspaceAssignment: WorkspaceAssignment
+  effectiveWorkspaceDataScopes?: DataScope[]
+  scopeStatus: AccessProfileScopeStatus
+  scopeReason?: string
+  instanceAssignments: TenantAccessProfileInstance[]
+}
+
+export interface TenantAccessProfileGrant {
+  tenantEntitlement: TenantEntitlement
+  target?: Agent
+  capability?: Capability
+  effectiveTenantDataScopes?: DataScope[]
+  scopeStatus: AccessProfileScopeStatus
+  scopeReason?: string
+  workspaceAssignments: TenantAccessProfileWorkspace[]
+}
+
+export interface TenantAccessProfile {
+  tenant: Tenant
+  scopeTenants: Tenant[]
+  summary: AccessProfileSummary
+  grants: TenantAccessProfileGrant[]
+  recentTraces: TraceEvent[]
+  generatedAt: string
+}
+
+export interface TenantAccessProfileData extends TenantAccessProfile {
+  loadedFromApi: boolean
   apiBase: string
 }
 

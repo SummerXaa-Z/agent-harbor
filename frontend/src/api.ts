@@ -7,13 +7,16 @@ import {
   sampleChannels,
   sampleInstanceAssignments,
   sampleProviders,
+  sampleTenantAccessProfile,
   sampleTenantEntitlements,
   sampleTraces,
   sampleWorkspaceAssignments,
   systemMetrics,
 } from './data'
+import { normalizeAccessProfileFilters } from './accessProfile'
 import type {
   AccessGrant,
+  AccessProfileFilters,
   Agent,
   ApiEnvelope,
   AuditEvent,
@@ -36,6 +39,8 @@ import type {
   RotateAgentCredentialsRequest,
   RoutePolicy,
   SystemMetric,
+  TenantAccessProfile,
+  TenantAccessProfileData,
   TenantEntitlement,
   TraceEvent,
   TraceFilters,
@@ -263,6 +268,36 @@ export async function fetchRuntimeMetrics(
     workspaceId: scope?.workspaceId,
   })
   return request<SystemMetric[]>(`/api/v1/metrics/runtime${query}`, { adminKey, signal })
+}
+
+export async function fetchTenantAccessProfile(
+  tenantId: string,
+  adminKey?: string,
+  filters: AccessProfileFilters = {},
+  signal?: AbortSignal,
+): Promise<TenantAccessProfile> {
+  const query = queryString(normalizeAccessProfileFilters(filters))
+  return request<TenantAccessProfile>(
+    `/api/v1/tenants/${encodeURIComponent(tenantId.trim())}/access-profile${query}`,
+    { adminKey, signal },
+  )
+}
+
+export async function loadTenantAccessProfile(
+  tenantId: string,
+  adminKey?: string,
+  filters: AccessProfileFilters = {},
+  signal?: AbortSignal,
+): Promise<TenantAccessProfileData> {
+  const result = await withFallback(
+    () => fetchTenantAccessProfile(tenantId, adminKey, filters, signal),
+    sampleTenantAccessProfile,
+  )
+  return {
+    ...result.data,
+    loadedFromApi: result.ok,
+    apiBase,
+  }
 }
 
 export async function refreshTargetCapabilities(targetId: string, adminKey?: string): Promise<Capability[]> {

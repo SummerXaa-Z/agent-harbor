@@ -22,6 +22,7 @@ scripts=(
   scripts/demo-sprint11-transactional-audit.sh
   scripts/demo-sprint12-mcp-capability-governance.sh
   scripts/demo-sprint13-data-permission-enforcement.sh
+  scripts/demo-sprint14-tenant-hierarchy.sh
 )
 
 echo "AgentHarbor full demo suite"

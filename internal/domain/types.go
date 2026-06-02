@@ -13,6 +13,30 @@ const (
 	AgentStatusDisabled AgentStatus = "disabled"
 )
 
+type TenantStatus string
+
+const (
+	TenantStatusActive   TenantStatus = "active"
+	TenantStatusDisabled TenantStatus = "disabled"
+)
+
+type Tenant struct {
+	ID             string       `json:"id"`
+	ParentTenantID string       `json:"parentTenantId,omitempty"`
+	Level          int          `json:"level"`
+	Name           string       `json:"name"`
+	Status         TenantStatus `json:"status"`
+	CreatedAt      time.Time    `json:"createdAt"`
+	UpdatedAt      time.Time    `json:"updatedAt"`
+}
+
+type CreateTenantRequest struct {
+	ID             string       `json:"id"`
+	ParentTenantID string       `json:"parentTenantId"`
+	Name           string       `json:"name"`
+	Status         TenantStatus `json:"status"`
+}
+
 type Agent struct {
 	ID                string            `json:"id"`
 	TenantID          string            `json:"tenantId"`

@@ -138,6 +138,14 @@ type capabilityResponse struct {
 	Version         int    `json:"version"`
 }
 
+type tenantResponse struct {
+	ID             string `json:"id"`
+	ParentTenantID string `json:"parentTenantId"`
+	Level          int    `json:"level"`
+	Name           string `json:"name"`
+	Status         string `json:"status"`
+}
+
 type tenantEntitlementResponse struct {
 	ID           string `json:"id"`
 	TenantID     string `json:"tenantId"`
@@ -825,6 +833,116 @@ func TestManagementScopeFiltersLists(t *testing.T) {
 	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces"+scopeQuery+"&runId=scope-run", nil, ""))
 	if len(traces) != 1 || traces[0].CallerID != inScope.ID {
 		t.Fatalf("expected scoped traces to match caller or target in scope, got %#v", traces)
+	}
+}
+
+func TestTenantHierarchyAPIsAndScopedManagementLists(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+
+	root := decodeData[tenantResponse](t, request(t, router, http.MethodPost, "/api/v1/tenants", map[string]any{
+		"id":     "tenant-root",
+		"name":   "Root Tenant",
+		"status": "active",
+	}, ""))
+	child := decodeData[tenantResponse](t, request(t, router, http.MethodPost, "/api/v1/tenants", map[string]any{
+		"id":             "tenant-child",
+		"parentTenantId": root.ID,
+		"name":           "Child Tenant",
+		"status":         "active",
+	}, ""))
+	grandchild := decodeData[tenantResponse](t, request(t, router, http.MethodPost, "/api/v1/tenants", map[string]any{
+		"id":             "tenant-grandchild",
+		"parentTenantId": child.ID,
+		"name":           "Grandchild Tenant",
+		"status":         "active",
+	}, ""))
+	if root.Level != 1 || child.Level != 2 || grandchild.Level != 3 {
+		t.Fatalf("unexpected tenant levels: root=%#v child=%#v grandchild=%#v", root, child, grandchild)
+	}
+	level4 := request(t, router, http.MethodPost, "/api/v1/tenants", map[string]any{
+		"id":             "tenant-level-4",
+		"parentTenantId": grandchild.ID,
+		"name":           "Too Deep",
+		"status":         "active",
+	}, "")
+	if level4.Code != http.StatusBadRequest {
+		t.Fatalf("fourth-level tenant should fail, got %d body=%s", level4.Code, level4.Body.String())
+	}
+
+	createAgent(t, router, map[string]any{"tenantId": root.ID, "workspaceId": "ws-a", "name": "Root Agent", "channelType": "local", "status": "active"})
+	createAgent(t, router, map[string]any{"tenantId": child.ID, "workspaceId": "ws-a", "name": "Child Agent", "channelType": "local", "status": "active"})
+	createAgent(t, router, map[string]any{"tenantId": grandchild.ID, "workspaceId": "ws-a", "name": "Grandchild Agent", "channelType": "local", "status": "active"})
+	createAgent(t, router, map[string]any{"tenantId": "tenant-unrelated", "workspaceId": "ws-a", "name": "Unrelated Agent", "channelType": "local", "status": "active"})
+
+	tenants := decodeData[[]tenantResponse](t, request(t, router, http.MethodGet, "/api/v1/tenants?tenantId="+root.ID, nil, ""))
+	if got := tenantResponseIDs(tenants); !reflect.DeepEqual(got, []string{root.ID, child.ID, grandchild.ID}) {
+		t.Fatalf("tenant subtree = %#v", got)
+	}
+	children := decodeData[[]tenantResponse](t, request(t, router, http.MethodGet, "/api/v1/tenants?parentTenantId="+root.ID, nil, ""))
+	if got := tenantResponseIDs(children); !reflect.DeepEqual(got, []string{child.ID}) {
+		t.Fatalf("direct children = %#v", got)
+	}
+	agents := decodeData[[]agentResponse](t, request(t, router, http.MethodGet, "/api/v1/agents?tenantId="+root.ID+"&workspaceId=ws-a", nil, ""))
+	if got := agentResponseTenantIDs(agents); !reflect.DeepEqual(got, []string{root.ID, child.ID, grandchild.ID}) {
+		t.Fatalf("scoped agent tenants = %#v", got)
+	}
+}
+
+func TestTenantHierarchyAllowsParentTargetEntitlementToDescendant(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+
+	for _, body := range []map[string]any{
+		{"id": "tenant-root", "name": "Root", "status": "active"},
+		{"id": "tenant-child", "parentTenantId": "tenant-root", "name": "Child", "status": "active"},
+		{"id": "tenant-unrelated", "name": "Unrelated", "status": "active"},
+	} {
+		resp := request(t, router, http.MethodPost, "/api/v1/tenants", body, "")
+		if resp.Code != http.StatusCreated {
+			t.Fatalf("create tenant failed: status=%d body=%s", resp.Code, resp.Body.String())
+		}
+	}
+	target := createDirectAgent(t, repo, "Root MCP", "tenant-root", "ws-root", "mcp", domain.AgentStatusActive, nil)
+	capability := domain.Capability{
+		ID:              security.NewID("cap"),
+		TargetID:        target.ID,
+		Type:            domain.CapabilityTypeMCPTool,
+		Key:             "search_customer",
+		DisplayName:     "search_customer",
+		Action:          domain.CapabilityActionRead,
+		Sensitivity:     domain.CapabilitySensitivityInternal,
+		RiskLevel:       domain.CapabilityRiskLow,
+		EnforcementMode: domain.CapabilityEnforcementGateway,
+		DiscoveryStatus: domain.CapabilityDiscoveryApproved,
+		Version:         1,
+		DiscoveredAt:    now,
+		UpdatedAt:       now,
+	}
+	if _, err := repo.UpsertCapability(t.Context(), capability); err != nil {
+		t.Fatalf("upsert capability: %v", err)
+	}
+
+	entitlement := request(t, router, http.MethodPost, "/api/v1/tenant-entitlements", map[string]any{
+		"tenantId":     "tenant-child",
+		"targetId":     target.ID,
+		"capabilityId": capability.ID,
+		"effect":       "allow",
+		"status":       "enabled",
+	}, "")
+	if entitlement.Code != http.StatusCreated {
+		t.Fatalf("descendant entitlement should be allowed, got %d body=%s", entitlement.Code, entitlement.Body.String())
+	}
+	unrelated := request(t, router, http.MethodPost, "/api/v1/tenant-entitlements", map[string]any{
+		"tenantId":     "tenant-unrelated",
+		"targetId":     target.ID,
+		"capabilityId": capability.ID,
+		"effect":       "allow",
+		"status":       "enabled",
+	}, "")
+	if unrelated.Code != http.StatusBadRequest {
+		t.Fatalf("unrelated entitlement should be rejected, got %d body=%s", unrelated.Code, unrelated.Body.String())
 	}
 }
 
@@ -2735,6 +2853,22 @@ func capabilityByKey(t *testing.T, capabilities []capabilityResponse, key string
 	}
 	t.Fatalf("capability %q not found in %#v", key, capabilities)
 	return capabilityResponse{}
+}
+
+func tenantResponseIDs(rows []tenantResponse) []string {
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	return ids
+}
+
+func agentResponseTenantIDs(rows []agentResponse) []string {
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.TenantID)
+	}
+	return ids
 }
 
 func auditActions(events []auditEventResponse) []string {

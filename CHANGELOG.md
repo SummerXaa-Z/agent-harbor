@@ -1,3 +1,33 @@
+## [2026-06-02 00:29] Session: Tenant Hierarchy Scoped Admin
+
+### 完成
+- 新增 `Tenant` 领域模型、三级租户创建/查询 API，以及 memory/Postgres 存储实现。
+- 将管理面列表的 `tenantId` 过滤升级为注册租户子树范围；未注册租户继续保持旧的精确匹配语义。
+- 更新 capability entitlement 校验，允许目标租户向自身或下级租户授予能力，拒绝无关租户。
+- 新增 Sprint 14 demo，覆盖 root/child/grandchild、第四级拒绝、租户子树可见性和下级授权路径。
+- 补充 README 与 Superpowers 实施计划，记录三级租户和 scoped administration 语义。
+
+### 决策
+- 三级租户只做层级边界和控制面授权范围，不让父租户 entitlement 自动继承到子租户运行时。
+- `List*` 管理接口在租户已注册时按子树可见；历史 flat `tenantId` 在未注册时仍精确过滤，保证兼容。
+- 本轮不做租户 UI、外部身份目录同步、数据湖/数仓/数据库细粒度谓词下推。
+
+### 血泪教训
+- 租户层级不能只落在 HTTP 层；memory/Postgres 的列表过滤也必须统一用 descendant resolution，否则不同后端会出现可见性不一致。
+- parent-to-child capability grant 只能放宽控制面发放路径，运行时仍要依赖显式 child entitlement 和上一轮的 data scope 收敛，避免权限隐式扩散。
+
+### 待办
+- 后续补管理控制台租户树视图、租户级 MCP/Agent/工具权限矩阵，以及下游数据权限消费规范。
+- 当前 PR 叠加在 data permission enforcement PR 上，需等底层 PR 合并或 rebase 后再落主线。
+
+### 影响文件
+- `internal/domain/types.go`：新增租户状态、租户对象和创建请求。
+- `internal/store/memory.go` / `postgres.go` 及测试：新增租户持久化、子树解析和 scoped 管理列表。
+- `internal/httpapi/server.go` / `server_test.go`：新增租户 API、层级校验和 parent-to-child entitlement 测试。
+- `internal/db/migrations/008_tenant_hierarchy.sql`：新增 tenants 表和 parent 索引。
+- `README.md` / `Makefile` / `scripts/demo-all.sh` / `scripts/demo-sprint14-tenant-hierarchy.sh`：补充 Sprint 14 文档与 demo。
+- `docs/superpowers/specs/2026-06-02-tenant-hierarchy-scoped-admin-design.md` / `docs/superpowers/plans/2026-06-02-tenant-hierarchy-scoped-admin.md`：记录设计共识和完成计划。
+
 ## [2026-06-02 00:06] Session: Data Permission Enforcement
 
 ### 完成

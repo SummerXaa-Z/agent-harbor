@@ -11,6 +11,10 @@ import (
 )
 
 type Repository interface {
+	CreateTenant(context.Context, domain.Tenant) (domain.Tenant, error)
+	CreateTenantWithAudit(context.Context, domain.Tenant, TenantAuditBuilder) (domain.Tenant, error)
+	ListTenants(context.Context, TenantFilter) ([]domain.Tenant, error)
+	GetTenant(context.Context, string) (domain.Tenant, bool, error)
 	CreateAgent(context.Context, domain.Agent) (domain.Agent, error)
 	CreateAgentWithAudit(context.Context, domain.Agent, AgentAuditBuilder) (domain.Agent, error)
 	ListAgents(context.Context, AgentFilter) ([]domain.Agent, error)
@@ -63,10 +67,16 @@ type AgentAuditBuilder func(domain.Agent) domain.AuditEvent
 type AgentKeyAuditBuilder func(domain.AgentKey) domain.AuditEvent
 type AccessGrantAuditBuilder func(domain.AccessGrant) domain.AuditEvent
 type RoutePolicyAuditBuilder func(domain.RoutePolicy) domain.AuditEvent
+type TenantAuditBuilder func(domain.Tenant) domain.AuditEvent
 
 type ManagementScope struct {
 	TenantID    string
 	WorkspaceID string
+}
+
+type TenantFilter struct {
+	TenantID       string
+	ParentTenantID string
 }
 
 type AgentFilter struct {
@@ -124,6 +134,7 @@ type CapabilityAccessRequest struct {
 
 type Memory struct {
 	mu                   sync.RWMutex
+	tenants              map[string]domain.Tenant
 	agents               map[string]domain.Agent
 	keys                 map[string]domain.AgentKey
 	grants               map[string]domain.AccessGrant
@@ -138,6 +149,7 @@ type Memory struct {
 
 func NewMemory() *Memory {
 	return &Memory{
+		tenants:              make(map[string]domain.Tenant),
 		agents:               make(map[string]domain.Agent),
 		keys:                 make(map[string]domain.AgentKey),
 		grants:               make(map[string]domain.AccessGrant),
@@ -147,6 +159,81 @@ func NewMemory() *Memory {
 		instanceAssignments:  make(map[string]domain.InstanceAssignment),
 		policies:             make(map[string]domain.RoutePolicy),
 	}
+}
+
+func (m *Memory) CreateTenant(_ context.Context, tenant domain.Tenant) (domain.Tenant, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tenants[tenant.ID] = tenant
+	return tenant, nil
+}
+
+func (m *Memory) CreateTenantWithAudit(_ context.Context, tenant domain.Tenant, build TenantAuditBuilder) (domain.Tenant, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tenants[tenant.ID] = tenant
+	m.audits = append(m.audits, build(tenant))
+	return tenant, nil
+}
+
+func (m *Memory) ListTenants(_ context.Context, filter TenantFilter) ([]domain.Tenant, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	tenantIDs := m.tenantIDsForScopeLocked(filter.TenantID)
+	parentTenantID := strings.TrimSpace(filter.ParentTenantID)
+	rows := make([]domain.Tenant, 0, len(m.tenants))
+	for _, tenant := range m.tenants {
+		if tenantIDs != nil {
+			if _, ok := tenantIDs[tenant.ID]; !ok {
+				continue
+			}
+		}
+		if parentTenantID != "" && tenant.ParentTenantID != parentTenantID {
+			continue
+		}
+		rows = append(rows, tenant)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Level != rows[j].Level {
+			return rows[i].Level < rows[j].Level
+		}
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
+	return rows, nil
+}
+
+func (m *Memory) GetTenant(_ context.Context, id string) (domain.Tenant, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	tenant, ok := m.tenants[id]
+	return tenant, ok, nil
+}
+
+func (m *Memory) tenantIDsForScopeLocked(tenantID string) map[string]struct{} {
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		return nil
+	}
+	if _, ok := m.tenants[tenantID]; !ok {
+		return map[string]struct{}{tenantID: {}}
+	}
+	ids := map[string]struct{}{tenantID: {}}
+	for changed := true; changed; {
+		changed = false
+		for id, tenant := range m.tenants {
+			if _, exists := ids[id]; exists {
+				continue
+			}
+			if _, parentIncluded := ids[tenant.ParentTenantID]; parentIncluded {
+				ids[id] = struct{}{}
+				changed = true
+			}
+		}
+	}
+	return ids
 }
 
 func (m *Memory) CreateAgent(_ context.Context, agent domain.Agent) (domain.Agent, error) {
@@ -168,9 +255,10 @@ func (m *Memory) ListAgents(_ context.Context, filter AgentFilter) ([]domain.Age
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	tenantIDs := m.tenantIDsForScopeLocked(filter.TenantID)
 	rows := make([]domain.Agent, 0, len(m.agents))
 	for _, agent := range m.agents {
-		if agentMatchesScope(agent, filter.ManagementScope) {
+		if agentMatchesScope(agent, filter.ManagementScope, tenantIDs) {
 			rows = append(rows, agent)
 		}
 	}
@@ -291,10 +379,11 @@ func (m *Memory) CreateAgentKeyWithAudit(_ context.Context, key domain.AgentKey,
 func (m *Memory) ListAgentKeys(_ context.Context, scope ManagementScope) ([]domain.AgentKey, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	tenantIDs := m.tenantIDsForScopeLocked(scope.TenantID)
 	rows := make([]domain.AgentKey, 0, len(m.keys))
 	for _, key := range m.keys {
 		agent, ok := m.agents[key.AgentID]
-		if !ok || !agentMatchesScope(agent, scope) {
+		if !ok || !agentMatchesScope(agent, scope, tenantIDs) {
 			continue
 		}
 		rows = append(rows, key)
@@ -370,9 +459,10 @@ func (m *Memory) CreateAccessGrantWithAudit(_ context.Context, grant domain.Acce
 func (m *Memory) ListAccessGrants(_ context.Context, scope ManagementScope) ([]domain.AccessGrant, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	tenantIDs := m.tenantIDsForScopeLocked(scope.TenantID)
 	rows := make([]domain.AccessGrant, 0, len(m.grants))
 	for _, grant := range m.grants {
-		if !m.grantMatchesScope(grant, scope) {
+		if !m.grantMatchesScope(grant, scope, tenantIDs) {
 			continue
 		}
 		rows = append(rows, grant)
@@ -434,9 +524,10 @@ func (m *Memory) UpsertCapability(_ context.Context, capability domain.Capabilit
 func (m *Memory) ListCapabilities(_ context.Context, filter CapabilityFilter) ([]domain.Capability, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	tenantIDs := m.tenantIDsForScopeLocked(filter.TenantID)
 	rows := make([]domain.Capability, 0, len(m.capabilities))
 	for _, capability := range m.capabilities {
-		if !m.capabilityMatchesFilter(capability, filter) {
+		if !m.capabilityMatchesFilter(capability, filter, tenantIDs) {
 			continue
 		}
 		rows = append(rows, cloneCapability(capability))
@@ -484,9 +575,10 @@ func (m *Memory) CreateTenantEntitlement(_ context.Context, entitlement domain.T
 func (m *Memory) ListTenantEntitlements(_ context.Context, filter EntitlementFilter) ([]domain.TenantEntitlement, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	tenantIDs := m.tenantIDsForScopeLocked(filter.TenantID)
 	rows := make([]domain.TenantEntitlement, 0, len(m.entitlements))
 	for _, entitlement := range m.entitlements {
-		if !tenantEntitlementMatchesFilter(entitlement, filter) {
+		if !tenantEntitlementMatchesFilter(entitlement, filter, tenantIDs) {
 			continue
 		}
 		rows = append(rows, cloneTenantEntitlement(entitlement))
@@ -511,9 +603,10 @@ func (m *Memory) CreateWorkspaceAssignment(_ context.Context, assignment domain.
 func (m *Memory) ListWorkspaceAssignments(_ context.Context, filter AssignmentFilter) ([]domain.WorkspaceAssignment, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	tenantIDs := m.tenantIDsForScopeLocked(filter.TenantID)
 	rows := make([]domain.WorkspaceAssignment, 0, len(m.workspaceAssignments))
 	for _, assignment := range m.workspaceAssignments {
-		if !workspaceAssignmentMatchesFilter(assignment, filter) {
+		if !workspaceAssignmentMatchesFilter(assignment, filter, tenantIDs) {
 			continue
 		}
 		rows = append(rows, cloneWorkspaceAssignment(assignment))
@@ -538,9 +631,10 @@ func (m *Memory) CreateInstanceAssignment(_ context.Context, assignment domain.I
 func (m *Memory) ListInstanceAssignments(_ context.Context, filter InstanceAssignmentFilter) ([]domain.InstanceAssignment, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	tenantIDs := m.tenantIDsForScopeLocked(filter.TenantID)
 	rows := make([]domain.InstanceAssignment, 0, len(m.instanceAssignments))
 	for _, assignment := range m.instanceAssignments {
-		if !m.instanceAssignmentMatchesFilter(assignment, filter) {
+		if !m.instanceAssignmentMatchesFilter(assignment, filter, tenantIDs) {
 			continue
 		}
 		rows = append(rows, cloneInstanceAssignment(assignment))
@@ -628,9 +722,10 @@ func (m *Memory) CreateRoutePolicyWithAudit(_ context.Context, policy domain.Rou
 func (m *Memory) ListRoutePolicies(_ context.Context, scope ManagementScope) ([]domain.RoutePolicy, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	tenantIDs := m.tenantIDsForScopeLocked(scope.TenantID)
 	rows := make([]domain.RoutePolicy, 0, len(m.policies))
 	for _, policy := range m.policies {
-		if !routePolicyMatchesScope(policy, scope) {
+		if !routePolicyMatchesScope(policy, scope, tenantIDs) {
 			continue
 		}
 		rows = append(rows, policy)
@@ -779,6 +874,7 @@ func (m *Memory) AppendTrace(_ context.Context, event domain.TraceEvent) (domain
 func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.TraceEvent, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	tenantIDs := m.tenantIDsForScopeLocked(filter.TenantID)
 	rows := make([]domain.TraceEvent, 0, len(m.traces))
 	for _, trace := range m.traces {
 		if filter.RunID != "" && trace.RunID != filter.RunID {
@@ -793,7 +889,7 @@ func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.Tra
 		if filter.TargetID != "" && trace.TargetID != filter.TargetID {
 			continue
 		}
-		if !m.traceMatchesScope(trace, filter.ManagementScope) {
+		if !m.traceMatchesScope(trace, filter.ManagementScope, tenantIDs) {
 			continue
 		}
 		rows = append(rows, trace)
@@ -817,6 +913,7 @@ func (m *Memory) AppendAuditEvent(_ context.Context, event domain.AuditEvent) (d
 func (m *Memory) ListAuditEvents(_ context.Context, filter AuditEventFilter) ([]domain.AuditEvent, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	tenantIDs := m.tenantIDsForScopeLocked(filter.TenantID)
 	rows := make([]domain.AuditEvent, 0, len(m.audits))
 	for _, event := range m.audits {
 		if filter.Action != "" && event.Action != filter.Action {
@@ -828,7 +925,7 @@ func (m *Memory) ListAuditEvents(_ context.Context, filter AuditEventFilter) ([]
 		if filter.ResourceID != "" && event.ResourceID != filter.ResourceID {
 			continue
 		}
-		if !auditEventMatchesScope(event, filter.ManagementScope) {
+		if !auditEventMatchesScope(event, filter.ManagementScope, tenantIDs) {
 			continue
 		}
 		rows = append(rows, event)
@@ -845,21 +942,21 @@ func (m *Memory) ListAuditEvents(_ context.Context, filter AuditEventFilter) ([]
 	return rows, nil
 }
 
-func (m *Memory) grantMatchesScope(grant domain.AccessGrant, scope ManagementScope) bool {
+func (m *Memory) grantMatchesScope(grant domain.AccessGrant, scope ManagementScope, tenantIDs map[string]struct{}) bool {
 	if scope.TenantID == "" && scope.WorkspaceID == "" {
 		return true
 	}
 	caller, callerOK := m.agents[grant.CallerID]
 	target, targetOK := m.agents[grant.TargetID]
-	return (callerOK && agentMatchesScope(caller, scope)) || (targetOK && agentMatchesScope(target, scope))
+	return (callerOK && agentMatchesScope(caller, scope, tenantIDs)) || (targetOK && agentMatchesScope(target, scope, tenantIDs))
 }
 
-func (m *Memory) traceMatchesScope(trace domain.TraceEvent, scope ManagementScope) bool {
+func (m *Memory) traceMatchesScope(trace domain.TraceEvent, scope ManagementScope, tenantIDs map[string]struct{}) bool {
 	if scope.TenantID == "" && scope.WorkspaceID == "" {
 		return true
 	}
 	if trace.TenantID != "" || trace.WorkspaceID != "" {
-		if scope.TenantID != "" && trace.TenantID != scope.TenantID {
+		if !tenantIDMatchesScope(trace.TenantID, scope.TenantID, tenantIDs) {
 			return false
 		}
 		if scope.WorkspaceID != "" && trace.WorkspaceID != scope.WorkspaceID {
@@ -869,10 +966,10 @@ func (m *Memory) traceMatchesScope(trace domain.TraceEvent, scope ManagementScop
 	}
 	caller, callerOK := m.agents[trace.CallerID]
 	target, targetOK := m.agents[trace.TargetID]
-	return (callerOK && agentMatchesScope(caller, scope)) || (targetOK && agentMatchesScope(target, scope))
+	return (callerOK && agentMatchesScope(caller, scope, tenantIDs)) || (targetOK && agentMatchesScope(target, scope, tenantIDs))
 }
 
-func (m *Memory) capabilityMatchesFilter(capability domain.Capability, filter CapabilityFilter) bool {
+func (m *Memory) capabilityMatchesFilter(capability domain.Capability, filter CapabilityFilter, tenantIDs map[string]struct{}) bool {
 	if filter.TargetID != "" && capability.TargetID != filter.TargetID {
 		return false
 	}
@@ -883,11 +980,11 @@ func (m *Memory) capabilityMatchesFilter(capability domain.Capability, filter Ca
 		return true
 	}
 	target, ok := m.agents[capability.TargetID]
-	return ok && agentMatchesScope(target, filter.ManagementScope)
+	return ok && agentMatchesScope(target, filter.ManagementScope, tenantIDs)
 }
 
-func tenantEntitlementMatchesFilter(entitlement domain.TenantEntitlement, filter EntitlementFilter) bool {
-	if filter.TenantID != "" && entitlement.TenantID != filter.TenantID {
+func tenantEntitlementMatchesFilter(entitlement domain.TenantEntitlement, filter EntitlementFilter, tenantIDs map[string]struct{}) bool {
+	if !tenantIDMatchesScope(entitlement.TenantID, filter.TenantID, tenantIDs) {
 		return false
 	}
 	if filter.TargetID != "" && entitlement.TargetID != filter.TargetID {
@@ -899,8 +996,8 @@ func tenantEntitlementMatchesFilter(entitlement domain.TenantEntitlement, filter
 	return true
 }
 
-func workspaceAssignmentMatchesFilter(assignment domain.WorkspaceAssignment, filter AssignmentFilter) bool {
-	if filter.TenantID != "" && assignment.TenantID != filter.TenantID {
+func workspaceAssignmentMatchesFilter(assignment domain.WorkspaceAssignment, filter AssignmentFilter, tenantIDs map[string]struct{}) bool {
+	if !tenantIDMatchesScope(assignment.TenantID, filter.TenantID, tenantIDs) {
 		return false
 	}
 	if filter.WorkspaceID != "" && assignment.WorkspaceID != filter.WorkspaceID {
@@ -912,8 +1009,8 @@ func workspaceAssignmentMatchesFilter(assignment domain.WorkspaceAssignment, fil
 	return true
 }
 
-func (m *Memory) instanceAssignmentMatchesFilter(assignment domain.InstanceAssignment, filter InstanceAssignmentFilter) bool {
-	if filter.TenantID != "" && assignment.TenantID != filter.TenantID {
+func (m *Memory) instanceAssignmentMatchesFilter(assignment domain.InstanceAssignment, filter InstanceAssignmentFilter, tenantIDs map[string]struct{}) bool {
+	if !tenantIDMatchesScope(assignment.TenantID, filter.TenantID, tenantIDs) {
 		return false
 	}
 	if filter.WorkspaceID != "" && assignment.WorkspaceID != filter.WorkspaceID {
@@ -1032,8 +1129,8 @@ func subjectSelectorMatches(selector string, subjectID string) bool {
 	return false
 }
 
-func routePolicyMatchesScope(policy domain.RoutePolicy, scope ManagementScope) bool {
-	if scope.TenantID != "" && policy.TenantID != scope.TenantID {
+func routePolicyMatchesScope(policy domain.RoutePolicy, scope ManagementScope, tenantIDs map[string]struct{}) bool {
+	if !tenantIDMatchesScope(policy.TenantID, scope.TenantID, tenantIDs) {
 		return false
 	}
 	if scope.WorkspaceID != "" && policy.WorkspaceID != scope.WorkspaceID {
@@ -1110,8 +1207,8 @@ func cloneRoutePolicyRetry(retry *domain.RoutePolicyRetry) *domain.RoutePolicyRe
 	return &copied
 }
 
-func agentMatchesScope(agent domain.Agent, scope ManagementScope) bool {
-	if scope.TenantID != "" && agent.TenantID != scope.TenantID {
+func agentMatchesScope(agent domain.Agent, scope ManagementScope, tenantIDs map[string]struct{}) bool {
+	if !tenantIDMatchesScope(agent.TenantID, scope.TenantID, tenantIDs) {
 		return false
 	}
 	if scope.WorkspaceID != "" && agent.WorkspaceID != scope.WorkspaceID {
@@ -1120,14 +1217,26 @@ func agentMatchesScope(agent domain.Agent, scope ManagementScope) bool {
 	return true
 }
 
-func auditEventMatchesScope(event domain.AuditEvent, scope ManagementScope) bool {
-	if scope.TenantID != "" && event.TenantID != scope.TenantID {
+func auditEventMatchesScope(event domain.AuditEvent, scope ManagementScope, tenantIDs map[string]struct{}) bool {
+	if !tenantIDMatchesScope(event.TenantID, scope.TenantID, tenantIDs) {
 		return false
 	}
 	if scope.WorkspaceID != "" && event.WorkspaceID != scope.WorkspaceID {
 		return false
 	}
 	return true
+}
+
+func tenantIDMatchesScope(actual string, scopeTenantID string, tenantIDs map[string]struct{}) bool {
+	scopeTenantID = strings.TrimSpace(scopeTenantID)
+	if scopeTenantID == "" {
+		return true
+	}
+	if tenantIDs == nil {
+		return actual == scopeTenantID
+	}
+	_, ok := tenantIDs[actual]
+	return ok
 }
 
 func cloneCapability(capability domain.Capability) domain.Capability {

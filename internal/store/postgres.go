@@ -36,6 +36,122 @@ func NewPostgresWithCredentialKey(pool *pgxpool.Pool, key []byte) *Postgres {
 	return &Postgres{pool: pool, credentialKey: copied}
 }
 
+func (p *Postgres) CreateTenant(ctx context.Context, tenant domain.Tenant) (domain.Tenant, error) {
+	return p.createTenant(ctx, p.pool, tenant)
+}
+
+func (p *Postgres) createTenant(ctx context.Context, exec sqlExecutor, tenant domain.Tenant) (domain.Tenant, error) {
+	_, err := exec.Exec(ctx, `
+		insert into tenants (
+			id, parent_tenant_id, level, name, status, created_at, updated_at
+		) values ($1,$2,$3,$4,$5,$6,$7)
+	`, tenant.ID, nullString(tenant.ParentTenantID), tenant.Level, tenant.Name, string(tenant.Status), tenant.CreatedAt, tenant.UpdatedAt)
+	if err != nil {
+		return domain.Tenant{}, fmt.Errorf("insert tenant: %w", err)
+	}
+	return tenant, nil
+}
+
+func (p *Postgres) CreateTenantWithAudit(ctx context.Context, tenant domain.Tenant, build TenantAuditBuilder) (domain.Tenant, error) {
+	var created domain.Tenant
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		created, err = p.createTenant(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		audit := build(created)
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return created, err
+}
+
+func (p *Postgres) ListTenants(ctx context.Context, filter TenantFilter) ([]domain.Tenant, error) {
+	query := `
+		select id, coalesce(parent_tenant_id, ''), level, name, status, created_at, updated_at
+		from tenants
+		where 1=1
+	`
+	args := []any{}
+	add := func(sql string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(" and "+sql, len(args))
+	}
+	if strings.TrimSpace(filter.TenantID) != "" {
+		tenantIDs, err := p.tenantIDsForScope(ctx, filter.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		add("id = any($%d)", tenantIDs)
+	}
+	if strings.TrimSpace(filter.ParentTenantID) != "" {
+		add("parent_tenant_id=$%d", strings.TrimSpace(filter.ParentTenantID))
+	}
+	query += " order by level asc, created_at asc, id asc"
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list tenants: %w", err)
+	}
+	defer rows.Close()
+	return scanTenants(rows)
+}
+
+func (p *Postgres) GetTenant(ctx context.Context, id string) (domain.Tenant, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select id, coalesce(parent_tenant_id, ''), level, name, status, created_at, updated_at
+		from tenants
+		where id=$1
+	`, id)
+	tenant, err := scanTenant(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Tenant{}, false, nil
+	}
+	if err != nil {
+		return domain.Tenant{}, false, fmt.Errorf("get tenant: %w", err)
+	}
+	return tenant, true, nil
+}
+
+func (p *Postgres) tenantIDsForScope(ctx context.Context, tenantID string) ([]string, error) {
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		return nil, nil
+	}
+	rows, err := p.pool.Query(ctx, `
+		with recursive tenant_tree as (
+			select id
+			from tenants
+			where id=$1
+			union all
+			select t.id
+			from tenants t
+			join tenant_tree parent on parent.id = t.parent_tenant_id
+		)
+		select id from tenant_tree
+		order by id
+	`, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("list tenant subtree: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return []string{tenantID}, nil
+	}
+	return ids, nil
+}
+
 func (p *Postgres) withTx(ctx context.Context, fn func(pgx.Tx) error) error {
 	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -93,7 +209,11 @@ func (p *Postgres) ListAgents(ctx context.Context, filter AgentFilter) ([]domain
 		query += fmt.Sprintf(" and "+sql, len(args))
 	}
 	if strings.TrimSpace(filter.TenantID) != "" {
-		add("tenant_id=$%d", filter.TenantID)
+		tenantIDs, err := p.tenantIDsForScope(ctx, filter.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		add("tenant_id = any($%d)", tenantIDs)
 	}
 	if strings.TrimSpace(filter.WorkspaceID) != "" {
 		add("workspace_id=$%d", filter.WorkspaceID)
@@ -231,7 +351,11 @@ func (p *Postgres) ListAgentKeys(ctx context.Context, scope ManagementScope) ([]
 		query += fmt.Sprintf(" and "+sql, len(args))
 	}
 	if strings.TrimSpace(scope.TenantID) != "" {
-		add("a.tenant_id=$%d", scope.TenantID)
+		tenantIDs, err := p.tenantIDsForScope(ctx, scope.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		add("a.tenant_id = any($%d)", tenantIDs)
 	}
 	if strings.TrimSpace(scope.WorkspaceID) != "" {
 		add("a.workspace_id=$%d", scope.WorkspaceID)
@@ -302,18 +426,42 @@ func (p *Postgres) createAccessGrant(ctx context.Context, exec sqlExecutor, gran
 }
 
 func (p *Postgres) ListAccessGrants(ctx context.Context, scope ManagementScope) ([]domain.AccessGrant, error) {
-	rows, err := p.pool.Query(ctx, `
+	query := `
 		select g.id, g.caller_agent_id, g.target_agent_id, g.route_type, g.route_key, g.created_at, g.expires_at, g.revoked_at
 		from access_grants g
 		join agents c on c.id = g.caller_agent_id
 		join agents t on t.id = g.target_agent_id
-		where (
-			($1 = '' and $2 = '')
-			or (($1 = '' or c.tenant_id = $1) and ($2 = '' or c.workspace_id = $2))
-			or (($1 = '' or t.tenant_id = $1) and ($2 = '' or t.workspace_id = $2))
-		)
-		order by g.created_at asc, g.id asc
-	`, strings.TrimSpace(scope.TenantID), strings.TrimSpace(scope.WorkspaceID))
+		where 1=1
+	`
+	args := []any{}
+	if strings.TrimSpace(scope.TenantID) != "" || strings.TrimSpace(scope.WorkspaceID) != "" {
+		var tenantIDs []string
+		if strings.TrimSpace(scope.TenantID) != "" {
+			var err error
+			tenantIDs, err = p.tenantIDsForScope(ctx, scope.TenantID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		workspaceID := strings.TrimSpace(scope.WorkspaceID)
+		caller := []string{}
+		target := []string{}
+		if tenantIDs != nil {
+			args = append(args, tenantIDs)
+			idx := len(args)
+			caller = append(caller, fmt.Sprintf("c.tenant_id = any($%d)", idx))
+			target = append(target, fmt.Sprintf("t.tenant_id = any($%d)", idx))
+		}
+		if workspaceID != "" {
+			args = append(args, workspaceID)
+			idx := len(args)
+			caller = append(caller, fmt.Sprintf("c.workspace_id=$%d", idx))
+			target = append(target, fmt.Sprintf("t.workspace_id=$%d", idx))
+		}
+		query += fmt.Sprintf(" and ((%s) or (%s))", strings.Join(caller, " and "), strings.Join(target, " and "))
+	}
+	query += " order by g.created_at asc, g.id asc"
+	rows, err := p.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list access grants: %w", err)
 	}
@@ -437,7 +585,11 @@ func (p *Postgres) ListCapabilities(ctx context.Context, filter CapabilityFilter
 		add("c.discovery_status=$%d", string(filter.Status))
 	}
 	if strings.TrimSpace(filter.TenantID) != "" {
-		add("target.tenant_id=$%d", strings.TrimSpace(filter.TenantID))
+		tenantIDs, err := p.tenantIDsForScope(ctx, filter.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		add("target.tenant_id = any($%d)", tenantIDs)
 	}
 	if strings.TrimSpace(filter.WorkspaceID) != "" {
 		add("target.workspace_id=$%d", strings.TrimSpace(filter.WorkspaceID))
@@ -523,7 +675,11 @@ func (p *Postgres) ListTenantEntitlements(ctx context.Context, filter Entitlemen
 		query += fmt.Sprintf(" and "+sql, len(args))
 	}
 	if strings.TrimSpace(filter.TenantID) != "" {
-		add("tenant_id=$%d", strings.TrimSpace(filter.TenantID))
+		tenantIDs, err := p.tenantIDsForScope(ctx, filter.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		add("tenant_id = any($%d)", tenantIDs)
 	}
 	if strings.TrimSpace(filter.TargetID) != "" {
 		add("target_agent_id=$%d", strings.TrimSpace(filter.TargetID))
@@ -569,7 +725,11 @@ func (p *Postgres) ListWorkspaceAssignments(ctx context.Context, filter Assignme
 		query += fmt.Sprintf(" and "+sql, len(args))
 	}
 	if strings.TrimSpace(filter.TenantID) != "" {
-		add("tenant_id=$%d", strings.TrimSpace(filter.TenantID))
+		tenantIDs, err := p.tenantIDsForScope(ctx, filter.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		add("tenant_id = any($%d)", tenantIDs)
 	}
 	if strings.TrimSpace(filter.WorkspaceID) != "" {
 		add("workspace_id=$%d", strings.TrimSpace(filter.WorkspaceID))
@@ -624,7 +784,11 @@ func (p *Postgres) ListInstanceAssignments(ctx context.Context, filter InstanceA
 		query += fmt.Sprintf(" and "+sql, len(args))
 	}
 	if strings.TrimSpace(filter.TenantID) != "" {
-		add("ia.tenant_id=$%d", strings.TrimSpace(filter.TenantID))
+		tenantIDs, err := p.tenantIDsForScope(ctx, filter.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		add("ia.tenant_id = any($%d)", tenantIDs)
 	}
 	if strings.TrimSpace(filter.WorkspaceID) != "" {
 		add("ia.workspace_id=$%d", strings.TrimSpace(filter.WorkspaceID))
@@ -819,7 +983,11 @@ func (p *Postgres) ListRoutePolicies(ctx context.Context, scope ManagementScope)
 		query += fmt.Sprintf(" and "+sql, len(args))
 	}
 	if strings.TrimSpace(scope.TenantID) != "" {
-		add("tenant_id=$%d", strings.TrimSpace(scope.TenantID))
+		tenantIDs, err := p.tenantIDsForScope(ctx, scope.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		add("tenant_id = any($%d)", tenantIDs)
 	}
 	if strings.TrimSpace(scope.WorkspaceID) != "" {
 		add("workspace_id=$%d", strings.TrimSpace(scope.WorkspaceID))
@@ -998,21 +1166,40 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 		add("target_agent_id=$%d", filter.TargetID)
 	}
 	if strings.TrimSpace(filter.TenantID) != "" || strings.TrimSpace(filter.WorkspaceID) != "" {
-		args = append(args, strings.TrimSpace(filter.TenantID), strings.TrimSpace(filter.WorkspaceID))
-		tenantIndex := len(args) - 1
-		workspaceIndex := len(args)
+		var tenantIDs []string
+		if strings.TrimSpace(filter.TenantID) != "" {
+			var err error
+			tenantIDs, err = p.tenantIDsForScope(ctx, filter.TenantID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		workspaceID := strings.TrimSpace(filter.WorkspaceID)
+		direct := []string{"(trace_events.tenant_id <> '' or trace_events.workspace_id <> '')"}
+		agent := []string{}
+		if tenantIDs != nil {
+			args = append(args, tenantIDs)
+			idx := len(args)
+			direct = append(direct, fmt.Sprintf("trace_events.tenant_id = any($%d)", idx))
+			agent = append(agent, fmt.Sprintf("scoped.tenant_id = any($%d)", idx))
+		}
+		if workspaceID != "" {
+			args = append(args, workspaceID)
+			idx := len(args)
+			direct = append(direct, fmt.Sprintf("trace_events.workspace_id=$%d", idx))
+			agent = append(agent, fmt.Sprintf("scoped.workspace_id=$%d", idx))
+		}
 		query += fmt.Sprintf(`
 			and (
-				(($%d = '' or trace_events.tenant_id = $%d) and ($%d = '' or trace_events.workspace_id = $%d) and (trace_events.tenant_id <> '' or trace_events.workspace_id <> ''))
+				(%s)
 				or exists (
 					select 1
 					from agents scoped
 					where scoped.id in (trace_events.caller_agent_id, trace_events.target_agent_id)
-						and ($%d = '' or scoped.tenant_id = $%d)
-						and ($%d = '' or scoped.workspace_id = $%d)
+						and %s
 				)
 			)
-		`, tenantIndex, tenantIndex, workspaceIndex, workspaceIndex, tenantIndex, tenantIndex, workspaceIndex, workspaceIndex)
+		`, strings.Join(direct, " and "), strings.Join(agent, " and "))
 	}
 	query += " order by created_at asc, id asc"
 	rows, err := p.pool.Query(ctx, query, args...)
@@ -1228,7 +1415,11 @@ func (p *Postgres) ListAuditEvents(ctx context.Context, filter AuditEventFilter)
 		query += fmt.Sprintf(" and "+sql, len(args))
 	}
 	if strings.TrimSpace(filter.TenantID) != "" {
-		add("tenant_id=$%d", strings.TrimSpace(filter.TenantID))
+		tenantIDs, err := p.tenantIDsForScope(ctx, filter.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		add("tenant_id = any($%d)", tenantIDs)
 	}
 	if strings.TrimSpace(filter.WorkspaceID) != "" {
 		add("workspace_id=$%d", strings.TrimSpace(filter.WorkspaceID))
@@ -1257,6 +1448,31 @@ func (p *Postgres) ListAuditEvents(ctx context.Context, filter AuditEventFilter)
 
 type scanner interface {
 	Scan(dest ...any) error
+}
+
+func scanTenants(rows pgx.Rows) ([]domain.Tenant, error) {
+	var out []domain.Tenant
+	for rows.Next() {
+		tenant, err := scanTenant(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, tenant)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanTenant(row scanner) (domain.Tenant, error) {
+	var tenant domain.Tenant
+	var status string
+	if err := row.Scan(&tenant.ID, &tenant.ParentTenantID, &tenant.Level, &tenant.Name, &status, &tenant.CreatedAt, &tenant.UpdatedAt); err != nil {
+		return domain.Tenant{}, err
+	}
+	tenant.Status = domain.TenantStatus(status)
+	return tenant, nil
 }
 
 func (p *Postgres) scanAgents(rows pgx.Rows) ([]domain.Agent, error) {
@@ -1624,6 +1840,13 @@ func scanAuditEvents(rows pgx.Rows) ([]domain.AuditEvent, error) {
 
 func nullTime(value time.Time) any {
 	if value.IsZero() {
+		return nil
+	}
+	return value
+}
+
+func nullString(value string) any {
+	if strings.TrimSpace(value) == "" {
 		return nil
 	}
 	return value

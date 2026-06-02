@@ -270,3 +270,70 @@ func TestMemoryCapabilityAssignmentRejectsStoredDataScopeExpansion(t *testing.T)
 		t.Fatalf("expected workspace scope expansion denial, got %#v", decision)
 	}
 }
+
+func TestMemoryTenantHierarchyScopesManagementReads(t *testing.T) {
+	repo := NewMemory()
+	now := time.Date(2026, 6, 2, 10, 0, 0, 0, time.UTC)
+	ctx := t.Context()
+
+	for _, tenant := range []domain.Tenant{
+		{ID: "tenant-root", Name: "Root", Level: 1, Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: "tenant-child", ParentTenantID: "tenant-root", Name: "Child", Level: 2, Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: "tenant-grandchild", ParentTenantID: "tenant-child", Name: "Grandchild", Level: 3, Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: "tenant-unrelated", Name: "Unrelated", Level: 1, Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now},
+	} {
+		if _, err := repo.CreateTenant(ctx, tenant); err != nil {
+			t.Fatalf("create tenant %s: %v", tenant.ID, err)
+		}
+	}
+	for _, agent := range []domain.Agent{
+		{ID: "agt_root", TenantID: "tenant-root", WorkspaceID: "ws-a", Name: "Root Agent", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: "agt_child", TenantID: "tenant-child", WorkspaceID: "ws-a", Name: "Child Agent", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: "agt_grandchild", TenantID: "tenant-grandchild", WorkspaceID: "ws-a", Name: "Grandchild Agent", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: "agt_unrelated", TenantID: "tenant-unrelated", WorkspaceID: "ws-a", Name: "Unrelated Agent", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: "agt_flat", TenantID: "tenant-flat", WorkspaceID: "ws-a", Name: "Flat Agent", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now},
+		{ID: "agt_flat_child_string", TenantID: "tenant-flat-child", WorkspaceID: "ws-a", Name: "Flat Child String", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now},
+	} {
+		if _, err := repo.CreateAgent(ctx, agent); err != nil {
+			t.Fatalf("create agent %s: %v", agent.ID, err)
+		}
+	}
+
+	tenants, err := repo.ListTenants(ctx, TenantFilter{TenantID: "tenant-root"})
+	if err != nil {
+		t.Fatalf("list tenants: %v", err)
+	}
+	if got := tenantIDs(tenants); !reflect.DeepEqual(got, []string{"tenant-root", "tenant-child", "tenant-grandchild"}) {
+		t.Fatalf("tenant subtree = %#v", got)
+	}
+	scopedAgents, err := repo.ListAgents(ctx, AgentFilter{ManagementScope: ManagementScope{TenantID: "tenant-root", WorkspaceID: "ws-a"}})
+	if err != nil {
+		t.Fatalf("list scoped agents: %v", err)
+	}
+	if got := agentIDs(scopedAgents); !reflect.DeepEqual(got, []string{"agt_child", "agt_grandchild", "agt_root"}) {
+		t.Fatalf("registered tenant scope agents = %#v", got)
+	}
+	flatAgents, err := repo.ListAgents(ctx, AgentFilter{ManagementScope: ManagementScope{TenantID: "tenant-flat", WorkspaceID: "ws-a"}})
+	if err != nil {
+		t.Fatalf("list flat agents: %v", err)
+	}
+	if got := agentIDs(flatAgents); !reflect.DeepEqual(got, []string{"agt_flat"}) {
+		t.Fatalf("unregistered tenant scope should remain exact, got %#v", got)
+	}
+}
+
+func tenantIDs(rows []domain.Tenant) []string {
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	return ids
+}
+
+func agentIDs(rows []domain.Agent) []string {
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	return ids
+}

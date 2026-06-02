@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -413,14 +414,19 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 		t.Fatalf("create target: %v", err)
 	}
 	capability := domain.Capability{
-		ID:              security.NewID("cap"),
-		TargetID:        target.ID,
-		Type:            domain.CapabilityTypeMCPTool,
-		Key:             "search_customer",
-		DisplayName:     "search_customer",
-		Action:          domain.CapabilityActionRead,
-		InputSchema:     map[string]any{"type": "object"},
-		OutputSchema:    map[string]any{},
+		ID:           security.NewID("cap"),
+		TargetID:     target.ID,
+		Type:         domain.CapabilityTypeMCPTool,
+		Key:          "search_customer",
+		DisplayName:  "search_customer",
+		Action:       domain.CapabilityActionRead,
+		InputSchema:  map[string]any{"type": "object"},
+		OutputSchema: map[string]any{},
+		DataScopes: []domain.DataScope{{
+			DataDomain:   "crm",
+			Dataset:      "customers",
+			TenantFilter: "tenant_id = 'tenant-pg-cap'",
+		}},
 		Sensitivity:     domain.CapabilitySensitivityInternal,
 		RiskLevel:       domain.CapabilityRiskLow,
 		EnforcementMode: domain.CapabilityEnforcementGateway,
@@ -459,9 +465,12 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 		TenantID:            caller.TenantID,
 		WorkspaceID:         caller.WorkspaceID,
 		Effect:              domain.PolicyEffectAllow,
-		Status:              domain.PolicyStatusEnabled,
-		CreatedAt:           now,
-		UpdatedAt:           now,
+		DataScopes: []domain.DataScope{{
+			Region: "us-east",
+		}},
+		Status:    domain.PolicyStatusEnabled,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("create workspace assignment: %v", err)
@@ -474,9 +483,12 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 		CallerInstanceID:      caller.ID,
 		SubjectSelector:       "user:*",
 		Effect:                domain.PolicyEffectAllow,
-		Status:                domain.PolicyStatusEnabled,
-		CreatedAt:             now,
-		UpdatedAt:             now,
+		DataScopes: []domain.DataScope{{
+			Table: "accounts",
+		}},
+		Status:    domain.PolicyStatusEnabled,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("create instance assignment: %v", err)
@@ -495,6 +507,16 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 	}
 	if !decision.Allowed || decision.EntitlementID != entitlement.ID || decision.WorkspaceAssignmentID != workspaceAssignment.ID || decision.InstanceAssignmentID != instanceAssignment.ID {
 		t.Fatalf("unexpected decision: %#v", decision)
+	}
+	wantScopes := []domain.DataScope{{
+		DataDomain:   "crm",
+		Dataset:      "customers",
+		Table:        "accounts",
+		Region:       "us-east",
+		TenantFilter: "tenant_id = 'tenant-pg-cap'",
+	}}
+	if !reflect.DeepEqual(decision.DataScopes, wantScopes) {
+		t.Fatalf("data scopes = %#v, want %#v", decision.DataScopes, wantScopes)
 	}
 	withoutSubject, err := repo.EvaluateCapabilityAccess(ctx, store.CapabilityAccessRequest{
 		TenantID:         caller.TenantID,

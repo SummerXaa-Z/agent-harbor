@@ -14,7 +14,8 @@ DEMO_SCRIPTS := \
 	scripts/demo-sprint9-route-policies.sh \
 	scripts/demo-sprint10-route-policy-retry.sh \
 	scripts/demo-sprint11-transactional-audit.sh \
-	scripts/demo-sprint12-mcp-capability-governance.sh
+	scripts/demo-sprint12-mcp-capability-governance.sh \
+	scripts/demo-sprint13-data-permission-enforcement.sh
 
 .PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-test frontend-build demo-scripts-lint github-config-lint test-postgres run demo-all
 

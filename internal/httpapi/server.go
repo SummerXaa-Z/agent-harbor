@@ -59,6 +59,8 @@ type proxyTraceResult struct {
 	upstreamError    string
 }
 
+type upstreamRequestMutator func(*http.Request) error
+
 type Option func(*Server)
 
 func WithAdminKey(key string) Option {
@@ -1065,6 +1067,10 @@ func (s *Server) createTenantEntitlement(w http.ResponseWriter, r *http.Request)
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "capabilityId must belong to targetId"))
 		return
 	}
+	if _, ok := domain.EffectiveDataScopes(capability.DataScopes, req.DataScopes); !ok {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "dataScopes must be equal to or narrower than capability dataScopes"))
+		return
+	}
 	now := s.now()
 	entitlement := domain.TenantEntitlement{
 		ID:           security.NewID("ent"),
@@ -1151,6 +1157,15 @@ func (s *Server) createWorkspaceAssignment(w http.ResponseWriter, r *http.Reques
 		writeError(w, domain.NotFound("target agent not found"))
 		return
 	}
+	entitlementScopes, err := s.effectiveTenantEntitlementDataScopes(r.Context(), entitlement)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if _, ok := domain.EffectiveDataScopes(entitlementScopes, req.DataScopes); !ok {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "dataScopes must be equal to or narrower than tenant entitlement dataScopes"))
+		return
+	}
 	now := s.now()
 	assignment := domain.WorkspaceAssignment{
 		ID:                  security.NewID("wsa"),
@@ -1224,6 +1239,25 @@ func (s *Server) createInstanceAssignment(w http.ResponseWriter, r *http.Request
 	workspaceAssignment, ok := findWorkspaceAssignment(workspaceAssignments, req.WorkspaceAssignmentID)
 	if !ok {
 		writeError(w, domain.NotFound("workspace assignment not found"))
+		return
+	}
+	entitlements, err := s.repo.ListTenantEntitlements(r.Context(), store.EntitlementFilter{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	entitlement, ok := findTenantEntitlement(entitlements, workspaceAssignment.TenantEntitlementID)
+	if !ok {
+		writeError(w, domain.NotFound("tenant entitlement not found"))
+		return
+	}
+	workspaceScopes, err := s.effectiveWorkspaceAssignmentDataScopes(r.Context(), entitlement, workspaceAssignment)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if _, ok := domain.EffectiveDataScopes(workspaceScopes, req.DataScopes); !ok {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "dataScopes must be equal to or narrower than workspace assignment dataScopes"))
 		return
 	}
 	caller, ok, err := s.repo.GetAgent(r.Context(), req.CallerInstanceID)
@@ -1387,7 +1421,7 @@ func (s *Server) handleDataPlane(w http.ResponseWriter, r *http.Request, routeTy
 	recordAllowedTrace := func(result proxyTraceResult) (domain.TraceEvent, error) {
 		return s.recordDataPlaneTrace(r, caller.ID, targetID, routeType, routeKey, domain.TraceDecisionAllowed, allowedReason, result)
 	}
-	if s.proxyUpstreamIfConfigured(w, r, target, routeType, routeKey, decision.Retry, recordAllowedTrace) {
+	if s.proxyUpstreamIfConfigured(w, r, target, routeType, routeKey, decision.Retry, recordAllowedTrace, nil) {
 		return
 	}
 	trace, err := recordAllowedTrace(proxyTraceResult{})
@@ -1535,8 +1569,16 @@ func (s *Server) handleMCPToolCall(w http.ResponseWriter, r *http.Request, info 
 			ProxyResult:        result,
 		})
 	}
+	contextHeader, err := agentHarborContextHeaderValue(identity, target.ID, capability, decision, info.ToolName)
+	if err != nil {
+		writeError(w, err)
+		return true
+	}
 	r.Body = io.NopCloser(bytes.NewReader(info.Body))
-	if s.proxyUpstreamIfConfigured(w, r, target, "mcp", info.Method, nil, recordAllowedTrace) {
+	if s.proxyUpstreamIfConfigured(w, r, target, "mcp", info.Method, nil, recordAllowedTrace, func(req *http.Request) error {
+		req.Header.Set(agentHarborContextHeader, contextHeader)
+		return nil
+	}) {
 		return true
 	}
 	trace, err := recordAllowedTrace(proxyTraceResult{})
@@ -1729,7 +1771,7 @@ func (s *Server) recordCapabilityTrace(r *http.Request, input traceRecordInput) 
 	return s.repo.AppendTrace(r.Context(), trace)
 }
 
-func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Request, target domain.Agent, routeType string, routeKey string, retryOverride *domain.RoutePolicyRetry, recordAllowedTrace func(proxyTraceResult) (domain.TraceEvent, error)) bool {
+func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Request, target domain.Agent, routeType string, routeKey string, retryOverride *domain.RoutePolicyRetry, recordAllowedTrace func(proxyTraceResult) (domain.TraceEvent, error), mutateRequest upstreamRequestMutator) bool {
 	endpoint, ok := target.ChannelConfig["endpoint"].(string)
 	endpoint = strings.TrimSpace(endpoint)
 	if !ok || endpoint == "" {
@@ -1783,6 +1825,12 @@ func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Reques
 		if err := copyCredentialHeaders(req.Header, target.ChannelConfig, target.Credentials); err != nil {
 			writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
 			return true
+		}
+		if mutateRequest != nil {
+			if err := mutateRequest(req); err != nil {
+				writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
+				return true
+			}
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -1871,6 +1919,9 @@ func openAPIUpstreamURL(endpoint string, relativePath string, rawQuery string) (
 
 func copyUpstreamRequestHeaders(dst http.Header, src http.Header) {
 	for _, key := range []string{"Content-Type", "Accept"} {
+		if isReservedAgentHarborHeader(key) {
+			continue
+		}
 		if value := src.Get(key); value != "" {
 			dst.Set(key, value)
 		}
@@ -2235,13 +2286,16 @@ func copyConfiguredHeaders(dst http.Header, config map[string]any) error {
 		return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers must be an object")
 	}
 	for name, value := range headers {
-		headerValue, ok := value.(string)
-		if !ok {
-			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers values must be strings")
-		}
 		trimmedName := strings.TrimSpace(name)
 		if trimmedName == "" || !validHeaderName(trimmedName) || security.IsSecretLikeKey(trimmedName) {
 			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers contains invalid header name")
+		}
+		if isReservedAgentHarborHeader(trimmedName) {
+			continue
+		}
+		headerValue, ok := value.(string)
+		if !ok {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers values must be strings")
 		}
 		if containsHeaderNewline(headerValue) {
 			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.headers values must not contain CR or LF")
@@ -2261,14 +2315,20 @@ func copyCredentialHeaders(dst http.Header, config map[string]any, credentials m
 		return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders must be an object")
 	}
 	for name, credentialKey := range headers {
+		trimmedName := strings.TrimSpace(name)
+		if trimmedName == "" || !validHeaderName(trimmedName) {
+			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders references missing credentials")
+		}
+		if isReservedAgentHarborHeader(trimmedName) {
+			continue
+		}
 		key, ok := credentialKey.(string)
 		if !ok {
 			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders values must be credential key strings")
 		}
-		trimmedName := strings.TrimSpace(name)
 		key = strings.TrimSpace(key)
 		value, exists := credentials[key]
-		if trimmedName == "" || !validHeaderName(trimmedName) || key == "" || !validCredentialKey(key) || !exists {
+		if key == "" || !validCredentialKey(key) || !exists {
 			return domain.BadRequest("VALIDATION_FAILED", "channelConfig.credentialHeaders references missing credentials")
 		}
 		if containsHeaderNewline(value) {
@@ -2960,6 +3020,33 @@ func findWorkspaceAssignment(rows []domain.WorkspaceAssignment, id string) (doma
 		}
 	}
 	return domain.WorkspaceAssignment{}, false
+}
+
+func (s *Server) effectiveTenantEntitlementDataScopes(ctx context.Context, entitlement domain.TenantEntitlement) ([]domain.DataScope, error) {
+	capability, ok, err := s.repo.GetCapability(ctx, entitlement.CapabilityID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok || capability.TargetID != entitlement.TargetID {
+		return nil, domain.BadRequest("VALIDATION_FAILED", "tenant entitlement capability is not registered for target")
+	}
+	scopes, ok := domain.EffectiveDataScopes(capability.DataScopes, entitlement.DataScopes)
+	if !ok {
+		return nil, domain.BadRequest("VALIDATION_FAILED", "tenant entitlement dataScopes exceed capability dataScopes")
+	}
+	return scopes, nil
+}
+
+func (s *Server) effectiveWorkspaceAssignmentDataScopes(ctx context.Context, entitlement domain.TenantEntitlement, assignment domain.WorkspaceAssignment) ([]domain.DataScope, error) {
+	entitlementScopes, err := s.effectiveTenantEntitlementDataScopes(ctx, entitlement)
+	if err != nil {
+		return nil, err
+	}
+	scopes, ok := domain.EffectiveDataScopes(entitlementScopes, assignment.DataScopes)
+	if !ok {
+		return nil, domain.BadRequest("VALIDATION_FAILED", "workspace assignment dataScopes exceed tenant entitlement dataScopes")
+	}
+	return scopes, nil
 }
 
 func normalizeRoutePolicyEffect(value domain.RoutePolicyEffect, fallback domain.RoutePolicyEffect) (domain.RoutePolicyEffect, error) {

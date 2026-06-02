@@ -665,6 +665,10 @@ func (p *Postgres) EvaluateCapabilityAccess(ctx context.Context, req CapabilityA
 	if entitlement.Effect == domain.PolicyEffectDeny {
 		return domain.CapabilityAccessDecision{Allowed: false, Source: "tenant_entitlement", CapabilityID: capability.ID, EntitlementID: entitlement.ID, Reason: "tenant entitlement denies capability"}, nil
 	}
+	entitlementScopes, ok := domain.EffectiveDataScopes(capability.DataScopes, entitlement.DataScopes)
+	if !ok {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "tenant_entitlement", CapabilityID: capability.ID, EntitlementID: entitlement.ID, Reason: "tenant entitlement data scopes exceed capability boundary"}, nil
+	}
 	workspaceAssignment, ok, err := p.matchWorkspaceAssignment(ctx, req, entitlement.ID)
 	if err != nil {
 		return domain.CapabilityAccessDecision{}, err
@@ -674,6 +678,10 @@ func (p *Postgres) EvaluateCapabilityAccess(ctx context.Context, req CapabilityA
 	}
 	if workspaceAssignment.Effect == domain.PolicyEffectDeny {
 		return domain.CapabilityAccessDecision{Allowed: false, Source: "workspace_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, Reason: "workspace assignment denies capability"}, nil
+	}
+	workspaceScopes, ok := domain.EffectiveDataScopes(entitlementScopes, workspaceAssignment.DataScopes)
+	if !ok {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "workspace_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, Reason: "workspace assignment data scopes exceed tenant entitlement boundary"}, nil
 	}
 	instanceAssignment, ok, err := p.matchInstanceAssignment(ctx, req, workspaceAssignment.ID)
 	if err != nil {
@@ -685,6 +693,10 @@ func (p *Postgres) EvaluateCapabilityAccess(ctx context.Context, req CapabilityA
 	if instanceAssignment.Effect == domain.PolicyEffectDeny {
 		return domain.CapabilityAccessDecision{Allowed: false, Source: "instance_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, InstanceAssignmentID: instanceAssignment.ID, Reason: "caller instance assignment denies capability"}, nil
 	}
+	instanceScopes, ok := domain.EffectiveDataScopes(workspaceScopes, instanceAssignment.DataScopes)
+	if !ok {
+		return domain.CapabilityAccessDecision{Allowed: false, Source: "instance_assignment", CapabilityID: capability.ID, EntitlementID: entitlement.ID, WorkspaceAssignmentID: workspaceAssignment.ID, InstanceAssignmentID: instanceAssignment.ID, Reason: "caller instance assignment data scopes exceed workspace assignment boundary"}, nil
+	}
 	return domain.CapabilityAccessDecision{
 		Allowed:               true,
 		Source:                "capability_governance",
@@ -693,7 +705,7 @@ func (p *Postgres) EvaluateCapabilityAccess(ctx context.Context, req CapabilityA
 		WorkspaceAssignmentID: workspaceAssignment.ID,
 		InstanceAssignmentID:  instanceAssignment.ID,
 		Reason:                "capability assignment matched",
-		DataScopes:            instanceAssignment.DataScopes,
+		DataScopes:            instanceScopes,
 	}, nil
 }
 

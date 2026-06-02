@@ -1,3 +1,34 @@
+## [2026-06-02 00:06] Session: Data Permission Enforcement
+
+### 完成
+- 新增 `internal/domain/data_scope.go`，集中实现 `dataScopes` 的 OR-list 收敛、继承和窄化校验。
+- 更新 memory/Postgres capability evaluation，运行时返回逐级计算后的有效 `dataScopes`，并对历史脏配置 fail closed。
+- 更新 `internal/httpapi/server.go`，在 tenant entitlement、workspace assignment、instance assignment 创建时校验子级 scope 不得放宽父级。
+- 新增 `internal/httpapi/context_header.go`，治理后的 MCP `tools/call` 会注入保留 `X-AgentHarbor-Context`，并过滤调用方、静态配置、credential 配置中的伪造值。
+- 新增 Sprint 13 demo 脚本和 README 说明，覆盖 scope 扩张拒绝、有效 scope trace 证据和上下文头语义。
+- 提交 `b01851b Add data permission enforcement`。
+
+### 决策
+- `dataScopes` 列表语义是 OR alternatives；每个子 scope 必须被至少一个父 scope 包含。
+- 空子级 scope 继承父级；空父级 scope 表示尚未建立边界，允许子级成为第一层边界。
+- Agent Harbor 暂不改写任意 MCP tool arguments；下游 MCP/agent/数据湖/数仓/数据库根据 `X-AgentHarbor-Context` 执行具体数据谓词。
+- `X-AgentHarbor-Context` 是保留 header，只能由 Agent Harbor 在运行时生成。
+
+### 血泪教训
+- 只在实例 assignment 上保存 `dataScopes` 不够；必须在 store evaluation 阶段重新逐级计算，才能保证 trace 和 runtime context 使用的是有效边界。
+- header 保留逻辑不能只防调用方伪造，也要覆盖 target `channelConfig.headers` 和 `credentialHeaders`，否则目标配置可覆盖网关注入的上下文。
+
+### 待办
+- 后续为 downstream agent/MCP server 定义 `X-AgentHarbor-Context` 的稳定版本化消费规范和签名/校验策略。
+- 后续再设计按具体工具 schema 改写参数或生成 SQL/data-lake predicate 的执行层，不在本次 MVP 中做。
+
+### 影响文件
+- `internal/domain/data_scope.go` / `data_scope_test.go`：新增 scope 合并与窄化规则。
+- `internal/store/memory.go` / `postgres.go` 及测试：运行时有效 scope 计算和 fail closed。
+- `internal/httpapi/server.go` / `context_header.go` / `server_test.go`：控制面校验、运行时 context header 注入和防伪造测试。
+- `README.md` / `scripts/demo-sprint13-data-permission-enforcement.sh` / `scripts/demo-all.sh` / `Makefile`：Sprint 13 说明与 demo 集成。
+- `docs/superpowers/plans/2026-06-01-data-permission-enforcement.md`：实现计划和完成勾选。
+
 ## [2026-06-01 16:24] Session: Go Format Gate
 
 ### 完成

@@ -21,6 +21,7 @@ scripts=(
   scripts/demo-sprint10-route-policy-retry.sh
   scripts/demo-sprint11-transactional-audit.sh
   scripts/demo-sprint12-mcp-capability-governance.sh
+  scripts/demo-sprint13-data-permission-enforcement.sh
 )
 
 echo "AgentHarbor full demo suite"

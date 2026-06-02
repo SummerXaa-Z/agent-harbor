@@ -1,6 +1,7 @@
 package store
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -22,12 +23,17 @@ func TestMemoryCapabilityAssignmentEvaluation(t *testing.T) {
 	}
 
 	capability := domain.Capability{
-		ID:              "cap_search",
-		TargetID:        target.ID,
-		Type:            domain.CapabilityTypeMCPTool,
-		Key:             "search_customer",
-		DisplayName:     "search_customer",
-		Action:          domain.CapabilityActionRead,
+		ID:          "cap_search",
+		TargetID:    target.ID,
+		Type:        domain.CapabilityTypeMCPTool,
+		Key:         "search_customer",
+		DisplayName: "search_customer",
+		Action:      domain.CapabilityActionRead,
+		DataScopes: []domain.DataScope{{
+			DataDomain:   "crm",
+			Dataset:      "customers",
+			TenantFilter: "tenant_id = 'tenant-a'",
+		}},
 		Sensitivity:     domain.CapabilitySensitivityInternal,
 		RiskLevel:       domain.CapabilityRiskLow,
 		EnforcementMode: domain.CapabilityEnforcementGateway,
@@ -74,9 +80,12 @@ func TestMemoryCapabilityAssignmentEvaluation(t *testing.T) {
 		TenantID:            caller.TenantID,
 		WorkspaceID:         caller.WorkspaceID,
 		Effect:              domain.PolicyEffectAllow,
-		Status:              domain.PolicyStatusEnabled,
-		CreatedAt:           now,
-		UpdatedAt:           now,
+		DataScopes: []domain.DataScope{{
+			Region: "us-east",
+		}},
+		Status:    domain.PolicyStatusEnabled,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("create workspace assignment: %v", err)
@@ -89,9 +98,12 @@ func TestMemoryCapabilityAssignmentEvaluation(t *testing.T) {
 		CallerInstanceID:      caller.ID,
 		SubjectSelector:       "user:*",
 		Effect:                domain.PolicyEffectAllow,
-		Status:                domain.PolicyStatusEnabled,
-		CreatedAt:             now,
-		UpdatedAt:             now,
+		DataScopes: []domain.DataScope{{
+			Table: "accounts",
+		}},
+		Status:    domain.PolicyStatusEnabled,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("create instance assignment: %v", err)
@@ -111,6 +123,16 @@ func TestMemoryCapabilityAssignmentEvaluation(t *testing.T) {
 	}
 	if !allowed.Allowed || allowed.EntitlementID != entitlement.ID || allowed.WorkspaceAssignmentID != workspaceAssignment.ID || allowed.InstanceAssignmentID != instanceAssignment.ID {
 		t.Fatalf("unexpected allowed decision: %#v", allowed)
+	}
+	wantScopes := []domain.DataScope{{
+		DataDomain:   "crm",
+		Dataset:      "customers",
+		Table:        "accounts",
+		Region:       "us-east",
+		TenantFilter: "tenant_id = 'tenant-a'",
+	}}
+	if !reflect.DeepEqual(allowed.DataScopes, wantScopes) {
+		t.Fatalf("data scopes = %#v, want %#v", allowed.DataScopes, wantScopes)
 	}
 
 	withoutSubject, err := repo.EvaluateCapabilityAccess(ctx, CapabilityAccessRequest{
@@ -157,5 +179,94 @@ func TestMemoryCapabilityAssignmentEvaluation(t *testing.T) {
 	}
 	if deniedBySubject.Allowed || deniedBySubject.InstanceAssignmentID != denyAssignment.ID {
 		t.Fatalf("exact deny assignment should take precedence over wildcard allow: %#v", deniedBySubject)
+	}
+}
+
+func TestMemoryCapabilityAssignmentRejectsStoredDataScopeExpansion(t *testing.T) {
+	repo := NewMemory()
+	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	ctx := t.Context()
+
+	caller := domain.Agent{ID: "agt_caller", TenantID: "tenant-a", WorkspaceID: "ws-sales", Name: "Caller", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	target := domain.Agent{ID: "agt_mcp", TenantID: "tenant-a", WorkspaceID: "ws-sales", Name: "MCP", ChannelType: "mcp", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(ctx, caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	if _, err := repo.CreateAgent(ctx, target); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+	capability := domain.Capability{
+		ID:              "cap_search",
+		TargetID:        target.ID,
+		Type:            domain.CapabilityTypeMCPTool,
+		Key:             "search_customer",
+		DisplayName:     "search_customer",
+		Action:          domain.CapabilityActionRead,
+		DataScopes:      []domain.DataScope{{DataDomain: "crm", Region: "us-east"}},
+		Sensitivity:     domain.CapabilitySensitivityInternal,
+		RiskLevel:       domain.CapabilityRiskLow,
+		EnforcementMode: domain.CapabilityEnforcementGateway,
+		DiscoveryStatus: domain.CapabilityDiscoveryApproved,
+		Version:         1,
+		DiscoveredAt:    now,
+		UpdatedAt:       now,
+	}
+	if _, err := repo.UpsertCapability(ctx, capability); err != nil {
+		t.Fatalf("upsert capability: %v", err)
+	}
+	entitlement, err := repo.CreateTenantEntitlement(ctx, domain.TenantEntitlement{
+		ID:           "ent_search",
+		TenantID:     caller.TenantID,
+		TargetID:     target.ID,
+		CapabilityID: capability.ID,
+		Effect:       domain.PolicyEffectAllow,
+		Status:       domain.PolicyStatusEnabled,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("create entitlement: %v", err)
+	}
+	workspaceAssignment, err := repo.CreateWorkspaceAssignment(ctx, domain.WorkspaceAssignment{
+		ID:                  "wsa_search",
+		TenantEntitlementID: entitlement.ID,
+		TenantID:            caller.TenantID,
+		WorkspaceID:         caller.WorkspaceID,
+		Effect:              domain.PolicyEffectAllow,
+		DataScopes:          []domain.DataScope{{DataDomain: "crm", Region: "eu-west"}},
+		Status:              domain.PolicyStatusEnabled,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	})
+	if err != nil {
+		t.Fatalf("create workspace assignment: %v", err)
+	}
+	if _, err := repo.CreateInstanceAssignment(ctx, domain.InstanceAssignment{
+		ID:                    "ina_search",
+		WorkspaceAssignmentID: workspaceAssignment.ID,
+		TenantID:              caller.TenantID,
+		WorkspaceID:           caller.WorkspaceID,
+		CallerInstanceID:      caller.ID,
+		Effect:                domain.PolicyEffectAllow,
+		Status:                domain.PolicyStatusEnabled,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	}); err != nil {
+		t.Fatalf("create instance assignment: %v", err)
+	}
+
+	decision, err := repo.EvaluateCapabilityAccess(ctx, CapabilityAccessRequest{
+		TenantID:         caller.TenantID,
+		WorkspaceID:      caller.WorkspaceID,
+		CallerInstanceID: caller.ID,
+		TargetID:         target.ID,
+		CapabilityID:     capability.ID,
+		Now:              now,
+	})
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if decision.Allowed || decision.Source != "workspace_assignment" {
+		t.Fatalf("expected workspace scope expansion denial, got %#v", decision)
 	}
 }

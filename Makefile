@@ -16,7 +16,8 @@ DEMO_SCRIPTS := \
 	scripts/demo-sprint11-transactional-audit.sh \
 	scripts/demo-sprint12-mcp-capability-governance.sh \
 	scripts/demo-sprint13-data-permission-enforcement.sh \
-	scripts/demo-sprint14-tenant-hierarchy.sh
+	scripts/demo-sprint14-tenant-hierarchy.sh \
+	scripts/demo-sprint15-tenant-access-profile.sh
 
 .PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-test frontend-build demo-scripts-lint github-config-lint test-postgres run demo-all
 

@@ -95,6 +95,7 @@ func (s *Server) Router() http.Handler {
 			r.Use(s.requireAdmin)
 			r.Post("/tenants", s.createTenant)
 			r.Get("/tenants", s.listTenants)
+			r.Get("/tenants/{id}/access-profile", s.getTenantAccessProfile)
 			r.Get("/tenants/{id}", s.getTenant)
 			r.Post("/agents", s.createAgent)
 			r.Get("/agents", s.listAgents)

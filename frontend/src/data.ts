@@ -8,12 +8,43 @@ import type {
   ProviderContract,
   RoutePolicy,
   SystemMetric,
+  Tenant,
+  TenantAccessProfile,
   TenantEntitlement,
   TraceEvent,
   WorkspaceAssignment,
 } from './types'
 
 const now = '2026-05-29T09:30:00Z'
+
+export const sampleTenants: Tenant[] = [
+  {
+    id: 'default',
+    level: 0,
+    name: 'Default Tenant',
+    status: 'active',
+    createdAt: '2026-05-20T01:00:00Z',
+    updatedAt: now,
+  },
+  {
+    id: 'default-bu',
+    parentTenantId: 'default',
+    level: 1,
+    name: 'Default Business Unit',
+    status: 'active',
+    createdAt: '2026-05-20T01:10:00Z',
+    updatedAt: now,
+  },
+  {
+    id: 'default-bu-team',
+    parentTenantId: 'default-bu',
+    level: 2,
+    name: 'Default Workspace Team',
+    status: 'active',
+    createdAt: '2026-05-20T01:20:00Z',
+    updatedAt: now,
+  },
+]
 
 export const sampleProviders: ProviderContract[] = [
   {
@@ -336,6 +367,47 @@ export const sampleTraces: TraceEvent[] = [
     createdAt: '2026-05-29T09:02:44Z',
   },
 ]
+
+export const sampleTenantAccessProfile: TenantAccessProfile = {
+  tenant: sampleTenants[0],
+  scopeTenants: sampleTenants,
+  summary: {
+    tenantCount: sampleTenants.length,
+    grantCount: 1,
+    targetCount: 1,
+    capabilityCount: 1,
+    workspaceAssignmentCount: 1,
+    instanceAssignmentCount: 1,
+    recentAllowedTraceCount: 1,
+    recentDeniedTraceCount: 0,
+  },
+  grants: [
+    {
+      tenantEntitlement: sampleTenantEntitlements[0],
+      target: sampleAgents[1],
+      capability: sampleCapabilities[0],
+      effectiveTenantDataScopes: sampleCapabilities[0].dataScopes,
+      scopeStatus: 'valid',
+      workspaceAssignments: [
+        {
+          workspaceAssignment: sampleWorkspaceAssignments[0],
+          effectiveWorkspaceDataScopes: sampleWorkspaceAssignments[0].dataScopes,
+          scopeStatus: 'valid',
+          instanceAssignments: [
+            {
+              instanceAssignment: sampleInstanceAssignments[0],
+              callerInstance: sampleAgents[0],
+              effectiveInstanceDataScopes: sampleInstanceAssignments[0].dataScopes,
+              scopeStatus: 'valid',
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  recentTraces: [sampleTraces[0]],
+  generatedAt: now,
+}
 
 export const sampleAuditEvents: AuditEvent[] = [
   {

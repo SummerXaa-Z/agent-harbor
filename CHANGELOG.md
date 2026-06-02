@@ -1,3 +1,44 @@
+## [2026-06-02 13:51] Session: Tenant Permission Console
+
+### 完成
+- 新增前端 `Access` 导航入口，围绕租户加载 `GET /api/v1/tenants/{id}/access-profile`，展示三级租户范围、有效 grant chain、数据 scope、invalid scope 和最近 trace evidence。
+- 新增 `frontend/src/accessProfile.ts`，把 access-profile 的过滤归一化、traceLimit 校验、scope 状态映射、data scope 摘要和 invalid 行计数拆成可测 helper。
+- 新增 `frontend/tests/accessProfile.test.mjs`，用现有 Node test runner 覆盖 access-profile helper。
+- 扩展 `frontend/src/api.ts` / `data.ts` / `types.ts`，新增 profile 类型、API loader 和三级租户 fallback profile。
+- 更新 `frontend/src/styles.css`，为 Access 视图增加密集型运营控制台布局，并修复中等宽度下 topbar 挤压标题的问题。
+- 新增 `docs/superpowers/specs/2026-06-02-tenant-permission-console-design.md` 和 `docs/superpowers/plans/2026-06-02-tenant-permission-console.md`，记录本轮设计共识和完成计划。
+
+### 决策
+- Access Console 第一版只做只读解释，不混入权限写入、grant wizard 或模拟器。
+- 最重要用户旅程继续以租户为入口；caller、workspace、target、capability 都是租户 profile 内的过滤维度。
+- 当前前端是 React/Vite，不是 Vue；实现跟随现有 React 代码结构。
+
+### 血泪教训
+- 中等宽度下侧边栏会折叠，导航文字不可见，浏览器验证不能只靠按钮文本定位，需要结合 DOM 数量和位置确认。
+- access-profile UI 不能在前端再手拼多个列表接口；必须消费后端聚合 profile，否则解释不清 tenant → workspace → instance 的权限来源。
+- 当前项目没有 React component test harness，helper 级测试更适合先覆盖 access-profile 纯逻辑。
+
+### 待办
+- 下一步可补权限写入/修复动作，但应该在 read-only profile 可信之后再做。
+- 后续可补一个 `make frontend-format` 或前端 lint gate，避免大 TSX/CSS 文件长期依赖人工格式检查。
+
+### 验证
+- `pnpm --dir frontend test`：8/8 pass。
+- `pnpm --dir frontend build`：TypeScript 和 Vite build pass。
+- `go test ./...`：pass。
+- in-app Browser 打开 `http://127.0.0.1:5174/`，确认 `Tenant Permission Console`、`Effective Grant Chain`、`Trace Evidence` 和 fallback profile 实际渲染。
+- `git diff --check`：无 whitespace 错误。
+
+### 影响文件
+- `frontend/src/App.tsx`：新增 Access nav、profile state/refresh、TenantAccessProfileView 和 metric 切换。
+- `frontend/src/accessProfile.ts`：新增 access-profile helper。
+- `frontend/src/api.ts`：新增 `fetchTenantAccessProfile` / `loadTenantAccessProfile`。
+- `frontend/src/data.ts`：新增三级租户和 fallback profile 样例。
+- `frontend/src/types.ts`：新增 tenant 与 access-profile 类型。
+- `frontend/src/styles.css`：新增 Access 视图布局和中等宽度 topbar 响应式调整。
+- `frontend/tests/accessProfile.test.mjs`：新增 helper 测试。
+- `docs/superpowers/specs/2026-06-02-tenant-permission-console-design.md` / `docs/superpowers/plans/2026-06-02-tenant-permission-console.md`：新增设计和计划文档。
+
 ## [2026-06-02 01:04] Session: Tenant Access Profile
 
 ### 完成

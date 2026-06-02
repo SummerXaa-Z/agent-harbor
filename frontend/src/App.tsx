@@ -92,7 +92,7 @@ const navItems = [
 const workspaceTabs = ["Prod", "Staging", "Sandbox"];
 const defaultManagementScope: ManagementScope = {
   tenantId: "default",
-  workspaceId: "workspace-demo"
+  workspaceId: "workspace-sandbox"
 };
 const defaultAgentForm = {
   channelType: "local",
@@ -579,7 +579,7 @@ function App() {
     ? "Tenant Permission Console"
     : isCapabilitiesView
       ? "Capability Governance"
-      : "Agent Gateway Cockpit";
+      : "AgentHarbor Control Plane";
 
   return (
     <div className="app-shell">
@@ -590,7 +590,7 @@ function App() {
           </div>
           <div>
             <strong>AgentHarbor</strong>
-            <span>Agent Gateway</span>
+            <span>Control Plane</span>
           </div>
         </div>
 

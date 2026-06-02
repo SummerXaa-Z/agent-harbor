@@ -2,47 +2,47 @@ SHELL := /bin/bash
 
 GO_FILES := $(shell git ls-files '*.go')
 
-DEMO_SCRIPTS := \
-	scripts/demo-governance-loop.sh \
-	scripts/demo-sprint2-cleanup.sh \
-	scripts/demo-sprint3-mcp-policy.sh \
-	scripts/demo-sprint4-credentials.sh \
-	scripts/demo-sprint5-retry-config.sh \
-	scripts/demo-sprint6-runtime-metrics.sh \
-	scripts/demo-sprint7-credential-rotation.sh \
-	scripts/demo-sprint8-management-audit.sh \
-	scripts/demo-sprint9-route-policies.sh \
-	scripts/demo-sprint10-route-policy-retry.sh \
-	scripts/demo-sprint11-transactional-audit.sh \
-	scripts/demo-sprint12-mcp-capability-governance.sh \
-	scripts/demo-sprint13-data-permission-enforcement.sh \
-	scripts/demo-sprint14-tenant-hierarchy.sh \
-	scripts/demo-sprint15-tenant-access-profile.sh
+SCENARIO_SCRIPTS := \
+	scripts/scenario-governance-loop.sh \
+	scripts/scenario-registry-cleanup.sh \
+	scripts/scenario-mcp-policy.sh \
+	scripts/scenario-credential-redaction.sh \
+	scripts/scenario-retry-config.sh \
+	scripts/scenario-runtime-metrics.sh \
+	scripts/scenario-credential-rotation.sh \
+	scripts/scenario-management-audit.sh \
+	scripts/scenario-route-policies.sh \
+	scripts/scenario-route-policy-retry.sh \
+	scripts/scenario-transactional-audit.sh \
+	scripts/scenario-mcp-capability-governance.sh \
+	scripts/scenario-data-permission-enforcement.sh \
+	scripts/scenario-tenant-hierarchy.sh \
+	scripts/scenario-tenant-access-profile.sh
 
-.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-test frontend-build demo-scripts-lint github-config-lint test-postgres run demo-all
+.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-test frontend-build scenario-scripts-lint github-config-lint test-postgres run scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
 	@printf '\n'
-	@printf '  make check              Run local backend, frontend, and demo-script checks\n'
-	@printf '  make release-check      Run uncached release/merge readiness checks\n'
-	@printf '  make fmt                Format Go files with gofmt\n'
-	@printf '  make gofmt-check        Verify Go files are gofmt-formatted\n'
-	@printf '  make test               Run Go tests\n'
-	@printf '  make test-fresh         Run uncached Go tests\n'
-	@printf '  make vet                Run go vet\n'
-	@printf '  make build              Build Go packages\n'
-	@printf '  make frontend-test      Run frontend unit tests\n'
-	@printf '  make frontend-build     Build frontend assets\n'
-	@printf '  make demo-scripts-lint  Syntax-check demo scripts\n'
-	@printf '  make github-config-lint Parse-check GitHub YAML configuration\n'
-	@printf '  make test-postgres      Run store tests using AGENT_HARBOR_TEST_DATABASE_URL\n'
-	@printf '  make run                Start the local API server\n'
-	@printf '  make demo-all           Run all demos against BASE_URL\n'
+	@printf '  make check                 Run local backend, frontend, and scenario-script checks\n'
+	@printf '  make release-check         Run uncached release/merge readiness checks\n'
+	@printf '  make fmt                   Format Go files with gofmt\n'
+	@printf '  make gofmt-check           Verify Go files are gofmt-formatted\n'
+	@printf '  make test                  Run Go tests\n'
+	@printf '  make test-fresh            Run uncached Go tests\n'
+	@printf '  make vet                   Run go vet\n'
+	@printf '  make build                 Build Go packages\n'
+	@printf '  make frontend-test         Run frontend unit tests\n'
+	@printf '  make frontend-build        Build frontend assets\n'
+	@printf '  make scenario-scripts-lint Syntax-check scenario scripts\n'
+	@printf '  make github-config-lint    Parse-check GitHub YAML configuration\n'
+	@printf '  make test-postgres         Run store tests using AGENT_HARBOR_TEST_DATABASE_URL\n'
+	@printf '  make run                   Start the local API server\n'
+	@printf '  make scenario-all          Run all scenarios against BASE_URL\n'
 
-check: gofmt-check test vet build frontend-test frontend-build demo-scripts-lint github-config-lint
+check: gofmt-check test vet build frontend-test frontend-build scenario-scripts-lint github-config-lint
 
-release-check: gofmt-check test-fresh vet build frontend-test frontend-build demo-scripts-lint github-config-lint
+release-check: gofmt-check test-fresh vet build frontend-test frontend-build scenario-scripts-lint github-config-lint
 
 fmt:
 	gofmt -w $(GO_FILES)
@@ -73,8 +73,8 @@ frontend-test:
 frontend-build:
 	pnpm --dir frontend build
 
-demo-scripts-lint:
-	bash -n $(DEMO_SCRIPTS) scripts/demo-all.sh
+scenario-scripts-lint:
+	bash -n $(SCENARIO_SCRIPTS) scripts/scenario-all.sh
 
 github-config-lint:
 	ruby -e 'require "yaml"; Dir[".github/**/*.yml"].sort.each { |file| YAML.load_file(file); puts "#{file} ok" }'
@@ -89,5 +89,5 @@ test-postgres:
 run:
 	go run ./cmd/agent-harbor
 
-demo-all:
-	bash scripts/demo-all.sh
+scenario-all:
+	bash scripts/scenario-all.sh

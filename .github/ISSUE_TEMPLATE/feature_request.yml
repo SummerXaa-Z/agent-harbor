@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Keep proposals small enough to review independently. For clean-room work, describe product behavior or public protocol expectations without copying source code or internal implementation details from another runtime.
+        Keep proposals small enough to review independently. Describe product behavior, user journeys, or public protocol expectations without relying on another codebase's internal implementation details.
   - type: textarea
     id: problem
     attributes:
@@ -34,7 +34,7 @@ body:
         - PostgreSQL persistence
         - Frontend console
         - CI / dependency workflow
-        - Documentation / demo scripts
+        - Documentation / scenario scripts
     validations:
       required: true
   - type: textarea
@@ -44,7 +44,7 @@ body:
       description: List concrete checks that would prove the proposal is done.
       placeholder: |
         - `make check` passes
-        - demo script proves ...
+        - scenario script proves ...
     validations:
       required: true
   - type: textarea

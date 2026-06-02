@@ -20,7 +20,7 @@ This covers:
 - Go package build via `make build`
 - frontend unit tests via `make frontend-test`
 - frontend production build via `make frontend-build`
-- demo script syntax checks via `make demo-scripts-lint`
+- scenario script syntax checks via `make scenario-scripts-lint`
 - GitHub YAML configuration parse checks via `make github-config-lint`
 
 Run PostgreSQL integration when the change touches persistence, migrations, audit behavior, credential storage, route policies, or CI database wiring:
@@ -30,10 +30,10 @@ AGENT_HARBOR_TEST_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5
   make test-postgres
 ```
 
-Run end-to-end demos when user-visible control-plane or data-plane behavior changes. Start the API first, then run:
+Run end-to-end scenarios when user-visible control-plane or data-plane behavior changes. Start the API first, then run:
 
 ```bash
-ADMIN_KEY=local-admin-key make demo-all
+ADMIN_KEY=local-admin-key make scenario-all
 ```
 
 ## GitHub Checks
@@ -43,7 +43,7 @@ Before merging:
 - Confirm the PR CI is green for Backend, PostgreSQL integration, and Frontend.
 - Confirm no job reached its timeout budget; timeouts indicate a workflow defect or unexpectedly slow test path that needs investigation.
 - Confirm the PR description lists the local verification commands that were run.
-- Confirm docs and demos describe behavior that exists in the current diff.
+- Confirm docs and scenarios describe behavior that exists in the current diff.
 
 After merging:
 
@@ -58,7 +58,7 @@ For a tagged release or downstream handoff, summarize:
 - behavior changes and compatibility notes
 - schema or migration changes
 - security and credential handling changes
-- verification evidence, including PostgreSQL and demo coverage when relevant
+- verification evidence, including PostgreSQL and scenario coverage when relevant
 - known follow-ups that should not block the release
 
 Keep release notes short, factual, and tied to merged commits or PRs.

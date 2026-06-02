@@ -1,19 +1,19 @@
 # Contributing
 
-AgentHarbor is a clean-room implementation track. Keep changes small, reviewable, and independently verifiable.
+AgentHarbor is a product codebase for tenant-first AI agent access governance. Keep changes small, reviewable, and independently verifiable.
 
-## Clean-Room Boundary
+## Source Boundary
 
-Do not copy source code, migrations, tests, deployment scripts, adapter code, generated assets, styles, or component structure from the existing Rust/React runtime. Use only product requirements, public protocols, and public product references.
+Do not import proprietary implementation artifacts, generated assets, styles, component structures, migrations, tests, or deployment scripts from another codebase.
 
-When a change depends on product behavior, record the requirement in docs, tests, or PR notes so reviewers can audit the source of the behavior without comparing against legacy implementation code.
+When a change depends on product behavior, record the requirement in docs, tests, or PR notes so reviewers can audit what the change is intended to provide.
 
 Do not file public issues for suspected vulnerabilities, credential leaks, authorization bypasses, or audit integrity failures. Follow the private reporting path in `SECURITY.md`.
 
 ## Branches And PRs
 
 - Start from the latest `main`.
-- Use `codex/<short-topic>` for Codex-authored branches.
+- Use descriptive branch names such as `feature/<short-topic>`, `fix/<short-topic>`, or `docs/<short-topic>`.
 - Keep each PR focused on one behavior, workflow, or documentation boundary.
 - Prefer a new small PR over a long-lived stack. If stacking is unavoidable, document the review order and retarget bottom-up.
 - Keep PR descriptions current with scope, verification, and follow-ups.
@@ -32,7 +32,7 @@ Run the standard local checks before opening or updating a PR:
 make check
 ```
 
-This runs Go formatting checks, backend tests, vet, build, frontend tests/build, and demo script syntax checks.
+This runs Go formatting checks, backend tests, vet, build, frontend tests/build, and scenario script syntax checks.
 It also parse-checks GitHub YAML configuration via `make github-config-lint`.
 
 Use `make fmt` before committing Go changes when `make gofmt-check` reports files that need formatting.
@@ -43,7 +43,7 @@ Use uncached Go tests before behavior-sensitive review:
 make release-check
 ```
 
-`make release-check` runs Go formatting checks, the uncached Go test path, vet, build, frontend test/build, and demo script syntax checks.
+`make release-check` runs Go formatting checks, the uncached Go test path, vet, build, frontend test/build, and scenario script syntax checks.
 
 Run PostgreSQL integration when a change touches repository behavior, migrations, transactions, credentials, audit events, route policies, or CI database wiring:
 
@@ -52,23 +52,23 @@ AGENT_HARBOR_TEST_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5
   make test-postgres
 ```
 
-With a local API already running, use the full demo suite for end-to-end smoke coverage:
+With a local API already running, use the full scenario suite for end-to-end smoke coverage:
 
 ```bash
-make demo-all
+make scenario-all
 ```
 
-If admin protection is enabled on the server, pass the same key to demo scripts:
+If admin protection is enabled on the server, pass the same key to scenario scripts:
 
 ```bash
-ADMIN_KEY=local-admin-key make demo-all
+ADMIN_KEY=local-admin-key make scenario-all
 ```
 
 ## CI Expectations
 
 GitHub Actions runs the same Makefile targets used locally:
 
-- Backend: `make gofmt-check`, `make test`, `make vet`, `make build`, `make demo-scripts-lint`
+- Backend: `make gofmt-check`, `make test`, `make vet`, `make build`, `make scenario-scripts-lint`
 - GitHub configuration lint: `make github-config-lint`
 - PostgreSQL integration: `make test-postgres`
 - Frontend: `make frontend-test`, `make frontend-build`
@@ -90,8 +90,7 @@ Dependabot opens weekly update PRs for Go modules, frontend npm packages, and Gi
 Update docs alongside behavior changes:
 
 - `README.md` for user-facing runtime, API, and local development entrypoints.
-- `docs/sprints/` for sprint-level scope and acceptance notes.
 - `docs/engineering/` for process, review, or governance workflow.
-- `CHANGELOG.md` for session-level decisions, verification, and lessons learned.
+- `CHANGELOG.md` for public release notes and notable changes.
 
 Keep examples executable. Prefer `make` targets and scripts over long command sequences that drift from CI.

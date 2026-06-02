@@ -5,7 +5,7 @@ Describe the change in 2-4 bullets. Name the user-visible behavior, engineering 
 ## Scope
 
 - [ ] This PR is one reviewable change.
-- [ ] This PR is a stacked/integration checkpoint and the review order is documented below.
+- [ ] This PR is an integration checkpoint and the review order is documented below.
 - [ ] This PR intentionally leaves follow-up work listed in the follow-up section.
 
 ## Review Boundary
@@ -16,7 +16,7 @@ Recommended review order:
 2. Store behavior and migrations
 3. HTTP/data-plane behavior
 4. Frontend surfaces
-5. Docs, demos, and changelog
+5. Docs, scenarios, and changelog
 
 Focus areas:
 
@@ -28,7 +28,7 @@ Name the highest-risk files, behaviors, or compatibility boundaries reviewers sh
 - [ ] `make release-check`, when preparing larger behavior changes or release handoffs
 - [ ] `git diff --check`
 - [ ] PostgreSQL integration, when store or migration behavior changes
-- [ ] Demo script, when user-facing flows change
+- [ ] Scenario script, when user-facing flows change
 
 ## Data And Security
 

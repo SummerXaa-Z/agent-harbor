@@ -855,6 +855,16 @@ th {
   white-space: nowrap;
 }
 
+:root[lang="zh-CN"] .section-kicker,
+:root[lang="zh-CN"] .status-strip span,
+:root[lang="zh-CN"] .control-form label,
+:root[lang="zh-CN"] th,
+:root[lang="zh-CN"] .capability-toolbar label,
+:root[lang="zh-CN"] .access-toolbar label,
+:root[lang="zh-CN"] .access-summary-cell span {
+  text-transform: none;
+}
+
 td {
   height: 54px;
   overflow: hidden;

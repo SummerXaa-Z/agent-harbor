@@ -2,9 +2,13 @@
 
 All notable public changes to AgentHarbor will be documented in this file.
 
-This project uses Keep a Changelog-style sections and will adopt semantic versioning once tagged releases begin.
+This project uses Keep a Changelog-style sections and semantic versioning for tagged releases.
 
 ## [Unreleased]
+
+No unreleased public changes yet.
+
+## [0.1.0] - 2026-06-03
 
 ### Added
 
@@ -40,6 +44,7 @@ This project uses Keep a Changelog-style sections and will adopt semantic versio
 - Prevented the Tenant Permission Console from blanking when access-profile collection fields are returned as `null`.
 - Added accessible names and titles to icon-only primary navigation buttons.
 - Made root-level frontend test/build targets install pinned frontend dependencies so `make check` works in a fresh clone.
+- Made `make demo` install pinned frontend dependencies before starting the web console so a fresh clone can run the first browser evaluation without a separate install step.
 
 ### Removed
 

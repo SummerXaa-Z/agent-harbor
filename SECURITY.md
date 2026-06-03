@@ -4,10 +4,11 @@ AgentHarbor handles authorization decisions, Agent Keys, upstream credentials, r
 
 ## Supported Versions
 
-Until tagged releases are published, security fixes target the latest `main` branch. After the first release, the supported versions table will be updated here.
+Security fixes target the latest tagged developer-preview release and the latest `main` branch. Older preview releases may be unsupported once a newer preview is available.
 
 | Version | Supported |
 | --- | --- |
+| `0.1.x` | Yes |
 | `main` | Yes |
 
 ## Reporting a Vulnerability

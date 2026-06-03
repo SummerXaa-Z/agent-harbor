@@ -105,7 +105,7 @@ run:
 mock-mcp:
 	scripts/mock-mcp-server.py --host "$${MOCK_MCP_HOST:-127.0.0.1}" --port "$${MOCK_MCP_PORT:-8787}"
 
-demo: scripts/demo.sh
+demo: frontend-deps scripts/demo.sh
 	scripts/demo.sh
 
 core-journey:

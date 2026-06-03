@@ -49,10 +49,14 @@ import {
   summarizeDataScopes
 } from "./accessProfile";
 import {
-  consoleDataSourceLabel,
   runtimeEvidenceMetric,
   type MetricTone
 } from "./consoleMetrics";
+import {
+  createTranslator,
+  resolveInitialLanguage,
+  type Language
+} from "./i18n";
 import { parseRetryFields } from "./retryForm";
 import type {
   AccessProfileFilters,
@@ -83,6 +87,7 @@ import type {
 } from "./types";
 
 type Tone = MetricTone;
+type Translator = ReturnType<typeof createTranslator>;
 
 const navItems = [
   { key: "cockpit", label: "Cockpit", icon: Gauge },
@@ -111,6 +116,7 @@ const defaultManagementScope: ManagementScope = {
   tenantId: "default",
   workspaceId: "workspace-sandbox"
 };
+const languageStorageKey = "agent-harbor-language";
 const defaultAgentForm = {
   channelType: "local",
   credentialHeader: "",
@@ -134,6 +140,20 @@ const defaultCapabilityGrantForm = {
   tenantId: defaultManagementScope.tenantId,
   workspaceId: defaultManagementScope.workspaceId
 };
+
+function initialLanguage(): Language {
+  if (typeof window === "undefined") {
+    return "en";
+  }
+  const browserLanguages = Array.from(
+    window.navigator.languages?.length ? window.navigator.languages : [window.navigator.language]
+  ).filter(Boolean);
+  try {
+    return resolveInitialLanguage(window.localStorage.getItem(languageStorageKey), browserLanguages);
+  } catch {
+    return resolveInitialLanguage(undefined, browserLanguages);
+  }
+}
 const defaultTraceFilters: TraceFilters = { callerAgentId: "", decision: "", runId: "", targetAgentId: "" };
 const defaultAccessProfileFilters: AccessProfileFilters = {
   callerInstanceId: "",
@@ -170,10 +190,23 @@ function App() {
   const [accessLoading, setAccessLoading] = useState(false);
   const [accessMessage, setAccessMessage] = useState("");
   const [accessProfile, setAccessProfile] = useState<TenantAccessProfileData | null>(null);
+  const [language, setLanguage] = useState<Language>(initialLanguage);
+  const t = useMemo(() => createTranslator(language), [language]);
 
   useEffect(() => {
     void refresh();
   }, []);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = language;
+    }
+    try {
+      window.localStorage.setItem(languageStorageKey, language);
+    } catch {
+      // The UI still works when storage is unavailable.
+    }
+  }, [language]);
 
   useEffect(() => {
     if (activeNav === "access" && !accessProfile && !accessLoading) {
@@ -235,7 +268,7 @@ function App() {
         traceLimit: traceLimit.value
       });
       setAccessProfile(next);
-      setAccessMessage(next.loadedFromApi ? "Access profile refreshed." : "Using fallback access profile.");
+      setAccessMessage(next.loadedFromApi ? t("status.profileRefreshed") : t("status.profileFallback"));
     } catch (error) {
       setAccessMessage(error instanceof Error ? error.message : "Unable to load tenant access profile");
     } finally {
@@ -586,17 +619,22 @@ function App() {
   const allowedTraces = traces.filter((trace) => trace.decision === "allowed").length;
   const pendingCapabilities = capabilities.filter((capability) => capability.discoveryStatus === "pending_review").length;
   const runtimeEvidence = runtimeEvidenceMetric(allowedTraces, deniedTraces);
-  const dataSourceLabel = consoleDataSourceLabel(loadError, data?.loadedFromApi);
-  const activeNavLabel = navItems.find((item) => item.key === activeNav)?.label ?? "Cockpit";
+  const dataSourceLabel = loadError
+    ? t("dataSource.apiError")
+    : data?.loadedFromApi
+      ? t("dataSource.runtime")
+      : t("dataSource.fallback");
+  const activeNavItem = navItems.find((item) => item.key === activeNav) ?? navItems[0];
+  const activeNavLabel = t(`nav.${activeNavItem.key}`, activeNavItem.label);
   const isCapabilitiesView = activeNav === "capabilities";
   const isAccessView = activeNav === "access";
   const accessSummary = accessProfile?.summary;
   const invalidAccessRows = countInvalidAccessProfileRows(accessProfile);
   const pageTitle = isAccessView
-    ? "Tenant Permission Console"
+    ? t("page.access")
     : isCapabilitiesView
-      ? "Capability Governance"
-      : "AgentHarbor Control Plane";
+      ? t("page.capabilities")
+      : t("app.title");
 
   return (
     <div className="app-shell">
@@ -607,31 +645,32 @@ function App() {
           </div>
           <div>
             <strong>AgentHarbor</strong>
-            <span>Control Plane</span>
+            <span>{t("app.controlPlane")}</span>
           </div>
         </div>
 
         <nav className="nav-list">
           {navItems.map((item) => {
             const Icon = item.icon;
+            const itemLabel = t(`nav.${item.key}`, item.label);
             return (
               <button
-                aria-label={item.label}
+                aria-label={itemLabel}
                 className={activeNav === item.key ? "nav-item active" : "nav-item"}
                 key={item.key}
                 onClick={() => setActiveNav(item.key)}
-                title={item.label}
+                title={itemLabel}
                 type="button"
               >
                 <Icon size={17} />
-                <span>{item.label}</span>
+                <span>{itemLabel}</span>
               </button>
             );
           })}
         </nav>
 
         <div className="sidebar-section">
-          <div className="section-kicker">Environments</div>
+          <div className="section-kicker">{t("section.environments")}</div>
           <div className="env-stack">
             {workspaceTabs.map((tab) => (
               <button
@@ -650,9 +689,9 @@ function App() {
         <div className="sidebar-health">
           <div>
             <span className="health-dot" />
-            <strong>Control plane</strong>
+            <strong>{t("app.controlPlane")}</strong>
           </div>
-          <span>{loadError ? "API error" : data?.loadedFromApi ? "Live API" : "Mock fallback"}</span>
+          <span>{loadError ? t("dataSource.apiError") : data?.loadedFromApi ? t("status.controlLive") : t("status.controlFallback")}</span>
         </div>
       </aside>
 
@@ -663,23 +702,39 @@ function App() {
             <h1>{pageTitle}</h1>
           </div>
           <div className="topbar-actions">
+            <div className="language-toggle" aria-label={t("control.language")} role="group">
+              <button
+                className={language === "zh-CN" ? "selected" : ""}
+                onClick={() => setLanguage("zh-CN")}
+                type="button"
+              >
+                中文
+              </button>
+              <button
+                className={language === "en" ? "selected" : ""}
+                onClick={() => setLanguage("en")}
+                type="button"
+              >
+                EN
+              </button>
+            </div>
             <label className="admin-key-box">
               <LockKeyhole size={16} />
               <input
                 onChange={(event) => setAdminKey(event.target.value)}
-                placeholder="X-Admin-Key"
+                placeholder={t("control.adminKey")}
                 type="password"
                 value={adminKey}
               />
             </label>
             <label className="search-box">
               <Search size={16} />
-              <input placeholder="Search agents, routes, traces" />
+              <input placeholder={t("control.search")} />
             </label>
-            <button className="icon-button" title="Filter" type="button">
+            <button className="icon-button" title={t("control.filter")} type="button">
               <Filter size={17} />
             </button>
-            <button className="icon-button" onClick={refresh} title="Refresh" type="button">
+            <button className="icon-button" onClick={refresh} title={t("action.refresh")} type="button">
               <RefreshCw size={17} />
             </button>
           </div>
@@ -687,29 +742,29 @@ function App() {
 
         <section className="status-strip" aria-label="Runtime status">
           <div>
-            <span>API</span>
+            <span>{t("status.api")}</span>
             <strong>{data?.apiBase ?? "http://127.0.0.1:9090"}</strong>
           </div>
           <div>
-            <span>Data source</span>
+            <span>{t("status.dataSource")}</span>
             <strong>{dataSourceLabel}</strong>
           </div>
           <div>
-            <span>Last refresh</span>
+            <span>{t("status.lastRefresh")}</span>
             <strong>{lastRefresh.toLocaleTimeString("zh-CN", { hour12: false })}</strong>
           </div>
           <div className="scope-control">
-            <span>Scope</span>
+            <span>{t("status.scope")}</span>
             <div className="scope-inputs">
               <input
-                aria-label="Tenant ID"
+                aria-label={t("form.tenantId")}
                 onBlur={() => void refresh()}
                 onChange={(event) => setScope((current) => ({ ...current, tenantId: event.target.value }))}
                 placeholder="tenantId"
                 value={scope.tenantId}
               />
               <input
-                aria-label="Workspace ID"
+                aria-label={t("form.workspaceId")}
                 onBlur={() => void refresh()}
                 onChange={(event) => setScope((current) => ({ ...current, workspaceId: event.target.value }))}
                 placeholder="workspaceId"
@@ -723,37 +778,37 @@ function App() {
         <section className="metric-grid" aria-label="Gateway metrics">
           <MetricCard
             icon={<ServerCog size={18} />}
-            label={isAccessView ? "Scope Tenants" : "Managed Agents"}
+            label={isAccessView ? t("metric.scopeTenants") : t("metric.managedAgents")}
             value={String(isAccessView ? accessSummary?.tenantCount ?? 0 : agents.length)}
-            detail={isAccessView ? accessProfile?.tenant.name ?? normalizedScope(scope).tenantId : `${activeAgents} active`}
+            detail={isAccessView ? accessProfile?.tenant.name ?? normalizedScope(scope).tenantId : `${activeAgents} ${t("detail.active")}`}
             tone="info"
           />
           <MetricCard
             icon={<KeyRound size={18} />}
-            label={isAccessView ? "Grant Chains" : "Active Policies"}
+            label={isAccessView ? t("metric.grantChains") : t("metric.activePolicies")}
             value={String(isAccessView ? accessSummary?.grantCount ?? 0 : activePolicies)}
-            detail={isAccessView ? `${accessSummary?.targetCount ?? 0} targets` : data?.routePoliciesLoadedFromApi ? "live route policies" : "sample fallback"}
+            detail={isAccessView ? `${accessSummary?.targetCount ?? 0} ${t("detail.targets")}` : data?.routePoliciesLoadedFromApi ? t("detail.liveRoutePolicies") : t("detail.sampleFallback")}
             tone="success"
           />
           <MetricCard
             icon={<TriangleAlert size={18} />}
-            label={isAccessView ? "Invalid Rows" : isCapabilitiesView ? "Pending Caps" : "Denied Traces"}
+            label={isAccessView ? t("metric.invalidRows") : isCapabilitiesView ? t("metric.pendingCaps") : t("metric.deniedTraces")}
             value={String(isAccessView ? invalidAccessRows : isCapabilitiesView ? pendingCapabilities : deniedTraces)}
-            detail={isAccessView ? `${accessSummary?.workspaceAssignmentCount ?? 0} workspaces` : isCapabilitiesView ? `${capabilities.length} discovered` : `${allowedTraces} allowed`}
+            detail={isAccessView ? `${accessSummary?.workspaceAssignmentCount ?? 0} ${t("detail.workspaces")}` : isCapabilitiesView ? `${capabilities.length} ${t("detail.discovered")}` : `${allowedTraces} ${t("detail.allowed")}`}
             tone={(isAccessView ? invalidAccessRows : isCapabilitiesView ? pendingCapabilities : deniedTraces) > 0 ? "warning" : "success"}
           />
           <MetricCard
             icon={<ClipboardCheck size={18} />}
-            label={isAccessView ? "Trace Evidence" : runtimeEvidence.label}
+            label={isAccessView ? t("metric.traceEvidence") : t("metric.runtimeEvidence")}
             value={isAccessView ? String((accessSummary?.recentAllowedTraceCount ?? 0) + (accessSummary?.recentDeniedTraceCount ?? 0)) : runtimeEvidence.value}
-            detail={isAccessView ? `${accessSummary?.recentDeniedTraceCount ?? 0} denied` : runtimeEvidence.detail}
+            detail={isAccessView ? `${accessSummary?.recentDeniedTraceCount ?? 0} ${t("detail.denied")}` : runtimeEvidence.value === "0" ? t("detail.noTraces") : `${allowedTraces} ${t("detail.allowed")} / ${deniedTraces} ${t("detail.denied")}`}
             tone={isAccessView ? "neutral" : runtimeEvidence.tone}
           />
         </section>
 
         {isAccessView ? (
           <section className="content-grid">
-            <Panel className="span-12" icon={<LockKeyhole size={18} />} title="Tenant Access Profile" action={<IconOpen />}>
+            <Panel className="span-12" icon={<LockKeyhole size={18} />} title={t("panel.accessProfile")} action={<IconOpen title={t("action.open")} />}>
               <TenantAccessProfileView
                 agents={agents}
                 capabilities={capabilities}
@@ -768,12 +823,13 @@ function App() {
                 }}
                 profile={accessProfile}
                 scope={scope}
+                t={t}
               />
             </Panel>
           </section>
         ) : isCapabilitiesView ? (
           <section className="content-grid">
-            <Panel className="span-12" icon={<DatabaseZap size={18} />} title="MCP Capabilities" action={<IconMore />}>
+            <Panel className="span-12" icon={<DatabaseZap size={18} />} title={t("panel.mcpCapabilities")} action={<IconMore title={t("action.more")} />}>
               <CapabilityGovernanceView
                 actionId={capabilityActionId}
                 agents={agents}
@@ -786,27 +842,28 @@ function App() {
                 onChange={setCapabilityForm}
                 onCreateGrantChain={submitCapabilityGrantChain}
                 onRefreshTarget={handleRefreshTargetCapabilities}
+                t={t}
                 tenantEntitlements={tenantEntitlements}
                 workspaceAssignments={workspaceAssignments}
               />
             </Panel>
 
-            <Panel className="span-7" icon={<FileSearch size={18} />} title="Audit Traces" action={<IconOpen />}>
-              <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} />
-              <TraceTable traces={traces} agents={agents} />
+            <Panel className="span-7" icon={<FileSearch size={18} />} title={t("panel.auditTraces")} action={<IconOpen title={t("action.open")} />}>
+              <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} t={t} />
+              <TraceTable traces={traces} agents={agents} t={t} />
             </Panel>
 
-            <Panel className="span-5" icon={<ClipboardCheck size={18} />} title="Management Audit" action={<IconOpen />}>
-              <ManagementAuditTable events={auditEvents} />
+            <Panel className="span-5" icon={<ClipboardCheck size={18} />} title={t("panel.managementAudit")} action={<IconOpen title={t("action.open")} />}>
+              <ManagementAuditTable events={auditEvents} t={t} />
             </Panel>
           </section>
         ) : (
         <section className="content-grid">
-          <Panel className="span-4" icon={<Boxes size={18} />} title="Create Agent">
+          <Panel className="span-4" icon={<Boxes size={18} />} title={t("panel.createAgent")}>
             <AgentCreateForm form={agentForm} message={agentMessage} onChange={setAgentForm} onSubmit={submitAgent} />
           </Panel>
 
-          <Panel className="span-4" icon={<KeyRound size={18} />} title="Create Key">
+          <Panel className="span-4" icon={<KeyRound size={18} />} title={t("panel.createKey")}>
             <KeyCreateForm
               agents={localCallers}
               createdKey={createdKey}
@@ -817,11 +874,11 @@ function App() {
             />
           </Panel>
 
-          <Panel className="span-4" icon={<Route size={18} />} title="Create Policy">
+          <Panel className="span-4" icon={<Route size={18} />} title={t("panel.createPolicy")}>
             <PolicyCreateForm agents={agents} form={policyForm} message={policyMessage} onChange={setPolicyForm} onSubmit={submitRoutePolicy} />
           </Panel>
 
-          <Panel className="span-4" icon={<KeyRound size={18} />} title="Rotate Credential">
+          <Panel className="span-4" icon={<KeyRound size={18} />} title={t("panel.rotateCredential")}>
             <CredentialRotateForm
               agents={agents}
               form={rotateForm}
@@ -831,7 +888,7 @@ function App() {
             />
           </Panel>
 
-          <Panel className="span-8" icon={<Workflow size={18} />} title="Route Governance" action={<IconMore />}>
+          <Panel className="span-8" icon={<Workflow size={18} />} title={t("panel.routeGovernance")} action={<IconMore title={t("action.more")} />}>
             <PolicyTable
               agents={agents}
               canDisable={Boolean(data?.routePoliciesLoadedFromApi)}
@@ -841,11 +898,11 @@ function App() {
             />
           </Panel>
 
-          <Panel className="span-4" icon={<Sparkles size={18} />} title="Evidence Runs" action={<IconOpen />}>
+          <Panel className="span-4" icon={<Sparkles size={18} />} title={t("panel.evidenceRuns")} action={<IconOpen title={t("action.open")} />}>
             <EvidenceTimeline runs={evidenceRuns} />
           </Panel>
 
-          <Panel className="span-8" icon={<Boxes size={18} />} title="Agent Registry" action={<IconMore />}>
+          <Panel className="span-8" icon={<Boxes size={18} />} title={t("panel.agentRegistry")} action={<IconMore title={t("action.more")} />}>
             <AgentTable
               agents={agents}
               channelLabels={channelLabels}
@@ -854,21 +911,21 @@ function App() {
             />
           </Panel>
 
-          <Panel className="span-4" icon={<Layers3 size={18} />} title="Contract Matrix" action={<IconOpen />}>
+          <Panel className="span-4" icon={<Layers3 size={18} />} title={t("panel.contractMatrix")} action={<IconOpen title={t("action.open")} />}>
             <ContractMatrix channels={channels} providers={data?.providers ?? []} />
           </Panel>
 
-          <Panel className="span-5" icon={<DatabaseZap size={18} />} title="Runtime Signals" action={<IconMore />}>
+          <Panel className="span-5" icon={<DatabaseZap size={18} />} title={t("panel.runtimeSignals")} action={<IconMore title={t("action.more")} />}>
             <SignalBoard metrics={metrics} />
           </Panel>
 
-          <Panel className="span-7" icon={<FileSearch size={18} />} title="Audit Traces" action={<IconOpen />}>
-            <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} />
-            <TraceTable traces={traces} agents={agents} />
+          <Panel className="span-7" icon={<FileSearch size={18} />} title={t("panel.auditTraces")} action={<IconOpen title={t("action.open")} />}>
+            <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} t={t} />
+            <TraceTable traces={traces} agents={agents} t={t} />
           </Panel>
 
-          <Panel className="span-12" icon={<ClipboardCheck size={18} />} title="Management Audit" action={<IconOpen />}>
-            <ManagementAuditTable events={auditEvents} />
+          <Panel className="span-12" icon={<ClipboardCheck size={18} />} title={t("panel.managementAudit")} action={<IconOpen title={t("action.open")} />}>
+            <ManagementAuditTable events={auditEvents} t={t} />
           </Panel>
         </section>
         )}
@@ -1024,30 +1081,32 @@ function TraceFilterBar({
   agents,
   filters,
   onChange,
-  onRefresh
+  onRefresh,
+  t
 }: {
   agents: Agent[];
   filters: TraceFilters;
   onChange: (filters: TraceFilters) => void;
   onRefresh: () => void;
+  t: Translator;
 }) {
   return (
     <div className="trace-filters">
       <input placeholder="runId" value={filters.runId ?? ""} onChange={(event) => onChange({ ...filters, runId: event.target.value })} />
       <select value={filters.decision ?? ""} onChange={(event) => onChange({ ...filters, decision: event.target.value as TraceDecision | "" })}>
-        <option value="">Any decision</option>
-        <option value="allowed">allowed</option>
-        <option value="denied">denied</option>
+        <option value="">{t("form.anyDecision")}</option>
+        <option value="allowed">{t("text.decisionAllowed")}</option>
+        <option value="denied">{t("text.decisionDenied")}</option>
       </select>
       <select value={filters.callerAgentId ?? ""} onChange={(event) => onChange({ ...filters, callerAgentId: event.target.value })}>
-        <option value="">Any caller</option>
+        <option value="">{t("form.anyCaller")}</option>
         {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
       </select>
       <select value={filters.targetAgentId ?? ""} onChange={(event) => onChange({ ...filters, targetAgentId: event.target.value })}>
-        <option value="">Any target</option>
+        <option value="">{t("form.anyTarget")}</option>
         {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
       </select>
-      <button className="secondary-button" type="button" onClick={onRefresh}><RefreshCw size={14} /> Refresh</button>
+      <button className="secondary-button" type="button" onClick={onRefresh}><RefreshCw size={14} /> {t("action.refresh")}</button>
     </div>
   );
 }
@@ -1328,12 +1387,12 @@ function SignalBoard({ metrics }: { metrics: SystemMetric[] }) {
   );
 }
 
-function TraceTable({ traces, agents }: { traces: TraceEvent[]; agents: Agent[] }) {
+function TraceTable({ traces, agents, t }: { traces: TraceEvent[]; agents: Agent[]; t: Translator }) {
   const names = useMemo(() => agentNameMap(agents), [agents]);
 
   return (
     <div className="trace-list">
-      {traces.length === 0 ? <EmptyRow title="No audit traces" detail="Allowed and denied data-plane calls will be listed here." /> : null}
+      {traces.length === 0 ? <EmptyRow title={t("empty.auditTraces.title")} detail={t("empty.auditTraces.detail")} /> : null}
       {traces.map((trace) => (
         <article className="trace-row" key={trace.id}>
           <div className={`trace-decision tone-${trace.decision === "allowed" ? "success" : "danger"}`}>
@@ -1365,7 +1424,8 @@ function TenantAccessProfileView({
   onRefresh,
   onTenantChange,
   profile,
-  scope
+  scope,
+  t
 }: {
   agents: Agent[];
   capabilities: Capability[];
@@ -1377,13 +1437,18 @@ function TenantAccessProfileView({
   onTenantChange: (tenantId: string) => void;
   profile: TenantAccessProfileData | null;
   scope: ManagementScope;
+  t: Translator;
 }) {
   const names = useMemo(() => agentNameMap(agents), [agents]);
   const targetAgents = agents.filter((agent) => agent.channelType !== "local");
   const visibleCapabilities = filters.targetId
     ? capabilities.filter((capability) => capability.targetId === filters.targetId)
     : capabilities;
-  const sourceLabel = profile ? (profile.loadedFromApi ? "Live access profile" : "Fallback access profile") : "Not loaded";
+  const sourceLabel = profile
+    ? profile.loadedFromApi
+      ? t("status.sourceLive")
+      : t("status.sourceFallback")
+    : t("status.sourceNotLoaded");
   const profileSummary = profile?.summary ?? emptyAccessProfileSummary;
   const profileScopeTenants = profile?.scopeTenants ?? [];
   const profileGrants = profile?.grants ?? [];
@@ -1398,24 +1463,24 @@ function TenantAccessProfileView({
     <div className="access-profile">
       <form className="access-toolbar" onSubmit={submit}>
         <label>
-          Tenant
+          {t("form.tenant")}
           <input value={scope.tenantId} onChange={(event) => onTenantChange(event.target.value)} />
         </label>
         <label>
-          Workspace
+          {t("form.workspace")}
           <input
-            placeholder="all workspaces"
+            placeholder={t("form.workspaceAll")}
             value={filters.workspaceId ?? ""}
             onChange={(event) => onChange({ ...filters, workspaceId: event.target.value })}
           />
         </label>
         <label>
-          Target
+          {t("form.target")}
           <select
             value={filters.targetId ?? ""}
             onChange={(event) => onChange({ ...filters, capabilityId: "", targetId: event.target.value })}
           >
-            <option value="">Any target</option>
+            <option value="">{t("form.anyTarget")}</option>
             {targetAgents.map((agent) => (
               <option key={agent.id} value={agent.id}>
                 {agent.name}
@@ -1424,12 +1489,12 @@ function TenantAccessProfileView({
           </select>
         </label>
         <label>
-          Capability
+          {t("form.capability")}
           <select
             value={filters.capabilityId ?? ""}
             onChange={(event) => onChange({ ...filters, capabilityId: event.target.value })}
           >
-            <option value="">Any capability</option>
+            <option value="">{t("form.anyCapability")}</option>
             {visibleCapabilities.map((capability) => (
               <option key={capability.id} value={capability.id}>
                 {capability.key}
@@ -1438,12 +1503,12 @@ function TenantAccessProfileView({
           </select>
         </label>
         <label>
-          Caller
+          {t("form.caller")}
           <select
             value={filters.callerInstanceId ?? ""}
             onChange={(event) => onChange({ ...filters, callerInstanceId: event.target.value })}
           >
-            <option value="">Any caller</option>
+            <option value="">{t("form.anyCaller")}</option>
             {agents.map((agent) => (
               <option key={agent.id} value={agent.id}>
                 {agent.name}
@@ -1452,7 +1517,7 @@ function TenantAccessProfileView({
           </select>
         </label>
         <label>
-          Traces
+          {t("form.traces")}
           <input
             inputMode="numeric"
             max={100}
@@ -1464,28 +1529,28 @@ function TenantAccessProfileView({
         </label>
         <button className="secondary-button" disabled={loading} type="submit">
           <RefreshCw size={14} />
-          {loading ? "Loading" : "Load profile"}
+          {loading ? t("action.loading") : t("action.loadProfile")}
         </button>
       </form>
 
       <div className="access-source-line">
         <span>{sourceLabel}</span>
-        {profile ? <span>Generated {formatDate(profile.generatedAt)}</span> : null}
+        {profile ? <span>{t("status.generated")} {formatDate(profile.generatedAt)}</span> : null}
         {message ? <strong>{message}</strong> : null}
       </div>
 
       {!profile ? (
-        <EmptyRow title="No access profile loaded" detail="Load a tenant profile to inspect effective permissions." />
+        <EmptyRow title={t("empty.accessProfile.title")} detail={t("empty.accessProfile.detail")} />
       ) : (
         <>
           <div className="access-summary-grid">
-            <AccessSummaryCell label="Tenant Scope" value={String(profileSummary.tenantCount ?? profileScopeTenants.length)} detail={profile.tenant.name} />
-            <AccessSummaryCell label="Grants" value={String(profileSummary.grantCount ?? profileGrants.length)} detail={`${profileSummary.capabilityCount ?? 0} capabilities`} />
-            <AccessSummaryCell label="Assignments" value={`${profileSummary.workspaceAssignmentCount ?? 0}/${profileSummary.instanceAssignmentCount ?? 0}`} detail="workspace / caller" />
-            <AccessSummaryCell label="Recent Decisions" value={`${profileSummary.recentAllowedTraceCount ?? 0}/${profileSummary.recentDeniedTraceCount ?? 0}`} detail="allowed / denied" />
+            <AccessSummaryCell label={t("summary.tenantScope")} value={String(profileSummary.tenantCount ?? profileScopeTenants.length)} detail={profile.tenant.name} />
+            <AccessSummaryCell label={t("summary.grants")} value={String(profileSummary.grantCount ?? profileGrants.length)} detail={`${profileSummary.capabilityCount ?? 0} ${t("detail.capabilities")}`} />
+            <AccessSummaryCell label={t("summary.assignments")} value={`${profileSummary.workspaceAssignmentCount ?? 0}/${profileSummary.instanceAssignmentCount ?? 0}`} detail={t("text.workspaceCaller")} />
+            <AccessSummaryCell label={t("summary.recentDecisions")} value={`${profileSummary.recentAllowedTraceCount ?? 0}/${profileSummary.recentDeniedTraceCount ?? 0}`} detail={t("text.allowedDenied")} />
           </div>
 
-          <div className="access-tenant-list" aria-label="Tenant scope">
+          <div className="access-tenant-list" aria-label={t("summary.tenantScope")}>
             {profileScopeTenants.map((tenant) => (
               <div className="access-tenant-row" key={tenant.id}>
                 <Badge tone={tenant.status === "active" ? "success" : "neutral"}>L{tenant.level}</Badge>
@@ -1498,26 +1563,26 @@ function TenantAccessProfileView({
           </div>
 
           <div className="access-layout">
-            <section className="access-grant-chain" aria-label="Effective grant chain">
+            <section className="access-grant-chain" aria-label={t("section.effectiveGrantChain")}>
               <header>
-                <strong>Effective Grant Chain</strong>
-                <span>{countInvalidAccessProfileRows(profile)} invalid rows</span>
+                <strong>{t("section.effectiveGrantChain")}</strong>
+                <span>{countInvalidAccessProfileRows(profile)} {t("text.invalidRows")}</span>
               </header>
               {profileGrants.length === 0 ? (
-                <EmptyRow title="No grant chains" detail="No tenant entitlement matched the current profile filters." />
+                <EmptyRow title={t("empty.grantChains.title")} detail={t("empty.grantChains.detail")} />
               ) : null}
               {profileGrants.map((grant) => (
-                <AccessGrantRow grant={grant} key={grant.tenantEntitlement.id} />
+                <AccessGrantRow grant={grant} key={grant.tenantEntitlement.id} t={t} />
               ))}
             </section>
 
-            <section className="access-trace-evidence" aria-label="Recent trace evidence">
+            <section className="access-trace-evidence" aria-label={t("section.traceEvidence")}>
               <header>
-                <strong>Trace Evidence</strong>
-                <span>{profileRecentTraces.length} recent traces</span>
+                <strong>{t("section.traceEvidence")}</strong>
+                <span>{profileRecentTraces.length} {t("text.recentTraces")}</span>
               </header>
               {profileRecentTraces.length === 0 ? (
-                <EmptyRow title="No trace evidence" detail="Set trace limit above 0 to include recent runtime decisions." />
+                <EmptyRow title={t("empty.traceEvidence.title")} detail={t("empty.traceEvidence.detail")} />
               ) : null}
               {profileRecentTraces.map((trace) => (
                 <article className="access-trace-row" key={trace.id}>
@@ -1549,7 +1614,7 @@ function AccessSummaryCell({ label, value, detail }: { label: string; value: str
   );
 }
 
-function AccessGrantRow({ grant }: { grant: TenantAccessProfileGrant }) {
+function AccessGrantRow({ grant, t }: { grant: TenantAccessProfileGrant; t: Translator }) {
   const invalidRows = countInvalidGrantRows(grant);
   return (
     <article className={invalidRows > 0 ? "access-grant-row invalid" : "access-grant-row"}>
@@ -1564,7 +1629,7 @@ function AccessGrantRow({ grant }: { grant: TenantAccessProfileGrant }) {
         </div>
       </div>
       <div className="access-scope-line">
-        <span>Tenant entitlement</span>
+        <span>{t("text.tenantEntitlement")}</span>
         <code>{grant.tenantEntitlement.id}</code>
         <span>{summarizeDataScopes(grant.effectiveTenantDataScopes)}</span>
       </div>
@@ -1629,6 +1694,7 @@ function CapabilityGovernanceView({
   onChange,
   onCreateGrantChain,
   onRefreshTarget,
+  t,
   tenantEntitlements,
   workspaceAssignments
 }: {
@@ -1643,6 +1709,7 @@ function CapabilityGovernanceView({
   onChange: (form: typeof defaultCapabilityGrantForm) => void;
   onCreateGrantChain: (event: FormEvent<HTMLFormElement>) => void;
   onRefreshTarget: () => void;
+  t: Translator;
   tenantEntitlements: TenantEntitlement[];
   workspaceAssignments: WorkspaceAssignment[];
 }) {
@@ -1693,9 +1760,9 @@ function CapabilityGovernanceView({
     <div className="capability-governance">
       <div className="capability-toolbar">
         <label>
-          Target
+          {t("form.target")}
           <select value={form.targetId} onChange={(event) => handleTargetChange(event.target.value)}>
-            <option value="">All MCP targets</option>
+            <option value="">{t("form.allMcpTargets")}</option>
             {mcpTargets.map((target) => (
               <option key={target.id} value={target.id}>
                 {target.name}
@@ -1710,7 +1777,7 @@ function CapabilityGovernanceView({
           type="button"
         >
           <RefreshCw size={14} />
-          {actionId === `refresh:${form.targetId}` ? "Refreshing" : "Refresh"}
+          {actionId === `refresh:${form.targetId}` ? t("action.loading") : t("action.refresh")}
         </button>
         {message ? <span className="capability-message">{message}</span> : null}
       </div>
@@ -1721,20 +1788,20 @@ function CapabilityGovernanceView({
             <table className="capability-table">
               <thead>
                 <tr>
-                  <th>Capability</th>
-                  <th>Target</th>
-                  <th>Action</th>
-                  <th>Risk</th>
-                  <th>Status</th>
-                  <th>Grants</th>
-                  <th>Action</th>
+                  <th>{t("table.capability")}</th>
+                  <th>{t("table.target")}</th>
+                  <th>{t("table.action")}</th>
+                  <th>{t("table.risk")}</th>
+                  <th>{t("table.status")}</th>
+                  <th>{t("table.grants")}</th>
+                  <th>{t("table.action")}</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleCapabilities.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
-                      <EmptyRow title="No capabilities" detail="Refresh an MCP target to populate tool capabilities." />
+                      <EmptyRow title={t("empty.capabilities.title")} detail={t("empty.capabilities.detail")} />
                     </td>
                   </tr>
                 ) : null}
@@ -1757,7 +1824,7 @@ function CapabilityGovernanceView({
                       <td><Badge tone={capabilityStatusTone(capability.discoveryStatus)}>{capability.discoveryStatus}</Badge></td>
                       <td>
                         <strong>{entitlementIds.length}/{workspaceIds.length}/{instanceCount}</strong>
-                        <span>tenant/workspace/instance</span>
+                        <span>{t("detail.tenantWorkspaceInstance")}</span>
                       </td>
                       <td>
                         {capability.discoveryStatus === "approved" ? (
@@ -1784,13 +1851,13 @@ function CapabilityGovernanceView({
 
         <form className="control-form capability-grant-form" onSubmit={onCreateGrantChain}>
           <div className="form-row">
-            <label>Tenant<input required value={form.tenantId} onChange={(event) => onChange({ ...form, tenantId: event.target.value })} /></label>
-            <label>Workspace<input required value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} /></label>
+            <label>{t("form.tenant")}<input required value={form.tenantId} onChange={(event) => onChange({ ...form, tenantId: event.target.value })} /></label>
+            <label>{t("form.workspace")}<input required value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} /></label>
           </div>
           <label>
-            Capability
+            {t("form.capability")}
             <select required value={form.capabilityId} onChange={(event) => handleCapabilityChange(event.target.value)}>
-              <option value="">Select capability</option>
+              <option value="">{t("form.selectCapability")}</option>
               {visibleCapabilities.map((capability) => (
                 <option key={capability.id} value={capability.id}>
                   {capability.key}
@@ -1800,9 +1867,9 @@ function CapabilityGovernanceView({
           </label>
           <div className="form-row">
             <label>
-              Caller instance
+              {t("form.callerInstance")}
               <select required value={form.callerInstanceId} onChange={(event) => onChange({ ...form, callerInstanceId: event.target.value })}>
-                <option value="">Select caller</option>
+                <option value="">{t("form.selectCaller")}</option>
                 {agents.map((agent) => (
                   <option key={agent.id} value={agent.id}>
                     {agent.name}
@@ -1810,22 +1877,22 @@ function CapabilityGovernanceView({
                 ))}
               </select>
             </label>
-            <label>Subject selector<input placeholder="optional, e.g. user:*" value={form.subjectSelector} onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })} /></label>
+            <label>{t("form.subjectSelector")}<input placeholder={t("form.subjectSelectorPlaceholder")} value={form.subjectSelector} onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })} /></label>
           </div>
           <div className="capability-scope-strip">
-            <span>{selectedCapability?.sensitivity ?? "sensitivity"}</span>
-            <span>{selectedCapability?.riskLevel ?? "risk"}</span>
-            <span>{dataScopeText(selectedCapability?.dataScopes) || "no data scope"}</span>
+            <span>{selectedCapability?.sensitivity ?? t("text.sensitivity")}</span>
+            <span>{selectedCapability?.riskLevel ?? t("text.risk")}</span>
+            <span>{dataScopeText(selectedCapability?.dataScopes) || t("text.noDataScope")}</span>
           </div>
           <FormFooter
             message=""
-            submitLabel={actionId === `grant:${form.capabilityId}` ? "Granting" : "Grant chain"}
+            submitLabel={actionId === `grant:${form.capabilityId}` ? t("action.loading") : t("action.grantChain")}
           />
         </form>
 
         <div className="assignment-list">
           {tenantEntitlements.length === 0 ? (
-            <EmptyRow title="No grant chains" detail="Tenant, workspace, and instance assignments will appear here." />
+            <EmptyRow title={t("empty.grantChains.title")} detail={t("empty.grantChains.assignmentDetail")} />
           ) : null}
           {tenantEntitlements.map((entitlement) => {
             const capability = capabilities.find((item) => item.id === entitlement.capabilityId);
@@ -1853,25 +1920,25 @@ function CapabilityGovernanceView({
   );
 }
 
-function ManagementAuditTable({ events }: { events: AuditEvent[] }) {
+function ManagementAuditTable({ events, t }: { events: AuditEvent[]; t: Translator }) {
   return (
     <div className="table-wrap">
       <table className="audit-table">
         <thead>
           <tr>
-            <th>Time</th>
-            <th>Action</th>
-            <th>Resource</th>
-            <th>Actor</th>
-            <th>Version</th>
-            <th>Summary</th>
+            <th>{t("table.time")}</th>
+            <th>{t("table.action")}</th>
+            <th>{t("table.resource")}</th>
+            <th>{t("table.actor")}</th>
+            <th>{t("table.version")}</th>
+            <th>{t("table.summary")}</th>
           </tr>
         </thead>
         <tbody>
           {events.length === 0 ? (
             <tr>
               <td colSpan={6}>
-                <EmptyRow title="No management audit events" detail="Control-plane changes will appear here after they are recorded." />
+                <EmptyRow title={t("empty.managementAudit.title")} detail={t("empty.managementAudit.detail")} />
               </td>
             </tr>
           ) : null}
@@ -1907,17 +1974,17 @@ function EmptyRow({ title, detail }: { title: string; detail: string }) {
   );
 }
 
-function IconMore() {
+function IconMore({ title = "More" }: { title?: string }) {
   return (
-    <button className="icon-button compact" title="More" type="button">
+    <button className="icon-button compact" title={title} type="button">
       <MoreHorizontal size={16} />
     </button>
   );
 }
 
-function IconOpen() {
+function IconOpen({ title = "Open" }: { title?: string }) {
   return (
-    <button className="icon-button compact" title="Open" type="button">
+    <button className="icon-button compact" title={title} type="button">
       <ExternalLink size={15} />
     </button>
   );

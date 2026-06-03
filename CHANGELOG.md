@@ -31,6 +31,7 @@ This project uses Keep a Changelog-style sections and will adopt semantic versio
 
 - Prevented the Tenant Permission Console from blanking when access-profile collection fields are returned as `null`.
 - Added accessible names and titles to icon-only primary navigation buttons.
+- Made root-level frontend test/build targets install pinned frontend dependencies so `make check` works in a fresh clone.
 
 ### Removed
 

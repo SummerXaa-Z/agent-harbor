@@ -20,7 +20,7 @@ SCENARIO_SCRIPTS := \
 	scripts/scenario-tenant-hierarchy.sh \
 	scripts/scenario-tenant-access-profile.sh
 
-.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-test frontend-build scenario-scripts-lint github-config-lint test-postgres run core-journey scenario-all
+.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run core-journey scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -33,8 +33,10 @@ help:
 	@printf '  make test-fresh            Run uncached Go tests\n'
 	@printf '  make vet                   Run go vet\n'
 	@printf '  make build                 Build Go packages\n'
+	@printf '  make frontend-deps         Install pinned frontend dependencies\n'
 	@printf '  make frontend-test         Run frontend unit tests\n'
 	@printf '  make frontend-build        Build frontend assets\n'
+	@printf '  make makefile-targets-test Verify Makefile release-gate dependencies\n'
 	@printf '  make scenario-scripts-lint Syntax-check scenario scripts\n'
 	@printf '  make github-config-lint    Parse-check GitHub YAML configuration\n'
 	@printf '  make test-postgres         Run store tests using AGENT_HARBOR_TEST_DATABASE_URL\n'
@@ -42,9 +44,9 @@ help:
 	@printf '  make core-journey          Run the 10-minute local core journey scenario\n'
 	@printf '  make scenario-all          Run all scenarios against BASE_URL\n'
 
-check: gofmt-check test vet build frontend-test frontend-build scenario-scripts-lint github-config-lint
+check: gofmt-check test vet build makefile-targets-test frontend-test frontend-build scenario-scripts-lint github-config-lint
 
-release-check: gofmt-check test-fresh vet build frontend-test frontend-build scenario-scripts-lint github-config-lint
+release-check: gofmt-check test-fresh vet build makefile-targets-test frontend-test frontend-build scenario-scripts-lint github-config-lint
 
 fmt:
 	gofmt -w $(GO_FILES)
@@ -69,11 +71,17 @@ vet:
 build:
 	go build ./...
 
-frontend-test:
+frontend-deps:
+	pnpm --dir frontend install --frozen-lockfile
+
+frontend-test: frontend-deps
 	pnpm --dir frontend test
 
-frontend-build:
+frontend-build: frontend-deps
 	pnpm --dir frontend build
+
+makefile-targets-test:
+	bash tests/makefile_targets_test.sh
 
 scenario-scripts-lint:
 	bash -n $(SCENARIO_SCRIPTS) scripts/scenario-all.sh

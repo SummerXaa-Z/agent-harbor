@@ -47,6 +47,8 @@ make check
 make run
 ```
 
+`make check` installs the pinned frontend dependencies from `frontend/pnpm-lock.yaml` before running frontend tests and builds.
+
 The API listens on `:9090` by default. Override it with:
 
 ```bash
@@ -106,6 +108,7 @@ AGENT_HARBOR_CREDENTIAL_KEY='0123456789abcdef0123456789abcdef' \
 ## Local Verification
 
 ```bash
+make frontend-deps
 make test
 make test-fresh
 make vet

@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import {
   callMcpRpc,
+  checkApiHealth,
+  checkMockMcpHealth,
   createAgent,
   createAgentKey,
   createInstanceAssignment,
@@ -34,6 +36,7 @@ import {
   createTenant,
   createTenantEntitlement,
   createWorkspaceAssignment,
+  defaultMockMcpHealthUrl,
   disableAgent,
   disableRoutePolicy,
   loadConsoleData,
@@ -74,6 +77,13 @@ import {
   type CoreJourneyStep,
   type CoreJourneyStepStatus
 } from "./coreJourney";
+import {
+  coreJourneyPreflightCanRun,
+  coreJourneyPreflightRows,
+  defaultCoreJourneyPreflight,
+  type CoreJourneyPreflightState,
+  type CoreJourneyPreflightStatus
+} from "./coreJourneyPreflight";
 import { parseRetryFields } from "./retryForm";
 import type {
   AccessProfileFilters,
@@ -213,6 +223,18 @@ function translatedValue(t: Translator, value?: string) {
   return value ? t(`value.${value}`, value) : "";
 }
 
+function mockMcpHealthUrlFromEndpoint(endpointValue: string) {
+  try {
+    const endpointUrl = new URL(endpointValue);
+    endpointUrl.pathname = "/healthz";
+    endpointUrl.search = "";
+    endpointUrl.hash = "";
+    return endpointUrl.toString();
+  } catch {
+    return defaultMockMcpHealthUrl;
+  }
+}
+
 function agentStatusLabel(status: AgentStatus, t: Translator) {
   if (status === "active") return t("status.agentActive");
   if (status === "disabled") return t("status.agentDisabled");
@@ -255,10 +277,17 @@ function App() {
   const [coreJourneyMessage, setCoreJourneyMessage] = useState("");
   const [coreJourneyRunning, setCoreJourneyRunning] = useState(false);
   const [coreJourneyResult, setCoreJourneyResult] = useState<CoreJourneyRunResult | null>(null);
+  const [coreJourneyPreflight, setCoreJourneyPreflight] = useState<CoreJourneyPreflightState>(defaultCoreJourneyPreflight);
+  const [coreJourneyPreflightChecking, setCoreJourneyPreflightChecking] = useState(false);
+  const [coreJourneyPreflightMessage, setCoreJourneyPreflightMessage] = useState("");
   const t = useMemo(() => createTranslator(language), [language]);
 
   useEffect(() => {
     void refresh();
+  }, []);
+
+  useEffect(() => {
+    void refreshCoreJourneyPreflight();
   }, []);
 
   useEffect(() => {
@@ -340,8 +369,66 @@ function App() {
     }
   }
 
+  async function refreshCoreJourneyPreflight() {
+    setCoreJourneyPreflightChecking(true);
+    setCoreJourneyPreflightMessage(t("message.coreJourneyPreflightChecking"));
+    setCoreJourneyPreflight((current) => ({
+      ...current,
+      api: "pending",
+      mockMcp: "pending"
+    }));
+    const [apiHealth, mockMcpHealth] = await Promise.all([
+      checkApiHealth(),
+      checkMockMcpHealth(mockMcpHealthUrlFromEndpoint(coreJourneyForm.mcpEndpoint))
+    ]);
+    const nextPreflight: CoreJourneyPreflightState = {
+      api: apiHealth.status === "ok" ? "ok" : "error",
+      mockMcp: mockMcpHealth.status === "ok" ? "ok" : "error",
+      privateUpstreams: "warning"
+    };
+    setCoreJourneyPreflight(nextPreflight);
+    if (coreJourneyPreflightCanRun(nextPreflight)) {
+      setCoreJourneyPreflightMessage(t("message.coreJourneyPreflightReady"));
+    } else {
+      const detail = [
+        apiHealth.status === "ok" ? "" : `API ${apiHealth.message}`,
+        mockMcpHealth.status === "ok" ? "" : `Mock MCP ${mockMcpHealth.message}`
+      ].filter(Boolean).join(" · ");
+      setCoreJourneyPreflightMessage(tx(t, "message.coreJourneyPreflightFailed", { detail: detail || "unknown" }));
+    }
+    setCoreJourneyPreflightChecking(false);
+  }
+
+  async function resetCoreJourneySession() {
+    const resetScope = defaultManagementScope;
+    const resetTraceFilters = defaultTraceFilters;
+    const resetAccessFilters = defaultAccessProfileFilters;
+    const nextConfig = createCoreJourneyConfig(coreJourneyForm);
+    setCoreJourneyConfig(nextConfig);
+    setCoreJourneyResult(null);
+    setCoreJourneyMessage(t("message.coreJourneyReset"));
+    setTraceFilters(resetTraceFilters);
+    setAccessFilters(resetAccessFilters);
+    setAccessProfile(null);
+    setScope(resetScope);
+    try {
+      setLoadError("");
+      const nextData = await loadConsoleData(adminKey, resetTraceFilters, normalizedScope(resetScope));
+      setData(nextData);
+      setLastRefresh(new Date());
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "console data unavailable");
+    }
+    await refreshCoreJourneyPreflight();
+  }
+
   async function runCoreJourney() {
     const nextConfig = createCoreJourneyConfig(coreJourneyForm);
+    if (!coreJourneyPreflightCanRun(coreJourneyPreflight)) {
+      setCoreJourneyMessage(t("message.coreJourneyPreflightBlocked"));
+      await refreshCoreJourneyPreflight();
+      return;
+    }
     const tenantScope: DataScope[] = [
       {
         dataDomain: "crm",
@@ -1025,7 +1112,12 @@ function App() {
         message={coreJourneyMessage}
         onChange={setCoreJourneyForm}
         onOpen={setActiveNav}
+        onRefreshPreflight={() => void refreshCoreJourneyPreflight()}
+        onReset={() => void resetCoreJourneySession()}
         onRun={() => void runCoreJourney()}
+        preflight={coreJourneyPreflight}
+        preflightChecking={coreJourneyPreflightChecking}
+        preflightMessage={coreJourneyPreflightMessage}
         result={coreJourneyResult}
         running={coreJourneyRunning}
         t={t}
@@ -1282,7 +1374,12 @@ function CoreJourneyWorkbench({
   message,
   onChange,
   onOpen,
+  onRefreshPreflight,
+  onReset,
   onRun,
+  preflight,
+  preflightChecking,
+  preflightMessage,
   result,
   running,
   t
@@ -1293,11 +1390,17 @@ function CoreJourneyWorkbench({
   message: string;
   onChange: (form: CoreJourneyForm) => void;
   onOpen: (key: NavKey) => void;
+  onRefreshPreflight: () => void;
+  onReset: () => void;
   onRun: () => void;
+  preflight: CoreJourneyPreflightState;
+  preflightChecking: boolean;
+  preflightMessage: string;
   result: CoreJourneyRunResult | null;
   running: boolean;
   t: Translator;
 }) {
+  const canRun = coreJourneyPreflightCanRun(preflight);
   return (
     <div className="core-journey">
       <div className="core-journey-toolbar">
@@ -1337,10 +1440,40 @@ function CoreJourneyWorkbench({
             onChange={(event) => onChange({ ...form, deniedTool: event.target.value })}
           />
         </label>
-        <button className="primary-button" disabled={running} onClick={onRun} type="button">
+        <button className="primary-button" disabled={running || preflightChecking || !canRun} onClick={onRun} type="button">
           <Workflow size={14} />
           {running ? t("action.runningJourney") : t("action.runCoreJourney")}
         </button>
+      </div>
+
+      <div className="core-journey-preflight">
+        <div className="core-journey-preflight-header">
+          <div>
+            <strong>{t("section.preflight")}</strong>
+            {preflightMessage ? <span>{preflightMessage}</span> : null}
+          </div>
+          <div className="core-journey-preflight-actions">
+            <button className="secondary-button" disabled={running || preflightChecking} onClick={onRefreshPreflight} type="button">
+              <RefreshCw size={14} />
+              {preflightChecking ? t("action.checkingPreflight") : t("action.checkPreflight")}
+            </button>
+            <button className="secondary-button" disabled={running} onClick={onReset} type="button">
+              <RefreshCw size={14} />
+              {t("action.resetCoreJourney")}
+            </button>
+          </div>
+        </div>
+        <div className="core-journey-preflight-grid">
+          {coreJourneyPreflightRows(preflight).map((row) => (
+            <article className={`core-journey-preflight-row status-${row.status}`} key={row.key}>
+              <Badge tone={preflightTone(row.status)}>{preflightStatusLabel(row.status, t)}</Badge>
+              <div>
+                <strong>{t(row.titleKey)}</strong>
+                <span>{t(row.detailKey)}</span>
+              </div>
+            </article>
+          ))}
+        </div>
       </div>
 
       <div className="core-journey-meta">
@@ -2756,6 +2889,20 @@ function coreJourneyStatusLabel(status: CoreJourneyStepStatus, t: Translator) {
   if (status === "complete") return t("status.stepComplete");
   if (status === "partial") return t("status.stepPartial");
   return t("status.stepMissing");
+}
+
+function preflightTone(status: CoreJourneyPreflightStatus): Tone {
+  if (status === "ok") return "success";
+  if (status === "warning") return "warning";
+  if (status === "error") return "danger";
+  return "neutral";
+}
+
+function preflightStatusLabel(status: CoreJourneyPreflightStatus, t: Translator) {
+  if (status === "ok") return t("status.preflightOk");
+  if (status === "warning") return t("status.preflightWarning");
+  if (status === "error") return t("status.preflightError");
+  return t("status.preflightPending");
 }
 
 function mcpToolsListPayload() {

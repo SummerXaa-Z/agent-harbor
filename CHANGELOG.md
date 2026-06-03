@@ -16,6 +16,9 @@ This project uses Keep a Changelog-style sections and will adopt semantic versio
 - Developer-preview core journey scenario with a dependency-free mock MCP server.
 - Development-only `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` switch for local loopback/private upstream evaluation.
 - English and Simplified Chinese labels for the web console's core tenant access and runtime evidence journey.
+- Distinct web console workspaces for each primary navigation item so Cockpit, Registry, Routes, Policies, Capabilities, Access, Traces, and Evidence no longer collapse into the same view.
+- Web console Core Journey Workbench that creates a fresh tenant tree, MCP target, scoped grant chain, allowed/denied runtime evidence, and tenant access profile through real APIs.
+- `make mock-mcp` for keeping the dependency-free mock MCP server running during browser-based console evaluation.
 
 ### Changed
 
@@ -28,6 +31,7 @@ This project uses Keep a Changelog-style sections and will adopt semantic versio
 - Rewrote the frontend design reference as public console design guidance.
 - Updated console metrics so live runtime evidence is shown from real allowed/denied traces instead of sample evidence runs.
 - Added a visible web console language toggle that persists the operator's local preference.
+- Expanded Simplified Chinese coverage for operator forms, tables, buttons, states, validation hints, and empty states in the web console.
 
 ### Fixed
 

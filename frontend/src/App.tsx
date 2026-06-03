@@ -26,10 +26,12 @@ import {
   Workflow
 } from "lucide-react";
 import {
+  callMcpRpc,
   createAgent,
   createAgentKey,
   createInstanceAssignment,
   createRoutePolicy,
+  createTenant,
   createTenantEntitlement,
   createWorkspaceAssignment,
   disableAgent,
@@ -57,6 +59,21 @@ import {
   resolveInitialLanguage,
   type Language
 } from "./i18n";
+import {
+  navItems,
+  viewForNav,
+  type NavKey
+} from "./consoleNavigation";
+import {
+  createCoreJourneyConfig,
+  defaultCoreJourneyForm,
+  evaluateCoreJourney,
+  type CoreJourneyConfig,
+  type CoreJourneyEvaluation,
+  type CoreJourneyForm,
+  type CoreJourneyStep,
+  type CoreJourneyStepStatus
+} from "./coreJourney";
 import { parseRetryFields } from "./retryForm";
 import type {
   AccessProfileFilters,
@@ -89,16 +106,13 @@ import type {
 type Tone = MetricTone;
 type Translator = ReturnType<typeof createTranslator>;
 
-const navItems = [
-  { key: "cockpit", label: "Cockpit", icon: Gauge },
-  { key: "registry", label: "Registry", icon: Boxes },
-  { key: "routes", label: "Routes", icon: Route },
-  { key: "policies", label: "Policies", icon: ShieldCheck },
-  { key: "capabilities", label: "Capabilities", icon: DatabaseZap },
-  { key: "access", label: "Access", icon: LockKeyhole },
-  { key: "traces", label: "Traces", icon: FileSearch },
-  { key: "evidence", label: "Evidence", icon: ClipboardCheck }
-];
+interface CoreJourneyRunResult {
+  allowedStatus: number;
+  callerId: string;
+  deniedStatus: number;
+  targetId: string;
+  toolListStatus: number;
+}
 
 const emptyAccessProfileSummary: AccessProfileSummary = {
   tenantCount: 0,
@@ -163,6 +177,51 @@ const defaultAccessProfileFilters: AccessProfileFilters = {
   workspaceId: ""
 };
 const mcpRouteKeyPresets = ["initialize", "tools/list", "tools/call"];
+const coreJourneyCallerName = "Core Journey Caller";
+const coreJourneyTargetName = "Core Journey MCP Target";
+
+function navIconFor(key: NavKey) {
+  switch (key) {
+    case "registry":
+      return Boxes;
+    case "routes":
+      return Route;
+    case "policies":
+      return ShieldCheck;
+    case "capabilities":
+      return DatabaseZap;
+    case "access":
+      return LockKeyhole;
+    case "traces":
+      return FileSearch;
+    case "evidence":
+      return ClipboardCheck;
+    case "cockpit":
+    default:
+      return Gauge;
+  }
+}
+
+function tx(t: Translator, key: string, values: Record<string, string | number>) {
+  return Object.entries(values).reduce(
+    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
+    t(key)
+  );
+}
+
+function translatedValue(t: Translator, value?: string) {
+  return value ? t(`value.${value}`, value) : "";
+}
+
+function agentStatusLabel(status: AgentStatus, t: Translator) {
+  if (status === "active") return t("status.agentActive");
+  if (status === "disabled") return t("status.agentDisabled");
+  return t("status.agentDraft");
+}
+
+function policyEffectLabel(effect: "allow" | "deny", t: Translator) {
+  return effect === "allow" ? t("status.policyAllow") : t("status.policyDeny");
+}
 
 function App() {
   const [activeNav, setActiveNav] = useState("cockpit");
@@ -191,6 +250,11 @@ function App() {
   const [accessMessage, setAccessMessage] = useState("");
   const [accessProfile, setAccessProfile] = useState<TenantAccessProfileData | null>(null);
   const [language, setLanguage] = useState<Language>(initialLanguage);
+  const [coreJourneyForm, setCoreJourneyForm] = useState<CoreJourneyForm>(defaultCoreJourneyForm);
+  const [coreJourneyConfig, setCoreJourneyConfig] = useState<CoreJourneyConfig>(() => createCoreJourneyConfig());
+  const [coreJourneyMessage, setCoreJourneyMessage] = useState("");
+  const [coreJourneyRunning, setCoreJourneyRunning] = useState(false);
+  const [coreJourneyResult, setCoreJourneyResult] = useState<CoreJourneyRunResult | null>(null);
   const t = useMemo(() => createTranslator(language), [language]);
 
   useEffect(() => {
@@ -276,6 +340,198 @@ function App() {
     }
   }
 
+  async function runCoreJourney() {
+    const nextConfig = createCoreJourneyConfig(coreJourneyForm);
+    const tenantScope: DataScope[] = [
+      {
+        dataDomain: "crm",
+        region: "us-east",
+        tenantFilter: `tenant_id = '${nextConfig.childTenantId}'`
+      }
+    ];
+    setCoreJourneyConfig(nextConfig);
+    setCoreJourneyResult(null);
+    setCoreJourneyRunning(true);
+    setCoreJourneyMessage(t("message.coreJourneyRunning"));
+    try {
+      await createTenant(
+        {
+          id: nextConfig.rootTenantId,
+          name: "Core Journey Root",
+          status: "active"
+        },
+        adminKey
+      );
+      await createTenant(
+        {
+          id: nextConfig.childTenantId,
+          name: "Core Journey Team",
+          parentTenantId: nextConfig.rootTenantId,
+          status: "active"
+        },
+        adminKey
+      );
+      await createTenant(
+        {
+          id: nextConfig.grandchildTenantId,
+          name: "Core Journey Project",
+          parentTenantId: nextConfig.childTenantId,
+          status: "active"
+        },
+        adminKey
+      );
+
+      const caller = await createAgent(
+        {
+          channelType: "local",
+          description: "Core journey browser caller",
+          name: coreJourneyCallerName,
+          status: "active",
+          tenantId: nextConfig.childTenantId,
+          workspaceId: nextConfig.workspaceId
+        },
+        adminKey
+      );
+      const callerKey = await createAgentKey(
+        {
+          agentId: caller.id,
+          expiresInSeconds: 900,
+          name: "core journey key"
+        },
+        adminKey
+      );
+      const target = await createAgent(
+        {
+          channelConfig: {
+            endpoint: nextConfig.mcpEndpoint,
+            transport: "streamable-http"
+          },
+          channelType: "mcp",
+          description: "Core journey MCP target",
+          name: coreJourneyTargetName,
+          status: "active",
+          tenantId: nextConfig.rootTenantId,
+          workspaceId: nextConfig.workspaceId
+        },
+        adminKey
+      );
+
+      const discovered = await refreshTargetCapabilities(target.id, adminKey);
+      const allowedCapability = discovered.find((capability) => capability.key === nextConfig.allowedTool);
+      const deniedCapability = discovered.find((capability) => capability.key === nextConfig.deniedTool);
+      if (!allowedCapability || !deniedCapability) {
+        throw new Error(tx(t, "message.coreJourneyMissingTools", { allowed: nextConfig.allowedTool, denied: nextConfig.deniedTool }));
+      }
+      const scopedCapability = await updateCapability(
+        allowedCapability.id,
+        {
+          dataScopes: tenantScope,
+          discoveryStatus: "approved"
+        },
+        adminKey
+      );
+      const entitlement = await createTenantEntitlement(
+        {
+          capabilityId: scopedCapability.id,
+          effect: "allow",
+          priority: 50,
+          status: "enabled",
+          targetId: target.id,
+          tenantId: nextConfig.childTenantId
+        },
+        adminKey
+      );
+      const workspaceAssignment = await createWorkspaceAssignment(
+        {
+          dataScopes: [{ table: "accounts" }],
+          effect: "allow",
+          status: "enabled",
+          tenantEntitlementId: entitlement.id,
+          workspaceId: nextConfig.workspaceId
+        },
+        adminKey
+      );
+      await createInstanceAssignment(
+        {
+          callerInstanceId: caller.id,
+          dataScopes: [{ field: "email" }],
+          effect: "allow",
+          status: "enabled",
+          workspaceAssignmentId: workspaceAssignment.id
+        },
+        adminKey
+      );
+
+      const toolList = await callMcpRpc(target.id, mcpToolsListPayload(), callerKey.key, nextConfig.runId, adminKey);
+      if (!toolList.ok) throw new Error(tx(t, "message.coreJourneyRpcUnexpected", { status: toolList.status }));
+      const listedTools = toolNamesFromPayload(toolList.payload);
+      if (!listedTools.includes(nextConfig.allowedTool) || listedTools.includes(nextConfig.deniedTool)) {
+        throw new Error(t("message.coreJourneyToolsListInvalid"));
+      }
+      const deniedCall = await callMcpRpc(
+        target.id,
+        mcpToolCallPayload(nextConfig.deniedTool),
+        callerKey.key,
+        nextConfig.runId,
+        adminKey
+      );
+      if (deniedCall.status !== 403) {
+        throw new Error(tx(t, "message.coreJourneyDeniedUnexpected", { status: deniedCall.status }));
+      }
+      const allowedCall = await callMcpRpc(
+        target.id,
+        mcpToolCallPayload(nextConfig.allowedTool),
+        callerKey.key,
+        nextConfig.runId,
+        adminKey
+      );
+      if (!allowedCall.ok) throw new Error(tx(t, "message.coreJourneyRpcUnexpected", { status: allowedCall.status }));
+
+      const nextScope = {
+        tenantId: nextConfig.childTenantId,
+        workspaceId: nextConfig.workspaceId
+      };
+      const nextTraceFilters = {
+        callerAgentId: caller.id,
+        decision: "" as TraceDecision | "",
+        runId: nextConfig.runId,
+        targetAgentId: target.id
+      };
+      const nextAccessFilters = {
+        callerInstanceId: caller.id,
+        capabilityId: "",
+        targetId: target.id,
+        traceLimit: "10",
+        workspaceId: nextConfig.workspaceId
+      };
+      const [nextData, nextProfile] = await Promise.all([
+        loadConsoleData(adminKey, nextTraceFilters),
+        loadTenantAccessProfile(nextConfig.childTenantId, adminKey, {
+          ...nextAccessFilters,
+          traceLimit: 10
+        })
+      ]);
+      setScope(nextScope);
+      setTraceFilters(nextTraceFilters);
+      setAccessFilters(nextAccessFilters);
+      setData(nextData);
+      setAccessProfile(nextProfile);
+      setLastRefresh(new Date());
+      setCoreJourneyResult({
+        allowedStatus: allowedCall.status,
+        callerId: caller.id,
+        deniedStatus: deniedCall.status,
+        targetId: target.id,
+        toolListStatus: toolList.status
+      });
+      setCoreJourneyMessage(t("message.coreJourneyComplete"));
+    } catch (error) {
+      setCoreJourneyMessage(error instanceof Error ? error.message : "Core journey failed");
+    } finally {
+      setCoreJourneyRunning(false);
+    }
+  }
+
   async function submitAgent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAgentMessage("");
@@ -304,7 +560,7 @@ function App() {
       let credentials: Record<string, string> | undefined;
       if (hasCredentialInput) {
         if (!credentialHeader || !credentialName || !credentialValue.trim()) {
-          setAgentMessage("Credential header, key, and value are required together.");
+          setAgentMessage(t("message.validationCredentialGroup"));
           return;
         }
         channelConfig.credentialHeaders = { [credentialHeader]: credentialName };
@@ -325,7 +581,7 @@ function App() {
         adminKey
       );
       setAgentForm(defaultAgentForm);
-      setAgentMessage("Agent created. Registry refreshed.");
+      setAgentMessage(t("message.agentCreated"));
       await refresh();
     } catch (error) {
       setAgentMessage(error instanceof Error ? error.message : "Unable to create agent");
@@ -341,7 +597,7 @@ function App() {
       } else {
         await updateAgent(agent.id, { status }, adminKey);
       }
-      setAgentMessage(`${agent.name} set to ${status}. Registry refreshed.`);
+      setAgentMessage(tx(t, "message.statusChanged", { name: agent.name, status: agentStatusLabel(status, t) }));
       await refresh();
     } catch (error) {
       setAgentMessage(error instanceof Error ? error.message : "Unable to update agent status");
@@ -355,7 +611,7 @@ function App() {
     setCleanupActionId(policy.id);
     try {
       await disableRoutePolicy(policy.id, adminKey);
-      setPolicyMessage("Route policy disabled. Governance refreshed.");
+      setPolicyMessage(t("message.policyDisabled"));
       await refresh();
     } catch (error) {
       setPolicyMessage(error instanceof Error ? error.message : "Unable to disable route policy");
@@ -371,7 +627,7 @@ function App() {
     try {
       const ttl = Number(keyForm.expiresInSeconds);
       if (!Number.isInteger(ttl) || ttl < 1 || ttl > 3600) {
-        setKeyMessage("TTL must be an integer between 1 and 3600 seconds.");
+        setKeyMessage(t("message.validationTtl"));
         return;
       }
       const next = await createAgentKey(
@@ -383,7 +639,7 @@ function App() {
         adminKey
       );
       setCreatedKey(next);
-      setKeyMessage("Plaintext key is shown once. Copy it before leaving this view.");
+      setKeyMessage(t("message.keyCreated"));
       setKeyForm({ ...defaultKeyForm, agentId: keyForm.agentId });
     } catch (error) {
       setKeyMessage(error instanceof Error ? error.message : "Unable to create key");
@@ -396,11 +652,11 @@ function App() {
     try {
       const credentialName = rotateForm.credentialName.trim();
       if (!rotateForm.agentId) {
-        setRotateMessage("Select an Agent to rotate.");
+        setRotateMessage(t("message.validationRotateAgent"));
         return;
       }
       if (!credentialName || !rotateForm.credentialValue.trim()) {
-        setRotateMessage("Credential key and new secret are required.");
+        setRotateMessage(t("message.validationCredentialRequired"));
         return;
       }
       await rotateAgentCredentials(
@@ -409,7 +665,7 @@ function App() {
         adminKey
       );
       setRotateForm({ ...defaultRotateForm, agentId: rotateForm.agentId, credentialName });
-      setRotateMessage("Credential rotated. Secret value cleared.");
+      setRotateMessage(t("message.credentialRotated"));
       await refresh();
     } catch (error) {
       setRotateMessage(error instanceof Error ? error.message : "Unable to rotate credential");
@@ -422,7 +678,7 @@ function App() {
     try {
       const priority = Number(policyForm.priority);
       if (!Number.isInteger(priority) || priority < 0) {
-        setPolicyMessage("Priority must be a non-negative integer.");
+        setPolicyMessage(t("message.validationPriority"));
         return;
       }
       const retry = parseRetryFields({
@@ -448,7 +704,7 @@ function App() {
         },
         adminKey
       );
-      setPolicyMessage("Route policy created. Governance refreshed.");
+      setPolicyMessage(t("message.policyCreated"));
       setPolicyForm({ ...defaultPolicyForm, callerAgentId: policyForm.callerAgentId });
       await refresh();
     } catch (error) {
@@ -459,7 +715,7 @@ function App() {
   async function handleRefreshTargetCapabilities() {
     const targetId = capabilityForm.targetId.trim();
     if (!targetId) {
-      setCapabilityMessage("Select an MCP target.");
+      setCapabilityMessage(t("message.validationMcpTargetRequired"));
       return;
     }
     setCapabilityMessage("");
@@ -475,10 +731,10 @@ function App() {
             }
           : current
       );
-      setCapabilityMessage(`Refreshed ${refreshed.length} capabilities.`);
+      setCapabilityMessage(tx(t, "message.refreshedCapabilities", { count: refreshed.length }));
     } catch (error) {
       if (shouldUseLocalCapabilityFallback(error, data)) {
-        setCapabilityMessage("Using fallback capabilities.");
+        setCapabilityMessage(t("message.capabilityFallback"));
         return;
       }
       setCapabilityMessage(error instanceof Error ? error.message : "Unable to refresh capabilities");
@@ -498,10 +754,10 @@ function App() {
               ...current,
               capabilities: current.capabilities.map((item) => (item.id === updated.id ? updated : item)),
               capabilitiesLoadedFromApi: true
-            }
+          }
           : current
       );
-      setCapabilityMessage(`${capability.key} approved.`);
+      setCapabilityMessage(tx(t, "message.capabilityApproved", { name: capability.key }));
     } catch (error) {
       if (shouldUseLocalCapabilityFallback(error, data)) {
         setData((current) =>
@@ -516,7 +772,7 @@ function App() {
               }
             : current
         );
-        setCapabilityMessage(`${capability.key} approved in fallback data.`);
+        setCapabilityMessage(tx(t, "message.capabilityApprovedFallback", { name: capability.key }));
         return;
       }
       setCapabilityMessage(error instanceof Error ? error.message : "Unable to approve capability");
@@ -533,11 +789,11 @@ function App() {
     const workspaceId = capabilityForm.workspaceId.trim();
     const callerInstanceId = capabilityForm.callerInstanceId.trim();
     if (!capability) {
-      setCapabilityMessage("Select a capability.");
+      setCapabilityMessage(t("message.validationCapabilityRequired"));
       return;
     }
     if (!tenantId || !workspaceId || !callerInstanceId) {
-      setCapabilityMessage("Tenant, workspace, and caller are required.");
+      setCapabilityMessage(t("message.validationTenantWorkspaceCaller"));
       return;
     }
     const dataScopes = capability.dataScopes ?? [];
@@ -576,14 +832,14 @@ function App() {
         },
         adminKey
       );
-      setCapabilityMessage("Grant chain created.");
+      setCapabilityMessage(t("message.grantChainCreated"));
       await refresh();
     } catch (error) {
       if (shouldUseLocalCapabilityFallback(error, data) && data) {
         setData((current) =>
           current ? appendLocalCapabilityGrantChain(current, capability, capabilityForm, dataScopes) : current
         );
-        setCapabilityMessage("Grant chain created in fallback data.");
+        setCapabilityMessage(t("message.grantChainCreatedFallback"));
         return;
       }
       setCapabilityMessage(error instanceof Error ? error.message : "Unable to create grant chain");
@@ -624,17 +880,224 @@ function App() {
     : data?.loadedFromApi
       ? t("dataSource.runtime")
       : t("dataSource.fallback");
-  const activeNavItem = navItems.find((item) => item.key === activeNav) ?? navItems[0];
+  const activeView = viewForNav(activeNav);
+  const activeNavItem = navItems.find((item) => item.key === activeView.key) ?? navItems[0];
   const activeNavLabel = t(`nav.${activeNavItem.key}`, activeNavItem.label);
-  const isCapabilitiesView = activeNav === "capabilities";
-  const isAccessView = activeNav === "access";
+  const isCapabilitiesView = activeView.key === "capabilities";
+  const isAccessView = activeView.key === "access";
   const accessSummary = accessProfile?.summary;
   const invalidAccessRows = countInvalidAccessProfileRows(accessProfile);
-  const pageTitle = isAccessView
-    ? t("page.access")
-    : isCapabilitiesView
-      ? t("page.capabilities")
-      : t("app.title");
+  const pageTitle = t(activeView.titleKey, t("app.title"));
+  const coreJourneyEvaluation = useMemo(
+    () => evaluateCoreJourney(data, accessProfile, coreJourneyConfig),
+    [accessProfile, coreJourneyConfig, data]
+  );
+  const tracePanel = (className = "span-7") => (
+    <Panel className={className} icon={<FileSearch size={18} />} title={t("panel.auditTraces")} action={<IconOpen title={t("action.open")} />}>
+      <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} t={t} />
+      <TraceTable traces={traces} agents={agents} t={t} />
+    </Panel>
+  );
+  const managementAuditPanel = (className = "span-12") => (
+    <Panel className={className} icon={<ClipboardCheck size={18} />} title={t("panel.managementAudit")} action={<IconOpen title={t("action.open")} />}>
+      <ManagementAuditTable events={auditEvents} t={t} />
+    </Panel>
+  );
+  const routeGovernancePanel = (className = "span-8") => (
+    <Panel className={className} icon={<Workflow size={18} />} title={t("panel.routeGovernance")} action={<IconMore title={t("action.more")} />}>
+      <PolicyTable
+        agents={agents}
+        canDisable={Boolean(data?.routePoliciesLoadedFromApi)}
+        onDisable={handleDisablePolicy}
+        pendingActionId={cleanupActionId}
+        policies={policies}
+        t={t}
+      />
+    </Panel>
+  );
+  const evidenceRunsPanel = (className = "span-4") => (
+    <Panel className={className} icon={<Sparkles size={18} />} title={t("panel.evidenceRuns")} action={<IconOpen title={t("action.open")} />}>
+      <EvidenceTimeline runs={evidenceRuns} t={t} />
+    </Panel>
+  );
+  const runtimeSignalsPanel = (className = "span-5") => (
+    <Panel className={className} icon={<DatabaseZap size={18} />} title={t("panel.runtimeSignals")} action={<IconMore title={t("action.more")} />}>
+      <SignalBoard metrics={metrics} t={t} />
+    </Panel>
+  );
+  const agentRegistryPanel = (className = "span-8") => (
+    <Panel className={className} icon={<Boxes size={18} />} title={t("panel.agentRegistry")} action={<IconMore title={t("action.more")} />}>
+      <AgentTable
+        agents={agents}
+        channelLabels={channelLabels}
+        onStatusChange={handleAgentStatusChange}
+        pendingActionId={cleanupActionId}
+        t={t}
+      />
+    </Panel>
+  );
+  const contractMatrixPanel = (className = "span-4") => (
+    <Panel className={className} icon={<Layers3 size={18} />} title={t("panel.contractMatrix")} action={<IconOpen title={t("action.open")} />}>
+      <ContractMatrix channels={channels} providers={data?.providers ?? []} t={t} />
+    </Panel>
+  );
+  const capabilityGovernancePanel = (className = "span-12") => (
+    <Panel className={className} icon={<DatabaseZap size={18} />} title={t("panel.mcpCapabilities")} action={<IconMore title={t("action.more")} />}>
+      <CapabilityGovernanceView
+        actionId={capabilityActionId}
+        agents={agents}
+        capabilities={capabilities}
+        form={capabilityForm}
+        instanceAssignments={instanceAssignments}
+        message={capabilityMessage}
+        mcpTargets={mcpTargets}
+        onApprove={handleApproveCapability}
+        onChange={setCapabilityForm}
+        onCreateGrantChain={submitCapabilityGrantChain}
+        onRefreshTarget={handleRefreshTargetCapabilities}
+        t={t}
+        tenantEntitlements={tenantEntitlements}
+        workspaceAssignments={workspaceAssignments}
+      />
+    </Panel>
+  );
+  const accessProfilePanel = (
+    <Panel className="span-12" icon={<LockKeyhole size={18} />} title={t("panel.accessProfile")} action={<IconOpen title={t("action.open")} />}>
+      <TenantAccessProfileView
+        agents={agents}
+        capabilities={capabilities}
+        filters={accessFilters}
+        loading={accessLoading}
+        message={accessMessage}
+        onChange={setAccessFilters}
+        onRefresh={() => void refreshAccessProfile()}
+        onTenantChange={(tenantId) => {
+          setScope((current) => ({ ...current, tenantId }));
+          setAccessProfile(null);
+        }}
+        profile={accessProfile}
+        scope={scope}
+        t={t}
+      />
+    </Panel>
+  );
+  const createAgentPanel = (
+    <Panel className="span-4" icon={<Boxes size={18} />} title={t("panel.createAgent")}>
+      <AgentCreateForm form={agentForm} message={agentMessage} onChange={setAgentForm} onSubmit={submitAgent} t={t} />
+    </Panel>
+  );
+  const createKeyPanel = (
+    <Panel className="span-4" icon={<KeyRound size={18} />} title={t("panel.createKey")}>
+      <KeyCreateForm
+        agents={localCallers}
+        createdKey={createdKey}
+        form={keyForm}
+        message={keyMessage}
+        onChange={setKeyForm}
+        onSubmit={submitKey}
+        t={t}
+      />
+    </Panel>
+  );
+  const createPolicyPanel = (
+    <Panel className="span-4" icon={<Route size={18} />} title={t("panel.createPolicy")}>
+      <PolicyCreateForm agents={agents} form={policyForm} message={policyMessage} onChange={setPolicyForm} onSubmit={submitRoutePolicy} t={t} />
+    </Panel>
+  );
+  const rotateCredentialPanel = (
+    <Panel className="span-4" icon={<KeyRound size={18} />} title={t("panel.rotateCredential")}>
+      <CredentialRotateForm
+        agents={agents}
+        form={rotateForm}
+        message={rotateMessage}
+        onChange={setRotateForm}
+        onSubmit={submitCredentialRotation}
+        t={t}
+      />
+    </Panel>
+  );
+  const coreJourneyPanel = (
+    <Panel className="span-12" icon={<Workflow size={18} />} title={t("panel.coreJourney")}>
+      <CoreJourneyWorkbench
+        config={coreJourneyConfig}
+        evaluation={coreJourneyEvaluation}
+        form={coreJourneyForm}
+        message={coreJourneyMessage}
+        onChange={setCoreJourneyForm}
+        onOpen={setActiveNav}
+        onRun={() => void runCoreJourney()}
+        result={coreJourneyResult}
+        running={coreJourneyRunning}
+        t={t}
+      />
+    </Panel>
+  );
+  const viewContent = (() => {
+    switch (activeView.key) {
+      case "registry":
+        return (
+          <section className="content-grid">
+            {createAgentPanel}
+            {createKeyPanel}
+            {rotateCredentialPanel}
+            {agentRegistryPanel("span-8")}
+            {contractMatrixPanel("span-4")}
+          </section>
+        );
+      case "routes":
+        return (
+          <section className="content-grid">
+            {createPolicyPanel}
+            {routeGovernancePanel("span-8")}
+            {tracePanel("span-12")}
+          </section>
+        );
+      case "policies":
+        return (
+          <section className="content-grid">
+            {routeGovernancePanel("span-7")}
+            {managementAuditPanel("span-5")}
+            {capabilityGovernancePanel("span-12")}
+          </section>
+        );
+      case "capabilities":
+        return (
+          <section className="content-grid">
+            {capabilityGovernancePanel("span-12")}
+            {tracePanel("span-7")}
+            {managementAuditPanel("span-5")}
+          </section>
+        );
+      case "access":
+        return <section className="content-grid">{accessProfilePanel}</section>;
+      case "traces":
+        return (
+          <section className="content-grid">
+            {tracePanel("span-12")}
+            {managementAuditPanel("span-12")}
+          </section>
+        );
+      case "evidence":
+        return (
+          <section className="content-grid">
+            {evidenceRunsPanel("span-5")}
+            {managementAuditPanel("span-7")}
+            {runtimeSignalsPanel("span-12")}
+          </section>
+        );
+      case "cockpit":
+      default:
+        return (
+          <section className="content-grid">
+            {coreJourneyPanel}
+            {runtimeSignalsPanel("span-5")}
+            {tracePanel("span-7")}
+            {evidenceRunsPanel("span-4")}
+            {agentRegistryPanel("span-8")}
+          </section>
+        );
+    }
+  })();
 
   return (
     <div className="app-shell">
@@ -651,12 +1114,12 @@ function App() {
 
         <nav className="nav-list">
           {navItems.map((item) => {
-            const Icon = item.icon;
+            const Icon = navIconFor(item.key);
             const itemLabel = t(`nav.${item.key}`, item.label);
             return (
               <button
                 aria-label={itemLabel}
-                className={activeNav === item.key ? "nav-item active" : "nav-item"}
+                className={activeView.key === item.key ? "nav-item active" : "nav-item"}
                 key={item.key}
                 onClick={() => setActiveNav(item.key)}
                 title={itemLabel}
@@ -698,7 +1161,7 @@ function App() {
       <main className="workspace">
         <header className="topbar">
           <div className="topbar-title">
-            <div className="breadcrumb">Gateway / {activeWorkspace} / {activeNavLabel}</div>
+            <div className="breadcrumb">{t("app.gateway")} / {activeWorkspace} / {activeNavLabel}</div>
             <h1>{pageTitle}</h1>
           </div>
           <div className="topbar-actions">
@@ -806,131 +1269,125 @@ function App() {
           />
         </section>
 
-        {isAccessView ? (
-          <section className="content-grid">
-            <Panel className="span-12" icon={<LockKeyhole size={18} />} title={t("panel.accessProfile")} action={<IconOpen title={t("action.open")} />}>
-              <TenantAccessProfileView
-                agents={agents}
-                capabilities={capabilities}
-                filters={accessFilters}
-                loading={accessLoading}
-                message={accessMessage}
-                onChange={setAccessFilters}
-                onRefresh={() => void refreshAccessProfile()}
-                onTenantChange={(tenantId) => {
-                  setScope((current) => ({ ...current, tenantId }));
-                  setAccessProfile(null);
-                }}
-                profile={accessProfile}
-                scope={scope}
-                t={t}
-              />
-            </Panel>
-          </section>
-        ) : isCapabilitiesView ? (
-          <section className="content-grid">
-            <Panel className="span-12" icon={<DatabaseZap size={18} />} title={t("panel.mcpCapabilities")} action={<IconMore title={t("action.more")} />}>
-              <CapabilityGovernanceView
-                actionId={capabilityActionId}
-                agents={agents}
-                capabilities={capabilities}
-                form={capabilityForm}
-                instanceAssignments={instanceAssignments}
-                message={capabilityMessage}
-                mcpTargets={mcpTargets}
-                onApprove={handleApproveCapability}
-                onChange={setCapabilityForm}
-                onCreateGrantChain={submitCapabilityGrantChain}
-                onRefreshTarget={handleRefreshTargetCapabilities}
-                t={t}
-                tenantEntitlements={tenantEntitlements}
-                workspaceAssignments={workspaceAssignments}
-              />
-            </Panel>
-
-            <Panel className="span-7" icon={<FileSearch size={18} />} title={t("panel.auditTraces")} action={<IconOpen title={t("action.open")} />}>
-              <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} t={t} />
-              <TraceTable traces={traces} agents={agents} t={t} />
-            </Panel>
-
-            <Panel className="span-5" icon={<ClipboardCheck size={18} />} title={t("panel.managementAudit")} action={<IconOpen title={t("action.open")} />}>
-              <ManagementAuditTable events={auditEvents} t={t} />
-            </Panel>
-          </section>
-        ) : (
-        <section className="content-grid">
-          <Panel className="span-4" icon={<Boxes size={18} />} title={t("panel.createAgent")}>
-            <AgentCreateForm form={agentForm} message={agentMessage} onChange={setAgentForm} onSubmit={submitAgent} />
-          </Panel>
-
-          <Panel className="span-4" icon={<KeyRound size={18} />} title={t("panel.createKey")}>
-            <KeyCreateForm
-              agents={localCallers}
-              createdKey={createdKey}
-              form={keyForm}
-              message={keyMessage}
-              onChange={setKeyForm}
-              onSubmit={submitKey}
-            />
-          </Panel>
-
-          <Panel className="span-4" icon={<Route size={18} />} title={t("panel.createPolicy")}>
-            <PolicyCreateForm agents={agents} form={policyForm} message={policyMessage} onChange={setPolicyForm} onSubmit={submitRoutePolicy} />
-          </Panel>
-
-          <Panel className="span-4" icon={<KeyRound size={18} />} title={t("panel.rotateCredential")}>
-            <CredentialRotateForm
-              agents={agents}
-              form={rotateForm}
-              message={rotateMessage}
-              onChange={setRotateForm}
-              onSubmit={submitCredentialRotation}
-            />
-          </Panel>
-
-          <Panel className="span-8" icon={<Workflow size={18} />} title={t("panel.routeGovernance")} action={<IconMore title={t("action.more")} />}>
-            <PolicyTable
-              agents={agents}
-              canDisable={Boolean(data?.routePoliciesLoadedFromApi)}
-              onDisable={handleDisablePolicy}
-              pendingActionId={cleanupActionId}
-              policies={policies}
-            />
-          </Panel>
-
-          <Panel className="span-4" icon={<Sparkles size={18} />} title={t("panel.evidenceRuns")} action={<IconOpen title={t("action.open")} />}>
-            <EvidenceTimeline runs={evidenceRuns} />
-          </Panel>
-
-          <Panel className="span-8" icon={<Boxes size={18} />} title={t("panel.agentRegistry")} action={<IconMore title={t("action.more")} />}>
-            <AgentTable
-              agents={agents}
-              channelLabels={channelLabels}
-              onStatusChange={handleAgentStatusChange}
-              pendingActionId={cleanupActionId}
-            />
-          </Panel>
-
-          <Panel className="span-4" icon={<Layers3 size={18} />} title={t("panel.contractMatrix")} action={<IconOpen title={t("action.open")} />}>
-            <ContractMatrix channels={channels} providers={data?.providers ?? []} />
-          </Panel>
-
-          <Panel className="span-5" icon={<DatabaseZap size={18} />} title={t("panel.runtimeSignals")} action={<IconMore title={t("action.more")} />}>
-            <SignalBoard metrics={metrics} />
-          </Panel>
-
-          <Panel className="span-7" icon={<FileSearch size={18} />} title={t("panel.auditTraces")} action={<IconOpen title={t("action.open")} />}>
-            <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} t={t} />
-            <TraceTable traces={traces} agents={agents} t={t} />
-          </Panel>
-
-          <Panel className="span-12" icon={<ClipboardCheck size={18} />} title={t("panel.managementAudit")} action={<IconOpen title={t("action.open")} />}>
-            <ManagementAuditTable events={auditEvents} t={t} />
-          </Panel>
-        </section>
-        )}
+        {viewContent}
       </main>
     </div>
+  );
+}
+
+function CoreJourneyWorkbench({
+  config,
+  evaluation,
+  form,
+  message,
+  onChange,
+  onOpen,
+  onRun,
+  result,
+  running,
+  t
+}: {
+  config: CoreJourneyConfig;
+  evaluation: CoreJourneyEvaluation;
+  form: CoreJourneyForm;
+  message: string;
+  onChange: (form: CoreJourneyForm) => void;
+  onOpen: (key: NavKey) => void;
+  onRun: () => void;
+  result: CoreJourneyRunResult | null;
+  running: boolean;
+  t: Translator;
+}) {
+  return (
+    <div className="core-journey">
+      <div className="core-journey-toolbar">
+        <div className="core-journey-score">
+          <strong>{evaluation.completeCount}/{evaluation.totalCount}</strong>
+          <span>{t("text.coreJourneyCompletion")}</span>
+        </div>
+        <label>
+          {t("form.workspace")}
+          <input
+            disabled={running}
+            value={form.workspaceId}
+            onChange={(event) => onChange({ ...form, workspaceId: event.target.value })}
+          />
+        </label>
+        <label>
+          {t("form.endpoint")}
+          <input
+            disabled={running}
+            value={form.mcpEndpoint}
+            onChange={(event) => onChange({ ...form, mcpEndpoint: event.target.value })}
+          />
+        </label>
+        <label>
+          {t("form.allowedTool")}
+          <input
+            disabled={running}
+            value={form.allowedTool}
+            onChange={(event) => onChange({ ...form, allowedTool: event.target.value })}
+          />
+        </label>
+        <label>
+          {t("form.deniedTool")}
+          <input
+            disabled={running}
+            value={form.deniedTool}
+            onChange={(event) => onChange({ ...form, deniedTool: event.target.value })}
+          />
+        </label>
+        <button className="primary-button" disabled={running} onClick={onRun} type="button">
+          <Workflow size={14} />
+          {running ? t("action.runningJourney") : t("action.runCoreJourney")}
+        </button>
+      </div>
+
+      <div className="core-journey-meta">
+        <code>{config.runId}</code>
+        <span>{config.childTenantId}</span>
+        {result ? (
+          <span>
+            tools/list {result.toolListStatus} · {form.deniedTool} {result.deniedStatus} · {form.allowedTool} {result.allowedStatus}
+          </span>
+        ) : null}
+        {message ? <strong>{message}</strong> : null}
+      </div>
+
+      <div className="core-journey-steps">
+        {evaluation.steps.map((step) => (
+          <CoreJourneyStepRow key={step.key} step={step} t={t} />
+        ))}
+      </div>
+
+      <div className="core-journey-actions">
+        <button className="secondary-button" onClick={() => onOpen("access")} type="button">
+          <LockKeyhole size={14} />
+          {t("action.openAccess")}
+        </button>
+        <button className="secondary-button" onClick={() => onOpen("capabilities")} type="button">
+          <DatabaseZap size={14} />
+          {t("action.openCapabilities")}
+        </button>
+        <button className="secondary-button" onClick={() => onOpen("traces")} type="button">
+          <FileSearch size={14} />
+          {t("action.openTraces")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CoreJourneyStepRow({ step, t }: { step: CoreJourneyStep; t: Translator }) {
+  return (
+    <article className={`core-journey-step status-${step.status}`}>
+      <Badge tone={coreJourneyStatusTone(step.status)}>{coreJourneyStatusLabel(step.status, t)}</Badge>
+      <div>
+        <strong>{t(`journey.step.${step.key}`)}</strong>
+        <span>{step.detail}</span>
+      </div>
+      <code>{step.metric}</code>
+    </article>
   );
 }
 
@@ -938,32 +1395,34 @@ function AgentCreateForm({
   form,
   message,
   onChange,
-  onSubmit
+  onSubmit,
+  t
 }: {
   form: typeof defaultAgentForm;
   message: string;
   onChange: (form: typeof defaultAgentForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  t: Translator;
 }) {
   return (
     <form className="control-form" onSubmit={onSubmit}>
-      <label>Name<input required value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
+      <label>{t("form.name")}<input required value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
       <div className="form-row">
-        <label>Channel<input value={form.channelType} onChange={(event) => onChange({ ...form, channelType: event.target.value })} /></label>
-        <label>Status<select value={form.status} onChange={(event) => onChange({ ...form, status: event.target.value as AgentStatus })}><option value="draft">draft</option><option value="active">active</option><option value="disabled">disabled</option></select></label>
+        <label>{t("form.channel")}<input value={form.channelType} onChange={(event) => onChange({ ...form, channelType: event.target.value })} /></label>
+        <label>{t("table.status")}<select value={form.status} onChange={(event) => onChange({ ...form, status: event.target.value as AgentStatus })}><option value="draft">{t("status.agentDraft")}</option><option value="active">{t("status.agentActive")}</option><option value="disabled">{t("status.agentDisabled")}</option></select></label>
       </div>
-      <label>Endpoint<input placeholder="https://api.example.com/a2a" value={form.endpoint} onChange={(event) => onChange({ ...form, endpoint: event.target.value })} /></label>
+      <label>{t("form.endpoint")}<input placeholder="https://api.example.com/a2a" value={form.endpoint} onChange={(event) => onChange({ ...form, endpoint: event.target.value })} /></label>
       <div className="form-row">
-        <label>Credential header<input placeholder="Authorization" value={form.credentialHeader} onChange={(event) => onChange({ ...form, credentialHeader: event.target.value })} /></label>
-        <label>Credential key<input placeholder="apiToken" value={form.credentialName} onChange={(event) => onChange({ ...form, credentialName: event.target.value })} /></label>
+        <label>{t("form.credentialHeader")}<input placeholder="Authorization" value={form.credentialHeader} onChange={(event) => onChange({ ...form, credentialHeader: event.target.value })} /></label>
+        <label>{t("form.credentialKey")}<input placeholder="apiToken" value={form.credentialName} onChange={(event) => onChange({ ...form, credentialName: event.target.value })} /></label>
       </div>
-      <label>Secret value<input placeholder="Bearer ..." type="password" value={form.credentialValue} onChange={(event) => onChange({ ...form, credentialValue: event.target.value })} /></label>
+      <label>{t("form.secretValue")}<input placeholder="Bearer ..." type="password" value={form.credentialValue} onChange={(event) => onChange({ ...form, credentialValue: event.target.value })} /></label>
       <div className="form-row">
-        <label>Retry attempts<input inputMode="numeric" max={4} min={1} type="number" value={form.retryMaxAttempts} onChange={(event) => onChange({ ...form, retryMaxAttempts: event.target.value })} /></label>
-        <label>Backoff ms<input inputMode="numeric" max={1000} min={0} type="number" value={form.retryBackoffMs} onChange={(event) => onChange({ ...form, retryBackoffMs: event.target.value })} /></label>
+        <label>{t("form.retryAttempts")}<input inputMode="numeric" max={4} min={1} type="number" value={form.retryMaxAttempts} onChange={(event) => onChange({ ...form, retryMaxAttempts: event.target.value })} /></label>
+        <label>{t("form.backoffMs")}<input inputMode="numeric" max={1000} min={0} type="number" value={form.retryBackoffMs} onChange={(event) => onChange({ ...form, retryBackoffMs: event.target.value })} /></label>
       </div>
-      <label>Description<textarea rows={2} value={form.description} onChange={(event) => onChange({ ...form, description: event.target.value })} /></label>
-      <FormFooter message={message} submitLabel="Create agent" />
+      <label>{t("form.description")}<textarea rows={2} value={form.description} onChange={(event) => onChange({ ...form, description: event.target.value })} /></label>
+      <FormFooter message={message} submitLabel={t("action.createAgent")} />
     </form>
   );
 }
@@ -974,7 +1433,8 @@ function KeyCreateForm({
   form,
   message,
   onChange,
-  onSubmit
+  onSubmit,
+  t
 }: {
   agents: Agent[];
   createdKey: CreateAgentKeyResponse | null;
@@ -982,20 +1442,21 @@ function KeyCreateForm({
   message: string;
   onChange: (form: typeof defaultKeyForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  t: Translator;
 }) {
   return (
     <form className="control-form" onSubmit={onSubmit}>
-      <label>Active local caller<select required value={form.agentId} onChange={(event) => onChange({ ...form, agentId: event.target.value })}><option value="">Select caller</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
-      <label>Name<input value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
-      <label>TTL seconds<input inputMode="numeric" max={3600} min={1} type="number" value={form.expiresInSeconds} onChange={(event) => onChange({ ...form, expiresInSeconds: event.target.value })} /></label>
+      <label>{t("form.caller")}<select required value={form.agentId} onChange={(event) => onChange({ ...form, agentId: event.target.value })}><option value="">{t("form.selectCaller")}</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
+      <label>{t("form.name")}<input value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
+      <label>{t("form.ttlSeconds")}<input inputMode="numeric" max={3600} min={1} type="number" value={form.expiresInSeconds} onChange={(event) => onChange({ ...form, expiresInSeconds: event.target.value })} /></label>
       {createdKey ? (
         <div className="one-time-key">
-          <div><strong>One-time key</strong><span>Copy now. Expires {formatDate(createdKey.expiresAt)}.</span></div>
+          <div><strong>{t("text.oneTimeKey")}</strong><span>{tx(t, "text.oneTimeKeyDetail", { expiresAt: formatDate(createdKey.expiresAt) })}</span></div>
           <code>{createdKey.key}</code>
-          <button className="secondary-button" type="button" onClick={() => void navigator.clipboard?.writeText(createdKey.key)}><Copy size={14} /> Copy</button>
+          <button className="secondary-button" type="button" onClick={() => void navigator.clipboard?.writeText(createdKey.key)}><Copy size={14} /> {t("action.copy")}</button>
         </div>
       ) : null}
-      <FormFooter message={message} submitLabel="Create key" />
+      <FormFooter message={message} submitLabel={t("action.createKey")} />
     </form>
   );
 }
@@ -1005,20 +1466,22 @@ function CredentialRotateForm({
   form,
   message,
   onChange,
-  onSubmit
+  onSubmit,
+  t
 }: {
   agents: Agent[];
   form: typeof defaultRotateForm;
   message: string;
   onChange: (form: typeof defaultRotateForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  t: Translator;
 }) {
   return (
     <form className="control-form" onSubmit={onSubmit}>
-      <label>Agent<select required value={form.agentId} onChange={(event) => onChange({ ...form, agentId: event.target.value })}><option value="">Select Agent</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
-      <label>Credential key<input placeholder="apiToken" value={form.credentialName} onChange={(event) => onChange({ ...form, credentialName: event.target.value })} /></label>
-      <label>New secret<input placeholder="Bearer ..." type="password" value={form.credentialValue} onChange={(event) => onChange({ ...form, credentialValue: event.target.value })} /></label>
-      <FormFooter message={message} submitLabel="Rotate credential" />
+      <label>{t("form.agent")}<select required value={form.agentId} onChange={(event) => onChange({ ...form, agentId: event.target.value })}><option value="">{t("form.selectAgent")}</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
+      <label>{t("form.credentialKey")}<input placeholder="apiToken" value={form.credentialName} onChange={(event) => onChange({ ...form, credentialName: event.target.value })} /></label>
+      <label>{t("form.newSecret")}<input placeholder="Bearer ..." type="password" value={form.credentialValue} onChange={(event) => onChange({ ...form, credentialValue: event.target.value })} /></label>
+      <FormFooter message={message} submitLabel={t("action.rotateCredential")} />
     </form>
   );
 }
@@ -1028,20 +1491,22 @@ function PolicyCreateForm({
   form,
   message,
   onChange,
-  onSubmit
+  onSubmit,
+  t
 }: {
   agents: Agent[];
   form: typeof defaultPolicyForm;
   message: string;
   onChange: (form: typeof defaultPolicyForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  t: Translator;
 }) {
   return (
     <form className="control-form" onSubmit={onSubmit}>
-      <label>Name<input placeholder="Allow MCP tools/call" value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
-      <label>Caller<select required value={form.callerAgentId} onChange={(event) => onChange({ ...form, callerAgentId: event.target.value })}><option value="">Select caller</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
-      <label>Target<select required value={form.targetAgentId} onChange={(event) => onChange({ ...form, targetAgentId: event.target.value })}><option value="">Select target</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
-      <div className="route-presets" aria-label="MCP route key presets">
+      <label>{t("form.name")}<input placeholder="Allow MCP tools/call" value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
+      <label>{t("form.caller")}<select required value={form.callerAgentId} onChange={(event) => onChange({ ...form, callerAgentId: event.target.value })}><option value="">{t("form.selectCaller")}</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
+      <label>{t("form.target")}<select required value={form.targetAgentId} onChange={(event) => onChange({ ...form, targetAgentId: event.target.value })}><option value="">{t("form.anyTarget")}</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
+      <div className="route-presets" aria-label={t("form.routeKeyPresets")}>
         {mcpRouteKeyPresets.map((preset) => (
           <button
             className={form.routeType === "mcp" && form.routeKey === preset ? "selected" : ""}
@@ -1057,22 +1522,22 @@ function PolicyCreateForm({
           onClick={() => onChange({ ...form, routeKey: "", routeType: "mcp" })}
           type="button"
         >
-          wildcard
+          {t("text.routeWildcard")}
         </button>
       </div>
       <div className="form-row">
-        <label>Route type<input value={form.routeType} onChange={(event) => onChange({ ...form, routeType: event.target.value })} /></label>
-        <label>Route key<input value={form.routeKey} onChange={(event) => onChange({ ...form, routeKey: event.target.value })} /></label>
+        <label>{t("form.routeType")}<input value={form.routeType} onChange={(event) => onChange({ ...form, routeType: event.target.value })} /></label>
+        <label>{t("form.routeKey")}<input value={form.routeKey} onChange={(event) => onChange({ ...form, routeKey: event.target.value })} /></label>
       </div>
       <div className="form-row">
-        <label>Effect<select value={form.effect} onChange={(event) => onChange({ ...form, effect: event.target.value })}><option value="allow">allow</option><option value="deny">deny</option></select></label>
-        <label>Priority<input inputMode="numeric" min={0} type="number" value={form.priority} onChange={(event) => onChange({ ...form, priority: event.target.value })} /></label>
+        <label>{t("form.effect")}<select value={form.effect} onChange={(event) => onChange({ ...form, effect: event.target.value })}><option value="allow">{t("status.policyAllow")}</option><option value="deny">{t("status.policyDeny")}</option></select></label>
+        <label>{t("form.priority")}<input inputMode="numeric" min={0} type="number" value={form.priority} onChange={(event) => onChange({ ...form, priority: event.target.value })} /></label>
       </div>
       <div className="form-row">
-        <label>Retry attempts<input inputMode="numeric" max={4} min={1} type="number" value={form.retryMaxAttempts} onChange={(event) => onChange({ ...form, retryMaxAttempts: event.target.value })} /></label>
-        <label>Retry backoff ms<input inputMode="numeric" max={1000} min={0} type="number" value={form.retryBackoffMs} onChange={(event) => onChange({ ...form, retryBackoffMs: event.target.value })} /></label>
+        <label>{t("form.retryAttempts")}<input inputMode="numeric" max={4} min={1} type="number" value={form.retryMaxAttempts} onChange={(event) => onChange({ ...form, retryMaxAttempts: event.target.value })} /></label>
+        <label>{t("form.retryBackoffMs")}<input inputMode="numeric" max={1000} min={0} type="number" value={form.retryBackoffMs} onChange={(event) => onChange({ ...form, retryBackoffMs: event.target.value })} /></label>
       </div>
-      <FormFooter message={message} submitLabel="Create policy" />
+      <FormFooter message={message} submitLabel={t("action.createPolicy")} />
     </form>
   );
 }
@@ -1177,13 +1642,15 @@ function PolicyTable({
   canDisable,
   onDisable,
   pendingActionId,
-  policies
+  policies,
+  t
 }: {
   agents: Agent[];
   canDisable: boolean;
   onDisable: (policy: RoutePolicy) => void;
   pendingActionId: string;
   policies: RoutePolicy[];
+  t: Translator;
 }) {
   const names = agentNameMap(agents);
 
@@ -1192,19 +1659,19 @@ function PolicyTable({
       <table className="policy-table">
         <thead>
           <tr>
-            <th>Policy</th>
-            <th>Caller</th>
-            <th>Target</th>
-            <th>Route</th>
-            <th>Decision</th>
-            <th>Action</th>
+            <th>{t("table.policy")}</th>
+            <th>{t("table.caller")}</th>
+            <th>{t("table.target")}</th>
+            <th>{t("table.route")}</th>
+            <th>{t("table.decision")}</th>
+            <th>{t("table.action")}</th>
           </tr>
         </thead>
         <tbody>
           {policies.length === 0 ? (
             <tr>
               <td colSpan={6}>
-                <EmptyRow title="No route policies" detail="Create a route policy to populate governed routes." />
+                <EmptyRow title={t("empty.routePolicies.title")} detail={t("empty.routePolicies.detail")} />
               </td>
             </tr>
           ) : null}
@@ -1212,14 +1679,14 @@ function PolicyTable({
             <tr className={policy.status === "disabled" ? "row-disabled" : undefined} key={policy.id}>
               <td>
                 <strong>{policy.name}</strong>
-                <span>priority {policy.priority} · {policyRetryText(policy)} · matched {formatDate(policy.lastMatchedAt ?? policy.createdAt)}</span>
+                <span>{tx(t, "text.policyPriority", { priority: policy.priority })} · {policyRetryText(policy, t)} · {tx(t, "text.policyMatched", { date: formatDate(policy.lastMatchedAt ?? policy.createdAt) })}</span>
               </td>
               <td>{names[policy.callerAgentId] ?? policy.callerAgentId}</td>
               <td>{names[policy.targetAgentId] ?? policy.targetAgentId}</td>
               <td>
-                <code>{policy.routeType}:{policy.routeKey || "wildcard"}</code>
+                <code>{policy.routeType}:{policy.routeKey || t("text.routeWildcard")}</code>
               </td>
-              <td><Badge tone={policy.effect === "allow" ? "success" : "danger"}>{policy.effect}</Badge></td>
+              <td><Badge tone={policy.effect === "allow" ? "success" : "danger"}>{policyEffectLabel(policy.effect, t)}</Badge></td>
               <td>
                 {canDisable && policy.status === "enabled" ? (
                   <button
@@ -1229,10 +1696,10 @@ function PolicyTable({
                     type="button"
                   >
                     <LockKeyhole size={13} />
-                    {pendingActionId === policy.id ? "Disabling" : "Disable"}
+                    {pendingActionId === policy.id ? t("action.disabling") : t("action.disable")}
                   </button>
                 ) : (
-                  <span className="muted-action">{policy.status === "disabled" ? "disabled" : "sample"}</span>
+                  <span className="muted-action">{policy.status === "disabled" ? t("status.agentDisabled") : t("status.sample")}</span>
                 )}
               </td>
             </tr>
@@ -1247,31 +1714,33 @@ function AgentTable({
   agents,
   channelLabels,
   onStatusChange,
-  pendingActionId
+  pendingActionId,
+  t
 }: {
   agents: Agent[];
   channelLabels: Record<string, string>;
   onStatusChange: (agent: Agent, status: AgentStatus) => void;
   pendingActionId: string;
+  t: Translator;
 }) {
   return (
     <div className="table-wrap">
       <table className="agent-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Channel</th>
-            <th>Endpoint</th>
-            <th>Status</th>
-            <th>Owner</th>
-            <th>Action</th>
+            <th>{t("table.name")}</th>
+            <th>{t("table.channel")}</th>
+            <th>{t("table.endpoint")}</th>
+            <th>{t("table.status")}</th>
+            <th>{t("table.owner")}</th>
+            <th>{t("table.action")}</th>
           </tr>
         </thead>
         <tbody>
           {agents.length === 0 ? (
             <tr>
               <td colSpan={6}>
-                <EmptyRow title="No agents registered" detail="Register caller and target agents to start routing traffic." />
+                <EmptyRow title={t("empty.registry.title")} detail={t("empty.registry.detail")} />
               </td>
             </tr>
           ) : null}
@@ -1281,10 +1750,10 @@ function AgentTable({
                 <strong>{agent.name}</strong>
                 <span>{agent.description || agent.id}</span>
               </td>
-              <td>{channelLabels[agent.channelType] ?? agent.channelType}</td>
-              <td className="truncate">{configText(agent, "endpoint") || "local runtime"}</td>
-              <td><Badge tone={agent.status === "active" ? "success" : agent.status === "draft" ? "warning" : "neutral"}>{agent.status}</Badge></td>
-              <td>{agent.ownerId || "platform"}</td>
+              <td>{channelLabel(agent.channelType, channelLabels, t)}</td>
+              <td className="truncate">{configText(agent, "endpoint") || t("status.localRuntime")}</td>
+              <td><Badge tone={agent.status === "active" ? "success" : agent.status === "draft" ? "warning" : "neutral"}>{agentStatusLabel(agent.status, t)}</Badge></td>
+              <td>{agent.ownerId || t("text.ownerPlatform")}</td>
               <td>
                 {agent.status !== "disabled" ? (
                   <div className="table-action-group">
@@ -1295,7 +1764,7 @@ function AgentTable({
                       type="button"
                     >
                       {agent.status === "active" ? <CircleDot size={13} /> : <CheckCircle2 size={13} />}
-                      {pendingActionId === agent.id ? "Updating" : agent.status === "active" ? "Draft" : "Activate"}
+                      {pendingActionId === agent.id ? t("action.updating") : agent.status === "active" ? t("action.draft") : t("action.activate")}
                     </button>
                     <button
                       className="table-action"
@@ -1304,11 +1773,11 @@ function AgentTable({
                       type="button"
                     >
                       <LockKeyhole size={13} />
-                      Disable
+                      {t("action.disable")}
                     </button>
                   </div>
                 ) : (
-                  <span className="muted-action">disabled</span>
+                  <span className="muted-action">{t("status.agentDisabled")}</span>
                 )}
               </td>
             </tr>
@@ -1319,10 +1788,10 @@ function AgentTable({
   );
 }
 
-function EvidenceTimeline({ runs }: { runs: EvidenceRun[] }) {
+function EvidenceTimeline({ runs, t }: { runs: EvidenceRun[]; t: Translator }) {
   return (
     <div className="timeline">
-      {runs.length === 0 ? <EmptyRow title="No evidence runs" detail="Policy checks will appear here after traffic is evaluated." /> : null}
+      {runs.length === 0 ? <EmptyRow title={t("empty.evidenceRuns.title")} detail={t("empty.evidenceRuns.detail")} /> : null}
       {runs.map((run) => (
         <article className="timeline-row" key={run.id}>
           <div className={`timeline-marker tone-${toneFromStatus(run.status)}`}>
@@ -1331,9 +1800,9 @@ function EvidenceTimeline({ runs }: { runs: EvidenceRun[] }) {
           <div>
             <div className="timeline-title">
               <strong>{run.title}</strong>
-              <Badge tone={toneFromStatus(run.status)}>{run.status}</Badge>
+              <Badge tone={toneFromStatus(run.status)}>{evidenceStatusLabel(run.status, t)}</Badge>
             </div>
-            <p>{run.checks} checks · {formatDuration(evidenceDuration(run))} · {formatDate(run.completedAt ?? run.startedAt)}</p>
+            <p>{run.checks} {t("text.checks")} · {formatDuration(evidenceDuration(run))} · {formatDate(run.completedAt ?? run.startedAt)}</p>
           </div>
         </article>
       ))}
@@ -1343,44 +1812,46 @@ function EvidenceTimeline({ runs }: { runs: EvidenceRun[] }) {
 
 function ContractMatrix({
   channels,
-  providers
+  providers,
+  t
 }: {
   channels: ChannelContract[];
   providers: Array<{ key: string; label: string; channelType: string; requiredCreds?: string[] }>;
+  t: Translator;
 }) {
   return (
     <div className="contract-list">
       {channels.map((channel) => (
         <div className="contract-row" key={channel.key}>
           <div>
-            <strong>{channel.label}</strong>
+            <strong>{channelLabel(channel.key, { [channel.key]: channel.label }, t)}</strong>
             <span>{channel.key}</span>
           </div>
           <Badge tone={channel.endpointRequiredWhenActive ? "warning" : "neutral"}>
-            {channel.endpointRequiredWhenActive ? "endpoint" : "local"}
+            {channel.endpointRequiredWhenActive ? t("form.endpoint") : translatedValue(t, "local")}
           </Badge>
         </div>
       ))}
       <div className="provider-strip">
         {providers.map((provider) => (
-          <span key={provider.key}>{provider.label} · {provider.channelType}</span>
+          <span key={provider.key}>{tx(t, "text.provider", { label: provider.label, channelType: translatedValue(t, provider.channelType) })}</span>
         ))}
       </div>
     </div>
   );
 }
 
-function SignalBoard({ metrics }: { metrics: SystemMetric[] }) {
+function SignalBoard({ metrics, t }: { metrics: SystemMetric[]; t: Translator }) {
   return (
     <div className="signal-grid">
       {metrics.map((metric) => (
         <article className="signal" key={metric.id}>
-          <span>{metric.label}</span>
+          <span>{t(`signal.${metric.id}`, metric.label)}</span>
           <strong>{metric.value}{metric.unit ?? ""}</strong>
           <div className="signal-track" aria-hidden="true">
             <i style={{ width: `${metricRatio(metric)}%` }} />
           </div>
-          <small>{metric.trend} · {metric.status}</small>
+          <small>{translatedValue(t, metric.trend)} · {translatedValue(t, metric.status)}</small>
         </article>
       ))}
     </div>
@@ -1399,12 +1870,17 @@ function TraceTable({ traces, agents, t }: { traces: TraceEvent[]; agents: Agent
             {trace.decision === "allowed" ? <CheckCircle2 size={15} /> : <LockKeyhole size={15} />}
           </div>
           <div>
-            <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? "anonymous"} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
+            <div className="trace-title-line">
+              <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? t("text.traceAnonymous")} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
+              <Badge tone={trace.decision === "allowed" ? "success" : "danger"}>
+                {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
+              </Badge>
+            </div>
             <span>
-              {trace.routeType}:{trace.routeKey || "default"}
+              {trace.routeType}:{trace.routeKey || t("text.traceDefaultRoute")}
               {trace.capabilityId ? ` · ${trace.capabilityId}` : ""}
               {" · "}
-              {trace.reason || trace.decision}
+              {trace.reason || policyEffectLabel(trace.decision === "allowed" ? "allow" : "deny", t)}
             </span>
           </div>
           <time>{formatDate(trace.createdAt)}</time>
@@ -1556,7 +2032,7 @@ function TenantAccessProfileView({
                 <Badge tone={tenant.status === "active" ? "success" : "neutral"}>L{tenant.level}</Badge>
                 <div>
                   <strong>{tenant.name}</strong>
-                  <span>{tenant.id}{tenant.parentTenantId ? ` · parent ${tenant.parentTenantId}` : ""}</span>
+                  <span>{tenant.id}{tenant.parentTenantId ? ` · ${t("text.parentTenant")} ${tenant.parentTenantId}` : ""}</span>
                 </div>
               </div>
             ))}
@@ -1590,8 +2066,13 @@ function TenantAccessProfileView({
                     {trace.decision === "allowed" ? <CheckCircle2 size={15} /> : <LockKeyhole size={15} />}
                   </div>
                   <div>
-                    <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? "anonymous"} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
-                    <span>{trace.capabilityId ?? `${trace.routeType}:${trace.routeKey || "default"}`} · {summarizeDataScopes(trace.dataScopes)} · {trace.reason || trace.decision}</span>
+                    <div className="trace-title-line">
+                      <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? t("text.traceAnonymous")} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
+                      <Badge tone={trace.decision === "allowed" ? "success" : "danger"}>
+                        {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
+                      </Badge>
+                    </div>
+                    <span>{trace.capabilityId ?? `${trace.routeType}:${trace.routeKey || t("text.traceDefaultRoute")}`} · {summarizeDataScopes(trace.dataScopes)} · {trace.reason || policyEffectLabel(trace.decision === "allowed" ? "allow" : "deny", t)}</span>
                   </div>
                   <time>{formatDate(trace.createdAt)}</time>
                 </article>
@@ -1625,7 +2106,7 @@ function AccessGrantRow({ grant, t }: { grant: TenantAccessProfileGrant; t: Tran
         </div>
         <div className="access-badge-group">
           <Badge tone={scopeStatusTone(grant.scopeStatus)}>{grant.scopeStatus}</Badge>
-          <Badge tone={grant.tenantEntitlement.effect === "allow" ? "success" : "danger"}>{grant.tenantEntitlement.effect}</Badge>
+          <Badge tone={grant.tenantEntitlement.effect === "allow" ? "success" : "danger"}>{policyEffectLabel(grant.tenantEntitlement.effect, t)}</Badge>
         </div>
       </div>
       <div className="access-scope-line">
@@ -1636,17 +2117,17 @@ function AccessGrantRow({ grant, t }: { grant: TenantAccessProfileGrant; t: Tran
       {grant.scopeReason ? <p className="access-invalid-reason">{grant.scopeReason}</p> : null}
       <div className="access-nested-list">
         {grant.workspaceAssignments.length === 0 ? (
-          <EmptyRow title="No workspace assignments" detail="No workspace assignment matched this entitlement." />
+          <EmptyRow title={t("empty.workspaceAssignments.title")} detail={t("empty.workspaceAssignments.detail")} />
         ) : null}
         {grant.workspaceAssignments.map((workspace) => (
-          <AccessWorkspaceRow key={workspace.workspaceAssignment.id} workspace={workspace} />
+          <AccessWorkspaceRow key={workspace.workspaceAssignment.id} workspace={workspace} t={t} />
         ))}
       </div>
     </article>
   );
 }
 
-function AccessWorkspaceRow({ workspace }: { workspace: TenantAccessProfileWorkspace }) {
+function AccessWorkspaceRow({ workspace, t }: { workspace: TenantAccessProfileWorkspace; t: Translator }) {
   return (
     <div className="access-workspace-row">
       <div className="access-row-main">
@@ -1659,22 +2140,22 @@ function AccessWorkspaceRow({ workspace }: { workspace: TenantAccessProfileWorks
       {workspace.scopeReason ? <p className="access-invalid-reason">{workspace.scopeReason}</p> : null}
       <div className="access-instance-list">
         {workspace.instanceAssignments.length === 0 ? (
-          <span className="access-empty-inline">No caller instances</span>
+          <span className="access-empty-inline">{t("empty.callerInstances.title")}</span>
         ) : null}
         {workspace.instanceAssignments.map((instance) => (
-          <AccessInstanceRow instance={instance} key={instance.instanceAssignment.id} />
+          <AccessInstanceRow instance={instance} key={instance.instanceAssignment.id} t={t} />
         ))}
       </div>
     </div>
   );
 }
 
-function AccessInstanceRow({ instance }: { instance: TenantAccessProfileInstance }) {
+function AccessInstanceRow({ instance, t }: { instance: TenantAccessProfileInstance; t: Translator }) {
   return (
     <div className="access-instance-row">
       <div>
         <strong>{instance.callerInstance?.name ?? instance.instanceAssignment.callerInstanceId}</strong>
-        <span>{instance.instanceAssignment.subjectSelector || "all subjects"} · {summarizeDataScopes(instance.effectiveInstanceDataScopes)}</span>
+        <span>{instance.instanceAssignment.subjectSelector || t("text.subjectsAll")} · {summarizeDataScopes(instance.effectiveInstanceDataScopes)}</span>
       </div>
       <Badge tone={scopeStatusTone(instance.scopeStatus)}>{instance.scopeStatus}</Badge>
       {instance.scopeReason ? <p className="access-invalid-reason">{instance.scopeReason}</p> : null}
@@ -1819,16 +2300,16 @@ function CapabilityGovernanceView({
                         <span>{dataScopeText(capability.dataScopes) || capability.description || capability.key}</span>
                       </td>
                       <td>{agentNames[capability.targetId] ?? capability.targetId}</td>
-                      <td><Badge tone={capability.action === "delete" || capability.action === "admin" ? "danger" : capability.action === "export" ? "warning" : "info"}>{capability.action}</Badge></td>
-                      <td><Badge tone={riskTone(capability.riskLevel)}>{capability.riskLevel}</Badge></td>
-                      <td><Badge tone={capabilityStatusTone(capability.discoveryStatus)}>{capability.discoveryStatus}</Badge></td>
+                      <td><Badge tone={capability.action === "delete" || capability.action === "admin" ? "danger" : capability.action === "export" ? "warning" : "info"}>{translatedValue(t, capability.action)}</Badge></td>
+                      <td><Badge tone={riskTone(capability.riskLevel)}>{translatedValue(t, capability.riskLevel)}</Badge></td>
+                      <td><Badge tone={capabilityStatusTone(capability.discoveryStatus)}>{capabilityDiscoveryStatusLabel(capability.discoveryStatus, t)}</Badge></td>
                       <td>
                         <strong>{entitlementIds.length}/{workspaceIds.length}/{instanceCount}</strong>
                         <span>{t("detail.tenantWorkspaceInstance")}</span>
                       </td>
                       <td>
                         {capability.discoveryStatus === "approved" ? (
-                          <span className="muted-action">approved</span>
+                          <span className="muted-action">{t("status.capabilityApproved")}</span>
                         ) : (
                           <button
                             className="table-action"
@@ -1837,7 +2318,7 @@ function CapabilityGovernanceView({
                             type="button"
                           >
                             <ShieldCheck size={13} />
-                            {actionId === capability.id ? "Approving" : "Approve"}
+                            {actionId === capability.id ? t("action.approving") : t("action.approve")}
                           </button>
                         )}
                       </td>
@@ -1905,11 +2386,11 @@ function CapabilityGovernanceView({
               <article className="assignment-row" key={entitlement.id}>
                 <div>
                   <strong>{capability?.key ?? entitlement.capabilityId}</strong>
-                  <span>{entitlement.tenantId} · {entitlement.effect} · {entitlement.status}</span>
+                  <span>{entitlement.tenantId} · {policyEffectLabel(entitlement.effect, t)} · {translatedValue(t, entitlement.status)}</span>
                 </div>
                 <div className="assignment-metrics">
-                  <span>{children.length} workspaces</span>
-                  <span>{instanceCount} callers</span>
+                  <span>{children.length} {t("text.workspaces")}</span>
+                  <span>{instanceCount} {t("text.callers")}</span>
                 </div>
               </article>
             );
@@ -2027,9 +2508,26 @@ function auditCredentialVersion(event: AuditEvent) {
   return "-";
 }
 
-function policyRetryText(policy: RoutePolicy) {
-  if (!policy.retry) return "target retry";
-  const statuses = policy.retry.statusCodes.length > 0 ? policy.retry.statusCodes.join("/") : "none";
+function channelLabel(channelType: string, channelLabels: Record<string, string>, t: Translator) {
+  return t(`value.${channelType}`, channelLabels[channelType] ?? channelType);
+}
+
+function evidenceStatusLabel(status: EvidenceRun["status"], t: Translator) {
+  if (status === "passed") return t("status.evidencePassed");
+  if (status === "failed") return t("status.evidenceFailed");
+  return t("status.evidenceWarning");
+}
+
+function capabilityDiscoveryStatusLabel(status: Capability["discoveryStatus"], t: Translator) {
+  if (status === "approved") return t("status.capabilityApproved");
+  if (status === "deprecated") return t("status.capabilityDeprecated");
+  if (status === "removed") return t("status.capabilityRemoved");
+  return t("status.capabilityPendingReview");
+}
+
+function policyRetryText(policy: RoutePolicy, t: Translator) {
+  if (!policy.retry) return t("text.targetRetry");
+  const statuses = policy.retry.statusCodes.length > 0 ? policy.retry.statusCodes.join("/") : t("text.retryNone");
   return `retry ${policy.retry.maxAttempts}x ${policy.retry.backoffMs}ms ${statuses}`;
 }
 
@@ -2246,6 +2744,53 @@ function capabilityStatusTone(status: Capability["discoveryStatus"]): Tone {
   if (status === "pending_review") return "warning";
   if (status === "removed") return "danger";
   return "neutral";
+}
+
+function coreJourneyStatusTone(status: CoreJourneyStepStatus): Tone {
+  if (status === "complete") return "success";
+  if (status === "partial") return "warning";
+  return "neutral";
+}
+
+function coreJourneyStatusLabel(status: CoreJourneyStepStatus, t: Translator) {
+  if (status === "complete") return t("status.stepComplete");
+  if (status === "partial") return t("status.stepPartial");
+  return t("status.stepMissing");
+}
+
+function mcpToolsListPayload() {
+  return {
+    id: "tools-list",
+    jsonrpc: "2.0",
+    method: "tools/list"
+  };
+}
+
+function mcpToolCallPayload(toolName: string) {
+  return {
+    id: `call-${toolName}`,
+    jsonrpc: "2.0",
+    method: "tools/call",
+    params: {
+      arguments: {},
+      name: toolName
+    }
+  };
+}
+
+function toolNamesFromPayload(payload: unknown) {
+  if (!payload || typeof payload !== "object") return [];
+  const result = "result" in payload ? (payload as { result?: unknown }).result : undefined;
+  if (!result || typeof result !== "object") return [];
+  const tools = "tools" in result ? (result as { tools?: unknown }).tools : undefined;
+  if (!Array.isArray(tools)) return [];
+  return tools
+    .map((tool) => {
+      if (!tool || typeof tool !== "object") return "";
+      const name = "name" in tool ? (tool as { name?: unknown }).name : undefined;
+      return typeof name === "string" ? name : "";
+    })
+    .filter(Boolean);
 }
 
 export default App;

@@ -855,6 +855,17 @@ th {
   white-space: nowrap;
 }
 
+:root[lang="zh-CN"] .section-kicker,
+:root[lang="zh-CN"] .status-strip span,
+:root[lang="zh-CN"] .control-form label,
+:root[lang="zh-CN"] th,
+:root[lang="zh-CN"] .capability-toolbar label,
+:root[lang="zh-CN"] .core-journey-toolbar label,
+:root[lang="zh-CN"] .access-toolbar label,
+:root[lang="zh-CN"] .access-summary-cell span {
+  text-transform: none;
+}
+
 td {
   height: 54px;
   overflow: hidden;
@@ -1171,6 +1182,22 @@ td code {
   font-size: 13px;
 }
 
+.trace-title-line {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.trace-title-line strong {
+  flex: 1 1 auto;
+}
+
+.trace-title-line .badge {
+  flex: 0 0 auto;
+  min-width: 48px;
+}
+
 .trace-row time {
   color: var(--soft);
   font-size: 12px;
@@ -1308,6 +1335,169 @@ td code {
   display: grid;
   gap: 3px;
   text-align: right;
+}
+
+.core-journey {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.core-journey-toolbar {
+  display: grid;
+  grid-template-columns: 142px minmax(130px, 0.8fr) minmax(260px, 1.3fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.core-journey-toolbar label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.core-journey-toolbar input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid #d8e0e7;
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 13px;
+  outline: 0;
+}
+
+.core-journey-toolbar input:disabled {
+  background: #f4f7f9;
+  color: var(--soft);
+}
+
+.core-journey-score {
+  display: grid;
+  min-height: 58px;
+  padding: 9px 10px;
+  border: 1px solid #dfe6ec;
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.core-journey-score strong {
+  color: #1f2a34;
+  font-size: 22px;
+  line-height: 25px;
+}
+
+.core-journey-score span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-journey-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  min-height: 30px;
+}
+
+.core-journey-meta code,
+.core-journey-meta span,
+.core-journey-meta strong {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 5px 8px;
+  border: 1px solid #dbe2e8;
+  border-radius: 999px;
+  background: #f8fafb;
+  color: #4f5f6d;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-journey-meta code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.core-journey-meta strong {
+  border-color: #b7dfe9;
+  background: #f2fbfd;
+  color: #0d6f88;
+}
+
+.core-journey-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.core-journey-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 64px;
+  padding: 9px 10px;
+  border: 1px solid #dfe6ec;
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.core-journey-step.status-complete {
+  border-color: #b9e3d0;
+  background: #fbfffd;
+}
+
+.core-journey-step.status-partial {
+  border-color: #f0d399;
+  background: #fffdf7;
+}
+
+.core-journey-step strong,
+.core-journey-step span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-journey-step strong {
+  color: #1f2a34;
+  font-size: 13px;
+}
+
+.core-journey-step span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.core-journey-step code {
+  max-width: 92px;
+  overflow: hidden;
+  color: #40505f;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-journey-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .access-profile {
@@ -1662,6 +1852,11 @@ td code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .core-journey-toolbar,
+  .core-journey-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .topbar {
     align-items: stretch;
     flex-direction: column;
@@ -1751,6 +1946,8 @@ td code {
   .status-strip,
   .metric-grid,
   .signal-grid,
+  .core-journey-toolbar,
+  .core-journey-steps,
   .form-row,
   .trace-filters,
   .capability-toolbar,

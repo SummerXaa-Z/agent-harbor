@@ -36,7 +36,7 @@ Run end-to-end scenarios when user-visible control-plane or data-plane behavior 
 ADMIN_KEY=local-admin-key make scenario-all
 ```
 
-For web console changes, manually verify that the core tenant access journey remains usable in both English and Simplified Chinese, including the language toggle, Tenant Permission Console, capability governance entry point, runtime evidence metrics, and trace evidence labels.
+For web console changes, manually verify that the Cockpit Core Journey Workbench can run against the local mock MCP server and that the core tenant access journey remains usable in both English and Simplified Chinese, including the language toggle, Tenant Permission Console, capability governance entry point, runtime evidence metrics, and trace evidence labels.
 
 ## GitHub Checks
 

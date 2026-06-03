@@ -75,6 +75,22 @@ The scenario starts `scripts/mock-mcp-server.py` automatically and points AgentH
 
 ## Web Console
 
+For the first browser evaluation, keep the API and mock MCP server running, then use the Cockpit's **Core Journey Workbench**:
+
+Terminal 1:
+
+```bash
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
+```
+
+Terminal 2:
+
+```bash
+make mock-mcp
+```
+
+Terminal 3:
+
 ```bash
 cd frontend
 pnpm install
@@ -83,7 +99,7 @@ pnpm dev
 
 The console reads `VITE_API_BASE`; if unset, it uses `http://127.0.0.1:9090`. When the backend is unavailable during local development, the UI falls back to sample data so the console remains navigable.
 
-The core console journey supports English and Simplified Chinese. The browser language is used on first load, and the visible `中文` / `EN` toggle persists the operator's choice locally.
+The Core Journey Workbench creates a fresh tenant tree, caller, MCP target, scoped capability grant chain, allowed call, denied call, and tenant access profile evidence through the real API. The core console journey supports English and Simplified Chinese. The browser language is used on first load, and the visible `中文` / `EN` toggle persists the operator's choice locally.
 
 ## Runtime Configuration
 

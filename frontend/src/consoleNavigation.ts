@@ -1,5 +1,6 @@
 export type NavKey =
   | "cockpit"
+  | "ai-admin"
   | "registry"
   | "routes"
   | "policies"
@@ -21,6 +22,7 @@ export interface ConsoleView {
 
 export const navItems: NavItem[] = [
   { key: "cockpit", label: "Cockpit" },
+  { key: "ai-admin", label: "AI Admin" },
   { key: "registry", label: "Registry" },
   { key: "routes", label: "Routes" },
   { key: "policies", label: "Policies" },
@@ -35,6 +37,11 @@ const views: Record<NavKey, ConsoleView> = {
     key: "cockpit",
     primaryPanelKey: "runtimeSignals",
     titleKey: "page.cockpit",
+  },
+  "ai-admin": {
+    key: "ai-admin",
+    primaryPanelKey: "aiAdminPermissionWorkbench",
+    titleKey: "page.aiAdmin",
   },
   registry: {
     key: "registry",

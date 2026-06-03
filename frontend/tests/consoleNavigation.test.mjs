@@ -12,6 +12,7 @@ test("every primary navigation item resolves to a distinct workspace", () => {
 
   assert.deepEqual(viewKeys, [
     "cockpit",
+    "ai-admin",
     "registry",
     "routes",
     "policies",

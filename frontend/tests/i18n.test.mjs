@@ -50,6 +50,19 @@ test("createTranslator returns Chinese labels for operator controls", () => {
   assert.equal(t("empty.routePolicies.title"), "暂无路由策略");
 });
 
+test("createTranslator returns Chinese labels for AI admin permission packages", () => {
+  const t = createTranslator("zh-CN");
+
+  assert.equal(t("nav.ai-admin"), "AI 管理员");
+  assert.equal(t("page.aiAdmin"), "AI 权限包工作台");
+  assert.equal(t("panel.aiAdminPermissionWorkbench"), "AI 管理员权限包工作台");
+  assert.equal(t("section.permissionDraft"), "权限变更草案");
+  assert.equal(t("section.permissionSimulation"), "发布前模拟");
+  assert.equal(t("action.applyPermissionPackage"), "应用权限包");
+  assert.equal(t("permissionSimulation.guardrailFinance"), "销售只读权限包不包含财务字段访问。");
+  assert.equal(t("message.noMatchingAllowedCapabilities"), "当前目标没有匹配的允许能力。");
+});
+
 test("createTranslator falls back to English for missing keys", () => {
   const t = createTranslator("zh-CN");
 

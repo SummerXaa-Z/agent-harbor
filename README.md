@@ -36,15 +36,24 @@ The data plane uses short-lived Agent Keys. Management APIs can be protected wit
 
 ## Quick Start
 
-Use the repository toolchain pins before running local checks:
+Use the repository toolchain pins before running local commands:
 
 - Go version comes from `go.mod`.
 - Node major version comes from `.node-version`.
 - Frontend package manager comes from `frontend/package.json`.
 
 ```bash
+make demo
+```
+
+Then open `http://127.0.0.1:5174/`. The demo command starts the API, the dependency-free mock MCP server, and the web console together for the first browser evaluation.
+
+In the Cockpit's **Core Journey Workbench**, confirm the preflight rows show the API service and Mock MCP service as ready, then run the core journey. A successful run reaches `6/6` and leaves allowed/denied runtime evidence plus the tenant access profile visible in the console.
+
+Use the local release gate when you want to verify the repository rather than run the browser demo:
+
+```bash
 make check
-make run
 ```
 
 `make check` installs the pinned frontend dependencies from `frontend/pnpm-lock.yaml` before running frontend tests and builds.
@@ -75,7 +84,23 @@ The scenario starts `scripts/mock-mcp-server.py` automatically and points AgentH
 
 ## Web Console
 
-For the first browser evaluation, keep the API and mock MCP server running, then use the Cockpit's **Core Journey Workbench**:
+For the first browser evaluation, run:
+
+```bash
+make demo
+```
+
+Then open `http://127.0.0.1:5174/` and use the Cockpit's **Core Journey Workbench**. The workbench checks API and Mock MCP readiness before enabling the run button. It also includes a **Reset demo session** action that clears the current browser session state and filters without deleting backend data; each run uses fresh `ui-core-*` identifiers so historical evidence remains inspectable.
+
+`make demo` starts:
+
+- AgentHarbor API at `http://127.0.0.1:9090`
+- Mock MCP server at `http://127.0.0.1:8787/mcp`
+- Web console at `http://127.0.0.1:5174`
+
+Use `Ctrl+C` in the demo terminal to stop all demo services.
+
+If you need to troubleshoot a single service, use the manual three-terminal path:
 
 Terminal 1:
 

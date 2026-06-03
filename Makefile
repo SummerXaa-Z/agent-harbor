@@ -18,9 +18,10 @@ SCENARIO_SCRIPTS := \
 	scripts/scenario-mcp-capability-governance.sh \
 	scripts/scenario-data-permission-enforcement.sh \
 	scripts/scenario-tenant-hierarchy.sh \
+	scripts/demo.sh \
 	scripts/scenario-tenant-access-profile.sh
 
-.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp core-journey scenario-all
+.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp demo core-journey scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -42,6 +43,7 @@ help:
 	@printf '  make test-postgres         Run store tests using AGENT_HARBOR_TEST_DATABASE_URL\n'
 	@printf '  make run                   Start the local API server\n'
 	@printf '  make mock-mcp              Start the local mock MCP server for console demos\n'
+	@printf '  make demo                  Start API, mock MCP, and web console for first-run evaluation\n'
 	@printf '  make core-journey          Run the 10-minute local core journey scenario\n'
 	@printf '  make scenario-all          Run all scenarios against BASE_URL\n'
 
@@ -102,6 +104,9 @@ run:
 
 mock-mcp:
 	scripts/mock-mcp-server.py --host "$${MOCK_MCP_HOST:-127.0.0.1}" --port "$${MOCK_MCP_PORT:-8787}"
+
+demo: scripts/demo.sh
+	scripts/demo.sh
 
 core-journey:
 	bash scripts/scenario-core-journey.sh

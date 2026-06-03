@@ -622,6 +622,12 @@ button {
   color: #40505f;
 }
 
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .table-action {
   min-height: 28px;
   padding: 0 8px;
@@ -1402,6 +1408,97 @@ td code {
   white-space: nowrap;
 }
 
+.core-journey-preflight {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid #edf1f4;
+  border-bottom: 1px solid #edf1f4;
+}
+
+.core-journey-preflight-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.core-journey-preflight-header > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 220px;
+}
+
+.core-journey-preflight-header strong {
+  color: #1f2a34;
+  font-size: 13px;
+}
+
+.core-journey-preflight-header span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.core-journey-preflight-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.core-journey-preflight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.core-journey-preflight-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  min-height: 62px;
+  padding: 9px 10px;
+  border: 1px solid #dfe6ec;
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.core-journey-preflight-row.status-ok {
+  border-color: #b9e3d0;
+  background: #fbfffd;
+}
+
+.core-journey-preflight-row.status-warning {
+  border-color: #f0d399;
+  background: #fffdf7;
+}
+
+.core-journey-preflight-row.status-error {
+  border-color: #e9bcc1;
+  background: #fffafa;
+}
+
+.core-journey-preflight-row strong,
+.core-journey-preflight-row span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-journey-preflight-row strong {
+  color: #1f2a34;
+  font-size: 13px;
+}
+
+.core-journey-preflight-row span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .core-journey-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1853,6 +1950,7 @@ td code {
   }
 
   .core-journey-toolbar,
+  .core-journey-preflight-grid,
   .core-journey-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1947,6 +2045,7 @@ td code {
   .metric-grid,
   .signal-grid,
   .core-journey-toolbar,
+  .core-journey-preflight-grid,
   .core-journey-steps,
   .form-row,
   .trace-filters,
@@ -1956,6 +2055,12 @@ td code {
   .access-tenant-list,
   .assignment-row {
     grid-template-columns: 1fr;
+  }
+
+  .core-journey-preflight-header,
+  .core-journey-preflight-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   th,

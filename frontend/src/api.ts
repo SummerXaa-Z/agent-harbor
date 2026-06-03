@@ -54,6 +54,15 @@ import type {
 
 const DEFAULT_API_BASE = 'http://127.0.0.1:9090'
 
+export type HealthCheckStatus = 'ok' | 'error'
+
+export interface HealthCheckResult {
+  status: HealthCheckStatus
+  message: string
+}
+
+export const defaultMockMcpHealthUrl = 'http://127.0.0.1:8787/healthz'
+
 type ViteImportMeta = ImportMeta & {
   env?: {
     VITE_API_BASE?: string
@@ -157,6 +166,35 @@ function isFetchNetworkError(error: unknown): boolean {
     message.includes('networkerror') ||
     message.includes('network request failed')
   )
+}
+
+export async function checkApiHealth(signal?: AbortSignal): Promise<HealthCheckResult> {
+  return checkJsonHealth(endpoint('/healthz'), signal)
+}
+
+export async function checkMockMcpHealth(
+  url: string = defaultMockMcpHealthUrl,
+  signal?: AbortSignal,
+): Promise<HealthCheckResult> {
+  return checkJsonHealth(url, signal)
+}
+
+async function checkJsonHealth(url: string, signal?: AbortSignal): Promise<HealthCheckResult> {
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal,
+    })
+    if (!response.ok) {
+      return { status: 'error', message: `HTTP ${response.status}` }
+    }
+    return { status: 'ok', message: 'ok' }
+  } catch (error) {
+    return {
+      status: 'error',
+      message: error instanceof Error ? error.message : 'health check failed',
+    }
+  }
 }
 
 export async function fetchProviders(signal?: AbortSignal): Promise<ProviderContract[]> {

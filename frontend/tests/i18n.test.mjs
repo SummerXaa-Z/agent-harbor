@@ -30,6 +30,9 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("action.loadProfile"), "加载档案");
   assert.equal(t("panel.coreJourney"), "核心旅程工作台");
   assert.equal(t("action.runCoreJourney"), "跑通核心旅程");
+  assert.equal(t("action.resetCoreJourney"), "重置演示会话");
+  assert.equal(t("preflight.api.title"), "API 服务");
+  assert.equal(t("preflight.mockMcp.title"), "Mock MCP 服务");
   assert.equal(t("journey.step.grantChain"), "租户/工作区/实例授权");
 });
 

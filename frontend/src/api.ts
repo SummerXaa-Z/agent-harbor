@@ -31,14 +31,17 @@ import type {
   CreateAgentRequest,
   CreateInstanceAssignmentRequest,
   CreateRoutePolicyRequest,
+  CreateTenantRequest,
   CreateTenantEntitlementRequest,
   CreateWorkspaceAssignmentRequest,
   InstanceAssignment,
   ManagementScope,
+  McpRpcCallResult,
   ProviderContract,
   RotateAgentCredentialsRequest,
   RoutePolicy,
   SystemMetric,
+  Tenant,
   TenantAccessProfile,
   TenantAccessProfileData,
   TenantEntitlement,
@@ -79,8 +82,10 @@ function isEnvelope<T>(value: unknown): value is ApiEnvelope<T> {
 
 interface RequestOptions {
   adminKey?: string
+  bearerToken?: string
   body?: unknown
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+  runId?: string
   signal?: AbortSignal
 }
 
@@ -97,6 +102,8 @@ class ApiRequestError extends Error {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (options.adminKey?.trim()) headers['X-Admin-Key'] = options.adminKey.trim()
+  if (options.bearerToken?.trim()) headers.Authorization = `Bearer ${options.bearerToken.trim()}`
+  if (options.runId?.trim()) headers['X-Run-Id'] = options.runId.trim()
   if (options.body !== undefined) headers['Content-Type'] = 'application/json'
 
   const response = await fetch(endpoint(path), {
@@ -305,6 +312,50 @@ export async function refreshTargetCapabilities(targetId: string, adminKey?: str
     adminKey,
     method: 'POST',
   })
+}
+
+export async function createTenant(body: CreateTenantRequest, adminKey?: string): Promise<Tenant> {
+  return request<Tenant>('/api/v1/tenants', { adminKey, body })
+}
+
+export async function callMcpRpc(
+  targetId: string,
+  body: unknown,
+  agentKey: string,
+  runId: string,
+  adminKey?: string,
+): Promise<McpRpcCallResult> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    Authorization: `Bearer ${agentKey.trim()}`,
+    'Content-Type': 'application/json',
+  }
+  if (adminKey?.trim()) headers['X-Admin-Key'] = adminKey.trim()
+  if (runId.trim()) headers['X-Run-Id'] = runId.trim()
+
+  const response = await fetch(endpoint(`/api/v1/mcp/agents/${encodeURIComponent(targetId)}/rpc`), {
+    body: JSON.stringify(body),
+    headers,
+    method: 'POST',
+  })
+
+  let payload: unknown
+  try {
+    payload = (await response.json()) as unknown
+  } catch {
+    payload = undefined
+  }
+
+  if (!response.ok && response.status !== 403) {
+    const message = isEnvelope<unknown>(payload) ? payload.message || payload.error : response.statusText
+    throw new ApiRequestError(response.status, message || `Request failed with status ${response.status}`)
+  }
+
+  return {
+    ok: response.ok,
+    payload,
+    status: response.status,
+  }
 }
 
 export async function fetchCapabilities(

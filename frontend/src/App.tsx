@@ -26,10 +26,12 @@ import {
   Workflow
 } from "lucide-react";
 import {
+  callMcpRpc,
   createAgent,
   createAgentKey,
   createInstanceAssignment,
   createRoutePolicy,
+  createTenant,
   createTenantEntitlement,
   createWorkspaceAssignment,
   disableAgent,
@@ -62,6 +64,16 @@ import {
   viewForNav,
   type NavKey
 } from "./consoleNavigation";
+import {
+  createCoreJourneyConfig,
+  defaultCoreJourneyForm,
+  evaluateCoreJourney,
+  type CoreJourneyConfig,
+  type CoreJourneyEvaluation,
+  type CoreJourneyForm,
+  type CoreJourneyStep,
+  type CoreJourneyStepStatus
+} from "./coreJourney";
 import { parseRetryFields } from "./retryForm";
 import type {
   AccessProfileFilters,
@@ -93,6 +105,14 @@ import type {
 
 type Tone = MetricTone;
 type Translator = ReturnType<typeof createTranslator>;
+
+interface CoreJourneyRunResult {
+  allowedStatus: number;
+  callerId: string;
+  deniedStatus: number;
+  targetId: string;
+  toolListStatus: number;
+}
 
 const emptyAccessProfileSummary: AccessProfileSummary = {
   tenantCount: 0,
@@ -157,6 +177,8 @@ const defaultAccessProfileFilters: AccessProfileFilters = {
   workspaceId: ""
 };
 const mcpRouteKeyPresets = ["initialize", "tools/list", "tools/call"];
+const coreJourneyCallerName = "Core Journey Caller";
+const coreJourneyTargetName = "Core Journey MCP Target";
 
 function navIconFor(key: NavKey) {
   switch (key) {
@@ -228,6 +250,11 @@ function App() {
   const [accessMessage, setAccessMessage] = useState("");
   const [accessProfile, setAccessProfile] = useState<TenantAccessProfileData | null>(null);
   const [language, setLanguage] = useState<Language>(initialLanguage);
+  const [coreJourneyForm, setCoreJourneyForm] = useState<CoreJourneyForm>(defaultCoreJourneyForm);
+  const [coreJourneyConfig, setCoreJourneyConfig] = useState<CoreJourneyConfig>(() => createCoreJourneyConfig());
+  const [coreJourneyMessage, setCoreJourneyMessage] = useState("");
+  const [coreJourneyRunning, setCoreJourneyRunning] = useState(false);
+  const [coreJourneyResult, setCoreJourneyResult] = useState<CoreJourneyRunResult | null>(null);
   const t = useMemo(() => createTranslator(language), [language]);
 
   useEffect(() => {
@@ -310,6 +337,198 @@ function App() {
       setAccessMessage(error instanceof Error ? error.message : "Unable to load tenant access profile");
     } finally {
       setAccessLoading(false);
+    }
+  }
+
+  async function runCoreJourney() {
+    const nextConfig = createCoreJourneyConfig(coreJourneyForm);
+    const tenantScope: DataScope[] = [
+      {
+        dataDomain: "crm",
+        region: "us-east",
+        tenantFilter: `tenant_id = '${nextConfig.childTenantId}'`
+      }
+    ];
+    setCoreJourneyConfig(nextConfig);
+    setCoreJourneyResult(null);
+    setCoreJourneyRunning(true);
+    setCoreJourneyMessage(t("message.coreJourneyRunning"));
+    try {
+      await createTenant(
+        {
+          id: nextConfig.rootTenantId,
+          name: "Core Journey Root",
+          status: "active"
+        },
+        adminKey
+      );
+      await createTenant(
+        {
+          id: nextConfig.childTenantId,
+          name: "Core Journey Team",
+          parentTenantId: nextConfig.rootTenantId,
+          status: "active"
+        },
+        adminKey
+      );
+      await createTenant(
+        {
+          id: nextConfig.grandchildTenantId,
+          name: "Core Journey Project",
+          parentTenantId: nextConfig.childTenantId,
+          status: "active"
+        },
+        adminKey
+      );
+
+      const caller = await createAgent(
+        {
+          channelType: "local",
+          description: "Core journey browser caller",
+          name: coreJourneyCallerName,
+          status: "active",
+          tenantId: nextConfig.childTenantId,
+          workspaceId: nextConfig.workspaceId
+        },
+        adminKey
+      );
+      const callerKey = await createAgentKey(
+        {
+          agentId: caller.id,
+          expiresInSeconds: 900,
+          name: "core journey key"
+        },
+        adminKey
+      );
+      const target = await createAgent(
+        {
+          channelConfig: {
+            endpoint: nextConfig.mcpEndpoint,
+            transport: "streamable-http"
+          },
+          channelType: "mcp",
+          description: "Core journey MCP target",
+          name: coreJourneyTargetName,
+          status: "active",
+          tenantId: nextConfig.rootTenantId,
+          workspaceId: nextConfig.workspaceId
+        },
+        adminKey
+      );
+
+      const discovered = await refreshTargetCapabilities(target.id, adminKey);
+      const allowedCapability = discovered.find((capability) => capability.key === nextConfig.allowedTool);
+      const deniedCapability = discovered.find((capability) => capability.key === nextConfig.deniedTool);
+      if (!allowedCapability || !deniedCapability) {
+        throw new Error(tx(t, "message.coreJourneyMissingTools", { allowed: nextConfig.allowedTool, denied: nextConfig.deniedTool }));
+      }
+      const scopedCapability = await updateCapability(
+        allowedCapability.id,
+        {
+          dataScopes: tenantScope,
+          discoveryStatus: "approved"
+        },
+        adminKey
+      );
+      const entitlement = await createTenantEntitlement(
+        {
+          capabilityId: scopedCapability.id,
+          effect: "allow",
+          priority: 50,
+          status: "enabled",
+          targetId: target.id,
+          tenantId: nextConfig.childTenantId
+        },
+        adminKey
+      );
+      const workspaceAssignment = await createWorkspaceAssignment(
+        {
+          dataScopes: [{ table: "accounts" }],
+          effect: "allow",
+          status: "enabled",
+          tenantEntitlementId: entitlement.id,
+          workspaceId: nextConfig.workspaceId
+        },
+        adminKey
+      );
+      await createInstanceAssignment(
+        {
+          callerInstanceId: caller.id,
+          dataScopes: [{ field: "email" }],
+          effect: "allow",
+          status: "enabled",
+          workspaceAssignmentId: workspaceAssignment.id
+        },
+        adminKey
+      );
+
+      const toolList = await callMcpRpc(target.id, mcpToolsListPayload(), callerKey.key, nextConfig.runId, adminKey);
+      if (!toolList.ok) throw new Error(tx(t, "message.coreJourneyRpcUnexpected", { status: toolList.status }));
+      const listedTools = toolNamesFromPayload(toolList.payload);
+      if (!listedTools.includes(nextConfig.allowedTool) || listedTools.includes(nextConfig.deniedTool)) {
+        throw new Error(t("message.coreJourneyToolsListInvalid"));
+      }
+      const deniedCall = await callMcpRpc(
+        target.id,
+        mcpToolCallPayload(nextConfig.deniedTool),
+        callerKey.key,
+        nextConfig.runId,
+        adminKey
+      );
+      if (deniedCall.status !== 403) {
+        throw new Error(tx(t, "message.coreJourneyDeniedUnexpected", { status: deniedCall.status }));
+      }
+      const allowedCall = await callMcpRpc(
+        target.id,
+        mcpToolCallPayload(nextConfig.allowedTool),
+        callerKey.key,
+        nextConfig.runId,
+        adminKey
+      );
+      if (!allowedCall.ok) throw new Error(tx(t, "message.coreJourneyRpcUnexpected", { status: allowedCall.status }));
+
+      const nextScope = {
+        tenantId: nextConfig.childTenantId,
+        workspaceId: nextConfig.workspaceId
+      };
+      const nextTraceFilters = {
+        callerAgentId: caller.id,
+        decision: "" as TraceDecision | "",
+        runId: nextConfig.runId,
+        targetAgentId: target.id
+      };
+      const nextAccessFilters = {
+        callerInstanceId: caller.id,
+        capabilityId: "",
+        targetId: target.id,
+        traceLimit: "10",
+        workspaceId: nextConfig.workspaceId
+      };
+      const [nextData, nextProfile] = await Promise.all([
+        loadConsoleData(adminKey, nextTraceFilters),
+        loadTenantAccessProfile(nextConfig.childTenantId, adminKey, {
+          ...nextAccessFilters,
+          traceLimit: 10
+        })
+      ]);
+      setScope(nextScope);
+      setTraceFilters(nextTraceFilters);
+      setAccessFilters(nextAccessFilters);
+      setData(nextData);
+      setAccessProfile(nextProfile);
+      setLastRefresh(new Date());
+      setCoreJourneyResult({
+        allowedStatus: allowedCall.status,
+        callerId: caller.id,
+        deniedStatus: deniedCall.status,
+        targetId: target.id,
+        toolListStatus: toolList.status
+      });
+      setCoreJourneyMessage(t("message.coreJourneyComplete"));
+    } catch (error) {
+      setCoreJourneyMessage(error instanceof Error ? error.message : "Core journey failed");
+    } finally {
+      setCoreJourneyRunning(false);
     }
   }
 
@@ -669,6 +888,10 @@ function App() {
   const accessSummary = accessProfile?.summary;
   const invalidAccessRows = countInvalidAccessProfileRows(accessProfile);
   const pageTitle = t(activeView.titleKey, t("app.title"));
+  const coreJourneyEvaluation = useMemo(
+    () => evaluateCoreJourney(data, accessProfile, coreJourneyConfig),
+    [accessProfile, coreJourneyConfig, data]
+  );
   const tracePanel = (className = "span-7") => (
     <Panel className={className} icon={<FileSearch size={18} />} title={t("panel.auditTraces")} action={<IconOpen title={t("action.open")} />}>
       <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} t={t} />
@@ -793,6 +1016,22 @@ function App() {
       />
     </Panel>
   );
+  const coreJourneyPanel = (
+    <Panel className="span-12" icon={<Workflow size={18} />} title={t("panel.coreJourney")}>
+      <CoreJourneyWorkbench
+        config={coreJourneyConfig}
+        evaluation={coreJourneyEvaluation}
+        form={coreJourneyForm}
+        message={coreJourneyMessage}
+        onChange={setCoreJourneyForm}
+        onOpen={setActiveNav}
+        onRun={() => void runCoreJourney()}
+        result={coreJourneyResult}
+        running={coreJourneyRunning}
+        t={t}
+      />
+    </Panel>
+  );
   const viewContent = (() => {
     switch (activeView.key) {
       case "registry":
@@ -850,6 +1089,7 @@ function App() {
       default:
         return (
           <section className="content-grid">
+            {coreJourneyPanel}
             {runtimeSignalsPanel("span-5")}
             {tracePanel("span-7")}
             {evidenceRunsPanel("span-4")}
@@ -1032,6 +1272,122 @@ function App() {
         {viewContent}
       </main>
     </div>
+  );
+}
+
+function CoreJourneyWorkbench({
+  config,
+  evaluation,
+  form,
+  message,
+  onChange,
+  onOpen,
+  onRun,
+  result,
+  running,
+  t
+}: {
+  config: CoreJourneyConfig;
+  evaluation: CoreJourneyEvaluation;
+  form: CoreJourneyForm;
+  message: string;
+  onChange: (form: CoreJourneyForm) => void;
+  onOpen: (key: NavKey) => void;
+  onRun: () => void;
+  result: CoreJourneyRunResult | null;
+  running: boolean;
+  t: Translator;
+}) {
+  return (
+    <div className="core-journey">
+      <div className="core-journey-toolbar">
+        <div className="core-journey-score">
+          <strong>{evaluation.completeCount}/{evaluation.totalCount}</strong>
+          <span>{t("text.coreJourneyCompletion")}</span>
+        </div>
+        <label>
+          {t("form.workspace")}
+          <input
+            disabled={running}
+            value={form.workspaceId}
+            onChange={(event) => onChange({ ...form, workspaceId: event.target.value })}
+          />
+        </label>
+        <label>
+          {t("form.endpoint")}
+          <input
+            disabled={running}
+            value={form.mcpEndpoint}
+            onChange={(event) => onChange({ ...form, mcpEndpoint: event.target.value })}
+          />
+        </label>
+        <label>
+          {t("form.allowedTool")}
+          <input
+            disabled={running}
+            value={form.allowedTool}
+            onChange={(event) => onChange({ ...form, allowedTool: event.target.value })}
+          />
+        </label>
+        <label>
+          {t("form.deniedTool")}
+          <input
+            disabled={running}
+            value={form.deniedTool}
+            onChange={(event) => onChange({ ...form, deniedTool: event.target.value })}
+          />
+        </label>
+        <button className="primary-button" disabled={running} onClick={onRun} type="button">
+          <Workflow size={14} />
+          {running ? t("action.runningJourney") : t("action.runCoreJourney")}
+        </button>
+      </div>
+
+      <div className="core-journey-meta">
+        <code>{config.runId}</code>
+        <span>{config.childTenantId}</span>
+        {result ? (
+          <span>
+            tools/list {result.toolListStatus} · {form.deniedTool} {result.deniedStatus} · {form.allowedTool} {result.allowedStatus}
+          </span>
+        ) : null}
+        {message ? <strong>{message}</strong> : null}
+      </div>
+
+      <div className="core-journey-steps">
+        {evaluation.steps.map((step) => (
+          <CoreJourneyStepRow key={step.key} step={step} t={t} />
+        ))}
+      </div>
+
+      <div className="core-journey-actions">
+        <button className="secondary-button" onClick={() => onOpen("access")} type="button">
+          <LockKeyhole size={14} />
+          {t("action.openAccess")}
+        </button>
+        <button className="secondary-button" onClick={() => onOpen("capabilities")} type="button">
+          <DatabaseZap size={14} />
+          {t("action.openCapabilities")}
+        </button>
+        <button className="secondary-button" onClick={() => onOpen("traces")} type="button">
+          <FileSearch size={14} />
+          {t("action.openTraces")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CoreJourneyStepRow({ step, t }: { step: CoreJourneyStep; t: Translator }) {
+  return (
+    <article className={`core-journey-step status-${step.status}`}>
+      <Badge tone={coreJourneyStatusTone(step.status)}>{coreJourneyStatusLabel(step.status, t)}</Badge>
+      <div>
+        <strong>{t(`journey.step.${step.key}`)}</strong>
+        <span>{step.detail}</span>
+      </div>
+      <code>{step.metric}</code>
+    </article>
   );
 }
 
@@ -1514,7 +1870,12 @@ function TraceTable({ traces, agents, t }: { traces: TraceEvent[]; agents: Agent
             {trace.decision === "allowed" ? <CheckCircle2 size={15} /> : <LockKeyhole size={15} />}
           </div>
           <div>
-            <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? t("text.traceAnonymous")} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
+            <div className="trace-title-line">
+              <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? t("text.traceAnonymous")} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
+              <Badge tone={trace.decision === "allowed" ? "success" : "danger"}>
+                {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
+              </Badge>
+            </div>
             <span>
               {trace.routeType}:{trace.routeKey || t("text.traceDefaultRoute")}
               {trace.capabilityId ? ` · ${trace.capabilityId}` : ""}
@@ -1705,7 +2066,12 @@ function TenantAccessProfileView({
                     {trace.decision === "allowed" ? <CheckCircle2 size={15} /> : <LockKeyhole size={15} />}
                   </div>
                   <div>
-                    <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? t("text.traceAnonymous")} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
+                    <div className="trace-title-line">
+                      <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? t("text.traceAnonymous")} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
+                      <Badge tone={trace.decision === "allowed" ? "success" : "danger"}>
+                        {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
+                      </Badge>
+                    </div>
                     <span>{trace.capabilityId ?? `${trace.routeType}:${trace.routeKey || t("text.traceDefaultRoute")}`} · {summarizeDataScopes(trace.dataScopes)} · {trace.reason || policyEffectLabel(trace.decision === "allowed" ? "allow" : "deny", t)}</span>
                   </div>
                   <time>{formatDate(trace.createdAt)}</time>
@@ -2378,6 +2744,53 @@ function capabilityStatusTone(status: Capability["discoveryStatus"]): Tone {
   if (status === "pending_review") return "warning";
   if (status === "removed") return "danger";
   return "neutral";
+}
+
+function coreJourneyStatusTone(status: CoreJourneyStepStatus): Tone {
+  if (status === "complete") return "success";
+  if (status === "partial") return "warning";
+  return "neutral";
+}
+
+function coreJourneyStatusLabel(status: CoreJourneyStepStatus, t: Translator) {
+  if (status === "complete") return t("status.stepComplete");
+  if (status === "partial") return t("status.stepPartial");
+  return t("status.stepMissing");
+}
+
+function mcpToolsListPayload() {
+  return {
+    id: "tools-list",
+    jsonrpc: "2.0",
+    method: "tools/list"
+  };
+}
+
+function mcpToolCallPayload(toolName: string) {
+  return {
+    id: `call-${toolName}`,
+    jsonrpc: "2.0",
+    method: "tools/call",
+    params: {
+      arguments: {},
+      name: toolName
+    }
+  };
+}
+
+function toolNamesFromPayload(payload: unknown) {
+  if (!payload || typeof payload !== "object") return [];
+  const result = "result" in payload ? (payload as { result?: unknown }).result : undefined;
+  if (!result || typeof result !== "object") return [];
+  const tools = "tools" in result ? (result as { tools?: unknown }).tools : undefined;
+  if (!Array.isArray(tools)) return [];
+  return tools
+    .map((tool) => {
+      if (!tool || typeof tool !== "object") return "";
+      const name = "name" in tool ? (tool as { name?: unknown }).name : undefined;
+      return typeof name === "string" ? name : "";
+    })
+    .filter(Boolean);
 }
 
 export default App;

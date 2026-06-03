@@ -61,6 +61,13 @@ export interface Tenant {
   updatedAt: string
 }
 
+export interface CreateTenantRequest {
+  id: string
+  parentTenantId?: string
+  name: string
+  status?: TenantStatus
+}
+
 export interface AgentKey {
   id: string
   agentId: string
@@ -443,4 +450,10 @@ export interface TraceFilters {
   decision?: TraceDecision | ''
   callerAgentId?: string
   targetAgentId?: string
+}
+
+export interface McpRpcCallResult {
+  ok: boolean
+  payload: unknown
+  status: number
 }

@@ -15,6 +15,7 @@ This project uses Keep a Changelog-style sections and will adopt semantic versio
 - Public roadmap for near-term and future product direction.
 - Developer-preview core journey scenario with a dependency-free mock MCP server.
 - Development-only `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` switch for local loopback/private upstream evaluation.
+- English and Simplified Chinese labels for the web console's core tenant access and runtime evidence journey.
 
 ### Changed
 
@@ -26,6 +27,7 @@ This project uses Keep a Changelog-style sections and will adopt semantic versio
 - Renamed PostgreSQL migration files to stable schema-area filenames.
 - Rewrote the frontend design reference as public console design guidance.
 - Updated console metrics so live runtime evidence is shown from real allowed/denied traces instead of sample evidence runs.
+- Added a visible web console language toggle that persists the operator's local preference.
 
 ### Fixed
 

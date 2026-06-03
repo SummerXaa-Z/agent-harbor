@@ -233,6 +233,33 @@ button {
   gap: 8px;
 }
 
+.language-toggle {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.language-toggle button {
+  min-width: 44px;
+  height: 30px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #5b6875;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.language-toggle button.selected {
+  background: #e8f7fb;
+  color: #0d6f88;
+}
+
 .search-box {
   display: flex;
   align-items: center;
@@ -1641,9 +1668,14 @@ td code {
   }
 
   .topbar-actions,
+  .language-toggle,
   .admin-key-box,
   .search-box {
     width: 100%;
+  }
+
+  .language-toggle button {
+    flex: 1;
   }
 
   .topbar-actions {

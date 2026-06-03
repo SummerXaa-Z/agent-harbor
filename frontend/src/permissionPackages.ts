@@ -4,6 +4,9 @@ import type {
   CapabilityRisk,
   CapabilitySensitivity,
   DataScope,
+  InstanceAssignment,
+  TenantEntitlement,
+  WorkspaceAssignment,
 } from "./types";
 
 export type PermissionPackageDecision = "allow" | "deny";
@@ -47,6 +50,13 @@ export interface PermissionPackageDraft {
   dataScopes: DataScope[];
   readiness: PermissionPackageReadiness;
   simulationRows: PermissionPackageSimulationRow[];
+}
+
+export interface PermissionPackageApplyResult {
+  draft: PermissionPackageDraft;
+  tenantEntitlements: TenantEntitlement[];
+  workspaceAssignments: WorkspaceAssignment[];
+  instanceAssignments: InstanceAssignment[];
 }
 
 export interface PermissionPackageReadiness {

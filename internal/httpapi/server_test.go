@@ -138,6 +138,43 @@ type capabilityResponse struct {
 	Version         int    `json:"version"`
 }
 
+type dataScopeResponse struct {
+	DataDomain   string `json:"dataDomain"`
+	Region       string `json:"region"`
+	TenantFilter string `json:"tenantFilter"`
+}
+
+type permissionPackageTemplateResponse struct {
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	AllowedActions []string `json:"allowedActions"`
+	BlockedActions []string `json:"blockedActions"`
+}
+
+type permissionPackageDraftResponse struct {
+	ID                  string                            `json:"id"`
+	Template            permissionPackageTemplateResponse `json:"template"`
+	AllowedCapabilities []capabilityResponse              `json:"allowedCapabilities"`
+	BlockedCapabilities []capabilityResponse              `json:"blockedCapabilities"`
+	DataScopes          []dataScopeResponse               `json:"dataScopes"`
+	Readiness           struct {
+		CanApply bool     `json:"canApply"`
+		Warnings []string `json:"warnings"`
+	} `json:"readiness"`
+	SimulationRows []struct {
+		CapabilityKey    string `json:"capabilityKey"`
+		ExpectedDecision string `json:"expectedDecision"`
+		ReasonKey        string `json:"reasonKey"`
+	} `json:"simulationRows"`
+}
+
+type permissionPackageApplyResponse struct {
+	Draft                permissionPackageDraftResponse `json:"draft"`
+	TenantEntitlements   []tenantEntitlementResponse    `json:"tenantEntitlements"`
+	WorkspaceAssignments []workspaceAssignmentResponse  `json:"workspaceAssignments"`
+	InstanceAssignments  []instanceAssignmentResponse   `json:"instanceAssignments"`
+}
+
 type tenantResponse struct {
 	ID             string `json:"id"`
 	ParentTenantID string `json:"parentTenantId"`
@@ -2577,6 +2614,112 @@ func TestMCPCapabilityDiscoveryAndAssignmentManagement(t *testing.T) {
 	}
 }
 
+func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-biz", "tenant-root", "Business tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-biz", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-sales", Name: "Sales Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "CRM MCP", "tenant-root", "ws-sales", "mcp", domain.AgentStatusActive, nil)
+	search := createDirectCapabilityWithAction(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	export := createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	templates := decodeData[[]permissionPackageTemplateResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/templates", nil, ""))
+	if len(templates) == 0 || templates[0].ID != "sales-readonly" {
+		t.Fatalf("expected sales-readonly template first, got %#v", templates)
+	}
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "华东",
+		"requestText":      "给销售助手开通客户只读，禁止导出合同。",
+		"subjectSelector":  "user:sales-*",
+		"targetId":         target.ID,
+		"templateId":       "sales-readonly",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-sales",
+	}
+	draft := decodeData[permissionPackageDraftResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/drafts", input, ""))
+	if !draft.Readiness.CanApply || draft.Template.ID != "sales-readonly" {
+		t.Fatalf("expected applicable sales-readonly draft, got %#v", draft)
+	}
+	if len(draft.AllowedCapabilities) != 1 || draft.AllowedCapabilities[0].ID != search.ID {
+		t.Fatalf("expected search_customer allowed, got %#v", draft.AllowedCapabilities)
+	}
+	if len(draft.BlockedCapabilities) != 1 || draft.BlockedCapabilities[0].ID != export.ID {
+		t.Fatalf("expected export_contracts blocked, got %#v", draft.BlockedCapabilities)
+	}
+	if len(draft.DataScopes) != 1 || draft.DataScopes[0].Region != "华东" || draft.DataScopes[0].TenantFilter != "tenant_id = 'tenant-east'" {
+		t.Fatalf("unexpected draft data scopes: %#v", draft.DataScopes)
+	}
+	if len(draft.SimulationRows) != 4 || draft.SimulationRows[0].ExpectedDecision != "allow" || draft.SimulationRows[1].ExpectedDecision != "deny" {
+		t.Fatalf("unexpected simulation rows: %#v", draft.SimulationRows)
+	}
+
+	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", input, ""))
+	if len(applied.TenantEntitlements) != 1 || applied.TenantEntitlements[0].CapabilityID != search.ID {
+		t.Fatalf("expected one applied tenant entitlement for search, got %#v", applied.TenantEntitlements)
+	}
+	if len(applied.WorkspaceAssignments) != 1 || applied.WorkspaceAssignments[0].WorkspaceID != "ws-sales" {
+		t.Fatalf("expected one workspace assignment, got %#v", applied.WorkspaceAssignments)
+	}
+	if len(applied.InstanceAssignments) != 1 || applied.InstanceAssignments[0].CallerInstanceID != caller.ID {
+		t.Fatalf("expected one caller instance assignment, got %#v", applied.InstanceAssignments)
+	}
+	updated, ok, err := repo.GetCapability(t.Context(), search.ID)
+	if err != nil || !ok {
+		t.Fatalf("get updated capability: ok=%v err=%v", ok, err)
+	}
+	if updated.DiscoveryStatus != domain.CapabilityDiscoveryApproved || len(updated.DataScopes) != 1 || updated.DataScopes[0].Region != "华东" {
+		t.Fatalf("expected package apply to approve and scope capability, got %#v", updated)
+	}
+	events := decodeData[[]auditEventResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/events?action=permission_package.applied", nil, ""))
+	if len(events) != 1 || events[0].TenantID != "tenant-east" || events[0].ResourceID != applied.Draft.ID {
+		t.Fatalf("expected permission_package.applied audit event, got %#v", events)
+	}
+}
+
+func TestPermissionPackageDraftDetectsDataScopeConflicts(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-sales", Name: "Sales Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "CRM MCP", "tenant-root", "ws-sales", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithActionAndScopes(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, []domain.DataScope{{
+		DataDomain:   "crm",
+		Region:       "us-east",
+		TenantFilter: "tenant_id = 'tenant-east'",
+	}}, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "eu-west",
+		"requestText":      "给销售助手开通客户只读。",
+		"targetId":         target.ID,
+		"templateId":       "sales-readonly",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-sales",
+	}
+	draft := decodeData[permissionPackageDraftResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/drafts", input, ""))
+	if draft.Readiness.CanApply || len(draft.Readiness.Warnings) == 0 {
+		t.Fatalf("expected data-scope conflict warning, got %#v", draft.Readiness)
+	}
+	applyResp := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", input, "")
+	if applyResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected apply to reject conflicting data scopes, status=%d body=%s", applyResp.Code, applyResp.Body.String())
+	}
+}
+
 func TestCapabilityAssignmentDataScopesMustNarrowHierarchy(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -2874,6 +3017,55 @@ func capabilityByKey(t *testing.T, capabilities []capabilityResponse, key string
 	}
 	t.Fatalf("capability %q not found in %#v", key, capabilities)
 	return capabilityResponse{}
+}
+
+func createDirectTenant(t *testing.T, repo store.Repository, id string, parentID string, name string, now time.Time) domain.Tenant {
+	t.Helper()
+	tenant := domain.Tenant{
+		ID:             id,
+		ParentTenantID: parentID,
+		Name:           name,
+		Status:         domain.TenantStatusActive,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	created, err := repo.CreateTenant(t.Context(), tenant)
+	if err != nil {
+		t.Fatalf("create direct tenant: %v", err)
+	}
+	return created
+}
+
+func createDirectCapabilityWithAction(t *testing.T, repo store.Repository, targetID string, key string, action domain.CapabilityAction, risk domain.CapabilityRisk, sensitivity domain.CapabilitySensitivity, now time.Time) domain.Capability {
+	t.Helper()
+	return createDirectCapabilityWithActionAndScopes(t, repo, targetID, key, action, risk, sensitivity, nil, now)
+}
+
+func createDirectCapabilityWithActionAndScopes(t *testing.T, repo store.Repository, targetID string, key string, action domain.CapabilityAction, risk domain.CapabilityRisk, sensitivity domain.CapabilitySensitivity, dataScopes []domain.DataScope, now time.Time) domain.Capability {
+	t.Helper()
+	capability := domain.Capability{
+		ID:              security.NewID("cap"),
+		TargetID:        targetID,
+		Type:            domain.CapabilityTypeMCPTool,
+		Key:             key,
+		DisplayName:     key,
+		Description:     key,
+		Action:          action,
+		DataDomains:     []string{"crm"},
+		DataScopes:      dataScopes,
+		Sensitivity:     sensitivity,
+		RiskLevel:       risk,
+		EnforcementMode: domain.CapabilityEnforcementGateway,
+		DiscoveryStatus: domain.CapabilityDiscoveryPendingReview,
+		Version:         1,
+		DiscoveredAt:    now,
+		UpdatedAt:       now,
+	}
+	created, err := repo.UpsertCapability(t.Context(), capability)
+	if err != nil {
+		t.Fatalf("create direct capability: %v", err)
+	}
+	return created
 }
 
 func tenantResponseIDs(rows []tenantResponse) []string {

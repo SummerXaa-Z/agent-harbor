@@ -26,12 +26,14 @@ import {
   Workflow
 } from "lucide-react";
 import {
+  applyPermissionPackage,
   callMcpRpc,
   checkApiHealth,
   checkMockMcpHealth,
   createAgent,
   createAgentKey,
   createInstanceAssignment,
+  createPermissionPackageDraftFromApi,
   createRoutePolicy,
   createTenant,
   createTenantEntitlement,
@@ -39,6 +41,8 @@ import {
   defaultMockMcpHealthUrl,
   disableAgent,
   disableRoutePolicy,
+  fetchPermissionPackageTemplates,
+  isApiCompatibilityFallbackError,
   loadConsoleData,
   loadTenantAccessProfile,
   refreshTargetCapabilities,
@@ -239,6 +243,10 @@ function tx(t: Translator, key: string, values: Record<string, string | number>)
   );
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
+}
+
 function translatedValue(t: Translator, value?: string) {
   return value ? t(`value.${value}`, value) : "";
 }
@@ -303,6 +311,8 @@ function App() {
   const [aiAdminForm, setAiAdminForm] = useState<PermissionPackageDraftInput>(defaultAiAdminForm);
   const [aiAdminMessage, setAiAdminMessage] = useState("");
   const [aiAdminApplying, setAiAdminApplying] = useState(false);
+  const [aiAdminTemplates, setAiAdminTemplates] = useState<PermissionPackageTemplate[]>(permissionPackageTemplates);
+  const [aiAdminServerDraft, setAiAdminServerDraft] = useState<PermissionPackageDraft | null>(null);
   const t = useMemo(() => createTranslator(language), [language]);
 
   useEffect(() => {
@@ -367,6 +377,10 @@ function App() {
       const requestScope = normalizedScope(scope);
       const mcpTarget = data.agents.find((agent) => agent.channelType === "mcp" && agent.status === "active")
         ?? data.agents.find((agent) => agent.channelType === "mcp");
+      const targetId = current.targetId || mcpTarget?.id || "";
+      const capabilityRegion = data.capabilities
+        .find((capability) => capability.targetId === targetId && capability.action === "read")
+        ?.dataScopes?.find((scopeItem) => scopeItem.region)?.region;
       const caller = data.agents.find(
         (agent) =>
           agent.status === "active" &&
@@ -377,7 +391,8 @@ function App() {
       const next = {
         ...current,
         callerInstanceId: current.callerInstanceId || caller?.id || "",
-        targetId: current.targetId || mcpTarget?.id || "",
+        region: current.region === defaultAiAdminForm.region && capabilityRegion ? capabilityRegion : current.region,
+        targetId,
         tenantId: current.tenantId === defaultManagementScope.tenantId && caller?.tenantId
           ? caller.tenantId
           : current.tenantId || requestScope.tenantId,
@@ -388,6 +403,22 @@ function App() {
       return shallowEqualAiAdminForm(current, next) ? current : next;
     });
   }, [data, scope]);
+
+  useEffect(() => {
+    if (activeNav !== "ai-admin" || !data?.loadedFromApi) {
+      setAiAdminServerDraft(null);
+      return;
+    }
+    const controller = new AbortController();
+    createPermissionPackageDraftFromApi(aiAdminForm, adminKey, controller.signal)
+      .then((draft) => setAiAdminServerDraft(draft))
+      .catch((error) => {
+        if (!isAbortError(error)) {
+          setAiAdminServerDraft(null);
+        }
+      });
+    return () => controller.abort();
+  }, [activeNav, adminKey, aiAdminForm, data?.loadedFromApi]);
 
   async function refresh() {
     try {
@@ -410,8 +441,12 @@ function App() {
   async function refreshAiAdminCatalog() {
     try {
       setLoadError("");
-      const next = await loadConsoleData(adminKey, traceFilters);
+      const [next, templates] = await Promise.all([
+        loadConsoleData(adminKey, traceFilters),
+        fetchPermissionPackageTemplates(adminKey).catch(() => permissionPackageTemplates)
+      ]);
       setData(next);
+      setAiAdminTemplates(templates.length > 0 ? templates : permissionPackageTemplates);
       setLastRefresh(new Date());
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "console data unavailable");
@@ -1016,48 +1051,15 @@ function App() {
     }
     setAiAdminApplying(true);
     try {
-      for (const capability of aiAdminDraft.allowedCapabilities) {
-        const approvedCapability = await updateCapability(
-          capability.id,
-          {
-            dataScopes: aiAdminDraft.dataScopes,
-            discoveryStatus: "approved"
-          },
-          adminKey
-        );
-        const entitlement = await createTenantEntitlement(
-          {
-            capabilityId: approvedCapability.id,
-            dataScopes: aiAdminDraft.dataScopes,
-            effect: "allow",
-            priority: 40,
-            status: "enabled",
-            targetId: approvedCapability.targetId,
-            tenantId: aiAdminForm.tenantId
-          },
-          adminKey
-        );
-        const workspaceAssignment = await createWorkspaceAssignment(
-          {
-            dataScopes: aiAdminDraft.dataScopes,
-            effect: "allow",
-            status: "enabled",
-            tenantEntitlementId: entitlement.id,
-            workspaceId: aiAdminForm.workspaceId
-          },
-          adminKey
-        );
-        await createInstanceAssignment(
-          {
-            callerInstanceId: aiAdminForm.callerInstanceId,
-            dataScopes: aiAdminDraft.dataScopes,
-            effect: "allow",
-            status: "enabled",
-            subjectSelector: aiAdminForm.subjectSelector?.trim() || undefined,
-            workspaceAssignmentId: workspaceAssignment.id
-          },
-          adminKey
-        );
+      let appliedCount = aiAdminDraft.allowedCapabilities.length;
+      try {
+        const applied = await applyPermissionPackage(aiAdminForm, adminKey);
+        appliedCount = applied.tenantEntitlements.length;
+      } catch (error) {
+        if (!isApiCompatibilityFallbackError(error)) {
+          throw error;
+        }
+        appliedCount = await applyAiAdminPermissionPackageWithManagementChain();
       }
 
       const nextScope = {
@@ -1083,12 +1085,59 @@ function App() {
       setData(nextData);
       setAccessProfile(nextProfile);
       setLastRefresh(new Date());
-      setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: aiAdminDraft.allowedCapabilities.length }));
+      setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: appliedCount }));
     } catch (error) {
       setAiAdminMessage(error instanceof Error ? error.message : "Unable to apply permission package");
     } finally {
       setAiAdminApplying(false);
     }
+  }
+
+  async function applyAiAdminPermissionPackageWithManagementChain() {
+    for (const capability of aiAdminDraft.allowedCapabilities) {
+      const approvedCapability = await updateCapability(
+        capability.id,
+        {
+          dataScopes: aiAdminDraft.dataScopes,
+          discoveryStatus: "approved"
+        },
+        adminKey
+      );
+      const entitlement = await createTenantEntitlement(
+        {
+          capabilityId: approvedCapability.id,
+          dataScopes: aiAdminDraft.dataScopes,
+          effect: "allow",
+          priority: 40,
+          status: "enabled",
+          targetId: approvedCapability.targetId,
+          tenantId: aiAdminForm.tenantId
+        },
+        adminKey
+      );
+      const workspaceAssignment = await createWorkspaceAssignment(
+        {
+          dataScopes: aiAdminDraft.dataScopes,
+          effect: "allow",
+          status: "enabled",
+          tenantEntitlementId: entitlement.id,
+          workspaceId: aiAdminForm.workspaceId
+        },
+        adminKey
+      );
+      await createInstanceAssignment(
+        {
+          callerInstanceId: aiAdminForm.callerInstanceId,
+          dataScopes: aiAdminDraft.dataScopes,
+          effect: "allow",
+          status: "enabled",
+          subjectSelector: aiAdminForm.subjectSelector?.trim() || undefined,
+          workspaceAssignmentId: workspaceAssignment.id
+        },
+        adminKey
+      );
+    }
+    return aiAdminDraft.allowedCapabilities.length;
   }
 
   const agents = data?.agents ?? [];
@@ -1104,10 +1153,11 @@ function App() {
   const metrics = data?.systemMetrics ?? [];
   const localCallers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const mcpTargets = agents.filter((agent) => agent.channelType === "mcp");
-  const aiAdminDraft = useMemo(
+  const localAiAdminDraft = useMemo(
     () => createPermissionPackageDraft(aiAdminForm, { capabilities }),
     [aiAdminForm, capabilities]
   );
+  const aiAdminDraft = aiAdminServerDraft ?? localAiAdminDraft;
 
   const channelLabels = useMemo(() => {
     return channels.reduce<Record<string, string>>((acc, item) => {
@@ -1239,6 +1289,7 @@ function App() {
         mcpTargets={mcpTargets}
         onApply={() => void applyAiAdminPermissionPackage()}
         onChange={setAiAdminForm}
+        templates={aiAdminTemplates}
         t={t}
       />
     </Panel>
@@ -1702,6 +1753,7 @@ function AiAdminPermissionWorkbench({
   mcpTargets,
   onApply,
   onChange,
+  templates,
   t
 }: {
   agents: Agent[];
@@ -1712,6 +1764,7 @@ function AiAdminPermissionWorkbench({
   mcpTargets: Agent[];
   onApply: () => void;
   onChange: (form: PermissionPackageDraftInput) => void;
+  templates: PermissionPackageTemplate[];
   t: Translator;
 }) {
   const callers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
@@ -1730,7 +1783,7 @@ function AiAdminPermissionWorkbench({
           <label>
             {t("form.permissionPackage")}
             <select value={form.templateId} onChange={(event) => onChange({ ...form, templateId: event.target.value })}>
-              {permissionPackageTemplates.map((template) => (
+              {templates.map((template) => (
                 <option key={template.id} value={template.id}>
                   {permissionPackageTemplateName(template, t)}
                 </option>

@@ -127,7 +127,7 @@ The console reads `VITE_API_BASE`; if unset, it uses `http://127.0.0.1:9090`. Wh
 
 The Core Journey Workbench creates a fresh tenant tree, caller, MCP target, scoped capability grant chain, allowed call, denied call, and tenant access profile evidence through the real API. The core console journey supports English and Simplified Chinese. The browser language is used on first load, and the visible `中文` / `EN` toggle persists the operator's choice locally.
 
-The console also includes an **AI Admin** workspace for the v0.2.0 permission-package journey. It lets an administrator describe an access request, select a deterministic permission package template, preview allow/deny simulation rows, apply the package through the existing capability grant APIs, and then inspect the refreshed tenant access profile. See [the v0.2.0 journey note](docs/product/0.2.0-ai-admin-permission-journey.md).
+The console also includes an **AI Admin** workspace for the v0.2.0 permission-package journey. It lets an administrator describe an access request, select a deterministic permission package template, preview allow/deny simulation rows, apply the package through the backend permission-package API, and then inspect the refreshed tenant access profile. See [the v0.2.0 journey note](docs/product/0.2.0-ai-admin-permission-journey.md).
 
 ## Runtime Configuration
 
@@ -247,6 +247,9 @@ ADMIN_KEY=local-admin-key \
 - `POST /api/v1/targets/{targetId}/capabilities:refresh`
 - `GET /api/v1/capabilities?tenantId=&workspaceId=&targetId=&status=`
 - `PATCH /api/v1/capabilities/{id}`
+- `GET /api/v1/permission-packages/templates`
+- `POST /api/v1/permission-packages/drafts`
+- `POST /api/v1/permission-packages:apply`
 - `POST /api/v1/tenant-entitlements`
 - `GET /api/v1/tenant-entitlements?tenantId=&workspaceId=&targetId=&capabilityId=`
 - `POST /api/v1/workspace-assignments`

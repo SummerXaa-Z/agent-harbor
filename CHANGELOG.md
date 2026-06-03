@@ -19,6 +19,8 @@ This project uses Keep a Changelog-style sections and will adopt semantic versio
 - Distinct web console workspaces for each primary navigation item so Cockpit, Registry, Routes, Policies, Capabilities, Access, Traces, and Evidence no longer collapse into the same view.
 - Web console Core Journey Workbench that creates a fresh tenant tree, MCP target, scoped grant chain, allowed/denied runtime evidence, and tenant access profile through real APIs.
 - `make mock-mcp` for keeping the dependency-free mock MCP server running during browser-based console evaluation.
+- `make demo` for one-command local first-run evaluation of the API, mock MCP server, and web console.
+- Core Journey Workbench preflight checks for API and Mock MCP readiness plus non-destructive demo session reset.
 
 ### Changed
 

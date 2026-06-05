@@ -39,6 +39,24 @@ TOOLS = [
             },
         },
     },
+    {
+        "name": "update_ticket",
+        "title": "Update Ticket",
+        "description": "Update a support ticket inside the mock support dataset.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "ticketId": {"type": "string"},
+                "status": {"type": "string"},
+            },
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string"},
+            },
+        },
+    },
 ]
 
 

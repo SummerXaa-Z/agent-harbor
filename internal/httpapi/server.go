@@ -127,6 +127,10 @@ func (s *Server) Router() http.Handler {
 			r.Patch("/capabilities/{id}", s.updateCapability)
 			r.Get("/permission-packages/templates", s.listPermissionPackageTemplates)
 			r.Get("/permission-packages/applications", s.listPermissionPackageApplications)
+			r.Get("/permission-packages/approval-requests", s.listPermissionPackageApprovalRequests)
+			r.Post("/permission-packages/approval-requests", s.createPermissionPackageApprovalRequest)
+			r.Post("/permission-packages/approval-requests/{id}/approve", s.approvePermissionPackageApprovalRequest)
+			r.Post("/permission-packages/approval-requests/{id}/reject", s.rejectPermissionPackageApprovalRequest)
 			r.Post("/permission-packages/drafts", s.createPermissionPackageDraft)
 			r.Post("/permission-packages:apply", s.applyPermissionPackage)
 			r.Post("/management/mcp", s.managementMCP)
@@ -1155,6 +1159,32 @@ func (s *Server) listPermissionPackageApplications(w http.ResponseWriter, r *htt
 	writeJSON(w, http.StatusOK, rows)
 }
 
+func (s *Server) listPermissionPackageApprovalRequests(w http.ResponseWriter, r *http.Request) {
+	limit, err := auditLimitFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	status := domain.PermissionPackageApprovalStatus(strings.TrimSpace(r.URL.Query().Get("status")))
+	if status != "" && !validPermissionPackageApprovalStatus(status) {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "status must be pending, approved, or rejected"))
+		return
+	}
+	rows, err := s.repo.ListPermissionPackageApprovalRequests(r.Context(), store.PermissionPackageApprovalRequestFilter{
+		ManagementScope:  managementScopeFromRequest(r),
+		TemplateID:       strings.TrimSpace(r.URL.Query().Get("templateId")),
+		TargetID:         strings.TrimSpace(r.URL.Query().Get("targetId")),
+		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
+		Status:           status,
+		Limit:            limit,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
 func (s *Server) createPermissionPackageDraft(w http.ResponseWriter, r *http.Request) {
 	var req domain.PermissionPackageDraftRequest
 	if err := decodeJSON(r, &req); err != nil {
@@ -1169,8 +1199,79 @@ func (s *Server) createPermissionPackageDraft(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, draft)
 }
 
-func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) {
+func (s *Server) createPermissionPackageApprovalRequest(w http.ResponseWriter, r *http.Request) {
 	var req domain.PermissionPackageDraftRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	created, err := s.createPermissionPackageApprovalRequestRecord(r.Context(), req, managementActor(r), s.now())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, created.TenantID, created.WorkspaceID, "permission_package.approval_requested", "permission_package_approval_request", created.ID, "Permission package approval requested", permissionPackageApprovalAuditMetadata(created))); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) approvePermissionPackageApprovalRequest(w http.ResponseWriter, r *http.Request) {
+	s.resolvePermissionPackageApprovalRequest(w, r, domain.PermissionPackageApprovalStatusApproved)
+}
+
+func (s *Server) rejectPermissionPackageApprovalRequest(w http.ResponseWriter, r *http.Request) {
+	s.resolvePermissionPackageApprovalRequest(w, r, domain.PermissionPackageApprovalStatusRejected)
+}
+
+func (s *Server) resolvePermissionPackageApprovalRequest(w http.ResponseWriter, r *http.Request, status domain.PermissionPackageApprovalStatus) {
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+	if id == "" {
+		writeError(w, domain.NotFound("approval request not found"))
+		return
+	}
+	var req domain.PermissionPackageApprovalResolutionRequest
+	if r.ContentLength != 0 {
+		if err := decodeJSON(r, &req); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
+	existing, ok, err := s.repo.GetPermissionPackageApprovalRequest(r.Context(), id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("approval request not found"))
+		return
+	}
+	reviewer := strings.TrimSpace(req.Reviewer)
+	if reviewer == "" {
+		reviewer = managementActor(r)
+	}
+	now := s.now()
+	saved, err := s.resolvePermissionPackageApprovalRequestRecord(r.Context(), existing, status, reviewer, req.Comment, now)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	action := "permission_package.approval_approved"
+	summary := "Permission package approval approved"
+	if status == domain.PermissionPackageApprovalStatusRejected {
+		action = "permission_package.approval_rejected"
+		summary = "Permission package approval rejected"
+	}
+	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, saved.TenantID, saved.WorkspaceID, action, "permission_package_approval_request", saved.ID, summary, permissionPackageApprovalAuditMetadata(saved))); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, saved)
+}
+
+func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) {
+	var req domain.PermissionPackageApplyRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, err)
 		return
@@ -1183,16 +1284,31 @@ func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusCreated, result)
 }
 
-func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.PermissionPackageDraftRequest) (domain.PermissionPackageApplyResponse, error) {
-	draft, err := s.buildPermissionPackageDraft(r.Context(), req)
+func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.PermissionPackageApplyRequest) (domain.PermissionPackageApplyResponse, error) {
+	req.ApprovalRequestID = strings.TrimSpace(req.ApprovalRequestID)
+	draft, err := s.buildPermissionPackageDraft(r.Context(), req.PermissionPackageDraftRequest)
 	if err != nil {
 		return domain.PermissionPackageApplyResponse{}, err
 	}
 	if !draft.Readiness.CanApply {
 		return domain.PermissionPackageApplyResponse{}, domain.BadRequest("VALIDATION_FAILED", "permission package draft is not ready to apply")
 	}
+	approvalRequestID := ""
 	if !draft.PolicyGate.CanApplyDirectly {
-		return domain.PermissionPackageApplyResponse{}, domain.BadRequest("VALIDATION_FAILED", "permission package requires approval before apply")
+		if req.ApprovalRequestID == "" {
+			return domain.PermissionPackageApplyResponse{}, domain.BadRequest("VALIDATION_FAILED", "permission package requires approval before apply")
+		}
+		approval, ok, err := s.repo.GetPermissionPackageApprovalRequest(r.Context(), req.ApprovalRequestID)
+		if err != nil {
+			return domain.PermissionPackageApplyResponse{}, err
+		}
+		if !ok {
+			return domain.PermissionPackageApplyResponse{}, domain.NotFound("approval request not found")
+		}
+		if err := validatePermissionPackageApprovalForDraft(approval, draft); err != nil {
+			return domain.PermissionPackageApplyResponse{}, err
+		}
+		approvalRequestID = approval.ID
 	}
 
 	now := s.now()
@@ -1310,7 +1426,7 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 	}
 	result.Application = &createdApplication
 
-	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, draft.Input.TenantID, draft.Input.WorkspaceID, "permission_package.applied", "permission_package", createdApplication.ID, "Permission package applied", map[string]any{
+	auditMetadata := map[string]any{
 		"applicationId":          createdApplication.ID,
 		"draftId":                draft.ID,
 		"templateId":             draft.Template.ID,
@@ -1323,7 +1439,11 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		"tenantEntitlementIds":   tenantEntitlementIDs,
 		"workspaceAssignmentIds": workspaceAssignmentIDs,
 		"instanceAssignmentIds":  instanceAssignmentIDs,
-	})); err != nil {
+	}
+	if approvalRequestID != "" {
+		auditMetadata["approvalRequestId"] = approvalRequestID
+	}
+	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, draft.Input.TenantID, draft.Input.WorkspaceID, "permission_package.applied", "permission_package", createdApplication.ID, "Permission package applied", auditMetadata)); err != nil {
 		return domain.PermissionPackageApplyResponse{}, err
 	}
 	return result, nil
@@ -3093,6 +3213,146 @@ func trimPermissionPackageDraftRequest(req domain.PermissionPackageDraftRequest)
 	return req
 }
 
+func (s *Server) createPermissionPackageApprovalRequestRecord(ctx context.Context, req domain.PermissionPackageDraftRequest, requestedBy string, now time.Time) (domain.PermissionPackageApprovalRequest, error) {
+	draft, err := s.buildPermissionPackageDraft(ctx, req)
+	if err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
+	}
+	if !draft.Readiness.CanApply {
+		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "permission package draft is not ready to request approval")
+	}
+	if draft.PolicyGate.CanApplyDirectly {
+		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "permission package does not require approval")
+	}
+	approval := permissionPackageApprovalRequestFromDraft(draft, requestedBy, now)
+	return s.repo.CreatePermissionPackageApprovalRequest(ctx, approval)
+}
+
+func (s *Server) resolvePermissionPackageApprovalRequestRecord(ctx context.Context, existing domain.PermissionPackageApprovalRequest, status domain.PermissionPackageApprovalStatus, reviewer string, comment string, now time.Time) (domain.PermissionPackageApprovalRequest, error) {
+	if existing.Status != domain.PermissionPackageApprovalStatusPending {
+		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "approval request is already resolved")
+	}
+	updated := existing
+	updated.Status = status
+	updated.ReviewedBy = strings.TrimSpace(reviewer)
+	updated.ReviewComment = strings.TrimSpace(comment)
+	updated.UpdatedAt = now
+	updated.ResolvedAt = now
+	saved, ok, err := s.repo.UpdatePermissionPackageApprovalRequest(ctx, updated)
+	if err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
+	}
+	if !ok {
+		return domain.PermissionPackageApprovalRequest{}, domain.NotFound("approval request not found")
+	}
+	return saved, nil
+}
+
+func permissionPackageApprovalRequestFromDraft(draft domain.PermissionPackageDraft, requestedBy string, now time.Time) domain.PermissionPackageApprovalRequest {
+	allowedCapabilityIDs, allowedCapabilityKeys := permissionPackageCapabilityIDsAndKeys(draft.AllowedCapabilities)
+	return domain.PermissionPackageApprovalRequest{
+		ID:                    security.NewID("ppar"),
+		DraftID:               draft.ID,
+		TemplateID:            draft.Template.ID,
+		TemplateVersion:       draft.Template.Version,
+		PolicyVersion:         draft.PolicyGate.PolicyVersion,
+		TenantID:              draft.Input.TenantID,
+		WorkspaceID:           draft.Input.WorkspaceID,
+		TargetID:              draft.Input.TargetID,
+		CallerInstanceID:      draft.Input.CallerInstanceID,
+		SubjectSelector:       draft.Input.SubjectSelector,
+		RequestText:           draft.Input.RequestText,
+		Region:                draft.Input.Region,
+		DataScopes:            append([]domain.DataScope(nil), draft.DataScopes...),
+		AllowedCapabilityIDs:  allowedCapabilityIDs,
+		AllowedCapabilityKeys: allowedCapabilityKeys,
+		PolicyGate:            draft.PolicyGate,
+		Status:                domain.PermissionPackageApprovalStatusPending,
+		RequestedBy:           requestedBy,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	}
+}
+
+func validatePermissionPackageApprovalForDraft(approval domain.PermissionPackageApprovalRequest, draft domain.PermissionPackageDraft) error {
+	if approval.Status != domain.PermissionPackageApprovalStatusApproved {
+		return domain.BadRequest("VALIDATION_FAILED", "permission package approval request must be approved before apply")
+	}
+	allowedCapabilityIDs, allowedCapabilityKeys := permissionPackageCapabilityIDsAndKeys(draft.AllowedCapabilities)
+	if approval.DraftID != draft.ID ||
+		approval.TemplateID != draft.Template.ID ||
+		approval.TemplateVersion != draft.Template.Version ||
+		approval.PolicyVersion != draft.PolicyGate.PolicyVersion ||
+		approval.TenantID != draft.Input.TenantID ||
+		approval.WorkspaceID != draft.Input.WorkspaceID ||
+		approval.TargetID != draft.Input.TargetID ||
+		approval.CallerInstanceID != draft.Input.CallerInstanceID ||
+		approval.SubjectSelector != draft.Input.SubjectSelector ||
+		approval.RequestText != draft.Input.RequestText ||
+		approval.Region != draft.Input.Region ||
+		!samePermissionPackageDataScopes(approval.DataScopes, draft.DataScopes) ||
+		!sameStringSet(approval.AllowedCapabilityIDs, allowedCapabilityIDs) ||
+		!sameStringSet(approval.AllowedCapabilityKeys, allowedCapabilityKeys) {
+		return domain.BadRequest("VALIDATION_FAILED", "approved permission package approval request does not match current draft")
+	}
+	return nil
+}
+
+func permissionPackageCapabilityIDsAndKeys(capabilities []domain.Capability) ([]string, []string) {
+	ids := make([]string, 0, len(capabilities))
+	keys := make([]string, 0, len(capabilities))
+	for _, capability := range capabilities {
+		ids = append(ids, capability.ID)
+		keys = append(keys, capability.Key)
+	}
+	return ids, keys
+}
+
+func samePermissionPackageDataScopes(left []domain.DataScope, right []domain.DataScope) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func sameStringSet(left []string, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	leftCopy := append([]string(nil), left...)
+	rightCopy := append([]string(nil), right...)
+	sort.Strings(leftCopy)
+	sort.Strings(rightCopy)
+	for i := range leftCopy {
+		if leftCopy[i] != rightCopy[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func permissionPackageApprovalAuditMetadata(request domain.PermissionPackageApprovalRequest) map[string]any {
+	return map[string]any{
+		"approvalRequestId":    request.ID,
+		"draftId":              request.DraftID,
+		"templateId":           request.TemplateID,
+		"templateVersion":      request.TemplateVersion,
+		"policyVersion":        request.PolicyVersion,
+		"targetId":             request.TargetID,
+		"callerInstanceId":     request.CallerInstanceID,
+		"status":               request.Status,
+		"requestedBy":          request.RequestedBy,
+		"reviewedBy":           request.ReviewedBy,
+		"reasonCount":          len(request.PolicyGate.Reasons),
+		"allowedCapabilityIds": request.AllowedCapabilityIDs,
+	}
+}
+
 func (s *Server) managementAuditEvent(r *http.Request, tenantID string, workspaceID string, action string, resourceType string, resourceID string, summary string, metadata map[string]any) domain.AuditEvent {
 	if metadata == nil {
 		metadata = map[string]any{}
@@ -3343,6 +3603,15 @@ func validCapabilitySensitivity(sensitivity domain.CapabilitySensitivity) bool {
 func validCapabilityRisk(risk domain.CapabilityRisk) bool {
 	switch risk {
 	case domain.CapabilityRiskLow, domain.CapabilityRiskMedium, domain.CapabilityRiskHigh, domain.CapabilityRiskCritical:
+		return true
+	default:
+		return false
+	}
+}
+
+func validPermissionPackageApprovalStatus(status domain.PermissionPackageApprovalStatus) bool {
+	switch status {
+	case domain.PermissionPackageApprovalStatusPending, domain.PermissionPackageApprovalStatusApproved, domain.PermissionPackageApprovalStatusRejected:
 		return true
 	default:
 		return false

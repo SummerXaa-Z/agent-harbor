@@ -15,6 +15,9 @@ import {
 } from './data'
 import { normalizeAccessProfileFilters } from './accessProfile'
 import type {
+  PermissionPackageApprovalRequest,
+  PermissionPackageApprovalStatus,
+  PermissionPackageApplyInput,
   PermissionPackageApplyResult,
   PermissionPackageDraft,
   PermissionPackageDraftInput,
@@ -437,10 +440,58 @@ export async function createPermissionPackageDraftFromApi(
 }
 
 export async function applyPermissionPackage(
-  body: PermissionPackageDraftInput,
+  body: PermissionPackageApplyInput,
   adminKey?: string,
 ): Promise<PermissionPackageApplyResult> {
   return request<PermissionPackageApplyResult>('/api/v1/permission-packages:apply', { adminKey, body })
+}
+
+export async function fetchPermissionPackageApprovalRequests(
+  filter: {
+    callerInstanceId?: string
+    limit?: number
+    status?: PermissionPackageApprovalStatus
+    targetId?: string
+    templateId?: string
+    tenantId?: string
+    workspaceId?: string
+  },
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<PermissionPackageApprovalRequest[]> {
+  const query = queryString({
+    callerInstanceId: filter.callerInstanceId,
+    limit: filter.limit ? String(filter.limit) : undefined,
+    status: filter.status,
+    targetId: filter.targetId,
+    templateId: filter.templateId,
+    tenantId: filter.tenantId,
+    workspaceId: filter.workspaceId,
+  })
+  return request<PermissionPackageApprovalRequest[]>(`/api/v1/permission-packages/approval-requests${query}`, { adminKey, signal })
+}
+
+export async function createPermissionPackageApprovalRequest(
+  body: PermissionPackageDraftInput,
+  adminKey?: string,
+): Promise<PermissionPackageApprovalRequest> {
+  return request<PermissionPackageApprovalRequest>('/api/v1/permission-packages/approval-requests', { adminKey, body })
+}
+
+export async function approvePermissionPackageApprovalRequest(
+  id: string,
+  body: { comment?: string; reviewer?: string } = {},
+  adminKey?: string,
+): Promise<PermissionPackageApprovalRequest> {
+  return request<PermissionPackageApprovalRequest>(`/api/v1/permission-packages/approval-requests/${encodeURIComponent(id)}/approve`, { adminKey, body })
+}
+
+export async function rejectPermissionPackageApprovalRequest(
+  id: string,
+  body: { comment?: string; reviewer?: string } = {},
+  adminKey?: string,
+): Promise<PermissionPackageApprovalRequest> {
+  return request<PermissionPackageApprovalRequest>(`/api/v1/permission-packages/approval-requests/${encodeURIComponent(id)}/reject`, { adminKey, body })
 }
 
 export async function fetchTenantEntitlements(

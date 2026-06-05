@@ -49,6 +49,10 @@ type Repository interface {
 	ListInstanceAssignments(context.Context, InstanceAssignmentFilter) ([]domain.InstanceAssignment, error)
 	CreatePermissionPackageApplication(context.Context, domain.PermissionPackageApplication) (domain.PermissionPackageApplication, error)
 	ListPermissionPackageApplications(context.Context, PermissionPackageApplicationFilter) ([]domain.PermissionPackageApplication, error)
+	CreatePermissionPackageApprovalRequest(context.Context, domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, error)
+	ListPermissionPackageApprovalRequests(context.Context, PermissionPackageApprovalRequestFilter) ([]domain.PermissionPackageApprovalRequest, error)
+	GetPermissionPackageApprovalRequest(context.Context, string) (domain.PermissionPackageApprovalRequest, bool, error)
+	UpdatePermissionPackageApprovalRequest(context.Context, domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, bool, error)
 	EvaluateCapabilityAccess(context.Context, CapabilityAccessRequest) (domain.CapabilityAccessDecision, error)
 	CreateRoutePolicy(context.Context, domain.RoutePolicy) (domain.RoutePolicy, error)
 	CreateRoutePolicyWithAudit(context.Context, domain.RoutePolicy, RoutePolicyAuditBuilder) (domain.RoutePolicy, error)
@@ -132,6 +136,15 @@ type PermissionPackageApplicationFilter struct {
 	Limit            int
 }
 
+type PermissionPackageApprovalRequestFilter struct {
+	ManagementScope
+	TemplateID       string
+	TargetID         string
+	CallerInstanceID string
+	Status           domain.PermissionPackageApprovalStatus
+	Limit            int
+}
+
 type CapabilityAccessRequest struct {
 	TenantID         string
 	WorkspaceID      string
@@ -153,6 +166,7 @@ type Memory struct {
 	workspaceAssignments map[string]domain.WorkspaceAssignment
 	instanceAssignments  map[string]domain.InstanceAssignment
 	packageApplications  map[string]domain.PermissionPackageApplication
+	packageApprovals     map[string]domain.PermissionPackageApprovalRequest
 	policies             map[string]domain.RoutePolicy
 	traces               []domain.TraceEvent
 	audits               []domain.AuditEvent
@@ -169,6 +183,7 @@ func NewMemory() *Memory {
 		workspaceAssignments: make(map[string]domain.WorkspaceAssignment),
 		instanceAssignments:  make(map[string]domain.InstanceAssignment),
 		packageApplications:  make(map[string]domain.PermissionPackageApplication),
+		packageApprovals:     make(map[string]domain.PermissionPackageApprovalRequest),
 		policies:             make(map[string]domain.RoutePolicy),
 	}
 }
@@ -691,6 +706,58 @@ func (m *Memory) ListPermissionPackageApplications(_ context.Context, filter Per
 	return rows, nil
 }
 
+func (m *Memory) CreatePermissionPackageApprovalRequest(_ context.Context, request domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	request = clonePermissionPackageApprovalRequest(request)
+	m.packageApprovals[request.ID] = request
+	return clonePermissionPackageApprovalRequest(request), nil
+}
+
+func (m *Memory) ListPermissionPackageApprovalRequests(_ context.Context, filter PermissionPackageApprovalRequestFilter) ([]domain.PermissionPackageApprovalRequest, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	tenantIDs := m.tenantIDsForScopeLocked(filter.TenantID)
+	rows := make([]domain.PermissionPackageApprovalRequest, 0, len(m.packageApprovals))
+	for _, request := range m.packageApprovals {
+		if !permissionPackageApprovalRequestMatchesFilter(request, filter, tenantIDs) {
+			continue
+		}
+		rows = append(rows, clonePermissionPackageApprovalRequest(request))
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID > rows[j].ID
+		}
+		return rows[i].CreatedAt.After(rows[j].CreatedAt)
+	})
+	if filter.Limit > 0 && len(rows) > filter.Limit {
+		rows = rows[:filter.Limit]
+	}
+	return rows, nil
+}
+
+func (m *Memory) GetPermissionPackageApprovalRequest(_ context.Context, id string) (domain.PermissionPackageApprovalRequest, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	request, ok := m.packageApprovals[id]
+	if !ok {
+		return domain.PermissionPackageApprovalRequest{}, false, nil
+	}
+	return clonePermissionPackageApprovalRequest(request), true, nil
+}
+
+func (m *Memory) UpdatePermissionPackageApprovalRequest(_ context.Context, request domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.packageApprovals[request.ID]; !ok {
+		return domain.PermissionPackageApprovalRequest{}, false, nil
+	}
+	request = clonePermissionPackageApprovalRequest(request)
+	m.packageApprovals[request.ID] = request
+	return clonePermissionPackageApprovalRequest(request), true, nil
+}
+
 func (m *Memory) EvaluateCapabilityAccess(_ context.Context, req CapabilityAccessRequest) (domain.CapabilityAccessDecision, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1092,6 +1159,28 @@ func permissionPackageApplicationMatchesFilter(application domain.PermissionPack
 	return true
 }
 
+func permissionPackageApprovalRequestMatchesFilter(request domain.PermissionPackageApprovalRequest, filter PermissionPackageApprovalRequestFilter, tenantIDs map[string]struct{}) bool {
+	if !tenantIDMatchesScope(request.TenantID, filter.TenantID, tenantIDs) {
+		return false
+	}
+	if filter.WorkspaceID != "" && request.WorkspaceID != filter.WorkspaceID {
+		return false
+	}
+	if filter.TemplateID != "" && request.TemplateID != filter.TemplateID {
+		return false
+	}
+	if filter.TargetID != "" && request.TargetID != filter.TargetID {
+		return false
+	}
+	if filter.CallerInstanceID != "" && request.CallerInstanceID != filter.CallerInstanceID {
+		return false
+	}
+	if filter.Status != "" && request.Status != filter.Status {
+		return false
+	}
+	return true
+}
+
 func (m *Memory) matchTenantEntitlementLocked(req CapabilityAccessRequest, capabilityID string) (domain.TenantEntitlement, bool) {
 	var best domain.TenantEntitlement
 	found := false
@@ -1333,6 +1422,43 @@ func clonePermissionPackageApplication(application domain.PermissionPackageAppli
 	application.WorkspaceAssignmentIDs = cloneStrings(application.WorkspaceAssignmentIDs)
 	application.InstanceAssignmentIDs = cloneStrings(application.InstanceAssignmentIDs)
 	return application
+}
+
+func clonePermissionPackageApprovalRequest(request domain.PermissionPackageApprovalRequest) domain.PermissionPackageApprovalRequest {
+	request.DataScopes = cloneDataScopes(request.DataScopes)
+	request.AllowedCapabilityIDs = cloneStrings(request.AllowedCapabilityIDs)
+	request.AllowedCapabilityKeys = cloneStrings(request.AllowedCapabilityKeys)
+	request.PolicyGate = clonePermissionPackagePolicyGate(request.PolicyGate)
+	return request
+}
+
+func clonePermissionPackagePolicyGate(gate domain.PermissionPackagePolicyGate) domain.PermissionPackagePolicyGate {
+	gate.Reasons = clonePermissionPackagePolicyReasons(gate.Reasons)
+	gate.NextActions = cloneStrings(gate.NextActions)
+	return gate
+}
+
+func clonePermissionPackagePolicyReasons(reasons []domain.PermissionPackagePolicyReason) []domain.PermissionPackagePolicyReason {
+	if reasons == nil {
+		return nil
+	}
+	out := make([]domain.PermissionPackagePolicyReason, 0, len(reasons))
+	for _, reason := range reasons {
+		reason.ReasonValues = cloneStringMap(reason.ReasonValues)
+		out = append(out, reason)
+	}
+	return out
+}
+
+func cloneStringMap(value map[string]string) map[string]string {
+	if value == nil {
+		return nil
+	}
+	copied := make(map[string]string, len(value))
+	for key, item := range value {
+		copied[key] = item
+	}
+	return copied
 }
 
 func cloneMap(value map[string]any) map[string]any {

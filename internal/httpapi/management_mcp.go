@@ -78,6 +78,22 @@ type managementMCPPermissionPackageApplicationArgs struct {
 	Limit            *int   `json:"limit"`
 }
 
+type managementMCPPermissionPackageApprovalRequestArgs struct {
+	TenantID         string                                 `json:"tenantId"`
+	WorkspaceID      string                                 `json:"workspaceId"`
+	TemplateID       string                                 `json:"templateId"`
+	TargetID         string                                 `json:"targetId"`
+	CallerInstanceID string                                 `json:"callerInstanceId"`
+	Status           domain.PermissionPackageApprovalStatus `json:"status"`
+	Limit            *int                                   `json:"limit"`
+}
+
+type managementMCPApprovalResolutionArgs struct {
+	ID       string `json:"id"`
+	Reviewer string `json:"reviewer"`
+	Comment  string `json:"comment"`
+}
+
 type managementMCPAccessProfileArgs struct {
 	TenantID         string `json:"tenantId"`
 	WorkspaceID      string `json:"workspaceId"`
@@ -186,7 +202,7 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		}
 		return managementMCPResult(draft), nil
 	case "apply_permission_package":
-		args, err := decodeManagementMCPArguments[domain.PermissionPackageDraftRequest](req.Params.Arguments)
+		args, err := decodeManagementMCPArguments[domain.PermissionPackageApplyRequest](req.Params.Arguments)
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
@@ -195,6 +211,53 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 			return managementMCPCallResult{}, err
 		}
 		return managementMCPResult(applied), nil
+	case "create_permission_package_approval_request":
+		args, err := decodeManagementMCPArguments[domain.PermissionPackageDraftRequest](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		created, err := s.createPermissionPackageApprovalRequestRecord(r.Context(), args, managementActor(r), s.now())
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, created.TenantID, created.WorkspaceID, "permission_package.approval_requested", "permission_package_approval_request", created.ID, "Permission package approval requested", permissionPackageApprovalAuditMetadata(created))); err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(created), nil
+	case "list_permission_package_approval_requests":
+		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageApprovalRequestArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		filter, err := permissionPackageApprovalRequestFilterFromMCPArgs(args)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		rows, err := s.repo.ListPermissionPackageApprovalRequests(r.Context(), filter)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(rows), nil
+	case "approve_permission_package_approval_request":
+		args, err := decodeManagementMCPArguments[managementMCPApprovalResolutionArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		approved, err := s.resolveManagementMCPPermissionPackageApprovalRequest(r, args, domain.PermissionPackageApprovalStatusApproved)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(approved), nil
+	case "reject_permission_package_approval_request":
+		args, err := decodeManagementMCPArguments[managementMCPApprovalResolutionArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		rejected, err := s.resolveManagementMCPPermissionPackageApprovalRequest(r, args, domain.PermissionPackageApprovalStatusRejected)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(rejected), nil
 	case "list_permission_package_applications":
 		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageApplicationArgs](req.Params.Arguments)
 		if err != nil {
@@ -291,8 +354,28 @@ func managementMCPTools() []managementMCPTool {
 		},
 		{
 			Name:        "apply_permission_package",
-			Description: "Apply a ready permission package draft by approving allowed capabilities, creating tenant/workspace/caller assignments, and recording audit evidence.",
+			Description: "Apply a ready permission package draft by approving allowed capabilities, creating tenant/workspace/caller assignments, and recording audit evidence. Approval-required drafts need approvalRequestId.",
+			InputSchema: permissionPackageApplySchema(),
+		},
+		{
+			Name:        "create_permission_package_approval_request",
+			Description: "Create a pending approval request snapshot for a ready permission package draft that policy gate says cannot be applied directly.",
 			InputSchema: permissionPackageDraftSchema(),
+		},
+		{
+			Name:        "list_permission_package_approval_requests",
+			Description: "List permission package approval requests by scope, template, target, caller, status, and limit.",
+			InputSchema: permissionPackageApprovalRequestListSchema(),
+		},
+		{
+			Name:        "approve_permission_package_approval_request",
+			Description: "Approve a pending permission package approval request so a matching apply_permission_package call can use its approvalRequestId.",
+			InputSchema: approvalResolutionSchema(),
+		},
+		{
+			Name:        "reject_permission_package_approval_request",
+			Description: "Reject a pending permission package approval request and record reviewer evidence.",
+			InputSchema: approvalResolutionSchema(),
 		},
 		{
 			Name:        "list_permission_package_applications",
@@ -357,6 +440,62 @@ func permissionPackageApplicationFilterFromMCPArgs(args managementMCPPermissionP
 		CallerInstanceID: strings.TrimSpace(args.CallerInstanceID),
 		Limit:            limit,
 	}, nil
+}
+
+func permissionPackageApprovalRequestFilterFromMCPArgs(args managementMCPPermissionPackageApprovalRequestArgs) (store.PermissionPackageApprovalRequestFilter, error) {
+	limit := defaultAuditLimit
+	if args.Limit != nil {
+		if *args.Limit < 1 || *args.Limit > maxAuditLimit {
+			return store.PermissionPackageApprovalRequestFilter{}, domain.BadRequest("VALIDATION_FAILED", "limit must be between 1 and 500")
+		}
+		limit = *args.Limit
+	}
+	if args.Status != "" && !validPermissionPackageApprovalStatus(args.Status) {
+		return store.PermissionPackageApprovalRequestFilter{}, domain.BadRequest("VALIDATION_FAILED", "status must be pending, approved, or rejected")
+	}
+	return store.PermissionPackageApprovalRequestFilter{
+		ManagementScope: store.ManagementScope{
+			TenantID:    strings.TrimSpace(args.TenantID),
+			WorkspaceID: strings.TrimSpace(args.WorkspaceID),
+		},
+		TemplateID:       strings.TrimSpace(args.TemplateID),
+		TargetID:         strings.TrimSpace(args.TargetID),
+		CallerInstanceID: strings.TrimSpace(args.CallerInstanceID),
+		Status:           args.Status,
+		Limit:            limit,
+	}, nil
+}
+
+func (s *Server) resolveManagementMCPPermissionPackageApprovalRequest(r *http.Request, args managementMCPApprovalResolutionArgs, status domain.PermissionPackageApprovalStatus) (domain.PermissionPackageApprovalRequest, error) {
+	id := strings.TrimSpace(args.ID)
+	if id == "" {
+		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "id is required")
+	}
+	existing, ok, err := s.repo.GetPermissionPackageApprovalRequest(r.Context(), id)
+	if err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
+	}
+	if !ok {
+		return domain.PermissionPackageApprovalRequest{}, domain.NotFound("approval request not found")
+	}
+	reviewer := strings.TrimSpace(args.Reviewer)
+	if reviewer == "" {
+		reviewer = managementActor(r)
+	}
+	saved, err := s.resolvePermissionPackageApprovalRequestRecord(r.Context(), existing, status, reviewer, args.Comment, s.now())
+	if err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
+	}
+	action := "permission_package.approval_approved"
+	summary := "Permission package approval approved"
+	if status == domain.PermissionPackageApprovalStatusRejected {
+		action = "permission_package.approval_rejected"
+		summary = "Permission package approval rejected"
+	}
+	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, saved.TenantID, saved.WorkspaceID, action, "permission_package_approval_request", saved.ID, summary, permissionPackageApprovalAuditMetadata(saved))); err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
+	}
+	return saved, nil
 }
 
 func (s *Server) managementMCPAccessProfile(r *http.Request, args managementMCPAccessProfileArgs) (tenantAccessProfileResponse, error) {
@@ -711,7 +850,17 @@ func managementMCPResponseID(id json.RawMessage) json.RawMessage {
 }
 
 func permissionPackageDraftSchema() map[string]any {
-	return objectSchema(map[string]any{
+	return objectSchema(permissionPackageDraftProperties(), permissionPackageDraftRequiredFields())
+}
+
+func permissionPackageApplySchema() map[string]any {
+	properties := permissionPackageDraftProperties()
+	properties["approvalRequestId"] = stringSchema("Approved permission package approval request id required when policyGate.canApplyDirectly is false.")
+	return objectSchema(properties, permissionPackageDraftRequiredFields())
+}
+
+func permissionPackageDraftProperties() map[string]any {
+	return map[string]any{
 		"callerInstanceId": stringSchema("Caller agent instance that will receive the package."),
 		"region":           stringSchema("Region data-scope value, for example us-east."),
 		"requestText":      stringSchema("Administrator natural-language request for audit context."),
@@ -720,7 +869,11 @@ func permissionPackageDraftSchema() map[string]any {
 		"templateId":       stringSchema("Permission package template id, for example sales-readonly."),
 		"tenantId":         stringSchema("Tenant that receives the entitlement."),
 		"workspaceId":      stringSchema("Workspace that receives the assignment."),
-	}, []string{"callerInstanceId", "targetId", "templateId", "tenantId", "workspaceId"})
+	}
+}
+
+func permissionPackageDraftRequiredFields() []string {
+	return []string{"callerInstanceId", "targetId", "templateId", "tenantId", "workspaceId"}
 }
 
 func permissionPackageApplicationListSchema() map[string]any {
@@ -732,6 +885,26 @@ func permissionPackageApplicationListSchema() map[string]any {
 		"callerInstanceId": stringSchema("Optional caller agent instance id."),
 		"limit":            map[string]any{"type": "integer", "minimum": 1, "maximum": maxAuditLimit, "description": "Maximum application records to return."},
 	}, []string{})
+}
+
+func permissionPackageApprovalRequestListSchema() map[string]any {
+	return objectSchema(map[string]any{
+		"tenantId":         stringSchema("Optional tenant scope. Tenant subtree is included when the tenant is registered."),
+		"workspaceId":      stringSchema("Optional workspace scope."),
+		"templateId":       stringSchema("Optional permission package template id."),
+		"targetId":         stringSchema("Optional target MCP agent id."),
+		"callerInstanceId": stringSchema("Optional caller agent instance id."),
+		"status":           map[string]any{"type": "string", "enum": []string{"pending", "approved", "rejected"}, "description": "Optional approval request status filter."},
+		"limit":            map[string]any{"type": "integer", "minimum": 1, "maximum": maxAuditLimit, "description": "Maximum approval requests to return."},
+	}, []string{})
+}
+
+func approvalResolutionSchema() map[string]any {
+	return objectSchema(map[string]any{
+		"id":       stringSchema("Permission package approval request id."),
+		"reviewer": stringSchema("Optional reviewer identity. Defaults to the management actor."),
+		"comment":  stringSchema("Optional review comment for audit context."),
+	}, []string{"id"})
 }
 
 func explainAccessDecisionSchema() map[string]any {

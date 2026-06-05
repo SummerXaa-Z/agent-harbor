@@ -11,6 +11,7 @@ import type {
 
 export type PermissionPackageDecision = "allow" | "deny";
 export type PermissionPackagePolicyDecision = "allow" | "approval_required";
+export type PermissionPackageApprovalStatus = "pending" | "approved" | "rejected";
 
 export interface PermissionPackageTemplate {
   id: string;
@@ -41,6 +42,10 @@ export interface PermissionPackageDraftInput {
   templateId: string;
   tenantId: string;
   workspaceId: string;
+}
+
+export interface PermissionPackageApplyInput extends PermissionPackageDraftInput {
+  approvalRequestId?: string;
 }
 
 export interface PermissionPackageDraft {
@@ -82,6 +87,32 @@ export interface PermissionPackageApplication {
   workspaceAssignmentIds: string[];
   instanceAssignmentIds: string[];
   appliedAt: string;
+}
+
+export interface PermissionPackageApprovalRequest {
+  id: string;
+  draftId: string;
+  templateId: string;
+  templateVersion: number;
+  policyVersion: number;
+  tenantId: string;
+  workspaceId: string;
+  targetId: string;
+  callerInstanceId: string;
+  subjectSelector?: string;
+  requestText?: string;
+  region?: string;
+  dataScopes?: DataScope[];
+  allowedCapabilityIds: string[];
+  allowedCapabilityKeys: string[];
+  policyGate: PermissionPackagePolicyGate;
+  status: PermissionPackageApprovalStatus;
+  requestedBy?: string;
+  reviewedBy?: string;
+  reviewComment?: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
 }
 
 export interface PermissionPackageReadiness {

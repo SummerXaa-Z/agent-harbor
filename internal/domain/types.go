@@ -398,6 +398,14 @@ const (
 	PermissionPackagePolicyDecisionApprovalRequired PermissionPackagePolicyDecision = "approval_required"
 )
 
+type PermissionPackageApprovalStatus string
+
+const (
+	PermissionPackageApprovalStatusPending  PermissionPackageApprovalStatus = "pending"
+	PermissionPackageApprovalStatusApproved PermissionPackageApprovalStatus = "approved"
+	PermissionPackageApprovalStatusRejected PermissionPackageApprovalStatus = "rejected"
+)
+
 type PermissionPackageTemplate struct {
 	ID                   string                           `json:"id"`
 	Version              int                              `json:"version"`
@@ -420,6 +428,11 @@ type PermissionPackageDraftRequest struct {
 	TemplateID       string `json:"templateId"`
 	TenantID         string `json:"tenantId"`
 	WorkspaceID      string `json:"workspaceId"`
+}
+
+type PermissionPackageApplyRequest struct {
+	PermissionPackageDraftRequest
+	ApprovalRequestID string `json:"approvalRequestId,omitempty"`
 }
 
 type PermissionPackageDraft struct {
@@ -474,6 +487,37 @@ type PermissionPackageApplyResponse struct {
 	WorkspaceAssignments []WorkspaceAssignment         `json:"workspaceAssignments"`
 	InstanceAssignments  []InstanceAssignment          `json:"instanceAssignments"`
 	Application          *PermissionPackageApplication `json:"application,omitempty"`
+}
+
+type PermissionPackageApprovalRequest struct {
+	ID                    string                          `json:"id"`
+	DraftID               string                          `json:"draftId"`
+	TemplateID            string                          `json:"templateId"`
+	TemplateVersion       int                             `json:"templateVersion"`
+	PolicyVersion         int                             `json:"policyVersion"`
+	TenantID              string                          `json:"tenantId"`
+	WorkspaceID           string                          `json:"workspaceId"`
+	TargetID              string                          `json:"targetId"`
+	CallerInstanceID      string                          `json:"callerInstanceId"`
+	SubjectSelector       string                          `json:"subjectSelector,omitempty"`
+	RequestText           string                          `json:"requestText,omitempty"`
+	Region                string                          `json:"region,omitempty"`
+	DataScopes            []DataScope                     `json:"dataScopes,omitempty"`
+	AllowedCapabilityIDs  []string                        `json:"allowedCapabilityIds"`
+	AllowedCapabilityKeys []string                        `json:"allowedCapabilityKeys"`
+	PolicyGate            PermissionPackagePolicyGate     `json:"policyGate"`
+	Status                PermissionPackageApprovalStatus `json:"status"`
+	RequestedBy           string                          `json:"requestedBy,omitempty"`
+	ReviewedBy            string                          `json:"reviewedBy,omitempty"`
+	ReviewComment         string                          `json:"reviewComment,omitempty"`
+	CreatedAt             time.Time                       `json:"createdAt"`
+	UpdatedAt             time.Time                       `json:"updatedAt"`
+	ResolvedAt            time.Time                       `json:"resolvedAt,omitempty,omitzero"`
+}
+
+type PermissionPackageApprovalResolutionRequest struct {
+	Reviewer string `json:"reviewer"`
+	Comment  string `json:"comment"`
 }
 
 type PermissionPackageApplication struct {

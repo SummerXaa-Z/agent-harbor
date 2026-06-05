@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -77,6 +78,45 @@ type managementMCPAccessProfileArgs struct {
 	TraceLimit       *int   `json:"traceLimit"`
 }
 
+type managementMCPExplainAccessArgs struct {
+	TenantID         string `json:"tenantId"`
+	WorkspaceID      string `json:"workspaceId"`
+	CallerInstanceID string `json:"callerInstanceId"`
+	SubjectID        string `json:"subjectId"`
+	TargetID         string `json:"targetId"`
+	CapabilityID     string `json:"capabilityId"`
+}
+
+type managementMCPExplainEvidence struct {
+	Layer   string `json:"layer"`
+	Status  string `json:"status"`
+	ID      string `json:"id,omitempty"`
+	Message string `json:"message"`
+}
+
+type managementMCPExplainPermissionPackageResult struct {
+	Outcome                string                                  `json:"outcome"`
+	Summary                string                                  `json:"summary"`
+	DraftID                string                                  `json:"draftId"`
+	Input                  domain.PermissionPackageDraftRequest    `json:"input"`
+	Readiness              domain.PermissionPackageReadiness       `json:"readiness"`
+	AllowedCapabilityCount int                                     `json:"allowedCapabilityCount"`
+	BlockedCapabilityCount int                                     `json:"blockedCapabilityCount"`
+	BlockedSimulationRows  []domain.PermissionPackageSimulationRow `json:"blockedSimulationRows"`
+	DataScopes             []domain.DataScope                      `json:"dataScopes,omitempty"`
+	NextActions            []string                                `json:"nextActions"`
+}
+
+type managementMCPExplainAccessResult struct {
+	Outcome     string                          `json:"outcome"`
+	Summary     string                          `json:"summary"`
+	Request     managementMCPExplainAccessArgs  `json:"request"`
+	Decision    domain.CapabilityAccessDecision `json:"decision"`
+	Evidence    []managementMCPExplainEvidence  `json:"evidence"`
+	DataScopes  []domain.DataScope              `json:"dataScopes,omitempty"`
+	NextActions []string                        `json:"nextActions"`
+}
+
 func (s *Server) managementMCP(w http.ResponseWriter, r *http.Request) {
 	req, err := managementMCPRequestFromHTTP(r)
 	if err != nil {
@@ -145,6 +185,26 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 			return managementMCPCallResult{}, err
 		}
 		return managementMCPResult(applied), nil
+	case "explain_permission_package_draft":
+		args, err := decodeManagementMCPArguments[domain.PermissionPackageDraftRequest](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		explanation, err := s.explainManagementMCPPermissionPackageDraft(r, args)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(explanation), nil
+	case "explain_access_decision":
+		args, err := decodeManagementMCPArguments[managementMCPExplainAccessArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		explanation, err := s.explainManagementMCPAccessDecision(r, args)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(explanation), nil
 	case "get_tenant_access_profile":
 		args, err := decodeManagementMCPArguments[managementMCPAccessProfileArgs](req.Params.Arguments)
 		if err != nil {
@@ -211,6 +271,16 @@ func managementMCPTools() []managementMCPTool {
 			InputSchema: permissionPackageDraftSchema(),
 		},
 		{
+			Name:        "explain_permission_package_draft",
+			Description: "Explain whether a permission package draft is ready, which simulation rows are blocked, and what an admin agent should fix next.",
+			InputSchema: permissionPackageDraftSchema(),
+		},
+		{
+			Name:        "explain_access_decision",
+			Description: "Explain the current capability access decision for a tenant, workspace, caller, target, and capability without changing permissions.",
+			InputSchema: explainAccessDecisionSchema(),
+		},
+		{
 			Name:        "get_tenant_access_profile",
 			Description: "Get tenant access-profile evidence after permission changes, including effective grants, assignments, data scopes, and recent traces.",
 			InputSchema: objectSchema(map[string]any{
@@ -255,6 +325,245 @@ func (s *Server) managementMCPAccessProfile(r *http.Request, args managementMCPA
 		CallerInstanceID: strings.TrimSpace(args.CallerInstanceID),
 		TraceLimit:       traceLimit,
 	})
+}
+
+func (s *Server) explainManagementMCPPermissionPackageDraft(r *http.Request, args domain.PermissionPackageDraftRequest) (managementMCPExplainPermissionPackageResult, error) {
+	draft, err := s.buildPermissionPackageDraft(r.Context(), args)
+	if err != nil {
+		return managementMCPExplainPermissionPackageResult{}, err
+	}
+	outcome := "blocked"
+	if draft.Readiness.CanApply {
+		outcome = "ready"
+	}
+	blockedRows := managementMCPBlockedSimulationRows(draft.SimulationRows)
+	result := managementMCPExplainPermissionPackageResult{
+		Outcome:                outcome,
+		Summary:                managementMCPPermissionPackageSummary(draft),
+		DraftID:                draft.ID,
+		Input:                  draft.Input,
+		Readiness:              draft.Readiness,
+		AllowedCapabilityCount: len(draft.AllowedCapabilities),
+		BlockedCapabilityCount: len(draft.BlockedCapabilities),
+		BlockedSimulationRows:  blockedRows,
+		DataScopes:             draft.DataScopes,
+		NextActions:            managementMCPPermissionPackageNextActions(draft, blockedRows),
+	}
+	return result, nil
+}
+
+func managementMCPBlockedSimulationRows(rows []domain.PermissionPackageSimulationRow) []domain.PermissionPackageSimulationRow {
+	blocked := make([]domain.PermissionPackageSimulationRow, 0, len(rows))
+	for _, row := range rows {
+		if row.ExpectedDecision == domain.PermissionPackageDecisionDeny {
+			blocked = append(blocked, row)
+		}
+	}
+	return blocked
+}
+
+func managementMCPPermissionPackageSummary(draft domain.PermissionPackageDraft) string {
+	if draft.Readiness.CanApply {
+		return fmt.Sprintf("Permission package %s is ready to apply with %d allowed capabilities and %d blocked capabilities.", draft.Template.ID, len(draft.AllowedCapabilities), len(draft.BlockedCapabilities))
+	}
+	if len(draft.Readiness.MissingFields) > 0 {
+		return fmt.Sprintf("Permission package %s is blocked because required fields are missing: %s.", draft.Template.ID, strings.Join(draft.Readiness.MissingFields, ", "))
+	}
+	if len(draft.Readiness.Warnings) > 0 {
+		return fmt.Sprintf("Permission package %s is blocked by readiness warnings: %s", draft.Template.ID, strings.Join(draft.Readiness.Warnings, "; "))
+	}
+	return fmt.Sprintf("Permission package %s is blocked and needs review before applying.", draft.Template.ID)
+}
+
+func managementMCPPermissionPackageNextActions(draft domain.PermissionPackageDraft, blockedRows []domain.PermissionPackageSimulationRow) []string {
+	actions := []string{}
+	if len(draft.Readiness.MissingFields) > 0 {
+		actions = append(actions, "Provide required fields: "+strings.Join(draft.Readiness.MissingFields, ", ")+".")
+	}
+	for _, warning := range draft.Readiness.Warnings {
+		lower := strings.ToLower(warning)
+		switch {
+		case strings.Contains(lower, "no matching allowed capabilities"):
+			actions = append(actions, "Refresh target capabilities or choose a template whose allowed actions match this target.")
+		case strings.Contains(lower, "data scopes exceed"):
+			actions = append(actions, "Narrow the requested region or data scope to fit the capability boundary, or pick a capability with the required boundary.")
+		default:
+			actions = append(actions, "Resolve readiness warning: "+warning)
+		}
+	}
+	if len(blockedRows) > 0 {
+		actions = append(actions, "Keep denied simulation rows blocked unless a separate approval policy explicitly allows them.")
+	}
+	if len(actions) == 0 {
+		actions = append(actions, "Apply the permission package after the administrator confirms the preview.")
+	}
+	return dedupeStrings(actions)
+}
+
+func (s *Server) explainManagementMCPAccessDecision(r *http.Request, args managementMCPExplainAccessArgs) (managementMCPExplainAccessResult, error) {
+	args = trimManagementMCPExplainAccessArgs(args)
+	if err := validateManagementMCPExplainAccessArgs(args); err != nil {
+		return managementMCPExplainAccessResult{}, err
+	}
+	decision, err := s.repo.EvaluateCapabilityAccess(r.Context(), store.CapabilityAccessRequest{
+		TenantID:         args.TenantID,
+		WorkspaceID:      args.WorkspaceID,
+		CallerInstanceID: args.CallerInstanceID,
+		SubjectID:        args.SubjectID,
+		TargetID:         args.TargetID,
+		CapabilityID:     args.CapabilityID,
+		Now:              s.now(),
+	})
+	if err != nil {
+		return managementMCPExplainAccessResult{}, err
+	}
+	evidence, err := s.managementMCPAccessEvidence(r.Context(), args, decision)
+	if err != nil {
+		return managementMCPExplainAccessResult{}, err
+	}
+	outcome := "denied"
+	if decision.Allowed {
+		outcome = "allowed"
+	}
+	return managementMCPExplainAccessResult{
+		Outcome:     outcome,
+		Summary:     managementMCPAccessSummary(decision),
+		Request:     args,
+		Decision:    decision,
+		Evidence:    evidence,
+		DataScopes:  decision.DataScopes,
+		NextActions: managementMCPAccessNextActions(decision),
+	}, nil
+}
+
+func trimManagementMCPExplainAccessArgs(args managementMCPExplainAccessArgs) managementMCPExplainAccessArgs {
+	args.TenantID = strings.TrimSpace(args.TenantID)
+	args.WorkspaceID = strings.TrimSpace(args.WorkspaceID)
+	args.CallerInstanceID = strings.TrimSpace(args.CallerInstanceID)
+	args.SubjectID = strings.TrimSpace(args.SubjectID)
+	args.TargetID = strings.TrimSpace(args.TargetID)
+	args.CapabilityID = strings.TrimSpace(args.CapabilityID)
+	return args
+}
+
+func validateManagementMCPExplainAccessArgs(args managementMCPExplainAccessArgs) error {
+	missing := []string{}
+	for _, field := range []struct {
+		name  string
+		value string
+	}{
+		{name: "tenantId", value: args.TenantID},
+		{name: "workspaceId", value: args.WorkspaceID},
+		{name: "callerInstanceId", value: args.CallerInstanceID},
+		{name: "targetId", value: args.TargetID},
+		{name: "capabilityId", value: args.CapabilityID},
+	} {
+		if field.value == "" {
+			missing = append(missing, field.name)
+		}
+	}
+	if len(missing) > 0 {
+		return domain.BadRequest("VALIDATION_FAILED", "missing required tool arguments: "+strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func (s *Server) managementMCPAccessEvidence(ctx context.Context, args managementMCPExplainAccessArgs, decision domain.CapabilityAccessDecision) ([]managementMCPExplainEvidence, error) {
+	evidence := []managementMCPExplainEvidence{}
+	caller, ok, err := s.repo.GetAgent(ctx, args.CallerInstanceID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "caller_instance", Status: "missing", Message: "Caller instance was not found."})
+	} else if caller.TenantID != args.TenantID || caller.WorkspaceID != args.WorkspaceID {
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "caller_instance", Status: "mismatch", ID: caller.ID, Message: "Caller instance tenant or workspace does not match the requested scope."})
+	} else {
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "caller_instance", Status: "matched", ID: caller.ID, Message: fmt.Sprintf("Caller instance %s matches tenant %s and workspace %s.", caller.Name, args.TenantID, args.WorkspaceID)})
+	}
+
+	target, ok, err := s.repo.GetAgent(ctx, args.TargetID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "target", Status: "missing", Message: "Target agent was not found."})
+	} else if target.Status != domain.AgentStatusActive {
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "target", Status: "inactive", ID: target.ID, Message: "Target agent is not active."})
+	} else {
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "target", Status: "matched", ID: target.ID, Message: fmt.Sprintf("Target %s is active.", target.Name)})
+	}
+
+	capability, ok, err := s.repo.GetCapability(ctx, args.CapabilityID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "capability", Status: "missing", Message: "Capability was not found."})
+	} else if capability.TargetID != args.TargetID {
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "capability", Status: "mismatch", ID: capability.ID, Message: "Capability is registered on a different target."})
+	} else if capability.DiscoveryStatus != domain.CapabilityDiscoveryApproved {
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "capability", Status: "not_approved", ID: capability.ID, Message: fmt.Sprintf("Capability %s is not approved.", capability.Key)})
+	} else {
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "capability", Status: "matched", ID: capability.ID, Message: fmt.Sprintf("Capability %s is approved for the target.", capability.Key)})
+	}
+
+	evidence = appendDecisionEvidence(evidence, "tenant_entitlement", decision.EntitlementID, decision.Source, decision.Allowed, "Tenant entitlement matched.", "Tenant entitlement is missing or blocking this capability.")
+	evidence = appendDecisionEvidence(evidence, "workspace_assignment", decision.WorkspaceAssignmentID, decision.Source, decision.Allowed, "Workspace assignment matched.", "Workspace assignment is missing or blocking this capability.")
+	evidence = appendDecisionEvidence(evidence, "instance_assignment", decision.InstanceAssignmentID, decision.Source, decision.Allowed, "Caller instance assignment matched.", "Caller instance assignment is missing or blocking this capability.")
+	return evidence, nil
+}
+
+func appendDecisionEvidence(rows []managementMCPExplainEvidence, layer string, id string, source string, allowed bool, matchedMessage string, blockedMessage string) []managementMCPExplainEvidence {
+	if id != "" {
+		status := "matched"
+		message := matchedMessage
+		if !allowed && source == layer {
+			status = "blocking"
+			message = blockedMessage
+		}
+		return append(rows, managementMCPExplainEvidence{Layer: layer, Status: status, ID: id, Message: message})
+	}
+	if source == layer {
+		return append(rows, managementMCPExplainEvidence{Layer: layer, Status: "missing", Message: blockedMessage})
+	}
+	return rows
+}
+
+func managementMCPAccessSummary(decision domain.CapabilityAccessDecision) string {
+	reason := strings.TrimSpace(decision.Reason)
+	if reason == "" {
+		reason = "no detailed reason was returned"
+	}
+	if decision.Allowed {
+		return "Allowed: " + reason + "."
+	}
+	return "Denied: " + reason + "."
+}
+
+func managementMCPAccessNextActions(decision domain.CapabilityAccessDecision) []string {
+	if decision.Allowed {
+		return []string{"No permission change is required. Review the returned dataScopes before broadening access."}
+	}
+	reason := strings.ToLower(decision.Reason)
+	switch {
+	case strings.Contains(reason, "not registered"):
+		return []string{"Refresh the target MCP capabilities, then choose a registered capability from list_capabilities."}
+	case strings.Contains(reason, "not approved"):
+		return []string{"Approve the capability or apply a permission package that approves the selected capability."}
+	case strings.Contains(reason, "tenant has no entitlement"):
+		return []string{"Use the permission package flow with draft_permission_package and apply_permission_package to create the tenant entitlement, workspace assignment, and caller assignment together."}
+	case strings.Contains(reason, "workspace has no assignment"):
+		return []string{"Apply a permission package or create a workspace assignment for this tenant entitlement and workspace."}
+	case strings.Contains(reason, "caller instance has no assignment"):
+		return []string{"Apply a permission package or create an instance assignment for this caller instance."}
+	case strings.Contains(reason, "data scopes exceed"):
+		return []string{"Narrow the child dataScopes so they stay inside the parent capability, tenant, workspace, or instance boundary."}
+	case strings.Contains(reason, "denies"):
+		return []string{"Review the deny effect on the matching entitlement or assignment before granting broader access."}
+	default:
+		return []string{"Inspect get_tenant_access_profile for this tenant/workspace/caller/capability and repair the first missing evidence layer."}
+	}
 }
 
 func decodeManagementMCPArguments[T any](raw json.RawMessage) (T, error) {
@@ -351,6 +660,17 @@ func permissionPackageDraftSchema() map[string]any {
 	}, []string{"callerInstanceId", "targetId", "templateId", "tenantId", "workspaceId"})
 }
 
+func explainAccessDecisionSchema() map[string]any {
+	return objectSchema(map[string]any{
+		"tenantId":         stringSchema("Tenant scope to evaluate."),
+		"workspaceId":      stringSchema("Workspace scope to evaluate."),
+		"callerInstanceId": stringSchema("Caller agent instance requesting access."),
+		"subjectId":        stringSchema("Optional subject id for subject-specific assignments."),
+		"targetId":         stringSchema("Target agent id."),
+		"capabilityId":     stringSchema("Capability id to evaluate."),
+	}, []string{"tenantId", "workspaceId", "callerInstanceId", "targetId", "capabilityId"})
+}
+
 func scopedListSchema() map[string]any {
 	return objectSchema(map[string]any{
 		"tenantId":    stringSchema("Optional tenant scope."),
@@ -372,4 +692,20 @@ func stringSchema(description string) map[string]any {
 		"type":        "string",
 		"description": description,
 	}
+}
+
+func dedupeStrings(values []string) []string {
+	seen := map[string]struct{}{}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }

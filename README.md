@@ -129,7 +129,7 @@ The Core Journey Workbench creates a fresh tenant tree, caller, MCP target, scop
 
 The console also includes an **AI Admin** workspace for the v0.2.0 permission-package journey. It lets an administrator describe an access request, select a deterministic permission package template, preview allow/deny simulation rows, apply the package through the backend permission-package API, and then inspect the refreshed tenant access profile. See [the v0.2.0 journey note](docs/product/0.2.0-ai-admin-permission-journey.md).
 
-AgentHarbor also exposes the same workflow as a management MCP endpoint at `POST /api/v1/management/mcp`. Admin agents can call `tools/list` and then use tools such as `draft_permission_package`, `apply_permission_package`, `get_tenant_access_profile`, `list_agents`, and `list_capabilities`. When `AGENT_HARBOR_ADMIN_KEY` is configured, this endpoint requires `X-Admin-Key` like the rest of the management API.
+AgentHarbor also exposes the same workflow as a management MCP endpoint at `POST /api/v1/management/mcp`. Admin agents can call `tools/list` and then use tools such as `draft_permission_package`, `apply_permission_package`, `explain_permission_package_draft`, `explain_access_decision`, `get_tenant_access_profile`, `list_agents`, and `list_capabilities`. When `AGENT_HARBOR_ADMIN_KEY` is configured, this endpoint requires `X-Admin-Key` like the rest of the management API.
 
 ## Runtime Configuration
 

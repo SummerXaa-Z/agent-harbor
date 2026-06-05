@@ -182,6 +182,75 @@ func TestMemoryCapabilityAssignmentEvaluation(t *testing.T) {
 	}
 }
 
+func TestMemoryPermissionPackageApplicationRoundTrip(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	if _, err := repo.CreateTenant(ctx, domain.Tenant{ID: "tenant-root", Name: "Root", Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("create root tenant: %v", err)
+	}
+	if _, err := repo.CreateTenant(ctx, domain.Tenant{ID: "tenant-east", ParentTenantID: "tenant-root", Level: 1, Name: "East", Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("create child tenant: %v", err)
+	}
+
+	older := domain.PermissionPackageApplication{
+		ID:                     "ppa_old",
+		DraftID:                "ppd_old",
+		TemplateID:             "sales-readonly",
+		TemplateVersion:        1,
+		TenantID:               "tenant-east",
+		WorkspaceID:            "ws-sales",
+		TargetID:               "agt_mcp",
+		CallerInstanceID:       "agt_caller",
+		SubjectSelector:        "user:sales-*",
+		RequestText:            "old request",
+		Region:                 "us-east",
+		DataScopes:             []domain.DataScope{{DataDomain: "crm", Region: "us-east"}},
+		AllowedCapabilityIDs:   []string{"cap_search"},
+		AllowedCapabilityKeys:  []string{"search_customer"},
+		TenantEntitlementIDs:   []string{"ent_search"},
+		WorkspaceAssignmentIDs: []string{"wsa_search"},
+		InstanceAssignmentIDs:  []string{"ina_search"},
+		AppliedAt:              now,
+	}
+	newer := older
+	newer.ID = "ppa_new"
+	newer.DraftID = "ppd_new"
+	newer.WorkspaceID = "ws-support"
+	newer.CallerInstanceID = "agt_support"
+	newer.AppliedAt = now.Add(time.Minute)
+
+	if _, err := repo.CreatePermissionPackageApplication(ctx, older); err != nil {
+		t.Fatalf("create older application: %v", err)
+	}
+	if _, err := repo.CreatePermissionPackageApplication(ctx, newer); err != nil {
+		t.Fatalf("create newer application: %v", err)
+	}
+
+	rows, err := repo.ListPermissionPackageApplications(ctx, PermissionPackageApplicationFilter{
+		ManagementScope: ManagementScope{TenantID: "tenant-root"},
+		TemplateID:      "sales-readonly",
+		Limit:           1,
+	})
+	if err != nil {
+		t.Fatalf("list applications: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != newer.ID || rows[0].TemplateVersion != 1 {
+		t.Fatalf("expected newest scoped application, got %#v", rows)
+	}
+	rows[0].AllowedCapabilityIDs[0] = "mutated"
+	again, err := repo.ListPermissionPackageApplications(ctx, PermissionPackageApplicationFilter{
+		ManagementScope:  ManagementScope{TenantID: "tenant-root", WorkspaceID: "ws-support"},
+		CallerInstanceID: "agt_support",
+	})
+	if err != nil {
+		t.Fatalf("list applications again: %v", err)
+	}
+	if len(again) != 1 || again[0].ID != newer.ID || again[0].AllowedCapabilityIDs[0] != "cap_search" {
+		t.Fatalf("expected cloned workspace/caller application, got %#v", again)
+	}
+}
+
 func TestMemoryCapabilityAssignmentRejectsStoredDataScopeExpansion(t *testing.T) {
 	repo := NewMemory()
 	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)

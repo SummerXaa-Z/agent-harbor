@@ -91,6 +91,7 @@ import {
 import {
   createPermissionPackageDraft,
   permissionPackageTemplates,
+  type PermissionPackageApplication,
   type PermissionPackageDraft,
   type PermissionPackageDraftInput,
   type PermissionPackageSimulationRow,
@@ -313,6 +314,7 @@ function App() {
   const [aiAdminApplying, setAiAdminApplying] = useState(false);
   const [aiAdminTemplates, setAiAdminTemplates] = useState<PermissionPackageTemplate[]>(permissionPackageTemplates);
   const [aiAdminServerDraft, setAiAdminServerDraft] = useState<PermissionPackageDraft | null>(null);
+  const [aiAdminApplication, setAiAdminApplication] = useState<PermissionPackageApplication | null>(null);
   const t = useMemo(() => createTranslator(language), [language]);
 
   useEffect(() => {
@@ -1052,9 +1054,11 @@ function App() {
     setAiAdminApplying(true);
     try {
       let appliedCount = aiAdminDraft.allowedCapabilities.length;
+      let application: PermissionPackageApplication | null = null;
       try {
         const applied = await applyPermissionPackage(aiAdminForm, adminKey);
         appliedCount = applied.tenantEntitlements.length;
+        application = applied.application ?? null;
       } catch (error) {
         if (!isApiCompatibilityFallbackError(error)) {
           throw error;
@@ -1085,6 +1089,7 @@ function App() {
       setData(nextData);
       setAccessProfile(nextProfile);
       setLastRefresh(new Date());
+      setAiAdminApplication(application);
       setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: appliedCount }));
     } catch (error) {
       setAiAdminMessage(error instanceof Error ? error.message : "Unable to apply permission package");
@@ -1285,10 +1290,14 @@ function App() {
         applying={aiAdminApplying}
         draft={aiAdminDraft}
         form={aiAdminForm}
+        application={aiAdminApplication}
         message={aiAdminMessage}
         mcpTargets={mcpTargets}
         onApply={() => void applyAiAdminPermissionPackage()}
-        onChange={setAiAdminForm}
+        onChange={(nextForm) => {
+          setAiAdminForm(nextForm);
+          setAiAdminApplication(null);
+        }}
         templates={aiAdminTemplates}
         t={t}
       />
@@ -1746,6 +1755,7 @@ function CoreJourneyWorkbench({
 
 function AiAdminPermissionWorkbench({
   agents,
+  application,
   applying,
   draft,
   form,
@@ -1757,6 +1767,7 @@ function AiAdminPermissionWorkbench({
   t
 }: {
   agents: Agent[];
+  application: PermissionPackageApplication | null;
   applying: boolean;
   draft: PermissionPackageDraft;
   form: PermissionPackageDraftInput;
@@ -1847,6 +1858,34 @@ function AiAdminPermissionWorkbench({
             <strong>{permissionPackageTemplateName(draft.template, t)}</strong>
             <span>{permissionPackageTemplateSummary(draft.template, t)}</span>
           </div>
+          {application ? (
+            <div className="permission-application-evidence">
+              <div className="permission-section-title">
+                <strong>{t("section.permissionApplicationEvidence")}</strong>
+                <Badge tone="success">v{application.templateVersion}</Badge>
+              </div>
+              <div className="permission-application-grid">
+                <div>
+                  <span>{t("detail.applicationId")}</span>
+                  <code>{application.id}</code>
+                </div>
+                <div>
+                  <span>{t("detail.draftId")}</span>
+                  <code>{application.draftId}</code>
+                </div>
+                <div>
+                  <span>{t("detail.createdObjects")}</span>
+                  <strong>
+                    {application.tenantEntitlementIds.length + application.workspaceAssignmentIds.length + application.instanceAssignmentIds.length}
+                  </strong>
+                </div>
+                <div>
+                  <span>{t("detail.dataScopes")}</span>
+                  <strong>{application.dataScopes?.length ?? 0}</strong>
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div className="permission-metrics">
             <div>
               <span>{t("metric.allowedCapabilities")}</span>

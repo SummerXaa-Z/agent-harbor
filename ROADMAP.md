@@ -6,8 +6,8 @@ This roadmap is intentionally high level. Detailed implementation work should st
 
 ## Near Term
 
-- Persist permission package versions and application records for repeatable review.
-- Add richer conflict remediation for package versioning, approval policy, and data-scope repair flows.
+- Add richer conflict remediation for package version changes, approval policy, and data-scope repair flows.
+- Add permission package application diff and rollback review flows.
 - Harden tenant access profiles with clearer inherited-vs-direct permission views.
 - Expand MCP capability governance with richer tool metadata, approval history, and stale-capability handling.
 - Improve local contributor ergonomics with clearer setup checks and seeded scenario data.

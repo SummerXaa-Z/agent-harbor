@@ -10,6 +10,7 @@ import (
 var templates = []domain.PermissionPackageTemplate{
 	{
 		ID:                   "sales-readonly",
+		Version:              1,
 		Name:                 "Sales read-only",
 		Summary:              "Allow CRM reads for a scoped sales tenant while blocking exports, deletes, admin actions, and restricted data.",
 		AllowedActions:       []domain.CapabilityAction{domain.CapabilityActionRead},
@@ -36,6 +37,7 @@ var templates = []domain.PermissionPackageTemplate{
 	},
 	{
 		ID:                   "support-ticket-triage",
+		Version:              1,
 		Name:                 "Support ticket triage",
 		Summary:              "Allow ticket reads and bounded updates while blocking exports, deletes, and admin operations.",
 		AllowedActions:       []domain.CapabilityAction{domain.CapabilityActionRead, domain.CapabilityActionWrite},
@@ -55,6 +57,7 @@ var templates = []domain.PermissionPackageTemplate{
 	},
 	{
 		ID:                   "analytics-sandbox",
+		Version:              1,
 		Name:                 "Analytics sandbox",
 		Summary:              "Allow read and execute capabilities for sandbox analysis while blocking writes, exports, and production admin actions.",
 		AllowedActions:       []domain.CapabilityAction{domain.CapabilityActionRead, domain.CapabilityActionExecute},
@@ -74,6 +77,7 @@ var templates = []domain.PermissionPackageTemplate{
 	},
 	{
 		ID:                   "audit-readonly",
+		Version:              1,
 		Name:                 "Audit read-only",
 		Summary:              "Allow low-risk reads for audit review while blocking mutations, exports, and restricted data.",
 		AllowedActions:       []domain.CapabilityAction{domain.CapabilityActionRead},

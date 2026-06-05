@@ -13,6 +13,7 @@ export type PermissionPackageDecision = "allow" | "deny";
 
 export interface PermissionPackageTemplate {
   id: string;
+  version: number;
   name: string;
   summary: string;
   allowedActions: CapabilityAction[];
@@ -57,6 +58,28 @@ export interface PermissionPackageApplyResult {
   tenantEntitlements: TenantEntitlement[];
   workspaceAssignments: WorkspaceAssignment[];
   instanceAssignments: InstanceAssignment[];
+  application?: PermissionPackageApplication;
+}
+
+export interface PermissionPackageApplication {
+  id: string;
+  draftId: string;
+  templateId: string;
+  templateVersion: number;
+  tenantId: string;
+  workspaceId: string;
+  targetId: string;
+  callerInstanceId: string;
+  subjectSelector?: string;
+  requestText?: string;
+  region?: string;
+  dataScopes?: DataScope[];
+  allowedCapabilityIds: string[];
+  allowedCapabilityKeys: string[];
+  tenantEntitlementIds: string[];
+  workspaceAssignmentIds: string[];
+  instanceAssignmentIds: string[];
+  appliedAt: string;
 }
 
 export interface PermissionPackageReadiness {
@@ -82,6 +105,7 @@ export interface PermissionPackageInventory {
 export const permissionPackageTemplates: PermissionPackageTemplate[] = [
   {
     id: "sales-readonly",
+    version: 1,
     name: "Sales read-only",
     summary: "Allow CRM reads for a scoped sales tenant while blocking exports, deletes, admin actions, and restricted data.",
     allowedActions: ["read"],
@@ -106,6 +130,7 @@ export const permissionPackageTemplates: PermissionPackageTemplate[] = [
   },
   {
     id: "support-ticket-triage",
+    version: 1,
     name: "Support ticket triage",
     summary: "Allow ticket reads and bounded updates while blocking exports, deletes, and admin operations.",
     allowedActions: ["read", "write"],
@@ -124,6 +149,7 @@ export const permissionPackageTemplates: PermissionPackageTemplate[] = [
   },
   {
     id: "analytics-sandbox",
+    version: 1,
     name: "Analytics sandbox",
     summary: "Allow read and execute capabilities for sandbox analysis while blocking writes, exports, and production admin actions.",
     allowedActions: ["read", "execute"],
@@ -142,6 +168,7 @@ export const permissionPackageTemplates: PermissionPackageTemplate[] = [
   },
   {
     id: "audit-readonly",
+    version: 1,
     name: "Audit read-only",
     summary: "Allow low-risk reads for audit review while blocking mutations, exports, and restricted data.",
     allowedActions: ["read"],

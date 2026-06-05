@@ -62,7 +62,7 @@ test("sales read-only package drafts allowed reads, blocked exports, and simulat
     { capabilities }
   );
 
-  assert.equal(permissionPackageTemplates.some((template) => template.id === "sales-readonly"), true);
+  assert.equal(permissionPackageTemplates.some((template) => template.id === "sales-readonly" && template.version === 1), true);
   assert.deepEqual(draft.allowedCapabilities.map((capability) => capability.key), ["search_customer"]);
   assert.deepEqual(draft.blockedCapabilities.map((capability) => capability.key), ["export_contracts"]);
   assert.deepEqual(draft.dataScopes, [

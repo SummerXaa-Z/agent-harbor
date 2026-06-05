@@ -47,6 +47,8 @@ type Repository interface {
 	ListWorkspaceAssignments(context.Context, AssignmentFilter) ([]domain.WorkspaceAssignment, error)
 	CreateInstanceAssignment(context.Context, domain.InstanceAssignment) (domain.InstanceAssignment, error)
 	ListInstanceAssignments(context.Context, InstanceAssignmentFilter) ([]domain.InstanceAssignment, error)
+	CreatePermissionPackageApplication(context.Context, domain.PermissionPackageApplication) (domain.PermissionPackageApplication, error)
+	ListPermissionPackageApplications(context.Context, PermissionPackageApplicationFilter) ([]domain.PermissionPackageApplication, error)
 	EvaluateCapabilityAccess(context.Context, CapabilityAccessRequest) (domain.CapabilityAccessDecision, error)
 	CreateRoutePolicy(context.Context, domain.RoutePolicy) (domain.RoutePolicy, error)
 	CreateRoutePolicyWithAudit(context.Context, domain.RoutePolicy, RoutePolicyAuditBuilder) (domain.RoutePolicy, error)
@@ -122,6 +124,14 @@ type InstanceAssignmentFilter struct {
 	CapabilityID     string
 }
 
+type PermissionPackageApplicationFilter struct {
+	ManagementScope
+	TemplateID       string
+	TargetID         string
+	CallerInstanceID string
+	Limit            int
+}
+
 type CapabilityAccessRequest struct {
 	TenantID         string
 	WorkspaceID      string
@@ -142,6 +152,7 @@ type Memory struct {
 	entitlements         map[string]domain.TenantEntitlement
 	workspaceAssignments map[string]domain.WorkspaceAssignment
 	instanceAssignments  map[string]domain.InstanceAssignment
+	packageApplications  map[string]domain.PermissionPackageApplication
 	policies             map[string]domain.RoutePolicy
 	traces               []domain.TraceEvent
 	audits               []domain.AuditEvent
@@ -157,6 +168,7 @@ func NewMemory() *Memory {
 		entitlements:         make(map[string]domain.TenantEntitlement),
 		workspaceAssignments: make(map[string]domain.WorkspaceAssignment),
 		instanceAssignments:  make(map[string]domain.InstanceAssignment),
+		packageApplications:  make(map[string]domain.PermissionPackageApplication),
 		policies:             make(map[string]domain.RoutePolicy),
 	}
 }
@@ -648,6 +660,37 @@ func (m *Memory) ListInstanceAssignments(_ context.Context, filter InstanceAssig
 	return rows, nil
 }
 
+func (m *Memory) CreatePermissionPackageApplication(_ context.Context, application domain.PermissionPackageApplication) (domain.PermissionPackageApplication, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	application = clonePermissionPackageApplication(application)
+	m.packageApplications[application.ID] = application
+	return clonePermissionPackageApplication(application), nil
+}
+
+func (m *Memory) ListPermissionPackageApplications(_ context.Context, filter PermissionPackageApplicationFilter) ([]domain.PermissionPackageApplication, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	tenantIDs := m.tenantIDsForScopeLocked(filter.TenantID)
+	rows := make([]domain.PermissionPackageApplication, 0, len(m.packageApplications))
+	for _, application := range m.packageApplications {
+		if !permissionPackageApplicationMatchesFilter(application, filter, tenantIDs) {
+			continue
+		}
+		rows = append(rows, clonePermissionPackageApplication(application))
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].AppliedAt.Equal(rows[j].AppliedAt) {
+			return rows[i].ID > rows[j].ID
+		}
+		return rows[i].AppliedAt.After(rows[j].AppliedAt)
+	})
+	if filter.Limit > 0 && len(rows) > filter.Limit {
+		rows = rows[:filter.Limit]
+	}
+	return rows, nil
+}
+
 func (m *Memory) EvaluateCapabilityAccess(_ context.Context, req CapabilityAccessRequest) (domain.CapabilityAccessDecision, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1030,6 +1073,25 @@ func (m *Memory) instanceAssignmentMatchesFilter(assignment domain.InstanceAssig
 	return ok && entitlement.CapabilityID == filter.CapabilityID
 }
 
+func permissionPackageApplicationMatchesFilter(application domain.PermissionPackageApplication, filter PermissionPackageApplicationFilter, tenantIDs map[string]struct{}) bool {
+	if !tenantIDMatchesScope(application.TenantID, filter.TenantID, tenantIDs) {
+		return false
+	}
+	if filter.WorkspaceID != "" && application.WorkspaceID != filter.WorkspaceID {
+		return false
+	}
+	if filter.TemplateID != "" && application.TemplateID != filter.TemplateID {
+		return false
+	}
+	if filter.TargetID != "" && application.TargetID != filter.TargetID {
+		return false
+	}
+	if filter.CallerInstanceID != "" && application.CallerInstanceID != filter.CallerInstanceID {
+		return false
+	}
+	return true
+}
+
 func (m *Memory) matchTenantEntitlementLocked(req CapabilityAccessRequest, capabilityID string) (domain.TenantEntitlement, bool) {
 	var best domain.TenantEntitlement
 	found := false
@@ -1261,6 +1323,16 @@ func cloneWorkspaceAssignment(assignment domain.WorkspaceAssignment) domain.Work
 func cloneInstanceAssignment(assignment domain.InstanceAssignment) domain.InstanceAssignment {
 	assignment.DataScopes = cloneDataScopes(assignment.DataScopes)
 	return assignment
+}
+
+func clonePermissionPackageApplication(application domain.PermissionPackageApplication) domain.PermissionPackageApplication {
+	application.DataScopes = cloneDataScopes(application.DataScopes)
+	application.AllowedCapabilityIDs = cloneStrings(application.AllowedCapabilityIDs)
+	application.AllowedCapabilityKeys = cloneStrings(application.AllowedCapabilityKeys)
+	application.TenantEntitlementIDs = cloneStrings(application.TenantEntitlementIDs)
+	application.WorkspaceAssignmentIDs = cloneStrings(application.WorkspaceAssignmentIDs)
+	application.InstanceAssignmentIDs = cloneStrings(application.InstanceAssignmentIDs)
+	return application
 }
 
 func cloneMap(value map[string]any) map[string]any {

@@ -808,6 +808,95 @@ func (p *Postgres) ListInstanceAssignments(ctx context.Context, filter InstanceA
 	return scanInstanceAssignments(rows)
 }
 
+func (p *Postgres) CreatePermissionPackageApplication(ctx context.Context, application domain.PermissionPackageApplication) (domain.PermissionPackageApplication, error) {
+	dataScopes, err := json.Marshal(application.DataScopes)
+	if err != nil {
+		return domain.PermissionPackageApplication{}, fmt.Errorf("marshal permission package application data scopes: %w", err)
+	}
+	allowedCapabilityIDs, err := json.Marshal(application.AllowedCapabilityIDs)
+	if err != nil {
+		return domain.PermissionPackageApplication{}, fmt.Errorf("marshal permission package application capability ids: %w", err)
+	}
+	allowedCapabilityKeys, err := json.Marshal(application.AllowedCapabilityKeys)
+	if err != nil {
+		return domain.PermissionPackageApplication{}, fmt.Errorf("marshal permission package application capability keys: %w", err)
+	}
+	tenantEntitlementIDs, err := json.Marshal(application.TenantEntitlementIDs)
+	if err != nil {
+		return domain.PermissionPackageApplication{}, fmt.Errorf("marshal permission package application entitlement ids: %w", err)
+	}
+	workspaceAssignmentIDs, err := json.Marshal(application.WorkspaceAssignmentIDs)
+	if err != nil {
+		return domain.PermissionPackageApplication{}, fmt.Errorf("marshal permission package application workspace assignment ids: %w", err)
+	}
+	instanceAssignmentIDs, err := json.Marshal(application.InstanceAssignmentIDs)
+	if err != nil {
+		return domain.PermissionPackageApplication{}, fmt.Errorf("marshal permission package application instance assignment ids: %w", err)
+	}
+	_, err = p.pool.Exec(ctx, `
+		insert into permission_package_applications (
+			id, draft_id, template_id, template_version, tenant_id, workspace_id, target_agent_id,
+			caller_instance_id, subject_selector, request_text, region, data_scopes,
+			allowed_capability_ids, allowed_capability_keys, tenant_entitlement_ids,
+			workspace_assignment_ids, instance_assignment_ids, applied_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+	`, application.ID, application.DraftID, application.TemplateID, application.TemplateVersion,
+		application.TenantID, application.WorkspaceID, application.TargetID, application.CallerInstanceID,
+		application.SubjectSelector, application.RequestText, application.Region, dataScopes,
+		allowedCapabilityIDs, allowedCapabilityKeys, tenantEntitlementIDs, workspaceAssignmentIDs,
+		instanceAssignmentIDs, application.AppliedAt)
+	if err != nil {
+		return domain.PermissionPackageApplication{}, fmt.Errorf("insert permission package application: %w", err)
+	}
+	return application, nil
+}
+
+func (p *Postgres) ListPermissionPackageApplications(ctx context.Context, filter PermissionPackageApplicationFilter) ([]domain.PermissionPackageApplication, error) {
+	query := `
+		select id, draft_id, template_id, template_version, tenant_id, workspace_id, target_agent_id,
+			caller_instance_id, subject_selector, request_text, region, data_scopes,
+			allowed_capability_ids, allowed_capability_keys, tenant_entitlement_ids,
+			workspace_assignment_ids, instance_assignment_ids, applied_at
+		from permission_package_applications
+		where 1=1
+	`
+	args := []any{}
+	add := func(sql string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(" and "+sql, len(args))
+	}
+	if strings.TrimSpace(filter.TenantID) != "" {
+		tenantIDs, err := p.tenantIDsForScope(ctx, filter.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		add("tenant_id = any($%d)", tenantIDs)
+	}
+	if strings.TrimSpace(filter.WorkspaceID) != "" {
+		add("workspace_id=$%d", strings.TrimSpace(filter.WorkspaceID))
+	}
+	if strings.TrimSpace(filter.TemplateID) != "" {
+		add("template_id=$%d", strings.TrimSpace(filter.TemplateID))
+	}
+	if strings.TrimSpace(filter.TargetID) != "" {
+		add("target_agent_id=$%d", strings.TrimSpace(filter.TargetID))
+	}
+	if strings.TrimSpace(filter.CallerInstanceID) != "" {
+		add("caller_instance_id=$%d", strings.TrimSpace(filter.CallerInstanceID))
+	}
+	query += " order by applied_at desc, id desc"
+	if filter.Limit > 0 {
+		args = append(args, filter.Limit)
+		query += fmt.Sprintf(" limit $%d", len(args))
+	}
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list permission package applications: %w", err)
+	}
+	defer rows.Close()
+	return scanPermissionPackageApplications(rows)
+}
+
 func (p *Postgres) EvaluateCapabilityAccess(ctx context.Context, req CapabilityAccessRequest) (domain.CapabilityAccessDecision, error) {
 	capability, ok, err := p.GetCapability(ctx, req.CapabilityID)
 	if err != nil {
@@ -1737,6 +1826,58 @@ func scanInstanceAssignment(row scanner) (domain.InstanceAssignment, error) {
 		return domain.InstanceAssignment{}, err
 	}
 	return assignment, nil
+}
+
+func scanPermissionPackageApplications(rows pgx.Rows) ([]domain.PermissionPackageApplication, error) {
+	var out []domain.PermissionPackageApplication
+	for rows.Next() {
+		application, err := scanPermissionPackageApplication(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, application)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanPermissionPackageApplication(row scanner) (domain.PermissionPackageApplication, error) {
+	var application domain.PermissionPackageApplication
+	var dataScopes []byte
+	var allowedCapabilityIDs []byte
+	var allowedCapabilityKeys []byte
+	var tenantEntitlementIDs []byte
+	var workspaceAssignmentIDs []byte
+	var instanceAssignmentIDs []byte
+	if err := row.Scan(&application.ID, &application.DraftID, &application.TemplateID,
+		&application.TemplateVersion, &application.TenantID, &application.WorkspaceID,
+		&application.TargetID, &application.CallerInstanceID, &application.SubjectSelector,
+		&application.RequestText, &application.Region, &dataScopes, &allowedCapabilityIDs,
+		&allowedCapabilityKeys, &tenantEntitlementIDs, &workspaceAssignmentIDs,
+		&instanceAssignmentIDs, &application.AppliedAt); err != nil {
+		return domain.PermissionPackageApplication{}, err
+	}
+	if err := unmarshalJSON(dataScopes, &application.DataScopes, "permission package application data scopes"); err != nil {
+		return domain.PermissionPackageApplication{}, err
+	}
+	if err := unmarshalJSON(allowedCapabilityIDs, &application.AllowedCapabilityIDs, "permission package application capability ids"); err != nil {
+		return domain.PermissionPackageApplication{}, err
+	}
+	if err := unmarshalJSON(allowedCapabilityKeys, &application.AllowedCapabilityKeys, "permission package application capability keys"); err != nil {
+		return domain.PermissionPackageApplication{}, err
+	}
+	if err := unmarshalJSON(tenantEntitlementIDs, &application.TenantEntitlementIDs, "permission package application entitlement ids"); err != nil {
+		return domain.PermissionPackageApplication{}, err
+	}
+	if err := unmarshalJSON(workspaceAssignmentIDs, &application.WorkspaceAssignmentIDs, "permission package application workspace assignment ids"); err != nil {
+		return domain.PermissionPackageApplication{}, err
+	}
+	if err := unmarshalJSON(instanceAssignmentIDs, &application.InstanceAssignmentIDs, "permission package application instance assignment ids"); err != nil {
+		return domain.PermissionPackageApplication{}, err
+	}
+	return application, nil
 }
 
 func scanRoutePolicies(rows pgx.Rows) ([]domain.RoutePolicy, error) {

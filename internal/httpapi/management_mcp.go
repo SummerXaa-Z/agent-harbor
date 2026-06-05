@@ -69,6 +69,15 @@ type managementMCPCapabilityArgs struct {
 	Status      domain.CapabilityDiscoveryStatus `json:"status"`
 }
 
+type managementMCPPermissionPackageApplicationArgs struct {
+	TenantID         string `json:"tenantId"`
+	WorkspaceID      string `json:"workspaceId"`
+	TemplateID       string `json:"templateId"`
+	TargetID         string `json:"targetId"`
+	CallerInstanceID string `json:"callerInstanceId"`
+	Limit            *int   `json:"limit"`
+}
+
 type managementMCPAccessProfileArgs struct {
 	TenantID         string `json:"tenantId"`
 	WorkspaceID      string `json:"workspaceId"`
@@ -185,6 +194,20 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 			return managementMCPCallResult{}, err
 		}
 		return managementMCPResult(applied), nil
+	case "list_permission_package_applications":
+		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageApplicationArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		filter, err := permissionPackageApplicationFilterFromMCPArgs(args)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		rows, err := s.repo.ListPermissionPackageApplications(r.Context(), filter)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(rows), nil
 	case "explain_permission_package_draft":
 		args, err := decodeManagementMCPArguments[domain.PermissionPackageDraftRequest](req.Params.Arguments)
 		if err != nil {
@@ -271,6 +294,11 @@ func managementMCPTools() []managementMCPTool {
 			InputSchema: permissionPackageDraftSchema(),
 		},
 		{
+			Name:        "list_permission_package_applications",
+			Description: "List permission package application records so an admin agent can review template version, scope, created assignments, and data-scope evidence.",
+			InputSchema: permissionPackageApplicationListSchema(),
+		},
+		{
 			Name:        "explain_permission_package_draft",
 			Description: "Explain whether a permission package draft is ready, which simulation rows are blocked, and what an admin agent should fix next.",
 			InputSchema: permissionPackageDraftSchema(),
@@ -308,6 +336,26 @@ func managementMCPTools() []managementMCPTool {
 			}, []string{}),
 		},
 	}
+}
+
+func permissionPackageApplicationFilterFromMCPArgs(args managementMCPPermissionPackageApplicationArgs) (store.PermissionPackageApplicationFilter, error) {
+	limit := defaultAuditLimit
+	if args.Limit != nil {
+		if *args.Limit < 1 || *args.Limit > maxAuditLimit {
+			return store.PermissionPackageApplicationFilter{}, domain.BadRequest("VALIDATION_FAILED", "limit must be between 1 and 500")
+		}
+		limit = *args.Limit
+	}
+	return store.PermissionPackageApplicationFilter{
+		ManagementScope: store.ManagementScope{
+			TenantID:    strings.TrimSpace(args.TenantID),
+			WorkspaceID: strings.TrimSpace(args.WorkspaceID),
+		},
+		TemplateID:       strings.TrimSpace(args.TemplateID),
+		TargetID:         strings.TrimSpace(args.TargetID),
+		CallerInstanceID: strings.TrimSpace(args.CallerInstanceID),
+		Limit:            limit,
+	}, nil
 }
 
 func (s *Server) managementMCPAccessProfile(r *http.Request, args managementMCPAccessProfileArgs) (tenantAccessProfileResponse, error) {
@@ -658,6 +706,17 @@ func permissionPackageDraftSchema() map[string]any {
 		"tenantId":         stringSchema("Tenant that receives the entitlement."),
 		"workspaceId":      stringSchema("Workspace that receives the assignment."),
 	}, []string{"callerInstanceId", "targetId", "templateId", "tenantId", "workspaceId"})
+}
+
+func permissionPackageApplicationListSchema() map[string]any {
+	return objectSchema(map[string]any{
+		"tenantId":         stringSchema("Optional tenant scope. Tenant subtree is included when the tenant is registered."),
+		"workspaceId":      stringSchema("Optional workspace scope."),
+		"templateId":       stringSchema("Optional permission package template id."),
+		"targetId":         stringSchema("Optional target MCP agent id."),
+		"callerInstanceId": stringSchema("Optional caller agent instance id."),
+		"limit":            map[string]any{"type": "integer", "minimum": 1, "maximum": maxAuditLimit, "description": "Maximum application records to return."},
+	}, []string{})
 }
 
 func explainAccessDecisionSchema() map[string]any {

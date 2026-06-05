@@ -146,6 +146,7 @@ type dataScopeResponse struct {
 
 type permissionPackageTemplateResponse struct {
 	ID             string   `json:"id"`
+	Version        int      `json:"version"`
 	Name           string   `json:"name"`
 	AllowedActions []string `json:"allowedActions"`
 	BlockedActions []string `json:"blockedActions"`
@@ -169,10 +170,31 @@ type permissionPackageDraftResponse struct {
 }
 
 type permissionPackageApplyResponse struct {
-	Draft                permissionPackageDraftResponse `json:"draft"`
-	TenantEntitlements   []tenantEntitlementResponse    `json:"tenantEntitlements"`
-	WorkspaceAssignments []workspaceAssignmentResponse  `json:"workspaceAssignments"`
-	InstanceAssignments  []instanceAssignmentResponse   `json:"instanceAssignments"`
+	Draft                permissionPackageDraftResponse        `json:"draft"`
+	TenantEntitlements   []tenantEntitlementResponse           `json:"tenantEntitlements"`
+	WorkspaceAssignments []workspaceAssignmentResponse         `json:"workspaceAssignments"`
+	InstanceAssignments  []instanceAssignmentResponse          `json:"instanceAssignments"`
+	Application          *permissionPackageApplicationResponse `json:"application"`
+}
+
+type permissionPackageApplicationResponse struct {
+	ID                     string              `json:"id"`
+	DraftID                string              `json:"draftId"`
+	TemplateID             string              `json:"templateId"`
+	TemplateVersion        int                 `json:"templateVersion"`
+	TenantID               string              `json:"tenantId"`
+	WorkspaceID            string              `json:"workspaceId"`
+	TargetID               string              `json:"targetId"`
+	CallerInstanceID       string              `json:"callerInstanceId"`
+	SubjectSelector        string              `json:"subjectSelector"`
+	RequestText            string              `json:"requestText"`
+	Region                 string              `json:"region"`
+	DataScopes             []dataScopeResponse `json:"dataScopes"`
+	AllowedCapabilityIDs   []string            `json:"allowedCapabilityIds"`
+	AllowedCapabilityKeys  []string            `json:"allowedCapabilityKeys"`
+	TenantEntitlementIDs   []string            `json:"tenantEntitlementIds"`
+	WorkspaceAssignmentIDs []string            `json:"workspaceAssignmentIds"`
+	InstanceAssignmentIDs  []string            `json:"instanceAssignmentIds"`
 }
 
 type mcpEnvelopeResponse struct {
@@ -2687,7 +2709,7 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	export := createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
 
 	templates := decodeData[[]permissionPackageTemplateResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/templates", nil, ""))
-	if len(templates) == 0 || templates[0].ID != "sales-readonly" {
+	if len(templates) == 0 || templates[0].ID != "sales-readonly" || templates[0].Version != 1 {
 		t.Fatalf("expected sales-readonly template first, got %#v", templates)
 	}
 
@@ -2702,7 +2724,7 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 		"workspaceId":      "ws-sales",
 	}
 	draft := decodeData[permissionPackageDraftResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/drafts", input, ""))
-	if !draft.Readiness.CanApply || draft.Template.ID != "sales-readonly" {
+	if !draft.Readiness.CanApply || draft.Template.ID != "sales-readonly" || draft.Template.Version != 1 {
 		t.Fatalf("expected applicable sales-readonly draft, got %#v", draft)
 	}
 	if len(draft.AllowedCapabilities) != 1 || draft.AllowedCapabilities[0].ID != search.ID {
@@ -2728,6 +2750,25 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	if len(applied.InstanceAssignments) != 1 || applied.InstanceAssignments[0].CallerInstanceID != caller.ID {
 		t.Fatalf("expected one caller instance assignment, got %#v", applied.InstanceAssignments)
 	}
+	if applied.Application == nil || applied.Application.DraftID != applied.Draft.ID ||
+		applied.Application.TemplateID != "sales-readonly" || applied.Application.TemplateVersion != 1 ||
+		applied.Application.TenantID != "tenant-east" || applied.Application.WorkspaceID != "ws-sales" ||
+		applied.Application.TargetID != target.ID || applied.Application.CallerInstanceID != caller.ID ||
+		len(applied.Application.AllowedCapabilityIDs) != 1 || applied.Application.AllowedCapabilityIDs[0] != search.ID ||
+		len(applied.Application.TenantEntitlementIDs) != 1 || applied.Application.TenantEntitlementIDs[0] != applied.TenantEntitlements[0].ID ||
+		len(applied.Application.WorkspaceAssignmentIDs) != 1 || applied.Application.WorkspaceAssignmentIDs[0] != applied.WorkspaceAssignments[0].ID ||
+		len(applied.Application.InstanceAssignmentIDs) != 1 || applied.Application.InstanceAssignmentIDs[0] != applied.InstanceAssignments[0].ID ||
+		len(applied.Application.DataScopes) != 1 || applied.Application.DataScopes[0].Region != "华东" {
+		t.Fatalf("unexpected permission package application: %#v", applied.Application)
+	}
+	applications := decodeData[[]permissionPackageApplicationResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications?tenantId=tenant-root&workspaceId=ws-sales&templateId=sales-readonly&targetId="+target.ID+"&callerInstanceId="+caller.ID+"&limit=1", nil, ""))
+	if len(applications) != 1 || applications[0].ID != applied.Application.ID || applications[0].DraftID != applied.Draft.ID {
+		t.Fatalf("expected listed application record, got %#v", applications)
+	}
+	badLimit := request(t, router, http.MethodGet, "/api/v1/permission-packages/applications?limit=0", nil, "")
+	if badLimit.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid application limit to fail, status=%d body=%s", badLimit.Code, badLimit.Body.String())
+	}
 	updated, ok, err := repo.GetCapability(t.Context(), search.ID)
 	if err != nil || !ok {
 		t.Fatalf("get updated capability: ok=%v err=%v", ok, err)
@@ -2736,7 +2777,9 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 		t.Fatalf("expected package apply to approve and scope capability, got %#v", updated)
 	}
 	events := decodeData[[]auditEventResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/events?action=permission_package.applied", nil, ""))
-	if len(events) != 1 || events[0].TenantID != "tenant-east" || events[0].ResourceID != applied.Draft.ID {
+	if len(events) != 1 || events[0].TenantID != "tenant-east" || events[0].ResourceID != applied.Application.ID ||
+		events[0].Metadata["applicationId"] != applied.Application.ID || events[0].Metadata["draftId"] != applied.Draft.ID ||
+		events[0].Metadata["templateVersion"] != float64(1) {
 		t.Fatalf("expected permission_package.applied audit event, got %#v", events)
 	}
 }
@@ -2796,7 +2839,9 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		"id":      "tools-list",
 		"method":  "tools/list",
 	}, ""))
-	if !mcpToolNamesContain(tools.Result.Tools, "draft_permission_package") || !mcpToolNamesContain(tools.Result.Tools, "apply_permission_package") {
+	if !mcpToolNamesContain(tools.Result.Tools, "draft_permission_package") ||
+		!mcpToolNamesContain(tools.Result.Tools, "apply_permission_package") ||
+		!mcpToolNamesContain(tools.Result.Tools, "list_permission_package_applications") {
 		t.Fatalf("management MCP tools missing permission package tools: %#v", tools.Result.Tools)
 	}
 
@@ -2842,6 +2887,29 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 	}
 	if len(applied.TenantEntitlements) != 1 || applied.TenantEntitlements[0].CapabilityID != search.ID {
 		t.Fatalf("expected one applied entitlement, got %#v", applied.TenantEntitlements)
+	}
+	applicationsCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "applications",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_permission_package_applications",
+			"arguments": map[string]any{
+				"tenantId":         "tenant-root",
+				"workspaceId":      "ws-sales",
+				"templateId":       "sales-readonly",
+				"targetId":         target.ID,
+				"callerInstanceId": caller.ID,
+				"limit":            1,
+			},
+		},
+	}, ""))
+	var applications []permissionPackageApplicationResponse
+	if err := json.Unmarshal(applicationsCall.Result.StructuredContent, &applications); err != nil {
+		t.Fatalf("decode applications structured content: %v", err)
+	}
+	if applied.Application == nil || len(applications) != 1 || applications[0].ID != applied.Application.ID || applications[0].TemplateVersion != 1 {
+		t.Fatalf("unexpected management MCP applications: applied=%#v rows=%#v", applied.Application, applications)
 	}
 	events := decodeData[[]auditEventResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/events?action=permission_package.applied", nil, ""))
 	if len(events) != 1 || events[0].ResourceType != "permission_package" {

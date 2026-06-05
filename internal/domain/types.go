@@ -393,6 +393,7 @@ const (
 
 type PermissionPackageTemplate struct {
 	ID                   string                           `json:"id"`
+	Version              int                              `json:"version"`
 	Name                 string                           `json:"name"`
 	Summary              string                           `json:"summary"`
 	AllowedActions       []CapabilityAction               `json:"allowedActions"`
@@ -442,10 +443,32 @@ type PermissionPackageSimulationRow struct {
 }
 
 type PermissionPackageApplyResponse struct {
-	Draft                PermissionPackageDraft `json:"draft"`
-	TenantEntitlements   []TenantEntitlement    `json:"tenantEntitlements"`
-	WorkspaceAssignments []WorkspaceAssignment  `json:"workspaceAssignments"`
-	InstanceAssignments  []InstanceAssignment   `json:"instanceAssignments"`
+	Draft                PermissionPackageDraft        `json:"draft"`
+	TenantEntitlements   []TenantEntitlement           `json:"tenantEntitlements"`
+	WorkspaceAssignments []WorkspaceAssignment         `json:"workspaceAssignments"`
+	InstanceAssignments  []InstanceAssignment          `json:"instanceAssignments"`
+	Application          *PermissionPackageApplication `json:"application,omitempty"`
+}
+
+type PermissionPackageApplication struct {
+	ID                     string      `json:"id"`
+	DraftID                string      `json:"draftId"`
+	TemplateID             string      `json:"templateId"`
+	TemplateVersion        int         `json:"templateVersion"`
+	TenantID               string      `json:"tenantId"`
+	WorkspaceID            string      `json:"workspaceId"`
+	TargetID               string      `json:"targetId"`
+	CallerInstanceID       string      `json:"callerInstanceId"`
+	SubjectSelector        string      `json:"subjectSelector,omitempty"`
+	RequestText            string      `json:"requestText,omitempty"`
+	Region                 string      `json:"region,omitempty"`
+	DataScopes             []DataScope `json:"dataScopes,omitempty"`
+	AllowedCapabilityIDs   []string    `json:"allowedCapabilityIds"`
+	AllowedCapabilityKeys  []string    `json:"allowedCapabilityKeys"`
+	TenantEntitlementIDs   []string    `json:"tenantEntitlementIds"`
+	WorkspaceAssignmentIDs []string    `json:"workspaceAssignmentIds"`
+	InstanceAssignmentIDs  []string    `json:"instanceAssignmentIds"`
+	AppliedAt              time.Time   `json:"appliedAt"`
 }
 
 type CapabilityAccessDecision struct {

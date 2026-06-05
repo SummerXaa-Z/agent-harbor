@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+API_HOST="${AGENT_HARBOR_PRODUCTION_GATE_API_HOST:-127.0.0.1}"
+API_PORT="${AGENT_HARBOR_PRODUCTION_GATE_API_PORT:-9091}"
+API_ADDR="${AGENT_HARBOR_PRODUCTION_GATE_API_ADDR:-${API_HOST}:${API_PORT}}"
+BASE_URL="${AGENT_HARBOR_PRODUCTION_GATE_BASE_URL:-http://${API_HOST}:${API_PORT}}"
+ADMIN_KEY="${ADMIN_KEY:-production-hardening-admin-key}"
+WRONG_ADMIN_KEY="${WRONG_ADMIN_KEY:-production-hardening-wrong-key}"
+RUN_ID="${RUN_ID:-production-hardening-$(date +%Y%m%d%H%M%S)}"
+
+if [[ "$WRONG_ADMIN_KEY" == "$ADMIN_KEY" ]]; then
+  WRONG_ADMIN_KEY="${ADMIN_KEY}-wrong"
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOG_DIR="${TMPDIR:-/tmp}/agent-harbor-production-hardening-${RUN_ID}"
+PIDS=()
+HTTP_STATUS=""
+HTTP_BODY=""
+
+cleanup() {
+  local pid
+  for pid in "${PIDS[@]:-}"; do
+    kill "$pid" >/dev/null 2>&1 || true
+  done
+  wait >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+need() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "missing dependency: $1" >&2
+    exit 1
+  fi
+}
+
+port_in_use() {
+  local port="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+    return
+  fi
+  python3 - "$port" <<'PY'
+import socket
+import sys
+
+port = int(sys.argv[1])
+sock = socket.socket()
+try:
+    sock.bind(("127.0.0.1", port))
+except OSError:
+    raise SystemExit(0)
+finally:
+    sock.close()
+raise SystemExit(1)
+PY
+}
+
+show_logs() {
+  local file
+  for file in "$LOG_DIR"/*.log; do
+    [[ -f "$file" ]] || continue
+    echo "== $file ==" >&2
+    tail -80 "$file" >&2 || true
+  done
+}
+
+wait_http() {
+  local label="$1"
+  local url="$2"
+  local i
+  for i in $(seq 1 60); do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      echo "$label ready: $url"
+      return
+    fi
+    sleep 0.5
+  done
+  echo "$label did not become ready: $url" >&2
+  show_logs
+  exit 1
+}
+
+request() {
+  local method="$1"
+  local path="$2"
+  local auth_mode="${3:-none}"
+  local body="${4:-}"
+  local tmp
+  tmp="$(mktemp)"
+
+  local args=(
+    -sS
+    -o "$tmp"
+    -w "%{http_code}"
+    -X "$method"
+    "$BASE_URL$path"
+    -H "Content-Type: application/json"
+  )
+
+  case "$auth_mode" in
+    none)
+      ;;
+    wrong)
+      args+=(-H "X-Admin-Key: $WRONG_ADMIN_KEY")
+      ;;
+    admin)
+      args+=(-H "X-Admin-Key: $ADMIN_KEY")
+      ;;
+    *)
+      rm -f "$tmp"
+      echo "unknown auth mode: $auth_mode" >&2
+      exit 1
+      ;;
+  esac
+
+  if [[ -n "$body" ]]; then
+    args+=(-d "$body")
+  fi
+
+  if ! HTTP_STATUS="$(curl "${args[@]}")"; then
+    rm -f "$tmp"
+    echo "curl failed for $method $path" >&2
+    show_logs
+    exit 1
+  fi
+  HTTP_BODY="$(<"$tmp")"
+  rm -f "$tmp"
+}
+
+expect_status() {
+  local expected="$1"
+  local label="$2"
+  if [[ "$HTTP_STATUS" != "$expected" ]]; then
+    echo "expected $label status $expected, got $HTTP_STATUS" >&2
+    echo "$HTTP_BODY" >&2
+    show_logs
+    exit 1
+  fi
+}
+
+assert_body_contains() {
+  local expected="$1"
+  local label="$2"
+  if [[ "$HTTP_BODY" != *"$expected"* ]]; then
+    echo "expected $label body to contain $expected" >&2
+    echo "$HTTP_BODY" >&2
+    show_logs
+    exit 1
+  fi
+}
+
+json_body() {
+  python3 - "$@" <<'PY'
+import json
+import sys
+
+kind = sys.argv[1]
+run_id = sys.argv[2]
+if kind == "local-agent":
+    body = {
+        "name": f"Production Hardening Local Agent {run_id}",
+        "workspaceId": "ws-production-hardening",
+        "channelType": "local",
+        "status": "active",
+    }
+elif kind == "loopback-mcp":
+    body = {
+        "name": f"Production Hardening Blocked Loopback MCP {run_id}",
+        "workspaceId": "ws-production-hardening",
+        "channelType": "mcp",
+        "status": "active",
+        "channelConfig": {"endpoint": "http://127.0.0.1:8787/mcp"},
+    }
+elif kind == "public-mcp":
+    body = {
+        "name": f"Production Hardening Public MCP {run_id}",
+        "workspaceId": "ws-production-hardening",
+        "channelType": "mcp",
+        "status": "active",
+        "channelConfig": {"endpoint": "https://api.example.com/mcp"},
+    }
+elif kind == "management-tools":
+    body = {
+        "jsonrpc": "2.0",
+        "id": f"production-hardening-tools-{run_id}",
+        "method": "tools/list",
+        "params": {},
+    }
+else:
+    raise SystemExit(f"unknown body kind: {kind}")
+print(json.dumps(body, separators=(",", ":")))
+PY
+}
+
+need curl
+need go
+need python3
+
+if port_in_use "$API_PORT"; then
+  echo "API port $API_PORT is already in use" >&2
+  exit 1
+fi
+
+mkdir -p "$LOG_DIR"
+cd "$ROOT_DIR"
+
+echo "AgentHarbor production hardening gate"
+echo "BASE_URL=$BASE_URL"
+echo "RUN_ID=$RUN_ID"
+echo "ADMIN_KEY=provided"
+echo "AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false"
+
+AGENT_HARBOR_ADDR="$API_ADDR" \
+AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL= \
+AGENT_HARBOR_CREDENTIAL_KEY= \
+  go run ./cmd/agent-harbor > "$LOG_DIR/api.log" 2>&1 &
+PIDS+=("$!")
+
+wait_http "API" "$BASE_URL/healthz"
+
+request GET "/healthz" none
+expect_status 200 "public health check"
+echo "public health check verified"
+
+request POST "/api/v1/agents" none "$(json_body local-agent "$RUN_ID")"
+expect_status 401 "management endpoint without admin key"
+assert_body_contains "missing or invalid admin key" "management endpoint without admin key"
+echo "management endpoint rejects missing admin key"
+
+request GET "/api/v1/agents" wrong
+expect_status 401 "management endpoint with wrong admin key"
+assert_body_contains "missing or invalid admin key" "management endpoint with wrong admin key"
+echo "management endpoint rejects wrong admin key"
+
+request GET "/api/v1/agents" admin
+expect_status 200 "management endpoint with admin key"
+echo "management endpoint accepts configured admin key"
+
+request GET "/api/v1/permission-packages/templates" none
+expect_status 401 "permission package templates without admin key"
+echo "permission package APIs require admin key"
+
+request GET "/api/v1/permission-packages/templates" admin
+expect_status 200 "permission package templates with admin key"
+echo "permission package APIs accept configured admin key"
+
+request POST "/api/v1/management/mcp" none "$(json_body management-tools "$RUN_ID")"
+expect_status 401 "management MCP without admin key"
+echo "management MCP requires admin key"
+
+request POST "/api/v1/management/mcp" admin "$(json_body management-tools "$RUN_ID")"
+expect_status 200 "management MCP with admin key"
+assert_body_contains "list_permission_package_templates" "management MCP tools/list"
+echo "management MCP accepts configured admin key"
+
+request POST "/api/v1/agents" admin "$(json_body loopback-mcp "$RUN_ID")"
+expect_status 400 "loopback MCP endpoint with private upstreams disabled"
+assert_body_contains "endpoint host is not allowed" "loopback MCP endpoint"
+echo "private and loopback upstreams are rejected by default"
+
+request POST "/api/v1/agents" admin "$(json_body public-mcp "$RUN_ID")"
+expect_status 201 "public MCP endpoint with admin key"
+echo "public HTTPS MCP endpoint remains registrable"
+
+echo "production hardening gate complete"

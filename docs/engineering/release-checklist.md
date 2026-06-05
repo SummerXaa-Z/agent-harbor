@@ -18,10 +18,13 @@ This covers:
 - uncached Go tests via `make test-fresh`
 - `go vet` via `make vet`
 - Go package build via `make build`
+- production safety baseline via `make production-hardening`
 - frontend unit tests via `make frontend-test`
 - frontend production build via `make frontend-build`
 - scenario script syntax checks via `make scenario-scripts-lint`
 - GitHub YAML configuration parse checks via `make github-config-lint`
+
+The production safety baseline starts a local memory-backed API with `AGENT_HARBOR_ADMIN_KEY` set and private upstreams disabled. It must prove that health remains public, management APIs reject missing or wrong admin keys, permission-package and management MCP endpoints use the same admin-key protection, loopback/private MCP upstreams are rejected by default, and public HTTPS MCP targets remain registrable.
 
 Run PostgreSQL integration when the change touches persistence, migrations, audit behavior, credential storage, route policies, or CI database wiring:
 

@@ -43,6 +43,9 @@ jobs:
       - name: Scenario script lint
         run: make scenario-scripts-lint
 
+      - name: Production hardening gate
+        run: make production-hardening
+
       - name: GitHub config lint
         run: make github-config-lint
 

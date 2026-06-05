@@ -6,7 +6,13 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ## [Unreleased]
 
-No unreleased public changes yet.
+### Added
+
+- Permission package templates now expose a stable version.
+- Permission package application records are persisted in memory and PostgreSQL and returned from `POST /api/v1/permission-packages:apply`.
+- `GET /api/v1/permission-packages/applications` lists permission package applications by tenant subtree, workspace, template, target, caller instance, and limit.
+- Management MCP now exposes `list_permission_package_applications` for admin agents to review applied template versions, created assignment ids, capability ids, and data scopes.
+- Web console AI Admin now shows the latest permission package application evidence after a successful apply.
 
 ## [0.1.0] - 2026-06-03
 

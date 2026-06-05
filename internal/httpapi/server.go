@@ -126,6 +126,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/capabilities", s.listCapabilities)
 			r.Patch("/capabilities/{id}", s.updateCapability)
 			r.Get("/permission-packages/templates", s.listPermissionPackageTemplates)
+			r.Get("/permission-packages/applications", s.listPermissionPackageApplications)
 			r.Post("/permission-packages/drafts", s.createPermissionPackageDraft)
 			r.Post("/permission-packages:apply", s.applyPermissionPackage)
 			r.Post("/management/mcp", s.managementMCP)
@@ -1134,6 +1135,26 @@ func (s *Server) listPermissionPackageTemplates(w http.ResponseWriter, _ *http.R
 	writeJSON(w, http.StatusOK, permissionpack.Templates())
 }
 
+func (s *Server) listPermissionPackageApplications(w http.ResponseWriter, r *http.Request) {
+	limit, err := auditLimitFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	rows, err := s.repo.ListPermissionPackageApplications(r.Context(), store.PermissionPackageApplicationFilter{
+		ManagementScope:  managementScopeFromRequest(r),
+		TemplateID:       strings.TrimSpace(r.URL.Query().Get("templateId")),
+		TargetID:         strings.TrimSpace(r.URL.Query().Get("targetId")),
+		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
+		Limit:            limit,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
 func (s *Server) createPermissionPackageDraft(w http.ResponseWriter, r *http.Request) {
 	var req domain.PermissionPackageDraftRequest
 	if err := decodeJSON(r, &req); err != nil {
@@ -1260,8 +1281,37 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		instanceAssignmentIDs = append(instanceAssignmentIDs, createdInstanceAssignment.ID)
 	}
 
-	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, draft.Input.TenantID, draft.Input.WorkspaceID, "permission_package.applied", "permission_package", draft.ID, "Permission package applied", map[string]any{
+	application := domain.PermissionPackageApplication{
+		ID:                     security.NewID("ppa"),
+		DraftID:                draft.ID,
+		TemplateID:             draft.Template.ID,
+		TemplateVersion:        draft.Template.Version,
+		TenantID:               draft.Input.TenantID,
+		WorkspaceID:            draft.Input.WorkspaceID,
+		TargetID:               draft.Input.TargetID,
+		CallerInstanceID:       draft.Input.CallerInstanceID,
+		SubjectSelector:        draft.Input.SubjectSelector,
+		RequestText:            draft.Input.RequestText,
+		Region:                 draft.Input.Region,
+		DataScopes:             draft.DataScopes,
+		AllowedCapabilityIDs:   appliedCapabilityIDs,
+		AllowedCapabilityKeys:  appliedCapabilityKeys,
+		TenantEntitlementIDs:   tenantEntitlementIDs,
+		WorkspaceAssignmentIDs: workspaceAssignmentIDs,
+		InstanceAssignmentIDs:  instanceAssignmentIDs,
+		AppliedAt:              now,
+	}
+	createdApplication, err := s.repo.CreatePermissionPackageApplication(r.Context(), application)
+	if err != nil {
+		return domain.PermissionPackageApplyResponse{}, err
+	}
+	result.Application = &createdApplication
+
+	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, draft.Input.TenantID, draft.Input.WorkspaceID, "permission_package.applied", "permission_package", createdApplication.ID, "Permission package applied", map[string]any{
+		"applicationId":          createdApplication.ID,
+		"draftId":                draft.ID,
 		"templateId":             draft.Template.ID,
+		"templateVersion":        draft.Template.Version,
 		"targetId":               draft.Input.TargetID,
 		"callerInstanceId":       draft.Input.CallerInstanceID,
 		"subjectSelector":        draft.Input.SubjectSelector,

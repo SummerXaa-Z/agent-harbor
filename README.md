@@ -15,7 +15,7 @@ AgentHarbor is in developer preview. It is ready for local evaluation, design fe
 - **Route policy controls**: allow or deny MCP/OpenAPI routes with priority, wildcard matching, and bounded retry overrides.
 - **MCP capability governance**: discover target tools, approve capabilities, and grant them through tenant, workspace, and caller-instance assignments.
 - **Data permission enforcement**: narrow `dataScopes` across capability, tenant entitlement, workspace assignment, and instance assignment boundaries.
-- **AI-friendly permission operations**: draft tenant-scoped permission package changes from administrator intent, preview allow/deny outcomes, and apply them through the existing grant chain.
+- **AI-friendly permission operations**: draft tenant-scoped permission package changes from administrator intent, preview allow/deny outcomes, apply them through the existing grant chain, and review structured application records.
 - **Runtime evidence**: record traces, audit events, metrics, upstream attempts, effective data scopes, and deny reasons.
 - **Tenant Permission Console**: inspect each tenant's effective access profile, grant chain, invalid scope rows, and recent trace evidence.
 
@@ -127,9 +127,9 @@ The console reads `VITE_API_BASE`; if unset, it uses `http://127.0.0.1:9090`. Wh
 
 The Core Journey Workbench creates a fresh tenant tree, caller, MCP target, scoped capability grant chain, allowed call, denied call, and tenant access profile evidence through the real API. The core console journey supports English and Simplified Chinese. The browser language is used on first load, and the visible `中文` / `EN` toggle persists the operator's choice locally.
 
-The console also includes an **AI Admin** workspace for the v0.2.0 permission-package journey. It lets an administrator describe an access request, select a deterministic permission package template, preview allow/deny simulation rows, apply the package through the backend permission-package API, and then inspect the refreshed tenant access profile. See [the v0.2.0 journey note](docs/product/0.2.0-ai-admin-permission-journey.md).
+The console also includes an **AI Admin** workspace for the v0.2.0 permission-package journey. It lets an administrator describe an access request, select a deterministic permission package template, preview allow/deny simulation rows, apply the package through the backend permission-package API, and then inspect the refreshed tenant access profile. Each successful package application records the template version, draft id, created entitlement and assignment ids, capability ids, and data scopes for later review. See [the v0.2.0 journey note](docs/product/0.2.0-ai-admin-permission-journey.md).
 
-AgentHarbor also exposes the same workflow as a management MCP endpoint at `POST /api/v1/management/mcp`. Admin agents can call `tools/list` and then use tools such as `draft_permission_package`, `apply_permission_package`, `explain_permission_package_draft`, `explain_access_decision`, `get_tenant_access_profile`, `list_agents`, and `list_capabilities`. When `AGENT_HARBOR_ADMIN_KEY` is configured, this endpoint requires `X-Admin-Key` like the rest of the management API.
+AgentHarbor also exposes the same workflow as a management MCP endpoint at `POST /api/v1/management/mcp`. Admin agents can call `tools/list` and then use tools such as `draft_permission_package`, `apply_permission_package`, `list_permission_package_applications`, `explain_permission_package_draft`, `explain_access_decision`, `get_tenant_access_profile`, `list_agents`, and `list_capabilities`. When `AGENT_HARBOR_ADMIN_KEY` is configured, this endpoint requires `X-Admin-Key` like the rest of the management API.
 
 ## Runtime Configuration
 
@@ -252,6 +252,7 @@ ADMIN_KEY=local-admin-key \
 - `GET /api/v1/permission-packages/templates`
 - `POST /api/v1/permission-packages/drafts`
 - `POST /api/v1/permission-packages:apply`
+- `GET /api/v1/permission-packages/applications?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&limit=`
 - `POST /api/v1/management/mcp`
 - `POST /api/v1/management/mcp/rpc`
 - `POST /api/v1/tenant-entitlements`

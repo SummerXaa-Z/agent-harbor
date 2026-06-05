@@ -493,6 +493,44 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create instance assignment: %v", err)
 	}
+	application, err := repo.CreatePermissionPackageApplication(ctx, domain.PermissionPackageApplication{
+		ID:                     security.NewID("ppa"),
+		DraftID:                "ppd_pg_cap",
+		TemplateID:             "sales-readonly",
+		TemplateVersion:        1,
+		TenantID:               caller.TenantID,
+		WorkspaceID:            caller.WorkspaceID,
+		TargetID:               target.ID,
+		CallerInstanceID:       caller.ID,
+		SubjectSelector:        "user:*",
+		RequestText:            "grant sales read access",
+		Region:                 "us-east",
+		DataScopes:             []domain.DataScope{{DataDomain: "crm", Region: "us-east", TenantFilter: "tenant_id = 'tenant-pg-cap'"}},
+		AllowedCapabilityIDs:   []string{capability.ID},
+		AllowedCapabilityKeys:  []string{capability.Key},
+		TenantEntitlementIDs:   []string{entitlement.ID},
+		WorkspaceAssignmentIDs: []string{workspaceAssignment.ID},
+		InstanceAssignmentIDs:  []string{instanceAssignment.ID},
+		AppliedAt:              now.Add(30 * time.Second),
+	})
+	if err != nil {
+		t.Fatalf("create permission package application: %v", err)
+	}
+	applications, err := repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
+		ManagementScope:  store.ManagementScope{TenantID: caller.TenantID, WorkspaceID: caller.WorkspaceID},
+		TemplateID:       "sales-readonly",
+		TargetID:         target.ID,
+		CallerInstanceID: caller.ID,
+		Limit:            1,
+	})
+	if err != nil {
+		t.Fatalf("list permission package applications: %v", err)
+	}
+	if len(applications) != 1 || applications[0].ID != application.ID || applications[0].TemplateVersion != 1 ||
+		len(applications[0].AllowedCapabilityIDs) != 1 || applications[0].AllowedCapabilityIDs[0] != capability.ID ||
+		len(applications[0].DataScopes) != 1 || applications[0].DataScopes[0].Region != "us-east" {
+		t.Fatalf("unexpected permission package applications: %#v", applications)
+	}
 	decision, err := repo.EvaluateCapabilityAccess(ctx, store.CapabilityAccessRequest{
 		TenantID:         caller.TenantID,
 		WorkspaceID:      caller.WorkspaceID,

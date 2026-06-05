@@ -56,6 +56,8 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("nav.ai-admin"), "AI 管理员");
   assert.equal(t("page.aiAdmin"), "AI 权限包工作台");
   assert.equal(t("panel.aiAdminPermissionWorkbench"), "AI 管理员权限包工作台");
+  assert.equal(t("section.permissionApplicationEvidence"), "应用证据");
+  assert.equal(t("detail.applicationId"), "应用记录 ID");
   assert.equal(t("section.permissionDraft"), "权限变更草案");
   assert.equal(t("section.permissionSimulation"), "发布前模拟");
   assert.equal(t("action.applyPermissionPackage"), "应用权限包");

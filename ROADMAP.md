@@ -6,7 +6,7 @@ This roadmap is intentionally high level. Detailed implementation work should st
 
 ## Near Term
 
-- Add management MCP tools for admin agents to call permission package templates, drafts, apply, and explain operations.
+- Add explain-oriented management MCP tools for access decisions, failed simulations, and data-scope conflicts.
 - Persist permission package versions and application records for repeatable review.
 - Harden tenant access profiles with clearer inherited-vs-direct permission views.
 - Expand MCP capability governance with richer tool metadata, approval history, and stale-capability handling.

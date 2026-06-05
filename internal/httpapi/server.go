@@ -128,6 +128,8 @@ func (s *Server) Router() http.Handler {
 			r.Get("/permission-packages/templates", s.listPermissionPackageTemplates)
 			r.Post("/permission-packages/drafts", s.createPermissionPackageDraft)
 			r.Post("/permission-packages:apply", s.applyPermissionPackage)
+			r.Post("/management/mcp", s.managementMCP)
+			r.Post("/management/mcp/rpc", s.managementMCP)
 			r.Post("/tenant-entitlements", s.createTenantEntitlement)
 			r.Get("/tenant-entitlements", s.listTenantEntitlements)
 			r.Post("/workspace-assignments", s.createWorkspaceAssignment)
@@ -1152,14 +1154,21 @@ func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) 
 		writeError(w, err)
 		return
 	}
-	draft, err := s.buildPermissionPackageDraft(r.Context(), req)
+	result, err := s.applyPermissionPackageRequest(r, req)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
+func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.PermissionPackageDraftRequest) (domain.PermissionPackageApplyResponse, error) {
+	draft, err := s.buildPermissionPackageDraft(r.Context(), req)
+	if err != nil {
+		return domain.PermissionPackageApplyResponse{}, err
+	}
 	if !draft.Readiness.CanApply {
-		writeError(w, domain.BadRequest("VALIDATION_FAILED", "permission package draft is not ready to apply"))
-		return
+		return domain.PermissionPackageApplyResponse{}, domain.BadRequest("VALIDATION_FAILED", "permission package draft is not ready to apply")
 	}
 
 	now := s.now()
@@ -1178,8 +1187,7 @@ func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) 
 	for _, capability := range draft.AllowedCapabilities {
 		effectiveScopes, ok := domain.EffectiveDataScopes(capability.DataScopes, draft.DataScopes)
 		if !ok {
-			writeError(w, domain.BadRequest("VALIDATION_FAILED", "permission package dataScopes exceed capability dataScopes"))
-			return
+			return domain.PermissionPackageApplyResponse{}, domain.BadRequest("VALIDATION_FAILED", "permission package dataScopes exceed capability dataScopes")
 		}
 		updatedCapability := capability
 		updatedCapability.DiscoveryStatus = domain.CapabilityDiscoveryApproved
@@ -1187,12 +1195,10 @@ func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) 
 		updatedCapability.UpdatedAt = now
 		savedCapability, ok, err := s.repo.UpdateCapability(r.Context(), updatedCapability)
 		if err != nil {
-			writeError(w, err)
-			return
+			return domain.PermissionPackageApplyResponse{}, err
 		}
 		if !ok {
-			writeError(w, domain.NotFound("capability not found"))
-			return
+			return domain.PermissionPackageApplyResponse{}, domain.NotFound("capability not found")
 		}
 
 		entitlement := domain.TenantEntitlement{
@@ -1209,8 +1215,7 @@ func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) 
 		}
 		createdEntitlement, err := s.repo.CreateTenantEntitlement(r.Context(), entitlement)
 		if err != nil {
-			writeError(w, err)
-			return
+			return domain.PermissionPackageApplyResponse{}, err
 		}
 		workspaceAssignment := domain.WorkspaceAssignment{
 			ID:                  security.NewID("wsa"),
@@ -1225,8 +1230,7 @@ func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) 
 		}
 		createdWorkspaceAssignment, err := s.repo.CreateWorkspaceAssignment(r.Context(), workspaceAssignment)
 		if err != nil {
-			writeError(w, err)
-			return
+			return domain.PermissionPackageApplyResponse{}, err
 		}
 		instanceAssignment := domain.InstanceAssignment{
 			ID:                    security.NewID("ina"),
@@ -1243,8 +1247,7 @@ func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) 
 		}
 		createdInstanceAssignment, err := s.repo.CreateInstanceAssignment(r.Context(), instanceAssignment)
 		if err != nil {
-			writeError(w, err)
-			return
+			return domain.PermissionPackageApplyResponse{}, err
 		}
 
 		result.TenantEntitlements = append(result.TenantEntitlements, createdEntitlement)
@@ -1268,10 +1271,9 @@ func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) 
 		"workspaceAssignmentIds": workspaceAssignmentIDs,
 		"instanceAssignmentIds":  instanceAssignmentIDs,
 	})); err != nil {
-		writeError(w, err)
-		return
+		return domain.PermissionPackageApplyResponse{}, err
 	}
-	writeJSON(w, http.StatusCreated, result)
+	return result, nil
 }
 
 func (s *Server) createTenantEntitlement(w http.ResponseWriter, r *http.Request) {

@@ -1495,13 +1495,15 @@ td code {
   background: #ffffff;
 }
 
-.permission-application-grid {
+.permission-application-grid,
+.permission-approval-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.permission-application-grid div {
+.permission-application-grid div,
+.permission-approval-grid div {
   min-width: 0;
   padding: 8px;
   border: 1px solid #edf1f5;
@@ -1509,7 +1511,8 @@ td code {
   background: var(--surface-muted);
 }
 
-.permission-application-grid span {
+.permission-application-grid span,
+.permission-approval-grid span {
   display: block;
   color: var(--muted);
   font-size: 10px;
@@ -1518,7 +1521,9 @@ td code {
 }
 
 .permission-application-grid strong,
-.permission-application-grid code {
+.permission-application-grid code,
+.permission-approval-grid strong,
+.permission-approval-grid code {
   display: block;
   min-width: 0;
   margin-top: 5px;
@@ -1528,6 +1533,29 @@ td code {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.permission-approval-request {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #d8e2ea;
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.permission-approval-request > span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.permission-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 .permission-metrics {
@@ -2391,6 +2419,7 @@ td code {
   .capability-toolbar,
   .ai-admin-fields,
   .permission-application-grid,
+  .permission-approval-grid,
   .permission-metrics,
   .permission-actions,
   .access-toolbar,

@@ -62,8 +62,12 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("section.permissionPolicyGate"), "策略门禁");
   assert.equal(t("section.permissionSimulation"), "发布前模拟");
   assert.equal(t("action.applyPermissionPackage"), "应用权限包");
+  assert.equal(t("action.createApprovalRequest"), "发起审批");
+  assert.equal(t("section.permissionApprovalRequest"), "审批请求");
   assert.equal(t("status.directApplyAllowed"), "可直接应用");
   assert.equal(t("status.approvalRequired"), "需要审批");
+  assert.equal(t("status.approvalPending"), "待审批");
+  assert.equal(t("message.permissionApprovalPending"), "审批请求仍在待审，请先批准再应用。");
   assert.equal(t("permissionSimulation.guardrailFinance"), "销售只读权限包不包含财务字段访问。");
   assert.equal(t("permissionPolicy.riskApprovalRequired"), "{capability} 是 {risk} 风险能力，需要先审批。");
   assert.equal(t("message.permissionPackageApprovalRequired"), "权限包需要先审批：{detail}。");

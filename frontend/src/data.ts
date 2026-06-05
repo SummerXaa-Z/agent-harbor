@@ -275,6 +275,33 @@ export const sampleCapabilities: Capability[] = [
     discoveredAt: '2026-05-29T08:40:00Z',
     updatedAt: '2026-05-29T08:40:00Z',
   },
+  {
+    id: 'cap_update_ticket',
+    targetId: 'agt_policy_router',
+    type: 'mcp_tool',
+    key: 'update_ticket',
+    displayName: 'update_ticket',
+    description: 'Update support ticket priority and triage notes.',
+    action: 'write',
+    inputSchema: { type: 'object' },
+    outputSchema: { type: 'object' },
+    dataDomains: ['support'],
+    dataScopes: [
+      {
+        dataDomain: 'support',
+        dataset: 'tickets',
+        classification: 'confidential',
+        tenantFilter: 'tenantId = default',
+      },
+    ],
+    sensitivity: 'confidential',
+    riskLevel: 'high',
+    enforcementMode: 'gateway',
+    discoveryStatus: 'pending_review',
+    version: 1,
+    discoveredAt: '2026-05-29T08:40:00Z',
+    updatedAt: '2026-05-29T08:40:00Z',
+  },
 ]
 
 export const sampleTenantEntitlements: TenantEntitlement[] = [

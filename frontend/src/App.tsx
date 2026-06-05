@@ -27,12 +27,14 @@ import {
 } from "lucide-react";
 import {
   applyPermissionPackage,
+  approvePermissionPackageApprovalRequest,
   callMcpRpc,
   checkApiHealth,
   checkMockMcpHealth,
   createAgent,
   createAgentKey,
   createInstanceAssignment,
+  createPermissionPackageApprovalRequest,
   createPermissionPackageDraftFromApi,
   createRoutePolicy,
   createTenant,
@@ -41,10 +43,12 @@ import {
   defaultMockMcpHealthUrl,
   disableAgent,
   disableRoutePolicy,
+  fetchPermissionPackageApprovalRequests,
   fetchPermissionPackageTemplates,
   isApiCompatibilityFallbackError,
   loadConsoleData,
   loadTenantAccessProfile,
+  rejectPermissionPackageApprovalRequest,
   refreshTargetCapabilities,
   rotateAgentCredentials,
   updateAgent,
@@ -92,6 +96,7 @@ import {
   createPermissionPackageDraft,
   permissionPackageTemplates,
   type PermissionPackageApplication,
+  type PermissionPackageApprovalRequest,
   type PermissionPackageDraft,
   type PermissionPackageDraftInput,
   type PermissionPackageSimulationRow,
@@ -315,6 +320,8 @@ function App() {
   const [aiAdminTemplates, setAiAdminTemplates] = useState<PermissionPackageTemplate[]>(permissionPackageTemplates);
   const [aiAdminServerDraft, setAiAdminServerDraft] = useState<PermissionPackageDraft | null>(null);
   const [aiAdminApplication, setAiAdminApplication] = useState<PermissionPackageApplication | null>(null);
+  const [aiAdminApprovalRequests, setAiAdminApprovalRequests] = useState<PermissionPackageApprovalRequest[]>([]);
+  const [aiAdminApprovalAction, setAiAdminApprovalAction] = useState<"" | "create" | "approve" | "reject">("");
   const t = useMemo(() => createTranslator(language), [language]);
 
   useEffect(() => {
@@ -1044,6 +1051,87 @@ function App() {
     }
   }
 
+  async function loadAiAdminApprovalRequestsForDraft(draft: PermissionPackageDraft, signal?: AbortSignal) {
+    if (!data?.loadedFromApi || !draft.readiness.canApply || draft.policyGate.canApplyDirectly) {
+      setAiAdminApprovalRequests([]);
+      return [];
+    }
+    const rows = await fetchPermissionPackageApprovalRequests(
+      {
+        callerInstanceId: draft.input.callerInstanceId,
+        limit: 8,
+        targetId: draft.input.targetId,
+        templateId: draft.template.id,
+        tenantId: draft.input.tenantId,
+        workspaceId: draft.input.workspaceId
+      },
+      adminKey,
+      signal
+    );
+    setAiAdminApprovalRequests(rows);
+    return rows;
+  }
+
+  function upsertAiAdminApprovalRequest(request: PermissionPackageApprovalRequest) {
+    setAiAdminApprovalRequests((current) => [request, ...current.filter((item) => item.id !== request.id)]);
+  }
+
+  async function createAiAdminApprovalRequest() {
+    if (!data?.loadedFromApi) {
+      setAiAdminMessage(t("message.permissionApprovalRequiresLiveApi"));
+      return;
+    }
+    setAiAdminApprovalAction("create");
+    setAiAdminMessage("");
+    try {
+      const request = await createPermissionPackageApprovalRequest(aiAdminForm, adminKey);
+      upsertAiAdminApprovalRequest(request);
+      setAiAdminMessage(tx(t, "message.permissionApprovalCreated", { id: request.id }));
+    } catch (error) {
+      setAiAdminMessage(error instanceof Error ? error.message : "Unable to create approval request");
+    } finally {
+      setAiAdminApprovalAction("");
+    }
+  }
+
+  async function approveAiAdminApprovalRequest() {
+    if (!aiAdminApprovalRequest) return;
+    setAiAdminApprovalAction("approve");
+    setAiAdminMessage("");
+    try {
+      const request = await approvePermissionPackageApprovalRequest(
+        aiAdminApprovalRequest.id,
+        { comment: "Approved from AI Admin" },
+        adminKey
+      );
+      upsertAiAdminApprovalRequest(request);
+      setAiAdminMessage(tx(t, "message.permissionApprovalApproved", { id: request.id }));
+    } catch (error) {
+      setAiAdminMessage(error instanceof Error ? error.message : "Unable to approve request");
+    } finally {
+      setAiAdminApprovalAction("");
+    }
+  }
+
+  async function rejectAiAdminApprovalRequest() {
+    if (!aiAdminApprovalRequest) return;
+    setAiAdminApprovalAction("reject");
+    setAiAdminMessage("");
+    try {
+      const request = await rejectPermissionPackageApprovalRequest(
+        aiAdminApprovalRequest.id,
+        { comment: "Rejected from AI Admin" },
+        adminKey
+      );
+      upsertAiAdminApprovalRequest(request);
+      setAiAdminMessage(tx(t, "message.permissionApprovalRejected", { id: request.id }));
+    } catch (error) {
+      setAiAdminMessage(error instanceof Error ? error.message : "Unable to reject request");
+    } finally {
+      setAiAdminApprovalAction("");
+    }
+  }
+
   async function applyAiAdminPermissionPackage() {
     setAiAdminMessage("");
     if (!aiAdminDraft.readiness.canApply) {
@@ -1052,20 +1140,39 @@ function App() {
       return;
     }
     if (!aiAdminDraft.policyGate.canApplyDirectly) {
-      const detail = permissionPolicyGateMessages(aiAdminDraft.policyGate, t).join(", ");
-      setAiAdminMessage(tx(t, "message.permissionPackageApprovalRequired", { detail: detail || t("status.approvalRequired") }));
-      return;
+      if (!data?.loadedFromApi) {
+        setAiAdminMessage(t("message.permissionApprovalRequiresLiveApi"));
+        return;
+      }
+      if (!aiAdminApprovalRequest) {
+        const detail = permissionPolicyGateMessages(aiAdminDraft.policyGate, t).join(", ");
+        setAiAdminMessage(tx(t, "message.permissionPackageApprovalRequired", { detail: detail || t("status.approvalRequired") }));
+        return;
+      }
+      if (aiAdminApprovalRequest.status === "pending") {
+        setAiAdminMessage(t("message.permissionApprovalPending"));
+        return;
+      }
+      if (aiAdminApprovalRequest.status === "rejected") {
+        setAiAdminMessage(t("message.permissionApprovalRejectedApply"));
+        return;
+      }
     }
     setAiAdminApplying(true);
     try {
       let appliedCount = aiAdminDraft.allowedCapabilities.length;
       let application: PermissionPackageApplication | null = null;
       try {
-        const applied = await applyPermissionPackage(aiAdminForm, adminKey);
+        const applied = await applyPermissionPackage(
+          aiAdminApprovalRequest?.status === "approved"
+            ? { ...aiAdminForm, approvalRequestId: aiAdminApprovalRequest.id }
+            : aiAdminForm,
+          adminKey
+        );
         appliedCount = applied.tenantEntitlements.length;
         application = applied.application ?? null;
       } catch (error) {
-        if (!isApiCompatibilityFallbackError(error)) {
+        if (!isApiCompatibilityFallbackError(error) || !aiAdminDraft.policyGate.canApplyDirectly) {
           throw error;
         }
         appliedCount = await applyAiAdminPermissionPackageWithManagementChain();
@@ -1096,6 +1203,7 @@ function App() {
       setLastRefresh(new Date());
       setAiAdminApplication(application);
       setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: appliedCount }));
+      await loadAiAdminApprovalRequestsForDraft(aiAdminDraft).catch(() => undefined);
     } catch (error) {
       setAiAdminMessage(error instanceof Error ? error.message : "Unable to apply permission package");
     } finally {
@@ -1168,6 +1276,31 @@ function App() {
     [aiAdminForm, capabilities]
   );
   const aiAdminDraft = aiAdminServerDraft ?? localAiAdminDraft;
+  const aiAdminApprovalRequest = useMemo(
+    () => matchingPermissionPackageApprovalRequest(aiAdminApprovalRequests, aiAdminDraft),
+    [aiAdminApprovalRequests, aiAdminDraft]
+  );
+
+  useEffect(() => {
+    if (activeNav !== "ai-admin" || !data?.loadedFromApi || !aiAdminDraft.readiness.canApply || aiAdminDraft.policyGate.canApplyDirectly) {
+      setAiAdminApprovalRequests([]);
+      return;
+    }
+    const controller = new AbortController();
+    loadAiAdminApprovalRequestsForDraft(aiAdminDraft, controller.signal).catch((error) => {
+      if (!isAbortError(error)) {
+        setAiAdminApprovalRequests([]);
+      }
+    });
+    return () => controller.abort();
+  }, [
+    activeNav,
+    adminKey,
+    aiAdminDraft.id,
+    aiAdminDraft.policyGate.canApplyDirectly,
+    aiAdminDraft.readiness.canApply,
+    data?.loadedFromApi
+  ]);
 
   const channelLabels = useMemo(() => {
     return channels.reduce<Record<string, string>>((acc, item) => {
@@ -1292,6 +1425,8 @@ function App() {
     <Panel className="span-12" icon={<Sparkles size={18} />} title={t("panel.aiAdminPermissionWorkbench")}>
       <AiAdminPermissionWorkbench
         agents={agents}
+        approvalAction={aiAdminApprovalAction}
+        approvalRequest={aiAdminApprovalRequest}
         applying={aiAdminApplying}
         draft={aiAdminDraft}
         form={aiAdminForm}
@@ -1299,10 +1434,14 @@ function App() {
         message={aiAdminMessage}
         mcpTargets={mcpTargets}
         onApply={() => void applyAiAdminPermissionPackage()}
+        onApproveApprovalRequest={() => void approveAiAdminApprovalRequest()}
         onChange={(nextForm) => {
           setAiAdminForm(nextForm);
           setAiAdminApplication(null);
+          setAiAdminApprovalRequests([]);
         }}
+        onCreateApprovalRequest={() => void createAiAdminApprovalRequest()}
+        onRejectApprovalRequest={() => void rejectAiAdminApprovalRequest()}
         templates={aiAdminTemplates}
         t={t}
       />
@@ -1761,30 +1900,46 @@ function CoreJourneyWorkbench({
 function AiAdminPermissionWorkbench({
   agents,
   application,
+  approvalAction,
+  approvalRequest,
   applying,
   draft,
   form,
   message,
   mcpTargets,
   onApply,
+  onApproveApprovalRequest,
   onChange,
+  onCreateApprovalRequest,
+  onRejectApprovalRequest,
   templates,
   t
 }: {
   agents: Agent[];
   application: PermissionPackageApplication | null;
+  approvalAction: "" | "create" | "approve" | "reject";
+  approvalRequest: PermissionPackageApprovalRequest | null;
   applying: boolean;
   draft: PermissionPackageDraft;
   form: PermissionPackageDraftInput;
   message: string;
   mcpTargets: Agent[];
   onApply: () => void;
+  onApproveApprovalRequest: () => void;
   onChange: (form: PermissionPackageDraftInput) => void;
+  onCreateApprovalRequest: () => void;
+  onRejectApprovalRequest: () => void;
   templates: PermissionPackageTemplate[];
   t: Translator;
 }) {
   const callers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
-  const canDirectApply = draft.readiness.canApply && draft.policyGate.canApplyDirectly;
+  const hasApprovedRequest = approvalRequest?.status === "approved";
+  const canApply = draft.readiness.canApply && (draft.policyGate.canApplyDirectly || hasApprovedRequest);
+  const approvalStatusTone: Tone = approvalRequest?.status === "approved"
+    ? "success"
+    : approvalRequest?.status === "rejected"
+      ? "danger"
+      : "warning";
   return (
     <div className="ai-admin-workbench">
       <div className="ai-admin-request">
@@ -1950,8 +2105,60 @@ function AiAdminPermissionWorkbench({
               </ul>
             ) : null}
           </div>
+          {!draft.policyGate.canApplyDirectly ? (
+            <div className="permission-approval-request">
+              <div className="permission-section-title">
+                <strong>{t("section.permissionApprovalRequest")}</strong>
+                <Badge tone={approvalRequest ? approvalStatusTone : "warning"}>
+                  {approvalRequest ? permissionApprovalStatusLabel(approvalRequest.status, t) : t("status.approvalNotRequested")}
+                </Badge>
+              </div>
+              {approvalRequest ? (
+                <div className="permission-approval-grid">
+                  <div>
+                    <span>{t("detail.approvalRequestId")}</span>
+                    <code>{approvalRequest.id}</code>
+                  </div>
+                  <div>
+                    <span>{t("table.version")}</span>
+                    <strong>v{approvalRequest.templateVersion} / p{approvalRequest.policyVersion}</strong>
+                  </div>
+                  <div>
+                    <span>{t("detail.createdObjects")}</span>
+                    <strong>{approvalRequest.allowedCapabilityIds.length}</strong>
+                  </div>
+                  <div>
+                    <span>{t("table.actor")}</span>
+                    <strong>{approvalRequest.reviewedBy || approvalRequest.requestedBy || "-"}</strong>
+                  </div>
+                </div>
+              ) : (
+                <span>{t("text.approvalRequestEmpty")}</span>
+              )}
+              <div className="permission-review-actions">
+                {approvalRequest?.status === "pending" ? (
+                  <>
+                    <button disabled={Boolean(approvalAction) || applying} onClick={onApproveApprovalRequest} type="button">
+                      <CheckCircle2 size={14} />
+                      {approvalAction === "approve" ? t("action.approving") : t("action.approvePermissionRequest")}
+                    </button>
+                    <button disabled={Boolean(approvalAction) || applying} onClick={onRejectApprovalRequest} type="button">
+                      <TriangleAlert size={14} />
+                      {approvalAction === "reject" ? t("action.rejecting") : t("action.rejectPermissionRequest")}
+                    </button>
+                  </>
+                ) : null}
+                {approvalRequest?.status !== "pending" && approvalRequest?.status !== "approved" ? (
+                  <button disabled={Boolean(approvalAction) || applying || !draft.readiness.canApply} onClick={onCreateApprovalRequest} type="button">
+                    <ClipboardCheck size={14} />
+                    {approvalAction === "create" ? t("action.creatingApprovalRequest") : t("action.createApprovalRequest")}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <div className="permission-actions">
-            <button className="primary-button" disabled={applying || !canDirectApply} onClick={onApply} type="button">
+            <button className="primary-button" disabled={applying || !canApply} onClick={onApply} type="button">
               <CheckCircle2 size={14} />
               {applying ? t("action.applyingPermissionPackage") : t("action.applyPermissionPackage")}
             </button>
@@ -3247,6 +3454,55 @@ function permissionPolicyReasonMessage(
     return acc;
   }, {});
   return tx(t, reason.reasonKey, values);
+}
+
+function permissionApprovalStatusLabel(status: PermissionPackageApprovalRequest["status"], t: Translator) {
+  if (status === "approved") return t("status.approvalApproved");
+  if (status === "rejected") return t("status.approvalRejected");
+  return t("status.approvalPending");
+}
+
+function matchingPermissionPackageApprovalRequest(
+  requests: PermissionPackageApprovalRequest[],
+  draft: PermissionPackageDraft
+) {
+  const matching = requests.filter((request) => permissionPackageApprovalRequestMatchesDraft(request, draft));
+  return matching.find((request) => request.status === "approved")
+    ?? matching.find((request) => request.status === "pending")
+    ?? matching.find((request) => request.status === "rejected")
+    ?? null;
+}
+
+function permissionPackageApprovalRequestMatchesDraft(
+  request: PermissionPackageApprovalRequest,
+  draft: PermissionPackageDraft
+) {
+  return request.draftId === draft.id
+    && request.templateId === draft.template.id
+    && request.templateVersion === draft.template.version
+    && request.policyVersion === draft.policyGate.policyVersion
+    && request.tenantId === draft.input.tenantId
+    && request.workspaceId === draft.input.workspaceId
+    && request.targetId === draft.input.targetId
+    && request.callerInstanceId === draft.input.callerInstanceId
+    && (request.subjectSelector ?? "") === (draft.input.subjectSelector ?? "")
+    && (request.requestText ?? "") === draft.input.requestText
+    && (request.region ?? "") === draft.input.region
+    && sameStringSet(request.allowedCapabilityIds, draft.allowedCapabilities.map((capability) => capability.id))
+    && sameStringSet(request.allowedCapabilityKeys, draft.allowedCapabilities.map((capability) => capability.key))
+    && sameDataScopes(request.dataScopes ?? [], draft.dataScopes);
+}
+
+function sameStringSet(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  const leftSorted = [...left].sort();
+  const rightSorted = [...right].sort();
+  return leftSorted.every((value, index) => value === rightSorted[index]);
+}
+
+function sameDataScopes(left: DataScope[], right: DataScope[]) {
+  if (left.length !== right.length) return false;
+  return left.every((scope, index) => JSON.stringify(scope) === JSON.stringify(right[index]));
 }
 
 function auditTone(action: string): Tone {

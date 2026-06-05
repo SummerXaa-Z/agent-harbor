@@ -8,6 +8,7 @@ This roadmap is intentionally high level. Detailed implementation work should st
 
 - Add richer conflict remediation for package version changes and data-scope repair flows.
 - Add permission package application diff and rollback review flows.
+- Add approver roles, approval expiry, approval consumption, and policy-configured approval routing.
 - Harden tenant access profiles with clearer inherited-vs-direct permission views.
 - Expand MCP capability governance with richer tool metadata, approval history, and stale-capability handling.
 - Improve local contributor ergonomics with clearer setup checks and seeded scenario data.
@@ -15,7 +16,7 @@ This roadmap is intentionally high level. Detailed implementation work should st
 
 ## Next
 
-- Add persisted approval requests, approver roles, and approval evidence for high-risk permission package application.
+- Add approval notification hooks and review queues for high-risk permission package application.
 - Add OpenAPI capability discovery and assignment semantics alongside MCP tools.
 - Add first-class data-system targets for data lakes, warehouses, and databases.
 - Expand data-scope validation so administrators can catch invalid narrowing before runtime.

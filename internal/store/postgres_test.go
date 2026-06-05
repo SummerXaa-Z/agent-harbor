@@ -531,6 +531,81 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 		len(applications[0].DataScopes) != 1 || applications[0].DataScopes[0].Region != "us-east" {
 		t.Fatalf("unexpected permission package applications: %#v", applications)
 	}
+	approval, err := repo.CreatePermissionPackageApprovalRequest(ctx, domain.PermissionPackageApprovalRequest{
+		ID:                    security.NewID("ppar"),
+		DraftID:               "ppd_pg_cap_pending",
+		TemplateID:            "sales-readonly",
+		TemplateVersion:       1,
+		PolicyVersion:         1,
+		TenantID:              caller.TenantID,
+		WorkspaceID:           caller.WorkspaceID,
+		TargetID:              target.ID,
+		CallerInstanceID:      caller.ID,
+		SubjectSelector:       "user:*",
+		RequestText:           "grant sales read access",
+		Region:                "us-east",
+		DataScopes:            []domain.DataScope{{DataDomain: "crm", Region: "us-east", TenantFilter: "tenant_id = 'tenant-pg-cap'"}},
+		AllowedCapabilityIDs:  []string{capability.ID},
+		AllowedCapabilityKeys: []string{capability.Key},
+		PolicyGate: domain.PermissionPackagePolicyGate{
+			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
+			CanApplyDirectly: false,
+			PolicyVersion:    1,
+			Reasons: []domain.PermissionPackagePolicyReason{{
+				ID:            "reason_high",
+				CapabilityID:  capability.ID,
+				CapabilityKey: capability.Key,
+				Severity:      "high",
+				Message:       "approval required",
+				ReasonKey:     "risk",
+				ReasonValues:  map[string]string{"risk": "high"},
+			}},
+			NextActions: []string{"request approval"},
+		},
+		Status:      domain.PermissionPackageApprovalStatusPending,
+		RequestedBy: "admin",
+		CreatedAt:   now.Add(40 * time.Second),
+		UpdatedAt:   now.Add(40 * time.Second),
+	})
+	if err != nil {
+		t.Fatalf("create permission package approval request: %v", err)
+	}
+	approvalRows, err := repo.ListPermissionPackageApprovalRequests(ctx, store.PermissionPackageApprovalRequestFilter{
+		ManagementScope:  store.ManagementScope{TenantID: caller.TenantID, WorkspaceID: caller.WorkspaceID},
+		TemplateID:       "sales-readonly",
+		TargetID:         target.ID,
+		CallerInstanceID: caller.ID,
+		Status:           domain.PermissionPackageApprovalStatusPending,
+		Limit:            1,
+	})
+	if err != nil {
+		t.Fatalf("list permission package approval requests: %v", err)
+	}
+	if len(approvalRows) != 1 || approvalRows[0].ID != approval.ID ||
+		len(approvalRows[0].PolicyGate.Reasons) != 1 || approvalRows[0].PolicyGate.Reasons[0].ReasonValues["risk"] != "high" ||
+		len(approvalRows[0].DataScopes) != 1 || approvalRows[0].DataScopes[0].Region != "us-east" {
+		t.Fatalf("unexpected permission package approval requests: %#v", approvalRows)
+	}
+	loadedApproval, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, approval.ID)
+	if err != nil {
+		t.Fatalf("get permission package approval request: %v", err)
+	}
+	if !ok || loadedApproval.ID != approval.ID || loadedApproval.Status != domain.PermissionPackageApprovalStatusPending {
+		t.Fatalf("unexpected permission package approval request get: ok=%v row=%#v", ok, loadedApproval)
+	}
+	loadedApproval.Status = domain.PermissionPackageApprovalStatusApproved
+	loadedApproval.ReviewedBy = "security"
+	loadedApproval.ReviewComment = "approved for pg test"
+	loadedApproval.UpdatedAt = now.Add(50 * time.Second)
+	loadedApproval.ResolvedAt = now.Add(50 * time.Second)
+	updatedApproval, ok, err := repo.UpdatePermissionPackageApprovalRequest(ctx, loadedApproval)
+	if err != nil {
+		t.Fatalf("update permission package approval request: %v", err)
+	}
+	if !ok || updatedApproval.Status != domain.PermissionPackageApprovalStatusApproved ||
+		updatedApproval.ReviewedBy != "security" || updatedApproval.ResolvedAt.IsZero() {
+		t.Fatalf("unexpected updated permission package approval request: ok=%v row=%#v", ok, updatedApproval)
+	}
 	decision, err := repo.EvaluateCapabilityAccess(ctx, store.CapabilityAccessRequest{
 		TenantID:         caller.TenantID,
 		WorkspaceID:      caller.WorkspaceID,

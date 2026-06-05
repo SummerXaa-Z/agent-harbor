@@ -251,6 +251,117 @@ func TestMemoryPermissionPackageApplicationRoundTrip(t *testing.T) {
 	}
 }
 
+func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	now := time.Date(2026, 6, 5, 10, 0, 0, 0, time.UTC)
+	if _, err := repo.CreateTenant(ctx, domain.Tenant{ID: "tenant-root", Name: "Root", Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("create root tenant: %v", err)
+	}
+	if _, err := repo.CreateTenant(ctx, domain.Tenant{ID: "tenant-east", ParentTenantID: "tenant-root", Level: 1, Name: "East", Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("create child tenant: %v", err)
+	}
+
+	older := domain.PermissionPackageApprovalRequest{
+		ID:                   "ppar_old",
+		DraftID:              "ppd_old",
+		TemplateID:           "support-ticket-triage",
+		TemplateVersion:      1,
+		PolicyVersion:        1,
+		TenantID:             "tenant-east",
+		WorkspaceID:          "ws-support",
+		TargetID:             "agt_mcp",
+		CallerInstanceID:     "agt_caller",
+		SubjectSelector:      "user:support-*",
+		RequestText:          "old request",
+		Region:               "us-east",
+		DataScopes:           []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		AllowedCapabilityIDs: []string{"cap_update"},
+		AllowedCapabilityKeys: []string{
+			"update_ticket",
+		},
+		PolicyGate: domain.PermissionPackagePolicyGate{
+			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
+			CanApplyDirectly: false,
+			PolicyVersion:    1,
+			Reasons: []domain.PermissionPackagePolicyReason{{
+				ID:            "policy:cap_update:action",
+				CapabilityID:  "cap_update",
+				CapabilityKey: "update_ticket",
+				Severity:      "high",
+				Message:       "Requires approval.",
+				ReasonKey:     "permissionPolicy.actionApprovalRequired",
+				ReasonValues:  map[string]string{"capability": "update_ticket", "action": "write"},
+			}},
+			NextActions: []string{"Request approval before applying this permission package."},
+		},
+		Status:      domain.PermissionPackageApprovalStatusPending,
+		RequestedBy: "admin-key",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	newer := older
+	newer.ID = "ppar_new"
+	newer.DraftID = "ppd_new"
+	newer.WorkspaceID = "ws-escalations"
+	newer.Status = domain.PermissionPackageApprovalStatusApproved
+	newer.ReviewedBy = "security-admin"
+	newer.ReviewComment = "approved for break-glass support"
+	newer.ResolvedAt = now.Add(time.Minute)
+	newer.CreatedAt = now.Add(time.Minute)
+	newer.UpdatedAt = now.Add(time.Minute)
+
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, older); err != nil {
+		t.Fatalf("create older approval request: %v", err)
+	}
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, newer); err != nil {
+		t.Fatalf("create newer approval request: %v", err)
+	}
+
+	rows, err := repo.ListPermissionPackageApprovalRequests(ctx, PermissionPackageApprovalRequestFilter{
+		ManagementScope: ManagementScope{TenantID: "tenant-root"},
+		TemplateID:      "support-ticket-triage",
+		Status:          domain.PermissionPackageApprovalStatusApproved,
+		Limit:           1,
+	})
+	if err != nil {
+		t.Fatalf("list approval requests: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != newer.ID || rows[0].ReviewedBy != "security-admin" {
+		t.Fatalf("expected newest approved request, got %#v", rows)
+	}
+	rows[0].AllowedCapabilityIDs[0] = "mutated"
+	rows[0].PolicyGate.Reasons[0].ReasonValues["capability"] = "mutated"
+
+	again, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, older.ID)
+	if err != nil || !ok {
+		t.Fatalf("get older approval request: ok=%v err=%v", ok, err)
+	}
+	again.Status = domain.PermissionPackageApprovalStatusRejected
+	again.ReviewedBy = "security-admin"
+	again.ReviewComment = "too broad"
+	again.ResolvedAt = now.Add(2 * time.Minute)
+	again.UpdatedAt = now.Add(2 * time.Minute)
+	updated, ok, err := repo.UpdatePermissionPackageApprovalRequest(ctx, again)
+	if err != nil || !ok {
+		t.Fatalf("update approval request: ok=%v err=%v", ok, err)
+	}
+	if updated.Status != domain.PermissionPackageApprovalStatusRejected || updated.ReviewComment != "too broad" {
+		t.Fatalf("unexpected updated approval request: %#v", updated)
+	}
+	finalRows, err := repo.ListPermissionPackageApprovalRequests(ctx, PermissionPackageApprovalRequestFilter{
+		ManagementScope: ManagementScope{TenantID: "tenant-root", WorkspaceID: "ws-support"},
+		Status:          domain.PermissionPackageApprovalStatusRejected,
+	})
+	if err != nil {
+		t.Fatalf("list rejected approval requests: %v", err)
+	}
+	if len(finalRows) != 1 || finalRows[0].ID != older.ID || finalRows[0].AllowedCapabilityIDs[0] != "cap_update" ||
+		finalRows[0].PolicyGate.Reasons[0].ReasonValues["capability"] != "update_ticket" {
+		t.Fatalf("expected cloned rejected request, got %#v", finalRows)
+	}
+}
+
 func TestMemoryCapabilityAssignmentRejectsStoredDataScopeExpansion(t *testing.T) {
 	repo := NewMemory()
 	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)

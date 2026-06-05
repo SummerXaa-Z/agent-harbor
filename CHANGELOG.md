@@ -16,6 +16,7 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Permission package approval requests are now persisted in memory and PostgreSQL so approval-required drafts can be reviewed and applied with evidence.
 - `POST /api/v1/permission-packages/approval-requests`, `GET /api/v1/permission-packages/approval-requests`, approve, and reject endpoints now provide the approval-request loop for permission packages.
 - `POST /api/v1/permission-packages:apply` now accepts `approvalRequestId` and rejects pending, rejected, missing, or mismatched approval requests before writing permissions.
+- Permission package approval requests now expire after 24 hours and are consumed transactionally by the first successful package application, so expired, already-used, or concurrently reused approvals cannot write permissions.
 - Management MCP now exposes `create_permission_package_approval_request`, `list_permission_package_approval_requests`, `approve_permission_package_approval_request`, and `reject_permission_package_approval_request`.
 - Web console AI Admin now shows the latest permission package application evidence after a successful apply.
 - Web console AI Admin now shows policy-gate status and disables direct apply when a package requires approval.

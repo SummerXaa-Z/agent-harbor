@@ -490,29 +490,32 @@ type PermissionPackageApplyResponse struct {
 }
 
 type PermissionPackageApprovalRequest struct {
-	ID                    string                          `json:"id"`
-	DraftID               string                          `json:"draftId"`
-	TemplateID            string                          `json:"templateId"`
-	TemplateVersion       int                             `json:"templateVersion"`
-	PolicyVersion         int                             `json:"policyVersion"`
-	TenantID              string                          `json:"tenantId"`
-	WorkspaceID           string                          `json:"workspaceId"`
-	TargetID              string                          `json:"targetId"`
-	CallerInstanceID      string                          `json:"callerInstanceId"`
-	SubjectSelector       string                          `json:"subjectSelector,omitempty"`
-	RequestText           string                          `json:"requestText,omitempty"`
-	Region                string                          `json:"region,omitempty"`
-	DataScopes            []DataScope                     `json:"dataScopes,omitempty"`
-	AllowedCapabilityIDs  []string                        `json:"allowedCapabilityIds"`
-	AllowedCapabilityKeys []string                        `json:"allowedCapabilityKeys"`
-	PolicyGate            PermissionPackagePolicyGate     `json:"policyGate"`
-	Status                PermissionPackageApprovalStatus `json:"status"`
-	RequestedBy           string                          `json:"requestedBy,omitempty"`
-	ReviewedBy            string                          `json:"reviewedBy,omitempty"`
-	ReviewComment         string                          `json:"reviewComment,omitempty"`
-	CreatedAt             time.Time                       `json:"createdAt"`
-	UpdatedAt             time.Time                       `json:"updatedAt"`
-	ResolvedAt            time.Time                       `json:"resolvedAt,omitempty,omitzero"`
+	ID                      string                          `json:"id"`
+	DraftID                 string                          `json:"draftId"`
+	TemplateID              string                          `json:"templateId"`
+	TemplateVersion         int                             `json:"templateVersion"`
+	PolicyVersion           int                             `json:"policyVersion"`
+	TenantID                string                          `json:"tenantId"`
+	WorkspaceID             string                          `json:"workspaceId"`
+	TargetID                string                          `json:"targetId"`
+	CallerInstanceID        string                          `json:"callerInstanceId"`
+	SubjectSelector         string                          `json:"subjectSelector,omitempty"`
+	RequestText             string                          `json:"requestText,omitempty"`
+	Region                  string                          `json:"region,omitempty"`
+	DataScopes              []DataScope                     `json:"dataScopes,omitempty"`
+	AllowedCapabilityIDs    []string                        `json:"allowedCapabilityIds"`
+	AllowedCapabilityKeys   []string                        `json:"allowedCapabilityKeys"`
+	PolicyGate              PermissionPackagePolicyGate     `json:"policyGate"`
+	Status                  PermissionPackageApprovalStatus `json:"status"`
+	RequestedBy             string                          `json:"requestedBy,omitempty"`
+	ReviewedBy              string                          `json:"reviewedBy,omitempty"`
+	ReviewComment           string                          `json:"reviewComment,omitempty"`
+	CreatedAt               time.Time                       `json:"createdAt"`
+	UpdatedAt               time.Time                       `json:"updatedAt"`
+	ResolvedAt              time.Time                       `json:"resolvedAt,omitempty,omitzero"`
+	ExpiresAt               time.Time                       `json:"expiresAt"`
+	ConsumedAt              time.Time                       `json:"consumedAt,omitempty,omitzero"`
+	ConsumedByApplicationID string                          `json:"consumedByApplicationId,omitempty"`
 }
 
 type PermissionPackageApprovalResolutionRequest struct {

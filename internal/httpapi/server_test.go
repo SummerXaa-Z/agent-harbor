@@ -215,26 +215,32 @@ type permissionPackageApplicationResponse struct {
 }
 
 type permissionPackageApprovalRequestResponse struct {
-	ID                    string                              `json:"id"`
-	DraftID               string                              `json:"draftId"`
-	TemplateID            string                              `json:"templateId"`
-	TemplateVersion       int                                 `json:"templateVersion"`
-	PolicyVersion         int                                 `json:"policyVersion"`
-	TenantID              string                              `json:"tenantId"`
-	WorkspaceID           string                              `json:"workspaceId"`
-	TargetID              string                              `json:"targetId"`
-	CallerInstanceID      string                              `json:"callerInstanceId"`
-	SubjectSelector       string                              `json:"subjectSelector"`
-	RequestText           string                              `json:"requestText"`
-	Region                string                              `json:"region"`
-	DataScopes            []dataScopeResponse                 `json:"dataScopes"`
-	AllowedCapabilityIDs  []string                            `json:"allowedCapabilityIds"`
-	AllowedCapabilityKeys []string                            `json:"allowedCapabilityKeys"`
-	PolicyGate            permissionPackagePolicyGateResponse `json:"policyGate"`
-	Status                string                              `json:"status"`
-	RequestedBy           string                              `json:"requestedBy"`
-	ReviewedBy            string                              `json:"reviewedBy"`
-	ReviewComment         string                              `json:"reviewComment"`
+	ID                      string                              `json:"id"`
+	DraftID                 string                              `json:"draftId"`
+	TemplateID              string                              `json:"templateId"`
+	TemplateVersion         int                                 `json:"templateVersion"`
+	PolicyVersion           int                                 `json:"policyVersion"`
+	TenantID                string                              `json:"tenantId"`
+	WorkspaceID             string                              `json:"workspaceId"`
+	TargetID                string                              `json:"targetId"`
+	CallerInstanceID        string                              `json:"callerInstanceId"`
+	SubjectSelector         string                              `json:"subjectSelector"`
+	RequestText             string                              `json:"requestText"`
+	Region                  string                              `json:"region"`
+	DataScopes              []dataScopeResponse                 `json:"dataScopes"`
+	AllowedCapabilityIDs    []string                            `json:"allowedCapabilityIds"`
+	AllowedCapabilityKeys   []string                            `json:"allowedCapabilityKeys"`
+	PolicyGate              permissionPackagePolicyGateResponse `json:"policyGate"`
+	Status                  string                              `json:"status"`
+	RequestedBy             string                              `json:"requestedBy"`
+	ReviewedBy              string                              `json:"reviewedBy"`
+	ReviewComment           string                              `json:"reviewComment"`
+	CreatedAt               time.Time                           `json:"createdAt"`
+	UpdatedAt               time.Time                           `json:"updatedAt"`
+	ResolvedAt              time.Time                           `json:"resolvedAt"`
+	ExpiresAt               time.Time                           `json:"expiresAt"`
+	ConsumedAt              time.Time                           `json:"consumedAt"`
+	ConsumedByApplicationID string                              `json:"consumedByApplicationId"`
 }
 
 type mcpEnvelopeResponse struct {
@@ -2911,6 +2917,9 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 		len(firstApproval.PolicyGate.Reasons) == 0 {
 		t.Fatalf("unexpected created approval request: %#v", firstApproval)
 	}
+	if firstApproval.ExpiresAt.IsZero() || !firstApproval.ExpiresAt.After(firstApproval.CreatedAt) {
+		t.Fatalf("approval request should expose a future expiry: %#v", firstApproval)
+	}
 	listedApprovals := decodeData[[]permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?tenantId=tenant-root&workspaceId=ws-support&templateId=support-ticket-triage&targetId="+target.ID+"&callerInstanceId="+caller.ID+"&status=pending&limit=1", nil, ""))
 	if len(listedApprovals) != 1 || listedApprovals[0].ID != firstApproval.ID {
 		t.Fatalf("expected listed pending approval request, got %#v", listedApprovals)
@@ -2962,6 +2971,15 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 		t.Fatalf("mismatched approval request should not authorize apply, status=%d body=%s", mismatchedApply.Code, mismatchedApply.Body.String())
 	}
 
+	expiredApproval, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), secondApproval.ID)
+	if err != nil || !ok {
+		t.Fatalf("get approved approval for expiry test: ok=%v err=%v", ok, err)
+	}
+	expiredApproval.ExpiresAt = time.Now().UTC().Add(-time.Minute)
+	expiredApproval.UpdatedAt = expiredApproval.ExpiresAt
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(t.Context(), expiredApproval); err != nil || !ok {
+		t.Fatalf("expire approval request: ok=%v err=%v", ok, err)
+	}
 	approvedApplyInput := map[string]any{
 		"approvalRequestId": secondApproval.ID,
 		"callerInstanceId":  caller.ID,
@@ -2972,11 +2990,30 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 		"tenantId":          "tenant-east",
 		"workspaceId":       "ws-support",
 	}
+	expiredApply := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", approvedApplyInput, "")
+	if expiredApply.Code != http.StatusBadRequest || !strings.Contains(expiredApply.Body.String(), "expired") {
+		t.Fatalf("expired approval request should not authorize apply, status=%d body=%s", expiredApply.Code, expiredApply.Body.String())
+	}
+
+	thirdApproval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
+	thirdApproval = decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+thirdApproval.ID+"/approve", nil, ""))
+	approvedApplyInput["approvalRequestId"] = thirdApproval.ID
 	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", approvedApplyInput, ""))
 	if len(applied.TenantEntitlements) != 1 || applied.TenantEntitlements[0].CapabilityID != updateTicket.ID ||
 		len(applied.WorkspaceAssignments) != 1 || len(applied.InstanceAssignments) != 1 ||
 		applied.Application == nil || applied.Application.TemplateID != "support-ticket-triage" {
 		t.Fatalf("expected approved package apply to write records, got %#v", applied)
+	}
+	consumedApproval, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), thirdApproval.ID)
+	if err != nil || !ok {
+		t.Fatalf("get consumed approval request: ok=%v err=%v", ok, err)
+	}
+	if consumedApproval.ConsumedAt.IsZero() || consumedApproval.ConsumedByApplicationID != applied.Application.ID {
+		t.Fatalf("approval request should be consumed by application %s, got %#v", applied.Application.ID, consumedApproval)
+	}
+	reusedApply := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", approvedApplyInput, "")
+	if reusedApply.Code != http.StatusBadRequest || !strings.Contains(reusedApply.Body.String(), "already consumed") {
+		t.Fatalf("consumed approval request should not authorize apply, status=%d body=%s", reusedApply.Code, reusedApply.Body.String())
 	}
 	updated, ok, err = repo.GetCapability(t.Context(), updateTicket.ID)
 	if err != nil || !ok {
@@ -2989,8 +3026,16 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 	if err != nil {
 		t.Fatalf("list applied audit events: %v", err)
 	}
-	if len(events) != 1 || events[0].Metadata["approvalRequestId"] != secondApproval.ID {
+	if len(events) != 1 || events[0].Metadata["approvalRequestId"] != thirdApproval.ID ||
+		events[0].Metadata["approvalConsumedAt"] == nil || events[0].Metadata["approvalExpiresAt"] == nil {
 		t.Fatalf("expected applied audit event with approval request id, got %#v", events)
+	}
+	applications, err = repo.ListPermissionPackageApplications(t.Context(), store.PermissionPackageApplicationFilter{})
+	if err != nil {
+		t.Fatalf("list applications after consumed retry: %v", err)
+	}
+	if len(applications) != 1 {
+		t.Fatalf("consumed approval retry should not write duplicate applications: %#v", applications)
 	}
 }
 

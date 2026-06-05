@@ -10,6 +10,7 @@ import type {
 } from "./types";
 
 export type PermissionPackageDecision = "allow" | "deny";
+export type PermissionPackagePolicyDecision = "allow" | "approval_required";
 
 export interface PermissionPackageTemplate {
   id: string;
@@ -50,6 +51,7 @@ export interface PermissionPackageDraft {
   blockedCapabilities: Capability[];
   dataScopes: DataScope[];
   readiness: PermissionPackageReadiness;
+  policyGate: PermissionPackagePolicyGate;
   simulationRows: PermissionPackageSimulationRow[];
 }
 
@@ -88,6 +90,24 @@ export interface PermissionPackageReadiness {
   warnings: string[];
 }
 
+export interface PermissionPackagePolicyGate {
+  decision: PermissionPackagePolicyDecision;
+  canApplyDirectly: boolean;
+  policyVersion: number;
+  reasons: PermissionPackagePolicyReason[];
+  nextActions: string[];
+}
+
+export interface PermissionPackagePolicyReason {
+  id: string;
+  capabilityId?: string;
+  capabilityKey?: string;
+  severity: string;
+  message: string;
+  reasonKey?: string;
+  reasonValues?: Record<string, string>;
+}
+
 export interface PermissionPackageSimulationRow {
   id: string;
   capabilityId?: string;
@@ -101,6 +121,8 @@ export interface PermissionPackageSimulationRow {
 export interface PermissionPackageInventory {
   capabilities: Capability[];
 }
+
+const policyGateVersion = 1;
 
 export const permissionPackageTemplates: PermissionPackageTemplate[] = [
   {
@@ -199,12 +221,14 @@ export function createPermissionPackageDraft(
   );
   const dataScopes = buildDraftDataScopes(input, template, allowedCapabilities);
   const readiness = buildReadiness(input, allowedCapabilities);
+  const policyGate = buildPolicyGate(allowedCapabilities);
   return {
     allowedCapabilities,
     blockedCapabilities,
     dataScopes,
     id: draftId(input),
     input,
+    policyGate,
     readiness,
     simulationRows: buildSimulationRows(allowedCapabilities, blockedCapabilities, template),
     template,
@@ -254,6 +278,106 @@ function buildReadiness(
     canApply: missingFields.length === 0 && warnings.length === 0,
     missingFields,
     warnings,
+  };
+}
+
+function buildPolicyGate(allowedCapabilities: Capability[]): PermissionPackagePolicyGate {
+  const reasons = allowedCapabilities.flatMap((capability) => policyReasonsForCapability(capability));
+  if (reasons.length === 0) {
+    return {
+      canApplyDirectly: true,
+      decision: "allow",
+      nextActions: [],
+      policyVersion: policyGateVersion,
+      reasons,
+    };
+  }
+  return {
+    canApplyDirectly: false,
+    decision: "approval_required",
+    nextActions: ["Request approval before applying this permission package."],
+    policyVersion: policyGateVersion,
+    reasons,
+  };
+}
+
+function policyReasonsForCapability(capability: Capability): PermissionPackagePolicyReason[] {
+  const reasons: PermissionPackagePolicyReason[] = [];
+  if (actionRequiresApproval(capability.action)) {
+    reasons.push(policyReason(
+      capability,
+      "action",
+      "high",
+      `Capability ${capability.key} uses ${capability.action} and requires approval before direct apply.`,
+      "permissionPolicy.actionApprovalRequired",
+      {
+        action: capability.action,
+        capability: capability.key,
+      },
+    ));
+  }
+  if (capability.action === "execute" && capability.riskLevel !== "low") {
+    reasons.push(policyReason(
+      capability,
+      "execute-risk",
+      "medium",
+      `Capability ${capability.key} executes work with ${capability.riskLevel} risk and requires approval.`,
+      "permissionPolicy.executeApprovalRequired",
+      {
+        capability: capability.key,
+        risk: capability.riskLevel,
+      },
+    ));
+  }
+  if (capability.riskLevel === "high" || capability.riskLevel === "critical") {
+    reasons.push(policyReason(
+      capability,
+      "risk",
+      "high",
+      `Capability ${capability.key} is ${capability.riskLevel} risk and requires approval.`,
+      "permissionPolicy.riskApprovalRequired",
+      {
+        capability: capability.key,
+        risk: capability.riskLevel,
+      },
+    ));
+  }
+  if (capability.sensitivity === "confidential" || capability.sensitivity === "restricted") {
+    reasons.push(policyReason(
+      capability,
+      "sensitivity",
+      "high",
+      `Capability ${capability.key} touches ${capability.sensitivity} data and requires approval.`,
+      "permissionPolicy.sensitivityApprovalRequired",
+      {
+        capability: capability.key,
+        sensitivity: capability.sensitivity,
+      },
+    ));
+  }
+  return reasons;
+}
+
+function actionRequiresApproval(action: CapabilityAction): boolean {
+  return action === "write" || action === "export" || action === "delete" || action === "admin";
+}
+
+function policyReason(
+  capability: Capability,
+  reasonId: string,
+  severity: string,
+  message: string,
+  reasonKey: string,
+  reasonValues: Record<string, string>,
+): PermissionPackagePolicyReason {
+  return {
+    capabilityId: capability.id,
+    capabilityKey: capability.key,
+    id: `policy:${capability.id}:${reasonId}`,
+    message,
+    reasonKey,
+    reasonValues,
+    severity,
   };
 }
 

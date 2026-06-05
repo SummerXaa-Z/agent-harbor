@@ -162,11 +162,28 @@ type permissionPackageDraftResponse struct {
 		CanApply bool     `json:"canApply"`
 		Warnings []string `json:"warnings"`
 	} `json:"readiness"`
+	PolicyGate     permissionPackagePolicyGateResponse `json:"policyGate"`
 	SimulationRows []struct {
 		CapabilityKey    string `json:"capabilityKey"`
 		ExpectedDecision string `json:"expectedDecision"`
 		ReasonKey        string `json:"reasonKey"`
 	} `json:"simulationRows"`
+}
+
+type permissionPackagePolicyGateResponse struct {
+	Decision         string `json:"decision"`
+	CanApplyDirectly bool   `json:"canApplyDirectly"`
+	PolicyVersion    int    `json:"policyVersion"`
+	Reasons          []struct {
+		ID            string            `json:"id"`
+		CapabilityID  string            `json:"capabilityId"`
+		CapabilityKey string            `json:"capabilityKey"`
+		Severity      string            `json:"severity"`
+		Message       string            `json:"message"`
+		ReasonKey     string            `json:"reasonKey"`
+		ReasonValues  map[string]string `json:"reasonValues"`
+	} `json:"reasons"`
+	NextActions []string `json:"nextActions"`
 }
 
 type permissionPackageApplyResponse struct {
@@ -231,6 +248,7 @@ type managementMCPExplainPermissionPackageResponse struct {
 		CanApply bool     `json:"canApply"`
 		Warnings []string `json:"warnings"`
 	} `json:"readiness"`
+	PolicyGate            permissionPackagePolicyGateResponse `json:"policyGate"`
 	BlockedSimulationRows []struct {
 		CapabilityKey    string `json:"capabilityKey"`
 		ExpectedDecision string `json:"expectedDecision"`
@@ -2727,6 +2745,9 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	if !draft.Readiness.CanApply || draft.Template.ID != "sales-readonly" || draft.Template.Version != 1 {
 		t.Fatalf("expected applicable sales-readonly draft, got %#v", draft)
 	}
+	if draft.PolicyGate.Decision != "allow" || !draft.PolicyGate.CanApplyDirectly || draft.PolicyGate.PolicyVersion != 1 {
+		t.Fatalf("expected direct-apply policy gate, got %#v", draft.PolicyGate)
+	}
 	if len(draft.AllowedCapabilities) != 1 || draft.AllowedCapabilities[0].ID != search.ID {
 		t.Fatalf("expected search_customer allowed, got %#v", draft.AllowedCapabilities)
 	}
@@ -2781,6 +2802,75 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 		events[0].Metadata["applicationId"] != applied.Application.ID || events[0].Metadata["draftId"] != applied.Draft.ID ||
 		events[0].Metadata["templateVersion"] != float64(1) {
 		t.Fatalf("expected permission_package.applied audit event, got %#v", events)
+	}
+}
+
+func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	updateTicket := createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow support triage updates for this tenant.",
+		"targetId":         target.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	draft := decodeData[permissionPackageDraftResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/drafts", input, ""))
+	if !draft.Readiness.CanApply {
+		t.Fatalf("expected ready draft before policy approval check, got %#v", draft.Readiness)
+	}
+	if draft.PolicyGate.Decision != "approval_required" || draft.PolicyGate.CanApplyDirectly || len(draft.PolicyGate.Reasons) == 0 {
+		t.Fatalf("expected approval-required policy gate, got %#v", draft.PolicyGate)
+	}
+
+	applyResp := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", input, "")
+	if applyResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected approval-required apply to fail, status=%d body=%s", applyResp.Code, applyResp.Body.String())
+	}
+	if !strings.Contains(applyResp.Body.String(), "requires approval") {
+		t.Fatalf("expected approval error message, body=%s", applyResp.Body.String())
+	}
+	entitlements, err := repo.ListTenantEntitlements(t.Context(), store.EntitlementFilter{})
+	if err != nil {
+		t.Fatalf("list entitlements: %v", err)
+	}
+	workspaceAssignments, err := repo.ListWorkspaceAssignments(t.Context(), store.AssignmentFilter{})
+	if err != nil {
+		t.Fatalf("list workspace assignments: %v", err)
+	}
+	instanceAssignments, err := repo.ListInstanceAssignments(t.Context(), store.InstanceAssignmentFilter{})
+	if err != nil {
+		t.Fatalf("list instance assignments: %v", err)
+	}
+	applications, err := repo.ListPermissionPackageApplications(t.Context(), store.PermissionPackageApplicationFilter{})
+	if err != nil {
+		t.Fatalf("list applications: %v", err)
+	}
+	events, err := repo.ListAuditEvents(t.Context(), store.AuditEventFilter{Action: "permission_package.applied"})
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	updated, ok, err := repo.GetCapability(t.Context(), updateTicket.ID)
+	if err != nil || !ok {
+		t.Fatalf("get capability: ok=%v err=%v", ok, err)
+	}
+	if len(entitlements) != 0 || len(workspaceAssignments) != 0 || len(instanceAssignments) != 0 || len(applications) != 0 || len(events) != 0 {
+		t.Fatalf("approval-required package should not write records: entitlements=%#v workspace=%#v instances=%#v applications=%#v events=%#v", entitlements, workspaceAssignments, instanceAssignments, applications, events)
+	}
+	if updated.DiscoveryStatus != domain.CapabilityDiscoveryPendingReview {
+		t.Fatalf("approval-required package should not update capability, got %#v", updated)
 	}
 }
 
@@ -3041,6 +3131,57 @@ func TestManagementMCPExplainPermissionPackageDraft(t *testing.T) {
 	}
 	if len(explanation.BlockedSimulationRows) == 0 || len(explanation.NextActions) == 0 || explanation.Summary == "" {
 		t.Fatalf("expected blocked rows, next actions, and summary, got %#v", explanation)
+	}
+}
+
+func TestManagementMCPExplainPermissionPackageDraftRequiresApproval(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	call := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "explain-approval",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "explain_permission_package_draft",
+			"arguments": map[string]any{
+				"callerInstanceId": caller.ID,
+				"region":           "us-east",
+				"requestText":      "Allow support triage updates for this tenant.",
+				"targetId":         target.ID,
+				"templateId":       "support-ticket-triage",
+				"tenantId":         "tenant-east",
+				"workspaceId":      "ws-support",
+			},
+		},
+	}, ""))
+	var explanation managementMCPExplainPermissionPackageResponse
+	if err := json.Unmarshal(call.Result.StructuredContent, &explanation); err != nil {
+		t.Fatalf("decode approval draft explanation: %v", err)
+	}
+	if explanation.Outcome != "approval_required" || !explanation.Readiness.CanApply {
+		t.Fatalf("expected approval-required ready draft explanation, got %#v", explanation)
+	}
+	if explanation.PolicyGate.Decision != "approval_required" || explanation.PolicyGate.CanApplyDirectly || len(explanation.PolicyGate.Reasons) == 0 {
+		t.Fatalf("expected policy gate in MCP explanation, got %#v", explanation.PolicyGate)
+	}
+	if !strings.Contains(explanation.Summary, "requires approval") {
+		t.Fatalf("expected approval summary, got %q", explanation.Summary)
+	}
+	if !strings.Contains(strings.Join(explanation.NextActions, " "), "approval") {
+		t.Fatalf("expected approval next action, got %#v", explanation.NextActions)
+	}
+	if strings.Contains(strings.Join(explanation.NextActions, " "), "Apply the permission package") {
+		t.Fatalf("approval-required draft should not suggest direct apply, got %#v", explanation.NextActions)
 	}
 }
 

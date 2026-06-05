@@ -12,7 +12,9 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Permission package application records are persisted in memory and PostgreSQL and returned from `POST /api/v1/permission-packages:apply`.
 - `GET /api/v1/permission-packages/applications` lists permission package applications by tenant subtree, workspace, template, target, caller instance, and limit.
 - Management MCP now exposes `list_permission_package_applications` for admin agents to review applied template versions, created assignment ids, capability ids, and data scopes.
+- Permission package drafts now include a deterministic `policyGate` that allows direct apply for low-risk packages and requires approval for write, export, admin, high-risk, critical-risk, confidential, or restricted allowed capabilities.
 - Web console AI Admin now shows the latest permission package application evidence after a successful apply.
+- Web console AI Admin now shows policy-gate status and disables direct apply when a package requires approval.
 
 ## [0.1.0] - 2026-06-03
 

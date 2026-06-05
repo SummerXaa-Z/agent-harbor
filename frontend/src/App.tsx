@@ -1051,6 +1051,11 @@ function App() {
       setAiAdminMessage(tx(t, "message.permissionPackageNotReady", { detail: detail || "not ready" }));
       return;
     }
+    if (!aiAdminDraft.policyGate.canApplyDirectly) {
+      const detail = permissionPolicyGateMessages(aiAdminDraft.policyGate, t).join(", ");
+      setAiAdminMessage(tx(t, "message.permissionPackageApprovalRequired", { detail: detail || t("status.approvalRequired") }));
+      return;
+    }
     setAiAdminApplying(true);
     try {
       let appliedCount = aiAdminDraft.allowedCapabilities.length;
@@ -1779,6 +1784,7 @@ function AiAdminPermissionWorkbench({
   t: Translator;
 }) {
   const callers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
+  const canDirectApply = draft.readiness.canApply && draft.policyGate.canApplyDirectly;
   return (
     <div className="ai-admin-workbench">
       <div className="ai-admin-request">
@@ -1926,8 +1932,26 @@ function AiAdminPermissionWorkbench({
               <span>{permissionReadinessMessages(draft.readiness, t).join(" · ")}</span>
             </div>
           ) : null}
+          <div className={`permission-policy-gate ${draft.policyGate.canApplyDirectly ? "is-direct" : "is-approval"}`}>
+            <div className="permission-section-title">
+              <strong>{t("section.permissionPolicyGate")}</strong>
+              <Badge tone={draft.policyGate.canApplyDirectly ? "success" : "warning"}>
+                {draft.policyGate.canApplyDirectly ? t("status.directApplyAllowed") : t("status.approvalRequired")}
+              </Badge>
+            </div>
+            <span>
+              {draft.policyGate.canApplyDirectly ? t("text.policyGateDirectDetail") : t("text.policyGateApprovalDetail")}
+            </span>
+            {draft.policyGate.reasons.length > 0 ? (
+              <ul>
+                {draft.policyGate.reasons.slice(0, 4).map((reason) => (
+                  <li key={reason.id}>{permissionPolicyReasonMessage(reason, t)}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
           <div className="permission-actions">
-            <button className="primary-button" disabled={applying || !draft.readiness.canApply} onClick={onApply} type="button">
+            <button className="primary-button" disabled={applying || !canDirectApply} onClick={onApply} type="button">
               <CheckCircle2 size={14} />
               {applying ? t("action.applyingPermissionPackage") : t("action.applyPermissionPackage")}
             </button>
@@ -3198,6 +3222,31 @@ function permissionReadinessMessages(readiness: PermissionPackageDraft["readines
         : warning
     )
   ];
+}
+
+function permissionPolicyGateMessages(policyGate: PermissionPackageDraft["policyGate"], t: Translator) {
+  if (policyGate.canApplyDirectly) {
+    return [t("text.policyGateDirectDetail")];
+  }
+  return policyGate.reasons.length > 0
+    ? policyGate.reasons.map((reason) => permissionPolicyReasonMessage(reason, t))
+    : [t("text.policyGateApprovalDetail")];
+}
+
+function permissionPolicyReasonMessage(
+  reason: PermissionPackageDraft["policyGate"]["reasons"][number],
+  t: Translator,
+) {
+  if (!reason.reasonKey) return reason.message;
+  const values = Object.entries(reason.reasonValues ?? {}).reduce<Record<string, string>>((acc, [key, value]) => {
+    if (key === "action" || key === "risk" || key === "sensitivity") {
+      acc[key] = translatedValue(t, value);
+    } else {
+      acc[key] = value;
+    }
+    return acc;
+  }, {});
+  return tx(t, reason.reasonKey, values);
 }
 
 function auditTone(action: string): Tone {

@@ -43,6 +43,7 @@ import {
   defaultMockMcpHealthUrl,
   disableAgent,
   disableRoutePolicy,
+  fetchAuditEvents,
   fetchPermissionPackageApprovalRequests,
   fetchPermissionPackageTemplates,
   isApiCompatibilityFallbackError,
@@ -92,6 +93,15 @@ import {
   type CoreJourneyPreflightState,
   type CoreJourneyPreflightStatus
 } from "./coreJourneyPreflight";
+import {
+  createAiAdminApprovalJourneyConfig,
+  evaluateAiAdminApprovalJourney,
+  type AiAdminApprovalJourneyConfig,
+  type AiAdminApprovalJourneyEvaluation,
+  type AiAdminApprovalJourneyResult,
+  type AiAdminApprovalJourneyStep,
+  type AiAdminApprovalJourneyStepStatus
+} from "./aiAdminApprovalJourney";
 import {
   createPermissionPackageDraft,
   permissionPackageTemplates,
@@ -322,6 +332,14 @@ function App() {
   const [aiAdminApplication, setAiAdminApplication] = useState<PermissionPackageApplication | null>(null);
   const [aiAdminApprovalRequests, setAiAdminApprovalRequests] = useState<PermissionPackageApprovalRequest[]>([]);
   const [aiAdminApprovalAction, setAiAdminApprovalAction] = useState<"" | "create" | "approve" | "reject">("");
+  const [aiAdminApprovalJourneyConfig, setAiAdminApprovalJourneyConfig] = useState<AiAdminApprovalJourneyConfig>(() =>
+    createAiAdminApprovalJourneyConfig()
+  );
+  const [aiAdminApprovalJourneyRunning, setAiAdminApprovalJourneyRunning] = useState(false);
+  const [aiAdminApprovalJourneyMessage, setAiAdminApprovalJourneyMessage] = useState("");
+  const [aiAdminApprovalJourneyResult, setAiAdminApprovalJourneyResult] =
+    useState<AiAdminApprovalJourneyResult | null>(null);
+  const [aiAdminApprovalAuditEvent, setAiAdminApprovalAuditEvent] = useState<AuditEvent | null>(null);
   const t = useMemo(() => createTranslator(language), [language]);
 
   useEffect(() => {
@@ -732,6 +750,246 @@ function App() {
       setCoreJourneyMessage(error instanceof Error ? error.message : "Core journey failed");
     } finally {
       setCoreJourneyRunning(false);
+    }
+  }
+
+  async function runAiAdminApprovalJourney() {
+    const nextConfig = createAiAdminApprovalJourneyConfig();
+    setAiAdminApprovalJourneyConfig(nextConfig);
+    setAiAdminApprovalJourneyResult(null);
+    setAiAdminApprovalAuditEvent(null);
+    setAiAdminApprovalJourneyRunning(true);
+    setAiAdminApprovalJourneyMessage(t("message.aiAdminApprovalJourneyRunning"));
+    setAiAdminMessage("");
+    try {
+      const [apiHealth, mockMcpHealth] = await Promise.all([
+        checkApiHealth(),
+        checkMockMcpHealth(mockMcpHealthUrlFromEndpoint(nextConfig.mcpEndpoint))
+      ]);
+      if (apiHealth.status !== "ok" || mockMcpHealth.status !== "ok") {
+        const detail = [
+          apiHealth.status === "ok" ? "" : `API ${apiHealth.message}`,
+          mockMcpHealth.status === "ok" ? "" : `Mock MCP ${mockMcpHealth.message}`
+        ].filter(Boolean).join(" · ");
+        throw new Error(tx(t, "message.aiAdminApprovalJourneyPreflightFailed", { detail: detail || "unknown" }));
+      }
+
+      await createTenant(
+        {
+          id: nextConfig.rootTenantId,
+          name: "AI Admin Approval Root",
+          status: "active"
+        },
+        adminKey
+      );
+      await createTenant(
+        {
+          id: nextConfig.childTenantId,
+          name: "AI Admin Approval Team",
+          parentTenantId: nextConfig.rootTenantId,
+          status: "active"
+        },
+        adminKey
+      );
+      await createTenant(
+        {
+          id: nextConfig.grandchildTenantId,
+          name: "AI Admin Approval Project",
+          parentTenantId: nextConfig.childTenantId,
+          status: "active"
+        },
+        adminKey
+      );
+
+      const caller = await createAgent(
+        {
+          channelType: "local",
+          description: "AI Admin approval journey browser caller",
+          name: "AI Admin Approval Caller",
+          status: "active",
+          tenantId: nextConfig.childTenantId,
+          workspaceId: nextConfig.workspaceId
+        },
+        adminKey
+      );
+      const callerKey = await createAgentKey(
+        {
+          agentId: caller.id,
+          expiresInSeconds: 900,
+          name: "ai admin approval journey key"
+        },
+        adminKey
+      );
+      const target = await createAgent(
+        {
+          channelConfig: {
+            endpoint: nextConfig.mcpEndpoint,
+            transport: "streamable-http"
+          },
+          channelType: "mcp",
+          description: "AI Admin approval journey MCP target",
+          name: "AI Admin Approval MCP Target",
+          status: "active",
+          tenantId: nextConfig.rootTenantId,
+          workspaceId: nextConfig.workspaceId
+        },
+        adminKey
+      );
+
+      const discovered = await refreshTargetCapabilities(target.id, adminKey);
+      const readCapability = discovered.find((capability) => capability.key === nextConfig.readTool);
+      const writeCapability = discovered.find((capability) => capability.key === nextConfig.writeTool);
+      const deniedCapability = discovered.find((capability) => capability.key === nextConfig.deniedTool);
+      if (!readCapability || !writeCapability || !deniedCapability) {
+        throw new Error(
+          tx(t, "message.aiAdminApprovalJourneyMissingTools", {
+            denied: nextConfig.deniedTool,
+            read: nextConfig.readTool,
+            write: nextConfig.writeTool
+          })
+        );
+      }
+
+      const nextForm: PermissionPackageDraftInput = {
+        callerInstanceId: caller.id,
+        region: nextConfig.region,
+        requestText: nextConfig.requestText,
+        subjectSelector: nextConfig.subjectSelector,
+        targetId: target.id,
+        templateId: nextConfig.templateId,
+        tenantId: nextConfig.childTenantId,
+        workspaceId: nextConfig.workspaceId
+      };
+      setAiAdminForm(nextForm);
+      setAiAdminApplication(null);
+      setAiAdminApprovalRequests([]);
+      const draft = await createPermissionPackageDraftFromApi(nextForm, adminKey);
+      setAiAdminServerDraft(draft);
+      if (!draft.readiness.canApply) {
+        throw new Error(tx(t, "message.permissionPackageNotReady", { detail: permissionReadinessMessages(draft.readiness, t).join(", ") }));
+      }
+      if (draft.policyGate.canApplyDirectly) {
+        throw new Error(t("message.aiAdminApprovalJourneyApprovalGateMissing"));
+      }
+
+      const pendingApproval = await createPermissionPackageApprovalRequest(nextForm, adminKey);
+      const approvedApproval = await approvePermissionPackageApprovalRequest(
+        pendingApproval.id,
+        {
+          comment: "Approved from AI Admin approval journey",
+          reviewer: "AI Admin"
+        },
+        adminKey
+      );
+      setAiAdminApprovalRequests([approvedApproval]);
+
+      const applied = await applyPermissionPackage(
+        {
+          ...nextForm,
+          approvalRequestId: approvedApproval.id
+        },
+        adminKey
+      );
+      const application = applied.application ?? null;
+      if (!application) {
+        throw new Error(t("message.aiAdminApprovalJourneyMissingApplication"));
+      }
+      setAiAdminApplication(application);
+
+      const toolList = await callMcpRpc(
+        target.id,
+        mcpToolsListPayload(),
+        callerKey.key,
+        nextConfig.runId,
+        adminKey,
+        nextConfig.subjectId
+      );
+      if (!toolList.ok) throw new Error(tx(t, "message.aiAdminApprovalJourneyRpcUnexpected", { status: toolList.status }));
+      const listedTools = toolNamesFromPayload(toolList.payload);
+      if (
+        !listedTools.includes(nextConfig.readTool) ||
+        !listedTools.includes(nextConfig.writeTool) ||
+        listedTools.includes(nextConfig.deniedTool)
+      ) {
+        throw new Error(t("message.aiAdminApprovalJourneyToolsListInvalid"));
+      }
+      const deniedCall = await callMcpRpc(
+        target.id,
+        mcpToolCallPayload(nextConfig.deniedTool),
+        callerKey.key,
+        nextConfig.runId,
+        adminKey,
+        nextConfig.subjectId
+      );
+      if (deniedCall.status !== 403) {
+        throw new Error(tx(t, "message.aiAdminApprovalJourneyDeniedUnexpected", { status: deniedCall.status }));
+      }
+      const allowedCall = await callMcpRpc(
+        target.id,
+        mcpToolCallPayload(nextConfig.writeTool),
+        callerKey.key,
+        nextConfig.runId,
+        adminKey,
+        nextConfig.subjectId
+      );
+      if (!allowedCall.ok) throw new Error(tx(t, "message.aiAdminApprovalJourneyRpcUnexpected", { status: allowedCall.status }));
+
+      const nextScope = {
+        tenantId: nextConfig.childTenantId,
+        workspaceId: nextConfig.workspaceId
+      };
+      const nextTraceFilters = {
+        callerAgentId: caller.id,
+        decision: "" as TraceDecision | "",
+        runId: nextConfig.runId,
+        targetAgentId: target.id
+      };
+      const nextAccessFilters = {
+        callerInstanceId: caller.id,
+        capabilityId: "",
+        targetId: target.id,
+        traceLimit: "10",
+        workspaceId: nextConfig.workspaceId
+      };
+      const [nextData, nextProfile, auditRows] = await Promise.all([
+        loadConsoleData(adminKey, nextTraceFilters),
+        loadTenantAccessProfile(nextConfig.childTenantId, adminKey, {
+          ...nextAccessFilters,
+          traceLimit: 10
+        }),
+        fetchAuditEvents(
+          {
+            action: "permission_package.applied",
+            resourceId: application.id,
+            tenantId: nextConfig.childTenantId,
+            workspaceId: nextConfig.workspaceId
+          },
+          adminKey
+        )
+      ]);
+      const appliedAudit = auditRows.find((event) => event.metadata?.approvalRequestId === approvedApproval.id) ?? auditRows[0] ?? null;
+      setScope(nextScope);
+      setTraceFilters(nextTraceFilters);
+      setAccessFilters(nextAccessFilters);
+      setData(appliedAudit ? { ...nextData, auditEvents: [appliedAudit, ...nextData.auditEvents.filter((event) => event.id !== appliedAudit.id)] } : nextData);
+      setAccessProfile(nextProfile);
+      setAiAdminApprovalAuditEvent(appliedAudit);
+      setLastRefresh(new Date());
+      setAiAdminApprovalJourneyResult({
+        allowedStatus: allowedCall.status,
+        applicationId: application.id,
+        approvalRequestId: approvedApproval.id,
+        callerId: caller.id,
+        deniedStatus: deniedCall.status,
+        targetId: target.id,
+        toolListStatus: toolList.status
+      });
+      setAiAdminApprovalJourneyMessage(t("message.aiAdminApprovalJourneyComplete"));
+      setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: applied.tenantEntitlements.length }));
+    } catch (error) {
+      setAiAdminApprovalJourneyMessage(error instanceof Error ? error.message : "AI Admin approval journey failed");
+    } finally {
+      setAiAdminApprovalJourneyRunning(false);
     }
   }
 
@@ -1332,6 +1590,27 @@ function App() {
     () => evaluateCoreJourney(data, accessProfile, coreJourneyConfig),
     [accessProfile, coreJourneyConfig, data]
   );
+  const aiAdminApprovalJourneyEvaluation = useMemo(
+    () =>
+      evaluateAiAdminApprovalJourney({
+        accessProfile,
+        application: aiAdminApplication,
+        approvalRequest: aiAdminApprovalRequest,
+        auditEvent: aiAdminApprovalAuditEvent,
+        config: aiAdminApprovalJourneyConfig,
+        data,
+        result: aiAdminApprovalJourneyResult
+      }),
+    [
+      accessProfile,
+      aiAdminApplication,
+      aiAdminApprovalAuditEvent,
+      aiAdminApprovalJourneyConfig,
+      aiAdminApprovalJourneyResult,
+      aiAdminApprovalRequest,
+      data
+    ]
+  );
   const tracePanel = (className = "span-7") => (
     <Panel className={className} icon={<FileSearch size={18} />} title={t("panel.auditTraces")} action={<IconOpen title={t("action.open")} />}>
       <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} t={t} />
@@ -1426,6 +1705,12 @@ function App() {
       <AiAdminPermissionWorkbench
         agents={agents}
         approvalAction={aiAdminApprovalAction}
+        approvalAuditEvent={aiAdminApprovalAuditEvent}
+        approvalJourneyConfig={aiAdminApprovalJourneyConfig}
+        approvalJourneyEvaluation={aiAdminApprovalJourneyEvaluation}
+        approvalJourneyMessage={aiAdminApprovalJourneyMessage}
+        approvalJourneyResult={aiAdminApprovalJourneyResult}
+        approvalJourneyRunning={aiAdminApprovalJourneyRunning}
         approvalRequest={aiAdminApprovalRequest}
         applying={aiAdminApplying}
         draft={aiAdminDraft}
@@ -1438,10 +1723,13 @@ function App() {
         onChange={(nextForm) => {
           setAiAdminForm(nextForm);
           setAiAdminApplication(null);
+          setAiAdminApprovalAuditEvent(null);
+          setAiAdminApprovalJourneyResult(null);
           setAiAdminApprovalRequests([]);
         }}
         onCreateApprovalRequest={() => void createAiAdminApprovalRequest()}
         onRejectApprovalRequest={() => void rejectAiAdminApprovalRequest()}
+        onRunApprovalJourney={() => void runAiAdminApprovalJourney()}
         templates={aiAdminTemplates}
         t={t}
       />
@@ -1901,6 +2189,12 @@ function AiAdminPermissionWorkbench({
   agents,
   application,
   approvalAction,
+  approvalAuditEvent,
+  approvalJourneyConfig,
+  approvalJourneyEvaluation,
+  approvalJourneyMessage,
+  approvalJourneyResult,
+  approvalJourneyRunning,
   approvalRequest,
   applying,
   draft,
@@ -1912,12 +2206,19 @@ function AiAdminPermissionWorkbench({
   onChange,
   onCreateApprovalRequest,
   onRejectApprovalRequest,
+  onRunApprovalJourney,
   templates,
   t
 }: {
   agents: Agent[];
   application: PermissionPackageApplication | null;
   approvalAction: "" | "create" | "approve" | "reject";
+  approvalAuditEvent: AuditEvent | null;
+  approvalJourneyConfig: AiAdminApprovalJourneyConfig;
+  approvalJourneyEvaluation: AiAdminApprovalJourneyEvaluation;
+  approvalJourneyMessage: string;
+  approvalJourneyResult: AiAdminApprovalJourneyResult | null;
+  approvalJourneyRunning: boolean;
   approvalRequest: PermissionPackageApprovalRequest | null;
   applying: boolean;
   draft: PermissionPackageDraft;
@@ -1929,6 +2230,7 @@ function AiAdminPermissionWorkbench({
   onChange: (form: PermissionPackageDraftInput) => void;
   onCreateApprovalRequest: () => void;
   onRejectApprovalRequest: () => void;
+  onRunApprovalJourney: () => void;
   templates: PermissionPackageTemplate[];
   t: Translator;
 }) {
@@ -1942,6 +2244,54 @@ function AiAdminPermissionWorkbench({
       : "warning";
   return (
     <div className="ai-admin-workbench">
+      <section className="ai-admin-live-journey">
+        <div className="ai-admin-journey-toolbar">
+          <div className="core-journey-score">
+            <strong>{approvalJourneyEvaluation.completeCount}/{approvalJourneyEvaluation.totalCount}</strong>
+            <span>{t("text.aiAdminApprovalJourneyCompletion")}</span>
+          </div>
+          <div className="ai-admin-journey-meta">
+            <div>
+              <span>{t("detail.runId")}</span>
+              <code>{approvalJourneyConfig.runId}</code>
+            </div>
+            <div>
+              <span>{t("detail.subjectId")}</span>
+              <code>{approvalJourneyConfig.subjectId}</code>
+            </div>
+            <div>
+              <span>{t("form.permissionPackage")}</span>
+              <strong>{approvalJourneyConfig.templateId}</strong>
+            </div>
+            <div>
+              <span>{t("form.endpoint")}</span>
+              <code>{approvalJourneyConfig.mcpEndpoint}</code>
+            </div>
+          </div>
+          <button className="primary-button" disabled={approvalJourneyRunning || applying} onClick={onRunApprovalJourney} type="button">
+            <Workflow size={14} />
+            {approvalJourneyRunning ? t("action.runningApprovalJourney") : t("action.runApprovalJourney")}
+          </button>
+        </div>
+        <div className="ai-admin-journey-result">
+          <strong>{t("section.aiAdminApprovalJourney")}</strong>
+          {approvalJourneyResult ? (
+            <span>
+              tools/list {approvalJourneyResult.toolListStatus} · {approvalJourneyConfig.deniedTool} {approvalJourneyResult.deniedStatus} · {approvalJourneyConfig.writeTool} {approvalJourneyResult.allowedStatus}
+            </span>
+          ) : (
+            <span>{approvalJourneyConfig.childTenantId}</span>
+          )}
+          {approvalAuditEvent ? <code>{approvalAuditEvent.id}</code> : null}
+          {approvalJourneyMessage ? <em>{approvalJourneyMessage}</em> : null}
+        </div>
+        <div className="ai-admin-journey-steps">
+          {approvalJourneyEvaluation.steps.map((step) => (
+            <AiAdminApprovalJourneyStepRow key={step.key} step={step} t={t} />
+          ))}
+        </div>
+      </section>
+
       <div className="ai-admin-request">
         <label className="ai-admin-request-text">
           {t("form.adminRequest")}
@@ -2242,6 +2592,21 @@ function CoreJourneyStepRow({ step, t }: { step: CoreJourneyStep; t: Translator 
       <Badge tone={coreJourneyStatusTone(step.status)}>{coreJourneyStatusLabel(step.status, t)}</Badge>
       <div>
         <strong>{t(`journey.step.${step.key}`)}</strong>
+        <span>{step.detail}</span>
+      </div>
+      <code>{step.metric}</code>
+    </article>
+  );
+}
+
+function AiAdminApprovalJourneyStepRow({ step, t }: { step: AiAdminApprovalJourneyStep; t: Translator }) {
+  return (
+    <article className={`ai-admin-journey-step status-${step.status}`}>
+      <Badge tone={aiAdminApprovalJourneyStatusTone(step.status)}>
+        {aiAdminApprovalJourneyStatusLabel(step.status, t)}
+      </Badge>
+      <div>
+        <strong>{t(`journey.aiAdmin.step.${step.key}`)}</strong>
         <span>{step.detail}</span>
       </div>
       <code>{step.metric}</code>
@@ -3748,6 +4113,18 @@ function coreJourneyStatusLabel(status: CoreJourneyStepStatus, t: Translator) {
   return t("status.stepMissing");
 }
 
+function aiAdminApprovalJourneyStatusTone(status: AiAdminApprovalJourneyStepStatus): Tone {
+  if (status === "complete") return "success";
+  if (status === "partial") return "warning";
+  return "neutral";
+}
+
+function aiAdminApprovalJourneyStatusLabel(status: AiAdminApprovalJourneyStepStatus, t: Translator) {
+  if (status === "complete") return t("status.stepComplete");
+  if (status === "partial") return t("status.stepPartial");
+  return t("status.stepMissing");
+}
+
 function preflightTone(status: CoreJourneyPreflightStatus): Tone {
   if (status === "ok") return "success";
   if (status === "warning") return "warning";
@@ -3776,7 +4153,11 @@ function mcpToolCallPayload(toolName: string) {
     jsonrpc: "2.0",
     method: "tools/call",
     params: {
-      arguments: {},
+      arguments: {
+        query: "acme",
+        status: "triaged",
+        ticketId: "T-1000"
+      },
       name: toolName
     }
   };

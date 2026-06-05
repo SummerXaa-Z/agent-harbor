@@ -887,6 +887,7 @@ th {
 :root[lang="zh-CN"] th,
 :root[lang="zh-CN"] .capability-toolbar label,
 :root[lang="zh-CN"] .core-journey-toolbar label,
+:root[lang="zh-CN"] .ai-admin-journey-meta span,
 :root[lang="zh-CN"] .ai-admin-request label,
 :root[lang="zh-CN"] .ai-admin-fields label,
 :root[lang="zh-CN"] .access-toolbar label,
@@ -1369,6 +1370,147 @@ td code {
   display: grid;
   gap: 12px;
   padding: 14px;
+}
+
+.ai-admin-live-journey {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dfe6ec;
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.ai-admin-journey-toolbar {
+  display: grid;
+  grid-template-columns: 142px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.ai-admin-journey-meta {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.7fr) minmax(130px, 0.7fr) minmax(150px, 0.7fr) minmax(240px, 1.2fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.ai-admin-journey-meta div {
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid #edf1f5;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.ai-admin-journey-meta span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ai-admin-journey-meta strong,
+.ai-admin-journey-meta code {
+  display: block;
+  min-width: 0;
+  margin-top: 5px;
+  overflow: hidden;
+  color: #1f2a34;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-admin-journey-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 1.2fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+  padding-top: 8px;
+  border-top: 1px solid #edf1f4;
+}
+
+.ai-admin-journey-result strong {
+  color: #1f2a34;
+  font-size: 13px;
+}
+
+.ai-admin-journey-result span,
+.ai-admin-journey-result em,
+.ai-admin-journey-result code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-admin-journey-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ai-admin-journey-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 58px;
+  padding: 9px;
+  border: 1px solid #dfe6ec;
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.ai-admin-journey-step.status-complete {
+  border-left-color: #2f9b63;
+}
+
+.ai-admin-journey-step.status-partial {
+  border-left-color: #c58a22;
+}
+
+.ai-admin-journey-step.status-missing {
+  border-left-color: #b9c4cf;
+}
+
+.ai-admin-journey-step div {
+  min-width: 0;
+}
+
+.ai-admin-journey-step strong,
+.ai-admin-journey-step span,
+.ai-admin-journey-step code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-admin-journey-step strong {
+  color: #1f2a34;
+  font-size: 12px;
+}
+
+.ai-admin-journey-step span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ai-admin-journey-step code {
+  color: var(--soft);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
 }
 
 .ai-admin-request {
@@ -2309,8 +2451,15 @@ td code {
 
   .core-journey-toolbar,
   .core-journey-preflight-grid,
-  .core-journey-steps {
+  .core-journey-steps,
+  .ai-admin-journey-meta,
+  .ai-admin-journey-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ai-admin-journey-toolbar,
+  .ai-admin-journey-result {
+    grid-template-columns: 1fr;
   }
 
   .topbar {
@@ -2414,6 +2563,10 @@ td code {
   .core-journey-toolbar,
   .core-journey-preflight-grid,
   .core-journey-steps,
+  .ai-admin-journey-toolbar,
+  .ai-admin-journey-meta,
+  .ai-admin-journey-result,
+  .ai-admin-journey-steps,
   .form-row,
   .trace-filters,
   .capability-toolbar,

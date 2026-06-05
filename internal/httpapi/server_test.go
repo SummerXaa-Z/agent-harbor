@@ -202,6 +202,36 @@ type mcpContentItem struct {
 	Text string `json:"text"`
 }
 
+type managementMCPExplainPermissionPackageResponse struct {
+	Outcome   string `json:"outcome"`
+	Summary   string `json:"summary"`
+	Readiness struct {
+		CanApply bool     `json:"canApply"`
+		Warnings []string `json:"warnings"`
+	} `json:"readiness"`
+	BlockedSimulationRows []struct {
+		CapabilityKey    string `json:"capabilityKey"`
+		ExpectedDecision string `json:"expectedDecision"`
+	} `json:"blockedSimulationRows"`
+	NextActions []string `json:"nextActions"`
+}
+
+type managementMCPExplainAccessResponse struct {
+	Outcome     string                          `json:"outcome"`
+	Summary     string                          `json:"summary"`
+	Decision    domain.CapabilityAccessDecision `json:"decision"`
+	Evidence    []managementMCPExplainEvidence  `json:"evidence"`
+	DataScopes  []domain.DataScope              `json:"dataScopes"`
+	NextActions []string                        `json:"nextActions"`
+}
+
+type managementMCPExplainEvidence struct {
+	Layer   string `json:"layer"`
+	Status  string `json:"status"`
+	ID      string `json:"id"`
+	Message string `json:"message"`
+}
+
 type tenantResponse struct {
 	ID             string `json:"id"`
 	ParentTenantID string `json:"parentTenantId"`
@@ -2895,6 +2925,146 @@ func TestManagementMCPReadTools(t *testing.T) {
 	}
 }
 
+func TestManagementMCPExplainPermissionPackageDraft(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-sales", Name: "Sales Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "CRM MCP", "tenant-root", "ws-sales", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithActionAndScopes(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, []domain.DataScope{{
+		DataDomain:   "crm",
+		Region:       "us-east",
+		TenantFilter: "tenant_id = 'tenant-east'",
+	}}, now)
+	createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	call := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "explain-draft",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "explain_permission_package_draft",
+			"arguments": map[string]any{
+				"callerInstanceId": caller.ID,
+				"region":           "eu-west",
+				"requestText":      "给销售助手开通客户只读。",
+				"subjectSelector":  "user:sales-*",
+				"targetId":         target.ID,
+				"templateId":       "sales-readonly",
+				"tenantId":         "tenant-east",
+				"workspaceId":      "ws-sales",
+			},
+		},
+	}, ""))
+	var explanation managementMCPExplainPermissionPackageResponse
+	if err := json.Unmarshal(call.Result.StructuredContent, &explanation); err != nil {
+		t.Fatalf("decode draft explanation: %v", err)
+	}
+	if explanation.Outcome != "blocked" || explanation.Readiness.CanApply {
+		t.Fatalf("expected blocked draft explanation, got %#v", explanation)
+	}
+	if !containsString(explanation.Readiness.Warnings, "Permission package data scopes exceed capability boundary for search_customer.") {
+		t.Fatalf("expected data-scope warning, got %#v", explanation.Readiness.Warnings)
+	}
+	if len(explanation.BlockedSimulationRows) == 0 || len(explanation.NextActions) == 0 || explanation.Summary == "" {
+		t.Fatalf("expected blocked rows, next actions, and summary, got %#v", explanation)
+	}
+}
+
+func TestManagementMCPExplainAccessDecision(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-sales", Name: "Sales Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "CRM MCP", "tenant-root", "ws-sales", "mcp", domain.AgentStatusActive, nil)
+	search := createDirectCapabilityWithAction(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	search.DiscoveryStatus = domain.CapabilityDiscoveryApproved
+	search.UpdatedAt = now
+	if _, ok, err := repo.UpdateCapability(t.Context(), search); err != nil || !ok {
+		t.Fatalf("approve capability: ok=%v err=%v", ok, err)
+	}
+
+	explainArgs := map[string]any{
+		"callerInstanceId": caller.ID,
+		"capabilityId":     search.ID,
+		"subjectId":        "user:sales-001",
+		"targetId":         target.ID,
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-sales",
+	}
+	deniedCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "explain-denied",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "explain_access_decision",
+			"arguments": explainArgs,
+		},
+	}, ""))
+	var denied managementMCPExplainAccessResponse
+	if err := json.Unmarshal(deniedCall.Result.StructuredContent, &denied); err != nil {
+		t.Fatalf("decode denied explanation: %v", err)
+	}
+	if denied.Outcome != "denied" || denied.Decision.Allowed || denied.Decision.Reason != "tenant has no entitlement for capability" {
+		t.Fatalf("unexpected denied explanation: %#v", denied)
+	}
+	if !strings.Contains(strings.Join(denied.NextActions, " "), "permission package") {
+		t.Fatalf("expected permission package next action, got %#v", denied.NextActions)
+	}
+
+	packageArgs := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "华东",
+		"requestText":      "给销售助手开通客户只读。",
+		"subjectSelector":  "user:sales-*",
+		"targetId":         target.ID,
+		"templateId":       "sales-readonly",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-sales",
+	}
+	_ = decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "apply",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "apply_permission_package",
+			"arguments": packageArgs,
+		},
+	}, ""))
+
+	allowedCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "explain-allowed",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "explain_access_decision",
+			"arguments": explainArgs,
+		},
+	}, ""))
+	var allowed managementMCPExplainAccessResponse
+	if err := json.Unmarshal(allowedCall.Result.StructuredContent, &allowed); err != nil {
+		t.Fatalf("decode allowed explanation: %v", err)
+	}
+	if allowed.Outcome != "allowed" || !allowed.Decision.Allowed || len(allowed.DataScopes) == 0 {
+		t.Fatalf("unexpected allowed explanation: %#v", allowed)
+	}
+	if !explainEvidenceContains(allowed.Evidence, "tenant_entitlement") ||
+		!explainEvidenceContains(allowed.Evidence, "workspace_assignment") ||
+		!explainEvidenceContains(allowed.Evidence, "instance_assignment") {
+		t.Fatalf("expected entitlement/workspace/instance evidence, got %#v", allowed.Evidence)
+	}
+}
+
 func TestCapabilityAssignmentDataScopesMustNarrowHierarchy(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -3288,6 +3458,24 @@ func decodeMCPResult(t *testing.T, resp *httptest.ResponseRecorder) mcpEnvelopeR
 func mcpToolNamesContain(tools []mcpToolResponse, name string) bool {
 	for _, tool := range tools {
 		if tool.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func explainEvidenceContains(rows []managementMCPExplainEvidence, layer string) bool {
+	for _, row := range rows {
+		if row.Layer == layer && row.ID != "" {
 			return true
 		}
 	}

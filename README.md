@@ -8,6 +8,8 @@ It gives platform teams one place to register agents, discover MCP capabilities,
 
 AgentHarbor is in developer preview. It is ready for local evaluation, design feedback, and early contribution, but it is not yet recommended for production traffic.
 
+Open-source timing is intentionally secondary to production hardening. Before any release-readiness claim, the current standard is that the safety baseline, release checks, and primary AI Admin journey all pass from a fresh local checkout.
+
 ## What It Provides
 
 - **Tenant-first governance**: register a three-level tenant tree and scope management views by tenant subtree.
@@ -58,6 +60,14 @@ make check
 ```
 
 `make check` installs the pinned frontend dependencies from `frontend/pnpm-lock.yaml` before running frontend tests and builds.
+
+Use the production safety gate when you want to verify conservative runtime defaults:
+
+```bash
+make production-hardening
+```
+
+This starts a local API with `AGENT_HARBOR_ADMIN_KEY` configured and private upstreams disabled. It verifies health remains public, management APIs reject missing or wrong admin keys, permission-package and management MCP endpoints use the same admin-key protection, loopback MCP targets are rejected by default, and public HTTPS MCP targets remain registrable.
 
 The API listens on `:9090` by default. Override it with:
 
@@ -116,6 +126,14 @@ make ai-admin-browser-journey
 ```
 
 This starts the API, Mock MCP, and web console, verifies browser CORS allows `X-AgentHarbor-Subject-Id`, then runs the approval-required package scenario against those services.
+
+For release-candidate validation of production defaults, run:
+
+```bash
+make production-hardening
+```
+
+`make release-check` also includes this safety baseline.
 
 ## Web Console
 
@@ -182,6 +200,8 @@ Use `.env.example` as the local configuration template.
 | `AGENT_HARBOR_CREDENTIAL_KEY` | 32-byte raw or base64 key used to encrypt persisted agent credentials. Required with PostgreSQL. |
 | `AGENT_HARBOR_TEST_DATABASE_URL` | PostgreSQL connection string used by integration tests. |
 | `VITE_API_BASE` | Frontend API base URL. |
+
+Run `make production-hardening` before any deployment-style handoff. It proves that `AGENT_HARBOR_ADMIN_KEY` protection is enforced across management APIs and that `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` stays disabled unless explicitly set for local development scenarios.
 
 PostgreSQL example:
 

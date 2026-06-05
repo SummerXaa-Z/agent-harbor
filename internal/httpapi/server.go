@@ -39,13 +39,14 @@ type Server struct {
 }
 
 const (
-	defaultProxyTimeout = 10 * time.Second
-	maxProxyTimeout     = 30 * time.Second
-	maxRetryAttempts    = 4
-	maxRetryBackoff     = time.Second
-	maxProxyBodyBytes   = 4 << 20
-	defaultAuditLimit   = 100
-	maxAuditLimit       = 500
+	defaultProxyTimeout                 = 10 * time.Second
+	maxProxyTimeout                     = 30 * time.Second
+	maxRetryAttempts                    = 4
+	maxRetryBackoff                     = time.Second
+	maxProxyBodyBytes                   = 4 << 20
+	defaultAuditLimit                   = 100
+	maxAuditLimit                       = 500
+	defaultPermissionPackageApprovalTTL = 24 * time.Hour
 )
 
 type proxyRetryPolicy struct {
@@ -1294,6 +1295,7 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		return domain.PermissionPackageApplyResponse{}, domain.BadRequest("VALIDATION_FAILED", "permission package draft is not ready to apply")
 	}
 	approvalRequestID := ""
+	var approvalForApply *domain.PermissionPackageApprovalRequest
 	if !draft.PolicyGate.CanApplyDirectly {
 		if req.ApprovalRequestID == "" {
 			return domain.PermissionPackageApplyResponse{}, domain.BadRequest("VALIDATION_FAILED", "permission package requires approval before apply")
@@ -1305,10 +1307,11 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		if !ok {
 			return domain.PermissionPackageApplyResponse{}, domain.NotFound("approval request not found")
 		}
-		if err := validatePermissionPackageApprovalForDraft(approval, draft); err != nil {
+		if err := validatePermissionPackageApprovalForDraft(approval, draft, s.now()); err != nil {
 			return domain.PermissionPackageApplyResponse{}, err
 		}
 		approvalRequestID = approval.ID
+		approvalForApply = &approval
 	}
 
 	now := s.now()
@@ -1323,6 +1326,10 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 	tenantEntitlementIDs := make([]string, 0, len(draft.AllowedCapabilities))
 	workspaceAssignmentIDs := make([]string, 0, len(draft.AllowedCapabilities))
 	instanceAssignmentIDs := make([]string, 0, len(draft.AllowedCapabilities))
+	capabilityMutations := make([]domain.Capability, 0, len(draft.AllowedCapabilities))
+	tenantEntitlements := make([]domain.TenantEntitlement, 0, len(draft.AllowedCapabilities))
+	workspaceAssignments := make([]domain.WorkspaceAssignment, 0, len(draft.AllowedCapabilities))
+	instanceAssignments := make([]domain.InstanceAssignment, 0, len(draft.AllowedCapabilities))
 
 	for _, capability := range draft.AllowedCapabilities {
 		effectiveScopes, ok := domain.EffectiveDataScopes(capability.DataScopes, draft.DataScopes)
@@ -1333,19 +1340,13 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		updatedCapability.DiscoveryStatus = domain.CapabilityDiscoveryApproved
 		updatedCapability.DataScopes = effectiveScopes
 		updatedCapability.UpdatedAt = now
-		savedCapability, ok, err := s.repo.UpdateCapability(r.Context(), updatedCapability)
-		if err != nil {
-			return domain.PermissionPackageApplyResponse{}, err
-		}
-		if !ok {
-			return domain.PermissionPackageApplyResponse{}, domain.NotFound("capability not found")
-		}
+		capabilityMutations = append(capabilityMutations, updatedCapability)
 
 		entitlement := domain.TenantEntitlement{
 			ID:           security.NewID("ent"),
 			TenantID:     draft.Input.TenantID,
 			TargetID:     draft.Input.TargetID,
-			CapabilityID: savedCapability.ID,
+			CapabilityID: updatedCapability.ID,
 			Effect:       domain.PolicyEffectAllow,
 			DataScopes:   effectiveScopes,
 			Status:       domain.PolicyStatusEnabled,
@@ -1353,13 +1354,9 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 			CreatedAt:    now,
 			UpdatedAt:    now,
 		}
-		createdEntitlement, err := s.repo.CreateTenantEntitlement(r.Context(), entitlement)
-		if err != nil {
-			return domain.PermissionPackageApplyResponse{}, err
-		}
 		workspaceAssignment := domain.WorkspaceAssignment{
 			ID:                  security.NewID("wsa"),
-			TenantEntitlementID: createdEntitlement.ID,
+			TenantEntitlementID: entitlement.ID,
 			TenantID:            draft.Input.TenantID,
 			WorkspaceID:         draft.Input.WorkspaceID,
 			Effect:              domain.PolicyEffectAllow,
@@ -1368,13 +1365,9 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 			CreatedAt:           now,
 			UpdatedAt:           now,
 		}
-		createdWorkspaceAssignment, err := s.repo.CreateWorkspaceAssignment(r.Context(), workspaceAssignment)
-		if err != nil {
-			return domain.PermissionPackageApplyResponse{}, err
-		}
 		instanceAssignment := domain.InstanceAssignment{
 			ID:                    security.NewID("ina"),
-			WorkspaceAssignmentID: createdWorkspaceAssignment.ID,
+			WorkspaceAssignmentID: workspaceAssignment.ID,
 			TenantID:              draft.Input.TenantID,
 			WorkspaceID:           draft.Input.WorkspaceID,
 			CallerInstanceID:      draft.Input.CallerInstanceID,
@@ -1385,19 +1378,15 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 			CreatedAt:             now,
 			UpdatedAt:             now,
 		}
-		createdInstanceAssignment, err := s.repo.CreateInstanceAssignment(r.Context(), instanceAssignment)
-		if err != nil {
-			return domain.PermissionPackageApplyResponse{}, err
-		}
 
-		result.TenantEntitlements = append(result.TenantEntitlements, createdEntitlement)
-		result.WorkspaceAssignments = append(result.WorkspaceAssignments, createdWorkspaceAssignment)
-		result.InstanceAssignments = append(result.InstanceAssignments, createdInstanceAssignment)
-		appliedCapabilityIDs = append(appliedCapabilityIDs, savedCapability.ID)
-		appliedCapabilityKeys = append(appliedCapabilityKeys, savedCapability.Key)
-		tenantEntitlementIDs = append(tenantEntitlementIDs, createdEntitlement.ID)
-		workspaceAssignmentIDs = append(workspaceAssignmentIDs, createdWorkspaceAssignment.ID)
-		instanceAssignmentIDs = append(instanceAssignmentIDs, createdInstanceAssignment.ID)
+		tenantEntitlements = append(tenantEntitlements, entitlement)
+		workspaceAssignments = append(workspaceAssignments, workspaceAssignment)
+		instanceAssignments = append(instanceAssignments, instanceAssignment)
+		appliedCapabilityIDs = append(appliedCapabilityIDs, updatedCapability.ID)
+		appliedCapabilityKeys = append(appliedCapabilityKeys, updatedCapability.Key)
+		tenantEntitlementIDs = append(tenantEntitlementIDs, entitlement.ID)
+		workspaceAssignmentIDs = append(workspaceAssignmentIDs, workspaceAssignment.ID)
+		instanceAssignmentIDs = append(instanceAssignmentIDs, instanceAssignment.ID)
 	}
 
 	application := domain.PermissionPackageApplication{
@@ -1420,14 +1409,17 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		InstanceAssignmentIDs:  instanceAssignmentIDs,
 		AppliedAt:              now,
 	}
-	createdApplication, err := s.repo.CreatePermissionPackageApplication(r.Context(), application)
-	if err != nil {
-		return domain.PermissionPackageApplyResponse{}, err
+	var consumedApproval *domain.PermissionPackageApprovalRequest
+	if approvalForApply != nil {
+		approval := *approvalForApply
+		approval.ConsumedAt = now
+		approval.ConsumedByApplicationID = application.ID
+		approval.UpdatedAt = now
+		consumedApproval = &approval
 	}
-	result.Application = &createdApplication
 
 	auditMetadata := map[string]any{
-		"applicationId":          createdApplication.ID,
+		"applicationId":          application.ID,
 		"draftId":                draft.ID,
 		"templateId":             draft.Template.ID,
 		"templateVersion":        draft.Template.Version,
@@ -1440,12 +1432,33 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		"workspaceAssignmentIds": workspaceAssignmentIDs,
 		"instanceAssignmentIds":  instanceAssignmentIDs,
 	}
-	if approvalRequestID != "" {
+	if consumedApproval != nil {
+		auditMetadata["approvalRequestId"] = consumedApproval.ID
+		auditMetadata["approvalExpiresAt"] = consumedApproval.ExpiresAt
+		auditMetadata["approvalConsumedAt"] = consumedApproval.ConsumedAt
+		auditMetadata["approvalConsumedByApplicationId"] = consumedApproval.ConsumedByApplicationID
+	} else if approvalRequestID != "" {
 		auditMetadata["approvalRequestId"] = approvalRequestID
 	}
-	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, draft.Input.TenantID, draft.Input.WorkspaceID, "permission_package.applied", "permission_package", createdApplication.ID, "Permission package applied", auditMetadata)); err != nil {
+	applyResult, err := s.repo.ApplyPermissionPackage(r.Context(), store.PermissionPackageApplyMutation{
+		Capabilities:         capabilityMutations,
+		TenantEntitlements:   tenantEntitlements,
+		WorkspaceAssignments: workspaceAssignments,
+		InstanceAssignments:  instanceAssignments,
+		Application:          application,
+		ApprovalRequest:      consumedApproval,
+		AuditEvent:           s.managementAuditEvent(r, draft.Input.TenantID, draft.Input.WorkspaceID, "permission_package.applied", "permission_package", application.ID, "Permission package applied", auditMetadata),
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrPermissionPackageApprovalNotConsumable) {
+			return domain.PermissionPackageApplyResponse{}, s.permissionPackageApprovalNotConsumableError(r.Context(), approvalRequestID, draft, now)
+		}
 		return domain.PermissionPackageApplyResponse{}, err
 	}
+	result.TenantEntitlements = applyResult.TenantEntitlements
+	result.WorkspaceAssignments = applyResult.WorkspaceAssignments
+	result.InstanceAssignments = applyResult.InstanceAssignments
+	result.Application = &applyResult.Application
 	return result, nil
 }
 
@@ -3271,12 +3284,19 @@ func permissionPackageApprovalRequestFromDraft(draft domain.PermissionPackageDra
 		RequestedBy:           requestedBy,
 		CreatedAt:             now,
 		UpdatedAt:             now,
+		ExpiresAt:             now.Add(defaultPermissionPackageApprovalTTL),
 	}
 }
 
-func validatePermissionPackageApprovalForDraft(approval domain.PermissionPackageApprovalRequest, draft domain.PermissionPackageDraft) error {
+func validatePermissionPackageApprovalForDraft(approval domain.PermissionPackageApprovalRequest, draft domain.PermissionPackageDraft, now time.Time) error {
 	if approval.Status != domain.PermissionPackageApprovalStatusApproved {
 		return domain.BadRequest("VALIDATION_FAILED", "permission package approval request must be approved before apply")
+	}
+	if !approval.ConsumedAt.IsZero() {
+		return domain.BadRequest("VALIDATION_FAILED", "permission package approval request is already consumed")
+	}
+	if !approval.ExpiresAt.IsZero() && !now.Before(approval.ExpiresAt) {
+		return domain.BadRequest("VALIDATION_FAILED", "permission package approval request has expired")
 	}
 	allowedCapabilityIDs, allowedCapabilityKeys := permissionPackageCapabilityIDsAndKeys(draft.AllowedCapabilities)
 	if approval.DraftID != draft.ID ||
@@ -3296,6 +3316,20 @@ func validatePermissionPackageApprovalForDraft(approval domain.PermissionPackage
 		return domain.BadRequest("VALIDATION_FAILED", "approved permission package approval request does not match current draft")
 	}
 	return nil
+}
+
+func (s *Server) permissionPackageApprovalNotConsumableError(ctx context.Context, approvalRequestID string, draft domain.PermissionPackageDraft, now time.Time) error {
+	approval, ok, err := s.repo.GetPermissionPackageApprovalRequest(ctx, approvalRequestID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return domain.NotFound("approval request not found")
+	}
+	if err := validatePermissionPackageApprovalForDraft(approval, draft, now); err != nil {
+		return err
+	}
+	return domain.BadRequest("VALIDATION_FAILED", "permission package approval request is no longer available")
 }
 
 func permissionPackageCapabilityIDsAndKeys(capabilities []domain.Capability) ([]string, []string) {
@@ -3338,18 +3372,21 @@ func sameStringSet(left []string, right []string) bool {
 
 func permissionPackageApprovalAuditMetadata(request domain.PermissionPackageApprovalRequest) map[string]any {
 	return map[string]any{
-		"approvalRequestId":    request.ID,
-		"draftId":              request.DraftID,
-		"templateId":           request.TemplateID,
-		"templateVersion":      request.TemplateVersion,
-		"policyVersion":        request.PolicyVersion,
-		"targetId":             request.TargetID,
-		"callerInstanceId":     request.CallerInstanceID,
-		"status":               request.Status,
-		"requestedBy":          request.RequestedBy,
-		"reviewedBy":           request.ReviewedBy,
-		"reasonCount":          len(request.PolicyGate.Reasons),
-		"allowedCapabilityIds": request.AllowedCapabilityIDs,
+		"approvalRequestId":       request.ID,
+		"draftId":                 request.DraftID,
+		"templateId":              request.TemplateID,
+		"templateVersion":         request.TemplateVersion,
+		"policyVersion":           request.PolicyVersion,
+		"targetId":                request.TargetID,
+		"callerInstanceId":        request.CallerInstanceID,
+		"status":                  request.Status,
+		"requestedBy":             request.RequestedBy,
+		"reviewedBy":              request.ReviewedBy,
+		"reasonCount":             len(request.PolicyGate.Reasons),
+		"allowedCapabilityIds":    request.AllowedCapabilityIDs,
+		"expiresAt":               request.ExpiresAt,
+		"consumedAt":              request.ConsumedAt,
+		"consumedByApplicationId": request.ConsumedByApplicationID,
 	}
 }
 

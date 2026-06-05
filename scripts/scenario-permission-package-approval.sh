@@ -290,6 +290,8 @@ if write_tool not in approval.get("allowedCapabilityKeys", []):
     raise SystemExit(f"approval missing write tool {write_tool!r}: {approval.get('allowedCapabilityKeys')}")
 if approval["policyGate"]["decision"] != "approval_required":
     raise SystemExit(f"approval missing policy gate snapshot: {approval['policyGate']}")
+if not approval.get("expiresAt"):
+    raise SystemExit(f"approval request should include expiresAt: {approval}")
 print(f"approval request {expected_status} verified")
 PY
 }
@@ -309,6 +311,37 @@ if rows[0]["id"] != expected_id or rows[0]["status"] != "pending":
     raise SystemExit(f"unexpected listed approval request: {rows[:1]}")
 print("approval request list verified")
 PY
+}
+
+assert_consumed_approval() {
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$APPROVAL_REQUEST_ID" "$APPLICATION_ID" <<'PY'
+import json
+import os
+import sys
+
+rows = json.loads(os.environ["RESPONSE_BODY"])["data"]
+approval_request_id, application_id = sys.argv[1:3]
+if not rows:
+    raise SystemExit("expected one listed consumed approval request")
+approval = rows[0]
+if approval["id"] != approval_request_id or approval["status"] != "approved":
+    raise SystemExit(f"unexpected consumed approval request: {approval}")
+if approval.get("consumedByApplicationId") != application_id:
+    raise SystemExit(f"approval request was not consumed by application {application_id!r}: {approval}")
+if not approval.get("consumedAt"):
+    raise SystemExit(f"approval request missing consumedAt: {approval}")
+print("approval request consumption verified")
+PY
+}
+
+assert_body_contains() {
+  local expected="$1"
+  local label="$2"
+  if [[ "$HTTP_BODY" != *"$expected"* ]]; then
+    echo "expected $label body to contain $expected" >&2
+    echo "$HTTP_BODY" >&2
+    exit 1
+  fi
 }
 
 assert_apply_response() {
@@ -563,6 +596,15 @@ request POST "/api/v1/permission-packages:apply" "$(permission_package_body "$AP
 expect_status 201 "apply approved permission package"
 APPLICATION_ID="$(assert_apply_response "$APPROVAL_REQUEST_ID")"
 echo "applied permission package application: $APPLICATION_ID"
+
+request GET "/api/v1/permission-packages/approval-requests?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID&templateId=$TEMPLATE_ID&targetId=$TARGET_ID&callerInstanceId=$CALLER_ID&status=approved&limit=1"
+expect_status 200 "list consumed approval request"
+assert_consumed_approval
+
+request POST "/api/v1/permission-packages:apply" "$(permission_package_body "$APPROVAL_REQUEST_ID")"
+expect_status 400 "reject consumed approval request"
+assert_body_contains "already consumed" "consumed approval retry"
+echo "consumed approval request reuse rejected"
 
 request POST "/api/v1/mcp/agents/$TARGET_ID/rpc" "$(json_body tools-list)" "$AGENT_KEY" "$RUN_ID-tools-list" "$SUBJECT_ID"
 expect_status 200 "filtered tools/list"

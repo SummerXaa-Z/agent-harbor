@@ -622,11 +622,15 @@ func (p *Postgres) GetCapability(ctx context.Context, id string) (domain.Capabil
 }
 
 func (p *Postgres) UpdateCapability(ctx context.Context, capability domain.Capability) (domain.Capability, bool, error) {
+	return p.updateCapability(ctx, p.pool, capability)
+}
+
+func (p *Postgres) updateCapability(ctx context.Context, exec sqlExecutor, capability domain.Capability) (domain.Capability, bool, error) {
 	dataScopes, err := json.Marshal(capability.DataScopes)
 	if err != nil {
 		return domain.Capability{}, false, fmt.Errorf("marshal capability data scopes: %w", err)
 	}
-	row := p.pool.QueryRow(ctx, `
+	row := exec.QueryRow(ctx, `
 		update capabilities
 		set display_name=$2, description=$3, sensitivity=$4, risk_level=$5, discovery_status=$6, data_scopes=$7, updated_at=$8
 		where id=$1
@@ -646,11 +650,15 @@ func (p *Postgres) UpdateCapability(ctx context.Context, capability domain.Capab
 }
 
 func (p *Postgres) CreateTenantEntitlement(ctx context.Context, entitlement domain.TenantEntitlement) (domain.TenantEntitlement, error) {
+	return p.createTenantEntitlement(ctx, p.pool, entitlement)
+}
+
+func (p *Postgres) createTenantEntitlement(ctx context.Context, exec sqlExecutor, entitlement domain.TenantEntitlement) (domain.TenantEntitlement, error) {
 	dataScopes, err := json.Marshal(entitlement.DataScopes)
 	if err != nil {
 		return domain.TenantEntitlement{}, fmt.Errorf("marshal entitlement data scopes: %w", err)
 	}
-	_, err = p.pool.Exec(ctx, `
+	_, err = exec.Exec(ctx, `
 		insert into tenant_entitlements (
 			id, tenant_id, target_agent_id, capability_id, effect, data_scopes, status, priority, created_at, updated_at
 		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -697,11 +705,15 @@ func (p *Postgres) ListTenantEntitlements(ctx context.Context, filter Entitlemen
 }
 
 func (p *Postgres) CreateWorkspaceAssignment(ctx context.Context, assignment domain.WorkspaceAssignment) (domain.WorkspaceAssignment, error) {
+	return p.createWorkspaceAssignment(ctx, p.pool, assignment)
+}
+
+func (p *Postgres) createWorkspaceAssignment(ctx context.Context, exec sqlExecutor, assignment domain.WorkspaceAssignment) (domain.WorkspaceAssignment, error) {
 	dataScopes, err := json.Marshal(assignment.DataScopes)
 	if err != nil {
 		return domain.WorkspaceAssignment{}, fmt.Errorf("marshal workspace assignment data scopes: %w", err)
 	}
-	_, err = p.pool.Exec(ctx, `
+	_, err = exec.Exec(ctx, `
 		insert into workspace_assignments (
 			id, tenant_entitlement_id, tenant_id, workspace_id, effect, data_scopes, status, created_at, updated_at
 		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
@@ -747,11 +759,15 @@ func (p *Postgres) ListWorkspaceAssignments(ctx context.Context, filter Assignme
 }
 
 func (p *Postgres) CreateInstanceAssignment(ctx context.Context, assignment domain.InstanceAssignment) (domain.InstanceAssignment, error) {
+	return p.createInstanceAssignment(ctx, p.pool, assignment)
+}
+
+func (p *Postgres) createInstanceAssignment(ctx context.Context, exec sqlExecutor, assignment domain.InstanceAssignment) (domain.InstanceAssignment, error) {
 	dataScopes, err := json.Marshal(assignment.DataScopes)
 	if err != nil {
 		return domain.InstanceAssignment{}, fmt.Errorf("marshal instance assignment data scopes: %w", err)
 	}
-	_, err = p.pool.Exec(ctx, `
+	_, err = exec.Exec(ctx, `
 		insert into instance_assignments (
 			id, workspace_assignment_id, tenant_id, workspace_id, caller_instance_id, subject_selector,
 			effect, data_scopes, status, created_at, updated_at
@@ -809,6 +825,10 @@ func (p *Postgres) ListInstanceAssignments(ctx context.Context, filter InstanceA
 }
 
 func (p *Postgres) CreatePermissionPackageApplication(ctx context.Context, application domain.PermissionPackageApplication) (domain.PermissionPackageApplication, error) {
+	return p.createPermissionPackageApplication(ctx, p.pool, application)
+}
+
+func (p *Postgres) createPermissionPackageApplication(ctx context.Context, exec sqlExecutor, application domain.PermissionPackageApplication) (domain.PermissionPackageApplication, error) {
 	dataScopes, err := json.Marshal(application.DataScopes)
 	if err != nil {
 		return domain.PermissionPackageApplication{}, fmt.Errorf("marshal permission package application data scopes: %w", err)
@@ -833,7 +853,7 @@ func (p *Postgres) CreatePermissionPackageApplication(ctx context.Context, appli
 	if err != nil {
 		return domain.PermissionPackageApplication{}, fmt.Errorf("marshal permission package application instance assignment ids: %w", err)
 	}
-	_, err = p.pool.Exec(ctx, `
+	_, err = exec.Exec(ctx, `
 		insert into permission_package_applications (
 			id, draft_id, template_id, template_version, tenant_id, workspace_id, target_agent_id,
 			caller_instance_id, subject_selector, request_text, region, data_scopes,
@@ -897,6 +917,69 @@ func (p *Postgres) ListPermissionPackageApplications(ctx context.Context, filter
 	return scanPermissionPackageApplications(rows)
 }
 
+func (p *Postgres) ApplyPermissionPackage(ctx context.Context, mutation PermissionPackageApplyMutation) (PermissionPackageApplyMutationResult, error) {
+	var result PermissionPackageApplyMutationResult
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		result = PermissionPackageApplyMutationResult{
+			Capabilities:         make([]domain.Capability, 0, len(mutation.Capabilities)),
+			TenantEntitlements:   make([]domain.TenantEntitlement, 0, len(mutation.TenantEntitlements)),
+			WorkspaceAssignments: make([]domain.WorkspaceAssignment, 0, len(mutation.WorkspaceAssignments)),
+			InstanceAssignments:  make([]domain.InstanceAssignment, 0, len(mutation.InstanceAssignments)),
+		}
+
+		if mutation.ApprovalRequest != nil {
+			approval, err := p.consumePermissionPackageApprovalRequest(ctx, tx, *mutation.ApprovalRequest)
+			if err != nil {
+				return err
+			}
+			result.ApprovalRequest = &approval
+		}
+		for _, capability := range mutation.Capabilities {
+			updated, ok, err := p.updateCapability(ctx, tx, capability)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return domain.NotFound("capability not found")
+			}
+			result.Capabilities = append(result.Capabilities, updated)
+		}
+		for _, entitlement := range mutation.TenantEntitlements {
+			created, err := p.createTenantEntitlement(ctx, tx, entitlement)
+			if err != nil {
+				return err
+			}
+			result.TenantEntitlements = append(result.TenantEntitlements, created)
+		}
+		for _, assignment := range mutation.WorkspaceAssignments {
+			created, err := p.createWorkspaceAssignment(ctx, tx, assignment)
+			if err != nil {
+				return err
+			}
+			result.WorkspaceAssignments = append(result.WorkspaceAssignments, created)
+		}
+		for _, assignment := range mutation.InstanceAssignments {
+			created, err := p.createInstanceAssignment(ctx, tx, assignment)
+			if err != nil {
+				return err
+			}
+			result.InstanceAssignments = append(result.InstanceAssignments, created)
+		}
+		application, err := p.createPermissionPackageApplication(ctx, tx, mutation.Application)
+		if err != nil {
+			return err
+		}
+		result.Application = application
+		audit, err := p.appendAuditEvent(ctx, tx, mutation.AuditEvent)
+		if err != nil {
+			return err
+		}
+		result.AuditEvent = audit
+		return nil
+	})
+	return result, err
+}
+
 func (p *Postgres) CreatePermissionPackageApprovalRequest(ctx context.Context, request domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, error) {
 	dataScopes, allowedCapabilityIDs, allowedCapabilityKeys, policyGate, err := marshalPermissionPackageApprovalRequestPayloads(request)
 	if err != nil {
@@ -907,13 +990,15 @@ func (p *Postgres) CreatePermissionPackageApprovalRequest(ctx context.Context, r
 			id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
 			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
 			allowed_capability_ids, allowed_capability_keys, policy_gate, status, requested_by,
-			reviewed_by, review_comment, created_at, updated_at, resolved_at
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
+			consumed_at, consumed_by_application_id
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
 	`, request.ID, request.DraftID, request.TemplateID, request.TemplateVersion, request.PolicyVersion,
 		request.TenantID, request.WorkspaceID, request.TargetID, request.CallerInstanceID,
 		request.SubjectSelector, request.RequestText, request.Region, dataScopes, allowedCapabilityIDs,
 		allowedCapabilityKeys, policyGate, string(request.Status), request.RequestedBy, request.ReviewedBy,
-		request.ReviewComment, request.CreatedAt, request.UpdatedAt, nullTime(request.ResolvedAt))
+		request.ReviewComment, request.CreatedAt, request.UpdatedAt, nullTime(request.ResolvedAt),
+		request.ExpiresAt, nullTime(request.ConsumedAt), request.ConsumedByApplicationID)
 	if err != nil {
 		return domain.PermissionPackageApprovalRequest{}, fmt.Errorf("insert permission package approval request: %w", err)
 	}
@@ -925,7 +1010,8 @@ func (p *Postgres) ListPermissionPackageApprovalRequests(ctx context.Context, fi
 		select id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
 			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
 			allowed_capability_ids, allowed_capability_keys, policy_gate, status, requested_by,
-			reviewed_by, review_comment, created_at, updated_at, resolved_at
+			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
+			consumed_at, consumed_by_application_id
 		from permission_package_approval_requests
 		where 1=1
 	`
@@ -974,7 +1060,8 @@ func (p *Postgres) GetPermissionPackageApprovalRequest(ctx context.Context, id s
 		select id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
 			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
 			allowed_capability_ids, allowed_capability_keys, policy_gate, status, requested_by,
-			reviewed_by, review_comment, created_at, updated_at, resolved_at
+			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
+			consumed_at, consumed_by_application_id
 		from permission_package_approval_requests
 		where id=$1
 	`, id)
@@ -999,17 +1086,20 @@ func (p *Postgres) UpdatePermissionPackageApprovalRequest(ctx context.Context, r
 			workspace_id=$7, target_agent_id=$8, caller_instance_id=$9, subject_selector=$10,
 			request_text=$11, region=$12, data_scopes=$13, allowed_capability_ids=$14,
 			allowed_capability_keys=$15, policy_gate=$16, status=$17, requested_by=$18,
-			reviewed_by=$19, review_comment=$20, created_at=$21, updated_at=$22, resolved_at=$23
+			reviewed_by=$19, review_comment=$20, created_at=$21, updated_at=$22, resolved_at=$23,
+			expires_at=$24, consumed_at=$25, consumed_by_application_id=$26
 		where id=$1
 		returning id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
 			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
 			allowed_capability_ids, allowed_capability_keys, policy_gate, status, requested_by,
-			reviewed_by, review_comment, created_at, updated_at, resolved_at
+			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
+			consumed_at, consumed_by_application_id
 	`, request.ID, request.DraftID, request.TemplateID, request.TemplateVersion, request.PolicyVersion,
 		request.TenantID, request.WorkspaceID, request.TargetID, request.CallerInstanceID,
 		request.SubjectSelector, request.RequestText, request.Region, dataScopes, allowedCapabilityIDs,
 		allowedCapabilityKeys, policyGate, string(request.Status), request.RequestedBy, request.ReviewedBy,
-		request.ReviewComment, request.CreatedAt, request.UpdatedAt, nullTime(request.ResolvedAt))
+		request.ReviewComment, request.CreatedAt, request.UpdatedAt, nullTime(request.ResolvedAt),
+		request.ExpiresAt, nullTime(request.ConsumedAt), request.ConsumedByApplicationID)
 	updated, err := scanPermissionPackageApprovalRequest(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.PermissionPackageApprovalRequest{}, false, nil
@@ -1018,6 +1108,31 @@ func (p *Postgres) UpdatePermissionPackageApprovalRequest(ctx context.Context, r
 		return domain.PermissionPackageApprovalRequest{}, false, fmt.Errorf("update permission package approval request: %w", err)
 	}
 	return updated, true, nil
+}
+
+func (p *Postgres) consumePermissionPackageApprovalRequest(ctx context.Context, exec sqlExecutor, request domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, error) {
+	row := exec.QueryRow(ctx, `
+		update permission_package_approval_requests
+		set consumed_at=$2, consumed_by_application_id=$3, updated_at=$4
+		where id=$1
+			and status=$5
+			and consumed_at is null
+			and expires_at > $2
+		returning id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
+			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
+			allowed_capability_ids, allowed_capability_keys, policy_gate, status, requested_by,
+			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
+			consumed_at, consumed_by_application_id
+	`, request.ID, nullTime(request.ConsumedAt), request.ConsumedByApplicationID, request.UpdatedAt,
+		string(domain.PermissionPackageApprovalStatusApproved))
+	updated, err := scanPermissionPackageApprovalRequest(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.PermissionPackageApprovalRequest{}, ErrPermissionPackageApprovalNotConsumable
+	}
+	if err != nil {
+		return domain.PermissionPackageApprovalRequest{}, fmt.Errorf("consume permission package approval request: %w", err)
+	}
+	return updated, nil
 }
 
 func (p *Postgres) EvaluateCapabilityAccess(ctx context.Context, req CapabilityAccessRequest) (domain.CapabilityAccessDecision, error) {
@@ -2026,18 +2141,23 @@ func scanPermissionPackageApprovalRequest(row scanner) (domain.PermissionPackage
 	var policyGate []byte
 	var status string
 	var resolvedAt *time.Time
+	var consumedAt *time.Time
 	if err := row.Scan(&request.ID, &request.DraftID, &request.TemplateID,
 		&request.TemplateVersion, &request.PolicyVersion, &request.TenantID,
 		&request.WorkspaceID, &request.TargetID, &request.CallerInstanceID,
 		&request.SubjectSelector, &request.RequestText, &request.Region, &dataScopes,
 		&allowedCapabilityIDs, &allowedCapabilityKeys, &policyGate, &status,
 		&request.RequestedBy, &request.ReviewedBy, &request.ReviewComment,
-		&request.CreatedAt, &request.UpdatedAt, &resolvedAt); err != nil {
+		&request.CreatedAt, &request.UpdatedAt, &resolvedAt, &request.ExpiresAt,
+		&consumedAt, &request.ConsumedByApplicationID); err != nil {
 		return domain.PermissionPackageApprovalRequest{}, err
 	}
 	request.Status = domain.PermissionPackageApprovalStatus(status)
 	if resolvedAt != nil {
 		request.ResolvedAt = *resolvedAt
+	}
+	if consumedAt != nil {
+		request.ConsumedAt = *consumedAt
 	}
 	if err := unmarshalJSON(dataScopes, &request.DataScopes, "permission package approval request data scopes"); err != nil {
 		return domain.PermissionPackageApprovalRequest{}, err

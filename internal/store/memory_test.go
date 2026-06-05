@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -299,6 +300,7 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 		RequestedBy: "admin-key",
 		CreatedAt:   now,
 		UpdatedAt:   now,
+		ExpiresAt:   now.Add(24 * time.Hour),
 	}
 	newer := older
 	newer.ID = "ppar_new"
@@ -308,8 +310,11 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 	newer.ReviewedBy = "security-admin"
 	newer.ReviewComment = "approved for break-glass support"
 	newer.ResolvedAt = now.Add(time.Minute)
+	newer.ConsumedAt = now.Add(2 * time.Minute)
+	newer.ConsumedByApplicationID = "ppa_new"
 	newer.CreatedAt = now.Add(time.Minute)
 	newer.UpdatedAt = now.Add(time.Minute)
+	newer.ExpiresAt = now.Add(25 * time.Hour)
 
 	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, older); err != nil {
 		t.Fatalf("create older approval request: %v", err)
@@ -327,7 +332,9 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list approval requests: %v", err)
 	}
-	if len(rows) != 1 || rows[0].ID != newer.ID || rows[0].ReviewedBy != "security-admin" {
+	if len(rows) != 1 || rows[0].ID != newer.ID || rows[0].ReviewedBy != "security-admin" ||
+		rows[0].ConsumedByApplicationID != "ppa_new" || rows[0].ConsumedAt.IsZero() ||
+		!rows[0].ExpiresAt.Equal(newer.ExpiresAt) {
 		t.Fatalf("expected newest approved request, got %#v", rows)
 	}
 	rows[0].AllowedCapabilityIDs[0] = "mutated"
@@ -342,11 +349,14 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 	again.ReviewComment = "too broad"
 	again.ResolvedAt = now.Add(2 * time.Minute)
 	again.UpdatedAt = now.Add(2 * time.Minute)
+	again.ConsumedAt = now.Add(3 * time.Minute)
+	again.ConsumedByApplicationID = "ppa_old"
 	updated, ok, err := repo.UpdatePermissionPackageApprovalRequest(ctx, again)
 	if err != nil || !ok {
 		t.Fatalf("update approval request: ok=%v err=%v", ok, err)
 	}
-	if updated.Status != domain.PermissionPackageApprovalStatusRejected || updated.ReviewComment != "too broad" {
+	if updated.Status != domain.PermissionPackageApprovalStatusRejected || updated.ReviewComment != "too broad" ||
+		updated.ConsumedByApplicationID != "ppa_old" || updated.ConsumedAt.IsZero() {
 		t.Fatalf("unexpected updated approval request: %#v", updated)
 	}
 	finalRows, err := repo.ListPermissionPackageApprovalRequests(ctx, PermissionPackageApprovalRequestFilter{
@@ -359,6 +369,180 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 	if len(finalRows) != 1 || finalRows[0].ID != older.ID || finalRows[0].AllowedCapabilityIDs[0] != "cap_update" ||
 		finalRows[0].PolicyGate.Reasons[0].ReasonValues["capability"] != "update_ticket" {
 		t.Fatalf("expected cloned rejected request, got %#v", finalRows)
+	}
+}
+
+func TestMemoryPermissionPackageApplyConsumesApprovalOnce(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	now := time.Date(2026, 6, 5, 10, 0, 0, 0, time.UTC)
+	capability := domain.Capability{
+		ID:              "cap_update",
+		TargetID:        "agt_mcp",
+		Type:            domain.CapabilityTypeMCPTool,
+		Key:             "update_ticket",
+		DisplayName:     "Update ticket",
+		Action:          domain.CapabilityActionWrite,
+		DataScopes:      []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		Sensitivity:     domain.CapabilitySensitivityConfidential,
+		RiskLevel:       domain.CapabilityRiskHigh,
+		DiscoveryStatus: domain.CapabilityDiscoveryPendingReview,
+		Version:         1,
+		DiscoveredAt:    now,
+		UpdatedAt:       now,
+	}
+	if _, err := repo.UpsertCapability(ctx, capability); err != nil {
+		t.Fatalf("upsert capability: %v", err)
+	}
+
+	approval := domain.PermissionPackageApprovalRequest{
+		ID:                    "ppar_apply",
+		DraftID:               "ppd_apply",
+		TemplateID:            "support-ticket-triage",
+		TemplateVersion:       1,
+		PolicyVersion:         1,
+		TenantID:              "tenant-east",
+		WorkspaceID:           "ws-support",
+		TargetID:              "agt_mcp",
+		CallerInstanceID:      "agt_caller",
+		SubjectSelector:       "user:support-*",
+		RequestText:           "need write access",
+		Region:                "us-east",
+		DataScopes:            []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		AllowedCapabilityIDs:  []string{capability.ID},
+		AllowedCapabilityKeys: []string{capability.Key},
+		PolicyGate: domain.PermissionPackagePolicyGate{
+			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
+			CanApplyDirectly: false,
+			PolicyVersion:    1,
+		},
+		Status:      domain.PermissionPackageApprovalStatusApproved,
+		RequestedBy: "admin-key",
+		ReviewedBy:  "security-admin",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		ResolvedAt:  now,
+		ExpiresAt:   now.Add(time.Hour),
+	}
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, approval); err != nil {
+		t.Fatalf("create approval request: %v", err)
+	}
+
+	updatedCapability := capability
+	updatedCapability.DiscoveryStatus = domain.CapabilityDiscoveryApproved
+	updatedCapability.UpdatedAt = now.Add(time.Minute)
+	entitlement := domain.TenantEntitlement{
+		ID:           "ent_update",
+		TenantID:     approval.TenantID,
+		TargetID:     approval.TargetID,
+		CapabilityID: capability.ID,
+		Effect:       domain.PolicyEffectAllow,
+		DataScopes:   approval.DataScopes,
+		Status:       domain.PolicyStatusEnabled,
+		Priority:     40,
+		CreatedAt:    now.Add(time.Minute),
+		UpdatedAt:    now.Add(time.Minute),
+	}
+	workspaceAssignment := domain.WorkspaceAssignment{
+		ID:                  "wsa_update",
+		TenantEntitlementID: entitlement.ID,
+		TenantID:            approval.TenantID,
+		WorkspaceID:         approval.WorkspaceID,
+		Effect:              domain.PolicyEffectAllow,
+		DataScopes:          approval.DataScopes,
+		Status:              domain.PolicyStatusEnabled,
+		CreatedAt:           now.Add(time.Minute),
+		UpdatedAt:           now.Add(time.Minute),
+	}
+	instanceAssignment := domain.InstanceAssignment{
+		ID:                    "ina_update",
+		WorkspaceAssignmentID: workspaceAssignment.ID,
+		TenantID:              approval.TenantID,
+		WorkspaceID:           approval.WorkspaceID,
+		CallerInstanceID:      approval.CallerInstanceID,
+		SubjectSelector:       approval.SubjectSelector,
+		Effect:                domain.PolicyEffectAllow,
+		DataScopes:            approval.DataScopes,
+		Status:                domain.PolicyStatusEnabled,
+		CreatedAt:             now.Add(time.Minute),
+		UpdatedAt:             now.Add(time.Minute),
+	}
+	application := domain.PermissionPackageApplication{
+		ID:                     "ppa_apply",
+		DraftID:                approval.DraftID,
+		TemplateID:             approval.TemplateID,
+		TemplateVersion:        approval.TemplateVersion,
+		TenantID:               approval.TenantID,
+		WorkspaceID:            approval.WorkspaceID,
+		TargetID:               approval.TargetID,
+		CallerInstanceID:       approval.CallerInstanceID,
+		SubjectSelector:        approval.SubjectSelector,
+		RequestText:            approval.RequestText,
+		Region:                 approval.Region,
+		DataScopes:             approval.DataScopes,
+		AllowedCapabilityIDs:   []string{capability.ID},
+		AllowedCapabilityKeys:  []string{capability.Key},
+		TenantEntitlementIDs:   []string{entitlement.ID},
+		WorkspaceAssignmentIDs: []string{workspaceAssignment.ID},
+		InstanceAssignmentIDs:  []string{instanceAssignment.ID},
+		AppliedAt:              now.Add(time.Minute),
+	}
+	consumedApproval := approval
+	consumedApproval.ConsumedAt = now.Add(time.Minute)
+	consumedApproval.ConsumedByApplicationID = application.ID
+	consumedApproval.UpdatedAt = now.Add(time.Minute)
+
+	mutation := PermissionPackageApplyMutation{
+		Capabilities:         []domain.Capability{updatedCapability},
+		TenantEntitlements:   []domain.TenantEntitlement{entitlement},
+		WorkspaceAssignments: []domain.WorkspaceAssignment{workspaceAssignment},
+		InstanceAssignments:  []domain.InstanceAssignment{instanceAssignment},
+		Application:          application,
+		ApprovalRequest:      &consumedApproval,
+		AuditEvent: domain.AuditEvent{
+			ID:           "aud_apply",
+			TenantID:     approval.TenantID,
+			WorkspaceID:  approval.WorkspaceID,
+			Actor:        "admin-key",
+			Action:       "permission_package.applied",
+			ResourceType: "permission_package",
+			ResourceID:   application.ID,
+			CreatedAt:    now.Add(time.Minute),
+		},
+	}
+	applied, err := repo.ApplyPermissionPackage(ctx, mutation)
+	if err != nil {
+		t.Fatalf("apply permission package: %v", err)
+	}
+	if applied.Application.ID != application.ID || applied.ApprovalRequest == nil ||
+		applied.ApprovalRequest.ConsumedByApplicationID != application.ID || applied.ApprovalRequest.ConsumedAt.IsZero() {
+		t.Fatalf("unexpected apply result: %#v", applied)
+	}
+	loadedApproval, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, approval.ID)
+	if err != nil || !ok {
+		t.Fatalf("get consumed approval request: ok=%v err=%v", ok, err)
+	}
+	if loadedApproval.ConsumedByApplicationID != application.ID || loadedApproval.ConsumedAt.IsZero() {
+		t.Fatalf("approval request should be consumed once, got %#v", loadedApproval)
+	}
+	events, err := repo.ListAuditEvents(ctx, AuditEventFilter{Action: "permission_package.applied"})
+	if err != nil || len(events) != 1 {
+		t.Fatalf("expected one apply audit event, events=%#v err=%v", events, err)
+	}
+
+	secondMutation := mutation
+	secondApplication := application
+	secondApplication.ID = "ppa_apply_second"
+	secondMutation.Application = secondApplication
+	secondConsumedApproval := consumedApproval
+	secondConsumedApproval.ConsumedByApplicationID = secondApplication.ID
+	secondMutation.ApprovalRequest = &secondConsumedApproval
+	if _, err := repo.ApplyPermissionPackage(ctx, secondMutation); !errors.Is(err, ErrPermissionPackageApprovalNotConsumable) {
+		t.Fatalf("expected consumed approval error on retry, got %v", err)
+	}
+	applications, err := repo.ListPermissionPackageApplications(ctx, PermissionPackageApplicationFilter{})
+	if err != nil || len(applications) != 1 || applications[0].ID != application.ID {
+		t.Fatalf("retry should not create another application, applications=%#v err=%v", applications, err)
 	}
 }
 

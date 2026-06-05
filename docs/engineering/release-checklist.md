@@ -56,7 +56,7 @@ AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
 make scenario-permission-package-approval
 ```
 
-This scenario must prove draft, approval request, approval, approved apply, runtime allow/deny, tenant access-profile, permission package application, and applied audit evidence.
+This scenario must prove draft, approval request, approval expiry metadata, approved apply, atomic one-time approval consumption, consumed-approval reuse rejection, runtime allow/deny, tenant access-profile, permission package application, and applied audit evidence.
 
 ## GitHub Checks
 

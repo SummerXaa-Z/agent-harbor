@@ -113,6 +113,9 @@ export interface PermissionPackageApprovalRequest {
   createdAt: string;
   updatedAt: string;
   resolvedAt?: string;
+  expiresAt: string;
+  consumedAt?: string;
+  consumedByApplicationId?: string;
 }
 
 export interface PermissionPackageReadiness {

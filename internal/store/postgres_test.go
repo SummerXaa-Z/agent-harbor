@@ -3,6 +3,7 @@ package store_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"reflect"
 	"testing"
@@ -566,6 +567,7 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 		RequestedBy: "admin",
 		CreatedAt:   now.Add(40 * time.Second),
 		UpdatedAt:   now.Add(40 * time.Second),
+		ExpiresAt:   now.Add(24 * time.Hour),
 	})
 	if err != nil {
 		t.Fatalf("create permission package approval request: %v", err)
@@ -583,7 +585,8 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 	}
 	if len(approvalRows) != 1 || approvalRows[0].ID != approval.ID ||
 		len(approvalRows[0].PolicyGate.Reasons) != 1 || approvalRows[0].PolicyGate.Reasons[0].ReasonValues["risk"] != "high" ||
-		len(approvalRows[0].DataScopes) != 1 || approvalRows[0].DataScopes[0].Region != "us-east" {
+		len(approvalRows[0].DataScopes) != 1 || approvalRows[0].DataScopes[0].Region != "us-east" ||
+		!approvalRows[0].ExpiresAt.Equal(now.Add(24*time.Hour)) {
 		t.Fatalf("unexpected permission package approval requests: %#v", approvalRows)
 	}
 	loadedApproval, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, approval.ID)
@@ -598,12 +601,16 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 	loadedApproval.ReviewComment = "approved for pg test"
 	loadedApproval.UpdatedAt = now.Add(50 * time.Second)
 	loadedApproval.ResolvedAt = now.Add(50 * time.Second)
+	loadedApproval.ConsumedAt = now.Add(60 * time.Second)
+	loadedApproval.ConsumedByApplicationID = "ppa_pg"
 	updatedApproval, ok, err := repo.UpdatePermissionPackageApprovalRequest(ctx, loadedApproval)
 	if err != nil {
 		t.Fatalf("update permission package approval request: %v", err)
 	}
 	if !ok || updatedApproval.Status != domain.PermissionPackageApprovalStatusApproved ||
-		updatedApproval.ReviewedBy != "security" || updatedApproval.ResolvedAt.IsZero() {
+		updatedApproval.ReviewedBy != "security" || updatedApproval.ResolvedAt.IsZero() ||
+		updatedApproval.ConsumedByApplicationID != "ppa_pg" || updatedApproval.ConsumedAt.IsZero() ||
+		!updatedApproval.ExpiresAt.Equal(now.Add(24*time.Hour)) {
 		t.Fatalf("unexpected updated permission package approval request: ok=%v row=%#v", ok, updatedApproval)
 	}
 	decision, err := repo.EvaluateCapabilityAccess(ctx, store.CapabilityAccessRequest{
@@ -674,6 +681,144 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 	}
 	if deniedBySubject.Allowed || deniedBySubject.InstanceAssignmentID != denyAssignment.ID {
 		t.Fatalf("exact deny assignment should take precedence over wildcard allow: %#v", deniedBySubject)
+	}
+
+	applyApproval, err := repo.CreatePermissionPackageApprovalRequest(ctx, domain.PermissionPackageApprovalRequest{
+		ID:                    security.NewID("ppar"),
+		DraftID:               "ppd_pg_apply",
+		TemplateID:            "support-write",
+		TemplateVersion:       1,
+		PolicyVersion:         1,
+		TenantID:              caller.TenantID,
+		WorkspaceID:           caller.WorkspaceID,
+		TargetID:              target.ID,
+		CallerInstanceID:      caller.ID,
+		SubjectSelector:       "user:pg-apply",
+		RequestText:           "grant support write access",
+		Region:                "us-east",
+		DataScopes:            []domain.DataScope{{DataDomain: "crm", Region: "us-east", TenantFilter: "tenant_id = 'tenant-pg-cap'"}},
+		AllowedCapabilityIDs:  []string{capability.ID},
+		AllowedCapabilityKeys: []string{capability.Key},
+		PolicyGate: domain.PermissionPackagePolicyGate{
+			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
+			CanApplyDirectly: false,
+			PolicyVersion:    1,
+		},
+		Status:      domain.PermissionPackageApprovalStatusApproved,
+		RequestedBy: "admin",
+		ReviewedBy:  "security",
+		CreatedAt:   now.Add(70 * time.Second),
+		UpdatedAt:   now.Add(70 * time.Second),
+		ResolvedAt:  now.Add(70 * time.Second),
+		ExpiresAt:   now.Add(24 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("create apply approval request: %v", err)
+	}
+	applyTime := now.Add(80 * time.Second)
+	applyEntitlement := domain.TenantEntitlement{
+		ID:           security.NewID("ent"),
+		TenantID:     caller.TenantID,
+		TargetID:     target.ID,
+		CapabilityID: capability.ID,
+		Effect:       domain.PolicyEffectAllow,
+		Status:       domain.PolicyStatusEnabled,
+		Priority:     40,
+		CreatedAt:    applyTime,
+		UpdatedAt:    applyTime,
+	}
+	applyWorkspaceAssignment := domain.WorkspaceAssignment{
+		ID:                  security.NewID("wsa"),
+		TenantEntitlementID: applyEntitlement.ID,
+		TenantID:            caller.TenantID,
+		WorkspaceID:         caller.WorkspaceID,
+		Effect:              domain.PolicyEffectAllow,
+		Status:              domain.PolicyStatusEnabled,
+		CreatedAt:           applyTime,
+		UpdatedAt:           applyTime,
+	}
+	applyInstanceAssignment := domain.InstanceAssignment{
+		ID:                    security.NewID("ina"),
+		WorkspaceAssignmentID: applyWorkspaceAssignment.ID,
+		TenantID:              caller.TenantID,
+		WorkspaceID:           caller.WorkspaceID,
+		CallerInstanceID:      caller.ID,
+		SubjectSelector:       "user:pg-apply",
+		Effect:                domain.PolicyEffectAllow,
+		Status:                domain.PolicyStatusEnabled,
+		CreatedAt:             applyTime,
+		UpdatedAt:             applyTime,
+	}
+	applyApplication := domain.PermissionPackageApplication{
+		ID:                     security.NewID("ppa"),
+		DraftID:                applyApproval.DraftID,
+		TemplateID:             applyApproval.TemplateID,
+		TemplateVersion:        applyApproval.TemplateVersion,
+		TenantID:               caller.TenantID,
+		WorkspaceID:            caller.WorkspaceID,
+		TargetID:               target.ID,
+		CallerInstanceID:       caller.ID,
+		SubjectSelector:        "user:pg-apply",
+		RequestText:            applyApproval.RequestText,
+		Region:                 applyApproval.Region,
+		DataScopes:             applyApproval.DataScopes,
+		AllowedCapabilityIDs:   []string{capability.ID},
+		AllowedCapabilityKeys:  []string{capability.Key},
+		TenantEntitlementIDs:   []string{applyEntitlement.ID},
+		WorkspaceAssignmentIDs: []string{applyWorkspaceAssignment.ID},
+		InstanceAssignmentIDs:  []string{applyInstanceAssignment.ID},
+		AppliedAt:              applyTime,
+	}
+	consumedApproval := applyApproval
+	consumedApproval.ConsumedAt = applyTime
+	consumedApproval.ConsumedByApplicationID = applyApplication.ID
+	consumedApproval.UpdatedAt = applyTime
+	applyMutation := store.PermissionPackageApplyMutation{
+		Capabilities:         []domain.Capability{capability},
+		TenantEntitlements:   []domain.TenantEntitlement{applyEntitlement},
+		WorkspaceAssignments: []domain.WorkspaceAssignment{applyWorkspaceAssignment},
+		InstanceAssignments:  []domain.InstanceAssignment{applyInstanceAssignment},
+		Application:          applyApplication,
+		ApprovalRequest:      &consumedApproval,
+		AuditEvent: domain.AuditEvent{
+			ID:           security.NewID("aud"),
+			TenantID:     caller.TenantID,
+			WorkspaceID:  caller.WorkspaceID,
+			Actor:        "admin",
+			Action:       "permission_package.applied",
+			ResourceType: "permission_package",
+			ResourceID:   applyApplication.ID,
+			Summary:      "Permission package applied",
+			Metadata:     map[string]any{"approvalRequestId": applyApproval.ID},
+			CreatedAt:    applyTime,
+		},
+	}
+	applyResult, err := repo.ApplyPermissionPackage(ctx, applyMutation)
+	if err != nil {
+		t.Fatalf("apply permission package mutation: %v", err)
+	}
+	if applyResult.Application.ID != applyApplication.ID || applyResult.ApprovalRequest == nil ||
+		applyResult.ApprovalRequest.ConsumedByApplicationID != applyApplication.ID || applyResult.ApprovalRequest.ConsumedAt.IsZero() {
+		t.Fatalf("unexpected apply mutation result: %#v", applyResult)
+	}
+	loadedApplyApproval, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, applyApproval.ID)
+	if err != nil || !ok {
+		t.Fatalf("get applied approval request: ok=%v err=%v", ok, err)
+	}
+	if loadedApplyApproval.ConsumedByApplicationID != applyApplication.ID || loadedApplyApproval.ConsumedAt.IsZero() {
+		t.Fatalf("approval request should be consumed by application %s: %#v", applyApplication.ID, loadedApplyApproval)
+	}
+	if _, err := repo.ApplyPermissionPackage(ctx, applyMutation); !errors.Is(err, store.ErrPermissionPackageApprovalNotConsumable) {
+		t.Fatalf("expected consumed approval error on retry, got %v", err)
+	}
+	applyApplications, err := repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
+		ManagementScope:  store.ManagementScope{TenantID: caller.TenantID, WorkspaceID: caller.WorkspaceID},
+		TemplateID:       "support-write",
+		TargetID:         target.ID,
+		CallerInstanceID: caller.ID,
+	})
+	if err != nil || len(applyApplications) != 1 || applyApplications[0].ID != applyApplication.ID {
+		t.Fatalf("retry should not create duplicate applications, applications=%#v err=%v", applyApplications, err)
 	}
 }
 

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"sync"
@@ -49,6 +50,7 @@ type Repository interface {
 	ListInstanceAssignments(context.Context, InstanceAssignmentFilter) ([]domain.InstanceAssignment, error)
 	CreatePermissionPackageApplication(context.Context, domain.PermissionPackageApplication) (domain.PermissionPackageApplication, error)
 	ListPermissionPackageApplications(context.Context, PermissionPackageApplicationFilter) ([]domain.PermissionPackageApplication, error)
+	ApplyPermissionPackage(context.Context, PermissionPackageApplyMutation) (PermissionPackageApplyMutationResult, error)
 	CreatePermissionPackageApprovalRequest(context.Context, domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, error)
 	ListPermissionPackageApprovalRequests(context.Context, PermissionPackageApprovalRequestFilter) ([]domain.PermissionPackageApprovalRequest, error)
 	GetPermissionPackageApprovalRequest(context.Context, string) (domain.PermissionPackageApprovalRequest, bool, error)
@@ -74,6 +76,28 @@ type AgentKeyAuditBuilder func(domain.AgentKey) domain.AuditEvent
 type AccessGrantAuditBuilder func(domain.AccessGrant) domain.AuditEvent
 type RoutePolicyAuditBuilder func(domain.RoutePolicy) domain.AuditEvent
 type TenantAuditBuilder func(domain.Tenant) domain.AuditEvent
+
+var ErrPermissionPackageApprovalNotConsumable = errors.New("permission package approval request is not consumable")
+
+type PermissionPackageApplyMutation struct {
+	Capabilities         []domain.Capability
+	TenantEntitlements   []domain.TenantEntitlement
+	WorkspaceAssignments []domain.WorkspaceAssignment
+	InstanceAssignments  []domain.InstanceAssignment
+	Application          domain.PermissionPackageApplication
+	ApprovalRequest      *domain.PermissionPackageApprovalRequest
+	AuditEvent           domain.AuditEvent
+}
+
+type PermissionPackageApplyMutationResult struct {
+	Capabilities         []domain.Capability
+	TenantEntitlements   []domain.TenantEntitlement
+	WorkspaceAssignments []domain.WorkspaceAssignment
+	InstanceAssignments  []domain.InstanceAssignment
+	Application          domain.PermissionPackageApplication
+	ApprovalRequest      *domain.PermissionPackageApprovalRequest
+	AuditEvent           domain.AuditEvent
+}
 
 type ManagementScope struct {
 	TenantID    string
@@ -706,6 +730,72 @@ func (m *Memory) ListPermissionPackageApplications(_ context.Context, filter Per
 	return rows, nil
 }
 
+func (m *Memory) ApplyPermissionPackage(_ context.Context, mutation PermissionPackageApplyMutation) (PermissionPackageApplyMutationResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, capability := range mutation.Capabilities {
+		if _, ok := m.capabilities[capability.ID]; !ok {
+			return PermissionPackageApplyMutationResult{}, domain.NotFound("capability not found")
+		}
+	}
+
+	result := PermissionPackageApplyMutationResult{
+		Capabilities:         make([]domain.Capability, 0, len(mutation.Capabilities)),
+		TenantEntitlements:   make([]domain.TenantEntitlement, 0, len(mutation.TenantEntitlements)),
+		WorkspaceAssignments: make([]domain.WorkspaceAssignment, 0, len(mutation.WorkspaceAssignments)),
+		InstanceAssignments:  make([]domain.InstanceAssignment, 0, len(mutation.InstanceAssignments)),
+	}
+
+	if mutation.ApprovalRequest != nil {
+		existing, ok := m.packageApprovals[mutation.ApprovalRequest.ID]
+		if !ok || !permissionPackageApprovalRequestCanConsume(existing, mutation.ApprovalRequest.ConsumedAt) {
+			return PermissionPackageApplyMutationResult{}, ErrPermissionPackageApprovalNotConsumable
+		}
+		consumedApproval := existing
+		consumedApproval.ConsumedAt = mutation.ApprovalRequest.ConsumedAt
+		consumedApproval.ConsumedByApplicationID = mutation.ApprovalRequest.ConsumedByApplicationID
+		consumedApproval.UpdatedAt = mutation.ApprovalRequest.UpdatedAt
+		consumedApproval = clonePermissionPackageApprovalRequest(consumedApproval)
+		m.packageApprovals[consumedApproval.ID] = consumedApproval
+		clonedApproval := clonePermissionPackageApprovalRequest(consumedApproval)
+		result.ApprovalRequest = &clonedApproval
+	}
+
+	for _, capability := range mutation.Capabilities {
+		existing := m.capabilities[capability.ID]
+		capability.TargetID = existing.TargetID
+		capability.Type = existing.Type
+		capability.Key = existing.Key
+		capability.DiscoveredAt = existing.DiscoveredAt
+		capability = cloneCapability(capability)
+		m.capabilities[capability.ID] = capability
+		result.Capabilities = append(result.Capabilities, cloneCapability(capability))
+	}
+	for _, entitlement := range mutation.TenantEntitlements {
+		entitlement = cloneTenantEntitlement(entitlement)
+		m.entitlements[entitlement.ID] = entitlement
+		result.TenantEntitlements = append(result.TenantEntitlements, cloneTenantEntitlement(entitlement))
+	}
+	for _, assignment := range mutation.WorkspaceAssignments {
+		assignment = cloneWorkspaceAssignment(assignment)
+		m.workspaceAssignments[assignment.ID] = assignment
+		result.WorkspaceAssignments = append(result.WorkspaceAssignments, cloneWorkspaceAssignment(assignment))
+	}
+	for _, assignment := range mutation.InstanceAssignments {
+		assignment = cloneInstanceAssignment(assignment)
+		m.instanceAssignments[assignment.ID] = assignment
+		result.InstanceAssignments = append(result.InstanceAssignments, cloneInstanceAssignment(assignment))
+	}
+
+	application := clonePermissionPackageApplication(mutation.Application)
+	m.packageApplications[application.ID] = application
+	result.Application = clonePermissionPackageApplication(application)
+	m.audits = append(m.audits, mutation.AuditEvent)
+	result.AuditEvent = mutation.AuditEvent
+	return result, nil
+}
+
 func (m *Memory) CreatePermissionPackageApprovalRequest(_ context.Context, request domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1179,6 +1269,12 @@ func permissionPackageApprovalRequestMatchesFilter(request domain.PermissionPack
 		return false
 	}
 	return true
+}
+
+func permissionPackageApprovalRequestCanConsume(request domain.PermissionPackageApprovalRequest, now time.Time) bool {
+	return request.Status == domain.PermissionPackageApprovalStatusApproved &&
+		request.ConsumedAt.IsZero() &&
+		(request.ExpiresAt.IsZero() || now.Before(request.ExpiresAt))
 }
 
 func (m *Memory) matchTenantEntitlementLocked(req CapabilityAccessRequest, capabilityID string) (domain.TenantEntitlement, bool) {

@@ -175,6 +175,33 @@ type permissionPackageApplyResponse struct {
 	InstanceAssignments  []instanceAssignmentResponse   `json:"instanceAssignments"`
 }
 
+type mcpEnvelopeResponse struct {
+	JSONRPC string           `json:"jsonrpc"`
+	ID      any              `json:"id"`
+	Result  mcpResultPayload `json:"result"`
+	Error   *struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+type mcpResultPayload struct {
+	Tools             []mcpToolResponse `json:"tools"`
+	Content           []mcpContentItem  `json:"content"`
+	StructuredContent json.RawMessage   `json:"structuredContent"`
+}
+
+type mcpToolResponse struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	InputSchema map[string]any `json:"inputSchema"`
+}
+
+type mcpContentItem struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
 type tenantResponse struct {
 	ID             string `json:"id"`
 	ParentTenantID string `json:"parentTenantId"`
@@ -2720,6 +2747,154 @@ func TestPermissionPackageDraftDetectsDataScopeConflicts(t *testing.T) {
 	}
 }
 
+func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-sales", Name: "Sales Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "CRM MCP", "tenant-root", "ws-sales", "mcp", domain.AgentStatusActive, nil)
+	search := createDirectCapabilityWithAction(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	tools := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "tools-list",
+		"method":  "tools/list",
+	}, ""))
+	if !mcpToolNamesContain(tools.Result.Tools, "draft_permission_package") || !mcpToolNamesContain(tools.Result.Tools, "apply_permission_package") {
+		t.Fatalf("management MCP tools missing permission package tools: %#v", tools.Result.Tools)
+	}
+
+	args := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "华东",
+		"requestText":      "给销售助手开通客户只读。",
+		"subjectSelector":  "user:sales-*",
+		"targetId":         target.ID,
+		"templateId":       "sales-readonly",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-sales",
+	}
+	draftCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "draft",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "draft_permission_package",
+			"arguments": args,
+		},
+	}, ""))
+	var draft permissionPackageDraftResponse
+	if err := json.Unmarshal(draftCall.Result.StructuredContent, &draft); err != nil {
+		t.Fatalf("decode draft structured content: %v", err)
+	}
+	if !draft.Readiness.CanApply || len(draft.AllowedCapabilities) != 1 || draft.AllowedCapabilities[0].ID != search.ID {
+		t.Fatalf("unexpected management MCP draft: %#v", draft)
+	}
+
+	appliedCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "apply",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "apply_permission_package",
+			"arguments": args,
+		},
+	}, ""))
+	var applied permissionPackageApplyResponse
+	if err := json.Unmarshal(appliedCall.Result.StructuredContent, &applied); err != nil {
+		t.Fatalf("decode apply structured content: %v", err)
+	}
+	if len(applied.TenantEntitlements) != 1 || applied.TenantEntitlements[0].CapabilityID != search.ID {
+		t.Fatalf("expected one applied entitlement, got %#v", applied.TenantEntitlements)
+	}
+	events := decodeData[[]auditEventResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/events?action=permission_package.applied", nil, ""))
+	if len(events) != 1 || events[0].ResourceType != "permission_package" {
+		t.Fatalf("expected permission package audit event, got %#v", events)
+	}
+}
+
+func TestManagementMCPReadTools(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-sales", Name: "Sales Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "CRM MCP", "tenant-root", "ws-sales", "mcp", domain.AgentStatusActive, nil)
+	capability := createDirectCapabilityWithAction(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+
+	agentsCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "agents",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_agents",
+			"arguments": map[string]any{
+				"tenantId": "tenant-east",
+			},
+		},
+	}, ""))
+	var agents []agentResponse
+	if err := json.Unmarshal(agentsCall.Result.StructuredContent, &agents); err != nil {
+		t.Fatalf("decode agents structured content: %v", err)
+	}
+	if len(agents) != 1 || agents[0].ID != caller.ID {
+		t.Fatalf("unexpected agent list: %#v", agents)
+	}
+
+	capabilitiesCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "capabilities",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_capabilities",
+			"arguments": map[string]any{
+				"targetId": target.ID,
+			},
+		},
+	}, ""))
+	var capabilities []capabilityResponse
+	if err := json.Unmarshal(capabilitiesCall.Result.StructuredContent, &capabilities); err != nil {
+		t.Fatalf("decode capabilities structured content: %v", err)
+	}
+	if len(capabilities) != 1 || capabilities[0].ID != capability.ID {
+		t.Fatalf("unexpected capabilities: %#v", capabilities)
+	}
+
+	profileCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "profile",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "get_tenant_access_profile",
+			"arguments": map[string]any{
+				"tenantId":    "tenant-east",
+				"workspaceId": "ws-sales",
+			},
+		},
+	}, ""))
+	var profile struct {
+		Summary struct {
+			TenantCount int `json:"tenantCount"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(profileCall.Result.StructuredContent, &profile); err != nil {
+		t.Fatalf("decode profile structured content: %v", err)
+	}
+	if profile.Summary.TenantCount != 1 {
+		t.Fatalf("unexpected profile summary: %#v", profile.Summary)
+	}
+}
+
 func TestCapabilityAssignmentDataScopesMustNarrowHierarchy(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -3090,6 +3265,33 @@ func auditActions(events []auditEventResponse) []string {
 		actions = append(actions, event.Action)
 	}
 	return actions
+}
+
+func decodeMCPResult(t *testing.T, resp *httptest.ResponseRecorder) mcpEnvelopeResponse {
+	t.Helper()
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected MCP HTTP 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	var payload mcpEnvelopeResponse
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode MCP response: %v body=%s", err, resp.Body.String())
+	}
+	if payload.Error != nil {
+		t.Fatalf("unexpected MCP error: %#v", payload.Error)
+	}
+	if payload.JSONRPC != "2.0" {
+		t.Fatalf("unexpected MCP jsonrpc: %#v", payload)
+	}
+	return payload
+}
+
+func mcpToolNamesContain(tools []mcpToolResponse, name string) bool {
+	for _, tool := range tools {
+		if tool.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func request(t *testing.T, router http.Handler, method string, path string, body any, bearer string) *httptest.ResponseRecorder {

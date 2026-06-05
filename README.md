@@ -1,25 +1,40 @@
 # AgentHarbor
 
-AgentHarbor is a tenant-first access control plane for AI agents, MCP servers, OpenAPI services, and governed data access.
+AgentHarbor is a tenant-first access governance and permission operations platform for AI agents, MCP tools, OpenAPI services, and governed data access.
 
-It gives platform teams one place to register agents, discover MCP capabilities, assign tenant/workspace/caller permissions, enforce data scopes, and inspect audit evidence for every allowed or denied runtime decision.
+AgentHarbor 是面向 AI Agent、MCP 工具、OpenAPI 服务和受治理数据访问的租户优先权限治理与权限运营平台。
+
+It helps platform, security, and tenant operations teams answer one production question: which tenant, workspace, caller instance, and subject can access which tool or data scope, why, and with what approval evidence.
+
+它帮助平台、安全和租户运营团队回答一个生产问题：哪个租户、工作区、调用方实例和主体可以访问哪些工具或数据范围，为什么可以访问，以及对应的审批和审计证据是什么。
+
+## Positioning
+
+AgentHarbor supports MCP gateway capabilities, but it is not positioned as another generic MCP gateway. MCP servers are one governed target type. The product identity is tenant-first access governance, AI-friendly permission operations, and evidence-backed runtime enforcement across MCP tools, APIs, agents, and data systems.
+
+AgentHarbor 支持 MCP 网关能力，但不把自己定位成另一个通用 MCP Gateway。MCP Server 只是被治理的目标类型之一。AgentHarbor 的产品身份是租户优先的访问治理、面向 AI 的权限运营，以及覆盖 MCP 工具、API、Agent 和数据系统的证据化运行时控制。
 
 ## Project Status
 
 AgentHarbor is in developer preview. It is ready for local evaluation, design feedback, and early contribution, but it is not yet recommended for production traffic.
 
+AgentHarbor 当前处于开发者预览阶段，适合本地评估、设计反馈和早期贡献；暂不建议承载生产流量。
+
 Open-source timing is intentionally secondary to production hardening. Before any release-readiness claim, the current standard is that the safety baseline, release checks, and primary AI Admin journey all pass from a fresh local checkout.
+
+开源节奏会服从生产可用性。任何发布就绪声明之前，都必须确保安全基线、发布检查和核心 AI Admin 用户旅程能在全新本地检出中通过。
 
 ## What It Provides
 
-- **Tenant-first governance**: register a three-level tenant tree and scope management views by tenant subtree.
-- **Agent registry**: manage caller agents, MCP targets, OpenAPI services, webhooks, credentials, and short-lived Agent Keys.
-- **Route policy controls**: allow or deny MCP/OpenAPI routes with priority, wildcard matching, and bounded retry overrides.
-- **MCP capability governance**: discover target tools, approve capabilities, and grant them through tenant, workspace, and caller-instance assignments.
-- **Data permission enforcement**: narrow `dataScopes` across capability, tenant entitlement, workspace assignment, and instance assignment boundaries.
-- **AI-friendly permission operations**: draft tenant-scoped permission package changes from administrator intent, preview allow/deny outcomes, run approval-required packages from the browser, apply them through the existing grant chain, and review structured application records.
-- **Runtime evidence**: record traces, audit events, metrics, upstream attempts, effective data scopes, and deny reasons.
-- **Tenant Permission Console**: inspect each tenant's effective access profile, grant chain, invalid scope rows, and recent trace evidence.
+- **Tenant-first governance / 租户优先治理**: register a three-level tenant tree and scope management views by tenant subtree. 注册三级租户树，并按租户子树限定管理视图。
+- **Agent and target registry / Agent 与目标注册**: manage caller agents, MCP targets, OpenAPI services, webhooks, credentials, and short-lived Agent Keys. 管理调用方 Agent、MCP 目标、OpenAPI 服务、Webhook、凭据和短期 Agent Key。
+- **Route policy controls / 路由策略控制**: allow or deny MCP/OpenAPI routes with priority, wildcard matching, and bounded retry overrides. 通过优先级、通配匹配和有界重试覆盖来允许或拒绝 MCP/OpenAPI 路由。
+- **Capability governance / 能力治理**: discover target tools, approve capabilities, and grant them through tenant, workspace, and caller-instance assignments. 发现目标工具，审批能力，并通过租户、工作区和调用方实例分配进行授权。
+- **Data permission enforcement / 数据权限控制**: narrow `dataScopes` across capability, tenant entitlement, workspace assignment, and instance assignment boundaries. 在能力、租户授权、工作区分配和实例分配边界上逐层收敛 `dataScopes`。
+- **AI-friendly permission operations / AI 友好的权限运营**: draft tenant-scoped permission package changes from administrator intent, preview allow/deny outcomes, run approval-required packages, apply them through the grant chain, and review structured application records. 从管理员意图生成租户范围的权限包草案，预览允许/拒绝结果，运行需审批权限包，通过授权链落地，并查看结构化应用记录。
+- **Approval and evidence / 审批与证据**: expire and consume approval requests, record applied package evidence, and keep audit trails for every privileged permission change. 对审批请求设置过期和一次性消费，记录权限包应用证据，并为高风险权限变更保留审计链。
+- **Runtime evidence / 运行时证据**: record traces, audit events, metrics, upstream attempts, effective data scopes, and deny reasons. 记录 trace、审计事件、指标、上游尝试、有效数据范围和拒绝原因。
+- **Tenant Permission Console / 租户权限控制台**: inspect each tenant's effective access profile, grant chain, invalid scope rows, and recent trace evidence. 查看每个租户的有效访问画像、授权链、无效范围行和近期运行证据。
 
 ## Core Model
 

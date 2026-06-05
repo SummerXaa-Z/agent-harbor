@@ -27,6 +27,11 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Added `make ai-admin-browser-journey` to start the local browser stack, verify subject-header CORS, and run the approval-required journey as a release-candidate gate.
 - Added `make production-hardening` and a CI gate to verify admin-key enforcement, permission-package and management MCP protection, default private-upstream rejection, and public MCP endpoint registration before release-readiness claims.
 
+### Changed
+
+- Reframed README, roadmap, and the v0.2.0 AI Admin journey note in English and Simplified Chinese around tenant-first access governance and AI-friendly permission operations instead of generic MCP gateway positioning.
+- 将 README、路线图和 v0.2.0 AI Admin 用户旅程说明改为中英双语，并把产品叙事收敛到租户优先访问治理与 AI 友好权限运营，而不是通用 MCP Gateway 定位。
+
 ## [0.1.0] - 2026-06-03
 
 ### Added

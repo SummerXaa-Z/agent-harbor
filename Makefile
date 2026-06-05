@@ -19,10 +19,11 @@ SCENARIO_SCRIPTS := \
 	scripts/scenario-data-permission-enforcement.sh \
 	scripts/scenario-tenant-hierarchy.sh \
 	scripts/scenario-permission-package-approval.sh \
+	scripts/scenario-ai-admin-browser-journey.sh \
 	scripts/demo.sh \
 	scripts/scenario-tenant-access-profile.sh
 
-.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp demo core-journey scenario-permission-package-approval scenario-all
+.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp demo core-journey scenario-permission-package-approval ai-admin-browser-journey scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -47,6 +48,7 @@ help:
 	@printf '  make demo                  Start API, mock MCP, and web console for first-run evaluation\n'
 	@printf '  make core-journey          Run the 10-minute local core journey scenario\n'
 	@printf '  make scenario-permission-package-approval Run the local approval-required permission package scenario\n'
+	@printf '  make ai-admin-browser-journey Run the browser-facing AI Admin approval journey release gate\n'
 	@printf '  make scenario-all          Run all scenarios against BASE_URL\n'
 
 check: gofmt-check test vet build makefile-targets-test frontend-test frontend-build scenario-scripts-lint github-config-lint
@@ -115,6 +117,9 @@ core-journey:
 
 scenario-permission-package-approval:
 	bash scripts/scenario-permission-package-approval.sh
+
+ai-admin-browser-journey: frontend-deps
+	bash scripts/scenario-ai-admin-browser-journey.sh
 
 scenario-all:
 	bash scripts/scenario-all.sh

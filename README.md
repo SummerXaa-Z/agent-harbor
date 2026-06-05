@@ -109,6 +109,14 @@ make scenario-permission-package-approval
 
 The scenario starts `scripts/mock-mcp-server.py` automatically and uses the mock `update_ticket` write tool to exercise the approval-required gate.
 
+For release-candidate validation of the browser-facing path, run:
+
+```bash
+make ai-admin-browser-journey
+```
+
+This starts the API, Mock MCP, and web console, verifies browser CORS allows `X-AgentHarbor-Subject-Id`, then runs the approval-required package scenario against those services.
+
 ## Web Console
 
 For the first browser evaluation, run:
@@ -120,6 +128,8 @@ make demo
 Then open `http://127.0.0.1:5174/` and use the Cockpit's **Core Journey Workbench**. The workbench checks API and Mock MCP readiness before enabling the run button. It also includes a **Reset demo session** action that clears the current browser session state and filters without deleting backend data; each run uses fresh `ui-core-*` identifiers so historical evidence remains inspectable.
 
 The **AI Admin** workspace includes a live approval journey workbench for the approval-required **Support ticket triage** path. Each run uses fresh `ui-approval-*` identifiers, applies the package through live APIs, sends runtime MCP calls with `X-AgentHarbor-Subject-Id`, and surfaces the run id, subject id, application record, tenant access profile, traces, and applied audit event in the console.
+
+The AI Admin workbench also shows first-run readiness for the API, Mock MCP, browser subject-header CORS, local private-upstream mode, and current data source before the live journey runs.
 
 `make demo` starts:
 

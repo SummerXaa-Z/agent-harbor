@@ -31,6 +31,7 @@ import {
   callMcpRpc,
   checkApiHealth,
   checkMockMcpHealth,
+  checkSubjectHeaderCors,
   createAgent,
   createAgentKey,
   createInstanceAssignment,
@@ -102,6 +103,14 @@ import {
   type AiAdminApprovalJourneyStep,
   type AiAdminApprovalJourneyStepStatus
 } from "./aiAdminApprovalJourney";
+import {
+  aiAdminApprovalReadinessCanRun,
+  aiAdminApprovalReadinessRows,
+  defaultAiAdminApprovalReadiness,
+  type AiAdminApprovalReadinessRow,
+  type AiAdminApprovalReadinessState,
+  type AiAdminApprovalReadinessStatus
+} from "./aiAdminApprovalReadiness";
 import {
   createPermissionPackageDraft,
   permissionPackageTemplates,
@@ -340,6 +349,10 @@ function App() {
   const [aiAdminApprovalJourneyResult, setAiAdminApprovalJourneyResult] =
     useState<AiAdminApprovalJourneyResult | null>(null);
   const [aiAdminApprovalAuditEvent, setAiAdminApprovalAuditEvent] = useState<AuditEvent | null>(null);
+  const [aiAdminApprovalReadiness, setAiAdminApprovalReadiness] =
+    useState<AiAdminApprovalReadinessState>(defaultAiAdminApprovalReadiness);
+  const [aiAdminApprovalReadinessChecking, setAiAdminApprovalReadinessChecking] = useState(false);
+  const [aiAdminApprovalReadinessMessage, setAiAdminApprovalReadinessMessage] = useState("");
   const t = useMemo(() => createTranslator(language), [language]);
 
   useEffect(() => {
@@ -370,6 +383,7 @@ function App() {
   useEffect(() => {
     if (activeNav === "ai-admin") {
       void refreshAiAdminCatalog();
+      void refreshAiAdminApprovalReadiness();
     }
   }, [activeNav]);
 
@@ -531,6 +545,53 @@ function App() {
       setCoreJourneyPreflightMessage(tx(t, "message.coreJourneyPreflightFailed", { detail: detail || "unknown" }));
     }
     setCoreJourneyPreflightChecking(false);
+  }
+
+  async function checkAiAdminApprovalReadiness(config: AiAdminApprovalJourneyConfig) {
+    const [apiHealth, mockMcpHealth, subjectHeaderHealth] = await Promise.all([
+      checkApiHealth(),
+      checkMockMcpHealth(mockMcpHealthUrlFromEndpoint(config.mcpEndpoint)),
+      checkSubjectHeaderCors()
+    ]);
+    const nextReadiness: AiAdminApprovalReadinessState = {
+      api: apiHealth.status === "ok" ? "ok" : "error",
+      dataSource: data?.loadedFromApi ? "ok" : "warning",
+      mockMcp: mockMcpHealth.status === "ok" ? "ok" : "error",
+      privateUpstreams: "warning",
+      subjectHeader: subjectHeaderHealth.status === "ok" ? "ok" : "error"
+    };
+    const detail = [
+      apiHealth.status === "ok" ? "" : `API ${apiHealth.message}`,
+      mockMcpHealth.status === "ok" ? "" : `Mock MCP ${mockMcpHealth.message}`,
+      subjectHeaderHealth.status === "ok" ? "" : `Subject header ${subjectHeaderHealth.message}`
+    ].filter(Boolean).join(" · ");
+    return {
+      detail,
+      message: aiAdminApprovalReadinessCanRun(nextReadiness)
+        ? t("message.aiAdminReadinessReady")
+        : tx(t, "message.aiAdminReadinessFailed", { detail: detail || "unknown" }),
+      state: nextReadiness
+    };
+  }
+
+  async function refreshAiAdminApprovalReadiness(config = aiAdminApprovalJourneyConfig) {
+    setAiAdminApprovalReadinessChecking(true);
+    setAiAdminApprovalReadinessMessage(t("message.aiAdminReadinessChecking"));
+    setAiAdminApprovalReadiness((current) => ({
+      ...current,
+      api: "pending",
+      dataSource: data?.loadedFromApi ? "ok" : "pending",
+      mockMcp: "pending",
+      subjectHeader: "pending"
+    }));
+    try {
+      const result = await checkAiAdminApprovalReadiness(config);
+      setAiAdminApprovalReadiness(result.state);
+      setAiAdminApprovalReadinessMessage(result.message);
+      return result;
+    } finally {
+      setAiAdminApprovalReadinessChecking(false);
+    }
   }
 
   async function resetCoreJourneySession() {
@@ -762,15 +823,9 @@ function App() {
     setAiAdminApprovalJourneyMessage(t("message.aiAdminApprovalJourneyRunning"));
     setAiAdminMessage("");
     try {
-      const [apiHealth, mockMcpHealth] = await Promise.all([
-        checkApiHealth(),
-        checkMockMcpHealth(mockMcpHealthUrlFromEndpoint(nextConfig.mcpEndpoint))
-      ]);
-      if (apiHealth.status !== "ok" || mockMcpHealth.status !== "ok") {
-        const detail = [
-          apiHealth.status === "ok" ? "" : `API ${apiHealth.message}`,
-          mockMcpHealth.status === "ok" ? "" : `Mock MCP ${mockMcpHealth.message}`
-        ].filter(Boolean).join(" · ");
+      const readinessResult = await refreshAiAdminApprovalReadiness(nextConfig);
+      if (!aiAdminApprovalReadinessCanRun(readinessResult.state)) {
+        const detail = readinessResult.detail;
         throw new Error(tx(t, "message.aiAdminApprovalJourneyPreflightFailed", { detail: detail || "unknown" }));
       }
 
@@ -1711,6 +1766,9 @@ function App() {
         approvalJourneyMessage={aiAdminApprovalJourneyMessage}
         approvalJourneyResult={aiAdminApprovalJourneyResult}
         approvalJourneyRunning={aiAdminApprovalJourneyRunning}
+        approvalReadiness={aiAdminApprovalReadiness}
+        approvalReadinessChecking={aiAdminApprovalReadinessChecking}
+        approvalReadinessMessage={aiAdminApprovalReadinessMessage}
         approvalRequest={aiAdminApprovalRequest}
         applying={aiAdminApplying}
         draft={aiAdminDraft}
@@ -1728,6 +1786,7 @@ function App() {
           setAiAdminApprovalRequests([]);
         }}
         onCreateApprovalRequest={() => void createAiAdminApprovalRequest()}
+        onRefreshApprovalReadiness={() => void refreshAiAdminApprovalReadiness()}
         onRejectApprovalRequest={() => void rejectAiAdminApprovalRequest()}
         onRunApprovalJourney={() => void runAiAdminApprovalJourney()}
         templates={aiAdminTemplates}
@@ -2195,6 +2254,9 @@ function AiAdminPermissionWorkbench({
   approvalJourneyMessage,
   approvalJourneyResult,
   approvalJourneyRunning,
+  approvalReadiness,
+  approvalReadinessChecking,
+  approvalReadinessMessage,
   approvalRequest,
   applying,
   draft,
@@ -2205,6 +2267,7 @@ function AiAdminPermissionWorkbench({
   onApproveApprovalRequest,
   onChange,
   onCreateApprovalRequest,
+  onRefreshApprovalReadiness,
   onRejectApprovalRequest,
   onRunApprovalJourney,
   templates,
@@ -2219,6 +2282,9 @@ function AiAdminPermissionWorkbench({
   approvalJourneyMessage: string;
   approvalJourneyResult: AiAdminApprovalJourneyResult | null;
   approvalJourneyRunning: boolean;
+  approvalReadiness: AiAdminApprovalReadinessState;
+  approvalReadinessChecking: boolean;
+  approvalReadinessMessage: string;
   approvalRequest: PermissionPackageApprovalRequest | null;
   applying: boolean;
   draft: PermissionPackageDraft;
@@ -2229,6 +2295,7 @@ function AiAdminPermissionWorkbench({
   onApproveApprovalRequest: () => void;
   onChange: (form: PermissionPackageDraftInput) => void;
   onCreateApprovalRequest: () => void;
+  onRefreshApprovalReadiness: () => void;
   onRejectApprovalRequest: () => void;
   onRunApprovalJourney: () => void;
   templates: PermissionPackageTemplate[];
@@ -2272,6 +2339,25 @@ function AiAdminPermissionWorkbench({
             <Workflow size={14} />
             {approvalJourneyRunning ? t("action.runningApprovalJourney") : t("action.runApprovalJourney")}
           </button>
+        </div>
+        <div className="ai-admin-readiness">
+          <div className="core-journey-preflight-header">
+            <div>
+              <strong>{t("section.aiAdminReadiness")}</strong>
+              {approvalReadinessMessage ? <span>{approvalReadinessMessage}</span> : null}
+            </div>
+            <div className="core-journey-preflight-actions">
+              <button className="secondary-button" disabled={approvalJourneyRunning || approvalReadinessChecking} onClick={onRefreshApprovalReadiness} type="button">
+                <RefreshCw size={14} />
+                {approvalReadinessChecking ? t("action.checkingApprovalReadiness") : t("action.checkApprovalReadiness")}
+              </button>
+            </div>
+          </div>
+          <div className="ai-admin-readiness-grid">
+            {aiAdminApprovalReadinessRows(approvalReadiness).map((row) => (
+              <AiAdminApprovalReadinessRow key={row.key} row={row} t={t} />
+            ))}
+          </div>
         </div>
         <div className="ai-admin-journey-result">
           <strong>{t("section.aiAdminApprovalJourney")}</strong>
@@ -2610,6 +2696,20 @@ function AiAdminApprovalJourneyStepRow({ step, t }: { step: AiAdminApprovalJourn
         <span>{step.detail}</span>
       </div>
       <code>{step.metric}</code>
+    </article>
+  );
+}
+
+function AiAdminApprovalReadinessRow({ row, t }: { row: AiAdminApprovalReadinessRow; t: Translator }) {
+  return (
+    <article className={`ai-admin-readiness-row status-${row.status}`}>
+      <Badge tone={aiAdminApprovalReadinessStatusTone(row.status)}>
+        {aiAdminApprovalReadinessStatusLabel(row.status, t)}
+      </Badge>
+      <div>
+        <strong>{t(row.titleKey)}</strong>
+        <span>{t(row.detailKey)}</span>
+      </div>
     </article>
   );
 }
@@ -4123,6 +4223,20 @@ function aiAdminApprovalJourneyStatusLabel(status: AiAdminApprovalJourneyStepSta
   if (status === "complete") return t("status.stepComplete");
   if (status === "partial") return t("status.stepPartial");
   return t("status.stepMissing");
+}
+
+function aiAdminApprovalReadinessStatusTone(status: AiAdminApprovalReadinessStatus): Tone {
+  if (status === "ok") return "success";
+  if (status === "warning") return "warning";
+  if (status === "error") return "danger";
+  return "neutral";
+}
+
+function aiAdminApprovalReadinessStatusLabel(status: AiAdminApprovalReadinessStatus, t: Translator) {
+  if (status === "ok") return t("status.preflightOk");
+  if (status === "warning") return t("status.preflightWarning");
+  if (status === "error") return t("status.preflightError");
+  return t("status.preflightPending");
 }
 
 function preflightTone(status: CoreJourneyPreflightStatus): Tone {

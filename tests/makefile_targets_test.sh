@@ -24,3 +24,4 @@ assert_target_depends_on() {
 assert_target_depends_on "frontend-test" "frontend-deps"
 assert_target_depends_on "frontend-build" "frontend-deps"
 assert_target_depends_on "demo" "frontend-deps"
+assert_target_depends_on "ai-admin-browser-journey" "frontend-deps"

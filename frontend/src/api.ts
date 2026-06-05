@@ -15,6 +15,12 @@ import {
 } from './data'
 import { normalizeAccessProfileFilters } from './accessProfile'
 import type {
+  PermissionPackageApplyResult,
+  PermissionPackageDraft,
+  PermissionPackageDraftInput,
+  PermissionPackageTemplate,
+} from './permissionPackages'
+import type {
   AccessGrant,
   AccessProfileFilters,
   Agent,
@@ -98,7 +104,7 @@ interface RequestOptions {
   signal?: AbortSignal
 }
 
-class ApiRequestError extends Error {
+export class ApiRequestError extends Error {
   constructor(
     readonly status: number,
     message: string,
@@ -166,6 +172,10 @@ function isFetchNetworkError(error: unknown): boolean {
     message.includes('networkerror') ||
     message.includes('network request failed')
   )
+}
+
+export function isApiCompatibilityFallbackError(error: unknown): boolean {
+  return isFetchNetworkError(error) || (error instanceof ApiRequestError && error.status === 404)
 }
 
 export async function checkApiHealth(signal?: AbortSignal): Promise<HealthCheckResult> {
@@ -409,6 +419,28 @@ export async function fetchCapabilities(
     workspaceId: scope?.workspaceId,
   })
   return request<Capability[]>(`/api/v1/capabilities${query}`, { adminKey, signal })
+}
+
+export async function fetchPermissionPackageTemplates(
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<PermissionPackageTemplate[]> {
+  return request<PermissionPackageTemplate[]>('/api/v1/permission-packages/templates', { adminKey, signal })
+}
+
+export async function createPermissionPackageDraftFromApi(
+  body: PermissionPackageDraftInput,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<PermissionPackageDraft> {
+  return request<PermissionPackageDraft>('/api/v1/permission-packages/drafts', { adminKey, body, signal })
+}
+
+export async function applyPermissionPackage(
+  body: PermissionPackageDraftInput,
+  adminKey?: string,
+): Promise<PermissionPackageApplyResult> {
+  return request<PermissionPackageApplyResult>('/api/v1/permission-packages:apply', { adminKey, body })
 }
 
 export async function fetchTenantEntitlements(

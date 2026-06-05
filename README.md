@@ -15,6 +15,7 @@ AgentHarbor is in developer preview. It is ready for local evaluation, design fe
 - **Route policy controls**: allow or deny MCP/OpenAPI routes with priority, wildcard matching, and bounded retry overrides.
 - **MCP capability governance**: discover target tools, approve capabilities, and grant them through tenant, workspace, and caller-instance assignments.
 - **Data permission enforcement**: narrow `dataScopes` across capability, tenant entitlement, workspace assignment, and instance assignment boundaries.
+- **AI-friendly permission operations**: draft tenant-scoped permission package changes from administrator intent, preview allow/deny outcomes, and apply them through the existing grant chain.
 - **Runtime evidence**: record traces, audit events, metrics, upstream attempts, effective data scopes, and deny reasons.
 - **Tenant Permission Console**: inspect each tenant's effective access profile, grant chain, invalid scope rows, and recent trace evidence.
 
@@ -125,6 +126,8 @@ pnpm dev
 The console reads `VITE_API_BASE`; if unset, it uses `http://127.0.0.1:9090`. When the backend is unavailable during local development, the UI falls back to sample data so the console remains navigable.
 
 The Core Journey Workbench creates a fresh tenant tree, caller, MCP target, scoped capability grant chain, allowed call, denied call, and tenant access profile evidence through the real API. The core console journey supports English and Simplified Chinese. The browser language is used on first load, and the visible `中文` / `EN` toggle persists the operator's choice locally.
+
+The console also includes an **AI Admin** workspace for the v0.2.0 permission-package journey. It lets an administrator describe an access request, select a deterministic permission package template, preview allow/deny simulation rows, apply the package through the backend permission-package API, and then inspect the refreshed tenant access profile. See [the v0.2.0 journey note](docs/product/0.2.0-ai-admin-permission-journey.md).
 
 ## Runtime Configuration
 
@@ -244,6 +247,9 @@ ADMIN_KEY=local-admin-key \
 - `POST /api/v1/targets/{targetId}/capabilities:refresh`
 - `GET /api/v1/capabilities?tenantId=&workspaceId=&targetId=&status=`
 - `PATCH /api/v1/capabilities/{id}`
+- `GET /api/v1/permission-packages/templates`
+- `POST /api/v1/permission-packages/drafts`
+- `POST /api/v1/permission-packages:apply`
 - `POST /api/v1/tenant-entitlements`
 - `GET /api/v1/tenant-entitlements?tenantId=&workspaceId=&targetId=&capabilityId=`
 - `POST /api/v1/workspace-assignments`

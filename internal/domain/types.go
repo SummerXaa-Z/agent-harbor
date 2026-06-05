@@ -384,6 +384,70 @@ type CreateInstanceAssignmentRequest struct {
 	Status                PolicyStatus `json:"status"`
 }
 
+type PermissionPackageDecision string
+
+const (
+	PermissionPackageDecisionAllow PermissionPackageDecision = "allow"
+	PermissionPackageDecisionDeny  PermissionPackageDecision = "deny"
+)
+
+type PermissionPackageTemplate struct {
+	ID                   string                           `json:"id"`
+	Name                 string                           `json:"name"`
+	Summary              string                           `json:"summary"`
+	AllowedActions       []CapabilityAction               `json:"allowedActions"`
+	BlockedActions       []CapabilityAction               `json:"blockedActions"`
+	BlockedRisks         []CapabilityRisk                 `json:"blockedRisks"`
+	BlockedSensitivities []CapabilitySensitivity          `json:"blockedSensitivities"`
+	DefaultDataDomain    string                           `json:"defaultDataDomain"`
+	Guardrails           []PermissionPackageSimulationRow `json:"guardrails"`
+}
+
+type PermissionPackageDraftRequest struct {
+	CallerInstanceID string `json:"callerInstanceId"`
+	Region           string `json:"region"`
+	RequestText      string `json:"requestText"`
+	SubjectSelector  string `json:"subjectSelector"`
+	TargetID         string `json:"targetId"`
+	TemplateID       string `json:"templateId"`
+	TenantID         string `json:"tenantId"`
+	WorkspaceID      string `json:"workspaceId"`
+}
+
+type PermissionPackageDraft struct {
+	ID                  string                           `json:"id"`
+	Input               PermissionPackageDraftRequest    `json:"input"`
+	Template            PermissionPackageTemplate        `json:"template"`
+	AllowedCapabilities []Capability                     `json:"allowedCapabilities"`
+	BlockedCapabilities []Capability                     `json:"blockedCapabilities"`
+	DataScopes          []DataScope                      `json:"dataScopes"`
+	Readiness           PermissionPackageReadiness       `json:"readiness"`
+	SimulationRows      []PermissionPackageSimulationRow `json:"simulationRows"`
+}
+
+type PermissionPackageReadiness struct {
+	CanApply      bool     `json:"canApply"`
+	MissingFields []string `json:"missingFields"`
+	Warnings      []string `json:"warnings"`
+}
+
+type PermissionPackageSimulationRow struct {
+	ID               string                    `json:"id"`
+	CapabilityID     string                    `json:"capabilityId,omitempty"`
+	CapabilityKey    string                    `json:"capabilityKey"`
+	ExpectedDecision PermissionPackageDecision `json:"expectedDecision"`
+	Reason           string                    `json:"reason"`
+	ReasonKey        string                    `json:"reasonKey,omitempty"`
+	ReasonValues     map[string]string         `json:"reasonValues,omitempty"`
+}
+
+type PermissionPackageApplyResponse struct {
+	Draft                PermissionPackageDraft `json:"draft"`
+	TenantEntitlements   []TenantEntitlement    `json:"tenantEntitlements"`
+	WorkspaceAssignments []WorkspaceAssignment  `json:"workspaceAssignments"`
+	InstanceAssignments  []InstanceAssignment   `json:"instanceAssignments"`
+}
+
 type CapabilityAccessDecision struct {
 	Allowed               bool        `json:"allowed"`
 	Source                string      `json:"source"`

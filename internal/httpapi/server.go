@@ -24,6 +24,7 @@ import (
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/contracts"
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
+	"github.com/SummerXaa-Z/agent-harbor/internal/permissionpack"
 	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 	"github.com/SummerXaa-Z/agent-harbor/internal/store"
 )
@@ -124,6 +125,9 @@ func (s *Server) Router() http.Handler {
 			r.Post("/targets/{targetId}/capabilities:refresh", s.refreshTargetCapabilities)
 			r.Get("/capabilities", s.listCapabilities)
 			r.Patch("/capabilities/{id}", s.updateCapability)
+			r.Get("/permission-packages/templates", s.listPermissionPackageTemplates)
+			r.Post("/permission-packages/drafts", s.createPermissionPackageDraft)
+			r.Post("/permission-packages:apply", s.applyPermissionPackage)
 			r.Post("/tenant-entitlements", s.createTenantEntitlement)
 			r.Get("/tenant-entitlements", s.listTenantEntitlements)
 			r.Post("/workspace-assignments", s.createWorkspaceAssignment)
@@ -1122,6 +1126,152 @@ func (s *Server) updateCapability(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, saved)
+}
+
+func (s *Server) listPermissionPackageTemplates(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, permissionpack.Templates())
+}
+
+func (s *Server) createPermissionPackageDraft(w http.ResponseWriter, r *http.Request) {
+	var req domain.PermissionPackageDraftRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	draft, err := s.buildPermissionPackageDraft(r.Context(), req)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, draft)
+}
+
+func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) {
+	var req domain.PermissionPackageDraftRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	draft, err := s.buildPermissionPackageDraft(r.Context(), req)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !draft.Readiness.CanApply {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "permission package draft is not ready to apply"))
+		return
+	}
+
+	now := s.now()
+	result := domain.PermissionPackageApplyResponse{
+		Draft:                draft,
+		TenantEntitlements:   []domain.TenantEntitlement{},
+		WorkspaceAssignments: []domain.WorkspaceAssignment{},
+		InstanceAssignments:  []domain.InstanceAssignment{},
+	}
+	appliedCapabilityIDs := make([]string, 0, len(draft.AllowedCapabilities))
+	appliedCapabilityKeys := make([]string, 0, len(draft.AllowedCapabilities))
+	tenantEntitlementIDs := make([]string, 0, len(draft.AllowedCapabilities))
+	workspaceAssignmentIDs := make([]string, 0, len(draft.AllowedCapabilities))
+	instanceAssignmentIDs := make([]string, 0, len(draft.AllowedCapabilities))
+
+	for _, capability := range draft.AllowedCapabilities {
+		effectiveScopes, ok := domain.EffectiveDataScopes(capability.DataScopes, draft.DataScopes)
+		if !ok {
+			writeError(w, domain.BadRequest("VALIDATION_FAILED", "permission package dataScopes exceed capability dataScopes"))
+			return
+		}
+		updatedCapability := capability
+		updatedCapability.DiscoveryStatus = domain.CapabilityDiscoveryApproved
+		updatedCapability.DataScopes = effectiveScopes
+		updatedCapability.UpdatedAt = now
+		savedCapability, ok, err := s.repo.UpdateCapability(r.Context(), updatedCapability)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		if !ok {
+			writeError(w, domain.NotFound("capability not found"))
+			return
+		}
+
+		entitlement := domain.TenantEntitlement{
+			ID:           security.NewID("ent"),
+			TenantID:     draft.Input.TenantID,
+			TargetID:     draft.Input.TargetID,
+			CapabilityID: savedCapability.ID,
+			Effect:       domain.PolicyEffectAllow,
+			DataScopes:   effectiveScopes,
+			Status:       domain.PolicyStatusEnabled,
+			Priority:     40,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+		createdEntitlement, err := s.repo.CreateTenantEntitlement(r.Context(), entitlement)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		workspaceAssignment := domain.WorkspaceAssignment{
+			ID:                  security.NewID("wsa"),
+			TenantEntitlementID: createdEntitlement.ID,
+			TenantID:            draft.Input.TenantID,
+			WorkspaceID:         draft.Input.WorkspaceID,
+			Effect:              domain.PolicyEffectAllow,
+			DataScopes:          effectiveScopes,
+			Status:              domain.PolicyStatusEnabled,
+			CreatedAt:           now,
+			UpdatedAt:           now,
+		}
+		createdWorkspaceAssignment, err := s.repo.CreateWorkspaceAssignment(r.Context(), workspaceAssignment)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		instanceAssignment := domain.InstanceAssignment{
+			ID:                    security.NewID("ina"),
+			WorkspaceAssignmentID: createdWorkspaceAssignment.ID,
+			TenantID:              draft.Input.TenantID,
+			WorkspaceID:           draft.Input.WorkspaceID,
+			CallerInstanceID:      draft.Input.CallerInstanceID,
+			SubjectSelector:       draft.Input.SubjectSelector,
+			Effect:                domain.PolicyEffectAllow,
+			DataScopes:            effectiveScopes,
+			Status:                domain.PolicyStatusEnabled,
+			CreatedAt:             now,
+			UpdatedAt:             now,
+		}
+		createdInstanceAssignment, err := s.repo.CreateInstanceAssignment(r.Context(), instanceAssignment)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+
+		result.TenantEntitlements = append(result.TenantEntitlements, createdEntitlement)
+		result.WorkspaceAssignments = append(result.WorkspaceAssignments, createdWorkspaceAssignment)
+		result.InstanceAssignments = append(result.InstanceAssignments, createdInstanceAssignment)
+		appliedCapabilityIDs = append(appliedCapabilityIDs, savedCapability.ID)
+		appliedCapabilityKeys = append(appliedCapabilityKeys, savedCapability.Key)
+		tenantEntitlementIDs = append(tenantEntitlementIDs, createdEntitlement.ID)
+		workspaceAssignmentIDs = append(workspaceAssignmentIDs, createdWorkspaceAssignment.ID)
+		instanceAssignmentIDs = append(instanceAssignmentIDs, createdInstanceAssignment.ID)
+	}
+
+	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, draft.Input.TenantID, draft.Input.WorkspaceID, "permission_package.applied", "permission_package", draft.ID, "Permission package applied", map[string]any{
+		"templateId":             draft.Template.ID,
+		"targetId":               draft.Input.TargetID,
+		"callerInstanceId":       draft.Input.CallerInstanceID,
+		"subjectSelector":        draft.Input.SubjectSelector,
+		"allowedCapabilityIds":   appliedCapabilityIDs,
+		"allowedCapabilityKeys":  appliedCapabilityKeys,
+		"tenantEntitlementIds":   tenantEntitlementIDs,
+		"workspaceAssignmentIds": workspaceAssignmentIDs,
+		"instanceAssignmentIds":  instanceAssignmentIDs,
+	})); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
 }
 
 func (s *Server) createTenantEntitlement(w http.ResponseWriter, r *http.Request) {
@@ -2828,6 +2978,64 @@ func auditLimitFromRequest(r *http.Request) (int, error) {
 		return 0, domain.BadRequest("VALIDATION_FAILED", "limit must be between 1 and 500")
 	}
 	return limit, nil
+}
+
+func (s *Server) buildPermissionPackageDraft(ctx context.Context, req domain.PermissionPackageDraftRequest) (domain.PermissionPackageDraft, error) {
+	req = trimPermissionPackageDraftRequest(req)
+	if req.TargetID != "" {
+		target, ok, err := s.repo.GetAgent(ctx, req.TargetID)
+		if err != nil {
+			return domain.PermissionPackageDraft{}, err
+		}
+		if !ok {
+			return domain.PermissionPackageDraft{}, domain.NotFound("target agent not found")
+		}
+		if req.TenantID != "" {
+			allowedTenant, err := s.tenantCanReceiveTargetEntitlement(ctx, target.TenantID, req.TenantID)
+			if err != nil {
+				return domain.PermissionPackageDraft{}, err
+			}
+			if !allowedTenant {
+				return domain.PermissionPackageDraft{}, domain.BadRequest("VALIDATION_FAILED", "tenantId must match target tenantId or be a descendant tenant")
+			}
+		}
+	}
+	if req.CallerInstanceID != "" {
+		caller, ok, err := s.repo.GetAgent(ctx, req.CallerInstanceID)
+		if err != nil {
+			return domain.PermissionPackageDraft{}, err
+		}
+		if !ok {
+			return domain.PermissionPackageDraft{}, domain.NotFound("caller instance not found")
+		}
+		if req.TenantID != "" && caller.TenantID != req.TenantID {
+			return domain.PermissionPackageDraft{}, domain.BadRequest("VALIDATION_FAILED", "caller instance must match permission package tenantId")
+		}
+		if req.WorkspaceID != "" && caller.WorkspaceID != req.WorkspaceID {
+			return domain.PermissionPackageDraft{}, domain.BadRequest("VALIDATION_FAILED", "caller instance must match permission package workspaceId")
+		}
+	}
+	capabilities := []domain.Capability{}
+	if req.TargetID != "" {
+		rows, err := s.repo.ListCapabilities(ctx, store.CapabilityFilter{TargetID: req.TargetID})
+		if err != nil {
+			return domain.PermissionPackageDraft{}, err
+		}
+		capabilities = rows
+	}
+	return permissionpack.BuildDraft(req, capabilities)
+}
+
+func trimPermissionPackageDraftRequest(req domain.PermissionPackageDraftRequest) domain.PermissionPackageDraftRequest {
+	req.CallerInstanceID = strings.TrimSpace(req.CallerInstanceID)
+	req.Region = strings.TrimSpace(req.Region)
+	req.RequestText = strings.TrimSpace(req.RequestText)
+	req.SubjectSelector = strings.TrimSpace(req.SubjectSelector)
+	req.TargetID = strings.TrimSpace(req.TargetID)
+	req.TemplateID = strings.TrimSpace(req.TemplateID)
+	req.TenantID = strings.TrimSpace(req.TenantID)
+	req.WorkspaceID = strings.TrimSpace(req.WorkspaceID)
+	return req
 }
 
 func (s *Server) managementAuditEvent(r *http.Request, tenantID string, workspaceID string, action string, resourceType string, resourceID string, summary string, metadata map[string]any) domain.AuditEvent {

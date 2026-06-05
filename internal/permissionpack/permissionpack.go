@@ -7,6 +7,8 @@ import (
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
 )
 
+const policyGateVersion = 1
+
 var templates = []domain.PermissionPackageTemplate{
 	{
 		ID:                   "sales-readonly",
@@ -126,6 +128,7 @@ func BuildDraft(input domain.PermissionPackageDraftRequest, capabilities []domai
 	}
 	dataScopes := buildDataScopes(input, template, allowedCapabilities)
 	readiness := buildReadiness(input, allowedCapabilities, dataScopes)
+	policyGate := buildPolicyGate(allowedCapabilities)
 	return domain.PermissionPackageDraft{
 		ID:                  draftID(input),
 		Input:               input,
@@ -134,6 +137,7 @@ func BuildDraft(input domain.PermissionPackageDraftRequest, capabilities []domai
 		BlockedCapabilities: cloneCapabilities(blockedCapabilities),
 		DataScopes:          dataScopes,
 		Readiness:           readiness,
+		PolicyGate:          policyGate,
 		SimulationRows:      buildSimulationRows(allowedCapabilities, blockedCapabilities, template),
 	}, nil
 }
@@ -229,6 +233,95 @@ func buildReadiness(input domain.PermissionPackageDraftRequest, allowedCapabilit
 		CanApply:      len(missingFields) == 0 && len(warnings) == 0,
 		MissingFields: missingFields,
 		Warnings:      warnings,
+	}
+}
+
+func buildPolicyGate(allowedCapabilities []domain.Capability) domain.PermissionPackagePolicyGate {
+	reasons := []domain.PermissionPackagePolicyReason{}
+	for _, capability := range allowedCapabilities {
+		if actionRequiresApproval(capability.Action) {
+			reasons = append(reasons, policyReason(
+				capability,
+				"action",
+				"high",
+				fmt.Sprintf("Capability %s uses %s and requires approval before direct apply.", capability.Key, capability.Action),
+				"permissionPolicy.actionApprovalRequired",
+				map[string]string{
+					"action":     string(capability.Action),
+					"capability": capability.Key,
+				},
+			))
+		}
+		if capability.Action == domain.CapabilityActionExecute && capability.RiskLevel != domain.CapabilityRiskLow {
+			reasons = append(reasons, policyReason(
+				capability,
+				"execute-risk",
+				"medium",
+				fmt.Sprintf("Capability %s executes work with %s risk and requires approval.", capability.Key, capability.RiskLevel),
+				"permissionPolicy.executeApprovalRequired",
+				map[string]string{
+					"capability": capability.Key,
+					"risk":       string(capability.RiskLevel),
+				},
+			))
+		}
+		if capability.RiskLevel == domain.CapabilityRiskHigh || capability.RiskLevel == domain.CapabilityRiskCritical {
+			reasons = append(reasons, policyReason(
+				capability,
+				"risk",
+				"high",
+				fmt.Sprintf("Capability %s is %s risk and requires approval.", capability.Key, capability.RiskLevel),
+				"permissionPolicy.riskApprovalRequired",
+				map[string]string{
+					"capability": capability.Key,
+					"risk":       string(capability.RiskLevel),
+				},
+			))
+		}
+		if capability.Sensitivity == domain.CapabilitySensitivityConfidential || capability.Sensitivity == domain.CapabilitySensitivityRestricted {
+			reasons = append(reasons, policyReason(
+				capability,
+				"sensitivity",
+				"high",
+				fmt.Sprintf("Capability %s touches %s data and requires approval.", capability.Key, capability.Sensitivity),
+				"permissionPolicy.sensitivityApprovalRequired",
+				map[string]string{
+					"capability":  capability.Key,
+					"sensitivity": string(capability.Sensitivity),
+				},
+			))
+		}
+	}
+	gate := domain.PermissionPackagePolicyGate{
+		Decision:         domain.PermissionPackagePolicyDecisionAllow,
+		CanApplyDirectly: true,
+		PolicyVersion:    policyGateVersion,
+		Reasons:          reasons,
+	}
+	if len(reasons) > 0 {
+		gate.Decision = domain.PermissionPackagePolicyDecisionApprovalRequired
+		gate.CanApplyDirectly = false
+		gate.NextActions = []string{"Request approval before applying this permission package."}
+	}
+	return gate
+}
+
+func actionRequiresApproval(action domain.CapabilityAction) bool {
+	return action == domain.CapabilityActionWrite ||
+		action == domain.CapabilityActionExport ||
+		action == domain.CapabilityActionDelete ||
+		action == domain.CapabilityActionAdmin
+}
+
+func policyReason(capability domain.Capability, reasonID string, severity string, message string, reasonKey string, reasonValues map[string]string) domain.PermissionPackagePolicyReason {
+	return domain.PermissionPackagePolicyReason{
+		ID:            fmt.Sprintf("policy:%s:%s", capability.ID, reasonID),
+		CapabilityID:  capability.ID,
+		CapabilityKey: capability.Key,
+		Severity:      severity,
+		Message:       message,
+		ReasonKey:     reasonKey,
+		ReasonValues:  reasonValues,
 	}
 }
 

@@ -1622,6 +1622,41 @@ td code {
   white-space: nowrap;
 }
 
+.permission-policy-gate {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #dfe6ec;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.permission-policy-gate.is-approval {
+  border-color: #f0d399;
+  background: #fffdf7;
+}
+
+.permission-policy-gate > span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.permission-policy-gate ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 17px;
+  color: #7b5a12;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.permission-policy-gate li {
+  overflow-wrap: anywhere;
+}
+
 .permission-actions {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

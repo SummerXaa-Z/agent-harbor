@@ -109,6 +109,7 @@ type managementMCPExplainPermissionPackageResult struct {
 	DraftID                string                                  `json:"draftId"`
 	Input                  domain.PermissionPackageDraftRequest    `json:"input"`
 	Readiness              domain.PermissionPackageReadiness       `json:"readiness"`
+	PolicyGate             domain.PermissionPackagePolicyGate      `json:"policyGate"`
 	AllowedCapabilityCount int                                     `json:"allowedCapabilityCount"`
 	BlockedCapabilityCount int                                     `json:"blockedCapabilityCount"`
 	BlockedSimulationRows  []domain.PermissionPackageSimulationRow `json:"blockedSimulationRows"`
@@ -383,6 +384,9 @@ func (s *Server) explainManagementMCPPermissionPackageDraft(r *http.Request, arg
 	outcome := "blocked"
 	if draft.Readiness.CanApply {
 		outcome = "ready"
+		if !draft.PolicyGate.CanApplyDirectly {
+			outcome = "approval_required"
+		}
 	}
 	blockedRows := managementMCPBlockedSimulationRows(draft.SimulationRows)
 	result := managementMCPExplainPermissionPackageResult{
@@ -391,6 +395,7 @@ func (s *Server) explainManagementMCPPermissionPackageDraft(r *http.Request, arg
 		DraftID:                draft.ID,
 		Input:                  draft.Input,
 		Readiness:              draft.Readiness,
+		PolicyGate:             draft.PolicyGate,
 		AllowedCapabilityCount: len(draft.AllowedCapabilities),
 		BlockedCapabilityCount: len(draft.BlockedCapabilities),
 		BlockedSimulationRows:  blockedRows,
@@ -412,6 +417,9 @@ func managementMCPBlockedSimulationRows(rows []domain.PermissionPackageSimulatio
 
 func managementMCPPermissionPackageSummary(draft domain.PermissionPackageDraft) string {
 	if draft.Readiness.CanApply {
+		if !draft.PolicyGate.CanApplyDirectly {
+			return fmt.Sprintf("Permission package %s requires approval before apply with %d policy gate reasons.", draft.Template.ID, len(draft.PolicyGate.Reasons))
+		}
 		return fmt.Sprintf("Permission package %s is ready to apply with %d allowed capabilities and %d blocked capabilities.", draft.Template.ID, len(draft.AllowedCapabilities), len(draft.BlockedCapabilities))
 	}
 	if len(draft.Readiness.MissingFields) > 0 {
@@ -437,6 +445,13 @@ func managementMCPPermissionPackageNextActions(draft domain.PermissionPackageDra
 			actions = append(actions, "Narrow the requested region or data scope to fit the capability boundary, or pick a capability with the required boundary.")
 		default:
 			actions = append(actions, "Resolve readiness warning: "+warning)
+		}
+	}
+	if draft.Readiness.CanApply && !draft.PolicyGate.CanApplyDirectly {
+		if len(draft.PolicyGate.NextActions) > 0 {
+			actions = append(actions, draft.PolicyGate.NextActions...)
+		} else {
+			actions = append(actions, "Request approval before applying this permission package.")
 		}
 	}
 	if len(blockedRows) > 0 {

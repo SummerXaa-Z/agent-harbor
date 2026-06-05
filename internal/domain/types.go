@@ -391,6 +391,13 @@ const (
 	PermissionPackageDecisionDeny  PermissionPackageDecision = "deny"
 )
 
+type PermissionPackagePolicyDecision string
+
+const (
+	PermissionPackagePolicyDecisionAllow            PermissionPackagePolicyDecision = "allow"
+	PermissionPackagePolicyDecisionApprovalRequired PermissionPackagePolicyDecision = "approval_required"
+)
+
 type PermissionPackageTemplate struct {
 	ID                   string                           `json:"id"`
 	Version              int                              `json:"version"`
@@ -423,6 +430,7 @@ type PermissionPackageDraft struct {
 	BlockedCapabilities []Capability                     `json:"blockedCapabilities"`
 	DataScopes          []DataScope                      `json:"dataScopes"`
 	Readiness           PermissionPackageReadiness       `json:"readiness"`
+	PolicyGate          PermissionPackagePolicyGate      `json:"policyGate"`
 	SimulationRows      []PermissionPackageSimulationRow `json:"simulationRows"`
 }
 
@@ -430,6 +438,24 @@ type PermissionPackageReadiness struct {
 	CanApply      bool     `json:"canApply"`
 	MissingFields []string `json:"missingFields"`
 	Warnings      []string `json:"warnings"`
+}
+
+type PermissionPackagePolicyGate struct {
+	Decision         PermissionPackagePolicyDecision `json:"decision"`
+	CanApplyDirectly bool                            `json:"canApplyDirectly"`
+	PolicyVersion    int                             `json:"policyVersion"`
+	Reasons          []PermissionPackagePolicyReason `json:"reasons"`
+	NextActions      []string                        `json:"nextActions"`
+}
+
+type PermissionPackagePolicyReason struct {
+	ID            string            `json:"id"`
+	CapabilityID  string            `json:"capabilityId,omitempty"`
+	CapabilityKey string            `json:"capabilityKey,omitempty"`
+	Severity      string            `json:"severity"`
+	Message       string            `json:"message"`
+	ReasonKey     string            `json:"reasonKey,omitempty"`
+	ReasonValues  map[string]string `json:"reasonValues,omitempty"`
 }
 
 type PermissionPackageSimulationRow struct {

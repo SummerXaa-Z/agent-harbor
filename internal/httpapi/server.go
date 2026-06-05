@@ -1191,6 +1191,9 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 	if !draft.Readiness.CanApply {
 		return domain.PermissionPackageApplyResponse{}, domain.BadRequest("VALIDATION_FAILED", "permission package draft is not ready to apply")
 	}
+	if !draft.PolicyGate.CanApplyDirectly {
+		return domain.PermissionPackageApplyResponse{}, domain.BadRequest("VALIDATION_FAILED", "permission package requires approval before apply")
+	}
 
 	now := s.now()
 	result := domain.PermissionPackageApplyResponse{

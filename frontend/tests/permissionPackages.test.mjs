@@ -73,6 +73,10 @@ test("sales read-only package drafts allowed reads, blocked exports, and simulat
     }
   ]);
   assert.equal(draft.readiness.canApply, true);
+  assert.equal(draft.policyGate.decision, "allow");
+  assert.equal(draft.policyGate.canApplyDirectly, true);
+  assert.equal(draft.policyGate.policyVersion, 1);
+  assert.equal(draft.policyGate.reasons.length, 0);
   assert.deepEqual(
     draft.simulationRows.map((row) => [row.expectedDecision, row.capabilityKey]),
     [
@@ -101,4 +105,49 @@ test("draft cannot be applied when no allowed capability matches the selected ta
   assert.equal(draft.allowedCapabilities.length, 0);
   assert.equal(draft.readiness.canApply, false);
   assert.match(draft.readiness.warnings.join(" "), /No matching allowed capabilities/);
+});
+
+test("support ticket triage package requires approval for risky allowed writes", () => {
+  const draft = createPermissionPackageDraft(
+    {
+      callerInstanceId: "agt_support_assistant",
+      region: "华东",
+      requestText: "给客服助手开通工单更新权限。",
+      targetId: "agt_crm_mcp",
+      templateId: "support-ticket-triage",
+      tenantId: "tenant-east",
+      workspaceId: "ws-support"
+    },
+    {
+      capabilities: [
+        ...capabilities,
+        {
+          id: "cap_update_ticket",
+          targetId: "agt_crm_mcp",
+          type: "mcp_tool",
+          key: "update_ticket",
+          displayName: "update_ticket",
+          description: "Update support tickets.",
+          action: "write",
+          dataDomains: ["support"],
+          dataScopes: [{ dataDomain: "support", dataset: "tickets", classification: "confidential" }],
+          sensitivity: "confidential",
+          riskLevel: "high",
+          enforcementMode: "gateway",
+          discoveryStatus: "pending_review",
+          version: 1,
+          discoveredAt: now,
+          updatedAt: now
+        }
+      ]
+    }
+  );
+
+  assert.deepEqual(draft.allowedCapabilities.map((capability) => capability.key), ["search_customer", "update_ticket"]);
+  assert.equal(draft.readiness.canApply, true);
+  assert.equal(draft.policyGate.decision, "approval_required");
+  assert.equal(draft.policyGate.canApplyDirectly, false);
+  assert.equal(draft.policyGate.policyVersion, 1);
+  assert.equal(draft.policyGate.reasons.some((reason) => reason.capabilityKey === "update_ticket"), true);
+  assert.match(draft.policyGate.nextActions.join(" "), /approval/i);
 });

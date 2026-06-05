@@ -38,6 +38,15 @@ ADMIN_KEY=local-admin-key make scenario-all
 
 For web console changes, run `make demo` and manually verify that the Cockpit Core Journey Workbench preflight checks pass, the journey can run against the local mock MCP server, and the non-destructive reset returns the browser session to the default demo scope. Confirm the core tenant access journey remains usable in both English and Simplified Chinese, including the language toggle, Tenant Permission Console, capability governance entry point, runtime evidence metrics, and trace evidence labels.
 
+Before declaring v0.2.0 permission-package work or a permission-package release candidate ready, also run the approval-required journey against a local API with private upstreams enabled:
+
+```bash
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
+make scenario-permission-package-approval
+```
+
+This scenario must prove draft, approval request, approval, approved apply, runtime allow/deny, tenant access-profile, permission package application, and applied audit evidence.
+
 ## GitHub Checks
 
 Before merging:

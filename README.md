@@ -83,6 +83,24 @@ make core-journey
 
 The scenario starts `scripts/mock-mcp-server.py` automatically and points AgentHarbor at `http://127.0.0.1:8787/mcp`. The `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` flag is required only for local development scenarios that use loopback or private-network upstreams; do not enable it for production deployments.
 
+## Try the AI Admin Approval Journey
+
+This local scenario proves the v0.2.0 approval-required permission package path: create a three-level tenant tree, register a caller and MCP target, discover read/write/export tools, draft a **Support ticket triage** permission package, create and approve a matching approval request, apply it with `approvalRequestId`, run allowed and denied MCP calls, and verify access-profile, application, approval, trace, and audit evidence.
+
+Terminal 1:
+
+```bash
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
+```
+
+Terminal 2:
+
+```bash
+make scenario-permission-package-approval
+```
+
+The scenario starts `scripts/mock-mcp-server.py` automatically and uses the mock `update_ticket` write tool to exercise the approval-required gate.
+
 ## Web Console
 
 For the first browser evaluation, run:
@@ -127,7 +145,7 @@ The console reads `VITE_API_BASE`; if unset, it uses `http://127.0.0.1:9090`. Wh
 
 The Core Journey Workbench creates a fresh tenant tree, caller, MCP target, scoped capability grant chain, allowed call, denied call, and tenant access profile evidence through the real API. The core console journey supports English and Simplified Chinese. The browser language is used on first load, and the visible `中文` / `EN` toggle persists the operator's choice locally.
 
-The console also includes an **AI Admin** workspace for the v0.2.0 permission-package journey. It lets an administrator describe an access request, select a deterministic permission package template, preview allow/deny simulation rows, apply low-risk packages through the backend permission-package API, request approval for high-risk packages, and then inspect the refreshed tenant access profile. Each draft includes a policy gate: direct apply is allowed for low-risk read-oriented packages, while write, export, admin, high-risk, critical-risk, confidential, or restricted allowed capabilities require an approval request before apply. Approved requests snapshot the draft, template version, scope, allowed capabilities, data scopes, and policy-gate reasons so apply rejects drift before writing permissions. Each successful package application records the template version, draft id, created entitlement and assignment ids, capability ids, data scopes, and approval request id when one was used. See [the v0.2.0 journey note](docs/product/0.2.0-ai-admin-permission-journey.md).
+The console also includes an **AI Admin** workspace for the v0.2.0 permission-package journey. It lets an administrator describe an access request, select a deterministic permission package template, preview allow/deny simulation rows, apply low-risk packages through the backend permission-package API, request approval for high-risk packages, and then inspect the refreshed tenant access profile. Each draft includes a policy gate: direct apply is allowed for low-risk read-oriented packages, while write, export, admin, high-risk, critical-risk, confidential, or restricted allowed capabilities require an approval request before apply. Approved requests snapshot the draft, template version, scope, allowed capabilities, data scopes, and policy-gate reasons so apply rejects drift before writing permissions. Each successful package application records the template version, draft id, created entitlement and assignment ids, capability ids, and data scopes; the applied audit event links the approval request id when one was used. See [the v0.2.0 journey note](docs/product/0.2.0-ai-admin-permission-journey.md).
 
 AgentHarbor also exposes the same workflow as a management MCP endpoint at `POST /api/v1/management/mcp`. Admin agents can call `tools/list` and then use tools such as `draft_permission_package`, `create_permission_package_approval_request`, `list_permission_package_approval_requests`, `approve_permission_package_approval_request`, `reject_permission_package_approval_request`, `apply_permission_package`, `list_permission_package_applications`, `explain_permission_package_draft`, `explain_access_decision`, `get_tenant_access_profile`, `list_agents`, and `list_capabilities`. When `AGENT_HARBOR_ADMIN_KEY` is configured, this endpoint requires `X-Admin-Key` like the rest of the management API.
 
@@ -187,6 +205,13 @@ The core journey has its own script because it intentionally uses a local mock M
 ```bash
 AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
 make core-journey
+```
+
+The approval-required permission package journey also uses the local mock MCP endpoint:
+
+```bash
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
+make scenario-permission-package-approval
 ```
 
 With admin protection enabled:
@@ -251,6 +276,10 @@ ADMIN_KEY=local-admin-key \
 - `PATCH /api/v1/capabilities/{id}`
 - `GET /api/v1/permission-packages/templates`
 - `POST /api/v1/permission-packages/drafts`
+- `POST /api/v1/permission-packages/approval-requests`
+- `GET /api/v1/permission-packages/approval-requests?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&status=&limit=`
+- `POST /api/v1/permission-packages/approval-requests/{id}/approve`
+- `POST /api/v1/permission-packages/approval-requests/{id}/reject`
 - `POST /api/v1/permission-packages:apply`
 - `GET /api/v1/permission-packages/applications?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&limit=`
 - `POST /api/v1/management/mcp`

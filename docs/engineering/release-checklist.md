@@ -38,6 +38,14 @@ ADMIN_KEY=local-admin-key make scenario-all
 
 For web console changes, run `make demo` and manually verify that the Cockpit Core Journey Workbench preflight checks pass, the journey can run against the local mock MCP server, and the non-destructive reset returns the browser session to the default demo scope. Confirm the core tenant access journey remains usable in both English and Simplified Chinese, including the language toggle, Tenant Permission Console, capability governance entry point, runtime evidence metrics, and trace evidence labels.
 
+For release-candidate validation of the browser-facing AI Admin path, run:
+
+```bash
+make ai-admin-browser-journey
+```
+
+This gate starts the API, Mock MCP, and web console, verifies browser CORS allows `X-AgentHarbor-Subject-Id`, and then runs the approval-required permission package journey against those services.
+
 Before declaring v0.2.0 permission-package work or a permission-package release candidate ready, also run the approval-required journey against a local API with private upstreams enabled:
 
 ```bash

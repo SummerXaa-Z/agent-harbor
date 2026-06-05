@@ -1451,6 +1451,70 @@ td code {
   white-space: nowrap;
 }
 
+.ai-admin-readiness {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid #edf1f4;
+  border-bottom: 1px solid #edf1f4;
+}
+
+.ai-admin-readiness-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ai-admin-readiness-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 54px;
+  padding: 8px;
+  border: 1px solid #dfe6ec;
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.ai-admin-readiness-row.status-ok {
+  border-left-color: #2f9b63;
+}
+
+.ai-admin-readiness-row.status-warning {
+  border-left-color: #c58a22;
+}
+
+.ai-admin-readiness-row.status-error {
+  border-left-color: #be4b55;
+}
+
+.ai-admin-readiness-row.status-pending {
+  border-left-color: #b9c4cf;
+}
+
+.ai-admin-readiness-row div,
+.ai-admin-readiness-row strong,
+.ai-admin-readiness-row span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-admin-readiness-row strong {
+  color: #1f2a34;
+  font-size: 12px;
+}
+
+.ai-admin-readiness-row span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .ai-admin-journey-steps {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2453,6 +2517,7 @@ td code {
   .core-journey-preflight-grid,
   .core-journey-steps,
   .ai-admin-journey-meta,
+  .ai-admin-readiness-grid,
   .ai-admin-journey-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2566,6 +2631,7 @@ td code {
   .ai-admin-journey-toolbar,
   .ai-admin-journey-meta,
   .ai-admin-journey-result,
+  .ai-admin-readiness-grid,
   .ai-admin-journey-steps,
   .form-row,
   .trace-filters,

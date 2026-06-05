@@ -108,12 +108,12 @@ interface RequestOptions {
 }
 
 export class ApiRequestError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
+  readonly status: number
+
+  constructor(status: number, message: string) {
     super(message)
     this.name = 'ApiRequestError'
+    this.status = status
   }
 }
 
@@ -190,6 +190,27 @@ export async function checkMockMcpHealth(
   signal?: AbortSignal,
 ): Promise<HealthCheckResult> {
   return checkJsonHealth(url, signal)
+}
+
+export async function checkSubjectHeaderCors(signal?: AbortSignal): Promise<HealthCheckResult> {
+  try {
+    const response = await fetch(endpoint('/healthz'), {
+      headers: {
+        Accept: 'application/json',
+        'X-AgentHarbor-Subject-Id': 'preflight-probe',
+      },
+      signal,
+    })
+    if (!response.ok) {
+      return { status: 'error', message: `HTTP ${response.status}` }
+    }
+    return { status: 'ok', message: 'ok' }
+  } catch (error) {
+    return {
+      status: 'error',
+      message: error instanceof Error ? error.message : 'subject header check failed',
+    }
+  }
 }
 
 async function checkJsonHealth(url: string, signal?: AbortSignal): Promise<HealthCheckResult> {

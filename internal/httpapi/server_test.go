@@ -382,6 +382,9 @@ func TestLocalDevCORS(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://127.0.0.1:5174" {
 		t.Fatalf("unexpected allowed origin %q", got)
 	}
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "X-AgentHarbor-Subject-Id") {
+		t.Fatalf("subject header missing from CORS allow headers %q", got)
+	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/contracts/channels", nil)
 	req.Header.Set("Origin", "https://example.invalid")

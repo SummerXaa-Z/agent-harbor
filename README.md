@@ -15,7 +15,7 @@ AgentHarbor is in developer preview. It is ready for local evaluation, design fe
 - **Route policy controls**: allow or deny MCP/OpenAPI routes with priority, wildcard matching, and bounded retry overrides.
 - **MCP capability governance**: discover target tools, approve capabilities, and grant them through tenant, workspace, and caller-instance assignments.
 - **Data permission enforcement**: narrow `dataScopes` across capability, tenant entitlement, workspace assignment, and instance assignment boundaries.
-- **AI-friendly permission operations**: draft tenant-scoped permission package changes from administrator intent, preview allow/deny outcomes, apply them through the existing grant chain, and review structured application records.
+- **AI-friendly permission operations**: draft tenant-scoped permission package changes from administrator intent, preview allow/deny outcomes, run approval-required packages from the browser, apply them through the existing grant chain, and review structured application records.
 - **Runtime evidence**: record traces, audit events, metrics, upstream attempts, effective data scopes, and deny reasons.
 - **Tenant Permission Console**: inspect each tenant's effective access profile, grant chain, invalid scope rows, and recent trace evidence.
 
@@ -85,7 +85,15 @@ The scenario starts `scripts/mock-mcp-server.py` automatically and points AgentH
 
 ## Try the AI Admin Approval Journey
 
-This local scenario proves the v0.2.0 approval-required permission package path: create a three-level tenant tree, register a caller and MCP target, discover read/write/export tools, draft a **Support ticket triage** permission package, create and approve a matching approval request, apply it with `approvalRequestId`, run allowed and denied MCP calls, and verify access-profile, application, approval, trace, and audit evidence.
+The browser workbench proves the v0.2.0 approval-required permission package path for the primary product journey: create a three-level tenant tree, register a caller and MCP target, discover read/write/export tools, draft a **Support ticket triage** permission package, create and approve a matching approval request, apply it with `approvalRequestId`, run allowed and denied MCP calls with a subject id, and verify access-profile, application, approval, trace, and audit evidence.
+
+```bash
+make demo
+```
+
+Then open `http://127.0.0.1:5174/`, switch to **AI Admin**, and run **Live Approval Journey**.
+
+Use the CLI scenario when you want the same path as a scriptable regression check:
 
 Terminal 1:
 
@@ -110,6 +118,8 @@ make demo
 ```
 
 Then open `http://127.0.0.1:5174/` and use the Cockpit's **Core Journey Workbench**. The workbench checks API and Mock MCP readiness before enabling the run button. It also includes a **Reset demo session** action that clears the current browser session state and filters without deleting backend data; each run uses fresh `ui-core-*` identifiers so historical evidence remains inspectable.
+
+The **AI Admin** workspace includes a live approval journey workbench for the approval-required **Support ticket triage** path. Each run uses fresh `ui-approval-*` identifiers, applies the package through live APIs, sends runtime MCP calls with `X-AgentHarbor-Subject-Id`, and surfaces the run id, subject id, application record, tenant access profile, traces, and applied audit event in the console.
 
 `make demo` starts:
 

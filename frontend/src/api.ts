@@ -375,6 +375,7 @@ export async function callMcpRpc(
   agentKey: string,
   runId: string,
   adminKey?: string,
+  subjectId?: string,
 ): Promise<McpRpcCallResult> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -383,6 +384,7 @@ export async function callMcpRpc(
   }
   if (adminKey?.trim()) headers['X-Admin-Key'] = adminKey.trim()
   if (runId.trim()) headers['X-Run-Id'] = runId.trim()
+  if (subjectId?.trim()) headers['X-AgentHarbor-Subject-Id'] = subjectId.trim()
 
   const response = await fetch(endpoint(`/api/v1/mcp/agents/${encodeURIComponent(targetId)}/rpc`), {
     body: JSON.stringify(body),

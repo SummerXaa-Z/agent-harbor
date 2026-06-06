@@ -1188,6 +1188,12 @@ type permissionPackageApplicationImpactResponse struct {
 	CapabilityReviews []permissionPackageApplicationImpactCapability `json:"capabilityReviews"`
 	RollbackReview    permissionPackageApplicationRollbackReview     `json:"rollbackReview"`
 	RemediationPlan   permissionPackageApplicationRemediationPlan    `json:"remediationPlan"`
+	Rehearsal         *permissionPackageApplicationImpactRehearsal   `json:"rehearsal,omitempty"`
+}
+
+type permissionPackageApplicationImpactRehearsal struct {
+	Enabled  bool   `json:"enabled"`
+	Scenario string `json:"scenario"`
 }
 
 type permissionPackageApplicationImpactSummary struct {
@@ -1244,6 +1250,11 @@ func (s *Server) getPermissionPackageApplicationImpact(w http.ResponseWriter, r 
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "permission package application id is required"))
 		return
 	}
+	rehearsal := strings.TrimSpace(r.URL.Query().Get("rehearsal"))
+	if rehearsal != "" && rehearsal != "grant_drift" {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "rehearsal must be grant_drift when provided"))
+		return
+	}
 	rows, err := s.repo.ListPermissionPackageApplications(r.Context(), store.PermissionPackageApplicationFilter{
 		ID:              applicationID,
 		ManagementScope: managementScopeFromRequest(r),
@@ -1262,6 +1273,9 @@ func (s *Server) getPermissionPackageApplicationImpact(w http.ResponseWriter, r 
 		writeError(w, err)
 		return
 	}
+	if rehearsal == "grant_drift" {
+		impact = permissionPackageApplicationImpactGrantDriftRehearsal(impact)
+	}
 	writeJSON(w, http.StatusOK, impact)
 }
 
@@ -1274,6 +1288,19 @@ func (s *Server) permissionPackageApplicationImpact(ctx context.Context, applica
 	if err != nil {
 		return permissionPackageApplicationImpactResponse{}, err
 	}
+	summary := permissionPackageApplicationImpactSummaryFor(createdObjects)
+	rollbackReview := permissionPackageApplicationRollbackReviewFor(application, summary)
+	return permissionPackageApplicationImpactResponse{
+		Application:       application,
+		Summary:           summary,
+		CreatedObjects:    createdObjects,
+		CapabilityReviews: capabilityReviews,
+		RollbackReview:    rollbackReview,
+		RemediationPlan:   permissionPackageApplicationRemediationPlanFor(application, createdObjects, capabilityReviews, rollbackReview),
+	}, nil
+}
+
+func permissionPackageApplicationImpactSummaryFor(createdObjects []permissionPackageApplicationImpactObject) permissionPackageApplicationImpactSummary {
 	summary := permissionPackageApplicationImpactSummary{CreatedObjectCount: len(createdObjects)}
 	for _, row := range createdObjects {
 		switch row.CurrentStatus {
@@ -1286,15 +1313,49 @@ func (s *Server) permissionPackageApplicationImpact(ctx context.Context, applica
 	summary.RollbackReady = summary.CreatedObjectCount > 0 &&
 		summary.ActiveObjectCount == summary.CreatedObjectCount &&
 		summary.MissingObjectCount == 0
-	rollbackReview := permissionPackageApplicationRollbackReviewFor(application, summary)
-	return permissionPackageApplicationImpactResponse{
-		Application:       application,
-		Summary:           summary,
-		CreatedObjects:    createdObjects,
-		CapabilityReviews: capabilityReviews,
-		RollbackReview:    rollbackReview,
-		RemediationPlan:   permissionPackageApplicationRemediationPlanFor(application, createdObjects, capabilityReviews, rollbackReview),
-	}, nil
+	return summary
+}
+
+func permissionPackageApplicationImpactGrantDriftRehearsal(impact permissionPackageApplicationImpactResponse) permissionPackageApplicationImpactResponse {
+	next := impact
+	next.CreatedObjects = append([]permissionPackageApplicationImpactObject(nil), impact.CreatedObjects...)
+	for index := range next.CreatedObjects {
+		if next.CreatedObjects[index].Type != "workspace_assignment" {
+			continue
+		}
+		next.CreatedObjects[index].CurrentStatus = "missing"
+		next.CreatedObjects[index].RollbackAction = "investigate"
+		next.CreatedObjects[index].DataScopes = nil
+		break
+	}
+	instanceMarked := false
+	for index := range next.CreatedObjects {
+		if next.CreatedObjects[index].Type != "instance_assignment" {
+			continue
+		}
+		next.CreatedObjects[index].CurrentStatus = string(domain.PolicyStatusDisabled)
+		next.CreatedObjects[index].RollbackAction = "investigate"
+		instanceMarked = true
+		break
+	}
+	if !instanceMarked {
+		for index := range next.CreatedObjects {
+			if next.CreatedObjects[index].Type != "tenant_entitlement" {
+				continue
+			}
+			next.CreatedObjects[index].CurrentStatus = string(domain.PolicyStatusDisabled)
+			next.CreatedObjects[index].RollbackAction = "investigate"
+			break
+		}
+	}
+	next.Summary = permissionPackageApplicationImpactSummaryFor(next.CreatedObjects)
+	next.RollbackReview = permissionPackageApplicationRollbackReviewFor(next.Application, next.Summary)
+	next.RemediationPlan = permissionPackageApplicationRemediationPlanFor(next.Application, next.CreatedObjects, next.CapabilityReviews, next.RollbackReview)
+	next.Rehearsal = &permissionPackageApplicationImpactRehearsal{
+		Enabled:  true,
+		Scenario: "grant_drift",
+	}
+	return next
 }
 
 func (s *Server) permissionPackageApplicationImpactObjects(ctx context.Context, application domain.PermissionPackageApplication) ([]permissionPackageApplicationImpactObject, error) {

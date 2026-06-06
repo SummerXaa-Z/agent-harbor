@@ -221,6 +221,12 @@ type permissionPackageApplicationImpactResponse struct {
 	CapabilityReviews []permissionPackageImpactCapability  `json:"capabilityReviews"`
 	RollbackReview    permissionPackageRollbackReview      `json:"rollbackReview"`
 	RemediationPlan   permissionPackageRemediationPlan     `json:"remediationPlan"`
+	Rehearsal         *permissionPackageImpactRehearsal    `json:"rehearsal"`
+}
+
+type permissionPackageImpactRehearsal struct {
+	Enabled  bool   `json:"enabled"`
+	Scenario string `json:"scenario"`
 }
 
 type permissionPackageImpactSummary struct {
@@ -2887,6 +2893,9 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	if impact.Application.ID != applied.Application.ID || impact.Application.DraftID != applied.Draft.ID {
 		t.Fatalf("expected impact for applied application, got %#v", impact.Application)
 	}
+	if impact.Rehearsal != nil {
+		t.Fatalf("real impact should not include rehearsal metadata, got %#v", impact.Rehearsal)
+	}
 	if impact.Summary.CreatedObjectCount != 3 || impact.Summary.ActiveObjectCount != 3 ||
 		impact.Summary.MissingObjectCount != 0 || !impact.Summary.RollbackReady {
 		t.Fatalf("unexpected application impact summary: %#v", impact.Summary)
@@ -2939,6 +2948,47 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	tenantOrder := remediationActionOrder(impact.RemediationPlan.Actions, "tenant_entitlement", applied.TenantEntitlements[0].ID, "disable")
 	if instanceOrder == 0 || workspaceOrder == 0 || tenantOrder == 0 || !(instanceOrder < workspaceOrder && workspaceOrder < tenantOrder) {
 		t.Fatalf("expected instance before workspace before tenant remediation order, got actions %#v", impact.RemediationPlan.Actions)
+	}
+	driftRehearsal := decodeData[permissionPackageApplicationImpactResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications/"+applied.Application.ID+"/impact?tenantId=tenant-root&workspaceId=ws-sales&rehearsal=grant_drift", nil, ""))
+	if driftRehearsal.Rehearsal == nil || !driftRehearsal.Rehearsal.Enabled || driftRehearsal.Rehearsal.Scenario != "grant_drift" {
+		t.Fatalf("expected grant_drift rehearsal metadata, got %#v", driftRehearsal.Rehearsal)
+	}
+	if driftRehearsal.Summary.CreatedObjectCount != 3 || driftRehearsal.Summary.ActiveObjectCount >= driftRehearsal.Summary.CreatedObjectCount ||
+		driftRehearsal.Summary.MissingObjectCount != 1 || driftRehearsal.Summary.RollbackReady {
+		t.Fatalf("unexpected rehearsal impact summary: %#v", driftRehearsal.Summary)
+	}
+	for _, code := range []string{"missing_created_objects", "inactive_created_objects"} {
+		if !containsString(driftRehearsal.RollbackReview.BlockerCodes, code) {
+			t.Fatalf("expected rehearsal rollback blocker code %q, got %#v", code, driftRehearsal.RollbackReview.BlockerCodes)
+		}
+		if !containsString(driftRehearsal.RemediationPlan.BlockerCodes, code) {
+			t.Fatalf("expected rehearsal remediation blocker code %q, got %#v", code, driftRehearsal.RemediationPlan.BlockerCodes)
+		}
+	}
+	if driftRehearsal.RollbackReview.Ready || driftRehearsal.RemediationPlan.Ready {
+		t.Fatalf("rehearsal drift should not be ready: rollback=%#v remediation=%#v", driftRehearsal.RollbackReview, driftRehearsal.RemediationPlan)
+	}
+	if !remediationActionsContain(driftRehearsal.RemediationPlan.Actions, "workspace_assignment", applied.WorkspaceAssignments[0].ID, "investigate") ||
+		!remediationActionsContain(driftRehearsal.RemediationPlan.Actions, "instance_assignment", applied.InstanceAssignments[0].ID, "investigate") ||
+		!remediationActionsContain(driftRehearsal.RemediationPlan.Actions, "access_decision", applied.Application.ID, "verify") {
+		t.Fatalf("expected rehearsal investigate and verify actions, got %#v", driftRehearsal.RemediationPlan.Actions)
+	}
+	for _, action := range driftRehearsal.RemediationPlan.Actions {
+		if !action.ReadOnly {
+			t.Fatalf("expected rehearsal actions to be read-only, got %#v in %#v", action, driftRehearsal.RemediationPlan.Actions)
+		}
+	}
+	realImpactAfterRehearsal := decodeData[permissionPackageApplicationImpactResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications/"+applied.Application.ID+"/impact?tenantId=tenant-root&workspaceId=ws-sales", nil, ""))
+	if realImpactAfterRehearsal.Rehearsal != nil {
+		t.Fatalf("real impact after rehearsal should not include rehearsal metadata, got %#v", realImpactAfterRehearsal.Rehearsal)
+	}
+	if realImpactAfterRehearsal.Summary.CreatedObjectCount != 3 || realImpactAfterRehearsal.Summary.ActiveObjectCount != 3 ||
+		realImpactAfterRehearsal.Summary.MissingObjectCount != 0 || !realImpactAfterRehearsal.Summary.RollbackReady {
+		t.Fatalf("rehearsal should not persist grant drift, got real summary %#v", realImpactAfterRehearsal.Summary)
+	}
+	badRehearsal := request(t, router, http.MethodGet, "/api/v1/permission-packages/applications/"+applied.Application.ID+"/impact?tenantId=tenant-root&workspaceId=ws-sales&rehearsal=unknown", nil, "")
+	if badRehearsal.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid rehearsal to fail, status=%d body=%s", badRehearsal.Code, badRehearsal.Body.String())
 	}
 	badLimit := request(t, router, http.MethodGet, "/api/v1/permission-packages/applications?limit=0", nil, "")
 	if badLimit.Code != http.StatusBadRequest {

@@ -96,6 +96,12 @@ export interface PermissionPackageApplicationImpact {
   capabilityReviews: PermissionPackageImpactCapability[];
   rollbackReview: PermissionPackageRollbackReview;
   remediationPlan: PermissionPackageRemediationPlan;
+  rehearsal?: PermissionPackageImpactRehearsal;
+}
+
+export interface PermissionPackageImpactRehearsal {
+  enabled: boolean;
+  scenario?: string;
 }
 
 export interface PermissionPackageImpactSummary {

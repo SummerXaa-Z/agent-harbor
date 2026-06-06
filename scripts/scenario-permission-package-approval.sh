@@ -560,6 +560,51 @@ print("permission package application impact verified")
 PY
 }
 
+assert_application_impact_rehearsal() {
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$APPLICATION_ID" <<'PY'
+import json
+import os
+import sys
+
+impact = json.loads(os.environ["RESPONSE_BODY"])["data"]
+application_id = sys.argv[1]
+if impact["application"]["id"] != application_id:
+    raise SystemExit(f"rehearsal application id mismatch: {impact['application']}")
+rehearsal = impact.get("rehearsal") or {}
+if rehearsal.get("enabled") is not True or rehearsal.get("scenario") != "grant_drift":
+    raise SystemExit(f"expected grant_drift rehearsal metadata: {rehearsal}")
+summary = impact["summary"]
+if summary.get("createdObjectCount") != 6:
+    raise SystemExit(f"rehearsal createdObjectCount={summary.get('createdObjectCount')}: {summary}")
+if summary.get("activeObjectCount") >= summary.get("createdObjectCount"):
+    raise SystemExit(f"rehearsal should reduce active object count: {summary}")
+if summary.get("missingObjectCount") != 1:
+    raise SystemExit(f"rehearsal should simulate one missing object: {summary}")
+if summary.get("rollbackReady") is not False:
+    raise SystemExit(f"rehearsal should not be rollback-ready: {summary}")
+review = impact["rollbackReview"]
+plan = impact.get("remediationPlan") or {}
+for code in ("missing_created_objects", "inactive_created_objects"):
+    if code not in (review.get("blockerCodes") or []):
+        raise SystemExit(f"rehearsal rollback missing blocker code {code}: {review}")
+    if code not in (plan.get("blockerCodes") or []):
+        raise SystemExit(f"rehearsal remediation missing blocker code {code}: {plan}")
+if review.get("ready") is not False or plan.get("ready") is not False:
+    raise SystemExit(f"rehearsal drift should require review: rollback={review} remediation={plan}")
+actions = plan.get("actions") or []
+if not actions:
+    raise SystemExit(f"rehearsal remediation plan should include actions: {plan}")
+if any(action.get("readOnly") is not True for action in actions):
+    raise SystemExit(f"all rehearsal actions must be read-only: {actions}")
+for object_type in ("workspace_assignment", "instance_assignment"):
+    if not any(row.get("targetType") == object_type and row.get("action") == "investigate" for row in actions):
+        raise SystemExit(f"missing rehearsal investigate action for {object_type}: {actions}")
+if not any(row.get("targetType") == "access_decision" and row.get("targetId") == application_id and row.get("action") == "verify" for row in actions):
+    raise SystemExit(f"missing rehearsal final access verification action: {actions}")
+print("permission package application drift rehearsal verified")
+PY
+}
+
 assert_applied_audit_event() {
   RESPONSE_BODY="$HTTP_BODY" python3 - "$APPLICATION_ID" "$APPROVAL_REQUEST_ID" <<'PY'
 import json
@@ -715,6 +760,14 @@ assert_application_list
 
 request GET "/api/v1/permission-packages/applications/$APPLICATION_ID/impact?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID"
 expect_status 200 "review permission package application impact"
+assert_application_impact
+
+request GET "/api/v1/permission-packages/applications/$APPLICATION_ID/impact?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID&rehearsal=grant_drift"
+expect_status 200 "rehearse permission package grant drift"
+assert_application_impact_rehearsal
+
+request GET "/api/v1/permission-packages/applications/$APPLICATION_ID/impact?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID"
+expect_status 200 "review permission package application impact after rehearsal"
 assert_application_impact
 
 request GET "/api/v1/audit/events?action=permission_package.applied&resourceId=$APPLICATION_ID&limit=1"

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   accessDecisionExplainPath,
+  permissionPackageApplicationHealthPath,
   permissionPackageApplicationImpactPath,
   permissionPackageApprovalRequestsPath
 } from "../src/apiPaths.ts";
@@ -69,4 +70,24 @@ test("permissionPackageApplicationImpactPath can request a read-only rehearsal",
   assert.equal(url.searchParams.get("tenantId"), "tenant-root");
   assert.equal(url.searchParams.get("workspaceId"), "ws-sales");
   assert.equal(url.searchParams.get("rehearsal"), "grant_drift");
+});
+
+test("permissionPackageApplicationHealthPath includes application health filters", () => {
+  const path = permissionPackageApplicationHealthPath({
+    callerInstanceId: "caller-sales",
+    limit: 10,
+    targetId: "mcp-crm",
+    templateId: "sales-readonly",
+    tenantId: "tenant-root",
+    workspaceId: "ws-sales"
+  });
+
+  const url = new URL(path, "http://127.0.0.1:9090");
+  assert.equal(url.pathname, "/api/v1/permission-packages/applications/health");
+  assert.equal(url.searchParams.get("callerInstanceId"), "caller-sales");
+  assert.equal(url.searchParams.get("limit"), "10");
+  assert.equal(url.searchParams.get("targetId"), "mcp-crm");
+  assert.equal(url.searchParams.get("templateId"), "sales-readonly");
+  assert.equal(url.searchParams.get("tenantId"), "tenant-root");
+  assert.equal(url.searchParams.get("workspaceId"), "ws-sales");
 });

@@ -99,6 +99,30 @@ export interface PermissionPackageApplicationImpact {
   rehearsal?: PermissionPackageImpactRehearsal;
 }
 
+export type PermissionPackageApplicationHealthStatus = "ready" | "drifted" | "needs_review";
+
+export interface PermissionPackageApplicationHealth {
+  summary: PermissionPackageApplicationHealthSummary;
+  applications: PermissionPackageApplicationHealthRow[];
+}
+
+export interface PermissionPackageApplicationHealthSummary {
+  total: number;
+  ready: number;
+  drifted: number;
+  needsReview: number;
+}
+
+export interface PermissionPackageApplicationHealthRow {
+  application: PermissionPackageApplication;
+  status: PermissionPackageApplicationHealthStatus;
+  blockerCodes?: string[];
+  createdObjectCount: number;
+  activeObjectCount: number;
+  missingObjectCount: number;
+  rollbackReady: boolean;
+}
+
 export interface PermissionPackageImpactRehearsal {
   enabled: boolean;
   scenario?: string;

@@ -229,6 +229,28 @@ type permissionPackageImpactRehearsal struct {
 	Scenario string `json:"scenario"`
 }
 
+type permissionPackageApplicationHealthResponse struct {
+	Summary      permissionPackageApplicationHealthSummary `json:"summary"`
+	Applications []permissionPackageApplicationHealthRow   `json:"applications"`
+}
+
+type permissionPackageApplicationHealthSummary struct {
+	Total       int `json:"total"`
+	Ready       int `json:"ready"`
+	Drifted     int `json:"drifted"`
+	NeedsReview int `json:"needsReview"`
+}
+
+type permissionPackageApplicationHealthRow struct {
+	Application        permissionPackageApplicationResponse `json:"application"`
+	Status             string                               `json:"status"`
+	BlockerCodes       []string                             `json:"blockerCodes"`
+	CreatedObjectCount int                                  `json:"createdObjectCount"`
+	ActiveObjectCount  int                                  `json:"activeObjectCount"`
+	MissingObjectCount int                                  `json:"missingObjectCount"`
+	RollbackReady      bool                                 `json:"rollbackReady"`
+}
+
 type permissionPackageImpactSummary struct {
 	CreatedObjectCount int  `json:"createdObjectCount"`
 	ActiveObjectCount  int  `json:"activeObjectCount"`
@@ -2889,6 +2911,22 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	if len(applications) != 1 || applications[0].ID != applied.Application.ID || applications[0].DraftID != applied.Draft.ID {
 		t.Fatalf("expected listed application record, got %#v", applications)
 	}
+	health := decodeData[permissionPackageApplicationHealthResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications/health?tenantId=tenant-root&workspaceId=ws-sales&templateId=sales-readonly&targetId="+target.ID+"&callerInstanceId="+caller.ID+"&limit=10", nil, ""))
+	if health.Summary.Total != 1 || health.Summary.Ready != 1 || health.Summary.Drifted != 0 || health.Summary.NeedsReview != 0 {
+		t.Fatalf("expected ready application health summary, got %#v", health.Summary)
+	}
+	if len(health.Applications) != 1 {
+		t.Fatalf("expected one application health row, got %#v", health.Applications)
+	}
+	healthRow := health.Applications[0]
+	if healthRow.Application.ID != applied.Application.ID || healthRow.Application.DraftID != applied.Draft.ID ||
+		healthRow.Status != "ready" || healthRow.CreatedObjectCount != 3 || healthRow.ActiveObjectCount != 3 ||
+		healthRow.MissingObjectCount != 0 || !healthRow.RollbackReady {
+		t.Fatalf("unexpected ready application health row: %#v", healthRow)
+	}
+	if healthRow.BlockerCodes == nil || len(healthRow.BlockerCodes) != 0 {
+		t.Fatalf("expected ready health blocker codes to encode as an empty array, got %#v", healthRow.BlockerCodes)
+	}
 	impact := decodeData[permissionPackageApplicationImpactResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications/"+applied.Application.ID+"/impact?tenantId=tenant-root&workspaceId=ws-sales", nil, ""))
 	if impact.Application.ID != applied.Application.ID || impact.Application.DraftID != applied.Draft.ID {
 		t.Fatalf("expected impact for applied application, got %#v", impact.Application)
@@ -2990,6 +3028,10 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	if badRehearsal.Code != http.StatusBadRequest {
 		t.Fatalf("expected invalid rehearsal to fail, status=%d body=%s", badRehearsal.Code, badRehearsal.Body.String())
 	}
+	badHealthLimit := request(t, router, http.MethodGet, "/api/v1/permission-packages/applications/health?limit=0", nil, "")
+	if badHealthLimit.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid application health limit to fail, status=%d body=%s", badHealthLimit.Code, badHealthLimit.Body.String())
+	}
 	badLimit := request(t, router, http.MethodGet, "/api/v1/permission-packages/applications?limit=0", nil, "")
 	if badLimit.Code != http.StatusBadRequest {
 		t.Fatalf("expected invalid application limit to fail, status=%d body=%s", badLimit.Code, badLimit.Body.String())
@@ -3088,6 +3130,23 @@ func TestPermissionPackageApplicationImpactReportsDriftBlockers(t *testing.T) {
 	if impact.Summary.CreatedObjectCount != 4 || impact.Summary.ActiveObjectCount != 0 ||
 		impact.Summary.MissingObjectCount != 1 || impact.Summary.RollbackReady {
 		t.Fatalf("unexpected drift impact summary: %#v", impact.Summary)
+	}
+	health := decodeData[permissionPackageApplicationHealthResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications/health?tenantId=tenant-root&workspaceId=ws-sales&limit=10", nil, ""))
+	if health.Summary.Total != 1 || health.Summary.Ready != 0 || health.Summary.Drifted != 1 || health.Summary.NeedsReview != 0 {
+		t.Fatalf("expected drifted application health summary, got %#v", health.Summary)
+	}
+	if len(health.Applications) != 1 {
+		t.Fatalf("expected one drifted application health row, got %#v", health.Applications)
+	}
+	healthRow := health.Applications[0]
+	if healthRow.Application.ID != application.ID || healthRow.Status != "drifted" || healthRow.CreatedObjectCount != 4 ||
+		healthRow.ActiveObjectCount != 0 || healthRow.MissingObjectCount != 1 || healthRow.RollbackReady {
+		t.Fatalf("unexpected drifted application health row: %#v", healthRow)
+	}
+	for _, code := range []string{"missing_created_objects", "inactive_created_objects"} {
+		if !containsString(healthRow.BlockerCodes, code) {
+			t.Fatalf("expected drift health blocker code %q, got %#v", code, healthRow.BlockerCodes)
+		}
 	}
 	for _, code := range []string{"missing_created_objects", "inactive_created_objects", "no_allowed_capabilities"} {
 		if !containsString(impact.RollbackReview.BlockerCodes, code) {

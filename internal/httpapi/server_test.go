@@ -3719,6 +3719,58 @@ func TestManagementMCPExplainAccessDecision(t *testing.T) {
 	}
 }
 
+func TestAccessDecisionExplain(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-sales", Name: "Sales Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "CRM MCP", "tenant-root", "ws-sales", "mcp", domain.AgentStatusActive, nil)
+	search := createDirectCapabilityWithAction(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	search.DiscoveryStatus = domain.CapabilityDiscoveryApproved
+	search.UpdatedAt = now
+	if _, ok, err := repo.UpdateCapability(t.Context(), search); err != nil || !ok {
+		t.Fatalf("approve capability: ok=%v err=%v", ok, err)
+	}
+
+	explainPath := "/api/v1/access-decisions:explain?tenantId=tenant-east&workspaceId=ws-sales&callerInstanceId=" + caller.ID + "&targetId=" + target.ID + "&capabilityId=" + search.ID + "&subjectId=user:sales-001"
+	denied := decodeData[managementMCPExplainAccessResponse](t, request(t, router, http.MethodGet, explainPath, nil, ""))
+	if denied.Outcome != "denied" || denied.Decision.Allowed || denied.Decision.Reason != "tenant has no entitlement for capability" {
+		t.Fatalf("unexpected denied explanation: %#v", denied)
+	}
+	if !strings.Contains(strings.Join(denied.NextActions, " "), "permission package") {
+		t.Fatalf("expected permission package next action, got %#v", denied.NextActions)
+	}
+
+	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "华东",
+		"requestText":      "给销售助手开通客户只读。",
+		"subjectSelector":  "user:sales-*",
+		"targetId":         target.ID,
+		"templateId":       "sales-readonly",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-sales",
+	}, ""))
+	if applied.Application == nil {
+		t.Fatalf("expected permission package application evidence")
+	}
+
+	allowed := decodeData[managementMCPExplainAccessResponse](t, request(t, router, http.MethodGet, explainPath, nil, ""))
+	if allowed.Outcome != "allowed" || !allowed.Decision.Allowed || len(allowed.DataScopes) == 0 {
+		t.Fatalf("unexpected allowed explanation: %#v", allowed)
+	}
+	if !explainEvidenceContains(allowed.Evidence, "tenant_entitlement") ||
+		!explainEvidenceContains(allowed.Evidence, "workspace_assignment") ||
+		!explainEvidenceContains(allowed.Evidence, "instance_assignment") {
+		t.Fatalf("expected entitlement/workspace/instance evidence, got %#v", allowed.Evidence)
+	}
+}
+
 func TestCapabilityAssignmentDataScopesMustNarrowHierarchy(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)

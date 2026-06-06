@@ -44,6 +44,7 @@ import {
   defaultMockMcpHealthUrl,
   disableAgent,
   disableRoutePolicy,
+  fetchAccessDecisionExplanation,
   fetchAuditEvents,
   fetchPermissionPackageApprovalRequests,
   fetchPermissionPackageTemplates,
@@ -114,6 +115,7 @@ import {
 import {
   createPermissionPackageDraft,
   permissionPackageTemplates,
+  subjectIdExampleFromSelector,
   type PermissionPackageApplication,
   type PermissionPackageApprovalRequest,
   type PermissionPackageDraft,
@@ -125,6 +127,8 @@ import { parseRetryFields } from "./retryForm";
 import type {
   AccessProfileFilters,
   AccessProfileSummary,
+  AccessDecisionExplainRequest,
+  AccessDecisionExplainResult,
   Agent,
   AgentStatus,
   AuditEvent,
@@ -229,6 +233,7 @@ const defaultTraceFilters: TraceFilters = { callerAgentId: "", decision: "", run
 const defaultAccessProfileFilters: AccessProfileFilters = {
   callerInstanceId: "",
   capabilityId: "",
+  subjectId: "",
   targetId: "",
   traceLimit: "20",
   workspaceId: ""
@@ -324,6 +329,9 @@ function App() {
   const [accessLoading, setAccessLoading] = useState(false);
   const [accessMessage, setAccessMessage] = useState("");
   const [accessProfile, setAccessProfile] = useState<TenantAccessProfileData | null>(null);
+  const [accessDecisionExplanation, setAccessDecisionExplanation] = useState<AccessDecisionExplainResult | null>(null);
+  const [accessDecisionExplainLoading, setAccessDecisionExplainLoading] = useState(false);
+  const [accessDecisionExplainMessage, setAccessDecisionExplainMessage] = useState("");
   const [language, setLanguage] = useState<Language>(initialLanguage);
   const [coreJourneyForm, setCoreJourneyForm] = useState<CoreJourneyForm>(defaultCoreJourneyForm);
   const [coreJourneyConfig, setCoreJourneyConfig] = useState<CoreJourneyConfig>(() => createCoreJourneyConfig());
@@ -345,6 +353,10 @@ function App() {
   const [aiAdminReviewerQueueLoading, setAiAdminReviewerQueueLoading] = useState(false);
   const [aiAdminReviewerQueueMessage, setAiAdminReviewerQueueMessage] = useState("");
   const [aiAdminSelectedApprovalRequestId, setAiAdminSelectedApprovalRequestId] = useState("");
+  const [aiAdminAccessDecisionExplanation, setAiAdminAccessDecisionExplanation] =
+    useState<AccessDecisionExplainResult | null>(null);
+  const [aiAdminAccessDecisionExplainLoading, setAiAdminAccessDecisionExplainLoading] = useState(false);
+  const [aiAdminAccessDecisionExplainMessage, setAiAdminAccessDecisionExplainMessage] = useState("");
   const [aiAdminApprovalJourneyConfig, setAiAdminApprovalJourneyConfig] = useState<AiAdminApprovalJourneyConfig>(() =>
     createAiAdminApprovalJourneyConfig()
   );
@@ -518,6 +530,70 @@ function App() {
       setAccessMessage(error instanceof Error ? error.message : "Unable to load tenant access profile");
     } finally {
       setAccessLoading(false);
+    }
+  }
+
+  async function explainAccessDecisionFromProfile() {
+    if (!data?.loadedFromApi) {
+      setAccessDecisionExplainMessage(t("message.accessDecisionExplainRequiresLiveApi"));
+      return;
+    }
+    const requestScope = normalizedScope(scope);
+    const request: AccessDecisionExplainRequest = {
+      callerInstanceId: accessFilters.callerInstanceId?.trim() ?? "",
+      capabilityId: accessFilters.capabilityId?.trim() ?? "",
+      subjectId: accessFilters.subjectId?.trim() || undefined,
+      targetId: accessFilters.targetId?.trim() ?? "",
+      tenantId: requestScope.tenantId,
+      workspaceId: accessFilters.workspaceId?.trim() || requestScope.workspaceId
+    };
+    if (!accessDecisionExplainRequestComplete(request)) {
+      setAccessDecisionExplainMessage(t("message.accessDecisionExplainMissingFields"));
+      return;
+    }
+    setAccessDecisionExplainLoading(true);
+    setAccessDecisionExplainMessage("");
+    try {
+      const next = await fetchAccessDecisionExplanation(request, adminKey);
+      setAccessDecisionExplanation(next);
+      setAccessDecisionExplainMessage(t("message.accessDecisionExplainLoaded"));
+    } catch (error) {
+      setAccessDecisionExplainMessage(error instanceof Error ? error.message : "Unable to explain access decision");
+    } finally {
+      setAccessDecisionExplainLoading(false);
+    }
+  }
+
+  async function explainAiAdminAccessDecision() {
+    if (!data?.loadedFromApi) {
+      setAiAdminAccessDecisionExplainMessage(t("message.accessDecisionExplainRequiresLiveApi"));
+      return;
+    }
+    const capability = aiAdminDraft.allowedCapabilities[0];
+    const request: AccessDecisionExplainRequest = {
+      callerInstanceId: aiAdminDraft.input.callerInstanceId,
+      capabilityId: capability?.id ?? "",
+      subjectId: subjectIdExampleFromSelector(aiAdminDraft.input.subjectSelector),
+      targetId: aiAdminDraft.input.targetId,
+      tenantId: aiAdminDraft.input.tenantId,
+      workspaceId: aiAdminDraft.input.workspaceId
+    };
+    if (!accessDecisionExplainRequestComplete(request)) {
+      setAiAdminAccessDecisionExplainMessage(
+        capability ? t("message.accessDecisionExplainMissingFields") : t("message.noMatchingAllowedCapabilities")
+      );
+      return;
+    }
+    setAiAdminAccessDecisionExplainLoading(true);
+    setAiAdminAccessDecisionExplainMessage("");
+    try {
+      const next = await fetchAccessDecisionExplanation(request, adminKey);
+      setAiAdminAccessDecisionExplanation(next);
+      setAiAdminAccessDecisionExplainMessage(t("message.accessDecisionExplainLoaded"));
+    } catch (error) {
+      setAiAdminAccessDecisionExplainMessage(error instanceof Error ? error.message : "Unable to explain access decision");
+    } finally {
+      setAiAdminAccessDecisionExplainLoading(false);
     }
   }
 
@@ -1797,14 +1873,24 @@ function App() {
       <TenantAccessProfileView
         agents={agents}
         capabilities={capabilities}
+        explanation={accessDecisionExplanation}
+        explanationLoading={accessDecisionExplainLoading}
+        explanationMessage={accessDecisionExplainMessage}
         filters={accessFilters}
         loading={accessLoading}
         message={accessMessage}
-        onChange={setAccessFilters}
+        onChange={(filters) => {
+          setAccessFilters(filters);
+          setAccessDecisionExplanation(null);
+          setAccessDecisionExplainMessage("");
+        }}
+        onExplainAccessDecision={() => void explainAccessDecisionFromProfile()}
         onRefresh={() => void refreshAccessProfile()}
         onTenantChange={(tenantId) => {
           setScope((current) => ({ ...current, tenantId }));
           setAccessProfile(null);
+          setAccessDecisionExplanation(null);
+          setAccessDecisionExplainMessage("");
         }}
         profile={accessProfile}
         scope={scope}
@@ -1829,6 +1915,9 @@ function App() {
         approvalRequest={aiAdminApprovalRequest}
         approvalRequests={aiAdminApprovalRequests}
         approvalReviewer={aiAdminApprovalReviewer}
+        accessDecisionExplanation={aiAdminAccessDecisionExplanation}
+        accessDecisionExplanationLoading={aiAdminAccessDecisionExplainLoading}
+        accessDecisionExplanationMessage={aiAdminAccessDecisionExplainMessage}
         applying={aiAdminApplying}
         draft={aiAdminDraft}
         form={aiAdminForm}
@@ -1845,8 +1934,11 @@ function App() {
           setAiAdminApprovalJourneyResult(null);
           setAiAdminApprovalRequests([]);
           setAiAdminSelectedApprovalRequestId("");
+          setAiAdminAccessDecisionExplanation(null);
+          setAiAdminAccessDecisionExplainMessage("");
         }}
         onCreateApprovalRequest={() => void createAiAdminApprovalRequest()}
+        onExplainAccessDecision={() => void explainAiAdminAccessDecision()}
         onRefreshApprovalReadiness={() => void refreshAiAdminApprovalReadiness()}
         onRefreshReviewerQueue={() => void refreshAiAdminReviewerQueue()}
         onRejectApprovalRequest={(requestId) => void rejectAiAdminApprovalRequest(requestId)}
@@ -2326,6 +2418,9 @@ function AiAdminPermissionWorkbench({
   approvalRequest,
   approvalRequests,
   approvalReviewer,
+  accessDecisionExplanation,
+  accessDecisionExplanationLoading,
+  accessDecisionExplanationMessage,
   applying,
   draft,
   form,
@@ -2336,6 +2431,7 @@ function AiAdminPermissionWorkbench({
   onApproveApprovalRequest,
   onChange,
   onCreateApprovalRequest,
+  onExplainAccessDecision,
   onRefreshApprovalReadiness,
   onRefreshReviewerQueue,
   onRejectApprovalRequest,
@@ -2362,6 +2458,9 @@ function AiAdminPermissionWorkbench({
   approvalRequest: PermissionPackageApprovalRequest | null;
   approvalRequests: PermissionPackageApprovalRequest[];
   approvalReviewer: string;
+  accessDecisionExplanation: AccessDecisionExplainResult | null;
+  accessDecisionExplanationLoading: boolean;
+  accessDecisionExplanationMessage: string;
   applying: boolean;
   draft: PermissionPackageDraft;
   form: PermissionPackageDraftInput;
@@ -2372,6 +2471,7 @@ function AiAdminPermissionWorkbench({
   onApproveApprovalRequest: (requestId?: string) => void;
   onChange: (form: PermissionPackageDraftInput) => void;
   onCreateApprovalRequest: () => void;
+  onExplainAccessDecision: () => void;
   onRefreshApprovalReadiness: () => void;
   onRefreshReviewerQueue: () => void;
   onRejectApprovalRequest: (requestId?: string) => void;
@@ -2620,6 +2720,13 @@ function AiAdminPermissionWorkbench({
               </ul>
             ) : null}
           </div>
+          <AccessDecisionExplainPanel
+            explanation={accessDecisionExplanation}
+            loading={accessDecisionExplanationLoading}
+            message={accessDecisionExplanationMessage}
+            onExplain={onExplainAccessDecision}
+            t={t}
+          />
           <div className="permission-reviewer-queue">
             <div className="permission-section-title">
               <strong>{t("section.permissionReviewerQueue")}</strong>
@@ -3350,10 +3457,14 @@ function TraceTable({ traces, agents, t }: { traces: TraceEvent[]; agents: Agent
 function TenantAccessProfileView({
   agents,
   capabilities,
+  explanation,
+  explanationLoading,
+  explanationMessage,
   filters,
   loading,
   message,
   onChange,
+  onExplainAccessDecision,
   onRefresh,
   onTenantChange,
   profile,
@@ -3362,10 +3473,14 @@ function TenantAccessProfileView({
 }: {
   agents: Agent[];
   capabilities: Capability[];
+  explanation: AccessDecisionExplainResult | null;
+  explanationLoading: boolean;
+  explanationMessage: string;
   filters: AccessProfileFilters;
   loading: boolean;
   message: string;
   onChange: (filters: AccessProfileFilters) => void;
+  onExplainAccessDecision: () => void;
   onRefresh: () => void;
   onTenantChange: (tenantId: string) => void;
   profile: TenantAccessProfileData | null;
@@ -3450,6 +3565,14 @@ function TenantAccessProfileView({
           </select>
         </label>
         <label>
+          {t("form.subjectId")}
+          <input
+            placeholder={t("detail.subjectId")}
+            value={filters.subjectId ?? ""}
+            onChange={(event) => onChange({ ...filters, subjectId: event.target.value })}
+          />
+        </label>
+        <label>
           {t("form.traces")}
           <input
             inputMode="numeric"
@@ -3471,6 +3594,14 @@ function TenantAccessProfileView({
         {profile ? <span>{t("status.generated")} {formatDate(profile.generatedAt)}</span> : null}
         {message ? <strong>{message}</strong> : null}
       </div>
+
+      <AccessDecisionExplainPanel
+        explanation={explanation}
+        loading={explanationLoading}
+        message={explanationMessage}
+        onExplain={onExplainAccessDecision}
+        t={t}
+      />
 
       {!profile ? (
         <EmptyRow title={t("empty.accessProfile.title")} detail={t("empty.accessProfile.detail")} />
@@ -3549,6 +3680,77 @@ function AccessSummaryCell({ label, value, detail }: { label: string; value: str
       <strong>{value}</strong>
       <small>{detail}</small>
     </div>
+  );
+}
+
+function AccessDecisionExplainPanel({
+  explanation,
+  loading,
+  message,
+  onExplain,
+  t
+}: {
+  explanation: AccessDecisionExplainResult | null;
+  loading: boolean;
+  message: string;
+  onExplain: () => void;
+  t: Translator;
+}) {
+  const dataScopes = explanation?.dataScopes ?? explanation?.decision.dataScopes ?? [];
+  return (
+    <section className="access-decision-explain">
+      <header>
+        <div>
+          <strong>{t("section.accessDecisionExplain")}</strong>
+          {message ? <span>{message}</span> : null}
+        </div>
+        <button className="secondary-button" disabled={loading} onClick={onExplain} type="button">
+          <FileSearch size={14} />
+          {loading ? t("action.loading") : t("action.explainAccessDecision")}
+        </button>
+      </header>
+      {!explanation ? (
+        <EmptyRow title={t("section.accessDecisionExplain")} detail={t("empty.accessDecisionExplain.detail")} />
+      ) : (
+        <>
+          <div className="access-decision-summary">
+            <Badge tone={accessDecisionOutcomeTone(explanation.outcome)}>
+              {accessDecisionOutcomeLabel(explanation.outcome, t)}
+            </Badge>
+            <div>
+              <strong>{explanation.summary}</strong>
+              <span>{explanation.decision.source} · {explanation.decision.reason}</span>
+            </div>
+          </div>
+          <div className="access-decision-evidence">
+            {explanation.evidence.map((row) => (
+              <article key={`${row.layer}:${row.id ?? row.status}`}>
+                <Badge tone={accessDecisionEvidenceTone(row.status)}>{row.status}</Badge>
+                <div>
+                  <strong>{row.layer}</strong>
+                  <span>{row.message}</span>
+                  {row.id ? <code>{row.id}</code> : null}
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="access-decision-footer">
+            <div>
+              <strong>{t("detail.dataScopes")}</strong>
+              <span>{summarizeDataScopes(dataScopes)}</span>
+            </div>
+            <div>
+              <strong>{t("text.nextActions")}</strong>
+              <ul>
+                {explanation.nextActions.map((action) => (
+                  <li key={action}>{action}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -3938,6 +4140,31 @@ function normalizedScope(scope: ManagementScope): ManagementScope {
     tenantId: scope.tenantId.trim() || defaultManagementScope.tenantId,
     workspaceId: scope.workspaceId.trim() || defaultManagementScope.workspaceId
   };
+}
+
+function accessDecisionExplainRequestComplete(request: AccessDecisionExplainRequest) {
+  return Boolean(
+    request.tenantId.trim() &&
+      request.workspaceId.trim() &&
+      request.callerInstanceId.trim() &&
+      request.targetId.trim() &&
+      request.capabilityId.trim()
+  );
+}
+
+function accessDecisionOutcomeTone(outcome: AccessDecisionExplainResult["outcome"]): Tone {
+  return outcome === "allowed" ? "success" : "danger";
+}
+
+function accessDecisionOutcomeLabel(outcome: AccessDecisionExplainResult["outcome"], t: Translator) {
+  return outcome === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied");
+}
+
+function accessDecisionEvidenceTone(status: string): Tone {
+  if (status === "matched") return "success";
+  if (status === "blocking" || status === "missing" || status === "mismatch") return "danger";
+  if (status === "not_approved" || status === "inactive") return "warning";
+  return "neutral";
 }
 
 function formatDate(value: string) {

@@ -391,6 +391,7 @@ export interface AccessProfileFilters {
   targetId?: string
   capabilityId?: string
   callerInstanceId?: string
+  subjectId?: string
   traceLimit?: number | string
 }
 
@@ -443,6 +444,43 @@ export interface TenantAccessProfile {
 export interface TenantAccessProfileData extends TenantAccessProfile {
   loadedFromApi: boolean
   apiBase: string
+}
+
+export interface AccessDecisionExplainRequest {
+  tenantId: string
+  workspaceId: string
+  callerInstanceId: string
+  targetId: string
+  capabilityId: string
+  subjectId?: string
+}
+
+export interface CapabilityAccessDecision {
+  allowed: boolean
+  source: string
+  capabilityId?: string
+  entitlementId?: string
+  workspaceAssignmentId?: string
+  instanceAssignmentId?: string
+  reason: string
+  dataScopes?: DataScope[]
+}
+
+export interface AccessDecisionExplainEvidence {
+  layer: string
+  status: string
+  id?: string
+  message: string
+}
+
+export interface AccessDecisionExplainResult {
+  outcome: 'allowed' | 'denied'
+  summary: string
+  request: AccessDecisionExplainRequest
+  decision: CapabilityAccessDecision
+  evidence: AccessDecisionExplainEvidence[]
+  dataScopes?: DataScope[]
+  nextActions: string[]
 }
 
 export interface TraceFilters {

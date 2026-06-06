@@ -137,6 +137,7 @@ func (s *Server) Router() http.Handler {
 			r.Post("/access-grants", s.createAccessGrant)
 			r.Get("/access-grants", s.listAccessGrants)
 			r.Delete("/access-grants/{id}", s.revokeAccessGrant)
+			r.Get("/access-decisions:explain", s.explainAccessDecision)
 			r.Post("/route-policies", s.createRoutePolicy)
 			r.Get("/route-policies", s.listRoutePolicies)
 			r.Patch("/route-policies/{id}", s.updateRoutePolicy)

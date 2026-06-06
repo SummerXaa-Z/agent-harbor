@@ -20,6 +20,27 @@ export interface PermissionPackageApprovalRequestPathFilter {
   workspaceId?: string
 }
 
+export interface AccessDecisionExplainPathRequest {
+  callerInstanceId?: string
+  capabilityId?: string
+  subjectId?: string
+  targetId?: string
+  tenantId?: string
+  workspaceId?: string
+}
+
+export function accessDecisionExplainPath(request: AccessDecisionExplainPathRequest): string {
+  const query = queryString({
+    callerInstanceId: request.callerInstanceId,
+    capabilityId: request.capabilityId,
+    subjectId: request.subjectId,
+    targetId: request.targetId,
+    tenantId: request.tenantId,
+    workspaceId: request.workspaceId,
+  })
+  return `/api/v1/access-decisions:explain${query}`
+}
+
 export function permissionPackageApprovalRequestsPath(filter: PermissionPackageApprovalRequestPathFilter): string {
   const query = queryString({
     callerInstanceId: filter.callerInstanceId,

@@ -243,6 +243,13 @@ export const permissionPackageTemplates: PermissionPackageTemplate[] = [
   },
 ];
 
+export function subjectIdExampleFromSelector(subjectSelector?: string): string | undefined {
+  const selector = subjectSelector?.trim() ?? "";
+  if (!selector) return undefined;
+  if (!selector.endsWith("*")) return selector;
+  return `${selector.slice(0, -1)}example`;
+}
+
 export function createPermissionPackageDraft(
   input: PermissionPackageDraftInput,
   inventory: PermissionPackageInventory,

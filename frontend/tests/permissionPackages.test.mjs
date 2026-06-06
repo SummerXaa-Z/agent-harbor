@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   createPermissionPackageDraft,
-  permissionPackageTemplates
+  permissionPackageTemplates,
+  subjectIdExampleFromSelector
 } from "../src/permissionPackages.ts";
 
 const now = "2026-06-04T09:00:00Z";
@@ -150,4 +151,11 @@ test("support ticket triage package requires approval for risky allowed writes",
   assert.equal(draft.policyGate.policyVersion, 1);
   assert.equal(draft.policyGate.reasons.some((reason) => reason.capabilityKey === "update_ticket"), true);
   assert.match(draft.policyGate.nextActions.join(" "), /approval/i);
+});
+
+test("subjectIdExampleFromSelector returns a matching concrete subject", () => {
+  assert.equal(subjectIdExampleFromSelector(""), undefined);
+  assert.equal(subjectIdExampleFromSelector(" user:sales-001 "), "user:sales-001");
+  assert.equal(subjectIdExampleFromSelector("user:*"), "user:example");
+  assert.equal(subjectIdExampleFromSelector("user:sales-*"), "user:sales-example");
 });

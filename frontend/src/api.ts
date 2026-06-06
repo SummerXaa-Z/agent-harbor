@@ -15,6 +15,7 @@ import {
 } from './data'
 import { normalizeAccessProfileFilters } from './accessProfile'
 import {
+  accessDecisionExplainPath,
   permissionPackageApprovalRequestsPath,
   type PermissionPackageApprovalRequestPathFilter,
 } from './apiPaths'
@@ -29,6 +30,8 @@ import type {
 } from './permissionPackages'
 import type {
   AccessGrant,
+  AccessDecisionExplainRequest,
+  AccessDecisionExplainResult,
   AccessProfileFilters,
   Agent,
   ApiEnvelope,
@@ -381,6 +384,14 @@ export async function loadTenantAccessProfile(
     loadedFromApi: result.ok,
     apiBase,
   }
+}
+
+export async function fetchAccessDecisionExplanation(
+  requestBody: AccessDecisionExplainRequest,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<AccessDecisionExplainResult> {
+  return request<AccessDecisionExplainResult>(accessDecisionExplainPath(requestBody), { adminKey, signal })
 }
 
 export async function refreshTargetCapabilities(targetId: string, adminKey?: string): Promise<Capability[]> {

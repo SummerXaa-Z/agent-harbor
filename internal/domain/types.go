@@ -489,6 +489,60 @@ type PermissionPackageApplyResponse struct {
 	Application          *PermissionPackageApplication `json:"application,omitempty"`
 }
 
+type PermissionPackagePreflightSeverity string
+
+const (
+	PermissionPackagePreflightPassed   PermissionPackagePreflightSeverity = "passed"
+	PermissionPackagePreflightInfo     PermissionPackagePreflightSeverity = "info"
+	PermissionPackagePreflightWarning  PermissionPackagePreflightSeverity = "warning"
+	PermissionPackagePreflightBlocking PermissionPackagePreflightSeverity = "blocking"
+)
+
+type PermissionPackageApplyPreflightResponse struct {
+	Draft          PermissionPackageDraft                         `json:"draft"`
+	Summary        PermissionPackageApplyPreflightSummary         `json:"summary"`
+	Checks         []PermissionPackageApplyPreflightCheck         `json:"checks"`
+	Planned        PermissionPackageApplyPreflightPlannedChanges  `json:"planned"`
+	ExistingGrants []PermissionPackageApplyPreflightExistingGrant `json:"existingGrants"`
+	NextActions    []string                                       `json:"nextActions"`
+}
+
+type PermissionPackageApplyPreflightSummary struct {
+	CanApply                        bool `json:"canApply"`
+	BlockingCount                   int  `json:"blockingCount"`
+	WarningCount                    int  `json:"warningCount"`
+	PlannedCapabilityCount          int  `json:"plannedCapabilityCount"`
+	PlannedTenantEntitlementCount   int  `json:"plannedTenantEntitlementCount"`
+	PlannedWorkspaceAssignmentCount int  `json:"plannedWorkspaceAssignmentCount"`
+	PlannedInstanceAssignmentCount  int  `json:"plannedInstanceAssignmentCount"`
+	ExistingGrantCount              int  `json:"existingGrantCount"`
+	RequiresApproval                bool `json:"requiresApproval"`
+	ApprovalReady                   bool `json:"approvalReady"`
+}
+
+type PermissionPackageApplyPreflightCheck struct {
+	Code          string                             `json:"code"`
+	Severity      PermissionPackagePreflightSeverity `json:"severity"`
+	Message       string                             `json:"message"`
+	CapabilityID  string                             `json:"capabilityId,omitempty"`
+	CapabilityKey string                             `json:"capabilityKey,omitempty"`
+}
+
+type PermissionPackageApplyPreflightPlannedChanges struct {
+	Capabilities         []Capability          `json:"capabilities"`
+	TenantEntitlements   []TenantEntitlement   `json:"tenantEntitlements"`
+	WorkspaceAssignments []WorkspaceAssignment `json:"workspaceAssignments"`
+	InstanceAssignments  []InstanceAssignment  `json:"instanceAssignments"`
+}
+
+type PermissionPackageApplyPreflightExistingGrant struct {
+	CapabilityID          string `json:"capabilityId"`
+	CapabilityKey         string `json:"capabilityKey"`
+	TenantEntitlementID   string `json:"tenantEntitlementId"`
+	WorkspaceAssignmentID string `json:"workspaceAssignmentId"`
+	InstanceAssignmentID  string `json:"instanceAssignmentId"`
+}
+
 type PermissionPackageApprovalRequest struct {
 	ID                      string                          `json:"id"`
 	DraftID                 string                          `json:"draftId"`

@@ -296,6 +296,37 @@ print(f"approval request {expected_status} verified")
 PY
 }
 
+assert_permission_package_preflight() {
+  local expected_can_apply="$1"
+  local expected_check="$2"
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_can_apply" "$expected_check" <<'PY'
+import json
+import os
+import sys
+
+preflight = json.loads(os.environ["RESPONSE_BODY"])["data"]
+expected_can_apply = sys.argv[1] == "true"
+expected_check = sys.argv[2]
+summary = preflight.get("summary") or {}
+if summary.get("canApply") is not expected_can_apply:
+    raise SystemExit(f"preflight canApply={summary.get('canApply')!r} want {expected_can_apply!r}: {summary}")
+codes = {check.get("code"): check for check in preflight.get("checks", [])}
+if expected_check not in codes:
+    raise SystemExit(f"preflight missing check {expected_check!r}: {codes}")
+if expected_can_apply:
+    if summary.get("blockingCount") != 0:
+        raise SystemExit(f"ready preflight should have zero blockers: {summary}")
+    if summary.get("plannedCapabilityCount", 0) < 1:
+        raise SystemExit(f"ready preflight should include planned capabilities: {summary}")
+else:
+    if summary.get("blockingCount", 0) < 1:
+        raise SystemExit(f"blocked preflight should include blockers: {summary}")
+if "application" in preflight:
+    raise SystemExit(f"preflight must not return an application record: {preflight}")
+print(f"permission package preflight verified: canApply={expected_can_apply} check={expected_check}")
+PY
+}
+
 assert_listed_approval() {
   local expected_id="$1"
   RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_id" <<'PY'
@@ -310,6 +341,25 @@ if not rows:
 if rows[0]["id"] != expected_id or rows[0]["status"] != "pending":
     raise SystemExit(f"unexpected listed approval request: {rows[:1]}")
 print("approval request list verified")
+PY
+}
+
+assert_unconsumed_approval() {
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$APPROVAL_REQUEST_ID" <<'PY'
+import json
+import os
+import sys
+
+rows = json.loads(os.environ["RESPONSE_BODY"])["data"]
+approval_request_id = sys.argv[1]
+if not rows:
+    raise SystemExit("expected one listed approved approval request")
+approval = rows[0]
+if approval["id"] != approval_request_id or approval["status"] != "approved":
+    raise SystemExit(f"unexpected approved approval request: {approval}")
+if approval.get("consumedByApplicationId") or approval.get("consumedAt"):
+    raise SystemExit(f"preflight should not consume approval request: {approval}")
+print("approval request remains unconsumed after preflight")
 PY
 }
 
@@ -739,6 +789,10 @@ request POST "/api/v1/permission-packages/drafts" "$(permission_package_body)"
 expect_status 200 "draft approval-required permission package"
 assert_approval_required_draft
 
+request POST "/api/v1/permission-packages:preflight" "$(permission_package_body)"
+expect_status 200 "preflight approval-required package without approval"
+assert_permission_package_preflight "false" "approval_request_missing"
+
 request POST "/api/v1/permission-packages:apply" "$(permission_package_body)"
 expect_status 400 "reject approval-required package without approval"
 echo "direct apply without approval rejected"
@@ -755,6 +809,14 @@ assert_listed_approval "$APPROVAL_REQUEST_ID"
 request POST "/api/v1/permission-packages/approval-requests/$APPROVAL_REQUEST_ID/approve" "$(json_body approval-resolution "security-reviewer" "approved for local production journey scenario")"
 expect_status 200 "approve approval request"
 assert_approval_request "approved" "$APPROVAL_REQUEST_ID"
+
+request POST "/api/v1/permission-packages:preflight" "$(permission_package_body "$APPROVAL_REQUEST_ID")"
+expect_status 200 "preflight approved permission package"
+assert_permission_package_preflight "true" "approval_request_ready"
+
+request GET "/api/v1/permission-packages/approval-requests?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID&templateId=$TEMPLATE_ID&targetId=$TARGET_ID&callerInstanceId=$CALLER_ID&status=approved&limit=1"
+expect_status 200 "list unconsumed approval request after preflight"
+assert_unconsumed_approval
 
 request POST "/api/v1/permission-packages:apply" "$(permission_package_body "$APPROVAL_REQUEST_ID")"
 expect_status 201 "apply approved permission package"

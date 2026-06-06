@@ -202,6 +202,16 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 			return managementMCPCallResult{}, err
 		}
 		return managementMCPResult(draft), nil
+	case "preflight_permission_package":
+		args, err := decodeManagementMCPArguments[domain.PermissionPackageApplyRequest](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		preflight, err := s.preflightPermissionPackageRequest(r.Context(), args)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(preflight), nil
 	case "apply_permission_package":
 		args, err := decodeManagementMCPArguments[domain.PermissionPackageApplyRequest](req.Params.Arguments)
 		if err != nil {
@@ -358,6 +368,11 @@ func managementMCPTools() []managementMCPTool {
 			Name:        "draft_permission_package",
 			Description: "Build a permission package draft with allowed capabilities, blocked capabilities, data scopes, readiness, and simulation rows.",
 			InputSchema: permissionPackageDraftSchema(),
+		},
+		{
+			Name:        "preflight_permission_package",
+			Description: "Run a read-only permission package apply preflight with blockers, warnings, planned changes, approval readiness, and existing grant-chain evidence.",
+			InputSchema: permissionPackageApplySchema(),
 		},
 		{
 			Name:        "apply_permission_package",

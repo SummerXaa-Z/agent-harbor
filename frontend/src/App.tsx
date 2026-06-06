@@ -122,6 +122,7 @@ import {
   type PermissionPackageApprovalRequest,
   type PermissionPackageDraft,
   type PermissionPackageDraftInput,
+  type PermissionPackageRemediationAction,
   type PermissionPackageSimulationRow,
   type PermissionPackageTemplate
 } from "./permissionPackages";
@@ -2940,6 +2941,9 @@ function PermissionApplicationImpactPanel({
 }) {
   const rollbackBlockers = impact?.rollbackReview.blockers ?? [];
   const rollbackSteps = impact?.rollbackReview.steps ?? [];
+  const remediationPlan = impact?.remediationPlan;
+  const remediationBlockers = remediationPlan?.blockers ?? [];
+  const remediationActions = remediationPlan?.actions ?? [];
   return (
     <div className="permission-application-impact">
       <div className="permission-impact-header">
@@ -3023,9 +3027,53 @@ function PermissionApplicationImpactPanel({
             ) : null}
             <ol>
               {rollbackSteps.map((step) => (
-                <li key={step}>{step}</li>
+                <li key={step}>{permissionRollbackStepLabel(step, t)}</li>
               ))}
             </ol>
+          </div>
+
+          <div className="permission-impact-review permission-remediation-plan">
+            <div className="permission-section-title">
+              <strong>{t("text.remediationPlan")}</strong>
+              <span>{remediationActions.length} {t("metric.plannedActions")}</span>
+            </div>
+            <div className="permission-remediation-summary">
+              <Badge tone={remediationPlan?.ready ? "success" : "warning"}>
+                {remediationPlan?.ready ? t("status.readyToApply") : t("status.needsReview")}
+              </Badge>
+              <Badge tone="info">
+                {translatedValue(t, remediationPlan?.executionMode) || t("text.readOnlyPlan")}
+              </Badge>
+            </div>
+            {remediationBlockers.length > 0 ? (
+              <ul className="permission-impact-blockers">
+                {remediationBlockers.map((blocker) => (
+                  <li key={blocker}>{blocker}</li>
+                ))}
+              </ul>
+            ) : null}
+            {remediationActions.length > 0 ? (
+              <div className="permission-impact-list">
+                {remediationActions.map((action) => (
+                  <article className="permission-impact-row permission-remediation-row" key={action.id}>
+                    <Badge tone={permissionRemediationActionTone(action.action)}>
+                      #{action.order}
+                    </Badge>
+                    <div>
+                      <strong>{permissionRemediationTargetLabel(action.targetType, t)}</strong>
+                      <code>{action.targetId || action.id}</code>
+                      <span>{translatedValue(t, action.reason)}</span>
+                    </div>
+                    <span>
+                      {action.readOnly ? `${t("text.readOnlyPlan")} · ` : ""}
+                      {translatedValue(t, action.action)}
+                    </span>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <span className="permission-impact-empty">{t("empty.remediationActions.detail")}</span>
+            )}
           </div>
         </>
       ) : (
@@ -4483,6 +4531,34 @@ function permissionImpactObjectLabel(type: string, t: Translator) {
   if (type === "workspace_assignment") return t("text.workspaceAssignment");
   if (type === "instance_assignment") return t("text.instanceAssignment");
   return type.replaceAll("_", " ");
+}
+
+function permissionRemediationTargetLabel(type: string, t: Translator) {
+  if (type === "capability") return t("text.capability");
+  if (type === "access_decision") return t("text.finalAccessVerification");
+  return permissionImpactObjectLabel(type, t);
+}
+
+function permissionRemediationActionTone(action: PermissionPackageRemediationAction["action"]): Tone {
+  if (action === "disable") return "warning";
+  if (action === "investigate") return "danger";
+  if (action === "verify") return "info";
+  return "neutral";
+}
+
+function permissionRollbackStepLabel(step: string, t: Translator) {
+  switch (step) {
+    case "Review capability discovery status manually; shared capabilities are not automatically downgraded by rollback.":
+      return t("rollbackStep.capabilityManualReview");
+    case "Disable recorded instance assignments before workspace assignments.":
+      return t("rollbackStep.disableInstanceAssignments");
+    case "Disable recorded workspace assignments before tenant entitlements.":
+      return t("rollbackStep.disableWorkspaceAssignments");
+    case "Disable recorded tenant entitlements and then verify effective access decisions.":
+      return t("rollbackStep.disableTenantEntitlements");
+    default:
+      return step;
+  }
 }
 
 function permissionImpactStatusLabel(status: string, t: Translator) {

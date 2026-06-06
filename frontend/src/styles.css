@@ -1866,6 +1866,25 @@ td code {
   border-top: 1px solid #edf1f5;
 }
 
+.permission-remediation-summary {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.permission-remediation-row {
+  grid-template-columns: auto minmax(0, 1fr) minmax(110px, auto);
+}
+
+.permission-remediation-row > div span {
+  color: #475663;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+}
+
 .permission-impact-review ol,
 .permission-impact-blockers {
   display: grid;

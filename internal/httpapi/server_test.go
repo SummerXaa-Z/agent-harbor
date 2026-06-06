@@ -220,6 +220,7 @@ type permissionPackageApplicationImpactResponse struct {
 	CreatedObjects    []permissionPackageImpactObject      `json:"createdObjects"`
 	CapabilityReviews []permissionPackageImpactCapability  `json:"capabilityReviews"`
 	RollbackReview    permissionPackageRollbackReview      `json:"rollbackReview"`
+	RemediationPlan   permissionPackageRemediationPlan     `json:"remediationPlan"`
 }
 
 type permissionPackageImpactSummary struct {
@@ -248,6 +249,24 @@ type permissionPackageRollbackReview struct {
 	Ready    bool     `json:"ready"`
 	Blockers []string `json:"blockers"`
 	Steps    []string `json:"steps"`
+}
+
+type permissionPackageRemediationPlan struct {
+	ExecutionMode string                               `json:"executionMode"`
+	Ready         bool                                 `json:"ready"`
+	Blockers      []string                             `json:"blockers"`
+	Actions       []permissionPackageRemediationAction `json:"actions"`
+}
+
+type permissionPackageRemediationAction struct {
+	ID            string `json:"id"`
+	Order         int    `json:"order"`
+	TargetType    string `json:"targetType"`
+	TargetID      string `json:"targetId"`
+	Action        string `json:"action"`
+	CurrentStatus string `json:"currentStatus"`
+	Reason        string `json:"reason"`
+	ReadOnly      bool   `json:"readOnly"`
 }
 
 type permissionPackageApprovalRequestResponse struct {
@@ -2886,6 +2905,33 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	if impact.RollbackReview.Blockers == nil {
 		t.Fatalf("expected rollback blockers to encode as an empty array, got nil")
 	}
+	if impact.RemediationPlan.ExecutionMode != "read_only" || !impact.RemediationPlan.Ready {
+		t.Fatalf("expected ready read-only remediation plan, got %#v", impact.RemediationPlan)
+	}
+	if impact.RemediationPlan.Blockers == nil || len(impact.RemediationPlan.Blockers) != 0 {
+		t.Fatalf("expected remediation blockers to encode as an empty array, got %#v", impact.RemediationPlan.Blockers)
+	}
+	if len(impact.RemediationPlan.Actions) == 0 {
+		t.Fatalf("expected remediation actions, got %#v", impact.RemediationPlan)
+	}
+	for _, action := range impact.RemediationPlan.Actions {
+		if !action.ReadOnly {
+			t.Fatalf("expected all remediation actions to be read-only, got %#v in %#v", action, impact.RemediationPlan.Actions)
+		}
+	}
+	if !remediationActionsContain(impact.RemediationPlan.Actions, "capability", search.ID, "manual_review") ||
+		!remediationActionsContain(impact.RemediationPlan.Actions, "instance_assignment", applied.InstanceAssignments[0].ID, "disable") ||
+		!remediationActionsContain(impact.RemediationPlan.Actions, "workspace_assignment", applied.WorkspaceAssignments[0].ID, "disable") ||
+		!remediationActionsContain(impact.RemediationPlan.Actions, "tenant_entitlement", applied.TenantEntitlements[0].ID, "disable") ||
+		!remediationActionsContain(impact.RemediationPlan.Actions, "access_decision", applied.Application.ID, "verify") {
+		t.Fatalf("expected complete remediation action sequence, got %#v", impact.RemediationPlan.Actions)
+	}
+	instanceOrder := remediationActionOrder(impact.RemediationPlan.Actions, "instance_assignment", applied.InstanceAssignments[0].ID, "disable")
+	workspaceOrder := remediationActionOrder(impact.RemediationPlan.Actions, "workspace_assignment", applied.WorkspaceAssignments[0].ID, "disable")
+	tenantOrder := remediationActionOrder(impact.RemediationPlan.Actions, "tenant_entitlement", applied.TenantEntitlements[0].ID, "disable")
+	if instanceOrder == 0 || workspaceOrder == 0 || tenantOrder == 0 || !(instanceOrder < workspaceOrder && workspaceOrder < tenantOrder) {
+		t.Fatalf("expected instance before workspace before tenant remediation order, got actions %#v", impact.RemediationPlan.Actions)
+	}
 	badLimit := request(t, router, http.MethodGet, "/api/v1/permission-packages/applications?limit=0", nil, "")
 	if badLimit.Code != http.StatusBadRequest {
 		t.Fatalf("expected invalid application limit to fail, status=%d body=%s", badLimit.Code, badLimit.Body.String())
@@ -4292,6 +4338,19 @@ func impactObjectsContain(rows []permissionPackageImpactObject, objectType strin
 		}
 	}
 	return false
+}
+
+func remediationActionsContain(rows []permissionPackageRemediationAction, targetType string, targetID string, action string) bool {
+	return remediationActionOrder(rows, targetType, targetID, action) > 0
+}
+
+func remediationActionOrder(rows []permissionPackageRemediationAction, targetType string, targetID string, action string) int {
+	for _, row := range rows {
+		if row.TargetType == targetType && row.TargetID == targetID && row.Action == action {
+			return row.Order
+		}
+	}
+	return 0
 }
 
 func explainEvidenceContains(rows []managementMCPExplainEvidence, layer string) bool {

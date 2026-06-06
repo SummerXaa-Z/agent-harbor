@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -1186,6 +1187,7 @@ type permissionPackageApplicationImpactResponse struct {
 	CreatedObjects    []permissionPackageApplicationImpactObject     `json:"createdObjects"`
 	CapabilityReviews []permissionPackageApplicationImpactCapability `json:"capabilityReviews"`
 	RollbackReview    permissionPackageApplicationRollbackReview     `json:"rollbackReview"`
+	RemediationPlan   permissionPackageApplicationRemediationPlan    `json:"remediationPlan"`
 }
 
 type permissionPackageApplicationImpactSummary struct {
@@ -1214,6 +1216,24 @@ type permissionPackageApplicationRollbackReview struct {
 	Ready    bool     `json:"ready"`
 	Blockers []string `json:"blockers"`
 	Steps    []string `json:"steps"`
+}
+
+type permissionPackageApplicationRemediationPlan struct {
+	ExecutionMode string                                          `json:"executionMode"`
+	Ready         bool                                            `json:"ready"`
+	Blockers      []string                                        `json:"blockers"`
+	Actions       []permissionPackageApplicationRemediationAction `json:"actions"`
+}
+
+type permissionPackageApplicationRemediationAction struct {
+	ID            string `json:"id"`
+	Order         int    `json:"order"`
+	TargetType    string `json:"targetType"`
+	TargetID      string `json:"targetId"`
+	Action        string `json:"action"`
+	CurrentStatus string `json:"currentStatus,omitempty"`
+	Reason        string `json:"reason"`
+	ReadOnly      bool   `json:"readOnly"`
 }
 
 func (s *Server) getPermissionPackageApplicationImpact(w http.ResponseWriter, r *http.Request) {
@@ -1264,12 +1284,14 @@ func (s *Server) permissionPackageApplicationImpact(ctx context.Context, applica
 	summary.RollbackReady = summary.CreatedObjectCount > 0 &&
 		summary.ActiveObjectCount == summary.CreatedObjectCount &&
 		summary.MissingObjectCount == 0
+	rollbackReview := permissionPackageApplicationRollbackReviewFor(application, summary)
 	return permissionPackageApplicationImpactResponse{
 		Application:       application,
 		Summary:           summary,
 		CreatedObjects:    createdObjects,
 		CapabilityReviews: capabilityReviews,
-		RollbackReview:    permissionPackageApplicationRollbackReviewFor(application, summary),
+		RollbackReview:    rollbackReview,
+		RemediationPlan:   permissionPackageApplicationRemediationPlanFor(application, createdObjects, capabilityReviews, rollbackReview),
 	}, nil
 }
 
@@ -1412,6 +1434,71 @@ func permissionPackageApplicationRollbackReviewFor(application domain.Permission
 		review.Ready = false
 	}
 	return review
+}
+
+func permissionPackageApplicationRemediationPlanFor(application domain.PermissionPackageApplication, createdObjects []permissionPackageApplicationImpactObject, capabilityReviews []permissionPackageApplicationImpactCapability, rollbackReview permissionPackageApplicationRollbackReview) permissionPackageApplicationRemediationPlan {
+	plan := permissionPackageApplicationRemediationPlan{
+		ExecutionMode: "read_only",
+		Ready:         rollbackReview.Ready,
+		Blockers:      append([]string{}, rollbackReview.Blockers...),
+		Actions:       []permissionPackageApplicationRemediationAction{},
+	}
+	for _, capability := range capabilityReviews {
+		action := capability.RollbackAction
+		reason := "shared_capability_manual_review"
+		if action == "investigate" {
+			reason = "capability_drift_investigation"
+		}
+		plan.addAction("capability", capability.ID, action, capability.CurrentStatus, reason)
+	}
+	for _, objectType := range []string{"instance_assignment", "workspace_assignment", "tenant_entitlement"} {
+		for _, object := range createdObjects {
+			if object.Type != objectType || object.RollbackAction == "disable" {
+				continue
+			}
+			plan.addAction(object.Type, object.ID, "investigate", object.CurrentStatus, "grant_drift_investigation")
+		}
+	}
+	for _, objectType := range []string{"instance_assignment", "workspace_assignment", "tenant_entitlement"} {
+		for _, object := range createdObjects {
+			if object.Type != objectType || object.RollbackAction != "disable" {
+				continue
+			}
+			plan.addAction(object.Type, object.ID, "disable", object.CurrentStatus, permissionPackageDisableRemediationReason(object.Type))
+		}
+	}
+	plan.addAction("access_decision", application.ID, "verify", "", "verify_effective_access")
+	if len(plan.Blockers) > 0 {
+		plan.Ready = false
+	}
+	return plan
+}
+
+func (plan *permissionPackageApplicationRemediationPlan) addAction(targetType string, targetID string, action string, currentStatus string, reason string) {
+	order := len(plan.Actions) + 1
+	plan.Actions = append(plan.Actions, permissionPackageApplicationRemediationAction{
+		ID:            fmt.Sprintf("remediation:%02d:%s:%s:%s", order, targetType, targetID, action),
+		Order:         order,
+		TargetType:    targetType,
+		TargetID:      targetID,
+		Action:        action,
+		CurrentStatus: currentStatus,
+		Reason:        reason,
+		ReadOnly:      true,
+	})
+}
+
+func permissionPackageDisableRemediationReason(objectType string) string {
+	switch objectType {
+	case "instance_assignment":
+		return "disable_instance_assignment"
+	case "workspace_assignment":
+		return "disable_workspace_assignment"
+	case "tenant_entitlement":
+		return "disable_tenant_entitlement"
+	default:
+		return "grant_drift_investigation"
+	}
 }
 
 func (s *Server) listPermissionPackageApprovalRequests(w http.ResponseWriter, r *http.Request) {

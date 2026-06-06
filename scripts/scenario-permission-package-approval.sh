@@ -482,13 +482,13 @@ PY
 }
 
 assert_application_impact() {
-  RESPONSE_BODY="$HTTP_BODY" python3 - "$APPLICATION_ID" "$READ_TOOL" "$WRITE_TOOL" <<'PY'
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$APPLICATION_ID" "$READ_TOOL" "$WRITE_TOOL" "$READ_CAPABILITY_ID" "$WRITE_CAPABILITY_ID" <<'PY'
 import json
 import os
 import sys
 
 impact = json.loads(os.environ["RESPONSE_BODY"])["data"]
-application_id, read_tool, write_tool = sys.argv[1:4]
+application_id, read_tool, write_tool, read_capability_id, write_capability_id = sys.argv[1:6]
 if impact["application"]["id"] != application_id:
     raise SystemExit(f"impact application id mismatch: {impact['application']}")
 summary = impact["summary"]
@@ -520,6 +520,38 @@ if review.get("blockers") != []:
     raise SystemExit(f"rollback blockers should be an empty array: {review}")
 if not review.get("steps"):
     raise SystemExit(f"rollback review should include steps: {review}")
+plan = impact.get("remediationPlan") or {}
+if plan.get("executionMode") != "read_only":
+    raise SystemExit(f"remediation executionMode={plan.get('executionMode')!r}: {plan}")
+if plan.get("ready") is not True:
+    raise SystemExit(f"remediation plan should be ready: {plan}")
+if plan.get("blockers") != []:
+    raise SystemExit(f"remediation blockers should be an empty array: {plan}")
+actions = plan.get("actions") or []
+if not actions:
+    raise SystemExit(f"remediation plan should include actions: {plan}")
+if any(action.get("readOnly") is not True for action in actions):
+    raise SystemExit(f"all remediation actions must be read-only: {actions}")
+
+def action_order(target_type, target_id, action_name):
+    for row in actions:
+        if row.get("targetType") == target_type and row.get("targetId") == target_id and row.get("action") == action_name:
+            return int(row.get("order") or 0)
+    return 0
+
+for capability_id in (read_capability_id, write_capability_id):
+    if not action_order("capability", capability_id, "manual_review"):
+        raise SystemExit(f"missing capability manual review remediation action for {capability_id}: {actions}")
+for object_type in ("tenant_entitlement", "workspace_assignment", "instance_assignment"):
+    if not any(row.get("targetType") == object_type and row.get("action") == "disable" for row in actions):
+        raise SystemExit(f"missing {object_type} disable remediation action: {actions}")
+if not action_order("access_decision", application_id, "verify"):
+    raise SystemExit(f"missing final access decision verification action: {actions}")
+first_instance = min((int(row.get("order") or 0) for row in actions if row.get("targetType") == "instance_assignment" and row.get("action") == "disable"), default=0)
+first_workspace = min((int(row.get("order") or 0) for row in actions if row.get("targetType") == "workspace_assignment" and row.get("action") == "disable"), default=0)
+first_tenant = min((int(row.get("order") or 0) for row in actions if row.get("targetType") == "tenant_entitlement" and row.get("action") == "disable"), default=0)
+if not (first_instance and first_workspace and first_tenant and first_instance < first_workspace < first_tenant):
+    raise SystemExit(f"disable remediation actions should be ordered instance -> workspace -> tenant: {actions}")
 print("permission package application impact verified")
 PY
 }

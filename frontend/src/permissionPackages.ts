@@ -95,6 +95,7 @@ export interface PermissionPackageApplicationImpact {
   createdObjects: PermissionPackageImpactObject[];
   capabilityReviews: PermissionPackageImpactCapability[];
   rollbackReview: PermissionPackageRollbackReview;
+  remediationPlan: PermissionPackageRemediationPlan;
 }
 
 export interface PermissionPackageImpactSummary {
@@ -123,6 +124,24 @@ export interface PermissionPackageRollbackReview {
   ready: boolean;
   blockers: string[];
   steps: string[];
+}
+
+export interface PermissionPackageRemediationPlan {
+  executionMode: string;
+  ready: boolean;
+  blockers: string[];
+  actions: PermissionPackageRemediationAction[];
+}
+
+export interface PermissionPackageRemediationAction {
+  id: string;
+  order: number;
+  targetType: string;
+  targetId: string;
+  action: string;
+  currentStatus?: string;
+  reason: string;
+  readOnly: boolean;
 }
 
 export interface PermissionPackageApprovalRequest {

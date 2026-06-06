@@ -1741,6 +1741,146 @@ td code {
   white-space: nowrap;
 }
 
+.permission-application-impact {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid #edf1f5;
+}
+
+.permission-impact-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.permission-impact-header > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.permission-impact-header strong {
+  color: #1f2a34;
+  font-size: 13px;
+}
+
+.permission-impact-header span,
+.permission-impact-empty {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission-impact-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.permission-impact-metrics div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #edf1f5;
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.permission-impact-metrics span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.permission-impact-metrics strong {
+  display: block;
+  margin-top: 4px;
+  color: #1f2a34;
+  font-size: 18px;
+}
+
+.permission-impact-list {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.permission-impact-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(76px, auto);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #edf1f5;
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.permission-impact-row > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.permission-impact-row strong,
+.permission-impact-row code,
+.permission-impact-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission-impact-row strong {
+  color: #1f2a34;
+  font-size: 12px;
+}
+
+.permission-impact-row code {
+  color: #475663;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+}
+
+.permission-impact-row span {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.permission-impact-review {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid #edf1f5;
+}
+
+.permission-impact-review ol,
+.permission-impact-blockers {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: #40505f;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.permission-impact-blockers {
+  color: #9f4a4a;
+}
+
 .permission-approval-request {
   display: grid;
   gap: 9px;
@@ -2837,6 +2977,20 @@ td code {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .permission-impact-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .permission-impact-metrics,
+  .permission-impact-row {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-impact-row span {
+    text-align: left;
+  }
+
   .permission-reviewer-row-actions {
     justify-content: flex-start;
   }
@@ -2928,6 +3082,8 @@ td code {
   .ai-admin-fields,
   .permission-application-grid,
   .permission-approval-grid,
+  .permission-impact-metrics,
+  .permission-impact-row,
   .permission-reviewer-controls,
   .permission-reviewer-row,
   .permission-metrics,

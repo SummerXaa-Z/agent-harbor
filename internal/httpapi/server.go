@@ -147,6 +147,7 @@ func (s *Server) Router() http.Handler {
 			r.Patch("/capabilities/{id}", s.updateCapability)
 			r.Get("/permission-packages/templates", s.listPermissionPackageTemplates)
 			r.Get("/permission-packages/applications", s.listPermissionPackageApplications)
+			r.Get("/permission-packages/applications/{id}/impact", s.getPermissionPackageApplicationImpact)
 			r.Get("/permission-packages/approval-requests", s.listPermissionPackageApprovalRequests)
 			r.Post("/permission-packages/approval-requests", s.createPermissionPackageApprovalRequest)
 			r.Post("/permission-packages/approval-requests/{id}/approve", s.approvePermissionPackageApprovalRequest)
@@ -1177,6 +1178,240 @@ func (s *Server) listPermissionPackageApplications(w http.ResponseWriter, r *htt
 		return
 	}
 	writeJSON(w, http.StatusOK, rows)
+}
+
+type permissionPackageApplicationImpactResponse struct {
+	Application       domain.PermissionPackageApplication            `json:"application"`
+	Summary           permissionPackageApplicationImpactSummary      `json:"summary"`
+	CreatedObjects    []permissionPackageApplicationImpactObject     `json:"createdObjects"`
+	CapabilityReviews []permissionPackageApplicationImpactCapability `json:"capabilityReviews"`
+	RollbackReview    permissionPackageApplicationRollbackReview     `json:"rollbackReview"`
+}
+
+type permissionPackageApplicationImpactSummary struct {
+	CreatedObjectCount int  `json:"createdObjectCount"`
+	ActiveObjectCount  int  `json:"activeObjectCount"`
+	MissingObjectCount int  `json:"missingObjectCount"`
+	RollbackReady      bool `json:"rollbackReady"`
+}
+
+type permissionPackageApplicationImpactObject struct {
+	ID             string             `json:"id"`
+	Type           string             `json:"type"`
+	CurrentStatus  string             `json:"currentStatus"`
+	RollbackAction string             `json:"rollbackAction"`
+	DataScopes     []domain.DataScope `json:"dataScopes,omitempty"`
+}
+
+type permissionPackageApplicationImpactCapability struct {
+	ID             string `json:"id"`
+	Key            string `json:"key,omitempty"`
+	CurrentStatus  string `json:"currentStatus"`
+	RollbackAction string `json:"rollbackAction"`
+}
+
+type permissionPackageApplicationRollbackReview struct {
+	Ready    bool     `json:"ready"`
+	Blockers []string `json:"blockers"`
+	Steps    []string `json:"steps"`
+}
+
+func (s *Server) getPermissionPackageApplicationImpact(w http.ResponseWriter, r *http.Request) {
+	applicationID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if applicationID == "" {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "permission package application id is required"))
+		return
+	}
+	rows, err := s.repo.ListPermissionPackageApplications(r.Context(), store.PermissionPackageApplicationFilter{
+		ID:              applicationID,
+		ManagementScope: managementScopeFromRequest(r),
+		Limit:           1,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if len(rows) == 0 {
+		writeError(w, domain.NotFound("permission package application not found"))
+		return
+	}
+	impact, err := s.permissionPackageApplicationImpact(r.Context(), rows[0])
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, impact)
+}
+
+func (s *Server) permissionPackageApplicationImpact(ctx context.Context, application domain.PermissionPackageApplication) (permissionPackageApplicationImpactResponse, error) {
+	createdObjects, err := s.permissionPackageApplicationImpactObjects(ctx, application)
+	if err != nil {
+		return permissionPackageApplicationImpactResponse{}, err
+	}
+	capabilityReviews, err := s.permissionPackageApplicationImpactCapabilities(ctx, application)
+	if err != nil {
+		return permissionPackageApplicationImpactResponse{}, err
+	}
+	summary := permissionPackageApplicationImpactSummary{CreatedObjectCount: len(createdObjects)}
+	for _, row := range createdObjects {
+		switch row.CurrentStatus {
+		case string(domain.PolicyStatusEnabled):
+			summary.ActiveObjectCount++
+		case "missing":
+			summary.MissingObjectCount++
+		}
+	}
+	summary.RollbackReady = summary.CreatedObjectCount > 0 &&
+		summary.ActiveObjectCount == summary.CreatedObjectCount &&
+		summary.MissingObjectCount == 0
+	return permissionPackageApplicationImpactResponse{
+		Application:       application,
+		Summary:           summary,
+		CreatedObjects:    createdObjects,
+		CapabilityReviews: capabilityReviews,
+		RollbackReview:    permissionPackageApplicationRollbackReviewFor(application, summary),
+	}, nil
+}
+
+func (s *Server) permissionPackageApplicationImpactObjects(ctx context.Context, application domain.PermissionPackageApplication) ([]permissionPackageApplicationImpactObject, error) {
+	objects := make([]permissionPackageApplicationImpactObject, 0,
+		len(application.TenantEntitlementIDs)+len(application.WorkspaceAssignmentIDs)+len(application.InstanceAssignmentIDs))
+
+	entitlements, err := s.repo.ListTenantEntitlements(ctx, store.EntitlementFilter{
+		ManagementScope: store.ManagementScope{TenantID: application.TenantID},
+		TargetID:        application.TargetID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	entitlementByID := map[string]domain.TenantEntitlement{}
+	for _, entitlement := range entitlements {
+		entitlementByID[entitlement.ID] = entitlement
+	}
+	for _, id := range application.TenantEntitlementIDs {
+		if entitlement, ok := entitlementByID[id]; ok {
+			objects = append(objects, permissionPackageImpactObjectFromGrant("tenant_entitlement", entitlement.ID, string(entitlement.Status), entitlement.DataScopes))
+		} else {
+			objects = append(objects, missingPermissionPackageImpactObject("tenant_entitlement", id))
+		}
+	}
+
+	workspaceAssignments, err := s.repo.ListWorkspaceAssignments(ctx, store.AssignmentFilter{
+		ManagementScope: store.ManagementScope{TenantID: application.TenantID, WorkspaceID: application.WorkspaceID},
+	})
+	if err != nil {
+		return nil, err
+	}
+	workspaceAssignmentByID := map[string]domain.WorkspaceAssignment{}
+	for _, assignment := range workspaceAssignments {
+		workspaceAssignmentByID[assignment.ID] = assignment
+	}
+	for _, id := range application.WorkspaceAssignmentIDs {
+		if assignment, ok := workspaceAssignmentByID[id]; ok {
+			objects = append(objects, permissionPackageImpactObjectFromGrant("workspace_assignment", assignment.ID, string(assignment.Status), assignment.DataScopes))
+		} else {
+			objects = append(objects, missingPermissionPackageImpactObject("workspace_assignment", id))
+		}
+	}
+
+	instanceAssignments, err := s.repo.ListInstanceAssignments(ctx, store.InstanceAssignmentFilter{
+		ManagementScope:  store.ManagementScope{TenantID: application.TenantID, WorkspaceID: application.WorkspaceID},
+		CallerInstanceID: application.CallerInstanceID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	instanceAssignmentByID := map[string]domain.InstanceAssignment{}
+	for _, assignment := range instanceAssignments {
+		instanceAssignmentByID[assignment.ID] = assignment
+	}
+	for _, id := range application.InstanceAssignmentIDs {
+		if assignment, ok := instanceAssignmentByID[id]; ok {
+			objects = append(objects, permissionPackageImpactObjectFromGrant("instance_assignment", assignment.ID, string(assignment.Status), assignment.DataScopes))
+		} else {
+			objects = append(objects, missingPermissionPackageImpactObject("instance_assignment", id))
+		}
+	}
+	return objects, nil
+}
+
+func (s *Server) permissionPackageApplicationImpactCapabilities(ctx context.Context, application domain.PermissionPackageApplication) ([]permissionPackageApplicationImpactCapability, error) {
+	rows := make([]permissionPackageApplicationImpactCapability, 0, len(application.AllowedCapabilityIDs))
+	for index, id := range application.AllowedCapabilityIDs {
+		capability, ok, err := s.repo.GetCapability(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			rows = append(rows, permissionPackageApplicationImpactCapability{
+				ID:             capability.ID,
+				Key:            capability.Key,
+				CurrentStatus:  string(capability.DiscoveryStatus),
+				RollbackAction: "manual_review",
+			})
+			continue
+		}
+		key := ""
+		if index < len(application.AllowedCapabilityKeys) {
+			key = application.AllowedCapabilityKeys[index]
+		}
+		rows = append(rows, permissionPackageApplicationImpactCapability{
+			ID:             id,
+			Key:            key,
+			CurrentStatus:  "missing",
+			RollbackAction: "investigate",
+		})
+	}
+	return rows, nil
+}
+
+func permissionPackageImpactObjectFromGrant(objectType string, id string, currentStatus string, dataScopes []domain.DataScope) permissionPackageApplicationImpactObject {
+	rollbackAction := "investigate"
+	if currentStatus == string(domain.PolicyStatusEnabled) {
+		rollbackAction = "disable"
+	}
+	return permissionPackageApplicationImpactObject{
+		ID:             id,
+		Type:           objectType,
+		CurrentStatus:  currentStatus,
+		RollbackAction: rollbackAction,
+		DataScopes:     append([]domain.DataScope(nil), dataScopes...),
+	}
+}
+
+func missingPermissionPackageImpactObject(objectType string, id string) permissionPackageApplicationImpactObject {
+	return permissionPackageApplicationImpactObject{
+		ID:             id,
+		Type:           objectType,
+		CurrentStatus:  "missing",
+		RollbackAction: "investigate",
+	}
+}
+
+func permissionPackageApplicationRollbackReviewFor(application domain.PermissionPackageApplication, summary permissionPackageApplicationImpactSummary) permissionPackageApplicationRollbackReview {
+	review := permissionPackageApplicationRollbackReview{
+		Ready:    summary.RollbackReady,
+		Blockers: []string{},
+		Steps: []string{
+			"Review capability discovery status manually; shared capabilities are not automatically downgraded by rollback.",
+			"Disable recorded instance assignments before workspace assignments.",
+			"Disable recorded workspace assignments before tenant entitlements.",
+			"Disable recorded tenant entitlements and then verify effective access decisions.",
+		},
+	}
+	if summary.MissingObjectCount > 0 {
+		review.Blockers = append(review.Blockers, "Some recorded grant objects are missing; investigate drift before rollback.")
+	}
+	if summary.ActiveObjectCount != summary.CreatedObjectCount {
+		review.Blockers = append(review.Blockers, "Some recorded grant objects are not enabled; review partial rollback or manual changes.")
+	}
+	if len(application.AllowedCapabilityIDs) == 0 {
+		review.Blockers = append(review.Blockers, "Application has no recorded allowed capabilities.")
+	}
+	if len(review.Blockers) > 0 {
+		review.Ready = false
+	}
+	return review
 }
 
 func (s *Server) listPermissionPackageApprovalRequests(w http.ResponseWriter, r *http.Request) {

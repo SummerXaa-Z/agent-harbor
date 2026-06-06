@@ -16,6 +16,7 @@ import {
 import { normalizeAccessProfileFilters } from './accessProfile'
 import {
   accessDecisionExplainPath,
+  permissionPackageApplicationImpactPath,
   permissionPackageApprovalRequestsPath,
   type PermissionPackageApprovalRequestPathFilter,
 } from './apiPaths'
@@ -24,6 +25,7 @@ import type {
   PermissionPackageApprovalStatus,
   PermissionPackageApplyInput,
   PermissionPackageApplyResult,
+  PermissionPackageApplicationImpact,
   PermissionPackageDraft,
   PermissionPackageDraftInput,
   PermissionPackageTemplate,
@@ -490,6 +492,18 @@ export async function fetchPermissionPackageApprovalRequests(
   signal?: AbortSignal,
 ): Promise<PermissionPackageApprovalRequest[]> {
   return request<PermissionPackageApprovalRequest[]>(permissionPackageApprovalRequestsPath(filter), { adminKey, signal })
+}
+
+export async function fetchPermissionPackageApplicationImpact(
+  applicationId: string,
+  scope?: ManagementScope,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<PermissionPackageApplicationImpact> {
+  return request<PermissionPackageApplicationImpact>(
+    permissionPackageApplicationImpactPath(applicationId, scope),
+    { adminKey, signal },
+  )
 }
 
 export async function createPermissionPackageApprovalRequest(

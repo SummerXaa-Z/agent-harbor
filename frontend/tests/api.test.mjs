@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   accessDecisionExplainPath,
+  permissionPackageApplicationImpactPath,
   permissionPackageApprovalRequestsPath
 } from "../src/apiPaths.ts";
 
@@ -41,5 +42,17 @@ test("accessDecisionExplainPath includes effective permission scope query", () =
   assert.equal(url.searchParams.get("subjectId"), "user:sales-001");
   assert.equal(url.searchParams.get("targetId"), "mcp-crm");
   assert.equal(url.searchParams.get("tenantId"), "tenant-east");
+  assert.equal(url.searchParams.get("workspaceId"), "ws-sales");
+});
+
+test("permissionPackageApplicationImpactPath includes application id and scope query", () => {
+  const path = permissionPackageApplicationImpactPath("ppa east/1", {
+    tenantId: "tenant-root",
+    workspaceId: "ws-sales"
+  });
+
+  const url = new URL(path, "http://127.0.0.1:9090");
+  assert.equal(url.pathname, "/api/v1/permission-packages/applications/ppa%20east%2F1/impact");
+  assert.equal(url.searchParams.get("tenantId"), "tenant-root");
   assert.equal(url.searchParams.get("workspaceId"), "ws-sales");
 });

@@ -250,6 +250,16 @@ func TestMemoryPermissionPackageApplicationRoundTrip(t *testing.T) {
 	if len(again) != 1 || again[0].ID != newer.ID || again[0].AllowedCapabilityIDs[0] != "cap_search" {
 		t.Fatalf("expected cloned workspace/caller application, got %#v", again)
 	}
+	byID, err := repo.ListPermissionPackageApplications(ctx, PermissionPackageApplicationFilter{
+		ID:              older.ID,
+		ManagementScope: ManagementScope{TenantID: "tenant-root"},
+	})
+	if err != nil {
+		t.Fatalf("list application by id: %v", err)
+	}
+	if len(byID) != 1 || byID[0].ID != older.ID || byID[0].DraftID != older.DraftID {
+		t.Fatalf("expected exact application by id, got %#v", byID)
+	}
 }
 
 func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {

@@ -89,6 +89,42 @@ export interface PermissionPackageApplication {
   appliedAt: string;
 }
 
+export interface PermissionPackageApplicationImpact {
+  application: PermissionPackageApplication;
+  summary: PermissionPackageImpactSummary;
+  createdObjects: PermissionPackageImpactObject[];
+  capabilityReviews: PermissionPackageImpactCapability[];
+  rollbackReview: PermissionPackageRollbackReview;
+}
+
+export interface PermissionPackageImpactSummary {
+  createdObjectCount: number;
+  activeObjectCount: number;
+  missingObjectCount: number;
+  rollbackReady: boolean;
+}
+
+export interface PermissionPackageImpactObject {
+  id: string;
+  type: string;
+  currentStatus: string;
+  rollbackAction: string;
+  dataScopes?: DataScope[];
+}
+
+export interface PermissionPackageImpactCapability {
+  id: string;
+  key?: string;
+  currentStatus: string;
+  rollbackAction: string;
+}
+
+export interface PermissionPackageRollbackReview {
+  ready: boolean;
+  blockers: string[];
+  steps: string[];
+}
+
 export interface PermissionPackageApprovalRequest {
   id: string;
   draftId: string;

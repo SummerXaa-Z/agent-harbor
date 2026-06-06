@@ -214,6 +214,42 @@ type permissionPackageApplicationResponse struct {
 	InstanceAssignmentIDs  []string            `json:"instanceAssignmentIds"`
 }
 
+type permissionPackageApplicationImpactResponse struct {
+	Application       permissionPackageApplicationResponse `json:"application"`
+	Summary           permissionPackageImpactSummary       `json:"summary"`
+	CreatedObjects    []permissionPackageImpactObject      `json:"createdObjects"`
+	CapabilityReviews []permissionPackageImpactCapability  `json:"capabilityReviews"`
+	RollbackReview    permissionPackageRollbackReview      `json:"rollbackReview"`
+}
+
+type permissionPackageImpactSummary struct {
+	CreatedObjectCount int  `json:"createdObjectCount"`
+	ActiveObjectCount  int  `json:"activeObjectCount"`
+	MissingObjectCount int  `json:"missingObjectCount"`
+	RollbackReady      bool `json:"rollbackReady"`
+}
+
+type permissionPackageImpactObject struct {
+	ID             string              `json:"id"`
+	Type           string              `json:"type"`
+	CurrentStatus  string              `json:"currentStatus"`
+	RollbackAction string              `json:"rollbackAction"`
+	DataScopes     []dataScopeResponse `json:"dataScopes"`
+}
+
+type permissionPackageImpactCapability struct {
+	ID             string `json:"id"`
+	Key            string `json:"key"`
+	CurrentStatus  string `json:"currentStatus"`
+	RollbackAction string `json:"rollbackAction"`
+}
+
+type permissionPackageRollbackReview struct {
+	Ready    bool     `json:"ready"`
+	Blockers []string `json:"blockers"`
+	Steps    []string `json:"steps"`
+}
+
 type permissionPackageApprovalRequestResponse struct {
 	ID                      string                              `json:"id"`
 	DraftID                 string                              `json:"draftId"`
@@ -2826,6 +2862,30 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	if len(applications) != 1 || applications[0].ID != applied.Application.ID || applications[0].DraftID != applied.Draft.ID {
 		t.Fatalf("expected listed application record, got %#v", applications)
 	}
+	impact := decodeData[permissionPackageApplicationImpactResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications/"+applied.Application.ID+"/impact?tenantId=tenant-root&workspaceId=ws-sales", nil, ""))
+	if impact.Application.ID != applied.Application.ID || impact.Application.DraftID != applied.Draft.ID {
+		t.Fatalf("expected impact for applied application, got %#v", impact.Application)
+	}
+	if impact.Summary.CreatedObjectCount != 3 || impact.Summary.ActiveObjectCount != 3 ||
+		impact.Summary.MissingObjectCount != 0 || !impact.Summary.RollbackReady {
+		t.Fatalf("unexpected application impact summary: %#v", impact.Summary)
+	}
+	if !impactObjectsContain(impact.CreatedObjects, "tenant_entitlement", applied.TenantEntitlements[0].ID, "enabled", "disable") ||
+		!impactObjectsContain(impact.CreatedObjects, "workspace_assignment", applied.WorkspaceAssignments[0].ID, "enabled", "disable") ||
+		!impactObjectsContain(impact.CreatedObjects, "instance_assignment", applied.InstanceAssignments[0].ID, "enabled", "disable") {
+		t.Fatalf("expected created grant objects in impact review, got %#v", impact.CreatedObjects)
+	}
+	if len(impact.CapabilityReviews) != 1 || impact.CapabilityReviews[0].ID != search.ID ||
+		impact.CapabilityReviews[0].CurrentStatus != string(domain.CapabilityDiscoveryApproved) ||
+		impact.CapabilityReviews[0].RollbackAction != "manual_review" {
+		t.Fatalf("expected capability manual review row, got %#v", impact.CapabilityReviews)
+	}
+	if !impact.RollbackReview.Ready || len(impact.RollbackReview.Blockers) != 0 || len(impact.RollbackReview.Steps) == 0 {
+		t.Fatalf("expected ready rollback review steps, got %#v", impact.RollbackReview)
+	}
+	if impact.RollbackReview.Blockers == nil {
+		t.Fatalf("expected rollback blockers to encode as an empty array, got nil")
+	}
 	badLimit := request(t, router, http.MethodGet, "/api/v1/permission-packages/applications?limit=0", nil, "")
 	if badLimit.Code != http.StatusBadRequest {
 		t.Fatalf("expected invalid application limit to fail, status=%d body=%s", badLimit.Code, badLimit.Body.String())
@@ -4219,6 +4279,15 @@ func mcpToolNamesContain(tools []mcpToolResponse, name string) bool {
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func impactObjectsContain(rows []permissionPackageImpactObject, objectType string, id string, currentStatus string, rollbackAction string) bool {
+	for _, row := range rows {
+		if row.Type == objectType && row.ID == id && row.CurrentStatus == currentStatus && row.RollbackAction == rollbackAction {
 			return true
 		}
 	}

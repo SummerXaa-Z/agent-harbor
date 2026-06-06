@@ -532,6 +532,16 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 		len(applications[0].DataScopes) != 1 || applications[0].DataScopes[0].Region != "us-east" {
 		t.Fatalf("unexpected permission package applications: %#v", applications)
 	}
+	byID, err := repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
+		ID:              application.ID,
+		ManagementScope: store.ManagementScope{TenantID: caller.TenantID, WorkspaceID: caller.WorkspaceID},
+	})
+	if err != nil {
+		t.Fatalf("list permission package application by id: %v", err)
+	}
+	if len(byID) != 1 || byID[0].ID != application.ID || byID[0].DraftID != application.DraftID {
+		t.Fatalf("expected exact permission package application by id, got %#v", byID)
+	}
 	approval, err := repo.CreatePermissionPackageApprovalRequest(ctx, domain.PermissionPackageApprovalRequest{
 		ID:                    security.NewID("ppar"),
 		DraftID:               "ppd_pg_cap_pending",

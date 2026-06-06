@@ -481,6 +481,49 @@ print("permission package application list verified")
 PY
 }
 
+assert_application_impact() {
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$APPLICATION_ID" "$READ_TOOL" "$WRITE_TOOL" <<'PY'
+import json
+import os
+import sys
+
+impact = json.loads(os.environ["RESPONSE_BODY"])["data"]
+application_id, read_tool, write_tool = sys.argv[1:4]
+if impact["application"]["id"] != application_id:
+    raise SystemExit(f"impact application id mismatch: {impact['application']}")
+summary = impact["summary"]
+expected = {
+    "createdObjectCount": 6,
+    "activeObjectCount": 6,
+    "missingObjectCount": 0,
+}
+for key, value in expected.items():
+    if summary.get(key) != value:
+        raise SystemExit(f"impact summary[{key}]={summary.get(key)} want {value}; summary={summary}")
+if summary.get("rollbackReady") is not True:
+    raise SystemExit(f"impact should be rollback-review ready: {summary}")
+object_types = {row["type"] for row in impact.get("createdObjects", [])}
+for object_type in ("tenant_entitlement", "workspace_assignment", "instance_assignment"):
+    if object_type not in object_types:
+        raise SystemExit(f"impact missing object type {object_type!r}: {object_types}")
+capability_keys = {row.get("key"): row for row in impact.get("capabilityReviews", [])}
+for key in (read_tool, write_tool):
+    row = capability_keys.get(key)
+    if not row:
+        raise SystemExit(f"impact missing capability review for {key!r}: {capability_keys}")
+    if row.get("rollbackAction") != "manual_review":
+        raise SystemExit(f"impact capability {key!r} rollbackAction={row.get('rollbackAction')!r}: {row}")
+review = impact["rollbackReview"]
+if review.get("ready") is not True:
+    raise SystemExit(f"rollback review should be ready: {review}")
+if review.get("blockers") != []:
+    raise SystemExit(f"rollback blockers should be an empty array: {review}")
+if not review.get("steps"):
+    raise SystemExit(f"rollback review should include steps: {review}")
+print("permission package application impact verified")
+PY
+}
+
 assert_applied_audit_event() {
   RESPONSE_BODY="$HTTP_BODY" python3 - "$APPLICATION_ID" "$APPROVAL_REQUEST_ID" <<'PY'
 import json
@@ -633,6 +676,10 @@ assert_profile_chain
 request GET "/api/v1/permission-packages/applications?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID&templateId=$TEMPLATE_ID&targetId=$TARGET_ID&callerInstanceId=$CALLER_ID&limit=1"
 expect_status 200 "list permission package applications"
 assert_application_list
+
+request GET "/api/v1/permission-packages/applications/$APPLICATION_ID/impact?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID"
+expect_status 200 "review permission package application impact"
+assert_application_impact
 
 request GET "/api/v1/audit/events?action=permission_package.applied&resourceId=$APPLICATION_ID&limit=1"
 expect_status 200 "list applied audit events"

@@ -11,6 +11,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Permission package templates now expose a stable version.
 - Permission package application records are persisted in memory and PostgreSQL and returned from `POST /api/v1/permission-packages:apply`.
 - `GET /api/v1/permission-packages/applications` lists permission package applications by tenant subtree, workspace, template, target, caller instance, and limit.
+- `GET /api/v1/permission-packages/applications/{id}/impact` now returns read-only application impact with created object status, capability manual-review rows, and rollback review steps.
+- `GET /api/v1/permission-packages/applications/{id}/impact` 现在返回只读应用影响复盘，包括已创建对象状态、能力人工评审项和回滚评审步骤。
 - Management MCP now exposes `list_permission_package_applications` for admin agents to review applied template versions, created assignment ids, capability ids, and data scopes.
 - Permission package drafts now include a deterministic `policyGate` that allows direct apply for low-risk packages and requires approval for write, export, admin, high-risk, critical-risk, confidential, or restricted allowed capabilities.
 - Permission package approval requests are now persisted in memory and PostgreSQL so approval-required drafts can be reviewed and applied with evidence.
@@ -19,6 +21,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Permission package approval requests now expire after 24 hours and are consumed transactionally by the first successful package application, so expired, already-used, or concurrently reused approvals cannot write permissions.
 - Management MCP now exposes `create_permission_package_approval_request`, `list_permission_package_approval_requests`, `approve_permission_package_approval_request`, and `reject_permission_package_approval_request`.
 - Web console AI Admin now shows the latest permission package application evidence after a successful apply.
+- Web console AI Admin now includes a read-only application impact review panel under application evidence, with created/active/missing object counts, grant-object rows, capability manual-review rows, and rollback review steps in English and Simplified Chinese.
+- Web 控制台 AI Admin 现在在应用证据下提供只读应用影响复盘，以中英双语展示已创建/有效/缺失对象数量、授权对象行、能力人工评审行和回滚评审步骤。
 - Web console AI Admin now shows policy-gate status and disables direct apply when a package requires approval.
 - Web console AI Admin now exposes the approval-required package path with create approval request, approve, reject, and approved apply controls in English and Simplified Chinese.
 - Web console AI Admin now includes a Reviewer queue for routed pending approval requests, with reviewer-scoped refresh plus approve/reject actions in English and Simplified Chinese.

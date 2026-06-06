@@ -341,6 +341,10 @@ function App() {
   const [aiAdminApplication, setAiAdminApplication] = useState<PermissionPackageApplication | null>(null);
   const [aiAdminApprovalRequests, setAiAdminApprovalRequests] = useState<PermissionPackageApprovalRequest[]>([]);
   const [aiAdminApprovalAction, setAiAdminApprovalAction] = useState<"" | "create" | "approve" | "reject">("");
+  const [aiAdminApprovalReviewer, setAiAdminApprovalReviewer] = useState("AI Admin");
+  const [aiAdminReviewerQueueLoading, setAiAdminReviewerQueueLoading] = useState(false);
+  const [aiAdminReviewerQueueMessage, setAiAdminReviewerQueueMessage] = useState("");
+  const [aiAdminSelectedApprovalRequestId, setAiAdminSelectedApprovalRequestId] = useState("");
   const [aiAdminApprovalJourneyConfig, setAiAdminApprovalJourneyConfig] = useState<AiAdminApprovalJourneyConfig>(() =>
     createAiAdminApprovalJourneyConfig()
   );
@@ -1381,12 +1385,51 @@ function App() {
       adminKey,
       signal
     );
-    setAiAdminApprovalRequests(rows);
+    setAiAdminApprovalRequests((current) => mergePermissionPackageApprovalRequests(rows, current));
     return rows;
   }
 
   function upsertAiAdminApprovalRequest(request: PermissionPackageApprovalRequest) {
     setAiAdminApprovalRequests((current) => [request, ...current.filter((item) => item.id !== request.id)]);
+  }
+
+  async function refreshAiAdminReviewerQueue(signal?: AbortSignal) {
+    if (!data?.loadedFromApi) {
+      setAiAdminReviewerQueueMessage(t("message.reviewerQueueRequiresLiveApi"));
+      return;
+    }
+    const reviewer = aiAdminApprovalReviewer.trim();
+    if (!reviewer) {
+      setAiAdminReviewerQueueMessage(t("message.reviewerQueueReviewerRequired"));
+      return;
+    }
+    setAiAdminReviewerQueueLoading(true);
+    setAiAdminReviewerQueueMessage("");
+    try {
+      const rows = await fetchPermissionPackageApprovalRequests(
+        {
+          callerInstanceId: aiAdminDraft.input.callerInstanceId,
+          limit: 10,
+          reviewer,
+          status: "pending",
+          targetId: aiAdminDraft.input.targetId,
+          templateId: aiAdminDraft.template.id,
+          tenantId: aiAdminDraft.input.tenantId,
+          workspaceId: aiAdminDraft.input.workspaceId
+        },
+        adminKey,
+        signal
+      );
+      setAiAdminApprovalRequests((current) => mergePermissionPackageApprovalRequests(rows, current));
+      setAiAdminSelectedApprovalRequestId((current) => rows.some((request) => request.id === current) ? current : rows[0]?.id ?? "");
+      setAiAdminReviewerQueueMessage(tx(t, "message.reviewerQueueLoaded", { count: rows.length }));
+    } catch (error) {
+      if (!isAbortError(error)) {
+        setAiAdminReviewerQueueMessage(error instanceof Error ? error.message : "Unable to load reviewer queue");
+      }
+    } finally {
+      setAiAdminReviewerQueueLoading(false);
+    }
   }
 
   async function createAiAdminApprovalRequest() {
@@ -1407,14 +1450,21 @@ function App() {
     }
   }
 
-  async function approveAiAdminApprovalRequest() {
-    if (!aiAdminApprovalRequest) return;
+  async function approveAiAdminApprovalRequest(requestId?: string) {
+    const targetRequest = requestId
+      ? aiAdminApprovalRequests.find((request) => request.id === requestId)
+      : aiAdminApprovalRequest;
+    if (!targetRequest) return;
     setAiAdminApprovalAction("approve");
     setAiAdminMessage("");
     try {
+      const reviewer = aiAdminApprovalReviewer.trim();
       const request = await approvePermissionPackageApprovalRequest(
-        aiAdminApprovalRequest.id,
-        { comment: "Approved from AI Admin" },
+        targetRequest.id,
+        {
+          comment: requestId ? "Approved from AI Admin reviewer queue" : "Approved from AI Admin",
+          ...(reviewer ? { reviewer } : {})
+        },
         adminKey
       );
       upsertAiAdminApprovalRequest(request);
@@ -1426,14 +1476,21 @@ function App() {
     }
   }
 
-  async function rejectAiAdminApprovalRequest() {
-    if (!aiAdminApprovalRequest) return;
+  async function rejectAiAdminApprovalRequest(requestId?: string) {
+    const targetRequest = requestId
+      ? aiAdminApprovalRequests.find((request) => request.id === requestId)
+      : aiAdminApprovalRequest;
+    if (!targetRequest) return;
     setAiAdminApprovalAction("reject");
     setAiAdminMessage("");
     try {
+      const reviewer = aiAdminApprovalReviewer.trim();
       const request = await rejectPermissionPackageApprovalRequest(
-        aiAdminApprovalRequest.id,
-        { comment: "Rejected from AI Admin" },
+        targetRequest.id,
+        {
+          comment: requestId ? "Rejected from AI Admin reviewer queue" : "Rejected from AI Admin",
+          ...(reviewer ? { reviewer } : {})
+        },
         adminKey
       );
       upsertAiAdminApprovalRequest(request);
@@ -1770,6 +1827,8 @@ function App() {
         approvalReadinessChecking={aiAdminApprovalReadinessChecking}
         approvalReadinessMessage={aiAdminApprovalReadinessMessage}
         approvalRequest={aiAdminApprovalRequest}
+        approvalRequests={aiAdminApprovalRequests}
+        approvalReviewer={aiAdminApprovalReviewer}
         applying={aiAdminApplying}
         draft={aiAdminDraft}
         form={aiAdminForm}
@@ -1777,18 +1836,25 @@ function App() {
         message={aiAdminMessage}
         mcpTargets={mcpTargets}
         onApply={() => void applyAiAdminPermissionPackage()}
-        onApproveApprovalRequest={() => void approveAiAdminApprovalRequest()}
+        onApprovalReviewerChange={setAiAdminApprovalReviewer}
+        onApproveApprovalRequest={(requestId) => void approveAiAdminApprovalRequest(requestId)}
         onChange={(nextForm) => {
           setAiAdminForm(nextForm);
           setAiAdminApplication(null);
           setAiAdminApprovalAuditEvent(null);
           setAiAdminApprovalJourneyResult(null);
           setAiAdminApprovalRequests([]);
+          setAiAdminSelectedApprovalRequestId("");
         }}
         onCreateApprovalRequest={() => void createAiAdminApprovalRequest()}
         onRefreshApprovalReadiness={() => void refreshAiAdminApprovalReadiness()}
-        onRejectApprovalRequest={() => void rejectAiAdminApprovalRequest()}
+        onRefreshReviewerQueue={() => void refreshAiAdminReviewerQueue()}
+        onRejectApprovalRequest={(requestId) => void rejectAiAdminApprovalRequest(requestId)}
         onRunApprovalJourney={() => void runAiAdminApprovalJourney()}
+        onSelectApprovalRequest={setAiAdminSelectedApprovalRequestId}
+        reviewerQueueLoading={aiAdminReviewerQueueLoading}
+        reviewerQueueMessage={aiAdminReviewerQueueMessage}
+        selectedApprovalRequestId={aiAdminSelectedApprovalRequestId}
         templates={aiAdminTemplates}
         t={t}
       />
@@ -2258,18 +2324,26 @@ function AiAdminPermissionWorkbench({
   approvalReadinessChecking,
   approvalReadinessMessage,
   approvalRequest,
+  approvalRequests,
+  approvalReviewer,
   applying,
   draft,
   form,
   message,
   mcpTargets,
   onApply,
+  onApprovalReviewerChange,
   onApproveApprovalRequest,
   onChange,
   onCreateApprovalRequest,
   onRefreshApprovalReadiness,
+  onRefreshReviewerQueue,
   onRejectApprovalRequest,
   onRunApprovalJourney,
+  onSelectApprovalRequest,
+  reviewerQueueLoading,
+  reviewerQueueMessage,
+  selectedApprovalRequestId,
   templates,
   t
 }: {
@@ -2286,29 +2360,34 @@ function AiAdminPermissionWorkbench({
   approvalReadinessChecking: boolean;
   approvalReadinessMessage: string;
   approvalRequest: PermissionPackageApprovalRequest | null;
+  approvalRequests: PermissionPackageApprovalRequest[];
+  approvalReviewer: string;
   applying: boolean;
   draft: PermissionPackageDraft;
   form: PermissionPackageDraftInput;
   message: string;
   mcpTargets: Agent[];
   onApply: () => void;
-  onApproveApprovalRequest: () => void;
+  onApprovalReviewerChange: (reviewer: string) => void;
+  onApproveApprovalRequest: (requestId?: string) => void;
   onChange: (form: PermissionPackageDraftInput) => void;
   onCreateApprovalRequest: () => void;
   onRefreshApprovalReadiness: () => void;
-  onRejectApprovalRequest: () => void;
+  onRefreshReviewerQueue: () => void;
+  onRejectApprovalRequest: (requestId?: string) => void;
   onRunApprovalJourney: () => void;
+  onSelectApprovalRequest: (requestId: string) => void;
+  reviewerQueueLoading: boolean;
+  reviewerQueueMessage: string;
+  selectedApprovalRequestId: string;
   templates: PermissionPackageTemplate[];
   t: Translator;
 }) {
   const callers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const hasApprovedRequest = approvalRequest?.status === "approved";
   const canApply = draft.readiness.canApply && (draft.policyGate.canApplyDirectly || hasApprovedRequest);
-  const approvalStatusTone: Tone = approvalRequest?.status === "approved"
-    ? "success"
-    : approvalRequest?.status === "rejected"
-      ? "danger"
-      : "warning";
+  const approvalStatusTone = approvalRequest ? permissionApprovalStatusTone(approvalRequest.status) : "warning";
+  const reviewerQueueRequests = approvalRequests.filter((request) => request.status === "pending");
   return (
     <div className="ai-admin-workbench">
       <section className="ai-admin-live-journey">
@@ -2541,6 +2620,61 @@ function AiAdminPermissionWorkbench({
               </ul>
             ) : null}
           </div>
+          <div className="permission-reviewer-queue">
+            <div className="permission-section-title">
+              <strong>{t("section.permissionReviewerQueue")}</strong>
+              <span>{t("text.reviewerQueueHelp")}</span>
+            </div>
+            <div className="permission-reviewer-controls">
+              <label>
+                {t("form.approvalReviewer")}
+                <input
+                  value={approvalReviewer}
+                  onChange={(event) => onApprovalReviewerChange(event.target.value)}
+                />
+              </label>
+              <button disabled={reviewerQueueLoading || Boolean(approvalAction)} onClick={onRefreshReviewerQueue} type="button">
+                <RefreshCw size={14} />
+                {reviewerQueueLoading ? t("action.loading") : t("action.refreshReviewerQueue")}
+              </button>
+            </div>
+            {selectedApprovalRequestId ? (
+              <span className="permission-reviewer-selected">
+                {t("text.reviewerQueueSelected")} <code>{selectedApprovalRequestId}</code>
+              </span>
+            ) : null}
+            {reviewerQueueMessage ? <span className="permission-reviewer-message">{reviewerQueueMessage}</span> : null}
+            <div className="permission-reviewer-list">
+              {reviewerQueueRequests.length === 0 ? (
+                <EmptyRow title={t("section.permissionReviewerQueue")} detail={t("empty.reviewerQueue.detail")} />
+              ) : null}
+              {reviewerQueueRequests.map((request) => (
+                <article
+                  className={`permission-reviewer-row ${request.id === selectedApprovalRequestId ? "is-selected" : ""}`}
+                  key={request.id}
+                >
+                  <button onClick={() => onSelectApprovalRequest(request.id)} type="button">
+                    <strong>{request.id}</strong>
+                    <span>{permissionPackageApprovalRouteLabel(request)}</span>
+                    <code>{request.templateId} · {formatDate(request.expiresAt)}</code>
+                  </button>
+                  <Badge tone={permissionApprovalStatusTone(request.status)}>
+                    {permissionApprovalStatusLabel(request.status, t)}
+                  </Badge>
+                  <div className="permission-reviewer-row-actions">
+                    <button disabled={Boolean(approvalAction) || applying} onClick={() => onApproveApprovalRequest(request.id)} type="button">
+                      <CheckCircle2 size={13} />
+                      {approvalAction === "approve" ? t("action.approving") : t("action.approvePermissionRequest")}
+                    </button>
+                    <button disabled={Boolean(approvalAction) || applying} onClick={() => onRejectApprovalRequest(request.id)} type="button">
+                      <TriangleAlert size={13} />
+                      {approvalAction === "reject" ? t("action.rejecting") : t("action.rejectPermissionRequest")}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
           {!draft.policyGate.canApplyDirectly ? (
             <div className="permission-approval-request">
               <div className="permission-section-title">
@@ -2574,11 +2708,11 @@ function AiAdminPermissionWorkbench({
               <div className="permission-review-actions">
                 {approvalRequest?.status === "pending" ? (
                   <>
-                    <button disabled={Boolean(approvalAction) || applying} onClick={onApproveApprovalRequest} type="button">
+                    <button disabled={Boolean(approvalAction) || applying} onClick={() => onApproveApprovalRequest()} type="button">
                       <CheckCircle2 size={14} />
                       {approvalAction === "approve" ? t("action.approving") : t("action.approvePermissionRequest")}
                     </button>
-                    <button disabled={Boolean(approvalAction) || applying} onClick={onRejectApprovalRequest} type="button">
+                    <button disabled={Boolean(approvalAction) || applying} onClick={() => onRejectApprovalRequest()} type="button">
                       <TriangleAlert size={14} />
                       {approvalAction === "reject" ? t("action.rejecting") : t("action.rejectPermissionRequest")}
                     </button>
@@ -3925,6 +4059,25 @@ function permissionApprovalStatusLabel(status: PermissionPackageApprovalRequest[
   if (status === "approved") return t("status.approvalApproved");
   if (status === "rejected") return t("status.approvalRejected");
   return t("status.approvalPending");
+}
+
+function permissionApprovalStatusTone(status: PermissionPackageApprovalRequest["status"]): Tone {
+  if (status === "approved") return "success";
+  if (status === "rejected") return "danger";
+  return "warning";
+}
+
+function permissionPackageApprovalRouteLabel(request: PermissionPackageApprovalRequest) {
+  return `${request.tenantId} / ${request.workspaceId} / ${request.callerInstanceId}`;
+}
+
+function mergePermissionPackageApprovalRequests(
+  next: PermissionPackageApprovalRequest[],
+  current: PermissionPackageApprovalRequest[]
+) {
+  const rows = new Map<string, PermissionPackageApprovalRequest>();
+  [...next, ...current].forEach((request) => rows.set(request.id, request));
+  return Array.from(rows.values());
 }
 
 function matchingPermissionPackageApprovalRequest(

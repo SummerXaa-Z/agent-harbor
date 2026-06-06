@@ -21,6 +21,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web console AI Admin now shows the latest permission package application evidence after a successful apply.
 - Web console AI Admin now shows policy-gate status and disables direct apply when a package requires approval.
 - Web console AI Admin now exposes the approval-required package path with create approval request, approve, reject, and approved apply controls in English and Simplified Chinese.
+- Web console AI Admin now includes a Reviewer queue for routed pending approval requests, with reviewer-scoped refresh plus approve/reject actions in English and Simplified Chinese.
+- Web 控制台 AI Admin 现在提供审查员队列，可按审查员刷新已路由的待处理审批，并以中英双语完成批准/驳回操作。
 - Web console AI Admin now includes a live approval journey workbench that creates a three-level tenant tree, discovers support tools, approves and applies a permission package, runs subject-scoped allow/deny MCP calls, and surfaces profile plus audit evidence.
 - Web console AI Admin now shows first-run readiness for API, Mock MCP, subject-header CORS, private-upstream mode, and live data source before running the approval journey.
 - Added `make scenario-permission-package-approval` to prove the approval-required permission package journey with local MCP discovery, approval, approved apply, runtime allow/deny, access-profile, application, and audit evidence.

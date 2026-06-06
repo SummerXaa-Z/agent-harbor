@@ -53,6 +53,7 @@ import {
   isApiCompatibilityFallbackError,
   loadConsoleData,
   loadTenantAccessProfile,
+  preflightPermissionPackage,
   rejectPermissionPackageApprovalRequest,
   refreshTargetCapabilities,
   rotateAgentCredentials,
@@ -118,6 +119,9 @@ import {
   createPermissionPackageDraft,
   permissionPackageTemplates,
   subjectIdExampleFromSelector,
+  type PermissionPackageApplyInput,
+  type PermissionPackageApplyPreflight,
+  type PermissionPackageApplyPreflightCheck,
   type PermissionPackageApplication,
   type PermissionPackageApplicationHealth,
   type PermissionPackageApplicationHealthRow,
@@ -358,6 +362,9 @@ function App() {
     useState<PermissionPackageApplicationHealth | null>(null);
   const [aiAdminApplicationHealthLoading, setAiAdminApplicationHealthLoading] = useState(false);
   const [aiAdminApplicationHealthMessage, setAiAdminApplicationHealthMessage] = useState("");
+  const [aiAdminApplyPreflight, setAiAdminApplyPreflight] = useState<PermissionPackageApplyPreflight | null>(null);
+  const [aiAdminApplyPreflightLoading, setAiAdminApplyPreflightLoading] = useState(false);
+  const [aiAdminApplyPreflightMessage, setAiAdminApplyPreflightMessage] = useState("");
   const [aiAdminApplicationImpact, setAiAdminApplicationImpact] =
     useState<PermissionPackageApplicationImpact | null>(null);
   const [aiAdminApplicationImpactLoading, setAiAdminApplicationImpactLoading] = useState(false);
@@ -1011,6 +1018,8 @@ function App() {
     setAiAdminApprovalAuditEvent(null);
     setAiAdminApplicationHealth(null);
     setAiAdminApplicationHealthMessage("");
+    setAiAdminApplyPreflight(null);
+    setAiAdminApplyPreflightMessage("");
     setAiAdminApplicationImpact(null);
     setAiAdminApplicationImpactMessage("");
     setAiAdminApprovalJourneyRunning(true);
@@ -1113,6 +1122,8 @@ function App() {
       setAiAdminApplication(null);
       setAiAdminApplicationHealth(null);
       setAiAdminApplicationHealthMessage("");
+      setAiAdminApplyPreflight(null);
+      setAiAdminApplyPreflightMessage("");
       setAiAdminApplicationImpact(null);
       setAiAdminApplicationImpactMessage("");
       setAiAdminApprovalRequests([]);
@@ -1135,6 +1146,29 @@ function App() {
         adminKey
       );
       setAiAdminApprovalRequests([approvedApproval]);
+
+      const journeyPreflight = await preflightPermissionPackage(
+        {
+          ...nextForm,
+          approvalRequestId: approvedApproval.id
+        },
+        adminKey
+      );
+      setAiAdminApplyPreflight(journeyPreflight);
+      setAiAdminApplyPreflightMessage(
+        journeyPreflight.summary.canApply
+          ? t("message.permissionPackagePreflightReady")
+          : tx(t, "message.permissionPackagePreflightBlocked", {
+            detail: permissionApplyPreflightCheckMessage(firstBlockingApplyPreflightCheck(journeyPreflight), t)
+          })
+      );
+      if (!journeyPreflight.summary.canApply) {
+        throw new Error(
+          tx(t, "message.permissionPackagePreflightBlocked", {
+            detail: permissionApplyPreflightCheckMessage(firstBlockingApplyPreflightCheck(journeyPreflight), t)
+          })
+        );
+      }
 
       const applied = await applyPermissionPackage(
         {
@@ -1592,6 +1626,43 @@ function App() {
     setAiAdminApprovalRequests((current) => [request, ...current.filter((item) => item.id !== request.id)]);
   }
 
+  function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
+    const approvalRequestId = aiAdminApprovalRequest?.id.trim();
+    return approvalRequestId ? { ...aiAdminForm, approvalRequestId } : { ...aiAdminForm };
+  }
+
+  async function refreshAiAdminApplyPreflight(signal?: AbortSignal, options: { silent?: boolean } = {}) {
+    if (!data?.loadedFromApi) {
+      setAiAdminApplyPreflight(null);
+      setAiAdminApplyPreflightMessage(t("message.permissionPackagePreflightRequiresLiveApi"));
+      return null;
+    }
+    setAiAdminApplyPreflightLoading(true);
+    if (!options.silent) {
+      setAiAdminApplyPreflightMessage("");
+    }
+    try {
+      const next = await preflightPermissionPackage(aiAdminPermissionPackageApplyInput(), adminKey, signal);
+      setAiAdminApplyPreflight(next);
+      setAiAdminApplyPreflightMessage(
+        next.summary.canApply
+          ? t("message.permissionPackagePreflightReady")
+          : tx(t, "message.permissionPackagePreflightBlocked", {
+            detail: permissionApplyPreflightCheckMessage(firstBlockingApplyPreflightCheck(next), t)
+          })
+      );
+      return next;
+    } catch (error) {
+      if (!isAbortError(error)) {
+        setAiAdminApplyPreflight(null);
+        setAiAdminApplyPreflightMessage(error instanceof Error ? error.message : "Unable to run permission package preflight");
+      }
+      return null;
+    } finally {
+      setAiAdminApplyPreflightLoading(false);
+    }
+  }
+
   async function refreshAiAdminReviewerQueue(signal?: AbortSignal) {
     if (!data?.loadedFromApi) {
       setAiAdminReviewerQueueMessage(t("message.reviewerQueueRequiresLiveApi"));
@@ -1641,6 +1712,8 @@ function App() {
     try {
       const request = await createPermissionPackageApprovalRequest(aiAdminForm, adminKey);
       upsertAiAdminApprovalRequest(request);
+      setAiAdminApplyPreflight(null);
+      setAiAdminApplyPreflightMessage("");
       setAiAdminMessage(tx(t, "message.permissionApprovalCreated", { id: request.id }));
     } catch (error) {
       setAiAdminMessage(error instanceof Error ? error.message : "Unable to create approval request");
@@ -1667,6 +1740,8 @@ function App() {
         adminKey
       );
       upsertAiAdminApprovalRequest(request);
+      setAiAdminApplyPreflight(null);
+      setAiAdminApplyPreflightMessage("");
       setAiAdminMessage(tx(t, "message.permissionApprovalApproved", { id: request.id }));
     } catch (error) {
       setAiAdminMessage(error instanceof Error ? error.message : "Unable to approve request");
@@ -1693,6 +1768,8 @@ function App() {
         adminKey
       );
       upsertAiAdminApprovalRequest(request);
+      setAiAdminApplyPreflight(null);
+      setAiAdminApplyPreflightMessage("");
       setAiAdminMessage(tx(t, "message.permissionApprovalRejected", { id: request.id }));
     } catch (error) {
       setAiAdminMessage(error instanceof Error ? error.message : "Unable to reject request");
@@ -1728,6 +1805,21 @@ function App() {
       }
       if (aiAdminApprovalRequest.status === "rejected") {
         setAiAdminMessage(t("message.permissionApprovalRejectedApply"));
+        return;
+      }
+    }
+    if (data?.loadedFromApi) {
+      const preflight = await refreshAiAdminApplyPreflight(undefined, { silent: true });
+      if (!preflight) {
+        setAiAdminMessage(t("message.permissionPackagePreflightRequiresLiveApi"));
+        return;
+      }
+      if (!preflight.summary.canApply) {
+        setAiAdminMessage(
+          tx(t, "message.permissionPackagePreflightApplyBlocked", {
+            detail: permissionApplyPreflightCheckMessage(firstBlockingApplyPreflightCheck(preflight), t)
+          })
+        );
         return;
       }
     }
@@ -2047,6 +2139,9 @@ function App() {
         approvalRequest={aiAdminApprovalRequest}
         approvalRequests={aiAdminApprovalRequests}
         approvalReviewer={aiAdminApprovalReviewer}
+        applyPreflight={aiAdminApplyPreflight}
+        applyPreflightLoading={aiAdminApplyPreflightLoading}
+        applyPreflightMessage={aiAdminApplyPreflightMessage}
         applicationHealth={aiAdminApplicationHealth}
         applicationHealthLoading={aiAdminApplicationHealthLoading}
         applicationHealthMessage={aiAdminApplicationHealthMessage}
@@ -2070,6 +2165,8 @@ function App() {
           setAiAdminApplication(null);
           setAiAdminApplicationHealth(null);
           setAiAdminApplicationHealthMessage("");
+          setAiAdminApplyPreflight(null);
+          setAiAdminApplyPreflightMessage("");
           setAiAdminApplicationImpact(null);
           setAiAdminApplicationImpactMessage("");
           setAiAdminApprovalAuditEvent(null);
@@ -2081,6 +2178,7 @@ function App() {
         }}
         onCreateApprovalRequest={() => void createAiAdminApprovalRequest()}
         onExplainAccessDecision={() => void explainAiAdminAccessDecision()}
+        onRefreshApplyPreflight={() => void refreshAiAdminApplyPreflight()}
         onRefreshApprovalReadiness={() => void refreshAiAdminApprovalReadiness()}
         onRefreshApplicationHealth={() => void refreshAiAdminApplicationHealth()}
         onRefreshReviewerQueue={() => void refreshAiAdminReviewerQueue()}
@@ -2568,6 +2666,9 @@ function AiAdminPermissionWorkbench({
   approvalRequest,
   approvalRequests,
   approvalReviewer,
+  applyPreflight,
+  applyPreflightLoading,
+  applyPreflightMessage,
   applicationHealth,
   applicationHealthLoading,
   applicationHealthMessage,
@@ -2588,6 +2689,7 @@ function AiAdminPermissionWorkbench({
   onChange,
   onCreateApprovalRequest,
   onExplainAccessDecision,
+  onRefreshApplyPreflight,
   onRefreshApprovalReadiness,
   onRefreshApplicationHealth,
   onRefreshReviewerQueue,
@@ -2618,6 +2720,9 @@ function AiAdminPermissionWorkbench({
   approvalRequest: PermissionPackageApprovalRequest | null;
   approvalRequests: PermissionPackageApprovalRequest[];
   approvalReviewer: string;
+  applyPreflight: PermissionPackageApplyPreflight | null;
+  applyPreflightLoading: boolean;
+  applyPreflightMessage: string;
   applicationHealth: PermissionPackageApplicationHealth | null;
   applicationHealthLoading: boolean;
   applicationHealthMessage: string;
@@ -2638,6 +2743,7 @@ function AiAdminPermissionWorkbench({
   onChange: (form: PermissionPackageDraftInput) => void;
   onCreateApprovalRequest: () => void;
   onExplainAccessDecision: () => void;
+  onRefreshApplyPreflight: () => void;
   onRefreshApprovalReadiness: () => void;
   onRefreshApplicationHealth: () => void;
   onRefreshReviewerQueue: () => void;
@@ -2906,6 +3012,13 @@ function AiAdminPermissionWorkbench({
               </ul>
             ) : null}
           </div>
+          <PermissionPackageApplyPreflightPanel
+            loading={applyPreflightLoading}
+            message={applyPreflightMessage}
+            onRefresh={onRefreshApplyPreflight}
+            preflight={applyPreflight}
+            t={t}
+          />
           <AccessDecisionExplainPanel
             explanation={accessDecisionExplanation}
             loading={accessDecisionExplanationLoading}
@@ -3037,6 +3150,96 @@ function AiAdminPermissionWorkbench({
           <PermissionSimulationTable rows={draft.simulationRows} t={t} />
         </section>
       </div>
+    </div>
+  );
+}
+
+function PermissionPackageApplyPreflightPanel({
+  loading,
+  message,
+  onRefresh,
+  preflight,
+  t
+}: {
+  loading: boolean;
+  message: string;
+  onRefresh: () => void;
+  preflight: PermissionPackageApplyPreflight | null;
+  t: Translator;
+}) {
+  const checks = preflight?.checks ?? [];
+  const visibleChecks = [...checks]
+    .sort((left, right) => permissionApplyPreflightSeverityRank(right.severity) - permissionApplyPreflightSeverityRank(left.severity))
+    .slice(0, 5);
+  const summary = preflight?.summary;
+  const statusTone: Tone = !summary ? "neutral" : summary.canApply ? "success" : "danger";
+  return (
+    <div className={`permission-apply-preflight ${summary?.canApply === false ? "is-blocked" : ""}`}>
+      <div className="permission-health-header">
+        <div>
+          <strong>{t("section.permissionApplyPreflight")}</strong>
+          {message ? <span>{message}</span> : <span>{t("text.permissionApplyPreflightHint")}</span>}
+        </div>
+        <div className="permission-preflight-actions">
+          <Badge tone={statusTone}>
+            {!summary ? t("status.preflightPending") : summary.canApply ? t("status.preflightOk") : t("status.preflightError")}
+          </Badge>
+          <button className="secondary-button" disabled={loading} onClick={onRefresh} type="button">
+            <RefreshCw size={14} />
+            {loading ? t("action.checkingPreflight") : t("action.checkPreflight")}
+          </button>
+        </div>
+      </div>
+
+      <div className="permission-health-metrics permission-preflight-metrics">
+        <div>
+          <span>{t("metric.preflightBlockers")}</span>
+          <strong>{summary?.blockingCount ?? 0}</strong>
+        </div>
+        <div>
+          <span>{t("metric.preflightWarnings")}</span>
+          <strong>{summary?.warningCount ?? 0}</strong>
+        </div>
+        <div>
+          <span>{t("metric.preflightPlannedObjects")}</span>
+          <strong>
+            {summary
+              ? summary.plannedTenantEntitlementCount + summary.plannedWorkspaceAssignmentCount + summary.plannedInstanceAssignmentCount
+              : 0}
+          </strong>
+        </div>
+        <div>
+          <span>{t("metric.preflightExistingGrants")}</span>
+          <strong>{summary?.existingGrantCount ?? 0}</strong>
+        </div>
+      </div>
+
+      {visibleChecks.length > 0 ? (
+        <div className="permission-preflight-list">
+          {visibleChecks.map((check) => (
+            <article className={`permission-preflight-row severity-${check.severity}`} key={`${check.code}:${check.capabilityId ?? check.message}`}>
+              <Badge tone={permissionApplyPreflightTone(check.severity)}>
+                {permissionApplyPreflightSeverityLabel(check.severity, t)}
+              </Badge>
+              <div>
+                <strong>{permissionApplyPreflightCheckLabel(check.code, t)}</strong>
+                <span>{permissionApplyPreflightCheckMessage(check, t)}</span>
+              </div>
+              {check.capabilityKey ? <code>{check.capabilityKey}</code> : null}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <span className="permission-health-empty">{t("empty.permissionApplyPreflight.detail")}</span>
+      )}
+
+      {preflight?.nextActions.length ? (
+        <ul className="permission-preflight-next-actions">
+          {preflight.nextActions.slice(0, 2).map((action) => (
+            <li key={action}>{permissionApplyPreflightNextAction(action, t)}</li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -4744,6 +4947,53 @@ function permissionPolicyReasonMessage(
     return acc;
   }, {});
   return tx(t, reason.reasonKey, values);
+}
+
+function firstBlockingApplyPreflightCheck(preflight: PermissionPackageApplyPreflight): PermissionPackageApplyPreflightCheck | null {
+  return preflight.checks.find((check) => check.severity === "blocking") ?? preflight.checks[0] ?? null;
+}
+
+function permissionApplyPreflightCheckLabel(code: string, t: Translator) {
+  return t(`permissionPreflight.${code}`, code.replaceAll("_", " "));
+}
+
+function permissionApplyPreflightCheckMessage(check: PermissionPackageApplyPreflightCheck | null, t: Translator) {
+  if (!check) return t("message.permissionPackagePreflightNoDetail");
+  return t(`permissionPreflight.detail.${check.code}`, check.message || permissionApplyPreflightCheckLabel(check.code, t));
+}
+
+function permissionApplyPreflightNextAction(action: string, t: Translator) {
+  const keyByAction: Record<string, string> = {
+    "Apply this permission package when the reviewer is ready.": "permissionPreflight.next.applyWhenReady",
+    "Create and approve a permission package approval request, then preflight again with approvalRequestId.": "permissionPreflight.next.createApproval",
+    "Fix draft readiness blockers before applying this permission package.": "permissionPreflight.next.fixDraft",
+    "Narrow region or data scopes so the package stays inside every capability boundary.": "permissionPreflight.next.narrowScope",
+    "Refresh approval or create a new approval request for the current draft.": "permissionPreflight.next.refreshApproval",
+    "Review existing grant chains before applying another permission package for the same caller and capability.": "permissionPreflight.next.reviewExistingGrants",
+    "Use an approved approvalRequestId that matches the current draft.": "permissionPreflight.next.useApprovedRequest"
+  };
+  return keyByAction[action] ? t(keyByAction[action], action) : action;
+}
+
+function permissionApplyPreflightSeverityLabel(severity: PermissionPackageApplyPreflightCheck["severity"], t: Translator) {
+  if (severity === "blocking") return t("status.preflightBlocking");
+  if (severity === "warning") return t("status.preflightWarning");
+  if (severity === "passed") return t("status.preflightPassed");
+  return t("status.preflightInfo");
+}
+
+function permissionApplyPreflightTone(severity: PermissionPackageApplyPreflightCheck["severity"]): Tone {
+  if (severity === "blocking") return "danger";
+  if (severity === "warning") return "warning";
+  if (severity === "passed") return "success";
+  return "info";
+}
+
+function permissionApplyPreflightSeverityRank(severity: PermissionPackageApplyPreflightCheck["severity"]) {
+  if (severity === "blocking") return 4;
+  if (severity === "warning") return 3;
+  if (severity === "info") return 2;
+  return 1;
 }
 
 function permissionApprovalStatusLabel(status: PermissionPackageApprovalRequest["status"], t: Translator) {

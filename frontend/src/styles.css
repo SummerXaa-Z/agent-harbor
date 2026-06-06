@@ -1865,6 +1865,108 @@ td code {
   text-align: right;
 }
 
+.permission-apply-preflight {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #d8e2ea;
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.permission-apply-preflight.is-blocked {
+  border-color: #efb3b3;
+  background: #fff7f7;
+}
+
+.permission-preflight-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.permission-preflight-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.permission-preflight-list {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.permission-preflight-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(90px, auto);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #edf1f5;
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.permission-preflight-row.severity-blocking {
+  border-color: #efb3b3;
+  background: #fff7f7;
+}
+
+.permission-preflight-row.severity-warning {
+  border-color: #f0d399;
+  background: #fffdf7;
+}
+
+.permission-preflight-row > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.permission-preflight-row strong,
+.permission-preflight-row span,
+.permission-preflight-row code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission-preflight-row strong {
+  color: #1f2a34;
+  font-size: 12px;
+}
+
+.permission-preflight-row span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.permission-preflight-row code {
+  color: #475663;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  text-align: right;
+}
+
+.permission-preflight-next-actions {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 17px;
+  color: #475663;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.permission-preflight-next-actions li {
+  overflow-wrap: anywhere;
+}
+
 .permission-application-impact {
   display: grid;
   gap: 9px;
@@ -3175,11 +3277,13 @@ td code {
   .permission-impact-metrics,
   .permission-health-metrics,
   .permission-health-row,
+  .permission-preflight-row,
   .permission-impact-row {
     grid-template-columns: 1fr;
   }
 
   .permission-health-row > span,
+  .permission-preflight-row code,
   .permission-impact-row span {
     text-align: left;
   }

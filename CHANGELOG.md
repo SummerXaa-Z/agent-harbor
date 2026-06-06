@@ -21,7 +21,11 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - `GET /api/v1/permission-packages/applications/{id}/impact` 现在为缺失授权对象、未启用授权对象、无已记录允许能力的应用返回稳定的回滚与处置 `blockerCodes`。
 - `GET /api/v1/permission-packages/applications/{id}/impact?rehearsal=grant_drift` now returns a response-only drift rehearsal with rehearsal metadata, simulated missing/inactive grant blockers, and read-only remediation actions without mutating permission state.
 - `GET /api/v1/permission-packages/applications/{id}/impact?rehearsal=grant_drift` 现在返回仅影响响应的漂移演练，包含演练元数据、模拟的缺失/未启用授权阻断和只读处置动作，不会写入权限状态。
+- `POST /api/v1/permission-packages:preflight` now returns read-only apply preflight with blockers, warnings, planned grant objects, approval readiness, data-scope fit, and existing grant-chain evidence before permission writes.
+- `POST /api/v1/permission-packages:preflight` 现在返回只读应用前预检，在写入权限前展示阻断项、风险提示、计划授权对象、审批就绪状态、数据范围匹配和已有授权链证据。
 - Management MCP now exposes `list_permission_package_applications` for admin agents to review applied template versions, created assignment ids, capability ids, and data scopes.
+- Management MCP now exposes `preflight_permission_package` so admin agents can verify permission package safety before calling `apply_permission_package`.
+- Management MCP 现在提供 `preflight_permission_package`，管理 Agent 可以在调用 `apply_permission_package` 前验证权限包安全性。
 - Permission package drafts now include a deterministic `policyGate` that allows direct apply for low-risk packages and requires approval for write, export, admin, high-risk, critical-risk, confidential, or restricted allowed capabilities.
 - Permission package approval requests are now persisted in memory and PostgreSQL so approval-required drafts can be reviewed and applied with evidence.
 - `POST /api/v1/permission-packages/approval-requests`, `GET /api/v1/permission-packages/approval-requests`, approve, and reject endpoints now provide the approval-request loop for permission packages.
@@ -39,6 +43,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web 控制台 AI Admin 现在通过稳定 blocker code 本地化回滚与处置阻塞原因，不再直接暴露后端原始文本。
 - Web console AI Admin now includes a read-only **Rehearse drift** action beside impact review so operators can preview drift blockers and then switch back to the real ready impact.
 - Web 控制台 AI Admin 现在在影响复盘旁提供只读 **演练漂移** 动作，操作员可预览漂移阻断并切回真实 ready 影响。
+- Web console AI Admin now includes an Apply Preflight panel and blocks live apply when preflight reports blockers.
+- Web 控制台 AI Admin 现在提供应用前预检面板，并在预检返回阻断项时阻止实时应用。
 - Web console AI Admin now shows policy-gate status and disables direct apply when a package requires approval.
 - Web console AI Admin now exposes the approval-required package path with create approval request, approve, reject, and approved apply controls in English and Simplified Chinese.
 - Web console AI Admin now includes a Reviewer queue for routed pending approval requests, with reviewer-scoped refresh plus approve/reject actions in English and Simplified Chinese.
@@ -47,7 +53,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web 控制台现在提供只读有效权限解释面板，由 `GET /api/v1/access-decisions:explain` 驱动，以中英双语展示允许/拒绝结果、证据层、数据范围和下一步动作。
 - Web console AI Admin now includes a live approval journey workbench that creates a three-level tenant tree, discovers support tools, approves and applies a permission package, runs subject-scoped allow/deny MCP calls, and surfaces profile plus audit evidence.
 - Web console AI Admin now shows first-run readiness for API, Mock MCP, subject-header CORS, private-upstream mode, and live data source before running the approval journey.
-- Added `make scenario-permission-package-approval` to prove the approval-required permission package journey with local MCP discovery, approval, approved apply, runtime allow/deny, access-profile, application, and audit evidence.
+- Added `make scenario-permission-package-approval` to prove the approval-required permission package journey with local MCP discovery, apply preflight, approval, approved apply, runtime allow/deny, access-profile, application, and audit evidence.
+- 新增 `make scenario-permission-package-approval`，用于验证需要审批的权限包旅程，包括本地 MCP 发现、应用前预检、审批、已审批应用、运行时允许/拒绝、访问画像、应用记录和审计证据。
 - Added `make ai-admin-browser-journey` to start the local browser stack, verify subject-header CORS, and run the approval-required journey as a release-candidate gate.
 - Added `make production-hardening` and a CI gate to verify admin-key enforcement, permission-package and management MCP protection, default private-upstream rejection, and public MCP endpoint registration before release-readiness claims.
 - Permission package approval queues can now be filtered by configured reviewer routing rules, and approve/reject operations enforce reviewer tenant-subtree and workspace scope when `AGENT_HARBOR_APPROVAL_REVIEWERS` is configured.

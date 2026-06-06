@@ -68,6 +68,53 @@ export interface PermissionPackageApplyResult {
   application?: PermissionPackageApplication;
 }
 
+export type PermissionPackageApplyPreflightSeverity = "passed" | "info" | "warning" | "blocking";
+
+export interface PermissionPackageApplyPreflight {
+  draft: PermissionPackageDraft;
+  summary: PermissionPackageApplyPreflightSummary;
+  checks: PermissionPackageApplyPreflightCheck[];
+  planned: PermissionPackageApplyPreflightPlannedChanges;
+  existingGrants: PermissionPackageApplyPreflightExistingGrant[];
+  nextActions: string[];
+}
+
+export interface PermissionPackageApplyPreflightSummary {
+  canApply: boolean;
+  blockingCount: number;
+  warningCount: number;
+  plannedCapabilityCount: number;
+  plannedTenantEntitlementCount: number;
+  plannedWorkspaceAssignmentCount: number;
+  plannedInstanceAssignmentCount: number;
+  existingGrantCount: number;
+  requiresApproval: boolean;
+  approvalReady: boolean;
+}
+
+export interface PermissionPackageApplyPreflightCheck {
+  code: string;
+  severity: PermissionPackageApplyPreflightSeverity;
+  message: string;
+  capabilityId?: string;
+  capabilityKey?: string;
+}
+
+export interface PermissionPackageApplyPreflightPlannedChanges {
+  capabilities: Capability[];
+  tenantEntitlements: TenantEntitlement[];
+  workspaceAssignments: WorkspaceAssignment[];
+  instanceAssignments: InstanceAssignment[];
+}
+
+export interface PermissionPackageApplyPreflightExistingGrant {
+  capabilityId: string;
+  capabilityKey: string;
+  tenantEntitlementId: string;
+  workspaceAssignmentId: string;
+  instanceAssignmentId: string;
+}
+
 export interface PermissionPackageApplication {
   id: string;
   draftId: string;

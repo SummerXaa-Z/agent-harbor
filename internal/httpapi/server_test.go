@@ -194,6 +194,51 @@ type permissionPackageApplyResponse struct {
 	Application          *permissionPackageApplicationResponse `json:"application"`
 }
 
+type permissionPackageApplyPreflightResponse struct {
+	Draft          permissionPackageDraftResponse                 `json:"draft"`
+	Summary        permissionPackageApplyPreflightSummary         `json:"summary"`
+	Checks         []permissionPackageApplyPreflightCheck         `json:"checks"`
+	Planned        permissionPackageApplyPreflightPlannedChanges  `json:"planned"`
+	ExistingGrants []permissionPackageApplyPreflightExistingGrant `json:"existingGrants"`
+	NextActions    []string                                       `json:"nextActions"`
+}
+
+type permissionPackageApplyPreflightSummary struct {
+	CanApply                        bool `json:"canApply"`
+	BlockingCount                   int  `json:"blockingCount"`
+	WarningCount                    int  `json:"warningCount"`
+	PlannedCapabilityCount          int  `json:"plannedCapabilityCount"`
+	PlannedTenantEntitlementCount   int  `json:"plannedTenantEntitlementCount"`
+	PlannedWorkspaceAssignmentCount int  `json:"plannedWorkspaceAssignmentCount"`
+	PlannedInstanceAssignmentCount  int  `json:"plannedInstanceAssignmentCount"`
+	ExistingGrantCount              int  `json:"existingGrantCount"`
+	RequiresApproval                bool `json:"requiresApproval"`
+	ApprovalReady                   bool `json:"approvalReady"`
+}
+
+type permissionPackageApplyPreflightCheck struct {
+	Code          string `json:"code"`
+	Severity      string `json:"severity"`
+	Message       string `json:"message"`
+	CapabilityID  string `json:"capabilityId"`
+	CapabilityKey string `json:"capabilityKey"`
+}
+
+type permissionPackageApplyPreflightPlannedChanges struct {
+	Capabilities         []capabilityResponse          `json:"capabilities"`
+	TenantEntitlements   []tenantEntitlementResponse   `json:"tenantEntitlements"`
+	WorkspaceAssignments []workspaceAssignmentResponse `json:"workspaceAssignments"`
+	InstanceAssignments  []instanceAssignmentResponse  `json:"instanceAssignments"`
+}
+
+type permissionPackageApplyPreflightExistingGrant struct {
+	CapabilityID          string `json:"capabilityId"`
+	CapabilityKey         string `json:"capabilityKey"`
+	TenantEntitlementID   string `json:"tenantEntitlementId"`
+	WorkspaceAssignmentID string `json:"workspaceAssignmentId"`
+	InstanceAssignmentID  string `json:"instanceAssignmentId"`
+}
+
 type permissionPackageApplicationResponse struct {
 	ID                     string              `json:"id"`
 	DraftID                string              `json:"draftId"`
@@ -3051,6 +3096,225 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	}
 }
 
+func TestPermissionPackagePreflightDirectApplyIsReadOnly(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-sales", Name: "Sales Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "CRM MCP", "tenant-root", "ws-sales", "mcp", domain.AgentStatusActive, nil)
+	search := createDirectCapabilityWithAction(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "华东",
+		"requestText":      "给销售助手开通客户只读，禁止导出合同。",
+		"subjectSelector":  "user:sales-*",
+		"targetId":         target.ID,
+		"templateId":       "sales-readonly",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-sales",
+	}
+	preflight := decodeData[permissionPackageApplyPreflightResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:preflight", input, ""))
+	if !preflight.Summary.CanApply || preflight.Summary.BlockingCount != 0 || preflight.Summary.WarningCount != 0 ||
+		preflight.Summary.PlannedCapabilityCount != 1 || preflight.Summary.PlannedTenantEntitlementCount != 1 ||
+		preflight.Summary.PlannedWorkspaceAssignmentCount != 1 || preflight.Summary.PlannedInstanceAssignmentCount != 1 ||
+		preflight.Summary.RequiresApproval || preflight.Summary.ApprovalReady {
+		t.Fatalf("expected ready direct preflight summary, got %#v", preflight.Summary)
+	}
+	if !permissionPackagePreflightHasCheck(preflight.Checks, "draft_ready", "passed") ||
+		!permissionPackagePreflightHasCheck(preflight.Checks, "policy_gate", "passed") ||
+		!permissionPackagePreflightHasCheck(preflight.Checks, "data_scope_fit", "passed") ||
+		!permissionPackagePreflightHasCheck(preflight.Checks, "planned_changes", "info") {
+		t.Fatalf("expected passed preflight checks, got %#v", preflight.Checks)
+	}
+	if len(preflight.Planned.Capabilities) != 1 || preflight.Planned.Capabilities[0].ID != search.ID ||
+		len(preflight.Planned.TenantEntitlements) != 1 || preflight.Planned.TenantEntitlements[0].CapabilityID != search.ID ||
+		len(preflight.Planned.WorkspaceAssignments) != 1 || preflight.Planned.WorkspaceAssignments[0].WorkspaceID != "ws-sales" ||
+		len(preflight.Planned.InstanceAssignments) != 1 || preflight.Planned.InstanceAssignments[0].CallerInstanceID != caller.ID {
+		t.Fatalf("unexpected planned changes: %#v", preflight.Planned)
+	}
+	entitlements, err := repo.ListTenantEntitlements(t.Context(), store.EntitlementFilter{})
+	if err != nil {
+		t.Fatalf("list entitlements: %v", err)
+	}
+	applications, err := repo.ListPermissionPackageApplications(t.Context(), store.PermissionPackageApplicationFilter{})
+	if err != nil {
+		t.Fatalf("list applications: %v", err)
+	}
+	events, err := repo.ListAuditEvents(t.Context(), store.AuditEventFilter{Action: "permission_package.applied"})
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	if len(entitlements) != 0 || len(applications) != 0 || len(events) != 0 {
+		t.Fatalf("preflight must not write records: entitlements=%#v applications=%#v events=%#v", entitlements, applications, events)
+	}
+}
+
+func TestPermissionPackagePreflightApprovalRequiredStates(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	updateTicket := createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow support triage updates for this tenant.",
+		"targetId":         target.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	missingApproval := decodeData[permissionPackageApplyPreflightResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:preflight", input, ""))
+	if missingApproval.Summary.CanApply || missingApproval.Summary.BlockingCount == 0 || !missingApproval.Summary.RequiresApproval ||
+		missingApproval.Summary.ApprovalReady || !permissionPackagePreflightHasCheck(missingApproval.Checks, "approval_request_missing", "blocking") {
+		t.Fatalf("expected missing approval to block preflight, got %#v", missingApproval)
+	}
+
+	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
+	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", nil, ""))
+	if approved.Status != "approved" {
+		t.Fatalf("expected approved request, got %#v", approved)
+	}
+	approvedInput := map[string]any{
+		"approvalRequestId": approved.ID,
+		"callerInstanceId":  caller.ID,
+		"region":            "us-east",
+		"requestText":       "Allow support triage updates for this tenant.",
+		"targetId":          target.ID,
+		"templateId":        "support-ticket-triage",
+		"tenantId":          "tenant-east",
+		"workspaceId":       "ws-support",
+	}
+	approvedPreflight := decodeData[permissionPackageApplyPreflightResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:preflight", approvedInput, ""))
+	if !approvedPreflight.Summary.CanApply || approvedPreflight.Summary.BlockingCount != 0 ||
+		!approvedPreflight.Summary.RequiresApproval || !approvedPreflight.Summary.ApprovalReady ||
+		!permissionPackagePreflightHasCheck(approvedPreflight.Checks, "approval_request_ready", "passed") ||
+		len(approvedPreflight.Planned.Capabilities) != 1 || approvedPreflight.Planned.Capabilities[0].ID != updateTicket.ID {
+		t.Fatalf("expected approved preflight to be ready, got %#v", approvedPreflight)
+	}
+	loadedApproval, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), approved.ID)
+	if err != nil || !ok {
+		t.Fatalf("get approval after preflight: ok=%v err=%v", ok, err)
+	}
+	if !loadedApproval.ConsumedAt.IsZero() || loadedApproval.ConsumedByApplicationID != "" {
+		t.Fatalf("preflight must not consume approval, got %#v", loadedApproval)
+	}
+	applications, err := repo.ListPermissionPackageApplications(t.Context(), store.PermissionPackageApplicationFilter{})
+	if err != nil {
+		t.Fatalf("list applications: %v", err)
+	}
+	if len(applications) != 0 {
+		t.Fatalf("preflight must not create applications, got %#v", applications)
+	}
+
+	mismatchedInput := map[string]any{
+		"approvalRequestId": approved.ID,
+		"callerInstanceId":  caller.ID,
+		"region":            "eu-west",
+		"requestText":       "Allow support triage updates for this tenant.",
+		"targetId":          target.ID,
+		"templateId":        "support-ticket-triage",
+		"tenantId":          "tenant-east",
+		"workspaceId":       "ws-support",
+	}
+	mismatched := decodeData[permissionPackageApplyPreflightResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:preflight", mismatchedInput, ""))
+	if mismatched.Summary.CanApply || !permissionPackagePreflightHasCheck(mismatched.Checks, "approval_request_invalid", "blocking") {
+		t.Fatalf("expected mismatched approval to block preflight, got %#v", mismatched)
+	}
+}
+
+func TestPermissionPackagePreflightDetectsDataScopeConflict(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-sales", Name: "Sales Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "CRM MCP", "tenant-root", "ws-sales", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithActionAndScopes(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, []domain.DataScope{{
+		DataDomain:   "crm",
+		Region:       "us-east",
+		TenantFilter: "tenant_id = 'tenant-east'",
+	}}, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "eu-west",
+		"requestText":      "给销售助手开通客户只读。",
+		"targetId":         target.ID,
+		"templateId":       "sales-readonly",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-sales",
+	}
+	preflight := decodeData[permissionPackageApplyPreflightResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:preflight", input, ""))
+	if preflight.Summary.CanApply || preflight.Summary.BlockingCount == 0 ||
+		!permissionPackagePreflightHasCheck(preflight.Checks, "data_scope_fit", "blocking") {
+		t.Fatalf("expected data-scope conflict to block preflight, got %#v", preflight)
+	}
+}
+
+func TestPermissionPackagePreflightWarnsAboutExistingGrantChain(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-sales", Name: "Sales Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "CRM MCP", "tenant-root", "ws-sales", "mcp", domain.AgentStatusActive, nil)
+	search := createDirectCapabilityWithAction(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "华东",
+		"requestText":      "给销售助手开通客户只读。",
+		"subjectSelector":  "user:sales-*",
+		"targetId":         target.ID,
+		"templateId":       "sales-readonly",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-sales",
+	}
+	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", input, ""))
+	if len(applied.TenantEntitlements) != 1 || applied.Application == nil {
+		t.Fatalf("expected seed apply to create a grant chain, got %#v", applied)
+	}
+	preflight := decodeData[permissionPackageApplyPreflightResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:preflight", input, ""))
+	if !preflight.Summary.CanApply || preflight.Summary.WarningCount == 0 || preflight.Summary.ExistingGrantCount != 1 ||
+		!permissionPackagePreflightHasCheck(preflight.Checks, "existing_grant_chain", "warning") ||
+		len(preflight.ExistingGrants) != 1 || preflight.ExistingGrants[0].CapabilityID != search.ID ||
+		preflight.ExistingGrants[0].TenantEntitlementID != applied.TenantEntitlements[0].ID ||
+		preflight.ExistingGrants[0].WorkspaceAssignmentID != applied.WorkspaceAssignments[0].ID ||
+		preflight.ExistingGrants[0].InstanceAssignmentID != applied.InstanceAssignments[0].ID {
+		t.Fatalf("expected existing grant warning, got %#v", preflight)
+	}
+	applications, err := repo.ListPermissionPackageApplications(t.Context(), store.PermissionPackageApplicationFilter{})
+	if err != nil {
+		t.Fatalf("list applications: %v", err)
+	}
+	if len(applications) != 1 {
+		t.Fatalf("preflight should not create another application, got %#v", applications)
+	}
+}
+
 func TestPermissionPackageApplicationImpactReportsDriftBlockers(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -3566,6 +3830,7 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		"method":  "tools/list",
 	}, ""))
 	if !mcpToolNamesContain(tools.Result.Tools, "draft_permission_package") ||
+		!mcpToolNamesContain(tools.Result.Tools, "preflight_permission_package") ||
 		!mcpToolNamesContain(tools.Result.Tools, "apply_permission_package") ||
 		!mcpToolNamesContain(tools.Result.Tools, "create_permission_package_approval_request") ||
 		!mcpToolNamesContain(tools.Result.Tools, "list_permission_package_approval_requests") ||
@@ -3600,6 +3865,31 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 	}
 	if !draft.Readiness.CanApply || len(draft.AllowedCapabilities) != 1 || draft.AllowedCapabilities[0].ID != search.ID {
 		t.Fatalf("unexpected management MCP draft: %#v", draft)
+	}
+
+	preflightCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "preflight",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "preflight_permission_package",
+			"arguments": args,
+		},
+	}, ""))
+	var preflight permissionPackageApplyPreflightResponse
+	if err := json.Unmarshal(preflightCall.Result.StructuredContent, &preflight); err != nil {
+		t.Fatalf("decode preflight structured content: %v", err)
+	}
+	if !preflight.Summary.CanApply || preflight.Summary.BlockingCount != 0 ||
+		!permissionPackagePreflightHasCheck(preflight.Checks, "planned_changes", "info") {
+		t.Fatalf("unexpected management MCP preflight: %#v", preflight)
+	}
+	entitlements, err := repo.ListTenantEntitlements(t.Context(), store.EntitlementFilter{})
+	if err != nil {
+		t.Fatalf("list entitlements after MCP preflight: %v", err)
+	}
+	if len(entitlements) != 0 {
+		t.Fatalf("management MCP preflight must not create entitlements: %#v", entitlements)
 	}
 
 	appliedCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
@@ -3686,6 +3976,23 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		t.Fatalf("expected approval-required management MCP draft, got %#v", draft)
 	}
 
+	missingApprovalPreflightCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "preflight-missing-approval",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "preflight_permission_package",
+			"arguments": args,
+		},
+	}, ""))
+	var missingApprovalPreflight permissionPackageApplyPreflightResponse
+	if err := json.Unmarshal(missingApprovalPreflightCall.Result.StructuredContent, &missingApprovalPreflight); err != nil {
+		t.Fatalf("decode missing approval preflight structured content: %v", err)
+	}
+	if missingApprovalPreflight.Summary.CanApply || !permissionPackagePreflightHasCheck(missingApprovalPreflight.Checks, "approval_request_missing", "blocking") {
+		t.Fatalf("expected missing approval MCP preflight to block, got %#v", missingApprovalPreflight)
+	}
+
 	createCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "approval-create",
@@ -3760,6 +4067,31 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		"tenantId":          "tenant-east",
 		"workspaceId":       "ws-support",
 	}
+	approvedPreflightCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "preflight-approved",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "preflight_permission_package",
+			"arguments": applyArgs,
+		},
+	}, ""))
+	var approvedPreflight permissionPackageApplyPreflightResponse
+	if err := json.Unmarshal(approvedPreflightCall.Result.StructuredContent, &approvedPreflight); err != nil {
+		t.Fatalf("decode approved preflight structured content: %v", err)
+	}
+	if !approvedPreflight.Summary.CanApply || !approvedPreflight.Summary.ApprovalReady ||
+		!permissionPackagePreflightHasCheck(approvedPreflight.Checks, "approval_request_ready", "passed") {
+		t.Fatalf("expected approved MCP preflight to pass, got %#v", approvedPreflight)
+	}
+	loadedApproval, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), approval.ID)
+	if err != nil || !ok {
+		t.Fatalf("get approval after MCP preflight: ok=%v err=%v", ok, err)
+	}
+	if !loadedApproval.ConsumedAt.IsZero() {
+		t.Fatalf("MCP preflight must not consume approval, got %#v", loadedApproval)
+	}
+
 	appliedCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "apply",
@@ -4550,6 +4882,15 @@ func mcpToolNamesContain(tools []mcpToolResponse, name string) bool {
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func permissionPackagePreflightHasCheck(checks []permissionPackageApplyPreflightCheck, code string, severity string) bool {
+	for _, check := range checks {
+		if check.Code == code && check.Severity == severity {
 			return true
 		}
 	}

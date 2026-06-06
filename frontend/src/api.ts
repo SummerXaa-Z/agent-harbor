@@ -27,6 +27,7 @@ import type {
   PermissionPackageApprovalRequest,
   PermissionPackageApprovalStatus,
   PermissionPackageApplyInput,
+  PermissionPackageApplyPreflight,
   PermissionPackageApplyResult,
   PermissionPackageApplicationHealth,
   PermissionPackageApplicationImpact,
@@ -488,6 +489,14 @@ export async function applyPermissionPackage(
   adminKey?: string,
 ): Promise<PermissionPackageApplyResult> {
   return request<PermissionPackageApplyResult>('/api/v1/permission-packages:apply', { adminKey, body })
+}
+
+export async function preflightPermissionPackage(
+  body: PermissionPackageApplyInput,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<PermissionPackageApplyPreflight> {
+  return request<PermissionPackageApplyPreflight>('/api/v1/permission-packages:preflight', { adminKey, body, signal })
 }
 
 export async function fetchPermissionPackageApprovalRequests(

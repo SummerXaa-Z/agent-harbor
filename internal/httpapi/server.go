@@ -155,6 +155,7 @@ func (s *Server) Router() http.Handler {
 			r.Post("/permission-packages/approval-requests/{id}/approve", s.approvePermissionPackageApprovalRequest)
 			r.Post("/permission-packages/approval-requests/{id}/reject", s.rejectPermissionPackageApprovalRequest)
 			r.Post("/permission-packages/drafts", s.createPermissionPackageDraft)
+			r.Post("/permission-packages:preflight", s.preflightPermissionPackage)
 			r.Post("/permission-packages:apply", s.applyPermissionPackage)
 			r.Post("/management/mcp", s.managementMCP)
 			r.Post("/management/mcp/rpc", s.managementMCP)
@@ -1708,6 +1709,111 @@ func (s *Server) createPermissionPackageDraft(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, draft)
 }
 
+func (s *Server) preflightPermissionPackage(w http.ResponseWriter, r *http.Request) {
+	var req domain.PermissionPackageApplyRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	result, err := s.preflightPermissionPackageRequest(r.Context(), req)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) preflightPermissionPackageRequest(ctx context.Context, req domain.PermissionPackageApplyRequest) (domain.PermissionPackageApplyPreflightResponse, error) {
+	req.ApprovalRequestID = strings.TrimSpace(req.ApprovalRequestID)
+	draft, err := s.buildPermissionPackageDraft(ctx, req.PermissionPackageDraftRequest)
+	if err != nil {
+		return domain.PermissionPackageApplyPreflightResponse{}, err
+	}
+
+	result := domain.PermissionPackageApplyPreflightResponse{
+		Draft:  draft,
+		Checks: []domain.PermissionPackageApplyPreflightCheck{},
+		Planned: domain.PermissionPackageApplyPreflightPlannedChanges{
+			Capabilities:         []domain.Capability{},
+			TenantEntitlements:   []domain.TenantEntitlement{},
+			WorkspaceAssignments: []domain.WorkspaceAssignment{},
+			InstanceAssignments:  []domain.InstanceAssignment{},
+		},
+		ExistingGrants: []domain.PermissionPackageApplyPreflightExistingGrant{},
+		NextActions:    []string{},
+	}
+
+	if draft.Readiness.CanApply {
+		result.Checks = append(result.Checks, permissionPackagePreflightCheck("draft_ready", domain.PermissionPackagePreflightPassed, "Permission package draft is ready to evaluate.", "", ""))
+	} else {
+		result.Checks = append(result.Checks, permissionPackagePreflightCheck("draft_not_ready", domain.PermissionPackagePreflightBlocking, "Permission package draft is not ready to apply.", "", ""))
+		result.NextActions = appendUniqueString(result.NextActions, "Fix draft readiness blockers before applying this permission package.")
+	}
+
+	requiresApproval := !draft.PolicyGate.CanApplyDirectly
+	approvalReady := false
+	if requiresApproval {
+		result.Checks = append(result.Checks, permissionPackagePreflightCheck("policy_gate", domain.PermissionPackagePreflightInfo, "Policy gate requires an approved permission package approval request.", "", ""))
+		if req.ApprovalRequestID == "" {
+			result.Checks = append(result.Checks, permissionPackagePreflightCheck("approval_request_missing", domain.PermissionPackagePreflightBlocking, "Permission package requires approval before apply.", "", ""))
+			result.NextActions = appendUniqueString(result.NextActions, "Create and approve a permission package approval request, then preflight again with approvalRequestId.")
+		} else {
+			approval, ok, err := s.repo.GetPermissionPackageApprovalRequest(ctx, req.ApprovalRequestID)
+			if err != nil {
+				return domain.PermissionPackageApplyPreflightResponse{}, err
+			}
+			if !ok {
+				result.Checks = append(result.Checks, permissionPackagePreflightCheck("approval_request_invalid", domain.PermissionPackagePreflightBlocking, "Approval request was not found.", "", ""))
+				result.NextActions = appendUniqueString(result.NextActions, "Use an approved approvalRequestId that matches the current draft.")
+			} else if err := validatePermissionPackageApprovalForDraft(approval, draft, s.now()); err != nil {
+				result.Checks = append(result.Checks, permissionPackagePreflightCheck("approval_request_invalid", domain.PermissionPackagePreflightBlocking, err.Error(), "", ""))
+				result.NextActions = appendUniqueString(result.NextActions, "Refresh approval or create a new approval request for the current draft.")
+			} else {
+				approvalReady = true
+				result.Checks = append(result.Checks, permissionPackagePreflightCheck("approval_request_ready", domain.PermissionPackagePreflightPassed, "Approval request is approved and matches the current draft.", "", ""))
+			}
+		}
+	} else {
+		result.Checks = append(result.Checks, permissionPackagePreflightCheck("policy_gate", domain.PermissionPackagePreflightPassed, "Policy gate allows direct apply.", "", ""))
+	}
+
+	dataScopeConflictCount := 0
+	for _, capability := range draft.AllowedCapabilities {
+		effectiveScopes, ok := domain.EffectiveDataScopes(capability.DataScopes, draft.DataScopes)
+		if !ok {
+			dataScopeConflictCount++
+			result.Checks = append(result.Checks, permissionPackagePreflightCheck("data_scope_fit", domain.PermissionPackagePreflightBlocking, "Permission package dataScopes exceed capability dataScopes.", capability.ID, capability.Key))
+			result.NextActions = appendUniqueString(result.NextActions, "Narrow region or data scopes so the package stays inside every capability boundary.")
+			continue
+		}
+		result.Planned.Capabilities = append(result.Planned.Capabilities, permissionPackagePreflightPlannedCapability(capability, effectiveScopes))
+		entitlement, workspaceAssignment, instanceAssignment := permissionPackagePreflightPlannedGrantChain(draft, capability, effectiveScopes)
+		result.Planned.TenantEntitlements = append(result.Planned.TenantEntitlements, entitlement)
+		result.Planned.WorkspaceAssignments = append(result.Planned.WorkspaceAssignments, workspaceAssignment)
+		result.Planned.InstanceAssignments = append(result.Planned.InstanceAssignments, instanceAssignment)
+
+		existingGrants, err := s.permissionPackagePreflightExistingGrants(ctx, draft, capability)
+		if err != nil {
+			return domain.PermissionPackageApplyPreflightResponse{}, err
+		}
+		for _, existing := range existingGrants {
+			result.ExistingGrants = append(result.ExistingGrants, existing)
+			result.Checks = append(result.Checks, permissionPackagePreflightCheck("existing_grant_chain", domain.PermissionPackagePreflightWarning, "An enabled grant chain already exists for this tenant, workspace, caller, and capability.", capability.ID, capability.Key))
+			result.NextActions = appendUniqueString(result.NextActions, "Review existing grant chains before applying another permission package for the same caller and capability.")
+		}
+	}
+	if dataScopeConflictCount == 0 {
+		result.Checks = append(result.Checks, permissionPackagePreflightCheck("data_scope_fit", domain.PermissionPackagePreflightPassed, "Permission package dataScopes fit all allowed capability boundaries.", "", ""))
+	}
+	result.Checks = append(result.Checks, permissionPackagePreflightCheck("planned_changes", domain.PermissionPackagePreflightInfo, "Preflight planned grant objects without writing them.", "", ""))
+
+	result.Summary = permissionPackagePreflightSummary(result, requiresApproval, approvalReady)
+	if result.Summary.CanApply {
+		result.NextActions = appendUniqueString(result.NextActions, "Apply this permission package when the reviewer is ready.")
+	}
+	return result, nil
+}
+
 func (s *Server) createPermissionPackageApprovalRequest(w http.ResponseWriter, r *http.Request) {
 	var req domain.PermissionPackageDraftRequest
 	if err := decodeJSON(r, &req); err != nil {
@@ -1972,6 +2078,168 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 	result.InstanceAssignments = applyResult.InstanceAssignments
 	result.Application = &applyResult.Application
 	return result, nil
+}
+
+func permissionPackagePreflightCheck(code string, severity domain.PermissionPackagePreflightSeverity, message string, capabilityID string, capabilityKey string) domain.PermissionPackageApplyPreflightCheck {
+	return domain.PermissionPackageApplyPreflightCheck{
+		Code:          code,
+		Severity:      severity,
+		Message:       message,
+		CapabilityID:  capabilityID,
+		CapabilityKey: capabilityKey,
+	}
+}
+
+func permissionPackagePreflightSummary(result domain.PermissionPackageApplyPreflightResponse, requiresApproval bool, approvalReady bool) domain.PermissionPackageApplyPreflightSummary {
+	summary := domain.PermissionPackageApplyPreflightSummary{
+		CanApply:                        true,
+		PlannedCapabilityCount:          len(result.Planned.Capabilities),
+		PlannedTenantEntitlementCount:   len(result.Planned.TenantEntitlements),
+		PlannedWorkspaceAssignmentCount: len(result.Planned.WorkspaceAssignments),
+		PlannedInstanceAssignmentCount:  len(result.Planned.InstanceAssignments),
+		ExistingGrantCount:              len(result.ExistingGrants),
+		RequiresApproval:                requiresApproval,
+		ApprovalReady:                   approvalReady,
+	}
+	for _, check := range result.Checks {
+		switch check.Severity {
+		case domain.PermissionPackagePreflightBlocking:
+			summary.BlockingCount++
+		case domain.PermissionPackagePreflightWarning:
+			summary.WarningCount++
+		}
+	}
+	summary.CanApply = summary.BlockingCount == 0
+	return summary
+}
+
+func permissionPackagePreflightPlannedCapability(capability domain.Capability, dataScopes []domain.DataScope) domain.Capability {
+	planned := capability
+	planned.DiscoveryStatus = domain.CapabilityDiscoveryApproved
+	planned.DataScopes = append([]domain.DataScope(nil), dataScopes...)
+	return planned
+}
+
+func permissionPackagePreflightPlannedGrantChain(draft domain.PermissionPackageDraft, capability domain.Capability, dataScopes []domain.DataScope) (domain.TenantEntitlement, domain.WorkspaceAssignment, domain.InstanceAssignment) {
+	entitlementID := "planned:ent:" + capability.ID
+	workspaceAssignmentID := "planned:wsa:" + capability.ID
+	return domain.TenantEntitlement{
+			ID:           entitlementID,
+			TenantID:     draft.Input.TenantID,
+			TargetID:     draft.Input.TargetID,
+			CapabilityID: capability.ID,
+			Effect:       domain.PolicyEffectAllow,
+			DataScopes:   append([]domain.DataScope(nil), dataScopes...),
+			Status:       domain.PolicyStatusEnabled,
+			Priority:     40,
+		}, domain.WorkspaceAssignment{
+			ID:                  workspaceAssignmentID,
+			TenantEntitlementID: entitlementID,
+			TenantID:            draft.Input.TenantID,
+			WorkspaceID:         draft.Input.WorkspaceID,
+			Effect:              domain.PolicyEffectAllow,
+			DataScopes:          append([]domain.DataScope(nil), dataScopes...),
+			Status:              domain.PolicyStatusEnabled,
+		}, domain.InstanceAssignment{
+			ID:                    "planned:ina:" + capability.ID,
+			WorkspaceAssignmentID: workspaceAssignmentID,
+			TenantID:              draft.Input.TenantID,
+			WorkspaceID:           draft.Input.WorkspaceID,
+			CallerInstanceID:      draft.Input.CallerInstanceID,
+			SubjectSelector:       draft.Input.SubjectSelector,
+			Effect:                domain.PolicyEffectAllow,
+			DataScopes:            append([]domain.DataScope(nil), dataScopes...),
+			Status:                domain.PolicyStatusEnabled,
+		}
+}
+
+func (s *Server) permissionPackagePreflightExistingGrants(ctx context.Context, draft domain.PermissionPackageDraft, capability domain.Capability) ([]domain.PermissionPackageApplyPreflightExistingGrant, error) {
+	entitlements, err := s.repo.ListTenantEntitlements(ctx, store.EntitlementFilter{
+		ManagementScope: store.ManagementScope{TenantID: draft.Input.TenantID},
+		TargetID:        draft.Input.TargetID,
+		CapabilityID:    capability.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	grants := []domain.PermissionPackageApplyPreflightExistingGrant{}
+	for _, entitlement := range entitlements {
+		if entitlement.TenantID != draft.Input.TenantID ||
+			entitlement.TargetID != draft.Input.TargetID ||
+			entitlement.CapabilityID != capability.ID ||
+			entitlement.Effect != domain.PolicyEffectAllow ||
+			entitlement.Status != domain.PolicyStatusEnabled {
+			continue
+		}
+		workspaceAssignments, err := s.repo.ListWorkspaceAssignments(ctx, store.AssignmentFilter{
+			ManagementScope: store.ManagementScope{
+				TenantID:    draft.Input.TenantID,
+				WorkspaceID: draft.Input.WorkspaceID,
+			},
+			EntitlementID: entitlement.ID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, workspaceAssignment := range workspaceAssignments {
+			if workspaceAssignment.TenantID != draft.Input.TenantID ||
+				workspaceAssignment.WorkspaceID != draft.Input.WorkspaceID ||
+				workspaceAssignment.TenantEntitlementID != entitlement.ID ||
+				workspaceAssignment.Effect != domain.PolicyEffectAllow ||
+				workspaceAssignment.Status != domain.PolicyStatusEnabled {
+				continue
+			}
+			instanceAssignments, err := s.repo.ListInstanceAssignments(ctx, store.InstanceAssignmentFilter{
+				ManagementScope: store.ManagementScope{
+					TenantID:    draft.Input.TenantID,
+					WorkspaceID: draft.Input.WorkspaceID,
+				},
+				CallerInstanceID: draft.Input.CallerInstanceID,
+				CapabilityID:     capability.ID,
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, instanceAssignment := range instanceAssignments {
+				if instanceAssignment.TenantID != draft.Input.TenantID ||
+					instanceAssignment.WorkspaceID != draft.Input.WorkspaceID ||
+					instanceAssignment.WorkspaceAssignmentID != workspaceAssignment.ID ||
+					instanceAssignment.CallerInstanceID != draft.Input.CallerInstanceID ||
+					instanceAssignment.Effect != domain.PolicyEffectAllow ||
+					instanceAssignment.Status != domain.PolicyStatusEnabled ||
+					!permissionPackageSubjectSelectorsOverlap(instanceAssignment.SubjectSelector, draft.Input.SubjectSelector) {
+					continue
+				}
+				grants = append(grants, domain.PermissionPackageApplyPreflightExistingGrant{
+					CapabilityID:          capability.ID,
+					CapabilityKey:         capability.Key,
+					TenantEntitlementID:   entitlement.ID,
+					WorkspaceAssignmentID: workspaceAssignment.ID,
+					InstanceAssignmentID:  instanceAssignment.ID,
+				})
+			}
+		}
+	}
+	return grants, nil
+}
+
+func permissionPackageSubjectSelectorsOverlap(existing string, requested string) bool {
+	existing = strings.TrimSpace(existing)
+	requested = strings.TrimSpace(requested)
+	return existing == "" || requested == "" || existing == requested
+}
+
+func appendUniqueString(values []string, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return values
+	}
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 func (s *Server) createTenantEntitlement(w http.ResponseWriter, r *http.Request) {

@@ -18,6 +18,7 @@ import {
   accessDecisionExplainPath,
   permissionPackageApplicationImpactPath,
   permissionPackageApprovalRequestsPath,
+  type PermissionPackageApplicationImpactPathScope,
   type PermissionPackageApprovalRequestPathFilter,
 } from './apiPaths'
 import type {
@@ -496,7 +497,7 @@ export async function fetchPermissionPackageApprovalRequests(
 
 export async function fetchPermissionPackageApplicationImpact(
   applicationId: string,
-  scope?: ManagementScope,
+  scope?: PermissionPackageApplicationImpactPathScope,
   adminKey?: string,
   signal?: AbortSignal,
 ): Promise<PermissionPackageApplicationImpact> {

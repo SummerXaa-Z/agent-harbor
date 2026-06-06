@@ -84,7 +84,9 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("text.nextActions"), "下一步动作");
   assert.equal(t("section.permissionApplicationImpact"), "应用影响复盘");
   assert.equal(t("action.reviewApplicationImpact"), "复盘影响");
+  assert.equal(t("action.rehearseApplicationDrift"), "演练漂移");
   assert.equal(t("message.permissionApplicationImpactLoaded"), "应用影响已加载。");
+  assert.equal(t("message.permissionApplicationDriftRehearsalLoaded"), "漂移演练已加载。");
   assert.equal(t("message.permissionApplicationImpactRequiresLiveApi"), "应用影响复盘需要实时 API。");
   assert.equal(t("metric.activeObjects"), "有效对象");
   assert.equal(t("metric.missingObjects"), "缺失对象");
@@ -95,6 +97,9 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("blocker.no_allowed_capabilities"), "该应用没有记录允许能力；不能按自动顺序规划回滚。");
   assert.equal(t("text.remediationPlan"), "处置计划");
   assert.equal(t("text.readOnlyPlan"), "只读计划");
+  assert.equal(t("text.rehearsalMode"), "只读演练");
+  assert.equal(t("rehearsal.grant_drift"), "授权漂移演练");
+  assert.equal(t("text.rehearsalReadOnlyDetail"), "该结果仅模拟缺失或未启用的授权对象，不会写入权限变更。");
   assert.equal(t("metric.plannedActions"), "计划动作");
   assert.equal(t("text.finalAccessVerification"), "最终访问校验");
   assert.equal(t("text.capabilityReview"), "能力评审");

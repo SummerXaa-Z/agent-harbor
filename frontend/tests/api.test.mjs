@@ -56,3 +56,17 @@ test("permissionPackageApplicationImpactPath includes application id and scope q
   assert.equal(url.searchParams.get("tenantId"), "tenant-root");
   assert.equal(url.searchParams.get("workspaceId"), "ws-sales");
 });
+
+test("permissionPackageApplicationImpactPath can request a read-only rehearsal", () => {
+  const path = permissionPackageApplicationImpactPath("ppa-1", {
+    rehearsal: "grant_drift",
+    tenantId: "tenant-root",
+    workspaceId: "ws-sales"
+  });
+
+  const url = new URL(path, "http://127.0.0.1:9090");
+  assert.equal(url.pathname, "/api/v1/permission-packages/applications/ppa-1/impact");
+  assert.equal(url.searchParams.get("tenantId"), "tenant-root");
+  assert.equal(url.searchParams.get("workspaceId"), "ws-sales");
+  assert.equal(url.searchParams.get("rehearsal"), "grant_drift");
+});

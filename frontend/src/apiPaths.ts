@@ -29,6 +29,12 @@ export interface AccessDecisionExplainPathRequest {
   workspaceId?: string
 }
 
+export interface PermissionPackageApplicationImpactPathScope {
+  rehearsal?: 'grant_drift'
+  tenantId?: string
+  workspaceId?: string
+}
+
 export function accessDecisionExplainPath(request: AccessDecisionExplainPathRequest): string {
   const query = queryString({
     callerInstanceId: request.callerInstanceId,
@@ -43,9 +49,10 @@ export function accessDecisionExplainPath(request: AccessDecisionExplainPathRequ
 
 export function permissionPackageApplicationImpactPath(
   applicationId: string,
-  scope: { tenantId?: string; workspaceId?: string } = {},
+  scope: PermissionPackageApplicationImpactPathScope = {},
 ): string {
   const query = queryString({
+    rehearsal: scope.rehearsal,
     tenantId: scope.tenantId,
     workspaceId: scope.workspaceId,
   })

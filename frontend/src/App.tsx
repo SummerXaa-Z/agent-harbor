@@ -633,6 +633,36 @@ function App() {
     }
   }
 
+  async function rehearseAiAdminApplicationDrift() {
+    if (!data?.loadedFromApi) {
+      setAiAdminApplicationImpactMessage(t("message.permissionApplicationImpactRequiresLiveApi"));
+      return;
+    }
+    if (!aiAdminApplication) {
+      setAiAdminApplicationImpactMessage(t("message.aiAdminApprovalJourneyMissingApplication"));
+      return;
+    }
+    setAiAdminApplicationImpactLoading(true);
+    setAiAdminApplicationImpactMessage("");
+    try {
+      const next = await fetchPermissionPackageApplicationImpact(
+        aiAdminApplication.id,
+        {
+          rehearsal: "grant_drift",
+          tenantId: aiAdminApplication.tenantId,
+          workspaceId: aiAdminApplication.workspaceId
+        },
+        adminKey
+      );
+      setAiAdminApplicationImpact(next);
+      setAiAdminApplicationImpactMessage(t("message.permissionApplicationDriftRehearsalLoaded"));
+    } catch (error) {
+      setAiAdminApplicationImpactMessage(error instanceof Error ? error.message : "Unable to rehearse application drift");
+    } finally {
+      setAiAdminApplicationImpactLoading(false);
+    }
+  }
+
   async function refreshCoreJourneyPreflight() {
     setCoreJourneyPreflightChecking(true);
     setCoreJourneyPreflightMessage(t("message.coreJourneyPreflightChecking"));
@@ -1993,6 +2023,7 @@ function App() {
         onRefreshApprovalReadiness={() => void refreshAiAdminApprovalReadiness()}
         onRefreshReviewerQueue={() => void refreshAiAdminReviewerQueue()}
         onRejectApprovalRequest={(requestId) => void rejectAiAdminApprovalRequest(requestId)}
+        onRehearseApplicationDrift={() => void rehearseAiAdminApplicationDrift()}
         onReviewApplicationImpact={() => void reviewAiAdminApplicationImpact()}
         onRunApprovalJourney={() => void runAiAdminApprovalJourney()}
         onSelectApprovalRequest={(requestId) => {
@@ -2494,6 +2525,7 @@ function AiAdminPermissionWorkbench({
   onRefreshApprovalReadiness,
   onRefreshReviewerQueue,
   onRejectApprovalRequest,
+  onRehearseApplicationDrift,
   onReviewApplicationImpact,
   onRunApprovalJourney,
   onSelectApprovalRequest,
@@ -2538,6 +2570,7 @@ function AiAdminPermissionWorkbench({
   onRefreshApprovalReadiness: () => void;
   onRefreshReviewerQueue: () => void;
   onRejectApprovalRequest: (requestId?: string) => void;
+  onRehearseApplicationDrift: () => void;
   onReviewApplicationImpact: () => void;
   onRunApprovalJourney: () => void;
   onSelectApprovalRequest: (requestId: string) => void;
@@ -2728,6 +2761,7 @@ function AiAdminPermissionWorkbench({
                 impact={applicationImpact}
                 loading={applicationImpactLoading}
                 message={applicationImpactMessage}
+                onRehearse={onRehearseApplicationDrift}
                 onReview={onReviewApplicationImpact}
                 t={t}
               />
@@ -2930,15 +2964,18 @@ function PermissionApplicationImpactPanel({
   impact,
   loading,
   message,
+  onRehearse,
   onReview,
   t
 }: {
   impact: PermissionPackageApplicationImpact | null;
   loading: boolean;
   message: string;
+  onRehearse: () => void;
   onReview: () => void;
   t: Translator;
 }) {
+  const rehearsal = impact?.rehearsal;
   const rollbackBlockers = impact?.rollbackReview.blockers ?? [];
   const rollbackBlockerCodes = impact?.rollbackReview.blockerCodes ?? [];
   const rollbackSteps = impact?.rollbackReview.steps ?? [];
@@ -2955,14 +2992,29 @@ function PermissionApplicationImpactPanel({
           <strong>{t("section.permissionApplicationImpact")}</strong>
           {message ? <span>{message}</span> : null}
         </div>
-        <button className="secondary-button" disabled={loading} onClick={onReview} type="button">
-          <FileSearch size={14} />
-          {loading ? t("action.loading") : t("action.reviewApplicationImpact")}
-        </button>
+        <div className="permission-impact-actions">
+          <button className="secondary-button" disabled={loading} onClick={onReview} type="button">
+            <FileSearch size={14} />
+            {loading ? t("action.loading") : t("action.reviewApplicationImpact")}
+          </button>
+          <button className="secondary-button" disabled={loading} onClick={onRehearse} type="button">
+            <TriangleAlert size={14} />
+            {loading ? t("action.loading") : t("action.rehearseApplicationDrift")}
+          </button>
+        </div>
       </div>
 
       {impact ? (
         <>
+          {rehearsal?.enabled ? (
+            <div className="permission-impact-rehearsal">
+              <Badge tone="warning">{t("text.rehearsalMode")}</Badge>
+              <div>
+                <strong>{t(`rehearsal.${rehearsal.scenario}`, rehearsal.scenario || t("text.rehearsalMode"))}</strong>
+                <span>{t("text.rehearsalReadOnlyDetail")}</span>
+              </div>
+            </div>
+          ) : null}
           <div className="permission-impact-metrics">
             <div>
               <span>{t("detail.createdObjects")}</span>

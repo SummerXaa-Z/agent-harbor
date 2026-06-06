@@ -15,6 +15,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - `GET /api/v1/permission-packages/applications/{id}/impact` 现在返回只读应用影响复盘，包括已创建对象状态、能力人工评审项和回滚评审步骤。
 - `GET /api/v1/permission-packages/applications/{id}/impact` now also returns a read-only remediation plan with ordered manual-review, drift-investigation, grant-disable, and final verification actions.
 - `GET /api/v1/permission-packages/applications/{id}/impact` 现在还返回只读处置计划，包括按顺序排列的人工评审、漂移调查、授权禁用和最终校验动作。
+- `GET /api/v1/permission-packages/applications/{id}/impact` now includes stable rollback and remediation `blockerCodes` for missing grant objects, inactive grant objects, and applications without recorded allowed capabilities.
+- `GET /api/v1/permission-packages/applications/{id}/impact` 现在为缺失授权对象、未启用授权对象、无已记录允许能力的应用返回稳定的回滚与处置 `blockerCodes`。
 - Management MCP now exposes `list_permission_package_applications` for admin agents to review applied template versions, created assignment ids, capability ids, and data scopes.
 - Permission package drafts now include a deterministic `policyGate` that allows direct apply for low-risk packages and requires approval for write, export, admin, high-risk, critical-risk, confidential, or restricted allowed capabilities.
 - Permission package approval requests are now persisted in memory and PostgreSQL so approval-required drafts can be reviewed and applied with evidence.
@@ -27,6 +29,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web 控制台 AI Admin 现在在应用证据下提供只读应用影响复盘，以中英双语展示已创建/有效/缺失对象数量、授权对象行、能力人工评审行和回滚评审步骤。
 - Web console AI Admin now renders the read-only remediation plan for a permission package application in English and Simplified Chinese, without adding rollback execution controls.
 - Web 控制台 AI Admin 现在以中英双语展示权限包应用的只读处置计划，且不提供回滚执行控件。
+- Web console AI Admin now localizes rollback and remediation blockers from stable blocker codes instead of exposing raw backend text.
+- Web 控制台 AI Admin 现在通过稳定 blocker code 本地化回滚与处置阻塞原因，不再直接暴露后端原始文本。
 - Web console AI Admin now shows policy-gate status and disables direct apply when a package requires approval.
 - Web console AI Admin now exposes the approval-required package path with create approval request, approve, reject, and approved apply controls in English and Simplified Chinese.
 - Web console AI Admin now includes a Reviewer queue for routed pending approval requests, with reviewer-scoped refresh plus approve/reject actions in English and Simplified Chinese.

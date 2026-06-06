@@ -90,6 +90,9 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("metric.missingObjects"), "缺失对象");
   assert.equal(t("text.rollbackReview"), "回滚评审");
   assert.equal(t("rollbackStep.capabilityManualReview"), "人工复核能力发现状态；共享能力不会被自动降级。");
+  assert.equal(t("blocker.missing_created_objects"), "部分已记录授权对象缺失；回滚前需要先调查漂移。");
+  assert.equal(t("blocker.inactive_created_objects"), "部分已记录授权对象未启用；需要复核是否已经发生手工变更或部分处置。");
+  assert.equal(t("blocker.no_allowed_capabilities"), "该应用没有记录允许能力；不能按自动顺序规划回滚。");
   assert.equal(t("text.remediationPlan"), "处置计划");
   assert.equal(t("text.readOnlyPlan"), "只读计划");
   assert.equal(t("metric.plannedActions"), "计划动作");

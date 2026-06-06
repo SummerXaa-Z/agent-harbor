@@ -518,6 +518,8 @@ if review.get("ready") is not True:
     raise SystemExit(f"rollback review should be ready: {review}")
 if review.get("blockers") != []:
     raise SystemExit(f"rollback blockers should be an empty array: {review}")
+if review.get("blockerCodes") != []:
+    raise SystemExit(f"rollback blocker codes should be an empty array: {review}")
 if not review.get("steps"):
     raise SystemExit(f"rollback review should include steps: {review}")
 plan = impact.get("remediationPlan") or {}
@@ -527,6 +529,8 @@ if plan.get("ready") is not True:
     raise SystemExit(f"remediation plan should be ready: {plan}")
 if plan.get("blockers") != []:
     raise SystemExit(f"remediation blockers should be an empty array: {plan}")
+if plan.get("blockerCodes") != []:
+    raise SystemExit(f"remediation blocker codes should be an empty array: {plan}")
 actions = plan.get("actions") or []
 if not actions:
     raise SystemExit(f"remediation plan should include actions: {plan}")

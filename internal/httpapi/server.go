@@ -1213,15 +1213,17 @@ type permissionPackageApplicationImpactCapability struct {
 }
 
 type permissionPackageApplicationRollbackReview struct {
-	Ready    bool     `json:"ready"`
-	Blockers []string `json:"blockers"`
-	Steps    []string `json:"steps"`
+	Ready        bool     `json:"ready"`
+	Blockers     []string `json:"blockers"`
+	BlockerCodes []string `json:"blockerCodes"`
+	Steps        []string `json:"steps"`
 }
 
 type permissionPackageApplicationRemediationPlan struct {
 	ExecutionMode string                                          `json:"executionMode"`
 	Ready         bool                                            `json:"ready"`
 	Blockers      []string                                        `json:"blockers"`
+	BlockerCodes  []string                                        `json:"blockerCodes"`
 	Actions       []permissionPackageApplicationRemediationAction `json:"actions"`
 }
 
@@ -1412,8 +1414,9 @@ func missingPermissionPackageImpactObject(objectType string, id string) permissi
 
 func permissionPackageApplicationRollbackReviewFor(application domain.PermissionPackageApplication, summary permissionPackageApplicationImpactSummary) permissionPackageApplicationRollbackReview {
 	review := permissionPackageApplicationRollbackReview{
-		Ready:    summary.RollbackReady,
-		Blockers: []string{},
+		Ready:        summary.RollbackReady,
+		Blockers:     []string{},
+		BlockerCodes: []string{},
 		Steps: []string{
 			"Review capability discovery status manually; shared capabilities are not automatically downgraded by rollback.",
 			"Disable recorded instance assignments before workspace assignments.",
@@ -1423,12 +1426,15 @@ func permissionPackageApplicationRollbackReviewFor(application domain.Permission
 	}
 	if summary.MissingObjectCount > 0 {
 		review.Blockers = append(review.Blockers, "Some recorded grant objects are missing; investigate drift before rollback.")
+		review.BlockerCodes = append(review.BlockerCodes, "missing_created_objects")
 	}
 	if summary.ActiveObjectCount != summary.CreatedObjectCount {
 		review.Blockers = append(review.Blockers, "Some recorded grant objects are not enabled; review partial rollback or manual changes.")
+		review.BlockerCodes = append(review.BlockerCodes, "inactive_created_objects")
 	}
 	if len(application.AllowedCapabilityIDs) == 0 {
 		review.Blockers = append(review.Blockers, "Application has no recorded allowed capabilities.")
+		review.BlockerCodes = append(review.BlockerCodes, "no_allowed_capabilities")
 	}
 	if len(review.Blockers) > 0 {
 		review.Ready = false
@@ -1441,6 +1447,7 @@ func permissionPackageApplicationRemediationPlanFor(application domain.Permissio
 		ExecutionMode: "read_only",
 		Ready:         rollbackReview.Ready,
 		Blockers:      append([]string{}, rollbackReview.Blockers...),
+		BlockerCodes:  append([]string{}, rollbackReview.BlockerCodes...),
 		Actions:       []permissionPackageApplicationRemediationAction{},
 	}
 	for _, capability := range capabilityReviews {

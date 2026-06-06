@@ -20,6 +20,15 @@ export interface PermissionPackageApprovalRequestPathFilter {
   workspaceId?: string
 }
 
+export interface PermissionPackageApplicationHealthPathFilter {
+  callerInstanceId?: string
+  limit?: number
+  targetId?: string
+  templateId?: string
+  tenantId?: string
+  workspaceId?: string
+}
+
 export interface AccessDecisionExplainPathRequest {
   callerInstanceId?: string
   capabilityId?: string
@@ -57,6 +66,18 @@ export function permissionPackageApplicationImpactPath(
     workspaceId: scope.workspaceId,
   })
   return `/api/v1/permission-packages/applications/${encodeURIComponent(applicationId.trim())}/impact${query}`
+}
+
+export function permissionPackageApplicationHealthPath(filter: PermissionPackageApplicationHealthPathFilter): string {
+  const query = queryString({
+    callerInstanceId: filter.callerInstanceId,
+    limit: filter.limit ? String(filter.limit) : undefined,
+    targetId: filter.targetId,
+    templateId: filter.templateId,
+    tenantId: filter.tenantId,
+    workspaceId: filter.workspaceId,
+  })
+  return `/api/v1/permission-packages/applications/health${query}`
 }
 
 export function permissionPackageApprovalRequestsPath(filter: PermissionPackageApprovalRequestPathFilter): string {

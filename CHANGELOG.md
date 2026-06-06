@@ -11,6 +11,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Permission package templates now expose a stable version.
 - Permission package application records are persisted in memory and PostgreSQL and returned from `POST /api/v1/permission-packages:apply`.
 - `GET /api/v1/permission-packages/applications` lists permission package applications by tenant subtree, workspace, template, target, caller instance, and limit.
+- `GET /api/v1/permission-packages/applications/health` now returns read-only ready, drifted, and needs-review health summaries derived from each application's impact review.
+- `GET /api/v1/permission-packages/applications/health` 现在返回只读应用健康汇总，根据应用影响复盘派生健康、已漂移和需复核状态。
 - `GET /api/v1/permission-packages/applications/{id}/impact` now returns read-only application impact with created object status, capability manual-review rows, and rollback review steps.
 - `GET /api/v1/permission-packages/applications/{id}/impact` 现在返回只读应用影响复盘，包括已创建对象状态、能力人工评审项和回滚评审步骤。
 - `GET /api/v1/permission-packages/applications/{id}/impact` now also returns a read-only remediation plan with ordered manual-review, drift-investigation, grant-disable, and final verification actions.
@@ -27,6 +29,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Permission package approval requests now expire after 24 hours and are consumed transactionally by the first successful package application, so expired, already-used, or concurrently reused approvals cannot write permissions.
 - Management MCP now exposes `create_permission_package_approval_request`, `list_permission_package_approval_requests`, `approve_permission_package_approval_request`, and `reject_permission_package_approval_request`.
 - Web console AI Admin now shows the latest permission package application evidence after a successful apply.
+- Web console AI Admin now includes a read-only application health panel with healthy, drifted, and review-needed rows plus one-click impact review in English and Simplified Chinese.
+- Web 控制台 AI Admin 现在提供只读应用健康面板，以中英双语展示健康、已漂移和需复核应用，并可一键进入影响复盘。
 - Web console AI Admin now includes a read-only application impact review panel under application evidence, with created/active/missing object counts, grant-object rows, capability manual-review rows, and rollback review steps in English and Simplified Chinese.
 - Web 控制台 AI Admin 现在在应用证据下提供只读应用影响复盘，以中英双语展示已创建/有效/缺失对象数量、授权对象行、能力人工评审行和回滚评审步骤。
 - Web console AI Admin now renders the read-only remediation plan for a permission package application in English and Simplified Chinese, without adding rollback execution controls.

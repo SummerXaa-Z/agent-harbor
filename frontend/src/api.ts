@@ -16,8 +16,10 @@ import {
 import { normalizeAccessProfileFilters } from './accessProfile'
 import {
   accessDecisionExplainPath,
+  permissionPackageApplicationHealthPath,
   permissionPackageApplicationImpactPath,
   permissionPackageApprovalRequestsPath,
+  type PermissionPackageApplicationHealthPathFilter,
   type PermissionPackageApplicationImpactPathScope,
   type PermissionPackageApprovalRequestPathFilter,
 } from './apiPaths'
@@ -26,6 +28,7 @@ import type {
   PermissionPackageApprovalStatus,
   PermissionPackageApplyInput,
   PermissionPackageApplyResult,
+  PermissionPackageApplicationHealth,
   PermissionPackageApplicationImpact,
   PermissionPackageDraft,
   PermissionPackageDraftInput,
@@ -493,6 +496,14 @@ export async function fetchPermissionPackageApprovalRequests(
   signal?: AbortSignal,
 ): Promise<PermissionPackageApprovalRequest[]> {
   return request<PermissionPackageApprovalRequest[]>(permissionPackageApprovalRequestsPath(filter), { adminKey, signal })
+}
+
+export async function fetchPermissionPackageApplicationHealth(
+  filter: PermissionPackageApplicationHealthPathFilter,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<PermissionPackageApplicationHealth> {
+  return request<PermissionPackageApplicationHealth>(permissionPackageApplicationHealthPath(filter), { adminKey, signal })
 }
 
 export async function fetchPermissionPackageApplicationImpact(

@@ -481,6 +481,46 @@ print("permission package application list verified")
 PY
 }
 
+assert_application_health() {
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$APPLICATION_ID" <<'PY'
+import json
+import os
+import sys
+
+health = json.loads(os.environ["RESPONSE_BODY"])["data"]
+application_id = sys.argv[1]
+summary = health.get("summary") or {}
+expected_summary = {
+    "total": 1,
+    "ready": 1,
+    "drifted": 0,
+    "needsReview": 0,
+}
+for key, value in expected_summary.items():
+    if summary.get(key) != value:
+        raise SystemExit(f"health summary[{key}]={summary.get(key)} want {value}; summary={summary}")
+applications = health.get("applications") or []
+if len(applications) != 1:
+    raise SystemExit(f"expected exactly one application health row: {health}")
+row = applications[0]
+if row.get("application", {}).get("id") != application_id:
+    raise SystemExit(f"health application id mismatch: {row}")
+expected_row = {
+    "status": "ready",
+    "createdObjectCount": 6,
+    "activeObjectCount": 6,
+    "missingObjectCount": 0,
+    "rollbackReady": True,
+}
+for key, value in expected_row.items():
+    if row.get(key) != value:
+        raise SystemExit(f"health row[{key}]={row.get(key)} want {value}; row={row}")
+if row.get("blockerCodes") != []:
+    raise SystemExit(f"health blockerCodes should be empty: {row}")
+print("permission package application health verified")
+PY
+}
+
 assert_application_impact() {
   RESPONSE_BODY="$HTTP_BODY" python3 - "$APPLICATION_ID" "$READ_TOOL" "$WRITE_TOOL" "$READ_CAPABILITY_ID" "$WRITE_CAPABILITY_ID" <<'PY'
 import json
@@ -757,6 +797,10 @@ assert_profile_chain
 request GET "/api/v1/permission-packages/applications?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID&templateId=$TEMPLATE_ID&targetId=$TARGET_ID&callerInstanceId=$CALLER_ID&limit=1"
 expect_status 200 "list permission package applications"
 assert_application_list
+
+request GET "/api/v1/permission-packages/applications/health?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID&templateId=$TEMPLATE_ID&targetId=$TARGET_ID&callerInstanceId=$CALLER_ID&limit=1"
+expect_status 200 "inspect permission package application health"
+assert_application_health
 
 request GET "/api/v1/permission-packages/applications/$APPLICATION_ID/impact?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID"
 expect_status 200 "review permission package application impact"

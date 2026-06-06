@@ -148,6 +148,7 @@ func (s *Server) Router() http.Handler {
 			r.Patch("/capabilities/{id}", s.updateCapability)
 			r.Get("/permission-packages/templates", s.listPermissionPackageTemplates)
 			r.Get("/permission-packages/applications", s.listPermissionPackageApplications)
+			r.Get("/permission-packages/applications/health", s.listPermissionPackageApplicationHealth)
 			r.Get("/permission-packages/applications/{id}/impact", s.getPermissionPackageApplicationImpact)
 			r.Get("/permission-packages/approval-requests", s.listPermissionPackageApprovalRequests)
 			r.Post("/permission-packages/approval-requests", s.createPermissionPackageApprovalRequest)
@@ -1179,6 +1180,97 @@ func (s *Server) listPermissionPackageApplications(w http.ResponseWriter, r *htt
 		return
 	}
 	writeJSON(w, http.StatusOK, rows)
+}
+
+type permissionPackageApplicationHealthResponse struct {
+	Summary      permissionPackageApplicationHealthSummary `json:"summary"`
+	Applications []permissionPackageApplicationHealthRow   `json:"applications"`
+}
+
+type permissionPackageApplicationHealthSummary struct {
+	Total       int `json:"total"`
+	Ready       int `json:"ready"`
+	Drifted     int `json:"drifted"`
+	NeedsReview int `json:"needsReview"`
+}
+
+type permissionPackageApplicationHealthRow struct {
+	Application        domain.PermissionPackageApplication `json:"application"`
+	Status             string                              `json:"status"`
+	BlockerCodes       []string                            `json:"blockerCodes"`
+	CreatedObjectCount int                                 `json:"createdObjectCount"`
+	ActiveObjectCount  int                                 `json:"activeObjectCount"`
+	MissingObjectCount int                                 `json:"missingObjectCount"`
+	RollbackReady      bool                                `json:"rollbackReady"`
+}
+
+func (s *Server) listPermissionPackageApplicationHealth(w http.ResponseWriter, r *http.Request) {
+	limit, err := auditLimitFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	applications, err := s.repo.ListPermissionPackageApplications(r.Context(), store.PermissionPackageApplicationFilter{
+		ManagementScope:  managementScopeFromRequest(r),
+		TemplateID:       strings.TrimSpace(r.URL.Query().Get("templateId")),
+		TargetID:         strings.TrimSpace(r.URL.Query().Get("targetId")),
+		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
+		Limit:            limit,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	response := permissionPackageApplicationHealthResponse{
+		Applications: []permissionPackageApplicationHealthRow{},
+	}
+	for _, application := range applications {
+		impact, err := s.permissionPackageApplicationImpact(r.Context(), application)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		status := permissionPackageApplicationHealthStatus(impact)
+		switch status {
+		case "ready":
+			response.Summary.Ready++
+		case "drifted":
+			response.Summary.Drifted++
+		default:
+			response.Summary.NeedsReview++
+		}
+		response.Applications = append(response.Applications, permissionPackageApplicationHealthRow{
+			Application:        application,
+			Status:             status,
+			BlockerCodes:       append([]string{}, impact.RollbackReview.BlockerCodes...),
+			CreatedObjectCount: impact.Summary.CreatedObjectCount,
+			ActiveObjectCount:  impact.Summary.ActiveObjectCount,
+			MissingObjectCount: impact.Summary.MissingObjectCount,
+			RollbackReady:      impact.Summary.RollbackReady,
+		})
+	}
+	response.Summary.Total = len(response.Applications)
+	writeJSON(w, http.StatusOK, response)
+}
+
+func permissionPackageApplicationHealthStatus(impact permissionPackageApplicationImpactResponse) string {
+	if impact.RollbackReview.Ready {
+		return "ready"
+	}
+	if permissionPackageApplicationBlockerCodesContain(impact.RollbackReview.BlockerCodes, "missing_created_objects") ||
+		permissionPackageApplicationBlockerCodesContain(impact.RollbackReview.BlockerCodes, "inactive_created_objects") {
+		return "drifted"
+	}
+	return "needs_review"
+}
+
+func permissionPackageApplicationBlockerCodesContain(blockerCodes []string, want string) bool {
+	for _, blockerCode := range blockerCodes {
+		if blockerCode == want {
+			return true
+		}
+	}
+	return false
 }
 
 type permissionPackageApplicationImpactResponse struct {

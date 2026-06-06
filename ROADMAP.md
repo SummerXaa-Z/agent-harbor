@@ -24,8 +24,8 @@ AgentHarbor 支持 MCP 网关能力，但主要产品界面不是通用 MCP 聚�
   为非技术管理员增加更丰富的权限包推荐和模板。
 - Add effective permission explanations that show why a subject is allowed or denied across tenant, workspace, caller, capability, and data-scope layers.
   增加有效权限解释，展示主体在租户、工作区、调用方、能力和数据范围各层为什么被允许或拒绝。
-- Add permission package application diff and rollback review flows.
-  增加权限包应用差异和回滚评审流程。
+- Expand permission package application health into richer diff and rollback review flows.
+  将权限包应用健康巡检扩展为更丰富的差异和回滚评审流程。
 - Harden tenant access profiles with clearer inherited-vs-direct permission views.
   强化租户访问画像，明确展示继承权限与直接权限。
 

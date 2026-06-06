@@ -46,6 +46,7 @@ import {
   disableRoutePolicy,
   fetchAccessDecisionExplanation,
   fetchAuditEvents,
+  fetchPermissionPackageApplicationHealth,
   fetchPermissionPackageApplicationImpact,
   fetchPermissionPackageApprovalRequests,
   fetchPermissionPackageTemplates,
@@ -118,6 +119,9 @@ import {
   permissionPackageTemplates,
   subjectIdExampleFromSelector,
   type PermissionPackageApplication,
+  type PermissionPackageApplicationHealth,
+  type PermissionPackageApplicationHealthRow,
+  type PermissionPackageApplicationHealthStatus,
   type PermissionPackageApplicationImpact,
   type PermissionPackageApprovalRequest,
   type PermissionPackageDraft,
@@ -350,6 +354,10 @@ function App() {
   const [aiAdminTemplates, setAiAdminTemplates] = useState<PermissionPackageTemplate[]>(permissionPackageTemplates);
   const [aiAdminServerDraft, setAiAdminServerDraft] = useState<PermissionPackageDraft | null>(null);
   const [aiAdminApplication, setAiAdminApplication] = useState<PermissionPackageApplication | null>(null);
+  const [aiAdminApplicationHealth, setAiAdminApplicationHealth] =
+    useState<PermissionPackageApplicationHealth | null>(null);
+  const [aiAdminApplicationHealthLoading, setAiAdminApplicationHealthLoading] = useState(false);
+  const [aiAdminApplicationHealthMessage, setAiAdminApplicationHealthMessage] = useState("");
   const [aiAdminApplicationImpact, setAiAdminApplicationImpact] =
     useState<PermissionPackageApplicationImpact | null>(null);
   const [aiAdminApplicationImpactLoading, setAiAdminApplicationImpactLoading] = useState(false);
@@ -604,23 +612,59 @@ function App() {
     }
   }
 
-  async function reviewAiAdminApplicationImpact() {
+  async function refreshAiAdminApplicationHealth(
+    formInput: PermissionPackageDraftInput = aiAdminForm,
+    options: { requireLiveApi?: boolean } = {}
+  ) {
+    const requireLiveApi = options.requireLiveApi ?? true;
+    if (requireLiveApi && !data?.loadedFromApi) {
+      setAiAdminApplicationHealthMessage(t("message.permissionApplicationHealthRequiresLiveApi"));
+      return null;
+    }
+    setAiAdminApplicationHealthLoading(true);
+    setAiAdminApplicationHealthMessage("");
+    try {
+      const next = await fetchPermissionPackageApplicationHealth(
+        {
+          callerInstanceId: formInput.callerInstanceId,
+          limit: 10,
+          targetId: formInput.targetId,
+          templateId: formInput.templateId,
+          tenantId: formInput.tenantId,
+          workspaceId: formInput.workspaceId
+        },
+        adminKey
+      );
+      setAiAdminApplicationHealth(next);
+      setAiAdminApplicationHealthMessage(t("message.permissionApplicationHealthLoaded"));
+      return next;
+    } catch (error) {
+      setAiAdminApplicationHealthMessage(error instanceof Error ? error.message : "Unable to refresh application health");
+      return null;
+    } finally {
+      setAiAdminApplicationHealthLoading(false);
+    }
+  }
+
+  async function reviewAiAdminApplicationImpact(applicationOverride?: PermissionPackageApplication) {
     if (!data?.loadedFromApi) {
       setAiAdminApplicationImpactMessage(t("message.permissionApplicationImpactRequiresLiveApi"));
       return;
     }
-    if (!aiAdminApplication) {
+    const application = applicationOverride ?? aiAdminApplication;
+    if (!application) {
       setAiAdminApplicationImpactMessage(t("message.aiAdminApprovalJourneyMissingApplication"));
       return;
     }
+    setAiAdminApplication(application);
     setAiAdminApplicationImpactLoading(true);
     setAiAdminApplicationImpactMessage("");
     try {
       const next = await fetchPermissionPackageApplicationImpact(
-        aiAdminApplication.id,
+        application.id,
         {
-          tenantId: aiAdminApplication.tenantId,
-          workspaceId: aiAdminApplication.workspaceId
+          tenantId: application.tenantId,
+          workspaceId: application.workspaceId
         },
         adminKey
       );
@@ -965,6 +1009,8 @@ function App() {
     setAiAdminApprovalJourneyConfig(nextConfig);
     setAiAdminApprovalJourneyResult(null);
     setAiAdminApprovalAuditEvent(null);
+    setAiAdminApplicationHealth(null);
+    setAiAdminApplicationHealthMessage("");
     setAiAdminApplicationImpact(null);
     setAiAdminApplicationImpactMessage("");
     setAiAdminApprovalJourneyRunning(true);
@@ -1065,6 +1111,8 @@ function App() {
       };
       setAiAdminForm(nextForm);
       setAiAdminApplication(null);
+      setAiAdminApplicationHealth(null);
+      setAiAdminApplicationHealthMessage("");
       setAiAdminApplicationImpact(null);
       setAiAdminApplicationImpactMessage("");
       setAiAdminApprovalRequests([]);
@@ -1100,6 +1148,8 @@ function App() {
         throw new Error(t("message.aiAdminApprovalJourneyMissingApplication"));
       }
       setAiAdminApplication(application);
+      setAiAdminApplicationHealth(null);
+      setAiAdminApplicationHealthMessage("");
       setAiAdminApplicationImpact(null);
       setAiAdminApplicationImpactMessage("");
 
@@ -1191,6 +1241,7 @@ function App() {
         targetId: target.id,
         toolListStatus: toolList.status
       });
+      await refreshAiAdminApplicationHealth(nextForm, { requireLiveApi: false });
       setAiAdminApprovalJourneyMessage(t("message.aiAdminApprovalJourneyComplete"));
       setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: applied.tenantEntitlements.length }));
     } catch (error) {
@@ -1652,6 +1703,8 @@ function App() {
 
   async function applyAiAdminPermissionPackage() {
     setAiAdminMessage("");
+    setAiAdminApplicationHealth(null);
+    setAiAdminApplicationHealthMessage("");
     setAiAdminApplicationImpact(null);
     setAiAdminApplicationImpactMessage("");
     if (!aiAdminDraft.readiness.canApply) {
@@ -1722,6 +1775,9 @@ function App() {
       setAccessProfile(nextProfile);
       setLastRefresh(new Date());
       setAiAdminApplication(application);
+      if (application) {
+        await refreshAiAdminApplicationHealth(aiAdminForm, { requireLiveApi: false });
+      }
       setAiAdminApplicationImpact(null);
       setAiAdminApplicationImpactMessage("");
       setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: appliedCount }));
@@ -1991,6 +2047,9 @@ function App() {
         approvalRequest={aiAdminApprovalRequest}
         approvalRequests={aiAdminApprovalRequests}
         approvalReviewer={aiAdminApprovalReviewer}
+        applicationHealth={aiAdminApplicationHealth}
+        applicationHealthLoading={aiAdminApplicationHealthLoading}
+        applicationHealthMessage={aiAdminApplicationHealthMessage}
         applicationImpact={aiAdminApplicationImpact}
         applicationImpactLoading={aiAdminApplicationImpactLoading}
         applicationImpactMessage={aiAdminApplicationImpactMessage}
@@ -2009,6 +2068,8 @@ function App() {
         onChange={(nextForm) => {
           setAiAdminForm(nextForm);
           setAiAdminApplication(null);
+          setAiAdminApplicationHealth(null);
+          setAiAdminApplicationHealthMessage("");
           setAiAdminApplicationImpact(null);
           setAiAdminApplicationImpactMessage("");
           setAiAdminApprovalAuditEvent(null);
@@ -2021,9 +2082,11 @@ function App() {
         onCreateApprovalRequest={() => void createAiAdminApprovalRequest()}
         onExplainAccessDecision={() => void explainAiAdminAccessDecision()}
         onRefreshApprovalReadiness={() => void refreshAiAdminApprovalReadiness()}
+        onRefreshApplicationHealth={() => void refreshAiAdminApplicationHealth()}
         onRefreshReviewerQueue={() => void refreshAiAdminReviewerQueue()}
         onRejectApprovalRequest={(requestId) => void rejectAiAdminApprovalRequest(requestId)}
         onRehearseApplicationDrift={() => void rehearseAiAdminApplicationDrift()}
+        onReviewApplicationHealthRow={(application) => void reviewAiAdminApplicationImpact(application)}
         onReviewApplicationImpact={() => void reviewAiAdminApplicationImpact()}
         onRunApprovalJourney={() => void runAiAdminApprovalJourney()}
         onSelectApprovalRequest={(requestId) => {
@@ -2505,6 +2568,9 @@ function AiAdminPermissionWorkbench({
   approvalRequest,
   approvalRequests,
   approvalReviewer,
+  applicationHealth,
+  applicationHealthLoading,
+  applicationHealthMessage,
   applicationImpact,
   applicationImpactLoading,
   applicationImpactMessage,
@@ -2523,9 +2589,11 @@ function AiAdminPermissionWorkbench({
   onCreateApprovalRequest,
   onExplainAccessDecision,
   onRefreshApprovalReadiness,
+  onRefreshApplicationHealth,
   onRefreshReviewerQueue,
   onRejectApprovalRequest,
   onRehearseApplicationDrift,
+  onReviewApplicationHealthRow,
   onReviewApplicationImpact,
   onRunApprovalJourney,
   onSelectApprovalRequest,
@@ -2550,6 +2618,9 @@ function AiAdminPermissionWorkbench({
   approvalRequest: PermissionPackageApprovalRequest | null;
   approvalRequests: PermissionPackageApprovalRequest[];
   approvalReviewer: string;
+  applicationHealth: PermissionPackageApplicationHealth | null;
+  applicationHealthLoading: boolean;
+  applicationHealthMessage: string;
   applicationImpact: PermissionPackageApplicationImpact | null;
   applicationImpactLoading: boolean;
   applicationImpactMessage: string;
@@ -2568,9 +2639,11 @@ function AiAdminPermissionWorkbench({
   onCreateApprovalRequest: () => void;
   onExplainAccessDecision: () => void;
   onRefreshApprovalReadiness: () => void;
+  onRefreshApplicationHealth: () => void;
   onRefreshReviewerQueue: () => void;
   onRejectApprovalRequest: (requestId?: string) => void;
   onRehearseApplicationDrift: () => void;
+  onReviewApplicationHealthRow: (application: PermissionPackageApplication) => void;
   onReviewApplicationImpact: () => void;
   onRunApprovalJourney: () => void;
   onSelectApprovalRequest: (requestId: string) => void;
@@ -2731,6 +2804,14 @@ function AiAdminPermissionWorkbench({
             <strong>{permissionPackageTemplateName(draft.template, t)}</strong>
             <span>{permissionPackageTemplateSummary(draft.template, t)}</span>
           </div>
+          <PermissionApplicationHealthPanel
+            health={applicationHealth}
+            loading={applicationHealthLoading}
+            message={applicationHealthMessage}
+            onRefresh={onRefreshApplicationHealth}
+            onReview={onReviewApplicationHealthRow}
+            t={t}
+          />
           {application ? (
             <div className="permission-application-evidence">
               <div className="permission-section-title">
@@ -2957,6 +3038,105 @@ function AiAdminPermissionWorkbench({
         </section>
       </div>
     </div>
+  );
+}
+
+function PermissionApplicationHealthPanel({
+  health,
+  loading,
+  message,
+  onRefresh,
+  onReview,
+  t
+}: {
+  health: PermissionPackageApplicationHealth | null;
+  loading: boolean;
+  message: string;
+  onRefresh: () => void;
+  onReview: (application: PermissionPackageApplication) => void;
+  t: Translator;
+}) {
+  const rows = health?.applications ?? [];
+  return (
+    <div className="permission-application-health">
+      <div className="permission-health-header">
+        <div>
+          <strong>{t("section.permissionApplicationHealth")}</strong>
+          {message ? <span>{message}</span> : null}
+        </div>
+        <button className="secondary-button" disabled={loading} onClick={onRefresh} type="button">
+          <RefreshCw size={14} />
+          {loading ? t("action.loading") : t("action.refreshApplicationHealth")}
+        </button>
+      </div>
+
+      <div className="permission-health-metrics">
+        <div>
+          <span>{t("metric.totalApplications")}</span>
+          <strong>{health?.summary.total ?? 0}</strong>
+        </div>
+        <div>
+          <span>{t("metric.readyApplications")}</span>
+          <strong>{health?.summary.ready ?? 0}</strong>
+        </div>
+        <div>
+          <span>{t("metric.driftedApplications")}</span>
+          <strong>{health?.summary.drifted ?? 0}</strong>
+        </div>
+        <div>
+          <span>{t("metric.needsReviewApplications")}</span>
+          <strong>{health?.summary.needsReview ?? 0}</strong>
+        </div>
+      </div>
+
+      {rows.length > 0 ? (
+        <div className="permission-health-list">
+          {rows.map((row) => (
+            <PermissionApplicationHealthRowView key={row.application.id} onReview={onReview} row={row} t={t} />
+          ))}
+        </div>
+      ) : (
+        <span className="permission-health-empty">{t("empty.permissionApplicationHealth.detail")}</span>
+      )}
+    </div>
+  );
+}
+
+function PermissionApplicationHealthRowView({
+  onReview,
+  row,
+  t
+}: {
+  onReview: (application: PermissionPackageApplication) => void;
+  row: PermissionPackageApplicationHealthRow;
+  t: Translator;
+}) {
+  const blockerLabels = permissionImpactBlockerLabels(row.blockerCodes ?? [], [], t);
+  return (
+    <article className={`permission-health-row status-${row.status}`}>
+      <Badge tone={permissionApplicationHealthTone(row.status)}>
+        {permissionApplicationHealthLabel(row.status, t)}
+      </Badge>
+      <div>
+        <strong>{row.application.templateId}</strong>
+        <code>{row.application.id}</code>
+        <span>{row.application.tenantId} / {row.application.workspaceId}</span>
+        {blockerLabels.length > 0 ? (
+          <ul className="permission-impact-blockers">
+            {blockerLabels.map((blocker) => (
+              <li key={blocker}>{blocker}</li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      <span>
+        {row.activeObjectCount}/{row.createdObjectCount} {t("metric.activeObjects")} · {row.missingObjectCount} {t("metric.missingObjects")}
+      </span>
+      <button className="secondary-button" onClick={() => onReview(row.application)} type="button">
+        <FileSearch size={14} />
+        {t("action.reviewApplicationImpact")}
+      </button>
+    </article>
   );
 }
 
@@ -4576,6 +4756,18 @@ function permissionApprovalStatusTone(status: PermissionPackageApprovalRequest["
   if (status === "approved") return "success";
   if (status === "rejected") return "danger";
   return "warning";
+}
+
+function permissionApplicationHealthLabel(status: PermissionPackageApplicationHealthStatus, t: Translator) {
+  if (status === "ready") return t("status.applicationHealthReady");
+  if (status === "drifted") return t("status.applicationHealthDrifted");
+  return t("status.applicationHealthNeedsReview");
+}
+
+function permissionApplicationHealthTone(status: PermissionPackageApplicationHealthStatus): Tone {
+  if (status === "ready") return "success";
+  if (status === "drifted") return "warning";
+  return "info";
 }
 
 function permissionPackageApprovalRouteLabel(request: PermissionPackageApprovalRequest) {

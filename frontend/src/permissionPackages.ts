@@ -123,6 +123,7 @@ export interface PermissionPackageImpactCapability {
 export interface PermissionPackageRollbackReview {
   ready: boolean;
   blockers: string[];
+  blockerCodes?: string[];
   steps: string[];
 }
 
@@ -130,6 +131,7 @@ export interface PermissionPackageRemediationPlan {
   executionMode: string;
   ready: boolean;
   blockers: string[];
+  blockerCodes?: string[];
   actions: PermissionPackageRemediationAction[];
 }
 

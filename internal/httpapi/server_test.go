@@ -246,15 +246,17 @@ type permissionPackageImpactCapability struct {
 }
 
 type permissionPackageRollbackReview struct {
-	Ready    bool     `json:"ready"`
-	Blockers []string `json:"blockers"`
-	Steps    []string `json:"steps"`
+	Ready        bool     `json:"ready"`
+	Blockers     []string `json:"blockers"`
+	BlockerCodes []string `json:"blockerCodes"`
+	Steps        []string `json:"steps"`
 }
 
 type permissionPackageRemediationPlan struct {
 	ExecutionMode string                               `json:"executionMode"`
 	Ready         bool                                 `json:"ready"`
 	Blockers      []string                             `json:"blockers"`
+	BlockerCodes  []string                             `json:"blockerCodes"`
 	Actions       []permissionPackageRemediationAction `json:"actions"`
 }
 
@@ -2905,11 +2907,17 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	if impact.RollbackReview.Blockers == nil {
 		t.Fatalf("expected rollback blockers to encode as an empty array, got nil")
 	}
+	if impact.RollbackReview.BlockerCodes == nil || len(impact.RollbackReview.BlockerCodes) != 0 {
+		t.Fatalf("expected rollback blocker codes to encode as an empty array, got %#v", impact.RollbackReview.BlockerCodes)
+	}
 	if impact.RemediationPlan.ExecutionMode != "read_only" || !impact.RemediationPlan.Ready {
 		t.Fatalf("expected ready read-only remediation plan, got %#v", impact.RemediationPlan)
 	}
 	if impact.RemediationPlan.Blockers == nil || len(impact.RemediationPlan.Blockers) != 0 {
 		t.Fatalf("expected remediation blockers to encode as an empty array, got %#v", impact.RemediationPlan.Blockers)
+	}
+	if impact.RemediationPlan.BlockerCodes == nil || len(impact.RemediationPlan.BlockerCodes) != 0 {
+		t.Fatalf("expected remediation blocker codes to encode as an empty array, got %#v", impact.RemediationPlan.BlockerCodes)
 	}
 	if len(impact.RemediationPlan.Actions) == 0 {
 		t.Fatalf("expected remediation actions, got %#v", impact.RemediationPlan)
@@ -2948,6 +2956,114 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 		events[0].Metadata["applicationId"] != applied.Application.ID || events[0].Metadata["draftId"] != applied.Draft.ID ||
 		events[0].Metadata["templateVersion"] != float64(1) {
 		t.Fatalf("expected permission_package.applied audit event, got %#v", events)
+	}
+}
+
+func TestPermissionPackageApplicationImpactReportsDriftBlockers(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	target := createDirectAgent(t, repo, "Drift MCP Target", "tenant-east", "ws-sales", "mcp", domain.AgentStatusActive, nil)
+	caller := createDirectAgent(t, repo, "Drift Caller", "tenant-east", "ws-sales", "local", domain.AgentStatusActive, nil)
+	entitlement, err := repo.CreateTenantEntitlement(t.Context(), domain.TenantEntitlement{
+		ID:           "ent-disabled-drift",
+		TenantID:     "tenant-east",
+		TargetID:     target.ID,
+		CapabilityID: "cap-drift",
+		Effect:       domain.PolicyEffectAllow,
+		Status:       domain.PolicyStatusDisabled,
+		DataScopes:   []domain.DataScope{{DataDomain: "crm", Region: "华东"}},
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("create disabled entitlement: %v", err)
+	}
+	workspaceAssignment, err := repo.CreateWorkspaceAssignment(t.Context(), domain.WorkspaceAssignment{
+		ID:                  "wsa-disabled-drift",
+		TenantEntitlementID: entitlement.ID,
+		TenantID:            "tenant-east",
+		WorkspaceID:         "ws-sales",
+		Effect:              domain.PolicyEffectAllow,
+		Status:              domain.PolicyStatusDisabled,
+		DataScopes:          []domain.DataScope{{DataDomain: "crm", Region: "华东"}},
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	})
+	if err != nil {
+		t.Fatalf("create disabled workspace assignment: %v", err)
+	}
+	instanceAssignment, err := repo.CreateInstanceAssignment(t.Context(), domain.InstanceAssignment{
+		ID:                    "ina-disabled-drift",
+		WorkspaceAssignmentID: workspaceAssignment.ID,
+		TenantID:              "tenant-east",
+		WorkspaceID:           "ws-sales",
+		CallerInstanceID:      caller.ID,
+		SubjectSelector:       "user:sales-*",
+		Effect:                domain.PolicyEffectAllow,
+		Status:                domain.PolicyStatusDisabled,
+		DataScopes:            []domain.DataScope{{DataDomain: "crm", Region: "华东"}},
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	})
+	if err != nil {
+		t.Fatalf("create disabled instance assignment: %v", err)
+	}
+	application, err := repo.CreatePermissionPackageApplication(t.Context(), domain.PermissionPackageApplication{
+		ID:                     "ppa-drift",
+		DraftID:                "draft-drift",
+		TemplateID:             "sales-readonly",
+		TemplateVersion:        1,
+		TenantID:               "tenant-east",
+		WorkspaceID:            "ws-sales",
+		TargetID:               target.ID,
+		CallerInstanceID:       caller.ID,
+		SubjectSelector:        "user:sales-*",
+		RequestText:            "drift review",
+		Region:                 "华东",
+		DataScopes:             []domain.DataScope{{DataDomain: "crm", Region: "华东"}},
+		AllowedCapabilityIDs:   []string{},
+		AllowedCapabilityKeys:  []string{},
+		TenantEntitlementIDs:   []string{entitlement.ID},
+		WorkspaceAssignmentIDs: []string{"wsa-missing-drift", workspaceAssignment.ID},
+		InstanceAssignmentIDs:  []string{instanceAssignment.ID},
+		AppliedAt:              now,
+	})
+	if err != nil {
+		t.Fatalf("create application: %v", err)
+	}
+	impact := decodeData[permissionPackageApplicationImpactResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications/"+application.ID+"/impact?tenantId=tenant-root&workspaceId=ws-sales", nil, ""))
+	if impact.Summary.CreatedObjectCount != 4 || impact.Summary.ActiveObjectCount != 0 ||
+		impact.Summary.MissingObjectCount != 1 || impact.Summary.RollbackReady {
+		t.Fatalf("unexpected drift impact summary: %#v", impact.Summary)
+	}
+	for _, code := range []string{"missing_created_objects", "inactive_created_objects", "no_allowed_capabilities"} {
+		if !containsString(impact.RollbackReview.BlockerCodes, code) {
+			t.Fatalf("expected rollback blocker code %q, got %#v", code, impact.RollbackReview.BlockerCodes)
+		}
+		if !containsString(impact.RemediationPlan.BlockerCodes, code) {
+			t.Fatalf("expected remediation blocker code %q, got %#v", code, impact.RemediationPlan.BlockerCodes)
+		}
+	}
+	if impact.RollbackReview.Ready || impact.RemediationPlan.Ready {
+		t.Fatalf("drift impact should not be ready: rollback=%#v remediation=%#v", impact.RollbackReview, impact.RemediationPlan)
+	}
+	if impact.RollbackReview.BlockerCodes == nil || impact.RemediationPlan.BlockerCodes == nil {
+		t.Fatalf("expected blocker codes to encode as arrays: rollback=%#v remediation=%#v", impact.RollbackReview.BlockerCodes, impact.RemediationPlan.BlockerCodes)
+	}
+	if !remediationActionsContain(impact.RemediationPlan.Actions, "tenant_entitlement", entitlement.ID, "investigate") ||
+		!remediationActionsContain(impact.RemediationPlan.Actions, "workspace_assignment", "wsa-missing-drift", "investigate") ||
+		!remediationActionsContain(impact.RemediationPlan.Actions, "workspace_assignment", workspaceAssignment.ID, "investigate") ||
+		!remediationActionsContain(impact.RemediationPlan.Actions, "instance_assignment", instanceAssignment.ID, "investigate") ||
+		!remediationActionsContain(impact.RemediationPlan.Actions, "access_decision", application.ID, "verify") {
+		t.Fatalf("expected drift remediation investigate and verify actions, got %#v", impact.RemediationPlan.Actions)
+	}
+	for _, action := range impact.RemediationPlan.Actions {
+		if !action.ReadOnly {
+			t.Fatalf("expected drift remediation actions to remain read-only, got %#v", action)
+		}
 	}
 }
 

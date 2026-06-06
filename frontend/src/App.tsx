@@ -2940,10 +2940,14 @@ function PermissionApplicationImpactPanel({
   t: Translator;
 }) {
   const rollbackBlockers = impact?.rollbackReview.blockers ?? [];
+  const rollbackBlockerCodes = impact?.rollbackReview.blockerCodes ?? [];
   const rollbackSteps = impact?.rollbackReview.steps ?? [];
   const remediationPlan = impact?.remediationPlan;
   const remediationBlockers = remediationPlan?.blockers ?? [];
+  const remediationBlockerCodes = remediationPlan?.blockerCodes ?? [];
   const remediationActions = remediationPlan?.actions ?? [];
+  const rollbackBlockerLabels = permissionImpactBlockerLabels(rollbackBlockerCodes, rollbackBlockers, t);
+  const remediationBlockerLabels = permissionImpactBlockerLabels(remediationBlockerCodes, remediationBlockers, t);
   return (
     <div className="permission-application-impact">
       <div className="permission-impact-header">
@@ -3018,9 +3022,9 @@ function PermissionApplicationImpactPanel({
                 {impact.rollbackReview.ready ? t("status.readyToApply") : t("status.needsReview")}
               </Badge>
             </div>
-            {rollbackBlockers.length > 0 ? (
+            {rollbackBlockerLabels.length > 0 ? (
               <ul className="permission-impact-blockers">
-                {rollbackBlockers.map((blocker) => (
+                {rollbackBlockerLabels.map((blocker) => (
                   <li key={blocker}>{blocker}</li>
                 ))}
               </ul>
@@ -3045,9 +3049,9 @@ function PermissionApplicationImpactPanel({
                 {translatedValue(t, remediationPlan?.executionMode) || t("text.readOnlyPlan")}
               </Badge>
             </div>
-            {remediationBlockers.length > 0 ? (
+            {remediationBlockerLabels.length > 0 ? (
               <ul className="permission-impact-blockers">
-                {remediationBlockers.map((blocker) => (
+                {remediationBlockerLabels.map((blocker) => (
                   <li key={blocker}>{blocker}</li>
                 ))}
               </ul>
@@ -4559,6 +4563,13 @@ function permissionRollbackStepLabel(step: string, t: Translator) {
     default:
       return step;
   }
+}
+
+function permissionImpactBlockerLabels(blockerCodes: string[], blockers: string[], t: Translator) {
+  if (blockerCodes.length > 0) {
+    return blockerCodes.map((code) => t(`blocker.${code}`, code));
+  }
+  return blockers;
 }
 
 function permissionImpactStatusLabel(status: string, t: Translator) {

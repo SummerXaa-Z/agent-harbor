@@ -2288,7 +2288,7 @@ td code {
 
 .access-toolbar {
   display: grid;
-  grid-template-columns: 1.05fr 1fr 1.1fr 1.1fr 1.1fr 92px auto;
+  grid-template-columns: 1.05fr 1fr 1.1fr 1.1fr 1.1fr 1fr 92px auto;
   gap: 8px;
   align-items: end;
   padding: 12px 14px;
@@ -2334,6 +2334,158 @@ td code {
 .access-source-line strong {
   color: #33404c;
   font-weight: 650;
+}
+
+.access-decision-explain {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid #edf1f4;
+  background: #fbfcfd;
+}
+
+.access-decision-explain > header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.access-decision-explain > header > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.access-decision-explain > header strong {
+  color: #1f2a34;
+  font-size: 13px;
+}
+
+.access-decision-explain > header span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.access-decision-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #dce6ee;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.access-decision-summary > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.access-decision-summary strong,
+.access-decision-summary span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.access-decision-summary strong {
+  color: #1f2a34;
+  font-size: 13px;
+}
+
+.access-decision-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.access-decision-evidence {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.access-decision-evidence article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #e1e8ef;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.access-decision-evidence article > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.access-decision-evidence strong,
+.access-decision-evidence span,
+.access-decision-evidence code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.access-decision-evidence strong {
+  color: #1f2a34;
+  font-size: 12px;
+}
+
+.access-decision-evidence span,
+.access-decision-evidence code {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.access-decision-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.access-decision-footer > div {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #e1e8ef;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.access-decision-footer strong,
+.access-decision-footer span,
+.access-decision-footer li {
+  color: #33404c;
+  font-size: 12px;
+}
+
+.access-decision-footer strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #1f2a34;
+  font-size: 12px;
+}
+
+.access-decision-footer ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
 }
 
 .access-summary-grid {
@@ -2701,6 +2853,14 @@ td code {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .access-decision-evidence {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .access-decision-footer {
+    grid-template-columns: 1fr;
+  }
+
   .access-layout {
     grid-template-columns: 1fr;
   }
@@ -2773,6 +2933,9 @@ td code {
   .permission-metrics,
   .permission-actions,
   .access-toolbar,
+  .access-decision-summary,
+  .access-decision-evidence,
+  .access-decision-footer,
   .access-summary-grid,
   .access-tenant-list,
   .assignment-row {

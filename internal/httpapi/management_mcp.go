@@ -525,6 +525,23 @@ func (s *Server) managementMCPAccessProfile(r *http.Request, args managementMCPA
 	})
 }
 
+func (s *Server) explainAccessDecision(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	result, err := s.explainManagementMCPAccessDecision(r, managementMCPExplainAccessArgs{
+		TenantID:         query.Get("tenantId"),
+		WorkspaceID:      query.Get("workspaceId"),
+		CallerInstanceID: query.Get("callerInstanceId"),
+		SubjectID:        query.Get("subjectId"),
+		TargetID:         query.Get("targetId"),
+		CapabilityID:     query.Get("capabilityId"),
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (s *Server) explainManagementMCPPermissionPackageDraft(r *http.Request, args domain.PermissionPackageDraftRequest) (managementMCPExplainPermissionPackageResult, error) {
 	draft, err := s.buildPermissionPackageDraft(r.Context(), args)
 	if err != nil {

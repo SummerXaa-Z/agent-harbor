@@ -85,6 +85,7 @@ type managementMCPPermissionPackageApprovalRequestArgs struct {
 	TargetID         string                                 `json:"targetId"`
 	CallerInstanceID string                                 `json:"callerInstanceId"`
 	Status           domain.PermissionPackageApprovalStatus `json:"status"`
+	Reviewer         string                                 `json:"reviewer"`
 	Limit            *int                                   `json:"limit"`
 }
 
@@ -233,7 +234,13 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
-		rows, err := s.repo.ListPermissionPackageApprovalRequests(r.Context(), filter)
+		reviewer := strings.TrimSpace(args.Reviewer)
+		var rows []domain.PermissionPackageApprovalRequest
+		if reviewer != "" {
+			rows, err = s.listPermissionPackageApprovalRequestsForReviewer(r.Context(), filter, reviewer, filter.Limit)
+		} else {
+			rows, err = s.repo.ListPermissionPackageApprovalRequests(r.Context(), filter)
+		}
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
@@ -481,6 +488,9 @@ func (s *Server) resolveManagementMCPPermissionPackageApprovalRequest(r *http.Re
 	reviewer := strings.TrimSpace(args.Reviewer)
 	if reviewer == "" {
 		reviewer = managementActor(r)
+	}
+	if err := s.validatePermissionPackageApprovalReviewer(r.Context(), reviewer, existing); err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
 	}
 	saved, err := s.resolvePermissionPackageApprovalRequestRecord(r.Context(), existing, status, reviewer, args.Comment, s.now())
 	if err != nil {
@@ -895,6 +905,7 @@ func permissionPackageApprovalRequestListSchema() map[string]any {
 		"targetId":         stringSchema("Optional target MCP agent id."),
 		"callerInstanceId": stringSchema("Optional caller agent instance id."),
 		"status":           map[string]any{"type": "string", "enum": []string{"pending", "approved", "rejected"}, "description": "Optional approval request status filter."},
+		"reviewer":         stringSchema("Optional reviewer identity for reviewable approval queue filtering."),
 		"limit":            map[string]any{"type": "integer", "minimum": 1, "maximum": maxAuditLimit, "description": "Maximum approval requests to return."},
 	}, []string{})
 }

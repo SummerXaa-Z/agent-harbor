@@ -41,6 +41,17 @@ export function accessDecisionExplainPath(request: AccessDecisionExplainPathRequ
   return `/api/v1/access-decisions:explain${query}`
 }
 
+export function permissionPackageApplicationImpactPath(
+  applicationId: string,
+  scope: { tenantId?: string; workspaceId?: string } = {},
+): string {
+  const query = queryString({
+    tenantId: scope.tenantId,
+    workspaceId: scope.workspaceId,
+  })
+  return `/api/v1/permission-packages/applications/${encodeURIComponent(applicationId.trim())}/impact${query}`
+}
+
 export function permissionPackageApprovalRequestsPath(filter: PermissionPackageApprovalRequestPathFilter): string {
   const query = queryString({
     callerInstanceId: filter.callerInstanceId,

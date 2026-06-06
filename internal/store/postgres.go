@@ -885,6 +885,9 @@ func (p *Postgres) ListPermissionPackageApplications(ctx context.Context, filter
 		args = append(args, value)
 		query += fmt.Sprintf(" and "+sql, len(args))
 	}
+	if strings.TrimSpace(filter.ID) != "" {
+		add("id=$%d", strings.TrimSpace(filter.ID))
+	}
 	if strings.TrimSpace(filter.TenantID) != "" {
 		tenantIDs, err := p.tenantIDsForScope(ctx, filter.TenantID)
 		if err != nil {

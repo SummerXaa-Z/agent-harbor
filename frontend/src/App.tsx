@@ -46,6 +46,7 @@ import {
   disableRoutePolicy,
   fetchAccessDecisionExplanation,
   fetchAuditEvents,
+  fetchPermissionPackageApplicationImpact,
   fetchPermissionPackageApprovalRequests,
   fetchPermissionPackageTemplates,
   isApiCompatibilityFallbackError,
@@ -117,6 +118,7 @@ import {
   permissionPackageTemplates,
   subjectIdExampleFromSelector,
   type PermissionPackageApplication,
+  type PermissionPackageApplicationImpact,
   type PermissionPackageApprovalRequest,
   type PermissionPackageDraft,
   type PermissionPackageDraftInput,
@@ -347,6 +349,10 @@ function App() {
   const [aiAdminTemplates, setAiAdminTemplates] = useState<PermissionPackageTemplate[]>(permissionPackageTemplates);
   const [aiAdminServerDraft, setAiAdminServerDraft] = useState<PermissionPackageDraft | null>(null);
   const [aiAdminApplication, setAiAdminApplication] = useState<PermissionPackageApplication | null>(null);
+  const [aiAdminApplicationImpact, setAiAdminApplicationImpact] =
+    useState<PermissionPackageApplicationImpact | null>(null);
+  const [aiAdminApplicationImpactLoading, setAiAdminApplicationImpactLoading] = useState(false);
+  const [aiAdminApplicationImpactMessage, setAiAdminApplicationImpactMessage] = useState("");
   const [aiAdminApprovalRequests, setAiAdminApprovalRequests] = useState<PermissionPackageApprovalRequest[]>([]);
   const [aiAdminApprovalAction, setAiAdminApprovalAction] = useState<"" | "create" | "approve" | "reject">("");
   const [aiAdminApprovalReviewer, setAiAdminApprovalReviewer] = useState("AI Admin");
@@ -594,6 +600,35 @@ function App() {
       setAiAdminAccessDecisionExplainMessage(error instanceof Error ? error.message : "Unable to explain access decision");
     } finally {
       setAiAdminAccessDecisionExplainLoading(false);
+    }
+  }
+
+  async function reviewAiAdminApplicationImpact() {
+    if (!data?.loadedFromApi) {
+      setAiAdminApplicationImpactMessage(t("message.permissionApplicationImpactRequiresLiveApi"));
+      return;
+    }
+    if (!aiAdminApplication) {
+      setAiAdminApplicationImpactMessage(t("message.aiAdminApprovalJourneyMissingApplication"));
+      return;
+    }
+    setAiAdminApplicationImpactLoading(true);
+    setAiAdminApplicationImpactMessage("");
+    try {
+      const next = await fetchPermissionPackageApplicationImpact(
+        aiAdminApplication.id,
+        {
+          tenantId: aiAdminApplication.tenantId,
+          workspaceId: aiAdminApplication.workspaceId
+        },
+        adminKey
+      );
+      setAiAdminApplicationImpact(next);
+      setAiAdminApplicationImpactMessage(t("message.permissionApplicationImpactLoaded"));
+    } catch (error) {
+      setAiAdminApplicationImpactMessage(error instanceof Error ? error.message : "Unable to review application impact");
+    } finally {
+      setAiAdminApplicationImpactLoading(false);
     }
   }
 
@@ -899,6 +934,8 @@ function App() {
     setAiAdminApprovalJourneyConfig(nextConfig);
     setAiAdminApprovalJourneyResult(null);
     setAiAdminApprovalAuditEvent(null);
+    setAiAdminApplicationImpact(null);
+    setAiAdminApplicationImpactMessage("");
     setAiAdminApprovalJourneyRunning(true);
     setAiAdminApprovalJourneyMessage(t("message.aiAdminApprovalJourneyRunning"));
     setAiAdminMessage("");
@@ -997,6 +1034,8 @@ function App() {
       };
       setAiAdminForm(nextForm);
       setAiAdminApplication(null);
+      setAiAdminApplicationImpact(null);
+      setAiAdminApplicationImpactMessage("");
       setAiAdminApprovalRequests([]);
       const draft = await createPermissionPackageDraftFromApi(nextForm, adminKey);
       setAiAdminServerDraft(draft);
@@ -1030,6 +1069,8 @@ function App() {
         throw new Error(t("message.aiAdminApprovalJourneyMissingApplication"));
       }
       setAiAdminApplication(application);
+      setAiAdminApplicationImpact(null);
+      setAiAdminApplicationImpactMessage("");
 
       const toolList = await callMcpRpc(
         target.id,
@@ -1580,6 +1621,8 @@ function App() {
 
   async function applyAiAdminPermissionPackage() {
     setAiAdminMessage("");
+    setAiAdminApplicationImpact(null);
+    setAiAdminApplicationImpactMessage("");
     if (!aiAdminDraft.readiness.canApply) {
       const detail = permissionReadinessMessages(aiAdminDraft.readiness, t).join(", ");
       setAiAdminMessage(tx(t, "message.permissionPackageNotReady", { detail: detail || "not ready" }));
@@ -1648,6 +1691,8 @@ function App() {
       setAccessProfile(nextProfile);
       setLastRefresh(new Date());
       setAiAdminApplication(application);
+      setAiAdminApplicationImpact(null);
+      setAiAdminApplicationImpactMessage("");
       setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: appliedCount }));
       await loadAiAdminApprovalRequestsForDraft(aiAdminDraft).catch(() => undefined);
     } catch (error) {
@@ -1915,6 +1960,9 @@ function App() {
         approvalRequest={aiAdminApprovalRequest}
         approvalRequests={aiAdminApprovalRequests}
         approvalReviewer={aiAdminApprovalReviewer}
+        applicationImpact={aiAdminApplicationImpact}
+        applicationImpactLoading={aiAdminApplicationImpactLoading}
+        applicationImpactMessage={aiAdminApplicationImpactMessage}
         accessDecisionExplanation={aiAdminAccessDecisionExplanation}
         accessDecisionExplanationLoading={aiAdminAccessDecisionExplainLoading}
         accessDecisionExplanationMessage={aiAdminAccessDecisionExplainMessage}
@@ -1930,6 +1978,8 @@ function App() {
         onChange={(nextForm) => {
           setAiAdminForm(nextForm);
           setAiAdminApplication(null);
+          setAiAdminApplicationImpact(null);
+          setAiAdminApplicationImpactMessage("");
           setAiAdminApprovalAuditEvent(null);
           setAiAdminApprovalJourneyResult(null);
           setAiAdminApprovalRequests([]);
@@ -1942,8 +1992,13 @@ function App() {
         onRefreshApprovalReadiness={() => void refreshAiAdminApprovalReadiness()}
         onRefreshReviewerQueue={() => void refreshAiAdminReviewerQueue()}
         onRejectApprovalRequest={(requestId) => void rejectAiAdminApprovalRequest(requestId)}
+        onReviewApplicationImpact={() => void reviewAiAdminApplicationImpact()}
         onRunApprovalJourney={() => void runAiAdminApprovalJourney()}
-        onSelectApprovalRequest={setAiAdminSelectedApprovalRequestId}
+        onSelectApprovalRequest={(requestId) => {
+          setAiAdminSelectedApprovalRequestId(requestId);
+          setAiAdminApplicationImpact(null);
+          setAiAdminApplicationImpactMessage("");
+        }}
         reviewerQueueLoading={aiAdminReviewerQueueLoading}
         reviewerQueueMessage={aiAdminReviewerQueueMessage}
         selectedApprovalRequestId={aiAdminSelectedApprovalRequestId}
@@ -2418,6 +2473,9 @@ function AiAdminPermissionWorkbench({
   approvalRequest,
   approvalRequests,
   approvalReviewer,
+  applicationImpact,
+  applicationImpactLoading,
+  applicationImpactMessage,
   accessDecisionExplanation,
   accessDecisionExplanationLoading,
   accessDecisionExplanationMessage,
@@ -2435,6 +2493,7 @@ function AiAdminPermissionWorkbench({
   onRefreshApprovalReadiness,
   onRefreshReviewerQueue,
   onRejectApprovalRequest,
+  onReviewApplicationImpact,
   onRunApprovalJourney,
   onSelectApprovalRequest,
   reviewerQueueLoading,
@@ -2458,6 +2517,9 @@ function AiAdminPermissionWorkbench({
   approvalRequest: PermissionPackageApprovalRequest | null;
   approvalRequests: PermissionPackageApprovalRequest[];
   approvalReviewer: string;
+  applicationImpact: PermissionPackageApplicationImpact | null;
+  applicationImpactLoading: boolean;
+  applicationImpactMessage: string;
   accessDecisionExplanation: AccessDecisionExplainResult | null;
   accessDecisionExplanationLoading: boolean;
   accessDecisionExplanationMessage: string;
@@ -2475,6 +2537,7 @@ function AiAdminPermissionWorkbench({
   onRefreshApprovalReadiness: () => void;
   onRefreshReviewerQueue: () => void;
   onRejectApprovalRequest: (requestId?: string) => void;
+  onReviewApplicationImpact: () => void;
   onRunApprovalJourney: () => void;
   onSelectApprovalRequest: (requestId: string) => void;
   reviewerQueueLoading: boolean;
@@ -2660,6 +2723,13 @@ function AiAdminPermissionWorkbench({
                   <strong>{application.dataScopes?.length ?? 0}</strong>
                 </div>
               </div>
+              <PermissionApplicationImpactPanel
+                impact={applicationImpact}
+                loading={applicationImpactLoading}
+                message={applicationImpactMessage}
+                onReview={onReviewApplicationImpact}
+                t={t}
+              />
             </div>
           ) : null}
           <div className="permission-metrics">
@@ -2851,6 +2921,116 @@ function AiAdminPermissionWorkbench({
           <PermissionSimulationTable rows={draft.simulationRows} t={t} />
         </section>
       </div>
+    </div>
+  );
+}
+
+function PermissionApplicationImpactPanel({
+  impact,
+  loading,
+  message,
+  onReview,
+  t
+}: {
+  impact: PermissionPackageApplicationImpact | null;
+  loading: boolean;
+  message: string;
+  onReview: () => void;
+  t: Translator;
+}) {
+  const rollbackBlockers = impact?.rollbackReview.blockers ?? [];
+  const rollbackSteps = impact?.rollbackReview.steps ?? [];
+  return (
+    <div className="permission-application-impact">
+      <div className="permission-impact-header">
+        <div>
+          <strong>{t("section.permissionApplicationImpact")}</strong>
+          {message ? <span>{message}</span> : null}
+        </div>
+        <button className="secondary-button" disabled={loading} onClick={onReview} type="button">
+          <FileSearch size={14} />
+          {loading ? t("action.loading") : t("action.reviewApplicationImpact")}
+        </button>
+      </div>
+
+      {impact ? (
+        <>
+          <div className="permission-impact-metrics">
+            <div>
+              <span>{t("detail.createdObjects")}</span>
+              <strong>{impact.summary.createdObjectCount}</strong>
+            </div>
+            <div>
+              <span>{t("metric.activeObjects")}</span>
+              <strong>{impact.summary.activeObjectCount}</strong>
+            </div>
+            <div>
+              <span>{t("metric.missingObjects")}</span>
+              <strong>{impact.summary.missingObjectCount}</strong>
+            </div>
+          </div>
+
+          <div className="permission-impact-list">
+            {impact.createdObjects.map((item) => (
+              <article className="permission-impact-row" key={`${item.type}:${item.id}`}>
+                <Badge tone={permissionImpactStatusTone(item.currentStatus)}>
+                  {permissionImpactStatusLabel(item.currentStatus, t)}
+                </Badge>
+                <div>
+                  <strong>{permissionImpactObjectLabel(item.type, t)}</strong>
+                  <code>{item.id}</code>
+                  {item.dataScopes?.length ? <span>{item.dataScopes.map((scope) => summarizeDataScopes([scope])).join(" · ")}</span> : null}
+                </div>
+                <span>{translatedValue(t, item.rollbackAction)}</span>
+              </article>
+            ))}
+          </div>
+
+          <div className="permission-impact-review">
+            <div className="permission-section-title">
+              <strong>{t("text.capabilityReview")}</strong>
+              <span>{impact.capabilityReviews.length} {t("detail.capabilities")}</span>
+            </div>
+            <div className="permission-impact-list">
+              {impact.capabilityReviews.map((item) => (
+                <article className="permission-impact-row" key={item.id}>
+                  <Badge tone={permissionImpactStatusTone(item.currentStatus)}>
+                    {permissionImpactStatusLabel(item.currentStatus, t)}
+                  </Badge>
+                  <div>
+                    <strong>{item.key || item.id}</strong>
+                    <code>{item.id}</code>
+                  </div>
+                  <span>{translatedValue(t, item.rollbackAction)}</span>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="permission-impact-review">
+            <div className="permission-section-title">
+              <strong>{t("text.rollbackReview")}</strong>
+              <Badge tone={impact.rollbackReview.ready ? "success" : "warning"}>
+                {impact.rollbackReview.ready ? t("status.readyToApply") : t("status.needsReview")}
+              </Badge>
+            </div>
+            {rollbackBlockers.length > 0 ? (
+              <ul className="permission-impact-blockers">
+                {rollbackBlockers.map((blocker) => (
+                  <li key={blocker}>{blocker}</li>
+                ))}
+              </ul>
+            ) : null}
+            <ol>
+              {rollbackSteps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </div>
+        </>
+      ) : (
+        <span className="permission-impact-empty">{t("empty.permissionApplicationImpact.detail")}</span>
+      )}
     </div>
   );
 }
@@ -4296,6 +4476,28 @@ function permissionApprovalStatusTone(status: PermissionPackageApprovalRequest["
 
 function permissionPackageApprovalRouteLabel(request: PermissionPackageApprovalRequest) {
   return `${request.tenantId} / ${request.workspaceId} / ${request.callerInstanceId}`;
+}
+
+function permissionImpactObjectLabel(type: string, t: Translator) {
+  if (type === "tenant_entitlement") return t("text.tenantEntitlement");
+  if (type === "workspace_assignment") return t("text.workspaceAssignment");
+  if (type === "instance_assignment") return t("text.instanceAssignment");
+  return type.replaceAll("_", " ");
+}
+
+function permissionImpactStatusLabel(status: string, t: Translator) {
+  if (status === "approved") return t("status.capabilityApproved");
+  if (status === "deprecated") return t("status.capabilityDeprecated");
+  if (status === "pending_review") return t("status.capabilityPendingReview");
+  if (status === "removed") return t("status.capabilityRemoved");
+  return translatedValue(t, status);
+}
+
+function permissionImpactStatusTone(status: string): Tone {
+  if (status === "enabled" || status === "approved") return "success";
+  if (status === "missing" || status === "removed") return "danger";
+  if (status === "disabled" || status === "deprecated" || status === "pending_review") return "warning";
+  return "neutral";
 }
 
 function mergePermissionPackageApprovalRequests(

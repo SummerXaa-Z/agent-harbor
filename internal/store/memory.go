@@ -154,6 +154,7 @@ type InstanceAssignmentFilter struct {
 
 type PermissionPackageApplicationFilter struct {
 	ManagementScope
+	ID               string
 	TemplateID       string
 	TargetID         string
 	CallerInstanceID string
@@ -1231,6 +1232,9 @@ func (m *Memory) instanceAssignmentMatchesFilter(assignment domain.InstanceAssig
 }
 
 func permissionPackageApplicationMatchesFilter(application domain.PermissionPackageApplication, filter PermissionPackageApplicationFilter, tenantIDs map[string]struct{}) bool {
+	if strings.TrimSpace(filter.ID) != "" && application.ID != strings.TrimSpace(filter.ID) {
+		return false
+	}
 	if !tenantIDMatchesScope(application.TenantID, filter.TenantID, tenantIDs) {
 		return false
 	}

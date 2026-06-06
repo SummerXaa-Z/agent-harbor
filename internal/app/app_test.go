@@ -71,3 +71,30 @@ func TestPrivateUpstreamsEnvRejectsInvalidBoolean(t *testing.T) {
 		t.Fatalf("expected invalid private upstream env value to fail")
 	}
 }
+
+func TestApprovalReviewersFromEnvParsesScopedRules(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_APPROVAL_REVIEWERS", "security-root=tenant-root/*;security-east=tenant-east/ws-support")
+
+	reviewers, err := approvalReviewersFromEnv()
+	if err != nil {
+		t.Fatalf("parse approval reviewers: %v", err)
+	}
+	if len(reviewers) != 2 {
+		t.Fatalf("expected two approval reviewer rules, got %#v", reviewers)
+	}
+	if reviewers[0].Reviewer != "security-root" || reviewers[0].TenantID != "tenant-root" || reviewers[0].WorkspaceID != "*" {
+		t.Fatalf("unexpected first reviewer rule: %#v", reviewers[0])
+	}
+	if reviewers[1].Reviewer != "security-east" || reviewers[1].TenantID != "tenant-east" || reviewers[1].WorkspaceID != "ws-support" {
+		t.Fatalf("unexpected second reviewer rule: %#v", reviewers[1])
+	}
+}
+
+func TestApprovalReviewersFromEnvRejectsMalformedRules(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_APPROVAL_REVIEWERS", "security-root=tenant-root")
+
+	_, err := approvalReviewersFromEnv()
+	if err == nil {
+		t.Fatalf("expected malformed approval reviewer env value to fail")
+	}
+}

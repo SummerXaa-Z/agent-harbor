@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/db"
+	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
 	"github.com/SummerXaa-Z/agent-harbor/internal/httpapi"
 	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 	"github.com/SummerXaa-Z/agent-harbor/internal/store"
@@ -46,11 +47,17 @@ func New(ctx context.Context) (*App, error) {
 		closeFn()
 		return nil, err
 	}
+	approvalReviewers, err := approvalReviewersFromEnv()
+	if err != nil {
+		closeFn()
+		return nil, err
+	}
 	return &App{
 		server: httpapi.New(
 			repo,
 			httpapi.WithAdminKey(os.Getenv("AGENT_HARBOR_ADMIN_KEY")),
 			httpapi.WithPrivateUpstreamsAllowed(allowPrivateUpstreams),
+			httpapi.WithPermissionPackageApprovalReviewers(approvalReviewers),
 		),
 		close: closeFn,
 	}, nil
@@ -82,4 +89,39 @@ func privateUpstreamsAllowedFromEnv() (bool, error) {
 		return false, fmt.Errorf("AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS must be a boolean")
 	}
 	return allowed, nil
+}
+
+func approvalReviewersFromEnv() ([]domain.PermissionPackageApprovalReviewer, error) {
+	raw := strings.TrimSpace(os.Getenv("AGENT_HARBOR_APPROVAL_REVIEWERS"))
+	if raw == "" {
+		return nil, nil
+	}
+	entries := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == ';'
+	})
+	reviewers := make([]domain.PermissionPackageApprovalReviewer, 0, len(entries))
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		reviewer, scope, ok := strings.Cut(entry, "=")
+		if !ok {
+			return nil, fmt.Errorf("AGENT_HARBOR_APPROVAL_REVIEWERS entries must use reviewer=tenantId/workspaceId")
+		}
+		tenantID, workspaceID, ok := strings.Cut(strings.TrimSpace(scope), "/")
+		if !ok {
+			return nil, fmt.Errorf("AGENT_HARBOR_APPROVAL_REVIEWERS entries must use reviewer=tenantId/workspaceId")
+		}
+		rule := domain.PermissionPackageApprovalReviewer{
+			Reviewer:    strings.TrimSpace(reviewer),
+			TenantID:    strings.TrimSpace(tenantID),
+			WorkspaceID: strings.TrimSpace(workspaceID),
+		}
+		if rule.Reviewer == "" || rule.TenantID == "" || rule.WorkspaceID == "" {
+			return nil, fmt.Errorf("AGENT_HARBOR_APPROVAL_REVIEWERS entries must include reviewer, tenantId, and workspaceId")
+		}
+		reviewers = append(reviewers, rule)
+	}
+	return reviewers, nil
 }

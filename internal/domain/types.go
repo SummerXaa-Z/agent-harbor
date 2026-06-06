@@ -518,6 +518,12 @@ type PermissionPackageApprovalRequest struct {
 	ConsumedByApplicationID string                          `json:"consumedByApplicationId,omitempty"`
 }
 
+type PermissionPackageApprovalReviewer struct {
+	Reviewer    string `json:"reviewer"`
+	TenantID    string `json:"tenantId"`
+	WorkspaceID string `json:"workspaceId"`
+}
+
 type PermissionPackageApprovalResolutionRequest struct {
 	Reviewer string `json:"reviewer"`
 	Comment  string `json:"comment"`

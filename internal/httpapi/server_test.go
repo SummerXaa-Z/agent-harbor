@@ -350,6 +350,10 @@ func newRouterWithRepo(repo store.Repository) http.Handler {
 	return httpapi.New(repo).Router()
 }
 
+func newRouterWithRepoAndApprovalReviewers(repo store.Repository, reviewers []domain.PermissionPackageApprovalReviewer) http.Handler {
+	return httpapi.New(repo, httpapi.WithPermissionPackageApprovalReviewers(reviewers)).Router()
+}
+
 func newRouterWithPrivateUpstreams() http.Handler {
 	return httpapi.New(store.NewMemory(), httpapi.WithPrivateUpstreamsAllowed(true)).Router()
 }
@@ -3039,6 +3043,142 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 	}
 }
 
+func TestPermissionPackageApprovalReviewerRouting(t *testing.T) {
+	repo := store.NewMemory()
+	now := time.Date(2026, 6, 6, 10, 0, 0, 0, time.UTC)
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	createDirectTenant(t, repo, "tenant-west", "tenant-root", "West tenant", now)
+	eastSupport := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-east-support", "tenant-east", "ws-support", now)
+	createDirectPermissionPackageApprovalRequest(t, repo, "ppar-east-sales", "tenant-east", "ws-sales", now.Add(time.Minute))
+	createDirectPermissionPackageApprovalRequest(t, repo, "ppar-west-support", "tenant-west", "ws-support", now.Add(2*time.Minute))
+	router := newRouterWithRepoAndApprovalReviewers(repo, []domain.PermissionPackageApprovalReviewer{
+		{Reviewer: "security-east", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+		{Reviewer: "security-root", TenantID: "tenant-root", WorkspaceID: "*"},
+		{Reviewer: "security-root", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+
+	eastQueue := decodeData[[]permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?status=pending&reviewer=security-east&limit=10", nil, ""))
+	if len(eastQueue) != 1 || eastQueue[0].ID != eastSupport.ID {
+		t.Fatalf("expected security-east to see only east support approvals, got %#v", eastQueue)
+	}
+	eastSalesQueue := decodeData[[]permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?status=pending&reviewer=security-east&workspaceId=ws-sales&limit=10", nil, ""))
+	if len(eastSalesQueue) != 0 {
+		t.Fatalf("expected security-east workspace route to exclude east sales approvals, got %#v", eastSalesQueue)
+	}
+	rootQueue := decodeData[[]permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?status=pending&reviewer=security-root&limit=10", nil, ""))
+	if len(rootQueue) != 3 {
+		t.Fatalf("expected root reviewer to see deduplicated tenant subtree approvals, got %#v", rootQueue)
+	}
+	rootEastQueue := decodeData[[]permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?tenantId=tenant-east&status=pending&reviewer=security-root&limit=10", nil, ""))
+	if len(rootEastQueue) != 2 {
+		t.Fatalf("expected root reviewer tenant query to narrow to east approvals, got %#v", rootEastQueue)
+	}
+	limitedRootQueue := decodeData[[]permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?status=pending&reviewer=security-root&limit=2", nil, ""))
+	if len(limitedRootQueue) != 2 || limitedRootQueue[0].ID != "ppar-west-support" || limitedRootQueue[1].ID != "ppar-east-sales" {
+		t.Fatalf("expected root reviewer queue to be sorted and limited after dedupe, got %#v", limitedRootQueue)
+	}
+
+	unauthorized := request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+eastSupport.ID+"/approve", map[string]any{
+		"reviewer": "security-root-ws-sales",
+		"comment":  "wrong workspace",
+	}, "")
+	if unauthorized.Code != http.StatusForbidden || !strings.Contains(unauthorized.Body.String(), "not allowed") {
+		t.Fatalf("expected unauthorized reviewer rejection, status=%d body=%s", unauthorized.Code, unauthorized.Body.String())
+	}
+	stillPending, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), eastSupport.ID)
+	if err != nil || !ok {
+		t.Fatalf("get approval after unauthorized review: ok=%v err=%v", ok, err)
+	}
+	if stillPending.Status != domain.PermissionPackageApprovalStatusPending || stillPending.ReviewedBy != "" {
+		t.Fatalf("unauthorized review should not mutate approval request: %#v", stillPending)
+	}
+
+	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+eastSupport.ID+"/approve", map[string]any{
+		"reviewer": "security-east",
+		"comment":  "approved by routed reviewer",
+	}, ""))
+	if approved.Status != "approved" || approved.ReviewedBy != "security-east" || approved.ReviewComment != "approved by routed reviewer" {
+		t.Fatalf("unexpected routed approval result: %#v", approved)
+	}
+}
+
+func TestManagementMCPPermissionPackageApprovalReviewerRouting(t *testing.T) {
+	repo := store.NewMemory()
+	now := time.Date(2026, 6, 6, 11, 0, 0, 0, time.UTC)
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	createDirectTenant(t, repo, "tenant-west", "tenant-root", "West tenant", now)
+	eastSupport := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-mcp-east-support", "tenant-east", "ws-support", now)
+	createDirectPermissionPackageApprovalRequest(t, repo, "ppar-mcp-west-support", "tenant-west", "ws-support", now.Add(time.Minute))
+	router := newRouterWithRepoAndApprovalReviewers(repo, []domain.PermissionPackageApprovalReviewer{
+		{Reviewer: "security-east", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+		{Reviewer: "security-west", TenantID: "tenant-west", WorkspaceID: "ws-support"},
+	})
+
+	listCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-list-routed",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_permission_package_approval_requests",
+			"arguments": map[string]any{
+				"reviewer": "security-east",
+				"status":   "pending",
+				"limit":    10,
+			},
+		},
+	}, ""))
+	var approvals []permissionPackageApprovalRequestResponse
+	if err := json.Unmarshal(listCall.Result.StructuredContent, &approvals); err != nil {
+		t.Fatalf("decode routed approvals structured content: %v", err)
+	}
+	if len(approvals) != 1 || approvals[0].ID != eastSupport.ID {
+		t.Fatalf("expected routed MCP approval queue, got %#v", approvals)
+	}
+
+	unauthorized := request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-approve-denied",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "approve_permission_package_approval_request",
+			"arguments": map[string]any{
+				"id":       eastSupport.ID,
+				"reviewer": "security-west",
+			},
+		},
+	}, "")
+	var unauthorizedEnvelope mcpEnvelopeResponse
+	if err := json.Unmarshal(unauthorized.Body.Bytes(), &unauthorizedEnvelope); err != nil {
+		t.Fatalf("decode unauthorized MCP envelope: %v body=%s", err, unauthorized.Body.String())
+	}
+	if unauthorizedEnvelope.Error == nil || !strings.Contains(unauthorizedEnvelope.Error.Message, "not allowed") {
+		t.Fatalf("expected routed MCP approval rejection, got %#v body=%s", unauthorizedEnvelope, unauthorized.Body.String())
+	}
+
+	approveCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-approve-routed",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "approve_permission_package_approval_request",
+			"arguments": map[string]any{
+				"id":       eastSupport.ID,
+				"reviewer": "security-east",
+				"comment":  "approved through routed MCP queue",
+			},
+		},
+	}, ""))
+	var approved permissionPackageApprovalRequestResponse
+	if err := json.Unmarshal(approveCall.Result.StructuredContent, &approved); err != nil {
+		t.Fatalf("decode routed MCP approval result: %v", err)
+	}
+	if approved.Status != "approved" || approved.ReviewedBy != "security-east" {
+		t.Fatalf("unexpected routed MCP approval result: %#v", approved)
+	}
+}
+
 func TestPermissionPackageDraftDetectsDataScopeConflicts(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -3923,6 +4063,52 @@ func createDirectCapabilityWithActionAndScopes(t *testing.T, repo store.Reposito
 	created, err := repo.UpsertCapability(t.Context(), capability)
 	if err != nil {
 		t.Fatalf("create direct capability: %v", err)
+	}
+	return created
+}
+
+func createDirectPermissionPackageApprovalRequest(t *testing.T, repo store.Repository, id string, tenantID string, workspaceID string, now time.Time) domain.PermissionPackageApprovalRequest {
+	t.Helper()
+	request := domain.PermissionPackageApprovalRequest{
+		ID:                    id,
+		DraftID:               "ppd_" + id,
+		TemplateID:            "support-ticket-triage",
+		TemplateVersion:       1,
+		PolicyVersion:         1,
+		TenantID:              tenantID,
+		WorkspaceID:           workspaceID,
+		TargetID:              "agt_target_" + id,
+		CallerInstanceID:      "agt_caller_" + id,
+		SubjectSelector:       "user:support-*",
+		RequestText:           "Allow support triage updates.",
+		Region:                "us-east",
+		DataScopes:            []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		AllowedCapabilityIDs:  []string{"cap_" + id},
+		AllowedCapabilityKeys: []string{"update_ticket"},
+		PolicyGate: domain.PermissionPackagePolicyGate{
+			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
+			CanApplyDirectly: false,
+			PolicyVersion:    1,
+			Reasons: []domain.PermissionPackagePolicyReason{{
+				ID:            "policy:" + id,
+				CapabilityID:  "cap_" + id,
+				CapabilityKey: "update_ticket",
+				Severity:      "high",
+				Message:       "Approval is required.",
+				ReasonKey:     "permissionPolicy.actionApprovalRequired",
+				ReasonValues:  map[string]string{"action": "write"},
+			}},
+			NextActions: []string{"Request approval before applying this permission package."},
+		},
+		Status:      domain.PermissionPackageApprovalStatusPending,
+		RequestedBy: "admin-key",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		ExpiresAt:   now.Add(24 * time.Hour),
+	}
+	created, err := repo.CreatePermissionPackageApprovalRequest(t.Context(), request)
+	if err != nil {
+		t.Fatalf("create approval request %s: %v", id, err)
 	}
 	return created
 }

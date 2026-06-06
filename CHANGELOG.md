@@ -26,6 +26,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Added `make scenario-permission-package-approval` to prove the approval-required permission package journey with local MCP discovery, approval, approved apply, runtime allow/deny, access-profile, application, and audit evidence.
 - Added `make ai-admin-browser-journey` to start the local browser stack, verify subject-header CORS, and run the approval-required journey as a release-candidate gate.
 - Added `make production-hardening` and a CI gate to verify admin-key enforcement, permission-package and management MCP protection, default private-upstream rejection, and public MCP endpoint registration before release-readiness claims.
+- Permission package approval queues can now be filtered by configured reviewer routing rules, and approve/reject operations enforce reviewer tenant-subtree and workspace scope when `AGENT_HARBOR_APPROVAL_REVIEWERS` is configured.
+- 权限包审批队列现在可按已配置审查员路由规则过滤；配置 `AGENT_HARBOR_APPROVAL_REVIEWERS` 后，批准/驳回会强制校验审查员的租户子树和工作区范围。
 
 ### Changed
 

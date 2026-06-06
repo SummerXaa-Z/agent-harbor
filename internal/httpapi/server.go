@@ -36,6 +36,7 @@ type Server struct {
 	now                   func() time.Time
 	adminKey              string
 	allowPrivateUpstreams bool
+	approvalReviewers     []domain.PermissionPackageApprovalReviewer
 }
 
 const (
@@ -75,6 +76,23 @@ func WithAdminKey(key string) Option {
 func WithPrivateUpstreamsAllowed(allowed bool) Option {
 	return func(s *Server) {
 		s.allowPrivateUpstreams = allowed
+	}
+}
+
+func WithPermissionPackageApprovalReviewers(reviewers []domain.PermissionPackageApprovalReviewer) Option {
+	return func(s *Server) {
+		s.approvalReviewers = make([]domain.PermissionPackageApprovalReviewer, 0, len(reviewers))
+		for _, reviewer := range reviewers {
+			normalized := domain.PermissionPackageApprovalReviewer{
+				Reviewer:    strings.TrimSpace(reviewer.Reviewer),
+				TenantID:    strings.TrimSpace(reviewer.TenantID),
+				WorkspaceID: strings.TrimSpace(reviewer.WorkspaceID),
+			}
+			if normalized.Reviewer == "" {
+				continue
+			}
+			s.approvalReviewers = append(s.approvalReviewers, normalized)
+		}
 	}
 }
 
@@ -1171,14 +1189,21 @@ func (s *Server) listPermissionPackageApprovalRequests(w http.ResponseWriter, r 
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "status must be pending, approved, or rejected"))
 		return
 	}
-	rows, err := s.repo.ListPermissionPackageApprovalRequests(r.Context(), store.PermissionPackageApprovalRequestFilter{
+	reviewer := strings.TrimSpace(r.URL.Query().Get("reviewer"))
+	filter := store.PermissionPackageApprovalRequestFilter{
 		ManagementScope:  managementScopeFromRequest(r),
 		TemplateID:       strings.TrimSpace(r.URL.Query().Get("templateId")),
 		TargetID:         strings.TrimSpace(r.URL.Query().Get("targetId")),
 		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
 		Status:           status,
 		Limit:            limit,
-	})
+	}
+	var rows []domain.PermissionPackageApprovalRequest
+	if reviewer != "" {
+		rows, err = s.listPermissionPackageApprovalRequestsForReviewer(r.Context(), filter, reviewer, limit)
+	} else {
+		rows, err = s.repo.ListPermissionPackageApprovalRequests(r.Context(), filter)
+	}
 	if err != nil {
 		writeError(w, err)
 		return
@@ -1253,6 +1278,10 @@ func (s *Server) resolvePermissionPackageApprovalRequest(w http.ResponseWriter, 
 		reviewer = managementActor(r)
 	}
 	now := s.now()
+	if err := s.validatePermissionPackageApprovalReviewer(r.Context(), reviewer, existing); err != nil {
+		writeError(w, err)
+		return
+	}
 	saved, err := s.resolvePermissionPackageApprovalRequestRecord(r.Context(), existing, status, reviewer, req.Comment, now)
 	if err != nil {
 		writeError(w, err)
@@ -3224,6 +3253,183 @@ func trimPermissionPackageDraftRequest(req domain.PermissionPackageDraftRequest)
 	req.TenantID = strings.TrimSpace(req.TenantID)
 	req.WorkspaceID = strings.TrimSpace(req.WorkspaceID)
 	return req
+}
+
+func (s *Server) validatePermissionPackageApprovalReviewer(ctx context.Context, reviewer string, approval domain.PermissionPackageApprovalRequest) error {
+	allowed, err := s.permissionPackageApprovalReviewerCanReview(ctx, reviewer, approval)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return domain.PermissionDenied("reviewer is not allowed to review this approval request")
+	}
+	return nil
+}
+
+func (s *Server) listPermissionPackageApprovalRequestsForReviewer(ctx context.Context, filter store.PermissionPackageApprovalRequestFilter, reviewer string, limit int) ([]domain.PermissionPackageApprovalRequest, error) {
+	reviewer = strings.TrimSpace(reviewer)
+	if len(s.approvalReviewers) == 0 {
+		filter.Limit = limit
+		return s.repo.ListPermissionPackageApprovalRequests(ctx, filter)
+	}
+	if reviewer == "" {
+		return nil, nil
+	}
+	seen := map[string]struct{}{}
+	rows := []domain.PermissionPackageApprovalRequest{}
+	for _, rule := range s.approvalReviewers {
+		if strings.TrimSpace(rule.Reviewer) != reviewer {
+			continue
+		}
+		ruleFilter, ok, err := s.permissionPackageApprovalReviewerListFilter(ctx, filter, rule, limit)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		ruleRows, err := s.repo.ListPermissionPackageApprovalRequests(ctx, ruleFilter)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range ruleRows {
+			if _, exists := seen[row.ID]; exists {
+				continue
+			}
+			allowed, err := s.permissionPackageApprovalReviewerCanReview(ctx, reviewer, row)
+			if err != nil {
+				return nil, err
+			}
+			if !allowed {
+				continue
+			}
+			seen[row.ID] = struct{}{}
+			rows = append(rows, row)
+		}
+	}
+	sortPermissionPackageApprovalRequests(rows)
+	return limitPermissionPackageApprovalRequests(rows, limit), nil
+}
+
+func (s *Server) permissionPackageApprovalReviewerListFilter(ctx context.Context, filter store.PermissionPackageApprovalRequestFilter, rule domain.PermissionPackageApprovalReviewer, limit int) (store.PermissionPackageApprovalRequestFilter, bool, error) {
+	tenantID, ok, err := s.intersectApprovalReviewerTenantScope(ctx, filter.TenantID, rule.TenantID)
+	if err != nil || !ok {
+		return store.PermissionPackageApprovalRequestFilter{}, ok, err
+	}
+	workspaceID, ok := intersectApprovalReviewerWorkspaceScope(filter.WorkspaceID, rule.WorkspaceID)
+	if !ok {
+		return store.PermissionPackageApprovalRequestFilter{}, false, nil
+	}
+	filter.TenantID = tenantID
+	filter.WorkspaceID = workspaceID
+	filter.Limit = limit
+	return filter, true, nil
+}
+
+func (s *Server) intersectApprovalReviewerTenantScope(ctx context.Context, requestTenantID string, ruleTenantID string) (string, bool, error) {
+	requestTenantID = strings.TrimSpace(requestTenantID)
+	ruleTenantID = strings.TrimSpace(ruleTenantID)
+	if ruleTenantID == "" || ruleTenantID == "*" {
+		return requestTenantID, true, nil
+	}
+	if requestTenantID == "" {
+		return ruleTenantID, true, nil
+	}
+	if requestTenantID == ruleTenantID {
+		return requestTenantID, true, nil
+	}
+	requestWithinRule, err := s.approvalReviewerTenantMatches(ctx, ruleTenantID, requestTenantID)
+	if err != nil || requestWithinRule {
+		return requestTenantID, requestWithinRule, err
+	}
+	ruleWithinRequest, err := s.approvalReviewerTenantMatches(ctx, requestTenantID, ruleTenantID)
+	if err != nil || ruleWithinRequest {
+		return ruleTenantID, ruleWithinRequest, err
+	}
+	return "", false, nil
+}
+
+func intersectApprovalReviewerWorkspaceScope(requestWorkspaceID string, ruleWorkspaceID string) (string, bool) {
+	requestWorkspaceID = strings.TrimSpace(requestWorkspaceID)
+	ruleWorkspaceID = strings.TrimSpace(ruleWorkspaceID)
+	if ruleWorkspaceID == "" || ruleWorkspaceID == "*" {
+		return requestWorkspaceID, true
+	}
+	if requestWorkspaceID == "" || requestWorkspaceID == ruleWorkspaceID {
+		return ruleWorkspaceID, true
+	}
+	return "", false
+}
+
+func (s *Server) permissionPackageApprovalReviewerCanReview(ctx context.Context, reviewer string, approval domain.PermissionPackageApprovalRequest) (bool, error) {
+	reviewer = strings.TrimSpace(reviewer)
+	if len(s.approvalReviewers) == 0 {
+		return reviewer != "", nil
+	}
+	if reviewer == "" {
+		return false, nil
+	}
+	for _, rule := range s.approvalReviewers {
+		if strings.TrimSpace(rule.Reviewer) != reviewer {
+			continue
+		}
+		if !approvalReviewerWorkspaceMatches(rule.WorkspaceID, approval.WorkspaceID) {
+			continue
+		}
+		matches, err := s.approvalReviewerTenantMatches(ctx, rule.TenantID, approval.TenantID)
+		if err != nil {
+			return false, err
+		}
+		if matches {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *Server) approvalReviewerTenantMatches(ctx context.Context, ruleTenantID string, approvalTenantID string) (bool, error) {
+	ruleTenantID = strings.TrimSpace(ruleTenantID)
+	approvalTenantID = strings.TrimSpace(approvalTenantID)
+	if ruleTenantID == "" || ruleTenantID == "*" {
+		return approvalTenantID != "", nil
+	}
+	if ruleTenantID == approvalTenantID {
+		return true, nil
+	}
+	tenants, err := s.repo.ListTenants(ctx, store.TenantFilter{TenantID: ruleTenantID})
+	if err != nil {
+		return false, err
+	}
+	for _, tenant := range tenants {
+		if tenant.ID == approvalTenantID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func approvalReviewerWorkspaceMatches(ruleWorkspaceID string, approvalWorkspaceID string) bool {
+	ruleWorkspaceID = strings.TrimSpace(ruleWorkspaceID)
+	if ruleWorkspaceID == "" || ruleWorkspaceID == "*" {
+		return true
+	}
+	return ruleWorkspaceID == strings.TrimSpace(approvalWorkspaceID)
+}
+
+func sortPermissionPackageApprovalRequests(rows []domain.PermissionPackageApprovalRequest) {
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID > rows[j].ID
+		}
+		return rows[i].CreatedAt.After(rows[j].CreatedAt)
+	})
+}
+
+func limitPermissionPackageApprovalRequests(rows []domain.PermissionPackageApprovalRequest, limit int) []domain.PermissionPackageApprovalRequest {
+	if limit > 0 && len(rows) > limit {
+		return rows[:limit]
+	}
+	return rows
 }
 
 func (s *Server) createPermissionPackageApprovalRequestRecord(ctx context.Context, req domain.PermissionPackageDraftRequest, requestedBy string, now time.Time) (domain.PermissionPackageApprovalRequest, error) {

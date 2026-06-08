@@ -119,6 +119,7 @@ type TraceFilter struct {
 	Decision domain.TraceDecision
 	CallerID string
 	TargetID string
+	Limit    int
 }
 
 type AuditEventFilter struct {
@@ -1101,6 +1102,9 @@ func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.Tra
 		}
 		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
 	})
+	if filter.Limit > 0 && len(rows) > filter.Limit {
+		rows = append([]domain.TraceEvent(nil), rows[len(rows)-filter.Limit:]...)
+	}
 	return rows, nil
 }
 

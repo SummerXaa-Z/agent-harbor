@@ -1531,7 +1531,16 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 			)
 		`, strings.Join(direct, " and "), strings.Join(agent, " and "))
 	}
-	query += " order by created_at asc, id asc"
+	if filter.Limit > 0 {
+		args = append(args, filter.Limit)
+		query = fmt.Sprintf(`
+			select *
+			from (%s order by created_at desc, id desc limit $%d) recent_trace_events
+			order by created_at asc, id asc
+		`, query, len(args))
+	} else {
+		query += " order by created_at asc, id asc"
+	}
 	rows, err := p.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list traces: %w", err)

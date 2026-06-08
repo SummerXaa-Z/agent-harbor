@@ -63,6 +63,31 @@ func TestNewAllowsPrivateUpstreamsFromEnv(t *testing.T) {
 	}
 }
 
+func TestNewAllowsConfiguredCORSOriginsFromEnv(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_CORS_ORIGINS", "http://127.0.0.1:15174")
+
+	app, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("new app: %v", err)
+	}
+	defer app.Close()
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/mcp/agents/browser-gate/rpc", nil)
+	req.Header.Set("Origin", "http://127.0.0.1:15174")
+	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, X-AgentHarbor-Subject-Id")
+	rec := httptest.NewRecorder()
+
+	app.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("configured CORS origin should allow preflight, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://127.0.0.1:15174" {
+		t.Fatalf("unexpected allowed origin %q", got)
+	}
+}
+
 func TestPrivateUpstreamsEnvRejectsInvalidBoolean(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS", "sometimes")
 

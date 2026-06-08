@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -296,6 +297,96 @@ type permissionPackageApplicationHealthRow struct {
 	RollbackReady      bool                                 `json:"rollbackReady"`
 }
 
+type permissionPackageProductionReadinessResponse struct {
+	Status            string                                      `json:"status"`
+	Summary           permissionPackageProductionReadinessSummary `json:"summary"`
+	Checks            []permissionPackageProductionReadinessCheck `json:"checks"`
+	LatestApplication *permissionPackageApplicationResponse       `json:"latestApplication"`
+	Preflight         *permissionPackageApplyPreflightResponse    `json:"preflight"`
+	RuntimeEvidence   permissionPackageRuntimeEvidence            `json:"runtimeEvidence"`
+	AuditEvidence     permissionPackageAuditEvidence              `json:"auditEvidence"`
+	NextActions       []string                                    `json:"nextActions"`
+}
+
+type permissionPackageProductionReadinessSummary struct {
+	ReadyCount         int  `json:"readyCount"`
+	WarningCount       int  `json:"warningCount"`
+	BlockingCount      int  `json:"blockingCount"`
+	HasApplication     bool `json:"hasApplication"`
+	HasAllowedTrace    bool `json:"hasAllowedTrace"`
+	HasDeniedTrace     bool `json:"hasDeniedTrace"`
+	HasAppliedAudit    bool `json:"hasAppliedAudit"`
+	AccessProfileReady bool `json:"accessProfileReady"`
+}
+
+type permissionPackageProductionReadinessCheck struct {
+	Code       string `json:"code"`
+	Severity   string `json:"severity"`
+	Message    string `json:"message"`
+	EvidenceID string `json:"evidenceId"`
+}
+
+type permissionPackageRuntimeEvidence struct {
+	AllowedTrace *traceResponse `json:"allowedTrace"`
+	DeniedTrace  *traceResponse `json:"deniedTrace"`
+}
+
+type permissionPackageAuditEvidence struct {
+	AppliedEvent *auditEventResponse `json:"appliedEvent"`
+}
+
+type permissionPackageProductionEvidenceReportResponse struct {
+	ReportVersion        string                                      `json:"reportVersion"`
+	Status               string                                      `json:"status"`
+	Scope                permissionPackageProductionEvidenceScope    `json:"scope"`
+	Summary              permissionPackageProductionReadinessSummary `json:"summary"`
+	Checks               []permissionPackageProductionReadinessCheck `json:"checks"`
+	Evidence             permissionPackageProductionEvidenceRefs     `json:"evidence"`
+	NextActions          []string                                    `json:"nextActions"`
+	ReadinessGeneratedAt string                                      `json:"readinessGeneratedAt"`
+}
+
+type permissionPackageProductionEvidenceScope struct {
+	TenantID         string `json:"tenantId"`
+	WorkspaceID      string `json:"workspaceId"`
+	TemplateID       string `json:"templateId"`
+	TargetID         string `json:"targetId"`
+	CallerInstanceID string `json:"callerInstanceId"`
+	SubjectID        string `json:"subjectId"`
+	Region           string `json:"region"`
+	SubjectSelector  string `json:"subjectSelector"`
+}
+
+type permissionPackageProductionEvidenceRefs struct {
+	Application       permissionPackageProductionApplicationEvidence `json:"application"`
+	Runtime           permissionPackageProductionRuntimeEvidence     `json:"runtime"`
+	Audit             permissionPackageProductionAuditEvidence       `json:"audit"`
+	AccessProfile     permissionPackageProductionEvidenceState       `json:"accessProfile"`
+	ApplicationHealth permissionPackageProductionEvidenceState       `json:"applicationHealth"`
+	ApplicationImpact permissionPackageProductionEvidenceState       `json:"applicationImpact"`
+}
+
+type permissionPackageProductionApplicationEvidence struct {
+	Present              bool     `json:"present"`
+	ID                   string   `json:"id"`
+	TemplateVersion      int      `json:"templateVersion"`
+	AllowedCapabilityIDs []string `json:"allowedCapabilityIds"`
+}
+
+type permissionPackageProductionRuntimeEvidence struct {
+	AllowedTraceID string `json:"allowedTraceId"`
+	DeniedTraceID  string `json:"deniedTraceId"`
+}
+
+type permissionPackageProductionAuditEvidence struct {
+	AppliedEventID string `json:"appliedEventId"`
+}
+
+type permissionPackageProductionEvidenceState struct {
+	Present bool   `json:"present"`
+	Status  string `json:"status"`
+}
+
 type permissionPackageImpactSummary struct {
 	CreatedObjectCount int  `json:"createdObjectCount"`
 	ActiveObjectCount  int  `json:"activeObjectCount"`
@@ -488,6 +579,10 @@ func newRouterWithPrivateUpstreams() http.Handler {
 	return httpapi.New(store.NewMemory(), httpapi.WithPrivateUpstreamsAllowed(true)).Router()
 }
 
+func newRouterWithCORSOrigins(origins []string) http.Handler {
+	return httpapi.New(store.NewMemory(), httpapi.WithCORSOrigins(origins)).Router()
+}
+
 func TestHealthAndContracts(t *testing.T) {
 	router := newRouter()
 
@@ -540,6 +635,28 @@ func TestLocalDevCORS(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	if rec.Code == http.StatusNoContent {
 		t.Fatalf("disallowed preflight should not be short-circuited")
+	}
+}
+
+func TestConfiguredCORSOriginAllowsBrowserGateMCPPreflight(t *testing.T) {
+	origin := "http://127.0.0.1:15174"
+	router := newRouterWithCORSOrigins([]string{origin})
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/mcp/agents/browser-gate/rpc", nil)
+	req.Header.Set("Origin", origin)
+	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, X-AgentHarbor-Subject-Id")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("preflight status = %d", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != origin {
+		t.Fatalf("unexpected allowed origin %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "X-AgentHarbor-Subject-Id") {
+		t.Fatalf("subject header missing from CORS allow headers %q", got)
 	}
 }
 
@@ -3237,6 +3354,127 @@ func TestPermissionPackagePreflightApprovalRequiredStates(t *testing.T) {
 	}
 }
 
+func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvidence(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	searchCustomer := createDirectCapabilityWithAction(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	updateTicket := createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	exportContracts := createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow support triage updates for this tenant.",
+		"subjectSelector":  "user:support-*",
+		"targetId":         target.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
+	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", nil, ""))
+	if approved.Status != "approved" {
+		t.Fatalf("expected approved request, got %#v", approved)
+	}
+
+	before := decodeData[permissionPackageProductionReadinessResponse](t, request(t, router, http.MethodGet, permissionPackageProductionReadinessPath(input, approved.ID, "user:support-001"), nil, ""))
+	if before.Status != "blocked" || before.Summary.BlockingCount == 0 || before.Summary.HasApplication {
+		t.Fatalf("expected production readiness to block before apply, got %#v", before)
+	}
+	if !permissionPackageProductionReadinessHasCheck(before.Checks, "preflight_ready", "passed") ||
+		!permissionPackageProductionReadinessHasCheck(before.Checks, "application_present", "blocking") {
+		t.Fatalf("expected ready preflight and missing application blocker, got %#v", before.Checks)
+	}
+	beforeReport := decodeData[permissionPackageProductionEvidenceReportResponse](t, request(t, router, http.MethodGet, permissionPackageProductionEvidenceReportPath(input, approved.ID, "user:support-001"), nil, ""))
+	if beforeReport.ReportVersion != "production-readiness-report/v1" || beforeReport.Status != "blocked" ||
+		beforeReport.Scope.TenantID != "tenant-east" || beforeReport.Scope.SubjectID != "user:support-001" ||
+		beforeReport.Evidence.Application.Present || beforeReport.Summary.BlockingCount == 0 ||
+		!permissionPackageProductionReadinessHasCheck(beforeReport.Checks, "application_present", "blocking") {
+		t.Fatalf("expected blocked production evidence report before apply, got %#v", beforeReport)
+	}
+
+	applyInput := map[string]any{
+		"approvalRequestId": approved.ID,
+		"callerInstanceId":  caller.ID,
+		"region":            input["region"],
+		"requestText":       input["requestText"],
+		"subjectSelector":   input["subjectSelector"],
+		"targetId":          target.ID,
+		"templateId":        input["templateId"],
+		"tenantId":          input["tenantId"],
+		"workspaceId":       input["workspaceId"],
+	}
+	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", applyInput, ""))
+	if applied.Application == nil || applied.Application.TemplateID != "support-ticket-triage" {
+		t.Fatalf("expected applied support package application, got %#v", applied)
+	}
+	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionDenied, caller, target, exportContracts, "export_contracts", "user:support-001", now.Add(time.Minute))
+	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionAllowed, caller, target, updateTicket, "update_ticket", "user:support-001", now.Add(2*time.Minute))
+
+	after := decodeData[permissionPackageProductionReadinessResponse](t, request(t, router, http.MethodGet, permissionPackageProductionReadinessPath(input, "", "user:support-001"), nil, ""))
+	if after.Status != "ready" || after.Summary.BlockingCount != 0 || !after.Summary.HasApplication ||
+		!after.Summary.HasAllowedTrace || !after.Summary.HasDeniedTrace || !after.Summary.HasAppliedAudit ||
+		!after.Summary.AccessProfileReady || after.LatestApplication == nil || after.LatestApplication.ID != applied.Application.ID {
+		t.Fatalf("expected production readiness after evidence, got %#v", after)
+	}
+	if after.RuntimeEvidence.AllowedTrace == nil || after.RuntimeEvidence.AllowedTrace.CapabilityID != updateTicket.ID ||
+		after.RuntimeEvidence.DeniedTrace == nil || after.RuntimeEvidence.DeniedTrace.CapabilityID != exportContracts.ID ||
+		after.AuditEvidence.AppliedEvent == nil || after.AuditEvidence.AppliedEvent.ResourceID != applied.Application.ID {
+		t.Fatalf("expected runtime and audit evidence, got runtime=%#v audit=%#v", after.RuntimeEvidence, after.AuditEvidence)
+	}
+	afterReport := decodeData[permissionPackageProductionEvidenceReportResponse](t, request(t, router, http.MethodGet, permissionPackageProductionEvidenceReportPath(input, "", "user:support-001"), nil, ""))
+	if afterReport.ReportVersion != "production-readiness-report/v1" || afterReport.Status != "ready" ||
+		afterReport.Evidence.Application.ID != applied.Application.ID ||
+		afterReport.Evidence.Application.TemplateVersion != 1 ||
+		len(afterReport.Evidence.Application.AllowedCapabilityIDs) != len(applied.Application.AllowedCapabilityIDs) ||
+		afterReport.Evidence.Runtime.AllowedTraceID == "" || afterReport.Evidence.Runtime.DeniedTraceID == "" ||
+		afterReport.Evidence.Audit.AppliedEventID == "" ||
+		afterReport.Evidence.AccessProfile.Present != true ||
+		afterReport.ReadinessGeneratedAt == "" {
+		t.Fatalf("expected ready production evidence report after evidence, got %#v", afterReport)
+	}
+	for _, check := range []string{
+		"application_present",
+		"application_health_ready",
+		"impact_ready",
+		"access_profile_chain_present",
+		"runtime_allowed_trace_present",
+		"runtime_denied_trace_present",
+		"applied_audit_event_present",
+	} {
+		if !permissionPackageProductionReadinessHasCheck(after.Checks, check, "passed") {
+			t.Fatalf("expected readiness check %q to pass, got %#v", check, after.Checks)
+		}
+	}
+	limitedTracePath := permissionPackageProductionReadinessPath(input, "", "user:support-001") + "&traceLimit=1"
+	limitedTrace := decodeData[permissionPackageProductionReadinessResponse](t, request(t, router, http.MethodGet, limitedTracePath, nil, ""))
+	if limitedTrace.Status != "blocked" || limitedTrace.RuntimeEvidence.AllowedTrace == nil || limitedTrace.RuntimeEvidence.DeniedTrace != nil ||
+		!permissionPackageProductionReadinessHasCheck(limitedTrace.Checks, "runtime_denied_trace_present", "blocking") {
+		t.Fatalf("expected traceLimit=1 to inspect only latest trace and block on missing denied evidence, got %#v", limitedTrace)
+	}
+	allowedIDs := map[string]struct{}{}
+	for _, capability := range applied.Draft.AllowedCapabilities {
+		allowedIDs[capability.ID] = struct{}{}
+	}
+	if len(allowedIDs) != 2 {
+		t.Fatalf("expected support package to include two allowed capabilities, got %#v", applied.Draft.AllowedCapabilities)
+	}
+	if _, ok := allowedIDs[searchCustomer.ID]; !ok {
+		t.Fatalf("expected support package to include search capability, got %#v", applied.Draft.AllowedCapabilities)
+	}
+	if _, ok := allowedIDs[updateTicket.ID]; !ok {
+		t.Fatalf("expected support package to include search and update capabilities, got %#v", applied.Draft.AllowedCapabilities)
+	}
+}
+
 func TestPermissionPackagePreflightDetectsDataScopeConflict(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -3822,7 +4060,7 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 	}
 	target := createDirectAgent(t, repo, "CRM MCP", "tenant-root", "ws-sales", "mcp", domain.AgentStatusActive, nil)
 	search := createDirectCapabilityWithAction(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
-	createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	exportContracts := createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
 
 	tools := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
 		"jsonrpc": "2.0",
@@ -3836,7 +4074,9 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		!mcpToolNamesContain(tools.Result.Tools, "list_permission_package_approval_requests") ||
 		!mcpToolNamesContain(tools.Result.Tools, "approve_permission_package_approval_request") ||
 		!mcpToolNamesContain(tools.Result.Tools, "reject_permission_package_approval_request") ||
-		!mcpToolNamesContain(tools.Result.Tools, "list_permission_package_applications") {
+		!mcpToolNamesContain(tools.Result.Tools, "list_permission_package_applications") ||
+		!mcpToolNamesContain(tools.Result.Tools, "check_permission_package_production_readiness") ||
+		!mcpToolNamesContain(tools.Result.Tools, "export_permission_package_production_evidence") {
 		t.Fatalf("management MCP tools missing permission package tools: %#v", tools.Result.Tools)
 	}
 
@@ -3930,6 +4170,59 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 	}
 	if applied.Application == nil || len(applications) != 1 || applications[0].ID != applied.Application.ID || applications[0].TemplateVersion != 1 {
 		t.Fatalf("unexpected management MCP applications: applied=%#v rows=%#v", applied.Application, applications)
+	}
+	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionDenied, caller, target, exportContracts, "export_contracts", "user:sales-001", now.Add(time.Minute))
+	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionAllowed, caller, target, search, "search_customer", "user:sales-001", now.Add(2*time.Minute))
+	readinessCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "production-readiness",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "check_permission_package_production_readiness",
+			"arguments": map[string]any{
+				"tenantId":         "tenant-east",
+				"workspaceId":      "ws-sales",
+				"templateId":       "sales-readonly",
+				"targetId":         target.ID,
+				"callerInstanceId": caller.ID,
+				"subjectId":        "user:sales-001",
+			},
+		},
+	}, ""))
+	var readiness permissionPackageProductionReadinessResponse
+	if err := json.Unmarshal(readinessCall.Result.StructuredContent, &readiness); err != nil {
+		t.Fatalf("decode production readiness structured content: %v", err)
+	}
+	if readiness.Status != "ready" || readiness.LatestApplication == nil || readiness.LatestApplication.ID != applied.Application.ID ||
+		!permissionPackageProductionReadinessHasCheck(readiness.Checks, "runtime_allowed_trace_present", "passed") ||
+		!permissionPackageProductionReadinessHasCheck(readiness.Checks, "applied_audit_event_present", "passed") {
+		t.Fatalf("unexpected production readiness MCP result: %#v", readiness)
+	}
+	reportCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "production-evidence",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "export_permission_package_production_evidence",
+			"arguments": map[string]any{
+				"tenantId":         "tenant-east",
+				"workspaceId":      "ws-sales",
+				"templateId":       "sales-readonly",
+				"targetId":         target.ID,
+				"callerInstanceId": caller.ID,
+				"subjectId":        "user:sales-001",
+			},
+		},
+	}, ""))
+	var report permissionPackageProductionEvidenceReportResponse
+	if err := json.Unmarshal(reportCall.Result.StructuredContent, &report); err != nil {
+		t.Fatalf("decode production evidence report structured content: %v", err)
+	}
+	if report.ReportVersion != "production-readiness-report/v1" || report.Status != "ready" ||
+		report.Evidence.Application.ID != applied.Application.ID ||
+		report.Evidence.Runtime.AllowedTraceID == "" ||
+		report.Evidence.Audit.AppliedEventID == "" {
+		t.Fatalf("unexpected production evidence MCP report: %#v", report)
 	}
 	events := decodeData[[]auditEventResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/events?action=permission_package.applied", nil, ""))
 	if len(events) != 1 || events[0].ResourceType != "permission_package" {
@@ -4895,6 +5188,68 @@ func permissionPackagePreflightHasCheck(checks []permissionPackageApplyPreflight
 		}
 	}
 	return false
+}
+
+func permissionPackageProductionReadinessHasCheck(checks []permissionPackageProductionReadinessCheck, code string, severity string) bool {
+	for _, check := range checks {
+		if check.Code == code && check.Severity == severity {
+			return true
+		}
+	}
+	return false
+}
+
+func permissionPackageProductionReadinessPath(input map[string]any, approvalRequestID string, subjectID string) string {
+	values := url.Values{}
+	for _, key := range []string{"tenantId", "workspaceId", "templateId", "targetId", "callerInstanceId", "region", "requestText", "subjectSelector"} {
+		if value, ok := input[key].(string); ok && value != "" {
+			values.Set(key, value)
+		}
+	}
+	if approvalRequestID != "" {
+		values.Set("approvalRequestId", approvalRequestID)
+	}
+	if subjectID != "" {
+		values.Set("subjectId", subjectID)
+	}
+	return "/api/v1/permission-packages/production-readiness?" + values.Encode()
+}
+
+func permissionPackageProductionEvidenceReportPath(input map[string]any, approvalRequestID string, subjectID string) string {
+	return strings.Replace(permissionPackageProductionReadinessPath(input, approvalRequestID, subjectID), "/production-readiness?", "/production-readiness/report?", 1)
+}
+
+func appendPermissionPackageReadinessTrace(
+	t *testing.T,
+	repo store.Repository,
+	decision domain.TraceDecision,
+	caller domain.Agent,
+	target domain.Agent,
+	capability domain.Capability,
+	routeKey string,
+	subjectID string,
+	createdAt time.Time,
+) {
+	t.Helper()
+	if _, err := repo.AppendTrace(t.Context(), domain.TraceEvent{
+		ID:                security.NewID("trc"),
+		RunID:             "production-readiness-" + string(decision),
+		CallerID:          caller.ID,
+		TargetID:          target.ID,
+		RouteType:         "mcp",
+		RouteKey:          routeKey,
+		TenantID:          caller.TenantID,
+		WorkspaceID:       caller.WorkspaceID,
+		CallerInstanceID:  caller.ID,
+		SubjectID:         subjectID,
+		CapabilityID:      capability.ID,
+		CapabilityVersion: capability.Version,
+		Decision:          decision,
+		Reason:            "production readiness fixture",
+		CreatedAt:         createdAt,
+	}); err != nil {
+		t.Fatalf("append readiness trace: %v", err)
+	}
 }
 
 func impactObjectsContain(rows []permissionPackageImpactObject, objectType string, id string, currentStatus string, rollbackAction string) bool {

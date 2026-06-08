@@ -58,6 +58,7 @@ func New(ctx context.Context) (*App, error) {
 			httpapi.WithAdminKey(os.Getenv("AGENT_HARBOR_ADMIN_KEY")),
 			httpapi.WithPrivateUpstreamsAllowed(allowPrivateUpstreams),
 			httpapi.WithPermissionPackageApprovalReviewers(approvalReviewers),
+			httpapi.WithCORSOrigins(corsOriginsFromEnv()),
 		),
 		close: closeFn,
 	}, nil
@@ -89,6 +90,25 @@ func privateUpstreamsAllowedFromEnv() (bool, error) {
 		return false, fmt.Errorf("AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS must be a boolean")
 	}
 	return allowed, nil
+}
+
+func corsOriginsFromEnv() []string {
+	raw := strings.TrimSpace(os.Getenv("AGENT_HARBOR_CORS_ORIGINS"))
+	if raw == "" {
+		return nil
+	}
+	entries := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == ';'
+	})
+	origins := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		origin := strings.TrimSpace(entry)
+		if origin == "" {
+			continue
+		}
+		origins = append(origins, origin)
+	}
+	return origins
 }
 
 func approvalReviewersFromEnv() ([]domain.PermissionPackageApprovalReviewer, error) {

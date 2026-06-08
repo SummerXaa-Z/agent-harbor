@@ -78,6 +78,20 @@ type managementMCPPermissionPackageApplicationArgs struct {
 	Limit            *int   `json:"limit"`
 }
 
+type managementMCPPermissionPackageProductionReadinessArgs struct {
+	TenantID          string `json:"tenantId"`
+	WorkspaceID       string `json:"workspaceId"`
+	TemplateID        string `json:"templateId"`
+	TargetID          string `json:"targetId"`
+	CallerInstanceID  string `json:"callerInstanceId"`
+	SubjectID         string `json:"subjectId"`
+	Region            string `json:"region"`
+	RequestText       string `json:"requestText"`
+	SubjectSelector   string `json:"subjectSelector"`
+	ApprovalRequestID string `json:"approvalRequestId"`
+	TraceLimit        *int   `json:"traceLimit"`
+}
+
 type managementMCPPermissionPackageApprovalRequestArgs struct {
 	TenantID         string                                 `json:"tenantId"`
 	WorkspaceID      string                                 `json:"workspaceId"`
@@ -289,6 +303,34 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 			return managementMCPCallResult{}, err
 		}
 		return managementMCPResult(rows), nil
+	case "check_permission_package_production_readiness":
+		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageProductionReadinessArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		query, err := permissionPackageProductionReadinessQueryFromMCPArgs(args)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		readiness, err := s.permissionPackageProductionReadiness(r.Context(), query)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(readiness), nil
+	case "export_permission_package_production_evidence":
+		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageProductionReadinessArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		query, err := permissionPackageProductionReadinessQueryFromMCPArgs(args)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		report, err := s.permissionPackageProductionEvidenceReport(r.Context(), query)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(report), nil
 	case "explain_permission_package_draft":
 		args, err := decodeManagementMCPArguments[domain.PermissionPackageDraftRequest](req.Params.Arguments)
 		if err != nil {
@@ -405,6 +447,16 @@ func managementMCPTools() []managementMCPTool {
 			InputSchema: permissionPackageApplicationListSchema(),
 		},
 		{
+			Name:        "check_permission_package_production_readiness",
+			Description: "Check the read-only production go/no-go gate for a tenant-scoped permission package using preflight, application, health, impact, access-profile, runtime, and audit evidence.",
+			InputSchema: permissionPackageProductionReadinessSchema(),
+		},
+		{
+			Name:        "export_permission_package_production_evidence",
+			Description: "Export a read-only JSON evidence report for a tenant-scoped permission package production readiness decision.",
+			InputSchema: permissionPackageProductionReadinessSchema(),
+		},
+		{
 			Name:        "explain_permission_package_draft",
 			Description: "Explain whether a permission package draft is ready, which simulation rows are blocked, and what an admin agent should fix next.",
 			InputSchema: permissionPackageDraftSchema(),
@@ -462,6 +514,43 @@ func permissionPackageApplicationFilterFromMCPArgs(args managementMCPPermissionP
 		CallerInstanceID: strings.TrimSpace(args.CallerInstanceID),
 		Limit:            limit,
 	}, nil
+}
+
+func permissionPackageProductionReadinessQueryFromMCPArgs(args managementMCPPermissionPackageProductionReadinessArgs) (permissionPackageProductionReadinessQuery, error) {
+	query := permissionPackageProductionReadinessQuery{
+		TenantID:          strings.TrimSpace(args.TenantID),
+		WorkspaceID:       strings.TrimSpace(args.WorkspaceID),
+		TemplateID:        strings.TrimSpace(args.TemplateID),
+		TargetID:          strings.TrimSpace(args.TargetID),
+		CallerInstanceID:  strings.TrimSpace(args.CallerInstanceID),
+		SubjectID:         strings.TrimSpace(args.SubjectID),
+		Region:            strings.TrimSpace(args.Region),
+		RequestText:       strings.TrimSpace(args.RequestText),
+		SubjectSelector:   strings.TrimSpace(args.SubjectSelector),
+		ApprovalRequestID: strings.TrimSpace(args.ApprovalRequestID),
+		TraceLimit:        defaultAccessProfileTraceLimit,
+	}
+	for _, required := range []struct {
+		name  string
+		value string
+	}{
+		{name: "tenantId", value: query.TenantID},
+		{name: "workspaceId", value: query.WorkspaceID},
+		{name: "templateId", value: query.TemplateID},
+		{name: "targetId", value: query.TargetID},
+		{name: "callerInstanceId", value: query.CallerInstanceID},
+	} {
+		if required.value == "" {
+			return permissionPackageProductionReadinessQuery{}, domain.BadRequest("VALIDATION_FAILED", required.name+" is required")
+		}
+	}
+	if args.TraceLimit != nil {
+		if *args.TraceLimit < 0 || *args.TraceLimit > maxAccessProfileTraceLimit {
+			return permissionPackageProductionReadinessQuery{}, domain.BadRequest("VALIDATION_FAILED", "traceLimit must be between 0 and 100")
+		}
+		query.TraceLimit = *args.TraceLimit
+	}
+	return query, nil
 }
 
 func permissionPackageApprovalRequestFilterFromMCPArgs(args managementMCPPermissionPackageApprovalRequestArgs) (store.PermissionPackageApprovalRequestFilter, error) {
@@ -927,6 +1016,22 @@ func permissionPackageApplicationListSchema() map[string]any {
 		"callerInstanceId": stringSchema("Optional caller agent instance id."),
 		"limit":            map[string]any{"type": "integer", "minimum": 1, "maximum": maxAuditLimit, "description": "Maximum application records to return."},
 	}, []string{})
+}
+
+func permissionPackageProductionReadinessSchema() map[string]any {
+	return objectSchema(map[string]any{
+		"tenantId":          stringSchema("Tenant that receives the entitlement."),
+		"workspaceId":       stringSchema("Workspace that receives the assignment."),
+		"templateId":        stringSchema("Permission package template id, for example sales-readonly."),
+		"targetId":          stringSchema("Target MCP agent id."),
+		"callerInstanceId":  stringSchema("Caller agent instance that will receive the package."),
+		"subjectId":         stringSchema("Optional production subject id used to filter runtime evidence."),
+		"region":            stringSchema("Optional region data-scope value. Defaults from the latest application when available."),
+		"requestText":       stringSchema("Optional administrator request text. Defaults from the latest application when available."),
+		"subjectSelector":   stringSchema("Optional subject selector. Defaults from the latest application when available."),
+		"approvalRequestId": stringSchema("Optional approved request id for pre-apply readiness checks."),
+		"traceLimit":        map[string]any{"type": "integer", "minimum": 0, "maximum": maxAccessProfileTraceLimit, "description": "Recent trace count to include."},
+	}, []string{"tenantId", "workspaceId", "templateId", "targetId", "callerInstanceId"})
 }
 
 func permissionPackageApprovalRequestListSchema() map[string]any {

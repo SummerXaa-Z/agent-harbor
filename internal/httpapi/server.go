@@ -38,6 +38,7 @@ type Server struct {
 	adminKey              string
 	allowPrivateUpstreams bool
 	approvalReviewers     []domain.PermissionPackageApprovalReviewer
+	corsOrigins           []string
 }
 
 const (
@@ -97,6 +98,19 @@ func WithPermissionPackageApprovalReviewers(reviewers []domain.PermissionPackage
 	}
 }
 
+func WithCORSOrigins(origins []string) Option {
+	return func(s *Server) {
+		s.corsOrigins = make([]string, 0, len(origins))
+		for _, origin := range origins {
+			normalized := strings.TrimSpace(origin)
+			if normalized == "" {
+				continue
+			}
+			s.corsOrigins = append(s.corsOrigins, normalized)
+		}
+	}
+}
+
 func New(repo store.Repository, options ...Option) *Server {
 	server := &Server{
 		repo: repo,
@@ -113,7 +127,7 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
-	r.Use(localDevCORS)
+	r.Use(localDevCORS(s.corsOrigins))
 
 	r.Get("/healthz", s.health)
 	r.Route("/api/v1", func(r chi.Router) {
@@ -147,6 +161,8 @@ func (s *Server) Router() http.Handler {
 			r.Get("/capabilities", s.listCapabilities)
 			r.Patch("/capabilities/{id}", s.updateCapability)
 			r.Get("/permission-packages/templates", s.listPermissionPackageTemplates)
+			r.Get("/permission-packages/production-readiness/report", s.getPermissionPackageProductionEvidenceReport)
+			r.Get("/permission-packages/production-readiness", s.getPermissionPackageProductionReadiness)
 			r.Get("/permission-packages/applications", s.listPermissionPackageApplications)
 			r.Get("/permission-packages/applications/health", s.listPermissionPackageApplicationHealth)
 			r.Get("/permission-packages/applications/{id}/impact", s.getPermissionPackageApplicationImpact)
@@ -180,7 +196,7 @@ func (s *Server) Router() http.Handler {
 	return r
 }
 
-func localDevCORS(next http.Handler) http.Handler {
+func localDevCORS(extraOrigins []string) func(http.Handler) http.Handler {
 	allowedOrigins := map[string]struct{}{
 		"http://localhost:4174": {},
 		"http://localhost:5174": {},
@@ -189,20 +205,25 @@ func localDevCORS(next http.Handler) http.Handler {
 		"http://[::1]:4174":     {},
 		"http://[::1]:5174":     {},
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if _, ok := allowedOrigins[origin]; ok {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Key, X-Run-Id, X-AgentHarbor-Subject-Id")
-			w.Header().Set("Vary", "Origin")
-			if r.Method == http.MethodOptions {
-				w.WriteHeader(http.StatusNoContent)
-				return
+	for _, origin := range extraOrigins {
+		allowedOrigins[origin] = struct{}{}
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			if _, ok := allowedOrigins[origin]; ok {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Key, X-Run-Id, X-AgentHarbor-Subject-Id")
+				w.Header().Set("Vary", "Origin")
+				if r.Method == http.MethodOptions {
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
 			}
-		}
-		next.ServeHTTP(w, r)
-	})
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func (s *Server) requireAdmin(next http.Handler) http.Handler {
@@ -1272,6 +1293,550 @@ func permissionPackageApplicationBlockerCodesContain(blockerCodes []string, want
 		}
 	}
 	return false
+}
+
+type permissionPackageProductionReadinessQuery struct {
+	TenantID          string
+	WorkspaceID       string
+	TemplateID        string
+	TargetID          string
+	CallerInstanceID  string
+	SubjectID         string
+	Region            string
+	RequestText       string
+	SubjectSelector   string
+	ApprovalRequestID string
+	TraceLimit        int
+}
+
+type permissionPackageProductionReadinessResponse struct {
+	Status            string                                          `json:"status"`
+	Summary           permissionPackageProductionReadinessSummary     `json:"summary"`
+	Checks            []permissionPackageProductionReadinessCheck     `json:"checks"`
+	LatestApplication *domain.PermissionPackageApplication            `json:"latestApplication,omitempty"`
+	Preflight         *domain.PermissionPackageApplyPreflightResponse `json:"preflight,omitempty"`
+	ApplicationHealth *permissionPackageApplicationHealthRow          `json:"applicationHealth,omitempty"`
+	ApplicationImpact *permissionPackageApplicationImpactResponse     `json:"applicationImpact,omitempty"`
+	AccessProfile     *tenantAccessProfileResponse                    `json:"accessProfile,omitempty"`
+	RuntimeEvidence   permissionPackageRuntimeEvidence                `json:"runtimeEvidence"`
+	AuditEvidence     permissionPackageAuditEvidence                  `json:"auditEvidence"`
+	NextActions       []string                                        `json:"nextActions"`
+	GeneratedAt       time.Time                                       `json:"generatedAt"`
+}
+
+type permissionPackageProductionReadinessSummary struct {
+	ReadyCount         int  `json:"readyCount"`
+	WarningCount       int  `json:"warningCount"`
+	BlockingCount      int  `json:"blockingCount"`
+	HasApplication     bool `json:"hasApplication"`
+	HasAllowedTrace    bool `json:"hasAllowedTrace"`
+	HasDeniedTrace     bool `json:"hasDeniedTrace"`
+	HasAppliedAudit    bool `json:"hasAppliedAudit"`
+	AccessProfileReady bool `json:"accessProfileReady"`
+}
+
+type permissionPackageProductionReadinessCheck struct {
+	Code       string                                    `json:"code"`
+	Severity   domain.PermissionPackagePreflightSeverity `json:"severity"`
+	Message    string                                    `json:"message"`
+	EvidenceID string                                    `json:"evidenceId,omitempty"`
+}
+
+type permissionPackageRuntimeEvidence struct {
+	AllowedTrace *domain.TraceEvent `json:"allowedTrace,omitempty"`
+	DeniedTrace  *domain.TraceEvent `json:"deniedTrace,omitempty"`
+}
+
+type permissionPackageAuditEvidence struct {
+	AppliedEvent *domain.AuditEvent `json:"appliedEvent,omitempty"`
+}
+
+const permissionPackageProductionEvidenceReportVersion = "production-readiness-report/v1"
+
+type permissionPackageProductionEvidenceReportResponse struct {
+	ReportVersion        string                                      `json:"reportVersion"`
+	GeneratedAt          time.Time                                   `json:"generatedAt"`
+	Scope                permissionPackageProductionEvidenceScope    `json:"scope"`
+	Status               string                                      `json:"status"`
+	Summary              permissionPackageProductionReadinessSummary `json:"summary"`
+	Checks               []permissionPackageProductionReadinessCheck `json:"checks"`
+	Evidence             permissionPackageProductionEvidenceRefs     `json:"evidence"`
+	NextActions          []string                                    `json:"nextActions"`
+	ReadinessGeneratedAt time.Time                                   `json:"readinessGeneratedAt"`
+}
+
+type permissionPackageProductionEvidenceScope struct {
+	TenantID         string `json:"tenantId"`
+	WorkspaceID      string `json:"workspaceId"`
+	TemplateID       string `json:"templateId"`
+	TargetID         string `json:"targetId"`
+	CallerInstanceID string `json:"callerInstanceId"`
+	SubjectID        string `json:"subjectId,omitempty"`
+	Region           string `json:"region,omitempty"`
+	SubjectSelector  string `json:"subjectSelector,omitempty"`
+}
+
+type permissionPackageProductionEvidenceRefs struct {
+	Application       permissionPackageProductionApplicationEvidence `json:"application"`
+	Runtime           permissionPackageProductionRuntimeEvidence     `json:"runtime"`
+	Audit             permissionPackageProductionAuditEvidence       `json:"audit"`
+	AccessProfile     permissionPackageProductionEvidenceState       `json:"accessProfile"`
+	ApplicationHealth permissionPackageProductionEvidenceState       `json:"applicationHealth"`
+	ApplicationImpact permissionPackageProductionEvidenceState       `json:"applicationImpact"`
+}
+
+type permissionPackageProductionApplicationEvidence struct {
+	Present               bool               `json:"present"`
+	ID                    string             `json:"id,omitempty"`
+	DraftID               string             `json:"draftId,omitempty"`
+	TemplateVersion       int                `json:"templateVersion,omitempty"`
+	AppliedAt             *time.Time         `json:"appliedAt,omitempty"`
+	AllowedCapabilityIDs  []string           `json:"allowedCapabilityIds,omitempty"`
+	AllowedCapabilityKeys []string           `json:"allowedCapabilityKeys,omitempty"`
+	DataScopes            []domain.DataScope `json:"dataScopes,omitempty"`
+}
+
+type permissionPackageProductionRuntimeEvidence struct {
+	AllowedTraceID string `json:"allowedTraceId,omitempty"`
+	DeniedTraceID  string `json:"deniedTraceId,omitempty"`
+}
+
+type permissionPackageProductionAuditEvidence struct {
+	AppliedEventID string `json:"appliedEventId,omitempty"`
+}
+
+type permissionPackageProductionEvidenceState struct {
+	Present bool   `json:"present"`
+	Status  string `json:"status,omitempty"`
+}
+
+func (s *Server) getPermissionPackageProductionReadiness(w http.ResponseWriter, r *http.Request) {
+	query, err := permissionPackageProductionReadinessQueryFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	result, err := s.permissionPackageProductionReadiness(r.Context(), query)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) getPermissionPackageProductionEvidenceReport(w http.ResponseWriter, r *http.Request) {
+	query, err := permissionPackageProductionReadinessQueryFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	result, err := s.permissionPackageProductionEvidenceReport(r.Context(), query)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func permissionPackageProductionReadinessQueryFromRequest(r *http.Request) (permissionPackageProductionReadinessQuery, error) {
+	values := r.URL.Query()
+	query := permissionPackageProductionReadinessQuery{
+		TenantID:          strings.TrimSpace(values.Get("tenantId")),
+		WorkspaceID:       strings.TrimSpace(values.Get("workspaceId")),
+		TemplateID:        strings.TrimSpace(values.Get("templateId")),
+		TargetID:          strings.TrimSpace(values.Get("targetId")),
+		CallerInstanceID:  strings.TrimSpace(values.Get("callerInstanceId")),
+		SubjectID:         strings.TrimSpace(values.Get("subjectId")),
+		Region:            strings.TrimSpace(values.Get("region")),
+		RequestText:       strings.TrimSpace(values.Get("requestText")),
+		SubjectSelector:   strings.TrimSpace(values.Get("subjectSelector")),
+		ApprovalRequestID: strings.TrimSpace(values.Get("approvalRequestId")),
+		TraceLimit:        defaultAccessProfileTraceLimit,
+	}
+	for _, required := range []struct {
+		name  string
+		value string
+	}{
+		{name: "tenantId", value: query.TenantID},
+		{name: "workspaceId", value: query.WorkspaceID},
+		{name: "templateId", value: query.TemplateID},
+		{name: "targetId", value: query.TargetID},
+		{name: "callerInstanceId", value: query.CallerInstanceID},
+	} {
+		if required.value == "" {
+			return permissionPackageProductionReadinessQuery{}, domain.BadRequest("VALIDATION_FAILED", required.name+" is required")
+		}
+	}
+	if raw := strings.TrimSpace(values.Get("traceLimit")); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil || limit < 0 || limit > maxAccessProfileTraceLimit {
+			return permissionPackageProductionReadinessQuery{}, domain.BadRequest("VALIDATION_FAILED", "traceLimit must be between 0 and 100")
+		}
+		query.TraceLimit = limit
+	}
+	return query, nil
+}
+
+func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query permissionPackageProductionReadinessQuery) (permissionPackageProductionReadinessResponse, error) {
+	result := permissionPackageProductionReadinessResponse{
+		Checks:      []permissionPackageProductionReadinessCheck{},
+		NextActions: []string{},
+		GeneratedAt: s.now(),
+	}
+	applications, err := s.repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
+		ManagementScope:  store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID},
+		TemplateID:       query.TemplateID,
+		TargetID:         query.TargetID,
+		CallerInstanceID: query.CallerInstanceID,
+		Limit:            1,
+	})
+	if err != nil {
+		return permissionPackageProductionReadinessResponse{}, err
+	}
+	if len(applications) > 0 {
+		latest := applications[0]
+		result.LatestApplication = &latest
+		query = permissionPackageProductionReadinessQueryWithApplicationDefaults(query, latest)
+	}
+
+	preflight, err := s.preflightPermissionPackageRequest(ctx, domain.PermissionPackageApplyRequest{
+		PermissionPackageDraftRequest: domain.PermissionPackageDraftRequest{
+			CallerInstanceID: query.CallerInstanceID,
+			Region:           query.Region,
+			RequestText:      query.RequestText,
+			SubjectSelector:  query.SubjectSelector,
+			TargetID:         query.TargetID,
+			TemplateID:       query.TemplateID,
+			TenantID:         query.TenantID,
+			WorkspaceID:      query.WorkspaceID,
+		},
+		ApprovalRequestID: query.ApprovalRequestID,
+	})
+	if err != nil {
+		return permissionPackageProductionReadinessResponse{}, err
+	}
+	result.Preflight = &preflight
+	if permissionPackageProductionPreflightReady(preflight, result.LatestApplication) {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("preflight_ready", domain.PermissionPackagePreflightPassed, "Permission package draft and safety preflight are acceptable for production readiness.", ""))
+	} else {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("preflight_ready", domain.PermissionPackagePreflightBlocking, "Permission package preflight still has blocking checks.", ""))
+		result.NextActions = appendUniqueString(result.NextActions, "Resolve apply preflight blockers before claiming production readiness.")
+	}
+
+	if result.LatestApplication == nil {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_present", domain.PermissionPackagePreflightBlocking, "No permission package application exists for this tenant, workspace, template, target, and caller.", ""))
+		result.NextActions = appendUniqueString(result.NextActions, "Apply the approved permission package before production readiness.")
+	} else {
+		result.Summary.HasApplication = true
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_present", domain.PermissionPackagePreflightPassed, "Permission package application evidence is present.", result.LatestApplication.ID))
+		if permissionPackageProductionApplicationScopeMatches(query, *result.LatestApplication) {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_scope_match", domain.PermissionPackagePreflightPassed, "Latest application matches the requested production scope.", result.LatestApplication.ID))
+		} else {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_scope_match", domain.PermissionPackagePreflightBlocking, "Latest application does not match the requested production scope.", result.LatestApplication.ID))
+			result.NextActions = appendUniqueString(result.NextActions, "Inspect the latest permission package application scope before go-live.")
+		}
+		impact, err := s.permissionPackageApplicationImpact(ctx, *result.LatestApplication)
+		if err != nil {
+			return permissionPackageProductionReadinessResponse{}, err
+		}
+		result.ApplicationImpact = &impact
+		healthStatus := permissionPackageApplicationHealthStatus(impact)
+		health := permissionPackageApplicationHealthRow{
+			Application:        *result.LatestApplication,
+			Status:             healthStatus,
+			BlockerCodes:       append([]string{}, impact.RollbackReview.BlockerCodes...),
+			CreatedObjectCount: impact.Summary.CreatedObjectCount,
+			ActiveObjectCount:  impact.Summary.ActiveObjectCount,
+			MissingObjectCount: impact.Summary.MissingObjectCount,
+			RollbackReady:      impact.Summary.RollbackReady,
+		}
+		result.ApplicationHealth = &health
+		if healthStatus == "ready" {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_health_ready", domain.PermissionPackagePreflightPassed, "Latest permission package application is healthy.", result.LatestApplication.ID))
+		} else {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_health_ready", domain.PermissionPackagePreflightBlocking, "Latest permission package application is not healthy.", result.LatestApplication.ID))
+			result.NextActions = appendUniqueString(result.NextActions, "Review application health and drift blockers before production readiness.")
+		}
+		if impact.RollbackReview.Ready && impact.Summary.MissingObjectCount == 0 {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("impact_ready", domain.PermissionPackagePreflightPassed, "Application impact review shows active created grant objects.", result.LatestApplication.ID))
+		} else {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("impact_ready", domain.PermissionPackagePreflightBlocking, "Application impact review has missing or inactive created objects.", result.LatestApplication.ID))
+			result.NextActions = appendUniqueString(result.NextActions, "Resolve impact review blockers before production readiness.")
+		}
+	}
+
+	profile, err := s.buildTenantAccessProfile(ctx, query.TenantID, accessProfileQuery{
+		WorkspaceID:      query.WorkspaceID,
+		TargetID:         query.TargetID,
+		CallerInstanceID: query.CallerInstanceID,
+		TraceLimit:       query.TraceLimit,
+	})
+	if err != nil {
+		return permissionPackageProductionReadinessResponse{}, err
+	}
+	result.AccessProfile = &profile
+	accessEvidenceID := permissionPackageProductionAccessProfileEvidenceID(profile, query, result.LatestApplication)
+	if accessEvidenceID != "" {
+		result.Summary.AccessProfileReady = true
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("access_profile_chain_present", domain.PermissionPackagePreflightPassed, "Tenant access profile contains an effective target, workspace, and caller grant chain.", accessEvidenceID))
+	} else {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("access_profile_chain_present", domain.PermissionPackagePreflightBlocking, "Tenant access profile does not contain an effective grant chain for this caller and target.", ""))
+		result.NextActions = appendUniqueString(result.NextActions, "Verify tenant entitlement, workspace assignment, and caller assignment evidence.")
+	}
+
+	traces := []domain.TraceEvent{}
+	if query.TraceLimit > 0 {
+		traces, err = s.repo.ListTraces(ctx, store.TraceFilter{
+			ManagementScope: store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID},
+			CallerID:        query.CallerInstanceID,
+			TargetID:        query.TargetID,
+			Limit:           query.TraceLimit,
+		})
+		if err != nil {
+			return permissionPackageProductionReadinessResponse{}, err
+		}
+	}
+	result.RuntimeEvidence.AllowedTrace = permissionPackageProductionLatestTrace(traces, domain.TraceDecisionAllowed, query.SubjectID)
+	result.RuntimeEvidence.DeniedTrace = permissionPackageProductionLatestTrace(traces, domain.TraceDecisionDenied, query.SubjectID)
+	if result.RuntimeEvidence.AllowedTrace != nil {
+		result.Summary.HasAllowedTrace = true
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_allowed_trace_present", domain.PermissionPackagePreflightPassed, "Runtime allowed evidence is present for this caller and target.", result.RuntimeEvidence.AllowedTrace.ID))
+	} else {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_allowed_trace_present", domain.PermissionPackagePreflightBlocking, "Runtime allowed evidence is missing for this caller and target.", ""))
+		result.NextActions = appendUniqueString(result.NextActions, "Run an allowed MCP call with the production subject before go-live.")
+	}
+	if result.RuntimeEvidence.DeniedTrace != nil {
+		result.Summary.HasDeniedTrace = true
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_denied_trace_present", domain.PermissionPackagePreflightPassed, "Runtime denied evidence is present for this caller and target.", result.RuntimeEvidence.DeniedTrace.ID))
+	} else {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_denied_trace_present", domain.PermissionPackagePreflightBlocking, "Runtime denied evidence is missing for this caller and target.", ""))
+		result.NextActions = appendUniqueString(result.NextActions, "Run a denied MCP call that proves blocked tools stay blocked.")
+	}
+
+	if result.LatestApplication != nil {
+		events, err := s.repo.ListAuditEvents(ctx, store.AuditEventFilter{
+			ManagementScope: store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID},
+			Action:          "permission_package.applied",
+			ResourceID:      result.LatestApplication.ID,
+			Limit:           1,
+		})
+		if err != nil {
+			return permissionPackageProductionReadinessResponse{}, err
+		}
+		if len(events) > 0 {
+			appliedEvent := events[0]
+			result.AuditEvidence.AppliedEvent = &appliedEvent
+		}
+	}
+	if result.AuditEvidence.AppliedEvent != nil {
+		result.Summary.HasAppliedAudit = true
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("applied_audit_event_present", domain.PermissionPackagePreflightPassed, "Applied audit event is present for this permission package application.", result.AuditEvidence.AppliedEvent.ID))
+	} else {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("applied_audit_event_present", domain.PermissionPackagePreflightBlocking, "Applied audit event is missing for this permission package application.", ""))
+		result.NextActions = appendUniqueString(result.NextActions, "Verify permission package applied audit evidence before production readiness.")
+	}
+
+	result.Summary = permissionPackageProductionReadinessSummaryFor(result)
+	result.Status = permissionPackageProductionReadinessStatus(result.Summary)
+	if result.Status == "ready" {
+		result.NextActions = appendUniqueString(result.NextActions, "Production readiness evidence is complete.")
+	}
+	return result, nil
+}
+
+func (s *Server) permissionPackageProductionEvidenceReport(ctx context.Context, query permissionPackageProductionReadinessQuery) (permissionPackageProductionEvidenceReportResponse, error) {
+	readiness, err := s.permissionPackageProductionReadiness(ctx, query)
+	if err != nil {
+		return permissionPackageProductionEvidenceReportResponse{}, err
+	}
+	return permissionPackageProductionEvidenceReportFromReadiness(query, readiness), nil
+}
+
+func permissionPackageProductionEvidenceReportFromReadiness(query permissionPackageProductionReadinessQuery, readiness permissionPackageProductionReadinessResponse) permissionPackageProductionEvidenceReportResponse {
+	scope := permissionPackageProductionEvidenceScope{
+		TenantID:         query.TenantID,
+		WorkspaceID:      query.WorkspaceID,
+		TemplateID:       query.TemplateID,
+		TargetID:         query.TargetID,
+		CallerInstanceID: query.CallerInstanceID,
+		SubjectID:        query.SubjectID,
+		Region:           query.Region,
+		SubjectSelector:  query.SubjectSelector,
+	}
+	evidence := permissionPackageProductionEvidenceRefs{
+		AccessProfile:     permissionPackageProductionEvidenceState{Present: readiness.Summary.AccessProfileReady},
+		ApplicationHealth: permissionPackageProductionEvidenceState{Present: readiness.ApplicationHealth != nil},
+		ApplicationImpact: permissionPackageProductionEvidenceState{Present: readiness.ApplicationImpact != nil},
+	}
+	if readiness.ApplicationHealth != nil {
+		evidence.ApplicationHealth.Status = readiness.ApplicationHealth.Status
+	}
+	if readiness.ApplicationImpact != nil && readiness.ApplicationImpact.Summary.RollbackReady {
+		evidence.ApplicationImpact.Status = "ready"
+	} else if readiness.ApplicationImpact != nil {
+		evidence.ApplicationImpact.Status = "blocked"
+	}
+	if readiness.LatestApplication != nil {
+		application := readiness.LatestApplication
+		scope.Region = stringOrDefault(scope.Region, application.Region)
+		scope.SubjectSelector = stringOrDefault(scope.SubjectSelector, application.SubjectSelector)
+		appliedAt := application.AppliedAt
+		evidence.Application = permissionPackageProductionApplicationEvidence{
+			Present:               true,
+			ID:                    application.ID,
+			DraftID:               application.DraftID,
+			TemplateVersion:       application.TemplateVersion,
+			AppliedAt:             &appliedAt,
+			AllowedCapabilityIDs:  append([]string(nil), application.AllowedCapabilityIDs...),
+			AllowedCapabilityKeys: append([]string(nil), application.AllowedCapabilityKeys...),
+			DataScopes:            domain.CloneDataScopes(application.DataScopes),
+		}
+	}
+	if readiness.RuntimeEvidence.AllowedTrace != nil {
+		evidence.Runtime.AllowedTraceID = readiness.RuntimeEvidence.AllowedTrace.ID
+	}
+	if readiness.RuntimeEvidence.DeniedTrace != nil {
+		evidence.Runtime.DeniedTraceID = readiness.RuntimeEvidence.DeniedTrace.ID
+	}
+	if readiness.AuditEvidence.AppliedEvent != nil {
+		evidence.Audit.AppliedEventID = readiness.AuditEvidence.AppliedEvent.ID
+	}
+	return permissionPackageProductionEvidenceReportResponse{
+		ReportVersion:        permissionPackageProductionEvidenceReportVersion,
+		GeneratedAt:          readiness.GeneratedAt,
+		Scope:                scope,
+		Status:               readiness.Status,
+		Summary:              readiness.Summary,
+		Checks:               append([]permissionPackageProductionReadinessCheck(nil), readiness.Checks...),
+		Evidence:             evidence,
+		NextActions:          append([]string(nil), readiness.NextActions...),
+		ReadinessGeneratedAt: readiness.GeneratedAt,
+	}
+}
+
+func stringOrDefault(value string, fallback string) string {
+	if strings.TrimSpace(value) != "" {
+		return value
+	}
+	return fallback
+}
+
+func permissionPackageProductionReadinessQueryWithApplicationDefaults(query permissionPackageProductionReadinessQuery, application domain.PermissionPackageApplication) permissionPackageProductionReadinessQuery {
+	if query.Region == "" {
+		query.Region = application.Region
+	}
+	if query.RequestText == "" {
+		query.RequestText = application.RequestText
+	}
+	if query.SubjectSelector == "" {
+		query.SubjectSelector = application.SubjectSelector
+	}
+	return query
+}
+
+func permissionPackageProductionPreflightReady(preflight domain.PermissionPackageApplyPreflightResponse, latestApplication *domain.PermissionPackageApplication) bool {
+	if preflight.Summary.CanApply {
+		return true
+	}
+	if latestApplication == nil {
+		return false
+	}
+	for _, check := range preflight.Checks {
+		if check.Severity != domain.PermissionPackagePreflightBlocking {
+			continue
+		}
+		if check.Code == "approval_request_missing" || check.Code == "approval_request_invalid" {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func permissionPackageProductionApplicationScopeMatches(query permissionPackageProductionReadinessQuery, application domain.PermissionPackageApplication) bool {
+	return application.TenantID == query.TenantID &&
+		application.WorkspaceID == query.WorkspaceID &&
+		application.TemplateID == query.TemplateID &&
+		application.TargetID == query.TargetID &&
+		application.CallerInstanceID == query.CallerInstanceID
+}
+
+func permissionPackageProductionAccessProfileEvidenceID(profile tenantAccessProfileResponse, query permissionPackageProductionReadinessQuery, application *domain.PermissionPackageApplication) string {
+	allowedCapabilityIDs := map[string]struct{}{}
+	if application != nil {
+		for _, capabilityID := range application.AllowedCapabilityIDs {
+			allowedCapabilityIDs[capabilityID] = struct{}{}
+		}
+	}
+	for _, grant := range profile.Grants {
+		if grant.ScopeStatus != accessProfileScopeValid || grant.Target == nil || grant.Target.ID != query.TargetID || grant.Capability == nil {
+			continue
+		}
+		if len(allowedCapabilityIDs) > 0 {
+			if _, ok := allowedCapabilityIDs[grant.Capability.ID]; !ok {
+				continue
+			}
+		}
+		for _, workspace := range grant.WorkspaceAssignments {
+			if workspace.ScopeStatus != accessProfileScopeValid || workspace.WorkspaceAssignment.WorkspaceID != query.WorkspaceID {
+				continue
+			}
+			for _, instance := range workspace.InstanceAssignments {
+				if instance.ScopeStatus == accessProfileScopeValid && instance.InstanceAssignment.CallerInstanceID == query.CallerInstanceID {
+					return instance.InstanceAssignment.ID
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func permissionPackageProductionLatestTrace(traces []domain.TraceEvent, decision domain.TraceDecision, subjectID string) *domain.TraceEvent {
+	for index := len(traces) - 1; index >= 0; index-- {
+		trace := traces[index]
+		if trace.Decision != decision {
+			continue
+		}
+		if subjectID != "" && trace.SubjectID != subjectID {
+			continue
+		}
+		return &trace
+	}
+	return nil
+}
+
+func permissionPackageProductionReadinessCheckFor(code string, severity domain.PermissionPackagePreflightSeverity, message string, evidenceID string) permissionPackageProductionReadinessCheck {
+	return permissionPackageProductionReadinessCheck{
+		Code:       code,
+		Severity:   severity,
+		Message:    message,
+		EvidenceID: evidenceID,
+	}
+}
+
+func permissionPackageProductionReadinessSummaryFor(result permissionPackageProductionReadinessResponse) permissionPackageProductionReadinessSummary {
+	summary := result.Summary
+	for _, check := range result.Checks {
+		switch check.Severity {
+		case domain.PermissionPackagePreflightPassed:
+			summary.ReadyCount++
+		case domain.PermissionPackagePreflightWarning:
+			summary.WarningCount++
+		case domain.PermissionPackagePreflightBlocking:
+			summary.BlockingCount++
+		}
+	}
+	return summary
+}
+
+func permissionPackageProductionReadinessStatus(summary permissionPackageProductionReadinessSummary) string {
+	if summary.BlockingCount > 0 {
+		return "blocked"
+	}
+	if summary.WarningCount > 0 {
+		return "needs_review"
+	}
+	return "ready"
 }
 
 type permissionPackageApplicationImpactResponse struct {

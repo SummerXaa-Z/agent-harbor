@@ -2,6 +2,10 @@
 
 Use this checklist before merging larger behavior changes, cutting a tagged release, or declaring `main` ready for downstream integration.
 
+For the current v0.2.0 local validation evidence, see `docs/engineering/0.2.0-local-validation-evidence.md`.
+
+当前 v0.2.0 本地验收证据见 `docs/engineering/0.2.0-local-validation-evidence.md`。
+
 ## Required Local Checks
 
 Run the uncached local release gate:
@@ -39,7 +43,7 @@ Run end-to-end scenarios when user-visible control-plane or data-plane behavior 
 ADMIN_KEY=local-admin-key make scenario-all
 ```
 
-For web console changes, run `make demo` and manually verify that the Cockpit Core Journey Workbench preflight checks pass, the journey can run against the local mock MCP server, and the non-destructive reset returns the browser session to the default demo scope. Confirm the core tenant access journey remains usable in both English and Simplified Chinese, including the language toggle, Tenant Permission Console, capability governance entry point, runtime evidence metrics, and trace evidence labels.
+For web console changes, run `make demo` and manually verify that the console opens on Permission Packages, the approval acceptance path is visible, and runtime checks are ready. Also verify the Self-Check workspace core permission loop can run against the local mock MCP server, and the non-destructive reset returns that self-check session to its default scope. Confirm the tenant access journey remains usable in both English and Simplified Chinese, including the language toggle, Tenant Permission Console, capability governance entry point, runtime evidence metrics, and trace evidence labels.
 
 For release-candidate validation of the browser-facing AI Admin path, run:
 
@@ -48,6 +52,17 @@ make ai-admin-browser-journey
 ```
 
 This gate starts the API, Mock MCP, and web console, verifies browser CORS allows `X-AgentHarbor-Subject-Id`, and then runs the approval-required permission package journey against those services.
+
+If the default local ports are already in use, run the same gate with isolated ports:
+
+```bash
+AGENT_HARBOR_BROWSER_GATE_API_PORT=19090 \
+AGENT_HARBOR_BROWSER_GATE_FRONTEND_PORT=15174 \
+MOCK_MCP_PORT=18787 \
+  make ai-admin-browser-journey
+```
+
+如果默认本地端口已被开发服务占用，可以使用上面的隔离端口运行同一个浏览器门禁。
 
 Before declaring v0.2.0 permission-package work or a permission-package release candidate ready, also run the approval-required journey against a local API with private upstreams enabled:
 

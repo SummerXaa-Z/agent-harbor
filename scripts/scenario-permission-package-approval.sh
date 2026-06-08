@@ -197,6 +197,36 @@ permission_package_body() {
   json_body permission-package "$CALLER_ID" "$REGION" "$REQUEST_TEXT" "$SUBJECT_SELECTOR" "$TARGET_ID" "$TEMPLATE_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID" "$approval_request_id"
 }
 
+production_readiness_path() {
+  local approval_request_id="${1:-}"
+  python3 - "$approval_request_id" "$CALLER_ID" "$REGION" "$REQUEST_TEXT" "$SUBJECT_ID" "$SUBJECT_SELECTOR" "$TARGET_ID" "$TEMPLATE_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID" <<'PY'
+import sys
+from urllib.parse import urlencode
+
+approval_request_id, caller_id, region, request_text, subject_id, subject_selector, target_id, template_id, tenant_id, workspace_id = sys.argv[1:11]
+params = {
+    "callerInstanceId": caller_id,
+    "region": region,
+    "requestText": request_text,
+    "subjectId": subject_id,
+    "subjectSelector": subject_selector,
+    "targetId": target_id,
+    "templateId": template_id,
+    "tenantId": tenant_id,
+    "traceLimit": "20",
+    "workspaceId": workspace_id,
+}
+if approval_request_id:
+    params["approvalRequestId"] = approval_request_id
+print("/api/v1/permission-packages/production-readiness?" + urlencode(params))
+PY
+}
+
+production_evidence_report_path() {
+  local approval_request_id="${1:-}"
+  production_readiness_path "$approval_request_id" | sed 's#/production-readiness?#/production-readiness/report?#'
+}
+
 capability_id_for_key() {
   local key="$1"
   RESPONSE_BODY="$HTTP_BODY" python3 - "$key" <<'PY'
@@ -324,6 +354,96 @@ else:
 if "application" in preflight:
     raise SystemExit(f"preflight must not return an application record: {preflight}")
 print(f"permission package preflight verified: canApply={expected_can_apply} check={expected_check}")
+PY
+}
+
+assert_production_readiness() {
+  local expected_status="$1"
+  local expected_check="$2"
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_status" "$expected_check" "$APPLICATION_ID" <<'PY'
+import json
+import os
+import sys
+
+readiness = json.loads(os.environ["RESPONSE_BODY"])["data"]
+expected_status, expected_check, application_id = sys.argv[1:4]
+if readiness.get("status") != expected_status:
+    raise SystemExit(f"production readiness status={readiness.get('status')!r} want {expected_status!r}: {readiness}")
+summary = readiness.get("summary") or {}
+checks = {check.get("code"): check for check in readiness.get("checks", [])}
+if expected_check not in checks:
+    raise SystemExit(f"production readiness missing check {expected_check!r}: {checks}")
+if expected_status == "ready":
+    if summary.get("blockingCount") != 0:
+        raise SystemExit(f"ready production readiness should have zero blockers: {summary}")
+    expected_flags = {
+        "hasApplication": True,
+        "hasAllowedTrace": True,
+        "hasDeniedTrace": True,
+        "hasAppliedAudit": True,
+        "accessProfileReady": True,
+    }
+    for key, value in expected_flags.items():
+        if summary.get(key) is not value:
+            raise SystemExit(f"production readiness summary[{key}]={summary.get(key)!r} want {value!r}: {summary}")
+    application = readiness.get("latestApplication") or {}
+    if application.get("id") != application_id:
+        raise SystemExit(f"production readiness application id mismatch: {application}")
+    runtime = readiness.get("runtimeEvidence") or {}
+    if not runtime.get("allowedTrace") or not runtime.get("deniedTrace"):
+        raise SystemExit(f"production readiness missing runtime evidence: {runtime}")
+    audit = readiness.get("auditEvidence") or {}
+    if not audit.get("appliedEvent"):
+        raise SystemExit(f"production readiness missing applied audit evidence: {audit}")
+else:
+    if summary.get("blockingCount", 0) < 1:
+        raise SystemExit(f"blocked production readiness should include blockers: {summary}")
+    check = checks[expected_check]
+    if check.get("severity") != "blocking":
+        raise SystemExit(f"expected check {expected_check!r} to block, got {check}")
+print(f"permission package production readiness verified: status={expected_status} check={expected_check}")
+PY
+}
+
+assert_production_evidence_report() {
+  local expected_status="$1"
+  local expected_check="$2"
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_status" "$expected_check" "$APPLICATION_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID" <<'PY'
+import json
+import os
+import sys
+
+report = json.loads(os.environ["RESPONSE_BODY"])["data"]
+expected_status, expected_check, application_id, tenant_id, workspace_id = sys.argv[1:6]
+if report.get("reportVersion") != "production-readiness-report/v1":
+    raise SystemExit(f"unexpected report version: {report}")
+if report.get("status") != expected_status:
+    raise SystemExit(f"production evidence report status={report.get('status')!r} want {expected_status!r}: {report}")
+scope = report.get("scope") or {}
+if scope.get("tenantId") != tenant_id or scope.get("workspaceId") != workspace_id:
+    raise SystemExit(f"unexpected production evidence scope: {scope}")
+checks = {check.get("code"): check for check in report.get("checks", [])}
+if expected_check not in checks:
+    raise SystemExit(f"production evidence report missing check {expected_check!r}: {checks}")
+evidence = report.get("evidence") or {}
+application = evidence.get("application") or {}
+runtime = evidence.get("runtime") or {}
+audit = evidence.get("audit") or {}
+if expected_status == "ready":
+    if application.get("id") != application_id or application.get("present") is not True:
+        raise SystemExit(f"ready production evidence report missing application evidence: {application}")
+    if not runtime.get("allowedTraceId") or not runtime.get("deniedTraceId"):
+        raise SystemExit(f"ready production evidence report missing runtime evidence: {runtime}")
+    if not audit.get("appliedEventId"):
+        raise SystemExit(f"ready production evidence report missing audit evidence: {audit}")
+    if (evidence.get("accessProfile") or {}).get("present") is not True:
+        raise SystemExit(f"ready production evidence report missing access profile evidence: {evidence}")
+else:
+    if application.get("present") is True:
+        raise SystemExit(f"blocked-before-apply report should not include application evidence: {application}")
+    if checks[expected_check].get("severity") != "blocking":
+        raise SystemExit(f"expected report check {expected_check!r} to block, got {checks[expected_check]}")
+print(f"permission package production evidence report verified: status={expected_status} check={expected_check}")
 PY
 }
 
@@ -818,6 +938,14 @@ request GET "/api/v1/permission-packages/approval-requests?tenantId=$ROOT_TENANT
 expect_status 200 "list unconsumed approval request after preflight"
 assert_unconsumed_approval
 
+request GET "$(production_readiness_path "$APPROVAL_REQUEST_ID")"
+expect_status 200 "check production readiness before apply"
+assert_production_readiness "blocked" "application_present"
+
+request GET "$(production_evidence_report_path "$APPROVAL_REQUEST_ID")"
+expect_status 200 "export production evidence report before apply"
+assert_production_evidence_report "blocked" "application_present"
+
 request POST "/api/v1/permission-packages:apply" "$(permission_package_body "$APPROVAL_REQUEST_ID")"
 expect_status 201 "apply approved permission package"
 APPLICATION_ID="$(assert_apply_response "$APPROVAL_REQUEST_ID")"
@@ -879,5 +1007,13 @@ assert_application_impact
 request GET "/api/v1/audit/events?action=permission_package.applied&resourceId=$APPLICATION_ID&limit=1"
 expect_status 200 "list applied audit events"
 assert_applied_audit_event
+
+request GET "$(production_readiness_path)"
+expect_status 200 "check production readiness after evidence"
+assert_production_readiness "ready" "runtime_allowed_trace_present"
+
+request GET "$(production_evidence_report_path)"
+expect_status 200 "export production evidence report after evidence"
+assert_production_evidence_report "ready" "runtime_allowed_trace_present"
 
 echo "permission package approval scenario complete"

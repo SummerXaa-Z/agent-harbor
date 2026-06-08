@@ -135,7 +135,7 @@ echo "FRONTEND_ORIGIN=$FRONTEND_ORIGIN"
 echo "MOCK_MCP=http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/mcp"
 echo "RUN_ID=$RUN_ID"
 
-AGENT_HARBOR_ADDR="$API_ADDR" AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true go run ./cmd/agent-harbor > "$LOG_DIR/api.log" 2>&1 &
+AGENT_HARBOR_ADDR="$API_ADDR" AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true AGENT_HARBOR_CORS_ORIGINS="$FRONTEND_ORIGIN" go run ./cmd/agent-harbor > "$LOG_DIR/api.log" 2>&1 &
 PIDS+=("$!")
 
 scripts/mock-mcp-server.py --host "$MOCK_MCP_HOST" --port "$MOCK_MCP_PORT" > "$LOG_DIR/mock-mcp.log" 2>&1 &

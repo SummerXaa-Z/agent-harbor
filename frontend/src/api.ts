@@ -19,6 +19,8 @@ import {
   permissionPackageApplicationHealthPath,
   permissionPackageApplicationImpactPath,
   permissionPackageApprovalRequestsPath,
+  permissionPackageProductionEvidenceReportPath,
+  permissionPackageProductionReadinessPath,
   type PermissionPackageApplicationHealthPathFilter,
   type PermissionPackageApplicationImpactPathScope,
   type PermissionPackageApprovalRequestPathFilter,
@@ -33,6 +35,9 @@ import type {
   PermissionPackageApplicationImpact,
   PermissionPackageDraft,
   PermissionPackageDraftInput,
+  PermissionPackageProductionEvidenceReport,
+  PermissionPackageProductionReadiness,
+  PermissionPackageProductionReadinessFilter,
   PermissionPackageTemplate,
 } from './permissionPackages'
 import type {
@@ -523,6 +528,25 @@ export async function fetchPermissionPackageApplicationImpact(
 ): Promise<PermissionPackageApplicationImpact> {
   return request<PermissionPackageApplicationImpact>(
     permissionPackageApplicationImpactPath(applicationId, scope),
+    { adminKey, signal },
+  )
+}
+
+export async function fetchPermissionPackageProductionReadiness(
+  filter: PermissionPackageProductionReadinessFilter,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<PermissionPackageProductionReadiness> {
+  return request<PermissionPackageProductionReadiness>(permissionPackageProductionReadinessPath(filter), { adminKey, signal })
+}
+
+export async function fetchPermissionPackageProductionEvidenceReport(
+  filter: PermissionPackageProductionReadinessFilter,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<PermissionPackageProductionEvidenceReport> {
+  return request<PermissionPackageProductionEvidenceReport>(
+    permissionPackageProductionEvidenceReportPath(filter),
     { adminKey, signal },
   )
 }

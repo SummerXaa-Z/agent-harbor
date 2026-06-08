@@ -29,6 +29,20 @@ export interface PermissionPackageApplicationHealthPathFilter {
   workspaceId?: string
 }
 
+export interface PermissionPackageProductionReadinessPathFilter {
+  approvalRequestId?: string
+  callerInstanceId?: string
+  region?: string
+  requestText?: string
+  subjectId?: string
+  subjectSelector?: string
+  targetId?: string
+  templateId?: string
+  tenantId?: string
+  traceLimit?: number
+  workspaceId?: string
+}
+
 export interface AccessDecisionExplainPathRequest {
   callerInstanceId?: string
   capabilityId?: string
@@ -78,6 +92,40 @@ export function permissionPackageApplicationHealthPath(filter: PermissionPackage
     workspaceId: filter.workspaceId,
   })
   return `/api/v1/permission-packages/applications/health${query}`
+}
+
+export function permissionPackageProductionReadinessPath(filter: PermissionPackageProductionReadinessPathFilter): string {
+  const query = queryString({
+    approvalRequestId: filter.approvalRequestId,
+    callerInstanceId: filter.callerInstanceId,
+    region: filter.region,
+    requestText: filter.requestText,
+    subjectId: filter.subjectId,
+    subjectSelector: filter.subjectSelector,
+    targetId: filter.targetId,
+    templateId: filter.templateId,
+    tenantId: filter.tenantId,
+    traceLimit: filter.traceLimit ? String(filter.traceLimit) : undefined,
+    workspaceId: filter.workspaceId,
+  })
+  return `/api/v1/permission-packages/production-readiness${query}`
+}
+
+export function permissionPackageProductionEvidenceReportPath(filter: PermissionPackageProductionReadinessPathFilter): string {
+  const query = queryString({
+    approvalRequestId: filter.approvalRequestId,
+    callerInstanceId: filter.callerInstanceId,
+    region: filter.region,
+    requestText: filter.requestText,
+    subjectId: filter.subjectId,
+    subjectSelector: filter.subjectSelector,
+    targetId: filter.targetId,
+    templateId: filter.templateId,
+    tenantId: filter.tenantId,
+    traceLimit: filter.traceLimit ? String(filter.traceLimit) : undefined,
+    workspaceId: filter.workspaceId,
+  })
+  return `/api/v1/permission-packages/production-readiness/report${query}`
 }
 
 export function permissionPackageApprovalRequestsPath(filter: PermissionPackageApprovalRequestPathFilter): string {

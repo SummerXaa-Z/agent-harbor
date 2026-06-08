@@ -7,6 +7,9 @@ import type {
   InstanceAssignment,
   TenantEntitlement,
   WorkspaceAssignment,
+  AuditEvent,
+  TenantAccessProfile,
+  TraceEvent,
 } from "./types";
 
 export type PermissionPackageDecision = "allow" | "deny";
@@ -168,6 +171,121 @@ export interface PermissionPackageApplicationHealthRow {
   activeObjectCount: number;
   missingObjectCount: number;
   rollbackReady: boolean;
+}
+
+export type PermissionPackageProductionReadinessStatus = "ready" | "needs_review" | "blocked";
+
+export interface PermissionPackageProductionReadinessFilter {
+  approvalRequestId?: string;
+  callerInstanceId: string;
+  region?: string;
+  requestText?: string;
+  subjectId?: string;
+  subjectSelector?: string;
+  targetId: string;
+  templateId: string;
+  tenantId: string;
+  traceLimit?: number;
+  workspaceId: string;
+}
+
+export interface PermissionPackageProductionReadiness {
+  status: PermissionPackageProductionReadinessStatus;
+  summary: PermissionPackageProductionReadinessSummary;
+  checks: PermissionPackageProductionReadinessCheck[];
+  latestApplication?: PermissionPackageApplication;
+  preflight?: PermissionPackageApplyPreflight;
+  applicationHealth?: PermissionPackageApplicationHealthRow;
+  applicationImpact?: PermissionPackageApplicationImpact;
+  accessProfile?: TenantAccessProfile;
+  runtimeEvidence: PermissionPackageRuntimeEvidence;
+  auditEvidence: PermissionPackageAuditEvidence;
+  nextActions: string[];
+  generatedAt: string;
+}
+
+export interface PermissionPackageProductionReadinessSummary {
+  readyCount: number;
+  warningCount: number;
+  blockingCount: number;
+  hasApplication: boolean;
+  hasAllowedTrace: boolean;
+  hasDeniedTrace: boolean;
+  hasAppliedAudit: boolean;
+  accessProfileReady: boolean;
+}
+
+export interface PermissionPackageProductionReadinessCheck {
+  code: string;
+  severity: PermissionPackageApplyPreflightSeverity;
+  message: string;
+  evidenceId?: string;
+}
+
+export interface PermissionPackageRuntimeEvidence {
+  allowedTrace?: TraceEvent;
+  deniedTrace?: TraceEvent;
+}
+
+export interface PermissionPackageAuditEvidence {
+  appliedEvent?: AuditEvent;
+}
+
+export interface PermissionPackageProductionEvidenceReport {
+  reportVersion: string;
+  generatedAt: string;
+  scope: PermissionPackageProductionEvidenceScope;
+  status: PermissionPackageProductionReadinessStatus;
+  summary: PermissionPackageProductionReadinessSummary;
+  checks: PermissionPackageProductionReadinessCheck[];
+  evidence: PermissionPackageProductionEvidenceRefs;
+  nextActions: string[];
+  readinessGeneratedAt: string;
+}
+
+export interface PermissionPackageProductionEvidenceScope {
+  tenantId: string;
+  workspaceId: string;
+  templateId: string;
+  targetId: string;
+  callerInstanceId: string;
+  subjectId?: string;
+  region?: string;
+  subjectSelector?: string;
+}
+
+export interface PermissionPackageProductionEvidenceRefs {
+  application: PermissionPackageProductionApplicationEvidence;
+  runtime: PermissionPackageProductionRuntimeEvidence;
+  audit: PermissionPackageProductionAuditEvidence;
+  accessProfile: PermissionPackageProductionEvidenceState;
+  applicationHealth: PermissionPackageProductionEvidenceState;
+  applicationImpact: PermissionPackageProductionEvidenceState;
+}
+
+export interface PermissionPackageProductionApplicationEvidence {
+  present: boolean;
+  id?: string;
+  draftId?: string;
+  templateVersion?: number;
+  appliedAt?: string;
+  allowedCapabilityIds?: string[];
+  allowedCapabilityKeys?: string[];
+  dataScopes?: DataScope[];
+}
+
+export interface PermissionPackageProductionRuntimeEvidence {
+  allowedTraceId?: string;
+  deniedTraceId?: string;
+}
+
+export interface PermissionPackageProductionAuditEvidence {
+  appliedEventId?: string;
+}
+
+export interface PermissionPackageProductionEvidenceState {
+  present: boolean;
+  status?: string;
 }
 
 export interface PermissionPackageImpactRehearsal {
@@ -376,6 +494,17 @@ export const permissionPackageTemplates: PermissionPackageTemplate[] = [
     ],
   },
 ];
+
+export const defaultPermissionPackageDraftInput: PermissionPackageDraftInput = {
+  callerInstanceId: "",
+  region: "华东",
+  requestText: "给客服助手开通当前租户的工单查询和有限更新权限，禁止导出合同、删除工单和管理操作。",
+  subjectSelector: "user:support-*",
+  targetId: "",
+  templateId: "support-ticket-triage",
+  tenantId: "default",
+  workspaceId: "workspace-sandbox"
+};
 
 export function subjectIdExampleFromSelector(subjectSelector?: string): string | undefined {
   const selector = subjectSelector?.trim() ?? "";

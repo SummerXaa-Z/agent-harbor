@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  defaultPermissionPackageDraftInput,
   createPermissionPackageDraft,
   permissionPackageTemplates,
   subjectIdExampleFromSelector
@@ -47,6 +48,12 @@ const capabilities = [
     updatedAt: now
   }
 ];
+
+test("default permission package draft opens the approval-required support journey", () => {
+  assert.equal(defaultPermissionPackageDraftInput.templateId, "support-ticket-triage");
+  assert.equal(defaultPermissionPackageDraftInput.subjectSelector, "user:support-*");
+  assert.match(defaultPermissionPackageDraftInput.requestText, /客服|工单/);
+});
 
 test("sales read-only package drafts allowed reads, blocked exports, and simulation rows", () => {
   const draft = createPermissionPackageDraft(

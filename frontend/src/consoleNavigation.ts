@@ -20,16 +20,18 @@ export interface ConsoleView {
   titleKey: string
 }
 
+export const defaultNavKey: NavKey = "ai-admin"
+
 export const navItems: NavItem[] = [
-  { key: "cockpit", label: "Cockpit" },
-  { key: "ai-admin", label: "AI Admin" },
+  { key: "ai-admin", label: "Permission Packages" },
+  { key: "access", label: "Access" },
+  { key: "traces", label: "Traces" },
+  { key: "evidence", label: "Evidence" },
+  { key: "cockpit", label: "Self-Check" },
   { key: "registry", label: "Registry" },
   { key: "routes", label: "Routes" },
   { key: "policies", label: "Policies" },
   { key: "capabilities", label: "Capabilities" },
-  { key: "access", label: "Access" },
-  { key: "traces", label: "Traces" },
-  { key: "evidence", label: "Evidence" },
 ]
 
 const views: Record<NavKey, ConsoleView> = {
@@ -81,5 +83,5 @@ const views: Record<NavKey, ConsoleView> = {
 }
 
 export function viewForNav(key: string): ConsoleView {
-  return views[(key as NavKey) in views ? (key as NavKey) : "cockpit"]
+  return views[(key as NavKey) in views ? (key as NavKey) : defaultNavKey]
 }

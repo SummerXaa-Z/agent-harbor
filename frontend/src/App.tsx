@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   Copy,
   DatabaseZap,
+  Download,
   ExternalLink,
   FileSearch,
   Filter,
@@ -21,7 +22,6 @@ import {
   Search,
   ServerCog,
   ShieldCheck,
-  Sparkles,
   TriangleAlert,
   Workflow
 } from "lucide-react";
@@ -49,6 +49,8 @@ import {
   fetchPermissionPackageApplicationHealth,
   fetchPermissionPackageApplicationImpact,
   fetchPermissionPackageApprovalRequests,
+  fetchPermissionPackageProductionEvidenceReport,
+  fetchPermissionPackageProductionReadiness,
   fetchPermissionPackageTemplates,
   isApiCompatibilityFallbackError,
   loadConsoleData,
@@ -77,6 +79,7 @@ import {
   type Language
 } from "./i18n";
 import {
+  defaultNavKey,
   navItems,
   viewForNav,
   type NavKey
@@ -116,7 +119,13 @@ import {
   type AiAdminApprovalReadinessStatus
 } from "./aiAdminApprovalReadiness";
 import {
+  buildAiAdminProductionConsoleSummary,
+  type AiAdminProductionConsoleStatus,
+  type AiAdminProductionConsoleSummary
+} from "./aiAdminProductionConsole";
+import {
   createPermissionPackageDraft,
+  defaultPermissionPackageDraftInput,
   permissionPackageTemplates,
   subjectIdExampleFromSelector,
   type PermissionPackageApplyInput,
@@ -130,6 +139,11 @@ import {
   type PermissionPackageApprovalRequest,
   type PermissionPackageDraft,
   type PermissionPackageDraftInput,
+  type PermissionPackageProductionEvidenceReport,
+  type PermissionPackageProductionReadiness,
+  type PermissionPackageProductionReadinessCheck,
+  type PermissionPackageProductionReadinessFilter,
+  type PermissionPackageProductionReadinessStatus,
   type PermissionPackageRemediationAction,
   type PermissionPackageSimulationRow,
   type PermissionPackageTemplate
@@ -217,12 +231,7 @@ const defaultCapabilityGrantForm = {
   workspaceId: defaultManagementScope.workspaceId
 };
 const defaultAiAdminForm: PermissionPackageDraftInput = {
-  callerInstanceId: "",
-  region: "华东",
-  requestText: "给销售助手开通当前租户的客户只读访问，禁止导出合同和访问财务字段。",
-  subjectSelector: "user:*",
-  targetId: "",
-  templateId: "sales-readonly",
+  ...defaultPermissionPackageDraftInput,
   tenantId: defaultManagementScope.tenantId,
   workspaceId: defaultManagementScope.workspaceId
 };
@@ -256,7 +265,7 @@ const coreJourneyTargetName = "Core Journey MCP Target";
 function navIconFor(key: NavKey) {
   switch (key) {
     case "ai-admin":
-      return Sparkles;
+      return ShieldCheck;
     case "registry":
       return Boxes;
     case "routes":
@@ -315,7 +324,7 @@ function policyEffectLabel(effect: "allow" | "deny", t: Translator) {
 }
 
 function App() {
-  const [activeNav, setActiveNav] = useState("cockpit");
+  const [activeNav, setActiveNav] = useState(defaultNavKey);
   const [activeWorkspace, setActiveWorkspace] = useState("Prod");
   const [adminKey, setAdminKey] = useState("");
   const [scope, setScope] = useState<ManagementScope>(defaultManagementScope);
@@ -369,9 +378,14 @@ function App() {
     useState<PermissionPackageApplicationImpact | null>(null);
   const [aiAdminApplicationImpactLoading, setAiAdminApplicationImpactLoading] = useState(false);
   const [aiAdminApplicationImpactMessage, setAiAdminApplicationImpactMessage] = useState("");
+  const [aiAdminProductionReadiness, setAiAdminProductionReadiness] =
+    useState<PermissionPackageProductionReadiness | null>(null);
+  const [aiAdminProductionReadinessLoading, setAiAdminProductionReadinessLoading] = useState(false);
+  const [aiAdminProductionEvidenceExporting, setAiAdminProductionEvidenceExporting] = useState(false);
+  const [aiAdminProductionReadinessMessage, setAiAdminProductionReadinessMessage] = useState("");
   const [aiAdminApprovalRequests, setAiAdminApprovalRequests] = useState<PermissionPackageApprovalRequest[]>([]);
   const [aiAdminApprovalAction, setAiAdminApprovalAction] = useState<"" | "create" | "approve" | "reject">("");
-  const [aiAdminApprovalReviewer, setAiAdminApprovalReviewer] = useState("AI Admin");
+  const [aiAdminApprovalReviewer, setAiAdminApprovalReviewer] = useState("Security Reviewer");
   const [aiAdminReviewerQueueLoading, setAiAdminReviewerQueueLoading] = useState(false);
   const [aiAdminReviewerQueueMessage, setAiAdminReviewerQueueMessage] = useState("");
   const [aiAdminSelectedApprovalRequestId, setAiAdminSelectedApprovalRequestId] = useState("");
@@ -650,6 +664,98 @@ function App() {
       return null;
     } finally {
       setAiAdminApplicationHealthLoading(false);
+    }
+  }
+
+  function aiAdminProductionReadinessFilter(
+    formInput: PermissionPackageDraftInput = aiAdminForm,
+    options: { approvalRequestId?: string; subjectId?: string } = {}
+  ): PermissionPackageProductionReadinessFilter {
+    const approvalRequestId =
+      options.approvalRequestId ??
+      (aiAdminApprovalRequest?.status === "approved" ? aiAdminApprovalRequest.id : undefined);
+    return {
+      ...(approvalRequestId ? { approvalRequestId } : {}),
+      callerInstanceId: formInput.callerInstanceId,
+      region: formInput.region,
+      requestText: formInput.requestText,
+      subjectId: options.subjectId ?? subjectIdExampleFromSelector(formInput.subjectSelector),
+      subjectSelector: formInput.subjectSelector,
+      targetId: formInput.targetId,
+      templateId: formInput.templateId,
+      tenantId: formInput.tenantId,
+      traceLimit: 20,
+      workspaceId: formInput.workspaceId
+    };
+  }
+
+  async function refreshAiAdminProductionReadiness(
+    formInput: PermissionPackageDraftInput = aiAdminForm,
+    options: { approvalRequestId?: string; requireLiveApi?: boolean; subjectId?: string } = {}
+  ) {
+    const requireLiveApi = options.requireLiveApi ?? true;
+    if (requireLiveApi && !data?.loadedFromApi) {
+      setAiAdminProductionReadinessMessage(t("message.permissionProductionReadinessRequiresLiveApi"));
+      return null;
+    }
+    setAiAdminProductionReadinessLoading(true);
+    setAiAdminProductionReadinessMessage("");
+    try {
+      const next = await fetchPermissionPackageProductionReadiness(
+        aiAdminProductionReadinessFilter(formInput, {
+          approvalRequestId: options.approvalRequestId,
+          subjectId: options.subjectId
+        }),
+        adminKey
+      );
+      setAiAdminProductionReadiness(next);
+      if (next.latestApplication) {
+        setAiAdminApplication(next.latestApplication);
+      }
+      if (next.applicationHealth) {
+        setAiAdminApplicationHealth({
+          applications: [next.applicationHealth],
+          summary: {
+            drifted: next.applicationHealth.status === "drifted" ? 1 : 0,
+            needsReview: next.applicationHealth.status === "needs_review" ? 1 : 0,
+            ready: next.applicationHealth.status === "ready" ? 1 : 0,
+            total: 1
+          }
+        });
+      }
+      if (next.applicationImpact) {
+        setAiAdminApplicationImpact(next.applicationImpact);
+      }
+      setAiAdminProductionReadinessMessage(t("message.permissionProductionReadinessLoaded"));
+      return next;
+    } catch (error) {
+      setAiAdminProductionReadinessMessage(error instanceof Error ? error.message : "Unable to check production readiness");
+      return null;
+    } finally {
+      setAiAdminProductionReadinessLoading(false);
+    }
+  }
+
+  async function exportAiAdminProductionEvidence(formInput: PermissionPackageDraftInput = aiAdminForm) {
+    if (!data?.loadedFromApi) {
+      setAiAdminProductionReadinessMessage(t("message.productionEvidenceRequiresLiveApi"));
+      return null;
+    }
+    setAiAdminProductionEvidenceExporting(true);
+    setAiAdminProductionReadinessMessage("");
+    try {
+      const report = await fetchPermissionPackageProductionEvidenceReport(
+        aiAdminProductionReadinessFilter(formInput),
+        adminKey
+      );
+      downloadJson(report, productionEvidenceReportFilename(report));
+      setAiAdminProductionReadinessMessage(t("message.productionEvidenceExported"));
+      return report;
+    } catch (error) {
+      setAiAdminProductionReadinessMessage(error instanceof Error ? error.message : "Unable to export production evidence");
+      return null;
+    } finally {
+      setAiAdminProductionEvidenceExporting(false);
     }
   }
 
@@ -1035,7 +1141,7 @@ function App() {
       await createTenant(
         {
           id: nextConfig.rootTenantId,
-          name: "AI Admin Approval Root",
+          name: "Permission Package Approval Root",
           status: "active"
         },
         adminKey
@@ -1043,7 +1149,7 @@ function App() {
       await createTenant(
         {
           id: nextConfig.childTenantId,
-          name: "AI Admin Approval Team",
+          name: "Permission Package Approval Team",
           parentTenantId: nextConfig.rootTenantId,
           status: "active"
         },
@@ -1052,7 +1158,7 @@ function App() {
       await createTenant(
         {
           id: nextConfig.grandchildTenantId,
-          name: "AI Admin Approval Project",
+          name: "Permission Package Approval Project",
           parentTenantId: nextConfig.childTenantId,
           status: "active"
         },
@@ -1062,8 +1168,8 @@ function App() {
       const caller = await createAgent(
         {
           channelType: "local",
-          description: "AI Admin approval journey browser caller",
-          name: "AI Admin Approval Caller",
+          description: "Permission package approval browser caller",
+          name: "Permission Package Approval Caller",
           status: "active",
           tenantId: nextConfig.childTenantId,
           workspaceId: nextConfig.workspaceId
@@ -1074,7 +1180,7 @@ function App() {
         {
           agentId: caller.id,
           expiresInSeconds: 900,
-          name: "ai admin approval journey key"
+          name: "permission package approval key"
         },
         adminKey
       );
@@ -1085,8 +1191,8 @@ function App() {
             transport: "streamable-http"
           },
           channelType: "mcp",
-          description: "AI Admin approval journey MCP target",
-          name: "AI Admin Approval MCP Target",
+          description: "Permission package approval MCP target",
+          name: "Permission Package Approval MCP Target",
           status: "active",
           tenantId: nextConfig.rootTenantId,
           workspaceId: nextConfig.workspaceId
@@ -1140,8 +1246,8 @@ function App() {
       const approvedApproval = await approvePermissionPackageApprovalRequest(
         pendingApproval.id,
         {
-          comment: "Approved from AI Admin approval journey",
-          reviewer: "AI Admin"
+          comment: "Approved from permission package approval journey",
+          reviewer: "Security Reviewer"
         },
         adminKey
       );
@@ -1186,6 +1292,8 @@ function App() {
       setAiAdminApplicationHealthMessage("");
       setAiAdminApplicationImpact(null);
       setAiAdminApplicationImpactMessage("");
+      setAiAdminProductionReadiness(null);
+      setAiAdminProductionReadinessMessage("");
 
       const toolList = await callMcpRpc(
         target.id,
@@ -1276,10 +1384,15 @@ function App() {
         toolListStatus: toolList.status
       });
       await refreshAiAdminApplicationHealth(nextForm, { requireLiveApi: false });
+      await refreshAiAdminProductionReadiness(nextForm, {
+        approvalRequestId: approvedApproval.id,
+        requireLiveApi: false,
+        subjectId: nextConfig.subjectId
+      });
       setAiAdminApprovalJourneyMessage(t("message.aiAdminApprovalJourneyComplete"));
       setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: applied.tenantEntitlements.length }));
     } catch (error) {
-      setAiAdminApprovalJourneyMessage(error instanceof Error ? error.message : "AI Admin approval journey failed");
+      setAiAdminApprovalJourneyMessage(error instanceof Error ? error.message : "Permission package approval journey failed");
     } finally {
       setAiAdminApprovalJourneyRunning(false);
     }
@@ -1734,7 +1847,7 @@ function App() {
       const request = await approvePermissionPackageApprovalRequest(
         targetRequest.id,
         {
-          comment: requestId ? "Approved from AI Admin reviewer queue" : "Approved from AI Admin",
+          comment: requestId ? "Approved from permission package reviewer queue" : "Approved from permission package console",
           ...(reviewer ? { reviewer } : {})
         },
         adminKey
@@ -1762,7 +1875,7 @@ function App() {
       const request = await rejectPermissionPackageApprovalRequest(
         targetRequest.id,
         {
-          comment: requestId ? "Rejected from AI Admin reviewer queue" : "Rejected from AI Admin",
+          comment: requestId ? "Rejected from permission package reviewer queue" : "Rejected from permission package console",
           ...(reviewer ? { reviewer } : {})
         },
         adminKey
@@ -1784,6 +1897,8 @@ function App() {
     setAiAdminApplicationHealthMessage("");
     setAiAdminApplicationImpact(null);
     setAiAdminApplicationImpactMessage("");
+    setAiAdminProductionReadiness(null);
+    setAiAdminProductionReadinessMessage("");
     if (!aiAdminDraft.readiness.canApply) {
       const detail = permissionReadinessMessages(aiAdminDraft.readiness, t).join(", ");
       setAiAdminMessage(tx(t, "message.permissionPackageNotReady", { detail: detail || "not ready" }));
@@ -1869,6 +1984,7 @@ function App() {
       setAiAdminApplication(application);
       if (application) {
         await refreshAiAdminApplicationHealth(aiAdminForm, { requireLiveApi: false });
+        await refreshAiAdminProductionReadiness(aiAdminForm, { requireLiveApi: false });
       }
       setAiAdminApplicationImpact(null);
       setAiAdminApplicationImpactMessage("");
@@ -1995,9 +2111,15 @@ function App() {
   const activeNavLabel = t(`nav.${activeNavItem.key}`, activeNavItem.label);
   const isCapabilitiesView = activeView.key === "capabilities";
   const isAccessView = activeView.key === "access";
+  const showWorkspaceTelemetry = activeView.key !== "ai-admin";
   const accessSummary = accessProfile?.summary;
   const invalidAccessRows = countInvalidAccessProfileRows(accessProfile);
   const pageTitle = t(activeView.titleKey, t("app.title"));
+
+  useEffect(() => {
+    window.scrollTo({ left: 0, top: 0 });
+    document.querySelector(".workspace")?.scrollTo({ left: 0, top: 0 });
+  }, [activeView.key]);
   const coreJourneyEvaluation = useMemo(
     () => evaluateCoreJourney(data, accessProfile, coreJourneyConfig),
     [accessProfile, coreJourneyConfig, data]
@@ -2023,6 +2145,16 @@ function App() {
       data
     ]
   );
+  const aiAdminProductionConsoleSummary = useMemo(
+    () =>
+      buildAiAdminProductionConsoleSummary({
+        application: aiAdminApplication,
+        approvalRequest: aiAdminApprovalRequest,
+        draft: aiAdminDraft,
+        productionReadiness: aiAdminProductionReadiness
+      }),
+    [aiAdminApplication, aiAdminApprovalRequest, aiAdminDraft, aiAdminProductionReadiness]
+  );
   const tracePanel = (className = "span-7") => (
     <Panel className={className} icon={<FileSearch size={18} />} title={t("panel.auditTraces")} action={<IconOpen title={t("action.open")} />}>
       <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} t={t} />
@@ -2047,7 +2179,7 @@ function App() {
     </Panel>
   );
   const evidenceRunsPanel = (className = "span-4") => (
-    <Panel className={className} icon={<Sparkles size={18} />} title={t("panel.evidenceRuns")} action={<IconOpen title={t("action.open")} />}>
+    <Panel className={className} icon={<ClipboardCheck size={18} />} title={t("panel.evidenceRuns")} action={<IconOpen title={t("action.open")} />}>
       <EvidenceTimeline runs={evidenceRuns} t={t} />
     </Panel>
   );
@@ -2123,7 +2255,7 @@ function App() {
     </Panel>
   );
   const aiAdminPanel = (
-    <Panel className="span-12" icon={<Sparkles size={18} />} title={t("panel.aiAdminPermissionWorkbench")}>
+    <Panel className="span-12" icon={<ShieldCheck size={18} />} title={t("panel.aiAdminPermissionWorkbench")}>
       <AiAdminPermissionWorkbench
         agents={agents}
         approvalAction={aiAdminApprovalAction}
@@ -2139,6 +2271,7 @@ function App() {
         approvalRequest={aiAdminApprovalRequest}
         approvalRequests={aiAdminApprovalRequests}
         approvalReviewer={aiAdminApprovalReviewer}
+        productionSummary={aiAdminProductionConsoleSummary}
         applyPreflight={aiAdminApplyPreflight}
         applyPreflightLoading={aiAdminApplyPreflightLoading}
         applyPreflightMessage={aiAdminApplyPreflightMessage}
@@ -2148,6 +2281,10 @@ function App() {
         applicationImpact={aiAdminApplicationImpact}
         applicationImpactLoading={aiAdminApplicationImpactLoading}
         applicationImpactMessage={aiAdminApplicationImpactMessage}
+        productionReadiness={aiAdminProductionReadiness}
+        productionEvidenceExporting={aiAdminProductionEvidenceExporting}
+        productionReadinessLoading={aiAdminProductionReadinessLoading}
+        productionReadinessMessage={aiAdminProductionReadinessMessage}
         accessDecisionExplanation={aiAdminAccessDecisionExplanation}
         accessDecisionExplanationLoading={aiAdminAccessDecisionExplainLoading}
         accessDecisionExplanationMessage={aiAdminAccessDecisionExplainMessage}
@@ -2169,6 +2306,8 @@ function App() {
           setAiAdminApplyPreflightMessage("");
           setAiAdminApplicationImpact(null);
           setAiAdminApplicationImpactMessage("");
+          setAiAdminProductionReadiness(null);
+          setAiAdminProductionReadinessMessage("");
           setAiAdminApprovalAuditEvent(null);
           setAiAdminApprovalJourneyResult(null);
           setAiAdminApprovalRequests([]);
@@ -2181,6 +2320,8 @@ function App() {
         onRefreshApplyPreflight={() => void refreshAiAdminApplyPreflight()}
         onRefreshApprovalReadiness={() => void refreshAiAdminApprovalReadiness()}
         onRefreshApplicationHealth={() => void refreshAiAdminApplicationHealth()}
+        onExportProductionEvidence={() => void exportAiAdminProductionEvidence()}
+        onRefreshProductionReadiness={() => void refreshAiAdminProductionReadiness()}
         onRefreshReviewerQueue={() => void refreshAiAdminReviewerQueue()}
         onRejectApprovalRequest={(requestId) => void rejectAiAdminApprovalRequest(requestId)}
         onRehearseApplicationDrift={() => void rehearseAiAdminApplicationDrift()}
@@ -2256,13 +2397,21 @@ function App() {
       />
     </Panel>
   );
+  const focusPermissionApprovalAction = () => {
+    if (typeof document === "undefined") return;
+    document.getElementById("permission-package-workbench")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>("[data-primary-approval-action]")?.focus();
+    }, 0);
+  };
+  const productKeyMessage = <ProductKeyMessage onPrimaryAction={focusPermissionApprovalAction} t={t} />;
   const viewContent = (() => {
     switch (activeView.key) {
       case "ai-admin":
         return (
           <section className="content-grid">
+            {productKeyMessage}
             {aiAdminPanel}
-            {accessProfilePanel}
           </section>
         );
       case "registry":
@@ -2425,80 +2574,84 @@ function App() {
               <Search size={16} />
               <input placeholder={t("control.search")} />
             </label>
-            <button className="icon-button" title={t("control.filter")} type="button">
+            <button aria-label={t("control.filter")} className="icon-button" title={t("control.filter")} type="button">
               <Filter size={17} />
             </button>
-            <button className="icon-button" onClick={refresh} title={t("action.refresh")} type="button">
+            <button aria-label={t("action.refresh")} className="icon-button" onClick={refresh} title={t("action.refresh")} type="button">
               <RefreshCw size={17} />
             </button>
           </div>
         </header>
 
-        <section className="status-strip" aria-label="Runtime status">
-          <div>
-            <span>{t("status.api")}</span>
-            <strong>{data?.apiBase ?? "http://127.0.0.1:9090"}</strong>
-          </div>
-          <div>
-            <span>{t("status.dataSource")}</span>
-            <strong>{dataSourceLabel}</strong>
-          </div>
-          <div>
-            <span>{t("status.lastRefresh")}</span>
-            <strong>{lastRefresh.toLocaleTimeString("zh-CN", { hour12: false })}</strong>
-          </div>
-          <div className="scope-control">
-            <span>{t("status.scope")}</span>
-            <div className="scope-inputs">
-              <input
-                aria-label={t("form.tenantId")}
-                onBlur={() => void refresh()}
-                onChange={(event) => setScope((current) => ({ ...current, tenantId: event.target.value }))}
-                placeholder="tenantId"
-                value={scope.tenantId}
-              />
-              <input
-                aria-label={t("form.workspaceId")}
-                onBlur={() => void refresh()}
-                onChange={(event) => setScope((current) => ({ ...current, workspaceId: event.target.value }))}
-                placeholder="workspaceId"
-                value={scope.workspaceId}
-              />
-            </div>
-          </div>
-          {loadError ? <div className="strip-error">{loadError}</div> : null}
-        </section>
+        {showWorkspaceTelemetry ? (
+          <>
+            <section className="status-strip" aria-label="Runtime status">
+              <div>
+                <span>{t("status.api")}</span>
+                <strong>{data?.apiBase ?? "http://127.0.0.1:9090"}</strong>
+              </div>
+              <div>
+                <span>{t("status.dataSource")}</span>
+                <strong>{dataSourceLabel}</strong>
+              </div>
+              <div>
+                <span>{t("status.lastRefresh")}</span>
+                <strong>{lastRefresh.toLocaleTimeString("zh-CN", { hour12: false })}</strong>
+              </div>
+              <div className="scope-control">
+                <span>{t("status.scope")}</span>
+                <div className="scope-inputs">
+                  <input
+                    aria-label={t("form.tenantId")}
+                    onBlur={() => void refresh()}
+                    onChange={(event) => setScope((current) => ({ ...current, tenantId: event.target.value }))}
+                    placeholder="tenantId"
+                    value={scope.tenantId}
+                  />
+                  <input
+                    aria-label={t("form.workspaceId")}
+                    onBlur={() => void refresh()}
+                    onChange={(event) => setScope((current) => ({ ...current, workspaceId: event.target.value }))}
+                    placeholder="workspaceId"
+                    value={scope.workspaceId}
+                  />
+                </div>
+              </div>
+              {loadError ? <div className="strip-error">{loadError}</div> : null}
+            </section>
 
-        <section className="metric-grid" aria-label="Gateway metrics">
-          <MetricCard
-            icon={<ServerCog size={18} />}
-            label={isAccessView ? t("metric.scopeTenants") : t("metric.managedAgents")}
-            value={String(isAccessView ? accessSummary?.tenantCount ?? 0 : agents.length)}
-            detail={isAccessView ? accessProfile?.tenant.name ?? normalizedScope(scope).tenantId : `${activeAgents} ${t("detail.active")}`}
-            tone="info"
-          />
-          <MetricCard
-            icon={<KeyRound size={18} />}
-            label={isAccessView ? t("metric.grantChains") : t("metric.activePolicies")}
-            value={String(isAccessView ? accessSummary?.grantCount ?? 0 : activePolicies)}
-            detail={isAccessView ? `${accessSummary?.targetCount ?? 0} ${t("detail.targets")}` : data?.routePoliciesLoadedFromApi ? t("detail.liveRoutePolicies") : t("detail.sampleFallback")}
-            tone="success"
-          />
-          <MetricCard
-            icon={<TriangleAlert size={18} />}
-            label={isAccessView ? t("metric.invalidRows") : isCapabilitiesView ? t("metric.pendingCaps") : t("metric.deniedTraces")}
-            value={String(isAccessView ? invalidAccessRows : isCapabilitiesView ? pendingCapabilities : deniedTraces)}
-            detail={isAccessView ? `${accessSummary?.workspaceAssignmentCount ?? 0} ${t("detail.workspaces")}` : isCapabilitiesView ? `${capabilities.length} ${t("detail.discovered")}` : `${allowedTraces} ${t("detail.allowed")}`}
-            tone={(isAccessView ? invalidAccessRows : isCapabilitiesView ? pendingCapabilities : deniedTraces) > 0 ? "warning" : "success"}
-          />
-          <MetricCard
-            icon={<ClipboardCheck size={18} />}
-            label={isAccessView ? t("metric.traceEvidence") : t("metric.runtimeEvidence")}
-            value={isAccessView ? String((accessSummary?.recentAllowedTraceCount ?? 0) + (accessSummary?.recentDeniedTraceCount ?? 0)) : runtimeEvidence.value}
-            detail={isAccessView ? `${accessSummary?.recentDeniedTraceCount ?? 0} ${t("detail.denied")}` : runtimeEvidence.value === "0" ? t("detail.noTraces") : `${allowedTraces} ${t("detail.allowed")} / ${deniedTraces} ${t("detail.denied")}`}
-            tone={isAccessView ? "neutral" : runtimeEvidence.tone}
-          />
-        </section>
+            <section className="metric-grid" aria-label="Gateway metrics">
+              <MetricCard
+                icon={<ServerCog size={18} />}
+                label={isAccessView ? t("metric.scopeTenants") : t("metric.managedAgents")}
+                value={String(isAccessView ? accessSummary?.tenantCount ?? 0 : agents.length)}
+                detail={isAccessView ? accessProfile?.tenant.name ?? normalizedScope(scope).tenantId : `${activeAgents} ${t("detail.active")}`}
+                tone="info"
+              />
+              <MetricCard
+                icon={<KeyRound size={18} />}
+                label={isAccessView ? t("metric.grantChains") : t("metric.activePolicies")}
+                value={String(isAccessView ? accessSummary?.grantCount ?? 0 : activePolicies)}
+                detail={isAccessView ? `${accessSummary?.targetCount ?? 0} ${t("detail.targets")}` : data?.routePoliciesLoadedFromApi ? t("detail.liveRoutePolicies") : t("detail.sampleFallback")}
+                tone="success"
+              />
+              <MetricCard
+                icon={<TriangleAlert size={18} />}
+                label={isAccessView ? t("metric.invalidRows") : isCapabilitiesView ? t("metric.pendingCaps") : t("metric.deniedTraces")}
+                value={String(isAccessView ? invalidAccessRows : isCapabilitiesView ? pendingCapabilities : deniedTraces)}
+                detail={isAccessView ? `${accessSummary?.workspaceAssignmentCount ?? 0} ${t("detail.workspaces")}` : isCapabilitiesView ? `${capabilities.length} ${t("detail.discovered")}` : `${allowedTraces} ${t("detail.allowed")}`}
+                tone={(isAccessView ? invalidAccessRows : isCapabilitiesView ? pendingCapabilities : deniedTraces) > 0 ? "warning" : "success"}
+              />
+              <MetricCard
+                icon={<ClipboardCheck size={18} />}
+                label={isAccessView ? t("metric.traceEvidence") : t("metric.runtimeEvidence")}
+                value={isAccessView ? String((accessSummary?.recentAllowedTraceCount ?? 0) + (accessSummary?.recentDeniedTraceCount ?? 0)) : runtimeEvidence.value}
+                detail={isAccessView ? `${accessSummary?.recentDeniedTraceCount ?? 0} ${t("detail.denied")}` : runtimeEvidence.value === "0" ? t("detail.noTraces") : `${allowedTraces} ${t("detail.allowed")} / ${deniedTraces} ${t("detail.denied")}`}
+                tone={isAccessView ? "neutral" : runtimeEvidence.tone}
+              />
+            </section>
+          </>
+        ) : null}
 
         {viewContent}
       </main>
@@ -2542,6 +2695,7 @@ function CoreJourneyWorkbench({
   const canRun = coreJourneyPreflightCanRun(preflight);
   return (
     <div className="core-journey">
+      <p className="core-journey-intro">{t("text.coreJourneyIntro")}</p>
       <div className="core-journey-toolbar">
         <div className="core-journey-score">
           <strong>{evaluation.completeCount}/{evaluation.totalCount}</strong>
@@ -2650,6 +2804,52 @@ function CoreJourneyWorkbench({
   );
 }
 
+function ProductKeyMessage({ onPrimaryAction, t }: { onPrimaryAction: () => void; t: Translator }) {
+  const messages = [
+    {
+      detailKey: "text.cockpitKeyMessageBoundaryDetail",
+      icon: <ShieldCheck size={16} />,
+      titleKey: "text.cockpitKeyMessageBoundary"
+    },
+    {
+      detailKey: "text.cockpitKeyMessageOperationsDetail",
+      icon: <ClipboardCheck size={16} />,
+      titleKey: "text.cockpitKeyMessageOperations"
+    },
+    {
+      detailKey: "text.cockpitKeyMessageEvidenceDetail",
+      icon: <FileSearch size={16} />,
+      titleKey: "text.cockpitKeyMessageEvidence"
+    }
+  ];
+
+  return (
+    <section className="cockpit-key-message span-12" aria-labelledby="cockpit-key-message-title">
+      <div className="cockpit-key-message-copy">
+        <h2 id="cockpit-key-message-title">{t("text.cockpitKeyMessageTitle")}</h2>
+        <p>{t("text.cockpitKeyMessageBody")}</p>
+        <div className="cockpit-key-message-actions">
+          <button className="secondary-button cockpit-key-message-action" onClick={onPrimaryAction} type="button">
+            <ClipboardCheck size={14} />
+            {t("action.startPermissionApproval")}
+          </button>
+        </div>
+      </div>
+      <div className="cockpit-key-message-points">
+        {messages.map((message) => (
+          <article className="cockpit-key-message-point" key={message.titleKey}>
+            <span>{message.icon}</span>
+            <div>
+              <strong>{t(message.titleKey)}</strong>
+              <p>{t(message.detailKey)}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function AiAdminPermissionWorkbench({
   agents,
   application,
@@ -2666,6 +2866,7 @@ function AiAdminPermissionWorkbench({
   approvalRequest,
   approvalRequests,
   approvalReviewer,
+  productionSummary,
   applyPreflight,
   applyPreflightLoading,
   applyPreflightMessage,
@@ -2675,6 +2876,10 @@ function AiAdminPermissionWorkbench({
   applicationImpact,
   applicationImpactLoading,
   applicationImpactMessage,
+  productionReadiness,
+  productionEvidenceExporting,
+  productionReadinessLoading,
+  productionReadinessMessage,
   accessDecisionExplanation,
   accessDecisionExplanationLoading,
   accessDecisionExplanationMessage,
@@ -2692,6 +2897,8 @@ function AiAdminPermissionWorkbench({
   onRefreshApplyPreflight,
   onRefreshApprovalReadiness,
   onRefreshApplicationHealth,
+  onExportProductionEvidence,
+  onRefreshProductionReadiness,
   onRefreshReviewerQueue,
   onRejectApprovalRequest,
   onRehearseApplicationDrift,
@@ -2720,6 +2927,7 @@ function AiAdminPermissionWorkbench({
   approvalRequest: PermissionPackageApprovalRequest | null;
   approvalRequests: PermissionPackageApprovalRequest[];
   approvalReviewer: string;
+  productionSummary: AiAdminProductionConsoleSummary;
   applyPreflight: PermissionPackageApplyPreflight | null;
   applyPreflightLoading: boolean;
   applyPreflightMessage: string;
@@ -2729,6 +2937,10 @@ function AiAdminPermissionWorkbench({
   applicationImpact: PermissionPackageApplicationImpact | null;
   applicationImpactLoading: boolean;
   applicationImpactMessage: string;
+  productionReadiness: PermissionPackageProductionReadiness | null;
+  productionEvidenceExporting: boolean;
+  productionReadinessLoading: boolean;
+  productionReadinessMessage: string;
   accessDecisionExplanation: AccessDecisionExplainResult | null;
   accessDecisionExplanationLoading: boolean;
   accessDecisionExplanationMessage: string;
@@ -2746,6 +2958,8 @@ function AiAdminPermissionWorkbench({
   onRefreshApplyPreflight: () => void;
   onRefreshApprovalReadiness: () => void;
   onRefreshApplicationHealth: () => void;
+  onExportProductionEvidence: () => void;
+  onRefreshProductionReadiness: () => void;
   onRefreshReviewerQueue: () => void;
   onRejectApprovalRequest: (requestId?: string) => void;
   onRehearseApplicationDrift: () => void;
@@ -2762,11 +2976,75 @@ function AiAdminPermissionWorkbench({
   const callers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const hasApprovedRequest = approvalRequest?.status === "approved";
   const canApply = draft.readiness.canApply && (draft.policyGate.canApplyDirectly || hasApprovedRequest);
+  const draftStatus = permissionDraftStatus(draft);
   const approvalStatusTone = approvalRequest ? permissionApprovalStatusTone(approvalRequest.status) : "warning";
   const reviewerQueueRequests = approvalRequests.filter((request) => request.status === "pending");
+  const runProductionPrimaryAction = () => {
+    if (productionSummary.primaryActionKey === "action.createApprovalRequest") {
+      onCreateApprovalRequest();
+      return;
+    }
+    if (productionSummary.primaryActionKey === "action.applyPermissionPackage") {
+      onApply();
+      return;
+    }
+    if (productionSummary.primaryActionKey === "action.exportProductionEvidence") {
+      onExportProductionEvidence();
+      return;
+    }
+    onRefreshProductionReadiness();
+  };
   return (
     <div className="ai-admin-workbench">
-      <section className="ai-admin-live-journey">
+      <section className={`ai-admin-production-console status-${productionSummary.status}`} id="permission-package-workbench">
+        <div className="ai-admin-production-console-header">
+          <div>
+            <strong>{t("section.aiAdminProductionConsole")}</strong>
+            <span>{t("text.aiAdminProductionConsoleHelp")}</span>
+          </div>
+          <div className="ai-admin-production-console-actions">
+            <div className="core-journey-score">
+              <strong>{productionSummary.readyCount}/{productionSummary.totalCount}</strong>
+              <span>{t("text.aiAdminApprovalJourneyCompletion")}</span>
+            </div>
+            <Badge tone={productionConsoleStatusTone(productionSummary.status)}>
+              {productionConsoleStatusLabel(productionSummary, t)}
+            </Badge>
+            <button
+              className="primary-button"
+              data-primary-approval-action
+              disabled={approvalJourneyRunning || applying || approvalAction === "create" || productionEvidenceExporting}
+              onClick={runProductionPrimaryAction}
+              type="button"
+            >
+              <CheckCircle2 size={14} />
+              {t(productionSummary.primaryActionKey)}
+            </button>
+          </div>
+        </div>
+        <ol className="ai-admin-production-rail">
+          {productionSummary.steps.map((step, index) => (
+            <li className={`ai-admin-production-step status-${step.status}`} key={step.key}>
+              <span className="ai-admin-production-step-index">{index + 1}</span>
+              <div>
+                <strong>{t(step.labelKey)}</strong>
+                {step.detailKey ? <span>{t(step.detailKey)}</span> : null}
+                {step.detail !== "-" ? <code>{step.detail}</code> : null}
+              </div>
+              {step.metric ? <small>{step.metric}</small> : null}
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <details className="ai-admin-evidence-details" open={approvalJourneyRunning || approvalJourneyEvaluation.completeCount > 0}>
+        <summary>
+          <span>{t("section.aiAdminApprovalJourney")}</span>
+          <Badge tone={approvalJourneyEvaluation.completeCount === approvalJourneyEvaluation.totalCount ? "success" : "neutral"}>
+            {approvalJourneyEvaluation.completeCount}/{approvalJourneyEvaluation.totalCount}
+          </Badge>
+        </summary>
+        <section className="ai-admin-live-journey">
         <div className="ai-admin-journey-toolbar">
           <div className="core-journey-score">
             <strong>{approvalJourneyEvaluation.completeCount}/{approvalJourneyEvaluation.totalCount}</strong>
@@ -2831,79 +3109,91 @@ function AiAdminPermissionWorkbench({
             <AiAdminApprovalJourneyStepRow key={step.key} step={step} t={t} />
           ))}
         </div>
-      </section>
+        </section>
+      </details>
 
-      <div className="ai-admin-request">
-        <label className="ai-admin-request-text">
-          {t("form.adminRequest")}
-          <textarea
-            rows={4}
-            value={form.requestText}
-            onChange={(event) => onChange({ ...form, requestText: event.target.value })}
-          />
-        </label>
-        <div className="ai-admin-fields">
-          <label>
-            {t("form.permissionPackage")}
-            <select value={form.templateId} onChange={(event) => onChange({ ...form, templateId: event.target.value })}>
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {permissionPackageTemplateName(template, t)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {t("form.tenantId")}
-            <input value={form.tenantId} onChange={(event) => onChange({ ...form, tenantId: event.target.value })} />
-          </label>
-          <label>
-            {t("form.workspaceId")}
-            <input value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} />
-          </label>
-          <label>
-            {t("form.region")}
-            <input value={form.region} onChange={(event) => onChange({ ...form, region: event.target.value })} />
-          </label>
-          <label>
-            {t("form.callerInstance")}
-            <select value={form.callerInstanceId} onChange={(event) => onChange({ ...form, callerInstanceId: event.target.value })}>
-              <option value="">{t("form.selectCaller")}</option>
-              {callers.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {t("form.target")}
-            <select value={form.targetId} onChange={(event) => onChange({ ...form, targetId: event.target.value })}>
-              <option value="">{t("form.allMcpTargets")}</option>
-              {mcpTargets.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {t("form.subjectSelector")}
-            <input
-              placeholder={t("form.subjectSelectorPlaceholder")}
-              value={form.subjectSelector ?? ""}
-              onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })}
-            />
-          </label>
-        </div>
-      </div>
+      <details className="ai-admin-config-details">
+        <summary>
+          <span>{t("section.permissionDraft")}</span>
+          <div className="ai-admin-config-summary">
+            <code>{permissionPackageTemplateName(draft.template, t)}</code>
+            <Badge tone={draftStatus.tone}>
+              {t(draftStatus.labelKey)}
+            </Badge>
+          </div>
+        </summary>
+        <div className="ai-admin-config-body">
+          <div className="ai-admin-request">
+            <label className="ai-admin-request-text">
+              {t("form.adminRequest")}
+              <textarea
+                rows={4}
+                value={form.requestText}
+                onChange={(event) => onChange({ ...form, requestText: event.target.value })}
+              />
+            </label>
+            <div className="ai-admin-fields">
+              <label>
+                {t("form.permissionPackage")}
+                <select value={form.templateId} onChange={(event) => onChange({ ...form, templateId: event.target.value })}>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {permissionPackageTemplateName(template, t)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t("form.tenantId")}
+                <input value={form.tenantId} onChange={(event) => onChange({ ...form, tenantId: event.target.value })} />
+              </label>
+              <label>
+                {t("form.workspaceId")}
+                <input value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} />
+              </label>
+              <label>
+                {t("form.region")}
+                <input value={form.region} onChange={(event) => onChange({ ...form, region: event.target.value })} />
+              </label>
+              <label>
+                {t("form.callerInstance")}
+                <select value={form.callerInstanceId} onChange={(event) => onChange({ ...form, callerInstanceId: event.target.value })}>
+                  <option value="">{t("form.selectCaller")}</option>
+                  {callers.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t("form.target")}
+                <select value={form.targetId} onChange={(event) => onChange({ ...form, targetId: event.target.value })}>
+                  <option value="">{t("form.allMcpTargets")}</option>
+                  {mcpTargets.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t("form.subjectSelector")}
+                <input
+                  placeholder={t("form.subjectSelectorPlaceholder")}
+                  value={form.subjectSelector ?? ""}
+                  onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })}
+                />
+              </label>
+            </div>
+          </div>
 
-      <div className="permission-package-grid">
+          <div className="permission-package-grid">
         <section className="permission-package-summary">
           <div className="permission-section-title">
             <strong>{t("section.permissionDraft")}</strong>
-            <Badge tone={draft.readiness.canApply ? "success" : "warning"}>
-              {draft.readiness.canApply ? t("status.readyToApply") : t("status.needsReview")}
+            <Badge tone={draftStatus.tone}>
+              {t(draftStatus.labelKey)}
             </Badge>
           </div>
           <div className="permission-package-template">
@@ -2916,6 +3206,15 @@ function AiAdminPermissionWorkbench({
             message={applicationHealthMessage}
             onRefresh={onRefreshApplicationHealth}
             onReview={onReviewApplicationHealthRow}
+            t={t}
+          />
+          <PermissionProductionReadinessPanel
+            exporting={productionEvidenceExporting}
+            loading={productionReadinessLoading}
+            message={productionReadinessMessage}
+            onExport={onExportProductionEvidence}
+            onRefresh={onRefreshProductionReadiness}
+            readiness={productionReadiness}
             t={t}
           />
           {application ? (
@@ -3149,7 +3448,9 @@ function AiAdminPermissionWorkbench({
           </div>
           <PermissionSimulationTable rows={draft.simulationRows} t={t} />
         </section>
-      </div>
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
@@ -3237,6 +3538,119 @@ function PermissionPackageApplyPreflightPanel({
         <ul className="permission-preflight-next-actions">
           {preflight.nextActions.slice(0, 2).map((action) => (
             <li key={action}>{permissionApplyPreflightNextAction(action, t)}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function PermissionProductionReadinessPanel({
+  exporting,
+  loading,
+  message,
+  onExport,
+  onRefresh,
+  readiness,
+  t
+}: {
+  exporting: boolean;
+  loading: boolean;
+  message: string;
+  onExport: () => void;
+  onRefresh: () => void;
+  readiness: PermissionPackageProductionReadiness | null;
+  t: Translator;
+}) {
+  const summary = readiness?.summary;
+  const visibleChecks = [...(readiness?.checks ?? [])]
+    .sort((left, right) => permissionApplyPreflightSeverityRank(right.severity) - permissionApplyPreflightSeverityRank(left.severity))
+    .slice(0, 6);
+  return (
+    <div className={`permission-apply-preflight permission-production-readiness status-${readiness?.status ?? "pending"}`}>
+      <div className="permission-health-header">
+        <div>
+          <strong>{t("section.permissionProductionReadiness")}</strong>
+          {message ? <span>{message}</span> : <span>{t("empty.permissionProductionReadiness.detail")}</span>}
+        </div>
+        <div className="permission-preflight-actions">
+          <Badge tone={productionReadinessStatusTone(readiness?.status)}>
+            {productionReadinessStatusLabel(readiness?.status, t)}
+          </Badge>
+          <button className="secondary-button" disabled={loading} onClick={onRefresh} type="button">
+            <RefreshCw size={14} />
+            {loading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
+          </button>
+          <button className="secondary-button" disabled={exporting} onClick={onExport} type="button">
+            <Download size={14} />
+            {exporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
+          </button>
+        </div>
+      </div>
+
+      <div className="permission-health-metrics permission-preflight-metrics">
+        <div>
+          <span>{t("metric.productionReadyChecks")}</span>
+          <strong>{summary?.readyCount ?? 0}</strong>
+        </div>
+        <div>
+          <span>{t("metric.productionBlockers")}</span>
+          <strong>{summary?.blockingCount ?? 0}</strong>
+        </div>
+        <div>
+          <span>{t("metric.productionWarnings")}</span>
+          <strong>{summary?.warningCount ?? 0}</strong>
+        </div>
+        <div>
+          <span>{t("detail.applicationId")}</span>
+          <strong>{summary?.hasApplication ? "1" : "0"}</strong>
+        </div>
+      </div>
+
+      {readiness ? (
+        <div className="permission-application-grid permission-production-evidence">
+          <div>
+            <span>{t("detail.applicationId")}</span>
+            {readiness.latestApplication ? <code>{readiness.latestApplication.id}</code> : <strong>0</strong>}
+          </div>
+          <div>
+            <span>{t("productionCheck.runtime_allowed_trace_present")}</span>
+            {readiness.runtimeEvidence.allowedTrace ? <code>{readiness.runtimeEvidence.allowedTrace.id}</code> : <strong>0</strong>}
+          </div>
+          <div>
+            <span>{t("productionCheck.runtime_denied_trace_present")}</span>
+            {readiness.runtimeEvidence.deniedTrace ? <code>{readiness.runtimeEvidence.deniedTrace.id}</code> : <strong>0</strong>}
+          </div>
+          <div>
+            <span>{t("productionCheck.applied_audit_event_present")}</span>
+            {readiness.auditEvidence.appliedEvent ? <code>{readiness.auditEvidence.appliedEvent.id}</code> : <strong>0</strong>}
+          </div>
+        </div>
+      ) : null}
+
+      {visibleChecks.length > 0 ? (
+        <div className="permission-preflight-list">
+          {visibleChecks.map((check) => (
+            <article className={`permission-preflight-row severity-${check.severity}`} key={`${check.code}:${check.evidenceId ?? check.message}`}>
+              <Badge tone={permissionApplyPreflightTone(check.severity)}>
+                {permissionApplyPreflightSeverityLabel(check.severity, t)}
+              </Badge>
+              <div>
+                <strong>{permissionProductionReadinessCheckLabel(check.code, t)}</strong>
+                <span>{permissionProductionReadinessCheckMessage(check, t)}</span>
+              </div>
+              {check.evidenceId ? <code>{check.evidenceId}</code> : null}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <span className="permission-health-empty">{t("empty.permissionProductionReadiness.detail")}</span>
+      )}
+
+      {readiness?.nextActions.length ? (
+        <ul className="permission-preflight-next-actions">
+          {readiness.nextActions.slice(0, 3).map((action) => (
+            <li key={action}>{permissionProductionReadinessNextAction(action, t)}</li>
           ))}
         </ul>
       ) : null}
@@ -4783,7 +5197,7 @@ function EmptyRow({ title, detail }: { title: string; detail: string }) {
 
 function IconMore({ title = "More" }: { title?: string }) {
   return (
-    <button className="icon-button compact" title={title} type="button">
+    <button aria-label={title} className="icon-button compact" title={title} type="button">
       <MoreHorizontal size={16} />
     </button>
   );
@@ -4791,7 +5205,7 @@ function IconMore({ title = "More" }: { title?: string }) {
 
 function IconOpen({ title = "Open" }: { title?: string }) {
   return (
-    <button className="icon-button compact" title={title} type="button">
+    <button aria-label={title} className="icon-button compact" title={title} type="button">
       <ExternalLink size={15} />
     </button>
   );
@@ -4888,6 +5302,16 @@ function permissionPackageTemplateName(template: PermissionPackageTemplate, t: T
 
 function permissionPackageTemplateSummary(template: PermissionPackageTemplate, t: Translator) {
   return t(`permissionPackage.${template.id}.summary`, template.summary);
+}
+
+function permissionDraftStatus(draft: PermissionPackageDraft): { labelKey: string; tone: Tone } {
+  if (!draft.readiness.canApply) {
+    return { labelKey: "status.needsReview", tone: "warning" };
+  }
+  if (!draft.policyGate.canApplyDirectly) {
+    return { labelKey: "status.approvalPending", tone: "warning" };
+  }
+  return { labelKey: "status.readyToApply", tone: "success" };
 }
 
 function permissionSimulationReason(row: PermissionPackageSimulationRow, t: Translator) {
@@ -5018,6 +5442,75 @@ function permissionApplicationHealthTone(status: PermissionPackageApplicationHea
   if (status === "ready") return "success";
   if (status === "drifted") return "warning";
   return "info";
+}
+
+function productionReadinessStatusLabel(status: PermissionPackageProductionReadinessStatus | undefined, t: Translator) {
+  if (status === "ready") return t("status.productionReady");
+  if (status === "needs_review") return t("status.productionNeedsReview");
+  if (status === "blocked") return t("status.productionBlocked");
+  return t("status.preflightPending");
+}
+
+function productionReadinessStatusTone(status: PermissionPackageProductionReadinessStatus | undefined): Tone {
+  if (status === "ready") return "success";
+  if (status === "needs_review") return "warning";
+  if (status === "blocked") return "danger";
+  return "neutral";
+}
+
+function permissionProductionReadinessCheckLabel(code: string, t: Translator) {
+  return t(`productionCheck.${code}`, code.replaceAll("_", " "));
+}
+
+function permissionProductionReadinessCheckMessage(check: PermissionPackageProductionReadinessCheck, t: Translator) {
+  return t(`productionCheck.detail.${check.code}`, check.message);
+}
+
+function permissionProductionReadinessNextAction(action: string, t: Translator) {
+  const known: Record<string, string> = {
+    "Apply the approved permission package before production readiness.": "productionNext.applyApproved",
+    "Inspect the latest permission package application scope before go-live.": "productionNext.inspectScope",
+    "Production readiness evidence is complete.": "productionNext.complete",
+    "Resolve apply preflight blockers before claiming production readiness.": "productionNext.resolvePreflight",
+    "Resolve impact review blockers before production readiness.": "productionNext.resolveImpact",
+    "Review application health and drift blockers before production readiness.": "productionNext.reviewHealth",
+    "Run a denied MCP call that proves blocked tools stay blocked.": "productionNext.runDenied",
+    "Run an allowed MCP call with the production subject before go-live.": "productionNext.runAllowed",
+    "Verify permission package applied audit evidence before production readiness.": "productionNext.verifyAudit",
+    "Verify tenant entitlement, workspace assignment, and caller assignment evidence.": "productionNext.verifyGrantChain"
+  };
+  const key = known[action];
+  return key ? t(key) : action;
+}
+
+function productionEvidenceReportFilename(report: PermissionPackageProductionEvidenceReport) {
+  const generated = safeFilenameSegment(report.generatedAt || new Date().toISOString());
+  return [
+    "agentharbor-production-evidence",
+    safeFilenameSegment(report.scope.tenantId),
+    safeFilenameSegment(report.scope.workspaceId),
+    safeFilenameSegment(report.scope.templateId),
+    safeFilenameSegment(report.status),
+    generated
+  ].filter(Boolean).join("-") + ".json";
+}
+
+function safeFilenameSegment(value: string | undefined) {
+  return (value ?? "")
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function downloadJson(value: unknown, filename: string) {
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function permissionPackageApprovalRouteLabel(request: PermissionPackageApprovalRequest) {
@@ -5386,6 +5879,21 @@ function aiAdminApprovalJourneyStatusLabel(status: AiAdminApprovalJourneyStepSta
   if (status === "complete") return t("status.stepComplete");
   if (status === "partial") return t("status.stepPartial");
   return t("status.stepMissing");
+}
+
+function productionConsoleStatusTone(status: AiAdminProductionConsoleStatus): Tone {
+  if (status === "ready") return "success";
+  if (status === "needs_review") return "warning";
+  if (status === "blocked") return "danger";
+  return "neutral";
+}
+
+function productionConsoleStatusLabel(summary: AiAdminProductionConsoleSummary, t: Translator) {
+  if (summary.status === "ready") return t("status.productionReady");
+  if (summary.status === "needs_review") return t("status.productionNeedsReview");
+  if (summary.status === "blocked") return t("status.productionBlocked");
+  if (summary.primaryActionKey === "action.createApprovalRequest") return t("status.approvalPending");
+  return t("status.productionPending");
 }
 
 function aiAdminApprovalReadinessStatusTone(status: AiAdminApprovalReadinessStatus): Tone {

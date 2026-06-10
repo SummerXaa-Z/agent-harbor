@@ -260,7 +260,8 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     || goLiveReady
     || approvalRequest?.status === "pending"
     || approvalRequest?.status === "approved";
-  const requestFormLockedDetailKey = Boolean(application) || goLiveReady
+  const requestFormActiveLocked = Boolean(application) || goLiveReady;
+  const requestFormLockedDetailKey = requestFormActiveLocked
     ? "text.permissionRequestLockedActiveDetail"
     : "text.permissionRequestLockedApprovalDetail";
   const requestFormTitleKey = requestFormLocked ? "section.permissionRequestReview" : "section.permissionRequestForm";
@@ -690,9 +691,17 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               <Badge tone={journeyStatus.tone}>{t(journeyStatus.labelKey)}</Badge>
             </header>
             {requestFormLocked ? (
-              <div className="approval-lock-notice" role="status">
-                <strong>{t("text.permissionRequestLockedTitle")}</strong>
-                <span>{t(requestFormLockedDetailKey)}</span>
+              <div className="approval-lock-notice">
+                <div>
+                  <strong>{t("text.permissionRequestLockedTitle")}</strong>
+                  <span>{t(requestFormLockedDetailKey)}</span>
+                </div>
+                {requestFormActiveLocked ? (
+                  <button className="secondary-button" disabled={permissionRequestBusy} onClick={onStartNewPermissionChange} type="button">
+                    <ClipboardCheck size={14} />
+                    {t("action.startPermissionApproval")}
+                  </button>
+                ) : null}
               </div>
             ) : null}
             <label className="approval-request">

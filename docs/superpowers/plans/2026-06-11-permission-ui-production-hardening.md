@@ -1139,3 +1139,34 @@ Browser verification on `http://127.0.0.1:5174/#ai-admin` confirmed the locked s
 Commit and push if clean, then inspect PR #74.
 
 Committed the locked-state review copy update after focused tests, browser verification, `git diff --check`, `make check`, and `make release-check`.
+
+## Task 31: Add Visible New-Change Exit To Active Review
+
+- [x] **Step 1: Inspect the active locked review state**
+
+The locked review state correctly prevented editing and used review copy, but the visible first viewport did not expose the `新建权限变更` exit. The same action existed lower in the completion card, outside the immediate review context.
+
+- [x] **Step 2: Add the exit only for active locks**
+
+`requestFormActiveLocked` now separates active/go-live locks from approval-frozen locks. The read-only review notice shows `新建权限变更` only when permissions are already applied or production-ready; pending/approved approval locks keep their approval-flow path and do not expose this bypass.
+
+- [x] **Step 3: Verify focused tests, browser, and repository gates**
+
+Run focused tests and browser verification, then run `git diff --check`, `make check`, and `make release-check`.
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs
+git diff --check
+make check
+make release-check
+```
+
+Browser verification on `http://127.0.0.1:5174/#ai-admin` confirmed the active locked review state shows `新建权限变更` beside the review notice, keeps `导出证据` as the primary action, and keeps all 9 configuration controls disabled.
+
+- [x] **Step 4: Commit, push, and inspect PR checks**
+
+Commit and push if clean, then inspect PR #74.
+
+Committed the active locked-state new-change exit after focused tests, browser verification, `git diff --check`, `make check`, and `make release-check`.

@@ -682,7 +682,11 @@ test("permission request freezes configuration after approval or apply", () => {
   assert.match(workbench, /const requestFormLocked = Boolean\(application\)/);
   assert.match(workbench, /approvalRequest\?\.status === "pending"/);
   assert.match(workbench, /approvalRequest\?\.status === "approved"/);
+  assert.match(workbench, /const requestFormTitleKey = requestFormLocked \? "section\.permissionRequestReview" : "section\.permissionRequestForm"/);
+  assert.match(workbench, /const requestFormHelpKey = requestFormLocked \? "text\.permissionRequestReviewHelp" : "text\.permissionRequestScopeHelp"/);
   assert.match(workbench, /requestFormLocked \? "is-read-only" : ""/);
+  assert.match(workbench, /<strong>\{t\(requestFormTitleKey\)\}<\/strong>/);
+  assert.match(workbench, /<p>\{t\(requestFormHelpKey\)\}<\/p>/);
   assert.match(workbench, /text\.permissionRequestLockedTitle/);
   assert.match(primaryForm, /disabled=\{requestFormLocked\}/);
   assert.match(advancedForm, /disabled=\{requestFormLocked\}/);

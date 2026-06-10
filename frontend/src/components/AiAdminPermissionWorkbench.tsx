@@ -263,6 +263,8 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const requestFormLockedDetailKey = Boolean(application) || goLiveReady
     ? "text.permissionRequestLockedActiveDetail"
     : "text.permissionRequestLockedApprovalDetail";
+  const requestFormTitleKey = requestFormLocked ? "section.permissionRequestReview" : "section.permissionRequestForm";
+  const requestFormHelpKey = requestFormLocked ? "text.permissionRequestReviewHelp" : "text.permissionRequestScopeHelp";
   const reviewerQueueReadOnly = Boolean(application) || goLiveReady;
   const runtimeValidationReady = Boolean(approvalJourneyResult) || goLiveReady;
   const approvalEffectivelyResolved = !draft.policyGate.canApplyDirectly
@@ -682,8 +684,8 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
           <section className={`approval-section approval-request-form-section ${requestFormLocked ? "is-read-only" : ""}`} id={permissionRequestStepSectionId("scope")}>
             <header>
               <div>
-                <strong>{t("section.permissionRequestForm")}</strong>
-                <p>{t("text.permissionRequestScopeHelp")}</p>
+                <strong>{t(requestFormTitleKey)}</strong>
+                <p>{t(requestFormHelpKey)}</p>
               </div>
               <Badge tone={journeyStatus.tone}>{t(journeyStatus.labelKey)}</Badge>
             </header>

@@ -1108,3 +1108,34 @@ Browser verification on `http://127.0.0.1:5174/#ai-admin` walked the local flow 
 Commit and push if clean, then inspect PR #74.
 
 Committed the read-only review state update after focused tests, browser verification, `git diff --check`, `make check`, and `make release-check`.
+
+## Task 30: Rename Locked Request Section To Review
+
+- [x] **Step 1: Inspect the locked first viewport copy**
+
+After Task 29, the locked state worked correctly, but the section title still read like editable request input: `申请信息`, with helper copy telling operators to select tenant, caller, tool service, and access role.
+
+- [x] **Step 2: Switch locked copy to review language**
+
+When `requestFormLocked` is true, the same section now renders as `配置复核` / `Configuration Review`, with helper copy explaining that the operator is reviewing the active tenant, caller, tool service, access role, and permission package.
+
+- [x] **Step 3: Verify focused tests, browser, and repository gates**
+
+Run focused tests and browser verification, then run `git diff --check`, `make check`, and `make release-check`.
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+git diff --check
+make check
+make release-check
+```
+
+Browser verification on `http://127.0.0.1:5174/#ai-admin` confirmed the locked state shows `配置复核`, the review helper copy, `当前配置仅供复核`, 9 disabled configuration controls, status `可上线`, and primary action `导出证据`.
+
+- [x] **Step 4: Commit, push, and inspect PR checks**
+
+Commit and push if clean, then inspect PR #74.
+
+Committed the locked-state review copy update after focused tests, browser verification, `git diff --check`, `make check`, and `make release-check`.

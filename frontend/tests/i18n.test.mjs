@@ -162,6 +162,8 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("text.currentWorkspaceContext"), "当前工作上下文");
   assert.equal(t("text.permissionRequestNextAction"), "建议下一步");
   assert.equal(t("text.permissionRequestScopeHelp"), "选择业务租户、调用方、工具服务和访问角色；技术 ID 只在高级设置里保留。");
+  assert.equal(t("section.permissionRequestReview"), "配置复核");
+  assert.equal(t("text.permissionRequestReviewHelp"), "复核本次生效的租户、调用方、工具服务、访问角色和权限包；需要调整时请新建变更。");
   assert.equal(t("text.permissionRequestTemplateHelp"), "从模板开始，系统会自动带出允许工具、阻断工具和数据范围。");
   assert.equal(t("text.permissionRequestApprovalHelp"), "系统会判断是否需要审批；审批通过后再应用到生产授权链。");
   assert.equal(t("text.permissionRequestApplyHelp"), "应用已批准的权限包，并确认权限已经生效。");

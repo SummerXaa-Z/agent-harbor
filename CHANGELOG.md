@@ -76,6 +76,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 运行导航文案现在区分“运行与审计”分组和“运行审计”工作区，空态改为运行记录，不再沿用旧的审计追踪措辞。
 - Completed or approval-frozen Permission Changes now render the request configuration as a read-only review state, preventing operators from editing tenant, caller, target, access-object, or template fields after the change is under approval or already active.
 - 已完成或进入审批冻结的权限变更现在会把申请配置呈现为只读复核态，避免操作员在审批中或已生效后继续编辑租户、调用方、目标、访问对象或权限包。
+- Locked Permission Changes now rename the request section to "Configuration Review" and switch helper copy to review language, so production-ready journeys no longer read like editable drafts.
+- 已锁定的权限变更现在会把申请区切换为“配置复核”并使用复核说明，避免生产可用旅程看起来仍像可编辑草稿。
 - `make ai-admin-browser-journey` now starts the API with split requester and reviewer admin identities by default, and the approval scenario verifies that requester-key impersonation of the reviewer is rejected before the real reviewer approves.
 - `make ai-admin-browser-journey` 现在默认用分离的申请人与审批人管理身份启动 API，并在审批场景中先验证申请人 key 冒充审批人会被拒绝，再由真实审批人批准。
 - Web console Permission Changes now treats not-yet-requested and pending approvals as pending work instead of production blockers, puts the next safe action in the task header, and keeps the tenant access profile in the dedicated Access workspace.

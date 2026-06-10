@@ -203,6 +203,28 @@ test("access profile query keeps raw identifiers in advanced filters", () => {
   assert.match(styles, /\.access-advanced-filters\s*\{/);
 });
 
+test("access profile grant chain keeps technical ids in advanced details", () => {
+  assert.match(accessProfileView, /const targetName = grant\.target \? permissionEntityDisplayName\(grant\.target\.name, t\) : t\("text\.unknownTarget"\)/);
+  assert.match(accessProfileView, /const workspaceLabel = t\("text\.workspaceAssignment"\)/);
+  const grantHeaderStart = accessProfileView.indexOf('<div className="access-grant-header">');
+  const grantTechnicalStart = accessProfileView.indexOf('<details className="access-grant-technical"', grantHeaderStart);
+  assert.notEqual(grantHeaderStart, -1);
+  assert.notEqual(grantTechnicalStart, -1);
+  assert.doesNotMatch(accessProfileView.slice(grantHeaderStart, grantTechnicalStart), /grant\.tenantEntitlement\.id/);
+  assert.doesNotMatch(accessProfileView.slice(grantHeaderStart, grantTechnicalStart), /grant\.tenantEntitlement\.targetId/);
+  assert.match(accessProfileView, /<TechnicalId label=\{t\("text\.tenantEntitlement"\)\} value=\{grant\.tenantEntitlement\.id\}/);
+  assert.match(accessProfileView, /<TechnicalId label=\{t\("form\.target"\)\} value=\{grant\.tenantEntitlement\.targetId\}/);
+  const workspaceMainStart = accessProfileView.indexOf('<div className="access-row-main">');
+  const workspaceTechnicalStart = accessProfileView.indexOf('<details className="access-workspace-technical"', workspaceMainStart);
+  assert.notEqual(workspaceMainStart, -1);
+  assert.notEqual(workspaceTechnicalStart, -1);
+  assert.doesNotMatch(accessProfileView.slice(workspaceMainStart, workspaceTechnicalStart), /workspace\.workspaceAssignment\.workspaceId/);
+  assert.match(accessProfileView, /<TechnicalId label=\{t\("text\.workspaceAssignment"\)\} value=\{workspace\.workspaceAssignment\.id\}/);
+  assert.match(accessProfileView, /<TechnicalId label=\{t\("form\.workspaceId"\)\} value=\{workspace\.workspaceAssignment\.workspaceId\}/);
+  assert.match(styles, /\.access-grant-technical\s*\{/);
+  assert.match(styles, /\.access-workspace-technical\s*\{/);
+});
+
 test("capability names use business labels in primary UI", () => {
   assert.match(presenters, /export function capabilityDisplayName/);
   assert.match(presenters, /export function capabilityKeyDisplayName/);

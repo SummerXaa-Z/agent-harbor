@@ -462,12 +462,13 @@ function AccessGrantRow({
   const capabilityName = grant.capability
     ? capabilityDisplayName(grant.capability, t)
     : grant.tenantEntitlement.capabilityId;
+  const targetName = grant.target ? permissionEntityDisplayName(grant.target.name, t) : t("text.unknownTarget");
   return (
     <article className={invalidRows > 0 ? "access-grant-row invalid" : "access-grant-row"}>
       <div className="access-grant-header">
         <div>
           <strong>{capabilityName}</strong>
-          <span>{grant.target?.name ?? grant.tenantEntitlement.targetId}</span>
+          <span>{targetName}</span>
         </div>
         <div className="access-badge-group">
           <Badge tone={scopeStatusTone(grant.scopeStatus)}>{grant.scopeStatus}</Badge>
@@ -476,9 +477,16 @@ function AccessGrantRow({
       </div>
       <div className="access-scope-line">
         <span>{t("text.tenantEntitlement")}</span>
-        <code>{grant.tenantEntitlement.id}</code>
         <span>{summarizeDataScopes(grant.effectiveTenantDataScopes, t("text.noDataScope"), dataScopeLabels)}</span>
       </div>
+      <details className="access-grant-technical">
+        <summary>{t("text.technicalDetails")}</summary>
+        <div className="access-technical-grid">
+          <TechnicalId label={t("text.tenantEntitlement")} value={grant.tenantEntitlement.id} />
+          <TechnicalId label={t("form.target")} value={grant.tenantEntitlement.targetId} />
+          <TechnicalId label={t("form.capability")} value={grant.tenantEntitlement.capabilityId} />
+        </div>
+      </details>
       {grant.scopeReason ? <p className="access-invalid-reason">{grant.scopeReason}</p> : null}
       <div className="access-nested-list">
         {grant.workspaceAssignments.length === 0 ? (
@@ -501,15 +509,24 @@ function AccessWorkspaceRow({
   workspace: TenantAccessProfileWorkspace;
   t: Translator;
 }) {
+  const workspaceLabel = t("text.workspaceAssignment");
   return (
     <div className="access-workspace-row">
       <div className="access-row-main">
         <div>
-          <strong>{workspace.workspaceAssignment.workspaceId}</strong>
+          <strong>{workspaceLabel}</strong>
           <span>{summarizeDataScopes(workspace.effectiveWorkspaceDataScopes, t("text.noDataScope"), dataScopeLabels)}</span>
         </div>
         <Badge tone={scopeStatusTone(workspace.scopeStatus)}>{workspace.scopeStatus}</Badge>
       </div>
+      <details className="access-workspace-technical">
+        <summary>{t("text.technicalDetails")}</summary>
+        <div className="access-technical-grid">
+          <TechnicalId label={t("text.workspaceAssignment")} value={workspace.workspaceAssignment.id} />
+          <TechnicalId label={t("form.workspaceId")} value={workspace.workspaceAssignment.workspaceId} />
+          <TechnicalId label={t("text.tenantEntitlement")} value={workspace.workspaceAssignment.tenantEntitlementId} />
+        </div>
+      </details>
       {workspace.scopeReason ? <p className="access-invalid-reason">{workspace.scopeReason}</p> : null}
       <div className="access-instance-list">
         {workspace.instanceAssignments.length === 0 ? (

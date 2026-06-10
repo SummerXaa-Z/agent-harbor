@@ -2468,24 +2468,33 @@ td code {
   font-size: 12px;
 }
 
-.access-scope-line code {
-  max-width: min(280px, 100%);
-  overflow: hidden;
-  padding: 3px 6px;
-  border: 1px solid var(--line-muted);
-  border-radius: 6px;
-  background: var(--surface-soft);
-  color: var(--ink-2);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .access-invalid-reason {
   margin: 8px 0 0;
   color: var(--red);
   font-size: 12px;
+}
+
+.access-grant-technical {
+  margin-top: 8px;
+}
+
+.access-workspace-technical {
+  margin-top: 8px;
+}
+
+.access-grant-technical summary,
+.access-workspace-technical summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.access-technical-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .access-nested-list,

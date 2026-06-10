@@ -765,3 +765,48 @@ pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i
 make check
 make release-check
 ```
+
+Committed and pushed `f2ed00e fix: remove request step count noise` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=CLEAN`; Backend, Frontend, and PostgreSQL integration were pending immediately after push.
+
+## Task 20: Hide Technical IDs In Access Profile Evidence
+
+- [x] **Step 1: Validate the access-profile handoff**
+
+Browser verification from `http://127.0.0.1:5174/#ai-admin` through `查看权限画像` confirmed the handoff context is preserved: tenant `客户服务中心`, workspace `客户服务工作区`, caller `客服助手`, and target `工单工具服务` all carry into the access profile.
+
+- [x] **Step 2: Identify remaining technical-id noise**
+
+The access-profile grant chain still showed raw grant ids such as `ent_...` and workspace ids such as `ws-permission-package-approval` in the main evidence rows, which made a production acceptance artifact look like a technical debug table.
+
+- [x] **Step 3: Move technical ids into collapsed details**
+
+Grant rows now show capability, target, effect, status, and data scope in the primary row. Tenant entitlement, target id, capability id, workspace assignment id, workspace id, and parent entitlement id are available through collapsed `TechnicalId` details.
+
+- [x] **Step 4: Verify in focused tests and browser**
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+```
+
+Browser verification confirmed the access profile reached through the Permission Changes journey has `hasVisibleRawGrantId=false`, `hasVisibleWorkspaceId=false`, and collapsed technical detail rows for the hidden ids.
+
+## Task 21: Release-Gate Access Profile Evidence Cleanup
+
+- [x] **Step 1: Run focused and repository gates**
+
+Run `git diff --check`, `pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs`, `make check`, and `make release-check`.
+
+Verified locally before commit:
+
+```bash
+git diff --check
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+make check
+make release-check
+```
+
+- [ ] **Step 2: Commit, push, and inspect PR checks**
+
+Commit the access-profile evidence cleanup, push branch `codex/production-readiness-gate`, and inspect PR #74 checks.

@@ -1859,6 +1859,30 @@ td code {
   min-width: 0;
 }
 
+.access-query-grid:not(.is-technical) .access-field,
+.access-query-grid:not(.is-technical) .access-query-actions {
+  grid-column: span 3;
+}
+
+.access-advanced-filters {
+  min-width: 0;
+  border: 1px solid var(--line-subtle);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+
+.access-advanced-filters summary {
+  padding: 9px 11px;
+  color: var(--ink-3);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.access-advanced-filters .access-query-grid {
+  padding: 0 11px 11px;
+}
+
 .access-query-summary {
   display: flex;
   flex-wrap: wrap;

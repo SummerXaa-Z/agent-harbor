@@ -103,7 +103,6 @@ export function TenantAccessProfileView({
   const targetLabel = handoffContext?.targetName ?? (filters.targetId ? names[filters.targetId] ?? filters.targetId : t("form.anyTarget"));
   const capabilityLabel = handoffContext?.capabilityName ?? (filters.capabilityId?.trim() || t("form.anyCapability"));
   const callerLabel = handoffContext?.callerName ?? (filters.callerInstanceId ? names[filters.callerInstanceId] ?? filters.callerInstanceId : t("form.anyCaller"));
-  const subjectLabel = filters.subjectId?.trim() || t("text.notSpecified");
   const traceLimitLabel = String(filters.traceLimit ?? 20);
   const targetDropdownOptions = [
     { value: "", label: t("form.anyTarget") },
@@ -181,19 +180,6 @@ export function TenantAccessProfileView({
         </header>
         <div className="access-query-grid">
           <label className="access-field">
-            <span>{t("form.tenant")}</span>
-            <input name="tenantId" value={scope.tenantId} onChange={(event) => onTenantChange(event.target.value)} />
-          </label>
-          <label className="access-field">
-            <span>{t("form.workspace")}</span>
-            <input
-              name="workspaceId"
-              placeholder={t("form.workspaceAll")}
-              value={filters.workspaceId ?? ""}
-              onChange={(event) => onChange({ ...filters, workspaceId: event.target.value })}
-            />
-          </label>
-          <label className="access-field">
             <span>{t("form.target")}</span>
             <ApprovalDropdown
               label={t("form.target")}
@@ -220,27 +206,6 @@ export function TenantAccessProfileView({
               onChange={(value) => onChange({ ...filters, callerInstanceId: value })}
             />
           </label>
-          <label className="access-field">
-            <span>{t("form.subjectId")}</span>
-            <input
-              name="subjectId"
-              placeholder={t("detail.subjectId")}
-              value={filters.subjectId ?? ""}
-              onChange={(event) => onChange({ ...filters, subjectId: event.target.value })}
-            />
-          </label>
-          <label className="access-field is-compact">
-            <span>{t("form.traces")}</span>
-            <input
-              inputMode="numeric"
-              max={100}
-              min={0}
-              name="traceLimit"
-              type="number"
-              value={String(filters.traceLimit ?? "")}
-              onChange={(event) => onChange({ ...filters, traceLimit: event.target.value })}
-            />
-          </label>
           <div className="access-query-actions">
             <button className="secondary-button" disabled={loading} type="submit">
               <RefreshCw size={14} />
@@ -252,9 +217,48 @@ export function TenantAccessProfileView({
             </button>
           </div>
         </div>
+        <details className="access-advanced-filters" open={!handoffContext}>
+          <summary>{t("text.technicalDetails")}</summary>
+          <div className="access-query-grid is-technical">
+            <label className="access-field">
+              <span>{t("form.tenant")}</span>
+              <input name="tenantId" value={scope.tenantId} onChange={(event) => onTenantChange(event.target.value)} />
+            </label>
+            <label className="access-field">
+              <span>{t("form.workspace")}</span>
+              <input
+                name="workspaceId"
+                placeholder={t("form.workspaceAll")}
+                value={filters.workspaceId ?? ""}
+                onChange={(event) => onChange({ ...filters, workspaceId: event.target.value })}
+              />
+            </label>
+            <label className="access-field">
+              <span>{t("form.subjectId")}</span>
+              <input
+                name="subjectId"
+                placeholder={t("detail.subjectId")}
+                value={filters.subjectId ?? ""}
+                onChange={(event) => onChange({ ...filters, subjectId: event.target.value })}
+              />
+            </label>
+            <label className="access-field is-compact">
+              <span>{t("form.traces")}</span>
+              <input
+                inputMode="numeric"
+                max={100}
+                min={0}
+                name="traceLimit"
+                type="number"
+                value={String(filters.traceLimit ?? "")}
+                onChange={(event) => onChange({ ...filters, traceLimit: event.target.value })}
+              />
+            </label>
+          </div>
+        </details>
         <div className="access-query-summary">
           <span>{capabilityLabel}</span>
-          <span>{subjectLabel}</span>
+          <span>{callerLabel}</span>
           <span>{targetLabel}</span>
         </div>
       </form>

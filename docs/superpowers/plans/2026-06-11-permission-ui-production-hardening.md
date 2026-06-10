@@ -434,3 +434,7 @@ Extend `frontend/tests/permissionFlowLayout.test.mjs` to assert that Access Prof
 - [x] **Step 4: Browser verification**
 
 Browser verification confirmed tenant-scope rows render `客户服务中心` and `工单处理项目` in the primary row, with `rawInMain=false`, and technical ids available under `高级设置`.
+
+- [x] **Step 5: Fold handoff technical filters**
+
+Move Access Profile `tenantId`, `workspaceId`, `subjectId`, and trace limit inputs into `access-advanced-filters`. Browser verification confirmed the handoff query panel keeps target, capability, caller, load, and explain actions visible while advanced identifiers are collapsed by default.

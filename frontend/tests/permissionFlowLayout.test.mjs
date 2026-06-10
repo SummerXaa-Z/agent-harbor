@@ -179,6 +179,24 @@ test("access profile tenant scope prefers business labels over raw tenant ids", 
   assert.match(styles, /\.access-tenant-technical\s*\{[^}]*grid-column:\s*1 \/ -1;/s);
 });
 
+test("access profile query keeps raw identifiers in advanced filters", () => {
+  const queryGridStart = accessProfileView.indexOf('<div className="access-query-grid">');
+  const advancedFiltersStart = accessProfileView.indexOf('<details className="access-advanced-filters"', queryGridStart);
+  const querySummaryStart = accessProfileView.indexOf('<div className="access-query-summary">', advancedFiltersStart);
+  assert.notEqual(queryGridStart, -1);
+  assert.notEqual(advancedFiltersStart, -1);
+  assert.notEqual(querySummaryStart, -1);
+  assert.doesNotMatch(accessProfileView.slice(queryGridStart, advancedFiltersStart), /name="tenantId"/);
+  assert.doesNotMatch(accessProfileView.slice(queryGridStart, advancedFiltersStart), /name="workspaceId"/);
+  assert.doesNotMatch(accessProfileView.slice(queryGridStart, advancedFiltersStart), /name="subjectId"/);
+  assert.match(accessProfileView.slice(advancedFiltersStart, querySummaryStart), /name="tenantId"/);
+  assert.match(accessProfileView.slice(advancedFiltersStart, querySummaryStart), /name="workspaceId"/);
+  assert.match(accessProfileView.slice(advancedFiltersStart, querySummaryStart), /name="subjectId"/);
+  assert.match(accessProfileView, /<details className="access-advanced-filters" open=\{!handoffContext\}>/);
+  assert.doesNotMatch(accessProfileView, /<span>\{subjectLabel\}<\/span>/);
+  assert.match(styles, /\.access-advanced-filters\s*\{/);
+});
+
 test("permission request evidence is secondary to the main operator task", () => {
   const auditStart = workbench.indexOf('<details className="approval-evidence">');
   assert.notEqual(auditStart, -1);

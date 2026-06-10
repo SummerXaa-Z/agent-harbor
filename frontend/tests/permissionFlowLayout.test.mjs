@@ -305,6 +305,13 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /productionReadiness\?\.status === "ready"/);
   assert.match(workbench, /workbenchPreview\?\.summary\.productionReady/);
   assert.match(workbench, /productionSummary\.status === "ready"/);
+  assert.match(workbench, /const approvalEffectivelyResolved = !draft\.policyGate\.canApplyDirectly/);
+  assert.match(workbench, /approvalRequest\?\.status === "approved" \|\| Boolean\(application\) \|\| goLiveReady/);
+  assert.match(workbench, /approvalDisplayStatus: PermissionPackageApprovalRequest\["status"\] \| null/);
+  assert.match(workbench, /const showPendingApprovalActions = !application && !goLiveReady && approvalRequest\?\.status === "pending"/);
+  assert.match(workbench, /permissionPolicyGateDetailKey\(draft\.policyGate\.canApplyDirectly, approvalDisplayStatus\)/);
+  assert.match(workbench, /showPolicyGateReasons && draft\.policyGate\.reasons\.length > 0/);
+  assert.doesNotMatch(workbench, /<Badge tone=\{draft\.policyGate\.canApplyDirectly \? "success" : approvalRequest \? approvalStatusTone : "warning"\}>/);
   assert.match(workbench, /className="approval-completion"/);
   assert.match(workbench, /text\.permissionChangeCompleteTitle/);
   assert.match(workbench, /text\.permissionChangeCompleteDetail/);
@@ -319,6 +326,7 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(app, /function openAiAdminAccessProfile\(\)/);
   assert.match(app, /setActiveNav\("access"\)/);
   assert.match(app, /function startNewAiAdminPermissionChange\(\)/);
+  assert.match(i18n, /"text\.policyGateApprovedDetail": "当前权限变更已记录审批。"/);
   assert.match(styles, /\.approval-completion\s*\{/);
   assert.match(styles, /\.approval-completion-actions\s*\{/);
 });

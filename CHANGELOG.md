@@ -128,6 +128,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 租户访问画像现在在租户范围列表优先展示业务租户名，并在权限变更交接后把原始租户、工作区和主体标识收进高级技术详情。
 - Permission Changes, Tenant Access Profile, and Capability Governance now show localized business capability names such as Search customers, Update tickets, and Export contracts in primary UI; Capability Governance grant-chain rows also prefer business tenant names over tenant ids.
 - 权限变更、租户访问画像和能力治理现在在主界面展示“查询客户、更新工单、导出合同”等业务能力名称；能力治理授权链主行也优先展示业务租户名，而不是租户 ID。
+- Permission Changes now treats applied or production-ready requests as approval-resolved in the main approval step, so stale pending queue items no longer make a completed journey look unapproved.
+- 权限变更页现在会把已应用或已上线的请求视为主审批步骤已闭环，旧的待审批队列项不再让完成态旅程看起来仍未审批。
 - Web console visual design review follow-up: design tokens now govern component colors, shadows, focus rings, button sizing, technical-id display, System Self-Check telemetry, and Agent registry ordering.
 - Web 控制台视觉设计审查项已落地：设计 token 现在约束组件色值、阴影、焦点环、按钮尺寸、技术 ID 展示、系统自检指标展示范围和 Agent 注册表顺序。
 - Web console UX review follow-up: desktop navigation now keeps readable grouped labels at medium widths, Permission Changes uses one authoritative context bar with non-truncating core selectors, and Capability Governance prioritizes the grant operation area over KPI cards.

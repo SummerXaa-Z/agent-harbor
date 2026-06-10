@@ -250,13 +250,29 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   }));
   const hasApprovedRequest = approvalRequest?.status === "approved";
   const canApply = draft.readiness.canApply && (draft.policyGate.canApplyDirectly || hasApprovedRequest);
-  const approvalStatusTone = approvalRequest ? permissionApprovalStatusTone(approvalRequest.status) : "warning";
   const reviewerQueueRequests = approvalRequests.filter((request) => request.status === "pending");
   const goLiveReadiness = summarizeAiAdminGoLiveReadiness(approvalJourneyEvaluation);
   const productionReady = productionReadiness?.status === "ready"
     || Boolean(workbenchPreview?.summary.productionReady)
     || productionSummary.status === "ready";
   const goLiveReady = productionReady || goLiveReadiness.status === "ready";
+  const approvalEffectivelyResolved = !draft.policyGate.canApplyDirectly
+    && (approvalRequest?.status === "approved" || Boolean(application) || goLiveReady);
+  const approvalDisplayStatus: PermissionPackageApprovalRequest["status"] | null = approvalEffectivelyResolved
+    ? "approved"
+    : approvalRequest?.status ?? null;
+  const approvalDisplayTone = draft.policyGate.canApplyDirectly
+    ? "success"
+    : approvalDisplayStatus ? permissionApprovalStatusTone(approvalDisplayStatus) : "warning";
+  const approvalDisplayLabel = draft.policyGate.canApplyDirectly
+    ? t("status.directApplyAllowed")
+    : approvalDisplayStatus ? permissionApprovalStatusLabel(approvalDisplayStatus, t) : t("status.approvalNotRequested");
+  const approvalGateDetailKey = permissionPolicyGateDetailKey(draft.policyGate.canApplyDirectly, approvalDisplayStatus);
+  const showPolicyGateReasons = !draft.policyGate.canApplyDirectly
+    && (!approvalDisplayStatus || approvalDisplayStatus === "pending");
+  const showCreateApprovalAction = !application && !goLiveReady
+    && (!approvalRequest || (approvalRequest.status !== "pending" && approvalRequest.status !== "approved"));
+  const showPendingApprovalActions = !application && !goLiveReady && approvalRequest?.status === "pending";
   const currentWizardStep = currentPermissionRequestWizardStep({
     application,
     approvalRequest,
@@ -781,15 +797,11 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
           <section className="approval-process-block" id={permissionRequestStepSectionId("approval")}>
             <header>
               <strong>{t("section.permissionWizardApproval")}</strong>
-              <Badge tone={draft.policyGate.canApplyDirectly ? "success" : approvalRequest ? approvalStatusTone : "warning"}>
-                {draft.policyGate.canApplyDirectly
-                  ? t("status.directApplyAllowed")
-                  : approvalRequest ? permissionApprovalStatusLabel(approvalRequest.status, t) : t("status.approvalNotRequested")}
-              </Badge>
+              <Badge tone={approvalDisplayTone}>{approvalDisplayLabel}</Badge>
             </header>
             <div className="approval-decision">
-              <strong>{draft.policyGate.canApplyDirectly ? t("text.policyGateDirectDetail") : t("text.policyGateApprovalDetail")}</strong>
-              {draft.policyGate.reasons.length > 0 ? (
+              <strong>{t(approvalGateDetailKey)}</strong>
+              {showPolicyGateReasons && draft.policyGate.reasons.length > 0 ? (
                 <ul>
                   {draft.policyGate.reasons.slice(0, 2).map((reason) => (
                     <li key={reason.id}>{permissionPolicyReasonMessage(reason, t)}</li>
@@ -807,11 +819,11 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               <div className="approval-request-state">
                 <div>
                   <span>{t("section.permissionApprovalRequest")}</span>
-                  <strong>{approvalRequest ? permissionApprovalStatusLabel(approvalRequest.status, t) : t("status.approvalNotRequested")}</strong>
-                  {approvalRequest?.expiresAt ? <small>{tx(t, "text.approvalExpiresAt", { date: formatDate(approvalRequest.expiresAt) })}</small> : null}
+                  <strong>{approvalDisplayLabel}</strong>
+                  {approvalRequest?.expiresAt && !approvalEffectivelyResolved ? <small>{tx(t, "text.approvalExpiresAt", { date: formatDate(approvalRequest.expiresAt) })}</small> : null}
                 </div>
                 <div className="approval-actions">
-                  {!approvalRequest || (approvalRequest.status !== "pending" && approvalRequest.status !== "approved") ? (
+                  {showCreateApprovalAction ? (
                     <button
                       className="approval-action-button is-primary"
                       disabled={liveDataBlocked || permissionRequestBusy || !draft.readiness.canApply}
@@ -822,7 +834,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                       {approvalAction === "create" ? t("action.creatingApprovalRequest") : t("action.createApprovalRequest")}
                     </button>
                   ) : null}
-                  {approvalRequest?.status === "pending" ? (
+                  {showPendingApprovalActions ? (
                     <>
                       <button className="approval-action-button is-primary" disabled={liveDataBlocked || permissionRequestBusy} onClick={() => beginApprovalDecision("approve")} type="button">
                         <CheckCircle2 size={14} />
@@ -1440,6 +1452,16 @@ function permissionDraftStatus(draft: PermissionPackageDraft): { labelKey: strin
   return { labelKey: "status.readyToApply", tone: "success" };
 }
 
+function permissionPolicyGateDetailKey(
+  canApplyDirectly: boolean,
+  approvalStatus: PermissionPackageApprovalRequest["status"] | null,
+) {
+  if (canApplyDirectly) return "text.policyGateDirectDetail";
+  if (approvalStatus === "approved") return "text.policyGateApprovedDetail";
+  if (approvalStatus === "rejected") return "text.policyGateRejectedDetail";
+  if (approvalStatus === "withdrawn") return "text.policyGateWithdrawnDetail";
+  return "text.policyGateApprovalDetail";
+}
 
 function permissionApprovalStatusLabel(status: PermissionPackageApprovalRequest["status"], t: Translator) {
   if (status === "approved") return t("status.approvalApproved");

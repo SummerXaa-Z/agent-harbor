@@ -456,3 +456,17 @@ Keep raw capability keys in the data model, tests, and technical/audit surfaces 
 - [x] **Step 4: Add regression coverage**
 
 Extend `frontend/tests/permissionFlowLayout.test.mjs` so future UI changes cannot reintroduce `capability.key` as the primary user-facing label.
+
+## Task 9: Completed Approval Step State
+
+- [x] **Step 1: Treat applied changes as approval-resolved**
+
+When a permission change is already applied or production-ready, render the main approval step as resolved even if an old pending approval queue item is still present in local state.
+
+- [x] **Step 2: Remove stale pending actions from completed journeys**
+
+Hide approve, reject, and withdraw actions from the main approval step once the permission change is applied or production-ready. The queue remains available in advanced evidence, but it no longer overrides the primary journey status.
+
+- [x] **Step 3: Verify in browser**
+
+Browser verification confirmed the completed Permission Changes approval block reads `已批准 / 当前权限变更已记录审批。`, with no `待审批` status and no approve/reject/withdraw actions in the main path.

@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   defaultNavKey,
+  navHashFor,
+  navKeyFromHash,
   navGroups,
   navItems,
   viewForNav
@@ -50,4 +52,11 @@ test("default navigation opens the permission package production journey", () =>
 
 test("go-live evidence navigation points to the acceptance workflow", () => {
   assert.equal(viewForNav("evidence").primaryPanelKey, "goLiveAcceptance");
+});
+
+test("navigation hash preserves the current workspace across reloads", () => {
+  assert.equal(navHashFor("evidence"), "#evidence");
+  assert.equal(navKeyFromHash("#evidence"), "evidence");
+  assert.equal(navKeyFromHash("evidence"), "evidence");
+  assert.equal(navKeyFromHash("#unknown"), null);
 });

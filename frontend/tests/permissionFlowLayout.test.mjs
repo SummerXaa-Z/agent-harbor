@@ -300,6 +300,14 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   assert.match(styles, /\.go-live-acceptance\s*\{/);
 });
 
+test("workspace navigation is reflected in the URL hash", () => {
+  assert.match(app, /const \[activeNav, setActiveNav\] = useState<NavKey>\(initialNavKey\)/);
+  assert.match(app, /window\.history\.replaceState/);
+  assert.match(app, /navHashFor\(activeView\.key\)/);
+  assert.match(app, /window\.addEventListener\("hashchange"/);
+  assert.match(app, /navKeyFromHash\(window\.location\.hash\)/);
+});
+
 test("permission request blocks main actions when sample fallback data is shown", () => {
   assert.match(workbench, /liveDataAvailable: boolean/);
   assert.match(workbench, /const liveDataBlocked = !liveDataAvailable/);

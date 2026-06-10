@@ -95,6 +95,8 @@ import {
 } from "./i18n";
 import {
   defaultNavKey,
+  navHashFor,
+  navKeyFromHash,
   navGroups,
   navItems,
   viewForNav,
@@ -272,6 +274,14 @@ function initialLanguage(): Language {
     return resolveInitialLanguage(undefined, browserLanguages);
   }
 }
+
+function initialNavKey(): NavKey {
+  if (typeof window === "undefined") {
+    return defaultNavKey;
+  }
+  return navKeyFromHash(window.location.hash) ?? defaultNavKey;
+}
+
 const defaultTraceFilters: TraceFilters = { callerAgentId: "", decision: "", runId: "", targetAgentId: "" };
 const defaultAccessProfileFilters: AccessProfileFilters = {
   callerInstanceId: "",
@@ -373,7 +383,7 @@ function App() {
   const approvalCreateInFlightRef = useRef(false);
   const approvalResolveBlockedRef = useRef(false);
   const approvalResolveCooldownTimerRef = useRef<number | null>(null);
-  const [activeNav, setActiveNav] = useState(defaultNavKey);
+  const [activeNav, setActiveNav] = useState<NavKey>(initialNavKey);
   const [adminKey, setAdminKey] = useState("");
   const [scope, setScope] = useState<ManagementScope>(defaultManagementScope);
   const [data, setData] = useState<ConsoleData | null>(null);
@@ -2384,6 +2394,21 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const activeNavLabel = t(`nav.${activeNavItem.key}`, activeNavItem.label);
   const showWorkspaceTelemetry = activeView.key === "cockpit";
   const pageTitle = t(activeView.titleKey, t("app.title"));
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setActiveNav(navKeyFromHash(window.location.hash) ?? defaultNavKey);
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    const nextHash = navHashFor(activeView.key);
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+    }
+  }, [activeView.key]);
 
   useEffect(() => {
     window.scrollTo({ left: 0, top: 0 });

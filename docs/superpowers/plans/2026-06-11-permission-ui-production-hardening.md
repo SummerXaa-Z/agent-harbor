@@ -477,6 +477,10 @@ Go-live Evidence now localizes management audit actions, resource types, actors,
 
 Go-live Evidence now starts with a go-live acceptance workflow that shows current permission-change context, readiness status, next actions, and production progress before historical evidence runs, and retitles the secondary table as evidence history.
 
+- [x] **Step 10: Preserve workspace context in the URL**
+
+The console now reflects the active workspace in the URL hash and restores that workspace on reload, so operators can refresh or reopen `#evidence` without losing the go-live acceptance context.
+
 ## Task 9: Completed Approval Step State
 
 - [x] **Step 1: Treat applied changes as approval-resolved**

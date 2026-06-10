@@ -25,6 +25,7 @@ export interface ConsoleView {
 }
 
 export const defaultNavKey: NavKey = "ai-admin"
+const navHashPrefix = "#"
 
 export const navGroups: Array<{ key: NavGroupKey; labelKey: string }> = [
   { key: "primary", labelKey: "navGroup.primary" },
@@ -94,4 +95,17 @@ const views: Record<NavKey, ConsoleView> = {
 
 export function viewForNav(key: string): ConsoleView {
   return views[(key as NavKey) in views ? (key as NavKey) : defaultNavKey]
+}
+
+export function isNavKey(key: string): key is NavKey {
+  return key in views
+}
+
+export function navKeyFromHash(hash: string): NavKey | null {
+  const normalized = hash.trim().replace(/^#\/?/, "")
+  return isNavKey(normalized) ? normalized : null
+}
+
+export function navHashFor(key: NavKey): string {
+  return `${navHashPrefix}${key}`
 }

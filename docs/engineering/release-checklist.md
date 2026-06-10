@@ -51,7 +51,9 @@ For release-candidate validation of the browser-facing AI Admin path, run:
 make ai-admin-browser-journey
 ```
 
-This gate starts the API, official SDK MCP demo service, and web console, verifies browser CORS allows `X-AgentHarbor-Subject-Id`, and then runs the approval-required permission package journey against those services.
+This gate starts the API with split requester and reviewer admin identities, official SDK MCP demo service, and web console. It verifies browser CORS allows `X-AgentHarbor-Subject-Id`, rejects requester-key reviewer impersonation, and then runs the approval-required permission package journey against those services.
+
+该门禁会用分离的申请人与审批人管理身份启动 API，同时启动官方 SDK MCP 演示服务和 Web 控制台；它会验证浏览器 CORS 允许 `X-AgentHarbor-Subject-Id`、申请人 key 冒充审批人会被拒绝，然后再跑完整的需审批权限包旅程。
 
 If the default local ports are already in use, run the same gate with isolated ports:
 

@@ -3,6 +3,11 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:9090}"
 ADMIN_KEY="${ADMIN_KEY:-}"
+REQUESTER_ACTOR="${REQUESTER_ACTOR:-requester}"
+APPROVAL_REVIEWER="${APPROVAL_REVIEWER:-security-reviewer}"
+REQUESTER_ADMIN_KEY="${REQUESTER_ADMIN_KEY:-${ADMIN_KEY:-}}"
+REVIEWER_ADMIN_KEY="${REVIEWER_ADMIN_KEY:-${ADMIN_KEY:-}}"
+ADMIN_KEY="${ADMIN_KEY:-$REQUESTER_ADMIN_KEY}"
 RUN_ID="${RUN_ID:-permission-package-approval-$(date +%Y%m%d%H%M%S)}"
 ROOT_TENANT_ID="${ROOT_TENANT_ID:-tenant-root-${RUN_ID}}"
 CHILD_TENANT_ID="${CHILD_TENANT_ID:-tenant-child-${RUN_ID}}"
@@ -54,6 +59,7 @@ request() {
   local bearer="${4:-}"
   local run_id="${5:-}"
   local subject_id="${6:-}"
+  local admin_key="${7:-$ADMIN_KEY}"
   local tmp
   tmp="$(mktemp)"
 
@@ -66,8 +72,8 @@ request() {
     -H "Content-Type: application/json"
   )
 
-  if [[ -n "$ADMIN_KEY" ]]; then
-    args+=(-H "X-Admin-Key: $ADMIN_KEY")
+  if [[ -n "$admin_key" ]]; then
+    args+=(-H "X-Admin-Key: $admin_key")
   fi
   if [[ -n "$bearer" ]]; then
     args+=(-H "Authorization: Bearer $bearer")
@@ -889,6 +895,9 @@ if [[ -n "$ADMIN_KEY" ]]; then
 else
   echo "ADMIN_KEY=not set"
 fi
+if [[ -n "$REQUESTER_ADMIN_KEY" && -n "$REVIEWER_ADMIN_KEY" && "$REQUESTER_ADMIN_KEY" != "$REVIEWER_ADMIN_KEY" ]]; then
+  echo "ADMIN_IDENTITIES=split requester/reviewer"
+fi
 
 start_mcp_server
 
@@ -940,7 +949,7 @@ expect_status 201 "create withdrawable approval request"
 assert_approval_request "pending"
 WITHDRAWN_APPROVAL_REQUEST_ID="$(json_get data.id)"
 
-request POST "/api/v1/permission-packages/approval-requests/$WITHDRAWN_APPROVAL_REQUEST_ID/withdraw" "$(json_body approval-resolution "requester" "wrong scope for this request")"
+request POST "/api/v1/permission-packages/approval-requests/$WITHDRAWN_APPROVAL_REQUEST_ID/withdraw" "$(json_body approval-resolution "$REQUESTER_ACTOR" "wrong scope for this request")"
 expect_status 200 "withdraw pending approval request"
 assert_approval_request "withdrawn" "$WITHDRAWN_APPROVAL_REQUEST_ID"
 
@@ -962,7 +971,14 @@ request GET "/api/v1/permission-packages/approval-requests?tenantId=$ROOT_TENANT
 expect_status 200 "list pending approval requests"
 assert_listed_approval "$APPROVAL_REQUEST_ID"
 
-request POST "/api/v1/permission-packages/approval-requests/$APPROVAL_REQUEST_ID/approve" "$(json_body approval-resolution "security-reviewer" "approved for local production journey scenario")"
+if [[ -n "$REQUESTER_ADMIN_KEY" && -n "$REVIEWER_ADMIN_KEY" && "$REQUESTER_ADMIN_KEY" != "$REVIEWER_ADMIN_KEY" ]]; then
+  request POST "/api/v1/permission-packages/approval-requests/$APPROVAL_REQUEST_ID/approve" "$(json_body approval-resolution "$APPROVAL_REVIEWER" "requester must not impersonate reviewer")" "" "" "" "$REQUESTER_ADMIN_KEY"
+  expect_status 403 "reject approval reviewer impersonation"
+  assert_body_contains "authenticated admin identity" "approval reviewer impersonation"
+  echo "approval reviewer impersonation rejected"
+fi
+
+request POST "/api/v1/permission-packages/approval-requests/$APPROVAL_REQUEST_ID/approve" "$(json_body approval-resolution "$APPROVAL_REVIEWER" "approved for local production journey scenario")" "" "" "" "$REVIEWER_ADMIN_KEY"
 expect_status 200 "approve approval request"
 assert_approval_request "approved" "$APPROVAL_REQUEST_ID"
 

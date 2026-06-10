@@ -2670,3 +2670,40 @@ td code {
     flex-direction: column;
   }
 }
+
+/* Permission Changes overrides must stay after the global responsive rules. */
+@media (max-width: 1120px) {
+  .approval-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1120px) {
+  .approval-flow-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+  }
+
+  .approval-process-panel {
+    position: sticky;
+    top: 12px;
+  }
+}
+
+@media (max-width: 760px) {
+  .approval-context-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .approval-task-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .approval-task-strip article {
+    border-right: 0;
+    border-bottom: 1px solid var(--line-subtle);
+  }
+
+  .approval-task-strip article:last-child {
+    border-bottom: 0;
+  }
+}

@@ -434,9 +434,6 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     }
     return step.metric ?? step.detail;
   };
-  const approvalStatusLabel = draft.policyGate.canApplyDirectly
-    ? t("productionConsole.approvalNotRequired")
-    : approvalRequest ? permissionApprovalStatusLabel(approvalRequest.status, t) : t("status.approvalNotRequested");
   const primaryActionCode = workbenchPreview?.summary.primaryActionCode;
   const journeyStatus = resolvePermissionJourneyStatus({
     approvalRequest,
@@ -754,9 +751,6 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               <span>{t("section.permissionRequestProcess")}</span>
               <strong>{t(journeyStatus.labelKey)}</strong>
             </div>
-            <Badge tone={journeyStatus.tone}>
-              {approvalStatusLabel}
-            </Badge>
           </div>
           <div className="approval-process-list">
             {processSteps.map((step, index) => (

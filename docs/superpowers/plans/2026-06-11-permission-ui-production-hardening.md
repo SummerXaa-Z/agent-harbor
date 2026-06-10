@@ -385,3 +385,30 @@ git push
 ```
 
 Expected: PR #74 updates with the new commit.
+
+## Task 6: Responsive Production Shell Follow-Up
+
+- [x] **Step 1: Verify tablet desktop width**
+
+Use the in-app browser at 1024x768 and verify the Permission Changes primary journey:
+
+- task strip remains full width
+- process panel remains visible beside the form
+- no horizontal overflow appears in header, context, task strip, form, or process panel
+
+- [x] **Step 2: Fix responsive cascade**
+
+Keep Permission Changes overrides after the global responsive rules in `frontend/src/styles.css`, so the old `max-width: 1120px` single-column rule does not collapse the production journey too early.
+
+- [x] **Step 3: Verify mobile width**
+
+Use the in-app browser at 390x844 and verify:
+
+- context strip is single-column and readable
+- task strip is single-column and readable
+- process header only shows the authoritative journey status
+- no horizontal overflow appears in the primary path
+
+- [x] **Step 4: Update tests and docs**
+
+Extend `frontend/tests/permissionFlowLayout.test.mjs` to lock the responsive cascade order, tablet two-column journey, mobile single-column strips, and removal of the approval-substatus badge from the journey header.

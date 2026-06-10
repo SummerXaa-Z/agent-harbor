@@ -76,6 +76,7 @@ test("permission request uses one authoritative journey status", () => {
   assert.match(workbench, /journeyStatus\.tone/);
   assert.match(workbench, /aria-label=\{t\("text\.permissionJourneyStatus"\)\}/);
   assert.doesNotMatch(workbench, /<Badge tone=\{draftStatus\.tone\}>\{t\(draftStatus\.labelKey\)\}<\/Badge>/);
+  assert.doesNotMatch(workbench, /const approvalStatusLabel =/);
 });
 
 test("permission request process steps navigate to their operator sections", () => {
@@ -114,6 +115,18 @@ test("permission request first viewport prioritizes one task flow", () => {
   assert.doesNotMatch(workbench.slice(taskStripStart, flowStart), /plannedObjectCount/);
   assert.match(styles, /\.approval-task-strip article\s*\{/);
   assert.match(styles, /\.approval-process-panel\s*\{[^}]*position:\s*sticky;/s);
+});
+
+test("permission request stays navigable at tablet desktop widths", () => {
+  const globalResponsiveIndex = baseStyles.indexOf("@media (max-width: 1120px)");
+  const permissionOverrideIndex = baseStyles.lastIndexOf("@media (min-width: 900px) and (max-width: 1120px)");
+  assert.ok(globalResponsiveIndex >= 0);
+  assert.ok(permissionOverrideIndex > globalResponsiveIndex);
+  assert.match(styles, /@media \(max-width: 1120px\)\s*\{[\s\S]*?\.approval-overview\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+  assert.match(styles, /@media \(min-width: 900px\) and \(max-width: 1120px\)\s*\{[\s\S]*?\.approval-flow-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(300px,\s*340px\);/);
+  assert.match(styles, /@media \(min-width: 900px\) and \(max-width: 1120px\)\s*\{[\s\S]*?\.approval-process-panel\s*\{[\s\S]*?position:\s*sticky;/);
+  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.approval-context-bar\s*\{[\s\S]*?grid-template-columns:\s*1fr;/);
+  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.approval-task-strip\s*\{[\s\S]*?grid-template-columns:\s*1fr;/);
 });
 
 test("permission request copy avoids repeated step labels", () => {

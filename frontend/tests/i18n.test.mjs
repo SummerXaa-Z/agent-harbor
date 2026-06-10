@@ -92,7 +92,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.notEqual(t("nav.ai-admin"), "申请权限");
   assert.equal(t("page.aiAdmin"), "权限变更与上线就绪");
   assert.equal(t("panel.aiAdminPermissionWorkbench"), "权限变更工作台");
-  assert.equal(t("section.aiAdminApprovalJourney"), "上线准备");
+  assert.equal(t("section.aiAdminApprovalJourney"), "运行验证证据");
   assert.equal(t("section.aiAdminReadiness"), "环境检查");
   assert.equal(t("section.aiAdminProductionConsole"), "上线状态");
   assert.equal(t("action.runApprovalJourney"), "执行运行验证");
@@ -127,7 +127,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.doesNotMatch(t("demo.permissionRequestApprovalProject"), /权限申请/);
   assert.doesNotMatch(t("demo.permissionRequestApprovalCaller"), /权限申请/);
   assert.doesNotMatch(t("demo.permissionRequestApprovalTarget"), /权限申请/);
-  assert.equal(t("section.permissionAdvancedChecks"), "高级检查项");
+  assert.equal(t("section.permissionAdvancedChecks"), "验收明细");
   assert.equal(t("form.businessTenant"), "租户");
   assert.equal(t("form.businessWorkspace"), "工作区");
   assert.equal(t("form.businessCaller"), "调用方");
@@ -157,7 +157,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("text.permissionApplyWaitingTitle"), "等待审批");
   assert.equal(t("status.currentStep"), "当前");
   assert.equal(t("text.permissionRequestGoLiveHelp"), "应用后执行运行验证，系统验证允许/拒绝调用并生成交接证据。");
-  assert.equal(t("text.permissionRequestAdvancedSummary"), "环境预检、待审批请求、权限判定、影响范围和审计证据。");
+  assert.equal(t("text.permissionRequestAdvancedSummary"), "主流程背后的辅助证据：环境、预检、审批队列、上线就绪、权限判定、影响和运行证据。");
   assert.equal(t("text.workspaceResolvedDetail"), "由所选租户和调用方确定；只有高级操作时才需要手动覆盖。");
   assert.equal(t("action.runDemoPermissionRequest"), "执行运行验证");
   assert.equal(t("text.permissionAppliedTitle"), "权限已生效");

@@ -154,6 +154,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 上线验收现在支持直接打开 `#evidence` 时加载完整权限变更目录，并以已生成的权限草稿作为上下文来源，避免向操作员展示未知调用方/目标占位。
 - Permission Changes now presents one guided go-live primary action at a time: run validation before evidence exists, check readiness after runtime evidence exists, and export evidence only after the change is ready.
 - 权限变更现在一次只展示一个上线主动作：缺少运行证据时执行运行验证，运行证据已具备后检查上线就绪，真正可上线后才导出证据。
+- Permission Changes now renames the folded expert evidence area from Advanced Checks to Acceptance Details and clarifies that runtime validation evidence is supporting proof behind the main operator flow.
+- 权限变更现在把折叠的专家证据区从“高级检查项”改为“验收明细”，并明确运行验证证据是主操作流程背后的辅助证明。
 - Go-live acceptance now treats applied or production-ready evidence as approval-satisfied, preventing conflicting "approval not requested" progress copy after permissions are already active.
 - 上线验收现在会把已应用或已可上线的证据视为审批已满足，避免权限已生效后进度里仍出现“审批未发起”的冲突提示。
 - Web console visual design review follow-up: design tokens now govern component colors, shadows, focus rings, button sizing, technical-id display, System Self-Check telemetry, and Agent registry ordering.

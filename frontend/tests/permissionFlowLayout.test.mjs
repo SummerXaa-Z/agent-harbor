@@ -268,6 +268,8 @@ test("permission request evidence is secondary to the main operator task", () =>
   assert.ok(auditStart > workbench.indexOf('<aside className="approval-process-panel"'));
   assert.match(workbench.slice(auditStart), /section\.aiAdminReadiness/);
   assert.match(workbench.slice(auditStart), /section\.permissionProductionReadiness/);
+  assert.match(i18n, /"section\.permissionAdvancedChecks": "验收明细"/);
+  assert.match(i18n, /"section\.aiAdminApprovalJourney": "运行验证证据"/);
 });
 
 test("management audit evidence uses business labels before technical ids", () => {

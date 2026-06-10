@@ -474,3 +474,7 @@ Browser verification confirmed the completed Permission Changes approval block r
 - [x] **Step 4: Separate step title from action wording**
 
 The Simplified Chinese approval step title now reads `审批处理` while the primary action remains `提交审批`, so a completed journey no longer looks like it is asking the operator to submit again.
+
+- [x] **Step 5: Align runtime result with production-ready state**
+
+When the journey is production-ready, the runtime result line now renders the completed validation copy instead of the pending `执行运行验证` copy, even if the local runtime result object was not retained.

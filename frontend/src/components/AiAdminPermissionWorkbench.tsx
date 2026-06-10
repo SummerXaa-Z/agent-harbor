@@ -256,6 +256,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     || Boolean(workbenchPreview?.summary.productionReady)
     || productionSummary.status === "ready";
   const goLiveReady = productionReady || goLiveReadiness.status === "ready";
+  const runtimeValidationReady = Boolean(approvalJourneyResult) || goLiveReady;
   const approvalEffectivelyResolved = !draft.policyGate.canApplyDirectly
     && (approvalRequest?.status === "approved" || Boolean(application) || goLiveReady);
   const approvalDisplayStatus: PermissionPackageApprovalRequest["status"] | null = approvalEffectivelyResolved
@@ -932,7 +933,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             )}
             <div className="approval-runtime" id={permissionRequestStepSectionId("validation")}>
               <strong>{t("text.runtimeValidationResultTitle")}</strong>
-              <span>{approvalJourneyResult ? t("text.runtimeValidationResultReady") : t("text.runtimeValidationResultPending")}</span>
+              <span>{runtimeValidationReady ? t("text.runtimeValidationResultReady") : t("text.runtimeValidationResultPending")}</span>
               {approvalJourneyMessage ? <em>{approvalJourneyMessage}</em> : null}
             </div>
           </section>

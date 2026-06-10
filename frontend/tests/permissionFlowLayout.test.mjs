@@ -309,6 +309,8 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /productionSummary\.status === "ready"/);
   assert.match(workbench, /const approvalEffectivelyResolved = !draft\.policyGate\.canApplyDirectly/);
   assert.match(workbench, /approvalRequest\?\.status === "approved" \|\| Boolean\(application\) \|\| goLiveReady/);
+  assert.match(workbench, /const runtimeValidationReady = Boolean\(approvalJourneyResult\) \|\| goLiveReady/);
+  assert.match(workbench, /runtimeValidationReady \? t\("text\.runtimeValidationResultReady"\) : t\("text\.runtimeValidationResultPending"\)/);
   assert.match(workbench, /approvalDisplayStatus: PermissionPackageApprovalRequest\["status"\] \| null/);
   assert.match(workbench, /const showPendingApprovalActions = !application && !goLiveReady && approvalRequest\?\.status === "pending"/);
   assert.match(workbench, /permissionPolicyGateDetailKey\(draft\.policyGate\.canApplyDirectly, approvalDisplayStatus\)/);

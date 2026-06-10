@@ -108,7 +108,8 @@ export function permissionEntityDisplayName(value: string, t: Translator) {
     "Permission Request Approval Team": t("demo.permissionRequestApprovalTeam"),
     "Permission Request Approval Project": t("demo.permissionRequestApprovalProject"),
     "Permission Request Approval Caller": t("demo.permissionRequestApprovalCaller"),
-    "Permission Request Approval MCP Target": t("demo.permissionRequestApprovalTarget")
+    "Permission Request Approval MCP Target": t("demo.permissionRequestApprovalTarget"),
+    "Security Reviewer": t("accessSubject.securityReviewer.name")
   };
   if (demoNames[normalized]) return demoNames[normalized];
   if (normalized.includes("Permission Package Approval")) {

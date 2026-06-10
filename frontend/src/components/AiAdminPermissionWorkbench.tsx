@@ -307,7 +307,9 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     || applicationHealthLoading
     || applicationImpactLoading
     || reviewerQueueLoading;
-  const reviewerIdentity = approvalReviewer.trim() || t("text.approvalReviewerFallback");
+  const reviewerIdentity = approvalReviewer.trim()
+    ? permissionEntityDisplayName(approvalReviewer.trim(), t)
+    : t("text.approvalReviewerFallback");
   const beginApprovalDecision = (action: ApprovalDecisionAction, requestId?: string) => {
     if (requestId) onSelectApprovalRequest(requestId);
     setPendingApprovalDecision({
@@ -1332,7 +1334,8 @@ function permissionEntityDisplayName(value: string, t: Translator) {
     "Permission Request Approval Team": t("demo.permissionRequestApprovalTeam"),
     "Permission Request Approval Project": t("demo.permissionRequestApprovalProject"),
     "Permission Request Approval Caller": t("demo.permissionRequestApprovalCaller"),
-    "Permission Request Approval MCP Target": t("demo.permissionRequestApprovalTarget")
+    "Permission Request Approval MCP Target": t("demo.permissionRequestApprovalTarget"),
+    "Security Reviewer": t("accessSubject.securityReviewer.name")
   };
   if (demoNames[normalized]) return demoNames[normalized];
   if (normalized.includes("Permission Package Approval")) {

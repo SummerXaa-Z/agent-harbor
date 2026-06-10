@@ -208,6 +208,8 @@ test("capability names use business labels in primary UI", () => {
   assert.match(presenters, /"Default Tenant": t\("text\.defaultTenantName"\)/);
   assert.match(presenters, /"Default Business Unit": t\("demo\.permissionRequestApprovalTeam"\)/);
   assert.match(presenters, /"Default Workspace Team": t\("demo\.permissionRequestApprovalProject"\)/);
+  assert.match(presenters, /"Security Reviewer": t\("accessSubject\.securityReviewer\.name"\)/);
+  assert.match(workbench, /"Security Reviewer": t\("accessSubject\.securityReviewer\.name"\)/);
   assert.match(presenters, /export function dataScopeText\(scopes\?: DataScope\[\], t\?: Translator\)/);
   assert.match(i18n, /"capability\.search_customer\.name": "查询客户"/);
   assert.match(i18n, /"capability\.update_ticket\.name": "更新工单"/);
@@ -270,6 +272,7 @@ test("permission request blocks main actions when sample fallback data is shown"
 test("permission request approval decisions show reviewer context before resolving", () => {
   assert.match(workbench, /useState/);
   assert.match(workbench, /pendingApprovalDecision/);
+  assert.match(workbench, /permissionEntityDisplayName\(approvalReviewer\.trim\(\), t\)/);
   assert.match(workbench, /beginApprovalDecision\("approve"/);
   assert.match(workbench, /beginApprovalDecision\("reject"/);
   assert.match(workbench, /className="approval-reviewer-context"/);

@@ -463,7 +463,7 @@ Capability Governance now maps caller and target service names through the same 
 
 - [x] **Step 6: Localize default context and capability summaries**
 
-Permission Changes now treats the default tenant and workspace ids as business context in the primary UI, including empty API states. Capability Governance now uses localized capability summaries, translated sensitivity/risk labels, and translated data-scope labels before falling back to technical descriptions.
+Permission Changes now treats the default tenant and workspace ids as business context in the primary UI, including empty API states, and localizes the default security approver display name in the approval step. Capability Governance now uses localized capability summaries, translated sensitivity/risk labels, and translated data-scope labels before falling back to technical descriptions.
 
 ## Task 9: Completed Approval Step State
 

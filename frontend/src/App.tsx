@@ -4140,11 +4140,11 @@ function permissionSimulationReason(row: PermissionPackageSimulationRow, t: Tran
 
 function permissionReadinessMessages(readiness: PermissionPackageDraft["readiness"], t: Translator) {
   const fieldLabels: Record<string, string> = {
-    callerInstanceId: t("form.callerInstance"),
+    callerInstanceId: t("form.caller"),
     subjectSelector: t("form.accessSubject"),
     targetId: t("form.target"),
-    tenantId: t("form.tenantId"),
-    workspaceId: t("form.workspaceId")
+    tenantId: t("form.tenant"),
+    workspaceId: t("form.workspace")
   };
   return [
     ...readiness.missingFields.map((field) =>

@@ -166,9 +166,15 @@ test("permission journey mutation handlers require live API before network write
   });
 });
 
-test("permission readiness messages use business field names for access subjects", () => {
+test("permission readiness messages use business field names on the main journey", () => {
   const block = syncFunctionBlock("permissionReadinessMessages");
 
+  assert.match(block, /callerInstanceId:\s*t\("form\.caller"\)/);
   assert.match(block, /subjectSelector:\s*t\("form\.accessSubject"\)/);
+  assert.match(block, /tenantId:\s*t\("form\.tenant"\)/);
+  assert.match(block, /workspaceId:\s*t\("form\.workspace"\)/);
+  assert.doesNotMatch(block, /tenantId:\s*t\("form\.tenantId"\)/);
+  assert.doesNotMatch(block, /workspaceId:\s*t\("form\.workspaceId"\)/);
+  assert.doesNotMatch(block, /callerInstanceId:\s*t\("form\.callerInstance"\)/);
   assert.doesNotMatch(block, /fieldLabels\[field\] \?\? "subjectSelector"/);
 });

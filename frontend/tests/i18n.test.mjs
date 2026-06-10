@@ -232,11 +232,13 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("section.accessDecisionExplain"), "权限判定说明");
   assert.equal(t("section.accessProfileTask"), "租户访问画像");
   assert.equal(t("section.accessProfileFilters"), "查询范围");
+  assert.equal(t("section.accessProfileAdjustScope"), "调整查看范围");
   assert.equal(t("text.accessProfileTaskTitle"), "复核最终访问权限");
   assert.equal(t("text.accessProfileFiltersDetail"), "先选择租户、工作区、调用方、目标和能力，再查看最终权限。");
+  assert.equal(t("text.accessProfileAdjustScopeDetail"), "本次权限变更范围已固定在上方；只有需要查看其他证据范围时再调整筛选。");
   assert.equal(t("text.accessProfileHandoffContext"), "权限变更交接上下文");
   assert.equal(t("text.accessProfileHandoffTitle"), "正在复核同一次权限变更");
-  assert.equal(t("text.accessProfileHandoffDetail"), "当前筛选已从刚完成的权限变更带入。");
+  assert.equal(t("text.accessProfileHandoffDetail"), "同一次权限变更范围已固定在下方，包含租户、工作区、调用方、目标和能力。");
   assert.equal(t("action.explainAccessDecision"), "查看判定");
   assert.equal(t("form.subjectId"), "主体 ID");
   assert.equal(t("text.notSpecified"), "未指定");

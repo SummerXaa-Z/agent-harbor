@@ -162,7 +162,7 @@ export function TenantAccessProfileView({
         </section>
       ) : null}
 
-      <section className="access-selected-scope" aria-label={t("text.selectedScope")}>
+      <section className={`access-selected-scope ${handoffContext ? "is-handoff" : ""}`} aria-label={t("text.selectedScope")}>
         <div>
           <span>{t("form.tenant")}</span>
           <strong>{tenantLabel}</strong>
@@ -179,13 +179,17 @@ export function TenantAccessProfileView({
           <span>{t("form.target")}</span>
           <strong>{targetLabel}</strong>
         </div>
+        <div>
+          <span>{t("form.capability")}</span>
+          <strong>{capabilityLabel}</strong>
+        </div>
       </section>
 
       <form className="access-query-panel" onSubmit={submit}>
         <header>
           <div>
-            <strong>{t("section.accessProfileFilters")}</strong>
-            <p>{t("text.accessProfileFiltersDetail")}</p>
+            <strong>{handoffContext ? t("section.accessProfileAdjustScope") : t("section.accessProfileFilters")}</strong>
+            <p>{handoffContext ? t("text.accessProfileAdjustScopeDetail") : t("text.accessProfileFiltersDetail")}</p>
           </div>
           <span>{t("form.traces")}: {traceLimitLabel}</span>
         </header>

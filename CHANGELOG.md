@@ -66,6 +66,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 租户访问画像的授权链现在把租户授权、工作区分配、工作区、目标和能力等技术 ID 收进折叠详情，主证据行不再直接展示原始 ID。
 - Tenant Access Profile instance and trace rows now show business caller, target, access-object, and localized decision-reason labels while moving caller ids, instance-assignment ids, and subject selectors into collapsed technical details.
 - 租户访问画像的实例授权和追踪证据行现在展示业务调用方、目标、访问对象和本地化判定原因，并把调用方 ID、实例分配 ID、主体选择器收进折叠技术详情。
+- Tenant Access Profile handoff now pins the completed permission-change scope, including capability, above the evidence controls and retitles the filter area as an optional viewing-scope adjustment.
+- 租户访问画像交接态现在会在证据控制区上方固定展示已完成权限变更范围，并补上能力维度；筛选区在交接态改为可选的查看范围调整。
 - Runtime Audit now shows business caller/target names, localized route and decision-reason labels, and keeps run id, route keys, and capability ids inside advanced technical details.
 - 运行审计现在展示业务调用方/目标、中文化路由和判定原因，并把运行批次、路由键和能力 ID 收进高级技术详情。
 - TechnicalId is now shared across dense console workspaces, preserving the same shortened, copyable identifier treatment outside the main business path.

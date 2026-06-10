@@ -159,8 +159,13 @@ test("permission request carries readable context into access profile workspace"
   assert.match(accessProfileView, /const workspaceLabel = handoffContext\?\.workspaceName \?\? \(filters\.workspaceId\?\.trim\(\) \|\| t\("form\.workspaceAll"\)\)/);
   assert.match(accessProfileView, /const callerLabel = handoffContext\?\.callerName \?\? \(filters\.callerInstanceId/);
   assert.match(accessProfileView, /const targetLabel = handoffContext\?\.targetName \?\? \(filters\.targetId/);
+  assert.match(accessProfileView, /const capabilityLabel = handoffContext\?\.capabilityName \?\? \(selectedCapability/);
   assert.match(accessProfileView, /className="access-handoff-context"/);
   assert.match(accessProfileView, /text\.accessProfileHandoffDetail/);
+  assert.match(accessProfileView, /className=\{`access-selected-scope \$\{handoffContext \? "is-handoff" : ""\}`\}/);
+  assert.match(accessProfileView, /<span>\{t\("form\.capability"\)\}<\/span>\s*<strong>\{capabilityLabel\}<\/strong>/);
+  assert.match(accessProfileView, /handoffContext \? t\("section\.accessProfileAdjustScope"\) : t\("section\.accessProfileFilters"\)/);
+  assert.match(accessProfileView, /handoffContext \? t\("text\.accessProfileAdjustScopeDetail"\) : t\("text\.accessProfileFiltersDetail"\)/);
   assert.match(app, /const \[accessProfileHandoffContext, setAccessProfileHandoffContext\] = useState<AccessProfileHandoffContext \| null>\(null\)/);
   assert.match(app, /setAccessProfileHandoffContext\(\{/);
   assert.match(app, /capabilityName: selectedCapability \? capabilityDisplayName\(selectedCapability, t\) : ""/);
@@ -168,6 +173,7 @@ test("permission request carries readable context into access profile workspace"
   assert.match(app, /workspaceName: permissionWorkspaceDisplayName\(aiAdminForm\.workspaceId, agents, t\)/);
   assert.match(app, /handoffContext=\{accessProfileHandoffContext\}/);
   assert.match(i18n, /"text\.accessProfileHandoffDetail"/);
+  assert.match(i18n, /"section\.accessProfileAdjustScope"/);
 });
 
 test("access profile tenant scope prefers business labels over raw tenant ids", () => {

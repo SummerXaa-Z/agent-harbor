@@ -1338,3 +1338,17 @@ Agent registration and route-policy forms now map retry parser validation messag
 - [x] **Step 2: Add regression coverage**
 
 `frontend/tests/i18n.test.mjs` covers the Simplified Chinese retry validation strings. `frontend/tests/permissionJourneySafety.test.mjs` asserts Agent and Route Policy submit handlers call `retryFieldValidationMessage(...)` instead of sending `retry.message` directly to the panel.
+
+## Task 40: Pin Permission-Change Context In Access Profile Handoff
+
+- [x] **Step 1: Keep the completed scope above evidence controls**
+
+Tenant Access Profile now keeps the permission-change handoff as a fixed scope summary across tenant, workspace, caller, target, and capability. The capability is no longer only visible in the filter chips, so operators can verify exactly which completed permission change they are reviewing before touching any controls.
+
+- [x] **Step 2: Reframe filters as optional review controls**
+
+When the access profile is opened from a completed permission change, the filter panel title changes from a generic access-scope query to `Adjust viewing scope` / `调整查看范围`. The explanatory copy makes the current change scope the default and tells operators to adjust filters only when they need a different evidence view.
+
+- [x] **Step 3: Add regression coverage**
+
+`frontend/tests/permissionFlowLayout.test.mjs` asserts the handoff scope includes capability, applies the handoff visual state, and switches the filter title/detail based on `handoffContext`. `frontend/tests/i18n.test.mjs` locks the new Chinese copy.

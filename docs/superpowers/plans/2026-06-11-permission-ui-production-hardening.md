@@ -927,6 +927,46 @@ make check
 make release-check
 ```
 
+- [x] **Step 5: Commit, push, and inspect PR checks**
+
+Commit and push if clean, then inspect PR #74.
+
+Committed and pushed `3c858dd fix: hide closed connection popover` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=UNSTABLE` because Backend, Frontend, and PostgreSQL integration checks were queued immediately after push.
+
+## Task 25: Promote Export Evidence On Ready Acceptance
+
+- [x] **Step 1: Inspect the go-live acceptance primary action**
+
+Browser verification on `http://127.0.0.1:5174/#evidence` showed the page was `可上线` and all checks were complete, but the first primary action remained `执行状态检查`; this made a completed acceptance page look like it still needed validation.
+
+- [x] **Step 2: Switch primary and secondary actions by readiness**
+
+`GoLiveAcceptanceOverview` now treats `productionReadiness?.status === "ready"` as the acceptance-ready state. When ready, `导出证据` is the primary action and `执行状态检查` is a secondary re-check action. When not ready, `执行状态检查` remains primary and export stays secondary.
+
+- [x] **Step 3: Verify focused tests and browser**
+
+Run focused frontend tests and verify the evidence page shows `导出证据` as the primary action in the ready state.
+
+Verified:
+
+```bash
+git diff --check
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+```
+
+Browser verification on `http://127.0.0.1:5174/#evidence` showed status `可上线`, primary action `导出证据`, and secondary actions `执行状态检查` / `查看权限变更`.
+
+- [x] **Step 4: Run repository gates**
+
+Run `make check` and `make release-check`.
+
+Verified locally before commit:
+
+```bash
+make check
+make release-check
+```
+
 - [ ] **Step 5: Commit, push, and inspect PR checks**
 
 Commit and push if clean, then inspect PR #74.

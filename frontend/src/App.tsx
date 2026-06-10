@@ -3511,6 +3511,7 @@ function GoLiveAcceptanceOverview({
     ?? productionSummary.steps.filter((step) => step.status === "blocked").length;
   const warningCount = productionReadiness?.summary.warningCount
     ?? productionSummary.steps.filter((step) => step.status === "needs_review" || step.status === "pending").length;
+  const acceptanceReady = productionReadiness?.status === "ready";
   const statusMessage = productionReadinessMessage === t("message.permissionProductionReadinessLoaded")
     ? ""
     : productionReadinessMessage;
@@ -3526,14 +3527,29 @@ function GoLiveAcceptanceOverview({
         {!liveDataAvailable ? <p className="go-live-acceptance-warning">{t("message.fallbackDataModeDetail")}</p> : null}
         {statusMessage ? <p className="go-live-acceptance-message">{statusMessage}</p> : null}
         <div className="go-live-acceptance-actions">
-          <button className="primary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
-            <RefreshCw size={14} />
-            {productionReadinessLoading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
-          </button>
-          <button className="secondary-button" disabled={!liveDataAvailable || !productionReadiness || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
-            <Download size={14} />
-            {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
-          </button>
+          {acceptanceReady ? (
+            <>
+              <button className="primary-button" disabled={!liveDataAvailable || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
+                <Download size={14} />
+                {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
+              </button>
+              <button className="secondary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
+                <RefreshCw size={14} />
+                {productionReadinessLoading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="primary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
+                <RefreshCw size={14} />
+                {productionReadinessLoading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
+              </button>
+              <button className="secondary-button" disabled={!liveDataAvailable || !productionReadiness || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
+                <Download size={14} />
+                {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
+              </button>
+            </>
+          )}
           <button className="secondary-button" onClick={onOpenPermissionChange} type="button">
             <ShieldCheck size={14} />
             {t("action.openPermissionChange")}

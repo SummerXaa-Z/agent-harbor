@@ -234,6 +234,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("action.refreshApplicationHealth"), "刷新状态");
   assert.equal(t("action.checkProductionReadiness"), "检查上线就绪");
   assert.equal(t("action.exportProductionEvidence"), "导出证据");
+  assert.equal(t("action.openAcceptanceDetails"), "查看验收明细");
   assert.equal(t("action.openAccessProfile"), "查看权限画像");
   assert.equal(t("action.withdrawPermissionRequest"), "撤回请求");
   assert.equal(t("action.confirmWithdrawPermissionRequest"), "确认撤回");

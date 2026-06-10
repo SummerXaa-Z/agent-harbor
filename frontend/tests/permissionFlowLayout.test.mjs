@@ -263,7 +263,7 @@ test("capability names use business labels in primary UI", () => {
 });
 
 test("permission request evidence is secondary to the main operator task", () => {
-  const auditStart = workbench.indexOf('<details className="approval-evidence">');
+  const auditStart = workbench.indexOf('className="approval-evidence"');
   assert.notEqual(auditStart, -1);
   assert.ok(auditStart > workbench.indexOf('<aside className="approval-process-panel"'));
   assert.match(workbench.slice(auditStart), /section\.aiAdminReadiness/);
@@ -420,7 +420,10 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /onOpenAccessProfile/);
   assert.match(workbench, /onStartNewPermissionChange/);
   assert.match(workbench, /const quickSecondaryActionLabel = goLiveReady/);
-  assert.match(workbench, /const runQuickSecondaryAction = goLiveReady \? onOpenAccessProfile : onRunApprovalJourney/);
+  assert.match(workbench, /function scrollToAcceptanceDetails\(\)/);
+  assert.match(workbench, /id="permission-request-acceptance-details"/);
+  assert.match(workbench, /const runQuickSecondaryAction = goLiveReady \? onOpenAccessProfile : scrollToAcceptanceDetails/);
+  assert.doesNotMatch(workbench, /const runQuickSecondaryAction = goLiveReady \? onOpenAccessProfile : onRunApprovalJourney/);
   assert.match(app, /function openAiAdminAccessProfile\(\)/);
   assert.match(app, /setActiveNav\("access"\)/);
   assert.match(app, /function startNewAiAdminPermissionChange\(\)/);

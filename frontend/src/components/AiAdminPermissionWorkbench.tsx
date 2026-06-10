@@ -329,6 +329,12 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       block: "start"
     });
   }
+  function scrollToAcceptanceDetails() {
+    document.getElementById("permission-request-acceptance-details")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+  }
   const confirmPendingApprovalDecision = () => {
     if (!pendingApprovalDecision) return;
     const comment = pendingApprovalDecision.comment.trim();
@@ -497,9 +503,9 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const liveDataBlocked = !liveDataAvailable;
   const quickSecondaryActionLabel = goLiveReady
     ? t("action.openAccessProfile")
-    : approvalJourneyRunning ? t("action.runningApprovalJourney") : t("action.runDemoPermissionRequest");
-  const quickSecondaryActionDisabled = permissionRequestBusy || (!goLiveReady && liveDataBlocked);
-  const runQuickSecondaryAction = goLiveReady ? onOpenAccessProfile : onRunApprovalJourney;
+    : t("action.openAcceptanceDetails");
+  const quickSecondaryActionDisabled = goLiveReady ? permissionRequestBusy : false;
+  const runQuickSecondaryAction = goLiveReady ? onOpenAccessProfile : scrollToAcceptanceDetails;
   const goLivePrimaryActionKey = goLiveReady
     ? "action.exportProductionEvidence"
     : runtimeValidationReady
@@ -965,7 +971,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
         </aside>
       </div>
 
-      <details className="approval-evidence">
+      <details className="approval-evidence" id="permission-request-acceptance-details">
         <summary>
           <div>
             <strong>{t("section.permissionAdvancedChecks")}</strong>

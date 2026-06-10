@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Inbox } from "lucide-react";
 
 import type { MetricTone } from "../consoleMetrics";
 
@@ -9,8 +10,11 @@ export function Badge({ tone, children }: { tone: MetricTone; children: ReactNod
 export function EmptyRow({ title, detail }: { title: string; detail: string }) {
   return (
     <div className="empty-row">
-      <strong>{title}</strong>
-      <span>{detail}</span>
+      <Inbox aria-hidden="true" className="empty-row-icon" size={18} />
+      <div className="empty-row-copy">
+        <strong>{title}</strong>
+        <span>{detail}</span>
+      </div>
     </div>
   );
 }

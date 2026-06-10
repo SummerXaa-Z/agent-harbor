@@ -1345,27 +1345,45 @@ td span {
 
 .empty-row {
   display: grid;
-  place-items: center;
-  min-height: 112px;
+  grid-template-columns: 36px minmax(0, 380px);
+  gap: var(--space-3);
+  align-content: center;
+  align-items: center;
+  justify-content: center;
+  min-height: 128px;
+  padding: var(--space-5);
   color: var(--muted);
-  text-align: center;
+  text-align: left;
 }
 
-.empty-row strong,
-.empty-row span {
-  display: block;
-  max-width: min(360px, 100%);
+.empty-row-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--line-muted);
+  border-radius: var(--radius-full);
+  background: var(--surface-muted);
+  color: var(--soft);
+}
+
+.empty-row-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .empty-row strong {
-  margin-bottom: 4px;
-  color: var(--ink-2);
-  font-size: 13px;
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 600;
+  line-height: 20px;
 }
 
 .empty-row span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
+  line-height: 18px;
 }
 
 td code {
@@ -2227,9 +2245,8 @@ td code {
 
 .access-decision-explain .empty-row {
   min-height: 72px;
-  place-items: center start;
+  justify-content: start;
   padding: 8px 0;
-  text-align: left;
 }
 
 .access-decision-explain > header > div {

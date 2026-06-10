@@ -9,6 +9,7 @@ const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
+const ui = readFileSync(new URL("../src/components/ui.tsx", import.meta.url), "utf8");
 
 function stylesWithoutRootTokens(source) {
   return source.replace(/:root\s*\{[\s\S]*?\n\}/, "");
@@ -152,6 +153,19 @@ test("workspace exposes an initial loading state before data is resolved", () =>
   assert.match(app, /className="workspace-loading"/);
   assert.match(styles, /\.workspace-loading\s*\{/);
   assert.match(styles, /\.workspace-loading-skeleton\s*\{/);
+});
+
+test("empty states use a consistent production component instead of single-line placeholders", () => {
+  assert.match(ui, /import \{ Inbox \} from "lucide-react"/);
+  assert.match(ui, /className="empty-row-icon"/);
+  assert.match(ui, /className="empty-row-copy"/);
+  assert.match(styles, /\.empty-row\s*\{[^}]*grid-template-columns:\s*36px minmax\(0,\s*380px\);/s);
+  assert.match(styles, /\.empty-row\s*\{[^}]*min-height:\s*128px;/s);
+  assert.match(styles, /\.empty-row\s*\{[^}]*padding:\s*var\(--space-5\);/s);
+  assert.match(styles, /\.empty-row-icon\s*\{[^}]*border:\s*1px solid var\(--line-muted\);/s);
+  assert.match(styles, /\.empty-row strong\s*\{[^}]*font-weight:\s*600;/s);
+  assert.match(styles, /\.empty-row span\s*\{[^}]*line-height:\s*18px;/s);
+  assert.match(styles, /\.access-decision-explain \.empty-row\s*\{[^}]*justify-content:\s*start;/s);
 });
 
 test("approval messages expose semantic status styling", () => {

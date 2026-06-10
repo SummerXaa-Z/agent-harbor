@@ -1277,3 +1277,24 @@ pnpm --dir frontend test -- permissionJourneySafety
 ```
 
 The backend test now covers an already-ready permission journey followed by a second same-scope pending approval request, and asserts that the workbench returns `awaiting_approval` without historical application/readiness evidence.
+
+## Task 36: Upgrade Empty States Toward Production Density
+
+- [x] **Step 1: Replace single-line placeholder empty states**
+
+`EmptyRow` now renders a consistent icon plus title/detail structure instead of plain centered gray text. The shared style uses existing design tokens, a 36px icon column, stable 128px default height, and a compact left-aligned variant for embedded explanation panels.
+
+- [x] **Step 2: Add regression coverage**
+
+`frontend/tests/styleTheme.test.mjs` now asserts the shared empty-state component imports the icon, renders `empty-row-icon` and `empty-row-copy`, and uses tokenized spacing, typography, and compact access-decision alignment.
+
+- [x] **Step 3: Verify focused test, build, and browser**
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/styleTheme.test.mjs
+pnpm --dir frontend build
+```
+
+Browser verification on `http://127.0.0.1:5174/#access` found 3 empty states with icons and structured copy. The regular empty states rendered at `min-height: 128px`; the embedded permission-decision explanation kept its compact `min-height: 72px`.

@@ -74,6 +74,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 能力治理创建授权链现在使用业务租户、工作区、调用方和访问对象选择器，自定义主体选择器收进高级设置。
 - Runtime navigation wording now separates the "Runtime & Audit" group from the "Runtime Audit" workspace and uses a runtime-record empty state instead of legacy audit-trace copy.
 - 运行导航文案现在区分“运行与审计”分组和“运行审计”工作区，空态改为运行记录，不再沿用旧的审计追踪措辞。
+- Shared console empty states now use a structured icon, title, and detail layout with stable tokenized spacing instead of single-line gray placeholders.
+- 控制台通用空态现在使用统一图标、标题和说明结构，并采用稳定的 token 化间距，不再是单行灰色占位文案。
 - Completed or approval-frozen Permission Changes now render the request configuration as a read-only review state, preventing operators from editing tenant, caller, target, access-object, or template fields after the change is under approval or already active.
 - 已完成或进入审批冻结的权限变更现在会把申请配置呈现为只读复核态，避免操作员在审批中或已生效后继续编辑租户、调用方、目标、访问对象或权限包。
 - Locked Permission Changes now rename the request section to "Configuration Review" and switch helper copy to review language, so production-ready journeys no longer read like editable drafts.

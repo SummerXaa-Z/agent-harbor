@@ -478,3 +478,7 @@ The Simplified Chinese approval step title now reads `审批处理` while the pr
 - [x] **Step 5: Align runtime result with production-ready state**
 
 When the journey is production-ready, the runtime result line now renders the completed validation copy instead of the pending `执行运行验证` copy, even if the local runtime result object was not retained.
+
+- [x] **Step 6: Make applied state explicit**
+
+Once an application record exists, the apply button is disabled and reads `已应用` instead of keeping the active `应用权限` wording.

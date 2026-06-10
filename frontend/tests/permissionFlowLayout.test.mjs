@@ -241,7 +241,7 @@ test("permission request blocks main actions when sample fallback data is shown"
   assert.match(workbench, /message\.fallbackDataModeDetail/);
   assert.match(workbench, /const permissionRequestBusy =/);
   assert.match(workbench, /disabled=\{liveDataBlocked \|\| permissionRequestBusy/);
-  assert.match(workbench, /disabled=\{liveDataBlocked \|\| permissionRequestBusy \|\| !canApply\}/);
+  assert.match(workbench, /disabled=\{Boolean\(application\) \|\| liveDataBlocked \|\| permissionRequestBusy \|\| !canApply\}/);
   assert.match(styles, /\.approval-live-warning\s*\{/);
 });
 
@@ -311,6 +311,8 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /approvalRequest\?\.status === "approved" \|\| Boolean\(application\) \|\| goLiveReady/);
   assert.match(workbench, /const runtimeValidationReady = Boolean\(approvalJourneyResult\) \|\| goLiveReady/);
   assert.match(workbench, /runtimeValidationReady \? t\("text\.runtimeValidationResultReady"\) : t\("text\.runtimeValidationResultPending"\)/);
+  assert.match(workbench, /disabled=\{Boolean\(application\) \|\| liveDataBlocked \|\| permissionRequestBusy \|\| !canApply\}/);
+  assert.match(workbench, /application \? t\("action\.permissionPackageApplied"\) : applying \? t\("action\.applyingPermissionPackage"\) : t\("action\.applyPermissionPackage"\)/);
   assert.match(workbench, /approvalDisplayStatus: PermissionPackageApprovalRequest\["status"\] \| null/);
   assert.match(workbench, /const showPendingApprovalActions = !application && !goLiveReady && approvalRequest\?\.status === "pending"/);
   assert.match(workbench, /permissionPolicyGateDetailKey\(draft\.policyGate\.canApplyDirectly, approvalDisplayStatus\)/);
@@ -331,6 +333,7 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(app, /setActiveNav\("access"\)/);
   assert.match(app, /function startNewAiAdminPermissionChange\(\)/);
   assert.match(i18n, /"text\.policyGateApprovedDetail": "当前权限变更已记录审批。"/);
+  assert.match(i18n, /"action\.permissionPackageApplied": "已应用"/);
   assert.match(styles, /\.approval-completion\s*\{/);
   assert.match(styles, /\.approval-completion-actions\s*\{/);
 });

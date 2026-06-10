@@ -180,6 +180,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("section.permissionSimulation"), "发布前模拟");
   assert.equal(t("form.permissionPackage"), "权限包模板");
   assert.equal(t("action.applyPermissionPackage"), "应用权限");
+  assert.equal(t("action.permissionPackageApplied"), "已应用");
   assert.equal(t("action.approvePermissionRequest"), "批准请求");
   assert.equal(t("action.confirmApprovePermissionRequest"), "确认批准");
   assert.equal(t("action.confirmRejectPermissionRequest"), "确认拒绝");

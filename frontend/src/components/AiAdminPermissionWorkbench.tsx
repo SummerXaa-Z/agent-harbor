@@ -867,9 +867,9 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                   : canApply ? t("text.permissionApplyReadyDetail") : t("text.permissionApplyWaitingDetail")}
                 </span>
               </div>
-              <button className="primary-button" disabled={liveDataBlocked || permissionRequestBusy || !canApply} onClick={onApply} type="button">
+              <button className="primary-button" disabled={Boolean(application) || liveDataBlocked || permissionRequestBusy || !canApply} onClick={onApply} type="button">
                 <CheckCircle2 size={14} />
-                {applying ? t("action.applyingPermissionPackage") : t("action.applyPermissionPackage")}
+                {application ? t("action.permissionPackageApplied") : applying ? t("action.applyingPermissionPackage") : t("action.applyPermissionPackage")}
               </button>
             </div>
             {message ? <span className={`approval-inline-message status-${messageTone}`}>{message}</span> : null}

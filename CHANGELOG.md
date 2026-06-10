@@ -134,6 +134,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 权限变更页中文主流程现在使用中性的“审批处理”步骤标题，将步骤状态和“提交审批”按钮动作区分开。
 - Permission Changes now treats production-ready evidence as completed runtime validation in the final step, so completed journeys no longer ask operators to run validation again.
 - 权限变更页现在会把上线就绪证据视为运行验证已完成，完成态不再提示操作员再次执行运行验证。
+- Permission Changes now changes the disabled apply button to Applied after an application exists, making repeated apply unavailable and visually clear.
+- 权限变更页现在会在应用记录存在后把禁用的应用按钮显示为“已应用”，明确避免重复应用误导。
 - Web console visual design review follow-up: design tokens now govern component colors, shadows, focus rings, button sizing, technical-id display, System Self-Check telemetry, and Agent registry ordering.
 - Web 控制台视觉设计审查项已落地：设计 token 现在约束组件色值、阴影、焦点环、按钮尺寸、技术 ID 展示、系统自检指标展示范围和 Agent 注册表顺序。
 - Web console UX review follow-up: desktop navigation now keeps readable grouped labels at medium widths, Permission Changes uses one authoritative context bar with non-truncating core selectors, and Capability Governance prioritizes the grant operation area over KPI cards.

@@ -23,8 +23,8 @@ test("permission request journey renders as one production workspace instead of 
   assert.match(workbench, /className="approval-request-panel"/);
   assert.match(workbench, /className="approval-process-panel"/);
   assert.match(styles, /\.approval-studio\s*\{[^}]*grid-column:\s*span 12;/s);
-  assert.match(styles, /\.approval-overview\s*\{[^}]*grid-template-columns:\s*minmax\(260px,\s*0\.8fr\)\s*minmax\(0,\s*1\.5fr\);/s);
-  assert.match(styles, /\.approval-overview-metrics\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/s);
+  assert.match(styles, /\.approval-overview\s*\{[^}]*padding:\s*0;/s);
+  assert.match(styles, /\.approval-task-strip\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(styles, /\.approval-flow-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(340px,\s*400px\);/s);
   assert.match(styles, /\.approval-context-bar\s*\{[^}]*position:\s*sticky;/s);
   assert.equal(styles.includes("counter-reset: approval-section"), false);
@@ -69,6 +69,15 @@ test("permission request journey exposes the active step for production operator
   assert.match(styles, /\.approval-process-step\.status-complete\s*> span\s*\{/);
 });
 
+test("permission request uses one authoritative journey status", () => {
+  assert.match(workbench, /const journeyStatus = resolvePermissionJourneyStatus\(/);
+  assert.match(workbench, /journeyStatus\.labelKey/);
+  assert.match(workbench, /journeyStatus\.detailKey/);
+  assert.match(workbench, /journeyStatus\.tone/);
+  assert.match(workbench, /aria-label=\{t\("text\.permissionJourneyStatus"\)\}/);
+  assert.doesNotMatch(workbench, /<Badge tone=\{draftStatus\.tone\}>\{t\(draftStatus\.labelKey\)\}<\/Badge>/);
+});
+
 test("permission request process steps navigate to their operator sections", () => {
   assert.match(workbench, /function permissionRequestStepSectionId/);
   assert.match(workbench, /function permissionRequestStepTarget/);
@@ -88,6 +97,36 @@ test("permission request process steps navigate to their operator sections", () 
   assert.match(workbench, /<button[\s\S]*data-step-target=\{step\.targetStep\}[\s\S]*onClick=\{\(\) => scrollToPermissionRequestStep\(step\.targetStep\)\}/);
   assert.match(styles, /\.approval-process-step\s*\{[^}]*border:\s*0;/s);
   assert.match(styles, /\.approval-process-step:hover\s*\{/);
+});
+
+test("permission request first viewport prioritizes one task flow", () => {
+  const headerStart = workbench.indexOf('<section className="approval-header"');
+  const contextStart = workbench.indexOf('<section className="approval-context-bar"', headerStart);
+  const overviewStart = workbench.indexOf('<section className="approval-overview"', contextStart);
+  const taskStripStart = workbench.indexOf('<div className="approval-task-strip"', overviewStart);
+  const flowStart = workbench.indexOf('<div className="approval-flow-layout">', overviewStart);
+  assert.ok(headerStart >= 0 && contextStart > headerStart && overviewStart > contextStart);
+  assert.match(workbench.slice(headerStart, contextStart), /t\("text\.permissionRequestActions"\)/);
+  assert.doesNotMatch(workbench.slice(headerStart, contextStart), /<strong>\{t\(journeyStatus\.nextActionKey\)\}<\/strong>/);
+  assert.ok(taskStripStart > overviewStart && flowStart > taskStripStart);
+  assert.match(workbench.slice(taskStripStart, flowStart), /journeyStatus\.labelKey/);
+  assert.match(workbench.slice(taskStripStart, flowStart), /journeyStatus\.nextActionKey/);
+  assert.doesNotMatch(workbench.slice(taskStripStart, flowStart), /plannedObjectCount/);
+  assert.match(styles, /\.approval-task-strip article\s*\{/);
+  assert.match(styles, /\.approval-process-panel\s*\{[^}]*position:\s*sticky;/s);
+});
+
+test("permission request copy avoids repeated step labels", () => {
+  assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.approval_approved": "审批已通过且匹配当前申请。"/);
+  assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.apply_done": "权限已应用。"/);
+  assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.validation_ready": "运行证据已完整。"/);
+  assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.acceptance_ready": "上线就绪检查已完成。"/);
+  assert.match(i18n, /"permissionWorkbench\.detail\.approval_approved": "已通过，等待应用。"/);
+  assert.match(i18n, /"permissionWorkbench\.detail\.apply_done": "已生效，等待验证。"/);
+  assert.match(i18n, /"permissionWorkbench\.detail\.validation_ready": "通过，等待就绪检查。"/);
+  assert.match(i18n, /"permissionWorkbench\.detail\.acceptance_ready": "证据已完成。"/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)\s*\{/);
+  assert.match(styles, /\.approval-dropdown-trigger svg\s*\{[^}]*transition:\s*none;/s);
 });
 
 test("permission request carries readable context into access profile workspace", () => {
@@ -227,6 +266,23 @@ test("permission request hides raw workspace identifiers from the primary path",
   assert.doesNotMatch(workbench.slice(workspaceLabelStart, technicalDetailsStart), /form\.workspaceId/);
 });
 
+test("permission reviewer queue uses business labels before technical identifiers", () => {
+  assert.match(workbench, /function permissionApprovalRequestBusinessLabel/);
+  assert.match(workbench, /function TechnicalId/);
+  assert.match(workbench, /className="approval-review-row-main"/);
+  assert.match(workbench, /className="approval-review-row-meta"/);
+  assert.match(workbench, /className="approval-review-row-technical"/);
+  const queueStart = workbench.indexOf('<section className="approval-reviewer-queue"');
+  const advancedStart = workbench.indexOf('<details className="approval-details"', queueStart);
+  assert.notEqual(queueStart, -1);
+  assert.notEqual(advancedStart, -1);
+  assert.doesNotMatch(workbench.slice(queueStart, advancedStart), /permissionPackageApprovalRouteLabel\(request\)/);
+  assert.doesNotMatch(workbench.slice(queueStart, advancedStart), /request\.tenantId/);
+  assert.doesNotMatch(workbench.slice(queueStart, advancedStart), /request\.callerInstanceId/);
+  assert.match(styles, /\.approval-review-row-main\s*\{/);
+  assert.match(styles, /\.approval-review-row-meta\s*\{/);
+});
+
 test("permission request keeps tenant workspace and caller context visible", () => {
   const contextStart = workbench.indexOf('<section className="approval-context-bar"');
   const overviewStart = workbench.indexOf('<section className="approval-overview"', contextStart);
@@ -258,7 +314,7 @@ test("permission request overview keeps context in one authoritative bar", () =>
   assert.match(context, /form\.businessTenant/);
   assert.match(context, /form\.businessWorkspace/);
   assert.match(context, /form\.businessCaller/);
-  assert.match(overview, /approval-status-summary/);
+  assert.match(overview, /approval-task-strip/);
   assert.doesNotMatch(overview, /form\.businessTenant/);
   assert.doesNotMatch(overview, /tenantPath\.primary/);
   assert.doesNotMatch(overview, /workspaceName/);

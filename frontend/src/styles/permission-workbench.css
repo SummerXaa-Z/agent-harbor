@@ -136,7 +136,6 @@
   background: var(--surface-subtle);
 }
 
-.approval-command strong,
 .approval-next-line strong {
   color: var(--ink);
   font-size: 15px;
@@ -228,53 +227,34 @@
 
 .approval-overview {
   display: grid;
-  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.5fr);
-  gap: 12px;
   min-width: 0;
+  padding: 0;
 }
 
-.approval-overview-status,
-.approval-overview-metrics {
+.approval-task-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
   border: 1px solid var(--line-muted);
   border-radius: 8px;
   background: var(--surface);
 }
 
-.approval-overview-status {
+.approval-task-strip article {
   display: grid;
-  gap: 8px;
+  gap: 5px;
   min-width: 0;
   padding: 14px;
-  border-left: 3px solid var(--brand);
-}
-
-.approval-overview-status strong {
-  color: var(--ink);
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.approval-overview-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  overflow: hidden;
-}
-
-.approval-overview-metrics article {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  min-height: 78px;
-  padding: 12px;
   border-right: 1px solid var(--line-subtle);
 }
 
-.approval-overview-metrics article:last-child {
+.approval-task-strip article:last-child {
   border-right: 0;
 }
 
-.approval-overview-metrics strong,
-.approval-overview-metrics small {
+.approval-task-strip span,
+.approval-task-strip strong,
+.approval-task-strip small {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -282,15 +262,23 @@
   white-space: nowrap;
 }
 
-.approval-overview-metrics strong {
+.approval-task-strip span {
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.approval-task-strip strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
 }
 
-.approval-overview-metrics small {
+.approval-task-strip small {
   color: var(--ink-3);
   font-size: 12px;
+  line-height: 1.4;
 }
 
 .approval-flow-layout {
@@ -471,6 +459,12 @@
 
 .approval-dropdown.is-open .approval-dropdown-trigger svg {
   transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .approval-dropdown-trigger svg {
+    transition: none;
+  }
 }
 
 .approval-dropdown-menu {
@@ -1107,7 +1101,9 @@ button.approval-mini-row {
 
 .approval-review-row > button {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px;
+  align-items: center;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -1115,24 +1111,35 @@ button.approval-mini-row {
   text-align: left;
 }
 
-.approval-review-row > button strong,
-.approval-review-row > button span {
-  display: block;
+.approval-review-row-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.approval-review-row-main strong,
+.approval-review-row-main small,
+.approval-review-row-meta {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.approval-review-row > button strong {
+.approval-review-row-main strong {
   color: var(--ink);
   font-size: 13px;
   font-weight: 600;
 }
 
-.approval-review-row > button span {
+.approval-review-row-main small,
+.approval-review-row-meta {
   color: var(--ink-3);
   font-size: 12px;
+}
+
+.approval-review-row-meta {
+  justify-self: end;
 }
 
 .approval-review-row > div {
@@ -1140,4 +1147,29 @@ button.approval-mini-row {
   flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-end;
+}
+
+.approval-review-row > .approval-details {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}
+
+.approval-review-row-technical {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.approval-review-row-technical > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.approval-review-row-technical > span > span:first-child {
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
 }

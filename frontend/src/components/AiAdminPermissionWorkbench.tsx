@@ -246,7 +246,6 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     value: template.id,
     label: permissionPackageTemplateName(template, t)
   }));
-  const draftStatus = permissionDraftStatus(draft);
   const hasApprovedRequest = approvalRequest?.status === "approved";
   const canApply = draft.readiness.canApply && (draft.policyGate.canApplyDirectly || hasApprovedRequest);
   const approvalStatusTone = approvalRequest ? permissionApprovalStatusTone(approvalRequest.status) : "warning";
@@ -329,6 +328,26 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     setPendingApprovalDecision(null);
   };
   const runProductionPrimaryAction = () => {
+    if (journeyStatus.nextActionKey === "action.refreshReviewerQueue") {
+      onRefreshReviewerQueue();
+      return;
+    }
+    if (journeyStatus.nextActionKey === "action.applyPermissionPackage") {
+      onApply();
+      return;
+    }
+    if (journeyStatus.nextActionKey === "action.exportProductionEvidence") {
+      onExportProductionEvidence();
+      return;
+    }
+    if (journeyStatus.nextActionKey === "action.checkPreflight") {
+      onRefreshApplyPreflight();
+      return;
+    }
+    if (journeyStatus.nextActionKey === "action.createApprovalRequest") {
+      onCreateApprovalRequest();
+      return;
+    }
     if (primaryActionCode === "create_approval_request" || productionSummary.primaryActionKey === "action.createApprovalRequest") {
       onCreateApprovalRequest();
       return;
@@ -419,15 +438,16 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     ? t("productionConsole.approvalNotRequired")
     : approvalRequest ? permissionApprovalStatusLabel(approvalRequest.status, t) : t("status.approvalNotRequested");
   const primaryActionCode = workbenchPreview?.summary.primaryActionCode;
-  const primaryActionKey = permissionWorkbenchActionKey(primaryActionCode, productionSummary.primaryActionKey);
-  const workbenchStatusKey = permissionWorkbenchStatusLabelKey(workbenchPreview?.summary.status);
-  const workbenchStatusDetailKey = permissionWorkbenchStatusDetailKey(workbenchPreview?.summary.status);
+  const journeyStatus = resolvePermissionJourneyStatus({
+    approvalRequest,
+    canApply,
+    draft,
+    goLiveReady,
+    productionStatus: productionSummary.status,
+    workbenchStatus: workbenchPreview?.summary.status
+  });
   const readinessReadyCount = workbenchPreview?.summary.readinessReadyCount ?? productionSummary.readyCount;
   const readinessTotalCount = workbenchPreview?.summary.readinessTotalCount || productionSummary.totalCount;
-  const plannedObjectCount = workbenchPreview?.summary.plannedObjectCount
-    ?? (application
-      ? application.tenantEntitlementIds.length + application.workspaceAssignmentIds.length + application.instanceAssignmentIds.length
-      : draft.allowedCapabilities.length * 3);
   const fallbackProcessSteps = permissionRequestProcessStepStatuses(flowSteps, currentWizardStep);
   const processSteps = workbenchPreview?.summary.steps.map((step) => ({
     count: step.count,
@@ -521,8 +541,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
           <p>{t("text.permissionRequestTaskBody")}</p>
         </div>
         <div className="approval-command">
-          <span>{t("text.permissionRequestNextAction")}</span>
-          <strong>{t(primaryActionKey)}</strong>
+          <span>{t("text.permissionRequestActions")}</span>
           <div className="approval-actions">
             <button
               className="primary-button"
@@ -532,7 +551,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               type="button"
             >
               <CheckCircle2 size={14} />
-              {t(primaryActionKey)}
+              {t(journeyStatus.nextActionKey)}
             </button>
             <button className="secondary-button" disabled={liveDataBlocked || permissionRequestBusy} onClick={onRunApprovalJourney} type="button">
               <Workflow size={14} />
@@ -567,13 +586,13 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
         </div>
       </section>
 
-      <section className="approval-overview" aria-label={t("text.permissionRequestStatusSummary")}>
-        <div className="approval-overview-status">
-          <span>{t("text.currentStatus")}</span>
-          <strong>{t(workbenchStatusKey)}</strong>
-          <p>{t(workbenchStatusDetailKey)}</p>
-        </div>
-        <div className="approval-overview-metrics approval-status-summary">
+      <section className="approval-overview" aria-label={t("text.permissionJourneyStatus")}>
+        <div className="approval-task-strip">
+          <article>
+            <span>{t("text.currentStatus")}</span>
+            <strong>{t(journeyStatus.labelKey)}</strong>
+            <small>{t(journeyStatus.detailKey)}</small>
+          </article>
           <article>
             <span>{t("form.permissionPackage")}</span>
             <strong>{permissionPackageTemplateName(draft.template, t)}</strong>
@@ -582,14 +601,9 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             </small>
           </article>
           <article>
-            <span>{t("metric.preflightPlannedObjects")}</span>
-            <strong>{plannedObjectCount}</strong>
-            <small>{t("text.permissionPlannedObjectsDetail")}</small>
-          </article>
-          <article>
-            <span>{t("productionConsole.productionReadiness")}</span>
-            <strong>{readinessReadyCount}/{readinessTotalCount}</strong>
-            <small>{goLiveReady ? t("status.productionReady") : t(goLiveNextKey)}</small>
+            <span>{t("text.permissionRequestNextAction")}</span>
+            <strong>{t(journeyStatus.nextActionKey)}</strong>
+            <small>{readinessReadyCount}/{readinessTotalCount} {t("text.checks")}</small>
           </article>
         </div>
       </section>
@@ -602,7 +616,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                 <strong>{t("section.permissionRequestForm")}</strong>
                 <p>{t("text.permissionRequestScopeHelp")}</p>
               </div>
-              <Badge tone={draftStatus.tone}>{t(draftStatus.labelKey)}</Badge>
+              <Badge tone={journeyStatus.tone}>{t(journeyStatus.labelKey)}</Badge>
             </header>
             <label className="approval-request">
               {t("form.adminRequest")}
@@ -738,9 +752,9 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
           <div className="approval-process-header">
             <div>
               <span>{t("section.permissionRequestProcess")}</span>
-              <strong>{t(workbenchStatusKey)}</strong>
+              <strong>{t(journeyStatus.labelKey)}</strong>
             </div>
-            <Badge tone={permissionWorkbenchStatusTone(workbenchPreview?.summary.status, productionSummary.status)}>
+            <Badge tone={journeyStatus.tone}>
               {approvalStatusLabel}
             </Badge>
           </div>
@@ -971,7 +985,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             </div>
           </section>
 
-          <section>
+          <section className="approval-reviewer-queue">
             <header>
               <strong>{t("section.permissionReviewerQueue")}</strong>
               <button className="secondary-button" disabled={liveDataBlocked || permissionRequestBusy} onClick={onRefreshReviewerQueue} type="button">
@@ -988,24 +1002,40 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               {reviewerQueueRequests.length === 0 ? (
                 <EmptyRow title={t("section.permissionReviewerQueue")} detail={t("empty.reviewerQueue.detail")} />
               ) : null}
-              {reviewerQueueRequests.map((request) => (
-                <article className={`approval-review-row ${request.id === selectedApprovalRequestId ? "is-selected" : ""}`} key={request.id}>
-                  <button onClick={() => onSelectApprovalRequest(request.id)} type="button">
-                    <strong>{permissionPackageTemplateNameById(request.templateId, t)}</strong>
-                    <span>{permissionPackageApprovalRouteLabel(request)}</span>
-                  </button>
-                  <div>
-                    <button className="approval-action-button is-primary" disabled={liveDataBlocked || permissionRequestBusy} onClick={() => beginApprovalDecision("approve", request.id)} type="button">
-                      <CheckCircle2 size={13} />
-                      {t("action.approvePermissionRequest")}
+              {reviewerQueueRequests.map((request) => {
+                const queueLabel = permissionApprovalRequestBusinessLabel(request, templates, tenants, agents, t);
+                return (
+                  <article className={`approval-review-row ${request.id === selectedApprovalRequestId ? "is-selected" : ""}`} key={request.id}>
+                    <button onClick={() => onSelectApprovalRequest(request.id)} type="button">
+                      <span className="approval-review-row-main">
+                        <strong>{queueLabel.template}</strong>
+                        <small>{tx(t, "text.permissionQueueBusinessScope", { caller: queueLabel.caller, target: queueLabel.target, tenant: queueLabel.tenant })}</small>
+                      </span>
+                      <span className="approval-review-row-meta">{tx(t, "text.permissionQueueExpires", { date: formatDate(request.expiresAt) })}</span>
                     </button>
-                    <button className="approval-action-button is-danger" disabled={liveDataBlocked || permissionRequestBusy} onClick={() => beginApprovalDecision("reject", request.id)} type="button">
-                      <TriangleAlert size={13} />
-                      {t("action.rejectPermissionRequest")}
-                    </button>
-                  </div>
-                </article>
-              ))}
+                    <div>
+                      <button className="approval-action-button is-primary" disabled={liveDataBlocked || permissionRequestBusy} onClick={() => beginApprovalDecision("approve", request.id)} type="button">
+                        <CheckCircle2 size={13} />
+                        {t("action.approvePermissionRequest")}
+                      </button>
+                      <button className="approval-action-button is-danger" disabled={liveDataBlocked || permissionRequestBusy} onClick={() => beginApprovalDecision("reject", request.id)} type="button">
+                        <TriangleAlert size={13} />
+                        {t("action.rejectPermissionRequest")}
+                      </button>
+                    </div>
+                    <details className="approval-details">
+                      <summary>{t("text.technicalRequestIds")}</summary>
+                      <div className="approval-review-row-technical">
+                        <TechnicalId label={t("table.request")} value={request.id} />
+                        <TechnicalId label={t("form.tenantId")} value={request.tenantId} />
+                        <TechnicalId label={t("form.workspaceId")} value={request.workspaceId} />
+                        <TechnicalId label={t("form.callerInstance")} value={request.callerInstanceId} />
+                        <TechnicalId label={t("form.target")} value={request.targetId} />
+                      </div>
+                    </details>
+                  </article>
+                );
+              })}
             </div>
           </section>
 
@@ -1301,8 +1331,38 @@ function permissionPackageTemplateNameById(templateId: string, t: Translator) {
   return t(`permissionPackage.${templateId}.name`, templateId);
 }
 
+function permissionApprovalRequestBusinessLabel(
+  request: PermissionPackageApprovalRequest,
+  templates: PermissionPackageTemplate[],
+  tenants: Tenant[],
+  agents: Agent[],
+  t: Translator
+) {
+  const template = templates.find((item) => item.id === request.templateId);
+  const tenant = tenants.find((item) => item.id === request.tenantId);
+  const caller = agents.find((item) => item.id === request.callerInstanceId);
+  const target = agents.find((item) => item.id === request.targetId);
+  return {
+    caller: caller ? permissionEntityDisplayName(caller.name, t) : t("text.unknownCaller"),
+    target: target ? permissionEntityDisplayName(target.name, t) : t("text.unknownTarget"),
+    template: template ? permissionPackageTemplateName(template, t) : t("text.unknownPermissionPackage"),
+    tenant: tenant ? permissionEntityDisplayName(tenant.name, t) : t("text.unknownTenant")
+  };
+}
+
 function permissionPackageTemplateSummary(template: PermissionPackageTemplate, t: Translator) {
   return t(`permissionPackage.${template.id}.summary`, template.summary);
+}
+
+function TechnicalId({ label, value }: { label: string; value: string }) {
+  return (
+    <span>
+      <span>{label}</span>
+      <span className="technical-id" title={value || "-"} translate="no">
+        <code>{value || "-"}</code>
+      </span>
+    </span>
+  );
 }
 
 function permissionRequestStepSectionId(step: PermissionRequestStepTarget) {
@@ -1314,6 +1374,70 @@ function permissionRequestStepTarget(step: PermissionPackageWorkbenchStepKey | P
   if (step === "validation") return "validation";
   if (step === "acceptance") return "acceptance";
   return step;
+}
+
+function resolvePermissionJourneyStatus(args: {
+  approvalRequest: PermissionPackageApprovalRequest | null;
+  canApply: boolean;
+  draft: PermissionPackageDraft;
+  goLiveReady: boolean;
+  productionStatus: AiAdminProductionConsoleStatus;
+  workbenchStatus?: PermissionPackageWorkbenchPreview["summary"]["status"];
+}): { labelKey: string; detailKey: string; tone: Tone; nextActionKey: string } {
+  if (args.goLiveReady) {
+    return {
+      detailKey: "permissionJourney.statusDetail.ready",
+      labelKey: "permissionJourney.status.ready",
+      nextActionKey: "action.exportProductionEvidence",
+      tone: "success"
+    };
+  }
+  if (args.approvalRequest?.status === "pending") {
+    return {
+      detailKey: "permissionJourney.statusDetail.awaitingApproval",
+      labelKey: "permissionJourney.status.awaitingApproval",
+      nextActionKey: "action.refreshReviewerQueue",
+      tone: "warning"
+    };
+  }
+  if (args.approvalRequest?.status === "rejected") {
+    return {
+      detailKey: "permissionJourney.statusDetail.rejected",
+      labelKey: "permissionJourney.status.rejected",
+      nextActionKey: "action.startPermissionApproval",
+      tone: "danger"
+    };
+  }
+  if (args.canApply) {
+    return {
+      detailKey: "permissionJourney.statusDetail.readyToApply",
+      labelKey: "permissionJourney.status.readyToApply",
+      nextActionKey: "action.applyPermissionPackage",
+      tone: "info"
+    };
+  }
+  if (args.draft.readiness.missingFields.length > 0 || args.workbenchStatus === "needs_input") {
+    return {
+      detailKey: "permissionJourney.statusDetail.needsInput",
+      labelKey: "permissionJourney.status.needsInput",
+      nextActionKey: "action.createApprovalRequest",
+      tone: "warning"
+    };
+  }
+  if (args.workbenchStatus === "blocked" || args.productionStatus === "blocked") {
+    return {
+      detailKey: "permissionJourney.statusDetail.blocked",
+      labelKey: "permissionJourney.status.blocked",
+      nextActionKey: "action.checkPreflight",
+      tone: "danger"
+    };
+  }
+  return {
+    detailKey: "permissionJourney.statusDetail.needsApproval",
+    labelKey: "permissionJourney.status.needsApproval",
+    nextActionKey: "action.createApprovalRequest",
+    tone: "warning"
+  };
 }
 
 function permissionDraftStatus(draft: PermissionPackageDraft): { labelKey: string; tone: Tone } {

@@ -1,0 +1,387 @@
+# Permission UI Production Hardening Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Make AgentHarbor's Permission Changes workspace feel like a production B2B task flow, not a demo console, while preserving the core journey: configure -> approve -> apply -> status check -> acceptance.
+
+**Architecture:** Keep the existing `AiAdminPermissionWorkbench` boundary, but introduce small presentation helpers inside that component before extracting files. The first pass fixes visible product semantics: one authoritative status, business-readable queue rows, a quieter first screen, and fewer technical identifiers in the primary path.
+
+**Tech Stack:** React, TypeScript, Vite, existing CSS modules under `frontend/src/styles`, Node test runner, GitHub PR #74 branch `codex/production-readiness-gate`.
+
+---
+
+## Product Consensus
+
+- Main users are platform admins and security reviewers, not protocol implementers.
+- Primary path must show business terms: tenant name, workspace name, caller name, target name, permission package name, reviewer, and next action.
+- Technical identifiers remain available only in advanced/details areas, copyable when necessary.
+- The page must never imply two conflicting states at once. If an approval request is pending, the dominant status is pending approval, even if previous demo evidence exists.
+- The first viewport should answer three questions: where am I, what is the current status, and what should I do next?
+- Evidence, preflight internals, impact details, and audit material are secondary until the operator asks for them.
+
+## Files
+
+- Modify `frontend/src/components/AiAdminPermissionWorkbench.tsx`: status resolver, queue row rendering, first-screen hierarchy, copy cleanup.
+- Modify `frontend/src/styles/permission-workbench.css`: compact task layout, queue row visual hierarchy, process nav polish, collapsible secondary content.
+- Modify `frontend/src/i18n.ts`: Chinese and English copy for unified statuses, queue summaries, and advanced technical labels.
+- Modify `frontend/tests/permissionFlowLayout.test.mjs`: structural regression tests for status precedence, technical-field hiding, queue row business labels, and first-screen focus.
+- Modify `frontend/tests/i18n.test.mjs`: translation key parity and Chinese copy checks.
+- Modify `docs/engineering/user-journey-review-2026-06-10.md`: record the sixth UI production hardening pass.
+- Modify `CHANGELOG.md`: user-facing note under Unreleased.
+
+## Task 1: Unified Journey Status
+
+- [x] **Step 1: Write failing tests**
+
+Add assertions to `frontend/tests/permissionFlowLayout.test.mjs`:
+
+```js
+test("permission request uses one authoritative journey status", () => {
+  assert.match(workbench, /const journeyStatus = resolvePermissionJourneyStatus\(/);
+  assert.match(workbench, /journeyStatus\.labelKey/);
+  assert.match(workbench, /journeyStatus\.detailKey/);
+  assert.match(workbench, /journeyStatus\.tone/);
+  assert.doesNotMatch(workbench, /<Badge tone=\{draftStatus\.tone\}>\{t\(draftStatus\.labelKey\)\}<\/Badge>/);
+  assert.match(workbench, /aria-label=\{t\("text.permissionJourneyStatus"\)\}/);
+});
+```
+
+- [x] **Step 2: Run focused test and confirm failure**
+
+Run:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs
+```
+
+Expected: the new status resolver assertions fail before implementation.
+
+- [x] **Step 3: Implement status resolver**
+
+In `AiAdminPermissionWorkbench.tsx`, add a local helper near existing helper functions:
+
+```ts
+function resolvePermissionJourneyStatus(args: {
+  approvalRequest: PermissionPackageApprovalRequest | null;
+  canApply: boolean;
+  draft: PermissionPackageDraft;
+  goLiveReady: boolean;
+  productionStatus: AiAdminProductionConsoleStatus;
+  workbenchStatus?: PermissionPackageWorkbenchPreview["summary"]["status"];
+}): { labelKey: string; detailKey: string; tone: Tone; nextActionKey: string } {
+  if (args.goLiveReady) {
+    return {
+      detailKey: "permissionJourney.statusDetail.ready",
+      labelKey: "permissionJourney.status.ready",
+      nextActionKey: "action.exportProductionEvidence",
+      tone: "success"
+    };
+  }
+  if (args.approvalRequest?.status === "pending") {
+    return {
+      detailKey: "permissionJourney.statusDetail.awaitingApproval",
+      labelKey: "permissionJourney.status.awaitingApproval",
+      nextActionKey: "action.refreshReviewerQueue",
+      tone: "warning"
+    };
+  }
+  if (args.approvalRequest?.status === "rejected") {
+    return {
+      detailKey: "permissionJourney.statusDetail.rejected",
+      labelKey: "permissionJourney.status.rejected",
+      nextActionKey: "action.startPermissionApproval",
+      tone: "danger"
+    };
+  }
+  if (args.canApply) {
+    return {
+      detailKey: "permissionJourney.statusDetail.readyToApply",
+      labelKey: "permissionJourney.status.readyToApply",
+      nextActionKey: "action.applyPermissionPackage",
+      tone: "accent"
+    };
+  }
+  if (args.draft.readiness.missingFields.length > 0) {
+    return {
+      detailKey: "permissionJourney.statusDetail.needsInput",
+      labelKey: "permissionJourney.status.needsInput",
+      nextActionKey: "action.createApprovalRequest",
+      tone: "warning"
+    };
+  }
+  return {
+    detailKey: "permissionJourney.statusDetail.needsApproval",
+    labelKey: "permissionJourney.status.needsApproval",
+    nextActionKey: "action.createApprovalRequest",
+    tone: "warning"
+  };
+}
+```
+
+Use `journeyStatus` in the header and overview instead of mixing `workbenchStatusKey`, `draftStatus`, and `productionSummary.status`.
+
+- [x] **Step 4: Add i18n**
+
+Add English and Chinese keys:
+
+```ts
+"text.permissionJourneyStatus": "Permission journey status",
+"permissionJourney.status.ready": "Ready for production",
+"permissionJourney.status.awaitingApproval": "Waiting for approval",
+"permissionJourney.status.rejected": "Approval rejected",
+"permissionJourney.status.readyToApply": "Ready to apply",
+"permissionJourney.status.needsInput": "Request needs input",
+"permissionJourney.status.needsApproval": "Approval required",
+"permissionJourney.statusDetail.ready": "Permission has been applied and production evidence is complete.",
+"permissionJourney.statusDetail.awaitingApproval": "A reviewer must approve this request before permissions can be applied.",
+"permissionJourney.statusDetail.rejected": "The reviewer rejected this request. Update the request before submitting again.",
+"permissionJourney.statusDetail.readyToApply": "Approval and checks are ready. Apply the permissions to continue.",
+"permissionJourney.statusDetail.needsInput": "Complete tenant, workspace, caller, target, and package selection first.",
+"permissionJourney.statusDetail.needsApproval": "Submit the request for approval before applying permissions.",
+```
+
+Chinese copy should use:
+
+```ts
+"text.permissionJourneyStatus": "权限变更状态",
+"permissionJourney.status.ready": "可上线",
+"permissionJourney.status.awaitingApproval": "等待审批",
+"permissionJourney.status.rejected": "审批已拒绝",
+"permissionJourney.status.readyToApply": "可以应用",
+"permissionJourney.status.needsInput": "申请待补充",
+"permissionJourney.status.needsApproval": "需要审批",
+"permissionJourney.statusDetail.ready": "权限已应用，上线证据已完成。",
+"permissionJourney.statusDetail.awaitingApproval": "需要审批人通过后才能应用权限。",
+"permissionJourney.statusDetail.rejected": "审批人已拒绝，请调整申请后重新提交。",
+"permissionJourney.statusDetail.readyToApply": "审批和检查已就绪，可以应用权限继续推进。",
+"permissionJourney.statusDetail.needsInput": "请先补齐租户、工作区、调用方、目标服务和权限包。",
+"permissionJourney.statusDetail.needsApproval": "应用权限前需要先提交审批。",
+```
+
+- [x] **Step 5: Verify**
+
+Run:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+```
+
+Expected: all focused tests pass.
+
+## Task 2: Hide Technical Fields From Primary Queue Rows
+
+- [x] **Step 1: Write failing tests**
+
+Add assertions:
+
+```js
+test("permission reviewer queue uses business labels before technical identifiers", () => {
+  assert.match(workbench, /function permissionApprovalRequestBusinessLabel/);
+  assert.match(workbench, /className="approval-review-row-main"/);
+  assert.match(workbench, /className="approval-review-row-meta"/);
+  assert.match(workbench, /<TechnicalId/);
+  const queueStart = workbench.indexOf('<section className="approval-reviewer-queue"');
+  const advancedStart = workbench.indexOf('<details className="approval-details"', queueStart);
+  assert.notEqual(queueStart, -1);
+  assert.notEqual(advancedStart, -1);
+  assert.doesNotMatch(workbench.slice(queueStart, advancedStart), /request\.tenantId/);
+  assert.doesNotMatch(workbench.slice(queueStart, advancedStart), /request\.callerInstanceId/);
+});
+```
+
+- [x] **Step 2: Implement business labels**
+
+In `AiAdminPermissionWorkbench.tsx`, add helper functions:
+
+```ts
+function permissionApprovalRequestBusinessLabel(
+  request: PermissionPackageApprovalRequest,
+  templates: PermissionPackageTemplate[],
+  tenants: Tenant[],
+  agents: Agent[],
+  t: Translator
+) {
+  const template = templates.find((item) => item.id === request.packageId);
+  const tenant = tenants.find((item) => item.id === request.tenantId);
+  const caller = agents.find((item) => item.id === request.callerInstanceId);
+  return {
+    caller: caller ? permissionEntityDisplayName(caller.name, t) : t("text.unknownCaller"),
+    template: template ? permissionPackageTemplateName(template, t) : t("text.unknownPermissionPackage"),
+    tenant: tenant ? permissionEntityDisplayName(tenant.name, t) : t("text.unknownTenant")
+  };
+}
+```
+
+Render queue rows as:
+
+```tsx
+const queueLabel = permissionApprovalRequestBusinessLabel(request, templates, tenants, agents, t);
+...
+<span className="approval-review-row-main">
+  <strong>{queueLabel.template}</strong>
+  <small>{tx(t, "text.permissionQueueBusinessScope", { tenant: queueLabel.tenant, caller: queueLabel.caller })}</small>
+</span>
+<span className="approval-review-row-meta">
+  {formatDate(request.expiresAt)}
+</span>
+```
+
+Move raw IDs into `TechnicalId` inside advanced details.
+
+- [x] **Step 3: Add i18n and styles**
+
+Add keys for unknown labels and queue meta. Add CSS for `.approval-review-row-main`, `.approval-review-row-meta`, and row truncation using `min-width: 0`.
+
+- [x] **Step 4: Verify**
+
+Run:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+```
+
+Expected: all focused tests pass and no queue row primary label contains raw IDs in browser smoke test.
+
+## Task 3: First Viewport Task Flow
+
+- [x] **Step 1: Write failing tests**
+
+Assert the first screen has one primary status block and secondary technical/evidence areas are after the process panel:
+
+```js
+test("permission request first viewport prioritizes one task flow", () => {
+  const headerStart = workbench.indexOf('<section className="approval-header"');
+  const contextStart = workbench.indexOf('<section className="approval-context-bar"', headerStart);
+  const overviewStart = workbench.indexOf('<section className="approval-overview"', contextStart);
+  const flowStart = workbench.indexOf('<div className="approval-flow-layout">', overviewStart);
+  assert.ok(headerStart >= 0 && contextStart > headerStart && overviewStart > contextStart && flowStart > overviewStart);
+  assert.match(workbench, /className="approval-task-strip"/);
+  assert.match(styles, /\.approval-task-strip\s*\{/);
+  assert.match(styles, /\.approval-process-panel\s*\{[^}]*position:\s*sticky;/s);
+});
+```
+
+- [x] **Step 2: Implement task strip**
+
+Replace the metrics-heavy top area with a tighter task strip:
+
+```tsx
+<section className="approval-task-strip" aria-label={t("text.permissionRequestTaskStrip")}>
+  <article>
+    <span>{t("text.currentStatus")}</span>
+    <strong>{t(journeyStatus.labelKey)}</strong>
+    <small>{t(journeyStatus.detailKey)}</small>
+  </article>
+  <article>
+    <span>{t("text.permissionRequestScope")}</span>
+    <strong>{tenantPath.primary}</strong>
+    <small>{workspaceName} · {callerName}</small>
+  </article>
+  <article>
+    <span>{t("text.permissionRequestNextAction")}</span>
+    <strong>{t(journeyStatus.nextActionKey)}</strong>
+    <small>{permissionPackageTemplateName(draft.template, t)}</small>
+  </article>
+</section>
+```
+
+Keep detailed metrics below or inside secondary details, not as the dominant first-view content.
+
+- [x] **Step 3: Verify layout**
+
+Run focused tests and browser smoke:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs
+```
+
+Browser expected: first viewport shows status, scope, next action, form, and sticky process panel without raw technical identifiers.
+
+## Task 4: Copy, i18n, and Microinteraction Polish
+
+- [x] **Step 1: Write failing tests**
+
+Add checks that duplicated copy is removed:
+
+```js
+test("permission request copy avoids repeated step labels", () => {
+  assert.doesNotMatch(i18n, /"permissionWorkbench\\.detail\\.approval_approved": "审批已通过且匹配当前申请。"/);
+  assert.doesNotMatch(i18n, /"permissionWorkbench\\.detail\\.apply_applied": "权限已应用。"/);
+  assert.match(i18n, /"permissionWorkbench\\.detail\\.approval_approved": "已通过，等待应用。"/);
+  assert.match(i18n, /"permissionWorkbench\\.detail\\.apply_applied": "已应用，等待验证。"/);
+});
+```
+
+- [x] **Step 2: Update copy**
+
+Replace repeated Chinese text:
+
+- `审批已通过且匹配当前申请。` -> `已通过，等待应用。`
+- `权限已应用。` -> `已应用，等待验证。`
+- `运行证据已完整。` -> `验证已通过。`
+- `上线就绪检查已完成。` -> `证据已完成。`
+
+Mirror concise English copy.
+
+- [x] **Step 3: Add reduced-motion safe polish**
+
+Only animate `box-shadow`, `border-color`, `background`, `color`, `opacity`, or `transform`; do not use `transition: all`.
+
+- [x] **Step 4: Verify**
+
+Run:
+
+```bash
+pnpm --dir frontend test
+pnpm --dir frontend build
+```
+
+Expected: 0 failures and build succeeds.
+
+## Task 5: Docs, Browser Verification, and PR Update
+
+- [x] **Step 1: Update docs**
+
+Append a sixth pass to `docs/engineering/user-journey-review-2026-06-10.md`:
+
+- unified status model
+- business-readable approval queue rows
+- first viewport task strip
+- technical IDs moved to advanced details
+- focused and browser verification
+
+Update `CHANGELOG.md` under Unreleased.
+
+- [x] **Step 2: Run full gates**
+
+Run:
+
+```bash
+git diff --check
+make check
+make release-check
+```
+
+Expected: all pass.
+
+- [x] **Step 3: Browser smoke test**
+
+Use the in-app browser at `http://127.0.0.1:5174/` and verify:
+
+- first viewport has one status, one scope, and one next action
+- process steps are clickable
+- approval queue primary labels are business-readable
+- no raw tenant/agent IDs appear in primary path
+- Access Profile handoff still carries readable context
+
+- [x] **Step 4: Commit and update PR**
+
+Commit:
+
+```bash
+git add CHANGELOG.md docs/engineering/user-journey-review-2026-06-10.md frontend/src/components/AiAdminPermissionWorkbench.tsx frontend/src/i18n.ts frontend/src/styles/permission-workbench.css frontend/tests/i18n.test.mjs frontend/tests/permissionFlowLayout.test.mjs docs/superpowers/plans/2026-06-11-permission-ui-production-hardening.md
+git commit -m "feat: harden permission journey ui"
+git push
+```
+
+Expected: PR #74 updates with the new commit.

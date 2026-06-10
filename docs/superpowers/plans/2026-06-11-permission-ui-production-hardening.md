@@ -1201,3 +1201,34 @@ Browser verification on `http://127.0.0.1:5174/#ai-admin` confirmed `新建权�
 Commit and push if clean, then inspect PR #74.
 
 Committed the new-draft isolation fix after focused tests, browser verification, `git diff --check`, `make check`, and `make release-check`.
+
+## Task 33: Stage The Header Secondary Action
+
+- [x] **Step 1: Inspect the new draft header action**
+
+After new-draft isolation, the reset state correctly showed `需要审批 / 申请信息 / 提交审批`, but the header secondary action still said `查看验收明细`, which pointed operators to a later acceptance phase before approval or apply had happened.
+
+- [x] **Step 2: Derive secondary action by journey phase**
+
+The header secondary action now shows `查看处理流程` before runtime validation, switches to `查看验收明细` once validation/acceptance details are relevant, and keeps `查看权限画像` for completed journeys.
+
+- [x] **Step 3: Verify focused tests, browser, and repository gates**
+
+Run focused tests and browser verification, then run `git diff --check`, `make check`, and `make release-check`.
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+git diff --check
+make check
+make release-check
+```
+
+Browser verification on `http://127.0.0.1:5174/#ai-admin` confirmed early/approval states show `查看处理流程`, while completed state keeps `导出证据` as primary and `查看权限画像` as the secondary action.
+
+- [x] **Step 4: Commit, push, and inspect PR checks**
+
+Commit and push if clean, then inspect PR #74.
+
+Committed the staged secondary-action copy after focused tests, browser verification, `git diff --check`, `make check`, and `make release-check`.

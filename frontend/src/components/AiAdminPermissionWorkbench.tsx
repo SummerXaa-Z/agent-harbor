@@ -514,9 +514,11 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const liveDataBlocked = !liveDataAvailable;
   const quickSecondaryActionLabel = goLiveReady
     ? t("action.openAccessProfile")
-    : t("action.openAcceptanceDetails");
+    : runtimeValidationReady ? t("action.openAcceptanceDetails") : t("action.openProcessDetails");
   const quickSecondaryActionDisabled = goLiveReady ? permissionRequestBusy : false;
-  const runQuickSecondaryAction = goLiveReady ? onOpenAccessProfile : scrollToAcceptanceDetails;
+  const runQuickSecondaryAction = goLiveReady
+    ? onOpenAccessProfile
+    : runtimeValidationReady ? scrollToAcceptanceDetails : () => scrollToPermissionRequestStep(currentWizardStep);
   const goLivePrimaryActionKey = goLiveReady
     ? "action.exportProductionEvidence"
     : runtimeValidationReady

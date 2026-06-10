@@ -517,9 +517,10 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /onOpenAccessProfile/);
   assert.match(workbench, /onStartNewPermissionChange/);
   assert.match(workbench, /const quickSecondaryActionLabel = goLiveReady/);
+  assert.match(workbench, /runtimeValidationReady \? t\("action\.openAcceptanceDetails"\) : t\("action\.openProcessDetails"\)/);
   assert.match(workbench, /function scrollToAcceptanceDetails\(\)/);
   assert.match(workbench, /id="permission-request-acceptance-details"/);
-  assert.match(workbench, /const runQuickSecondaryAction = goLiveReady \? onOpenAccessProfile : scrollToAcceptanceDetails/);
+  assert.match(workbench, /runtimeValidationReady \? scrollToAcceptanceDetails : \(\) => scrollToPermissionRequestStep\(currentWizardStep\)/);
   assert.doesNotMatch(workbench, /const runQuickSecondaryAction = goLiveReady \? onOpenAccessProfile : onRunApprovalJourney/);
   assert.match(app, /function openAiAdminAccessProfile\(\)/);
   assert.match(app, /setActiveNav\("access"\)/);

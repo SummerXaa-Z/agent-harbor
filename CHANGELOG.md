@@ -82,6 +82,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 已生效的锁定态权限变更现在会在只读复核提示旁提供可见的“新建权限变更”出口；审批冻结中的请求仍通过审批流程处理，避免绕过撤回。
 - Starting a new Permission Change now enters an isolated draft mode that ignores historical approval, application, and readiness evidence until the operator submits the new request.
 - 新建权限变更现在会进入独立草稿模式，在操作员提交新请求前不会重新吸附历史审批、落地和就绪证据。
+- Permission Changes now labels the header secondary action by stage: early drafts review the process, validation-ready journeys review acceptance details, and completed journeys open the access profile.
+- 权限变更页头辅助动作现在按阶段命名：早期草稿查看处理流程，进入验证后查看验收明细，完成后查看权限画像。
 - `make ai-admin-browser-journey` now starts the API with split requester and reviewer admin identities by default, and the approval scenario verifies that requester-key impersonation of the reviewer is rejected before the real reviewer approves.
 - `make ai-admin-browser-journey` 现在默认用分离的申请人与审批人管理身份启动 API，并在审批场景中先验证申请人 key 冒充审批人会被拒绝，再由真实审批人批准。
 - Web console Permission Changes now treats not-yet-requested and pending approvals as pending work instead of production blockers, puts the next safe action in the task header, and keeps the tenant access profile in the dedicated Access workspace.

@@ -1372,3 +1372,13 @@ The first two Permission Changes process steps now read `Configure scope` / `配
 - [x] **Step 2: Add i18n coverage**
 
 `frontend/tests/i18n.test.mjs` now locks the Simplified Chinese process labels so the main journey keeps admin-oriented wording.
+
+## Task 43: Clarify Process Step Accessible Names
+
+- [x] **Step 1: Add localized step labels for assistive technology**
+
+Permission Changes process step buttons now expose `text.permissionProcessStepAria` as their accessible name. The label includes step number, task label, and current evidence detail, so assistive technology reads a clear sentence instead of concatenating visible text such as `1配置范围已选择...`.
+
+- [x] **Step 2: Add regression coverage**
+
+`frontend/tests/permissionFlowLayout.test.mjs` asserts the process step buttons build their aria label from the localized template, and `frontend/tests/i18n.test.mjs` locks the Simplified Chinese label template.

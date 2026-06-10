@@ -124,6 +124,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("section.permissionWizardApproval"), "审批处理");
   assert.equal(t("permissionWorkbench.step.request"), "配置范围");
   assert.equal(t("permissionWorkbench.step.approval"), "审批处理");
+  assert.equal(t("text.permissionProcessStepAria"), "第 {index} 步：{label}，{detail}");
   assert.equal(t("section.permissionWizardApply"), "应用权限");
   assert.equal(t("section.permissionWizardGoLive"), "状态检查");
   assert.equal(t("demo.coreJourneyTarget"), "标准工具服务");

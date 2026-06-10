@@ -866,23 +866,27 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             </div>
           </div>
           <div className="approval-process-list">
-            {processSteps.map((step, index) => (
-              <button
-                aria-current={step.status === "current" ? "step" : undefined}
-                className={`approval-process-step status-${step.status}`}
-                data-step-target={step.targetStep}
-                key={step.key}
-                onClick={() => scrollToPermissionRequestStep(step.targetStep)}
-                type="button"
-              >
-                <span>{index + 1}</span>
-                <div>
-                  <strong>{t(step.labelKey)}</strong>
-                  <small>{step.detail}</small>
-                </div>
-                {typeof step.count === "number" && typeof step.total === "number" ? <em>{step.count}/{step.total}</em> : null}
-              </button>
-            ))}
+            {processSteps.map((step, index) => {
+              const stepLabel = t(step.labelKey);
+              return (
+                <button
+                  aria-current={step.status === "current" ? "step" : undefined}
+                  aria-label={tx(t, "text.permissionProcessStepAria", { detail: step.detail, index: index + 1, label: stepLabel })}
+                  className={`approval-process-step status-${step.status}`}
+                  data-step-target={step.targetStep}
+                  key={step.key}
+                  onClick={() => scrollToPermissionRequestStep(step.targetStep)}
+                  type="button"
+                >
+                  <span>{index + 1}</span>
+                  <div>
+                    <strong>{stepLabel}</strong>
+                    <small>{step.detail}</small>
+                  </div>
+                  {typeof step.count === "number" && typeof step.total === "number" ? <em>{step.count}/{step.total}</em> : null}
+                </button>
+              );
+            })}
           </div>
           <section className="approval-process-block" id={permissionRequestStepSectionId("approval")}>
             <header>

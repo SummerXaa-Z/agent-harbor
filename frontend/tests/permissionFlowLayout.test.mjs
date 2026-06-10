@@ -96,6 +96,8 @@ test("permission request process steps navigate to their operator sections", () 
   assert.match(workbench, /id=\{permissionRequestStepSectionId\("validation"\)\}/);
   assert.match(workbench, /id=\{permissionRequestStepSectionId\("acceptance"\)\}/);
   assert.match(workbench, /targetStep: permissionRequestStepTarget\(step\.key\)/);
+  assert.match(workbench, /const stepLabel = t\(step\.labelKey\)/);
+  assert.match(workbench, /aria-label=\{tx\(t, "text\.permissionProcessStepAria", \{ detail: step\.detail, index: index \+ 1, label: stepLabel \}\)\}/);
   assert.match(workbench, /<button[\s\S]*data-step-target=\{step\.targetStep\}[\s\S]*onClick=\{\(\) => scrollToPermissionRequestStep\(step\.targetStep\)\}/);
   assert.match(styles, /\.approval-process-step\s*\{[^}]*border:\s*0;/s);
   assert.match(styles, /\.approval-process-step:hover\s*\{/);

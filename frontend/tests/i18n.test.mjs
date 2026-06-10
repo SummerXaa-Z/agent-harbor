@@ -37,7 +37,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("nav.evidence"), "上线证据");
   assert.equal(t("nav.registry"), "Agent 与工具");
   assert.equal(t("navGroup.primary"), "主流程");
-  assert.equal(t("navGroup.audit"), "运行审计");
+  assert.equal(t("navGroup.audit"), "运行与审计");
   assert.equal(t("navGroup.configuration"), "系统配置");
   assert.equal(t("navDetail.ai-admin"), "配置、审批、应用并验证权限变更。");
   assert.equal(t("navDetail.access"), "查看租户、工作区、调用方最终权限。");
@@ -47,6 +47,8 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("page.evidence"), "上线验收");
   assert.equal(t("page.traces"), "运行审计");
   assert.equal(t("panel.auditTraces"), "运行审计");
+  assert.equal(t("empty.auditTraces.title"), "暂无运行记录");
+  assert.equal(t("empty.auditTraces.detail"), "允许、拒绝和工具发现过滤记录会显示在这里。");
   assert.equal(t("panel.evidenceRuns"), "历史证据");
   assert.equal(t("empty.evidenceRuns.title"), "暂无历史证据");
   assert.equal(t("section.goLiveAcceptance"), "上线验收");

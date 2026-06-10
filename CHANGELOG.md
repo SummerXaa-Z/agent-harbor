@@ -72,6 +72,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - TechnicalId 现在作为共享组件用于密集控制台视图，在主业务路径外保持一致的缩略和复制体验。
 - Capability Governance grant creation now uses business tenant, workspace, caller, and access-object pickers, with custom subject selectors kept in advanced settings.
 - 能力治理创建授权链现在使用业务租户、工作区、调用方和访问对象选择器，自定义主体选择器收进高级设置。
+- Runtime navigation wording now separates the "Runtime & Audit" group from the "Runtime Audit" workspace and uses a runtime-record empty state instead of legacy audit-trace copy.
+- 运行导航文案现在区分“运行与审计”分组和“运行审计”工作区，空态改为运行记录，不再沿用旧的审计追踪措辞。
 - `make ai-admin-browser-journey` now starts the API with split requester and reviewer admin identities by default, and the approval scenario verifies that requester-key impersonation of the reviewer is rejected before the real reviewer approves.
 - `make ai-admin-browser-journey` 现在默认用分离的申请人与审批人管理身份启动 API，并在审批场景中先验证申请人 key 冒充审批人会被拒绝，再由真实审批人批准。
 - Web console Permission Changes now treats not-yet-requested and pending approvals as pending work instead of production blockers, puts the next safe action in the task header, and keeps the tenant access profile in the dedicated Access workspace.

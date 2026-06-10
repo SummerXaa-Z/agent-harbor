@@ -1009,6 +1009,31 @@ make check
 make release-check
 ```
 
+Committed and pushed `982cb92 fix: use business pickers for capability grants` to `codex/production-readiness-gate`. GitHub PR #74 reported fresh Backend, Frontend, and PostgreSQL integration checks as pending immediately after push.
+
+## Task 28: Separate Runtime Group And Workspace Copy
+
+- [x] **Step 1: Inspect runtime navigation wording**
+
+The sidebar used `运行审计` both as the navigation group and the workspace item, while the empty runtime list still said `暂无审计追踪`. This made the shell feel terminology-heavy after the runtime audit page itself had been simplified.
+
+- [x] **Step 2: Update bilingual copy**
+
+The runtime group is now `运行与审计` / `Runtime & Audit`, the workspace remains `运行审计` / `Runtime Audit`, and the empty trace state now talks about runtime records.
+
+- [x] **Step 3: Verify focused tests and repository gates**
+
+Run i18n focused tests plus `git diff --check`, `make check`, and `make release-check`; then commit and push if clean.
+
+Verified locally before commit:
+
+```bash
+pnpm --dir frontend exec node --test tests/i18n.test.mjs
+git diff --check
+make check
+make release-check
+```
+
 Committed and pushed `7b1a678 fix: quiet runtime audit technical details` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=UNSTABLE` because Backend, Frontend, and PostgreSQL integration checks were in progress immediately after push.
 
 ## Task 27: Use Business Pickers In Capability Governance

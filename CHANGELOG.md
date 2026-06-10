@@ -124,6 +124,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web 控制台权限变更页现在使用唯一权威的旅程状态，并用首屏任务条展示当前状态、权限包和下一步；审批队列优先展示业务可读信息，原始 ID 收进技术详情。
 - Web console Permission Changes now keeps the process panel visible at 1024px desktop widths, switches the context and task strips to a single-column mobile layout, and points the completed quick action to the access profile instead of rerunning validation.
 - Web 控制台权限变更页现在在 1024px 中窄桌面宽度仍保留处理流程栏，并在移动端将上下文条和任务条切成单列；完成态快捷操作会指向权限画像，而不是继续提示运行验证。
+- Tenant Access Profile now shows business tenant names in the tenant-scope list and keeps raw tenant identifiers inside advanced technical details.
+- 租户访问画像现在在租户范围列表优先展示业务租户名，原始租户标识收进高级技术详情。
 - Web console visual design review follow-up: design tokens now govern component colors, shadows, focus rings, button sizing, technical-id display, System Self-Check telemetry, and Agent registry ordering.
 - Web 控制台视觉设计审查项已落地：设计 token 现在约束组件色值、阴影、焦点环、按钮尺寸、技术 ID 展示、系统自检指标展示范围和 Agent 注册表顺序。
 - Web console UX review follow-up: desktop navigation now keeps readable grouped labels at medium widths, Permission Changes uses one authoritative context bar with non-truncating core selectors, and Capability Governance prioritizes the grant operation area over KPI cards.

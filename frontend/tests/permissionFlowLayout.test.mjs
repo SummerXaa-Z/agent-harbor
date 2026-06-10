@@ -9,6 +9,7 @@ const workbenchStyles = readFileSync(new URL("../src/styles/permission-workbench
 const styles = `${baseStyles}\n${workbenchStyles}`;
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
+const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const accessProfileView = readFileSync(new URL("../src/components/TenantAccessProfileView.tsx", import.meta.url), "utf8");
 const capabilityGovernanceView = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
 const presenters = readFileSync(new URL("../src/consolePresenters.ts", import.meta.url), "utf8");
@@ -158,6 +159,26 @@ test("permission request carries readable context into access profile workspace"
   assert.match(i18n, /"text\.accessProfileHandoffDetail"/);
 });
 
+test("access profile tenant scope prefers business labels over raw tenant ids", () => {
+  assert.match(technicalId, /export function TechnicalId/);
+  assert.match(workbench, /import \{ TechnicalId \} from "\.\/TechnicalId"/);
+  assert.match(accessProfileView, /import \{ TechnicalId \} from "\.\/TechnicalId"/);
+  assert.match(accessProfileView, /const tenantNameById = useMemo/);
+  assert.match(accessProfileView, /const tenantName = permissionEntityDisplayName\(tenant\.name, t\)/);
+  assert.match(accessProfileView, /const parentTenantName = tenant\.parentTenantId \? tenantNameById\.get\(tenant\.parentTenantId\)/);
+  assert.match(accessProfileView, /t\("text\.parentTenantOutsideScope"\)/);
+  assert.match(i18n, /"text\.parentTenantOutsideScope": "上级租户未展开"/);
+  const tenantListStart = accessProfileView.indexOf('<div className="access-tenant-list"');
+  const tenantTechnicalStart = accessProfileView.indexOf('<details className="access-tenant-technical"', tenantListStart);
+  assert.notEqual(tenantListStart, -1);
+  assert.notEqual(tenantTechnicalStart, -1);
+  assert.doesNotMatch(accessProfileView.slice(tenantListStart, tenantTechnicalStart), />\{tenant\.id\}</);
+  assert.doesNotMatch(accessProfileView.slice(tenantListStart, tenantTechnicalStart), /\$\{tenant\.parentTenantId\}/);
+  assert.match(accessProfileView, /<TechnicalId label=\{t\("form\.tenantId"\)\} value=\{tenant\.id\}/);
+  assert.match(accessProfileView, /<TechnicalId label=\{t\("text\.parentTenant"\)\} value=\{tenant\.parentTenantId\}/);
+  assert.match(styles, /\.access-tenant-technical\s*\{[^}]*grid-column:\s*1 \/ -1;/s);
+});
+
 test("permission request evidence is secondary to the main operator task", () => {
   const auditStart = workbench.indexOf('<details className="approval-evidence">');
   assert.notEqual(auditStart, -1);
@@ -283,7 +304,8 @@ test("permission request hides raw workspace identifiers from the primary path",
 
 test("permission reviewer queue uses business labels before technical identifiers", () => {
   assert.match(workbench, /function permissionApprovalRequestBusinessLabel/);
-  assert.match(workbench, /function TechnicalId/);
+  assert.match(workbench, /import \{ TechnicalId \} from "\.\/TechnicalId"/);
+  assert.match(technicalId, /export function TechnicalId/);
   assert.match(workbench, /className="approval-review-row-main"/);
   assert.match(workbench, /className="approval-review-row-meta"/);
   assert.match(workbench, /className="approval-review-row-technical"/);

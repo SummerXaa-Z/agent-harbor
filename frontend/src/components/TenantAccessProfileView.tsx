@@ -31,6 +31,7 @@ import type {
   TenantAccessProfileWorkspace
 } from "../types";
 import { ApprovalDropdown } from "./ApprovalDropdown";
+import { TechnicalId } from "./TechnicalId";
 import { Badge, EmptyRow } from "./ui";
 
 const emptyAccessProfileSummary: AccessProfileSummary = {
@@ -93,6 +94,10 @@ export function TenantAccessProfileView({
   const profileScopeTenants = profile?.scopeTenants ?? [];
   const profileGrants = profile?.grants ?? [];
   const profileRecentTraces = profile?.recentTraces ?? [];
+  const tenantNameById = useMemo(
+    () => new Map(profileScopeTenants.map((tenant) => [tenant.id, permissionEntityDisplayName(tenant.name, t)])),
+    [profileScopeTenants, t]
+  );
   const tenantLabel = handoffContext?.tenantName ?? profile?.tenant.name ?? scope.tenantId;
   const workspaceLabel = handoffContext?.workspaceName ?? (filters.workspaceId?.trim() || t("form.workspaceAll"));
   const targetLabel = handoffContext?.targetName ?? (filters.targetId ? names[filters.targetId] ?? filters.targetId : t("form.anyTarget"));
@@ -273,15 +278,27 @@ export function TenantAccessProfileView({
           </div>
 
           <div className="access-tenant-list" aria-label={t("summary.tenantScope")}>
-            {profileScopeTenants.map((tenant) => (
-              <div className="access-tenant-row" key={tenant.id}>
-                <Badge tone={tenant.status === "active" ? "success" : "neutral"}>L{tenant.level}</Badge>
-                <div>
-                  <strong>{tenant.name}</strong>
-                  <span>{tenant.id}{tenant.parentTenantId ? ` · ${t("text.parentTenant")} ${tenant.parentTenantId}` : ""}</span>
+            {profileScopeTenants.map((tenant) => {
+              const tenantName = permissionEntityDisplayName(tenant.name, t);
+              const parentTenantName = tenant.parentTenantId ? tenantNameById.get(tenant.parentTenantId) ?? t("text.parentTenantOutsideScope") : "";
+
+              return (
+                <div className="access-tenant-row" key={tenant.id}>
+                  <Badge tone={tenant.status === "active" ? "success" : "neutral"}>L{tenant.level}</Badge>
+                  <div>
+                    <strong>{tenantName}</strong>
+                    <span>{tenant.parentTenantId ? `${t("text.parentTenant")} ${parentTenantName}` : t("text.rootTenant")}</span>
+                  </div>
+                  <details className="access-tenant-technical">
+                    <summary>{t("text.technicalDetails")}</summary>
+                    <div className="access-tenant-technical-grid">
+                      <TechnicalId label={t("form.tenantId")} value={tenant.id} />
+                      {tenant.parentTenantId ? <TechnicalId label={t("text.parentTenant")} value={tenant.parentTenantId} /> : null}
+                    </div>
+                  </details>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="access-layout">

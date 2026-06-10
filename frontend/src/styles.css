@@ -2095,8 +2095,14 @@ td code {
   background: var(--surface);
 }
 
+.access-tenant-row > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
 .access-tenant-row strong,
-.access-tenant-row span {
+.access-tenant-row > div > span {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -2109,9 +2115,29 @@ td code {
   font-size: 13px;
 }
 
-.access-tenant-row span {
+.access-tenant-row > div > span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.access-tenant-technical {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.access-tenant-technical summary {
+  color: var(--ink-3);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.access-tenant-technical-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+  padding-top: 8px;
 }
 
 .access-layout {

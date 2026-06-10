@@ -416,3 +416,21 @@ Extend `frontend/tests/permissionFlowLayout.test.mjs` to lock the responsive cas
 - [x] **Step 5: Align completed quick actions**
 
 When `goLiveReady` is true, keep the primary action on evidence export and switch the header secondary action to Access Profile review. Browser verification confirmed the completed header reads `导出证据 / 查看权限画像` instead of sending users back to runtime validation.
+
+## Task 7: Access Profile Handoff Tenant Readability
+
+- [x] **Step 1: Browser-test the completed handoff**
+
+Click the completed Permission Changes header action `查看权限画像` and verify the Access Profile workspace receives the tenant, workspace, caller, and target business context.
+
+- [x] **Step 2: Move tenant ids out of the primary tenant-scope list**
+
+Render tenant-scope rows with business tenant names and parent-tenant business context first. Keep `tenant.id` and `parentTenantId` inside an `高级设置` details section backed by the shared `TechnicalId` component.
+
+- [x] **Step 3: Add regression coverage**
+
+Extend `frontend/tests/permissionFlowLayout.test.mjs` to assert that Access Profile tenant rows import `TechnicalId`, build a tenant-name map, avoid raw ids in the primary row, and retain raw ids only in technical details.
+
+- [x] **Step 4: Browser verification**
+
+Browser verification confirmed tenant-scope rows render `客户服务中心` and `工单处理项目` in the primary row, with `rawInMain=false`, and technical ids available under `高级设置`.

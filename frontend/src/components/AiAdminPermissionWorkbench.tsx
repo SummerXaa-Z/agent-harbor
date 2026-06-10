@@ -63,6 +63,7 @@ import type {
   Tenant
 } from "../types";
 import { ApprovalDropdown, type ApprovalDropdownOption } from "./ApprovalDropdown";
+import { TechnicalId } from "./TechnicalId";
 import { Badge, EmptyRow } from "./ui";
 
 type Tone = MetricTone;
@@ -1351,17 +1352,6 @@ function permissionApprovalRequestBusinessLabel(
 
 function permissionPackageTemplateSummary(template: PermissionPackageTemplate, t: Translator) {
   return t(`permissionPackage.${template.id}.summary`, template.summary);
-}
-
-function TechnicalId({ label, value }: { label: string; value: string }) {
-  return (
-    <span>
-      <span>{label}</span>
-      <span className="technical-id" title={value || "-"} translate="no">
-        <code>{value || "-"}</code>
-      </span>
-    </span>
-  );
 }
 
 function permissionRequestStepSectionId(step: PermissionRequestStepTarget) {

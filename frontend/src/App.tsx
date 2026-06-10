@@ -3861,7 +3861,7 @@ function ManagementAuditTable({ events, t }: { events: AuditEvent[]; t: Translat
               <td>
                 <strong>{auditResourceTypeLabel(event.resourceType, t)}</strong>
                 <details className="audit-technical">
-                  <summary>{t("text.technicalDetails")}</summary>
+                  <summary>{t("text.auditDetails")}</summary>
                   <TechnicalId value={event.resourceId} t={t} />
                 </details>
               </td>

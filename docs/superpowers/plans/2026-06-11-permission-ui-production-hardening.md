@@ -510,3 +510,79 @@ When the journey is production-ready, the runtime result line now renders the co
 - [x] **Step 6: Make applied state explicit**
 
 Once an application record exists, the apply button is disabled and reads `已应用` instead of keeping the active `应用权限` wording.
+
+## Task 10: Browser Gate Matches Production Admin Identity Boundary
+
+- [x] **Step 1: Reproduce the gate mismatch**
+
+`make ai-admin-browser-journey` was rerun while the default local API on `9090` was active. The first run failed because the default port was occupied; the isolated-port rerun then failed with `401 admin authentication is required`; the next rerun with a shared admin key failed with `403 reviewer must match authenticated admin identity`. These failures showed that the release-candidate browser gate no longer matched the production fail-closed admin identity model.
+
+- [x] **Step 2: Make the gate use split identities by default**
+
+`scripts/scenario-ai-admin-browser-journey.sh` now starts the API with default split admin identities:
+
+```bash
+requester=browser-gate-requester-key;security-reviewer=browser-gate-reviewer-key
+```
+
+The script passes the requester key to setup and apply calls, and passes the reviewer key to the approval action.
+
+- [x] **Step 3: Verify reviewer impersonation is rejected**
+
+`scripts/scenario-permission-package-approval.sh` now supports separate `REQUESTER_ADMIN_KEY` and `REVIEWER_ADMIN_KEY` values. When the keys differ, the scenario first tries to approve with the requester key while claiming the reviewer actor and expects `403 authenticated admin identity`; only after that does the real reviewer approve.
+
+- [x] **Step 4: Document and verify**
+
+Documentation was updated in `README.md`, `CHANGELOG.md`, `docs/engineering/release-checklist.md`, `docs/product/0.2.0-ai-admin-permission-journey.md`, and `docs/engineering/0.2.0-local-validation-evidence.md`.
+
+Verified:
+
+```bash
+bash -n scripts/scenario-permission-package-approval.sh scripts/scenario-ai-admin-browser-journey.sh
+AGENT_HARBOR_BROWSER_GATE_API_PORT=19090 AGENT_HARBOR_BROWSER_GATE_FRONTEND_PORT=15174 MOCK_MCP_PORT=18787 make ai-admin-browser-journey
+git diff --check
+make scenario-scripts-lint
+make makefile-targets-test
+make check
+make release-check
+```
+
+The browser journey passed with run id `ai-admin-browser-journey-20260611041605` and explicitly logged `approval reviewer impersonation rejected`.
+
+## Task 11: Continue Main Journey UI Context Scan
+
+- [x] **Step 1: Inspect the live Permission Changes route**
+
+Use the in-app browser on `http://127.0.0.1:5174/#ai-admin` and verify the first viewport answers these in order: current workspace, selected tenant/workspace/caller/target/access object, current status, next action, and where acceptance evidence lives.
+
+- [x] **Step 2: Inspect the Go-Live Acceptance route**
+
+Use the in-app browser on `http://127.0.0.1:5174/#evidence` and verify the acceptance route keeps the same permission-change context, avoids duplicate status messages, and does not expose raw identifiers before business labels.
+
+- [x] **Step 3: Choose the next smallest production fix**
+
+Pick exactly one problem from the scan that breaks user confidence in the configure -> approve -> apply -> status check -> acceptance journey. The fix must include code, i18n if copy changes, docs, focused tests, browser verification, and release gates before commit.
+
+The selected issue was Go-Live Acceptance's management audit table still feeling like a technical log: each row showed an "Advanced settings" disclosure in the primary scan path, and global badge styling forced mixed-case business words like `Agent` to lowercase. The fix changed audit technical-id disclosure text to `Details` / `详情`, preserved badge text casing, and verified in browser that raw ids remain hidden while audit rows read `创建 Agent ... 详情`.
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+```
+
+Browser verification on `http://127.0.0.1:5174/#evidence` confirmed no visible raw ids, no `高级设置` audit-row text, and no lowercase `agent` audit action.
+
+## Task 12: Continue Acceptance And Main Journey Scan
+
+- [ ] **Step 1: Re-check the Permission Changes route after audit polish**
+
+Reload `http://127.0.0.1:5174/#ai-admin` and verify the first viewport still has one obvious next action, no duplicate status sources, no raw identifiers in the primary path, and no native select controls in the main journey.
+
+- [ ] **Step 2: Re-check the Acceptance route after audit polish**
+
+Reload `http://127.0.0.1:5174/#evidence` and verify the management audit table stays secondary, the acceptance status and current permission-change context remain dominant, and technical detail disclosures are visually quiet.
+
+- [ ] **Step 3: Pick the next production-confidence fix**
+
+Choose the smallest remaining issue that affects safety, stability, or user confidence; implement it with tests, docs, browser verification, `make check`, `make release-check`, commit, and push.

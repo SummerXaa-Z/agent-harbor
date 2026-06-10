@@ -275,15 +275,23 @@ test("permission request evidence is secondary to the main operator task", () =>
 });
 
 test("management audit evidence uses business labels before technical ids", () => {
+  const auditTableStart = app.indexOf("function ManagementAuditTable");
+  const auditTableEnd = app.indexOf("function IconMore", auditTableStart);
+  const auditTable = app.slice(auditTableStart, auditTableEnd);
   assert.match(app, /auditActionLabel\(event\.action, t\)/);
   assert.match(app, /auditResourceTypeLabel\(event\.resourceType, t\)/);
   assert.match(app, /auditActorLabel\(event\.actor, t\)/);
   assert.match(app, /auditSummaryLabel\(event\.summary, t\)/);
   assert.match(app, /className="audit-technical"/);
+  assert.match(auditTable, /<summary>\{t\("text\.auditDetails"\)\}<\/summary>/);
+  assert.doesNotMatch(auditTable, /text\.technicalDetails/);
   assert.doesNotMatch(app, /<span>\{event\.resourceId\}<\/span>/);
   assert.match(i18n, /"auditAction\.permission_package\.applied": "应用权限包"/);
   assert.match(i18n, /"auditActor\.local-dev": "本地管理员"/);
+  assert.match(i18n, /"text\.auditDetails": "详情"/);
   assert.match(styles, /\.audit-technical summary\s*\{/);
+  assert.match(styles, /\.badge\s*\{[^}]*text-transform:\s*none;/s);
+  assert.doesNotMatch(styles, /\.badge\s*\{[^}]*text-transform:\s*lowercase;/s);
 });
 
 test("go-live evidence page starts with acceptance workflow instead of historical runs", () => {

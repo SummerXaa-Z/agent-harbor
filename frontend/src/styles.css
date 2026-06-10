@@ -1436,7 +1436,7 @@ td code {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
-  text-transform: lowercase;
+  text-transform: none;
   white-space: nowrap;
 }
 

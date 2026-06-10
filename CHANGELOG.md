@@ -44,6 +44,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web 控制台权限变更页现在对已完成的审批、应用、运行验证和状态检查步骤使用完成态描述，避免旅程已可上线后仍显示“等待下一步”的误导文案。
 - Go-Live Acceptance now suppresses generic status-check success logs and relies on the status badge, next action, and check list for the normal path, leaving the message area for actionable failures or warnings.
 - 上线验收页现在隐藏普通的状态检查成功加载日志，正常路径依赖状态标识、下一步和检查列表，消息区域只留给需要处理的失败或告警。
+- Go-Live Acceptance management audit rows now use a quiet "Details" disclosure for technical ids and preserve mixed-case business terms such as Agent instead of forcing badge text to lowercase.
+- 上线验收页的管理审计行现在用更安静的“详情”折叠技术 ID，并保留 Agent 等中英混排业务词大小写，不再把徽标文字强制小写。
 - `make ai-admin-browser-journey` now starts the API with split requester and reviewer admin identities by default, and the approval scenario verifies that requester-key impersonation of the reviewer is rejected before the real reviewer approves.
 - `make ai-admin-browser-journey` 现在默认用分离的申请人与审批人管理身份启动 API，并在审批场景中先验证申请人 key 冒充审批人会被拒绝，再由真实审批人批准。
 - Web console Permission Changes now treats not-yet-requested and pending approvals as pending work instead of production blockers, puts the next safe action in the task header, and keeps the tenant access profile in the dedicated Access workspace.

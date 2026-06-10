@@ -611,11 +611,17 @@ test("permission reviewer queue uses business labels before technical identifier
 
 test("completed permission journeys make reviewer queue read-only", () => {
   assert.match(workbench, /const reviewerQueueReadOnly = Boolean\(application\) \|\| goLiveReady/);
+  assert.match(workbench, /const reviewerQueueTitleKey = reviewerQueueReadOnly \? "section\.permissionApprovalTrace" : "section\.permissionReviewerQueue"/);
+  assert.match(workbench, /const reviewerQueueRefreshKey = reviewerQueueReadOnly \? "action\.refreshApprovalTrace" : "action\.refreshReviewerQueue"/);
+  assert.match(workbench, /<strong>\{t\(reviewerQueueTitleKey\)\}<\/strong>/);
+  assert.match(workbench, /reviewerQueueLoading \? t\("action\.loading"\) : t\(reviewerQueueRefreshKey\)/);
   assert.match(workbench, /reviewerQueueReadOnly \? <span className="approval-inline-message status-info">\{t\("text\.reviewerQueueReadOnlyDetail"\)\}<\/span> : null/);
   assert.match(workbench, /reviewerQueueReadOnly \? \(/);
   assert.match(workbench, /className="approval-review-row-state"/);
   assert.match(workbench, /t\("text\.reviewerQueueReadOnlyAction"\)/);
-  assert.match(i18n, /"text\.reviewerQueueReadOnlyDetail": "权限已经生效，待审批队列仅用于追溯。"/);
+  assert.match(i18n, /"section\.permissionApprovalTrace": "审批追溯"/);
+  assert.match(i18n, /"action\.refreshApprovalTrace": "刷新追溯"/);
+  assert.match(i18n, /"text\.reviewerQueueReadOnlyDetail": "权限已经生效，审批记录仅用于追溯。"/);
   assert.match(i18n, /"text\.reviewerQueueReadOnlyAction": "只读"/);
   assert.match(styles, /\.approval-review-row-state\s*\{/);
 });

@@ -223,12 +223,14 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("empty.permissionApplyPreflight.detail"), "应用权限前先运行预检。");
   assert.equal(t("message.permissionPackageApprovalRequired"), "该申请需要先审批：{detail}。");
   assert.equal(t("section.permissionApprovalRequest"), "审批请求");
+  assert.equal(t("section.permissionApprovalTrace"), "审批追溯");
   assert.equal(t("section.permissionReviewerQueue"), "待审批请求");
   assert.equal(t("form.approvalReviewer"), "审批人");
   assert.equal(t("form.approvalRejectReason"), "拒绝理由");
   assert.equal(t("text.approvalReviewerIdentity"), "当前审批人：{reviewer}");
   assert.equal(t("text.approvalReviewerSeparationDetail"), "生产环境会校验具名管理员身份，并强制职责分离。");
   assert.equal(t("text.approvalRejectReasonHelp"), "用于审计和交接，不能为空。");
+  assert.equal(t("action.refreshApprovalTrace"), "刷新追溯");
   assert.equal(t("action.refreshReviewerQueue"), "刷新队列");
   assert.equal(t("empty.reviewerQueue.detail"), "输入审批人标识后刷新待处理请求。");
   assert.equal(t("message.reviewerQueueLoaded"), "已加载 {count} 个待审批请求。");

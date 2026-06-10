@@ -268,6 +268,8 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const requestFormTitleKey = requestFormLocked ? "section.permissionRequestReview" : "section.permissionRequestForm";
   const requestFormHelpKey = requestFormLocked ? "text.permissionRequestReviewHelp" : "text.permissionRequestScopeHelp";
   const reviewerQueueReadOnly = Boolean(application) || goLiveReady;
+  const reviewerQueueTitleKey = reviewerQueueReadOnly ? "section.permissionApprovalTrace" : "section.permissionReviewerQueue";
+  const reviewerQueueRefreshKey = reviewerQueueReadOnly ? "action.refreshApprovalTrace" : "action.refreshReviewerQueue";
   const runtimeValidationReady = Boolean(approvalJourneyResult) || goLiveReady;
   const approvalEffectivelyResolved = !draft.policyGate.canApplyDirectly
     && (approvalRequest?.status === "approved" || Boolean(application) || goLiveReady);
@@ -1092,10 +1094,10 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
 
           <section className="approval-reviewer-queue">
             <header>
-              <strong>{t("section.permissionReviewerQueue")}</strong>
+              <strong>{t(reviewerQueueTitleKey)}</strong>
               <button className="secondary-button" disabled={liveDataBlocked || permissionRequestBusy} onClick={onRefreshReviewerQueue} type="button">
                 <RefreshCw size={14} />
-                {reviewerQueueLoading ? t("action.loading") : t("action.refreshReviewerQueue")}
+                {reviewerQueueLoading ? t("action.loading") : t(reviewerQueueRefreshKey)}
               </button>
             </header>
             <label className="approval-select">
@@ -1106,7 +1108,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             {reviewerQueueReadOnly ? <span className="approval-inline-message status-info">{t("text.reviewerQueueReadOnlyDetail")}</span> : null}
             <div className="approval-mini-list">
               {reviewerQueueRequests.length === 0 ? (
-                <EmptyRow title={t("section.permissionReviewerQueue")} detail={t("empty.reviewerQueue.detail")} />
+                <EmptyRow title={t(reviewerQueueTitleKey)} detail={t("empty.reviewerQueue.detail")} />
               ) : null}
               {reviewerQueueRequests.map((request) => {
                 const queueLabel = permissionApprovalRequestBusinessLabel(request, templates, tenants, agents, t);

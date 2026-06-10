@@ -1392,3 +1392,13 @@ Permission Changes reviewer queue rows still retain request, tenant, workspace, 
 - [x] **Step 2: Add regression coverage**
 
 `frontend/tests/permissionFlowLayout.test.mjs` now asserts reviewer queue details use `text.reviewerQueueTraceDetails`, keeps the Simplified Chinese label locked, and prevents the queue summary from reverting to the generic technical-request wording.
+
+## Task 45: Rename Completed Reviewer Queue as Approval Trace
+
+- [x] **Step 1: Separate active queue wording from completed trace wording**
+
+When a Permission Changes journey is already applied or production-ready, the reviewer queue is read-only evidence. The section title, refresh action, and read-only notice now use `Approval Trace` / `审批追溯`, `Refresh trace` / `刷新追溯`, and approval-record wording, while active in-flight journeys still use the pending approval queue wording.
+
+- [x] **Step 2: Lock the completed-state copy**
+
+`frontend/tests/permissionFlowLayout.test.mjs` asserts the component derives read-only title/action keys from `reviewerQueueReadOnly`, and `frontend/tests/i18n.test.mjs` locks the Simplified Chinese labels.

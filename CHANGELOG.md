@@ -50,6 +50,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 权限变更流程步骤按钮现在提供本地化读屏标签，包含步骤序号、任务名称和当前证据，避免辅助技术读出连在一起的可见文本。
 - Permission Changes reviewer queues now label folded request identifiers as trace details, keeping audit identifiers available without presenting them as the operator task.
 - 权限变更审批队列现在把折叠的请求标识命名为追溯详情，保留审计排障能力，但不把技术标识表现成当前操作任务。
+- Completed Permission Changes now rename the read-only reviewer queue to approval trace and refresh trace, and describe the rows as approval records instead of pending queue work.
+- 已完成的权限变更现在把只读审批队列改为审批追溯和刷新追溯，并把行说明为审批记录而不是待处理队列。
 - Go-Live Acceptance now suppresses generic status-check success logs and relies on the status badge, next action, and check list for the normal path, leaving the message area for actionable failures or warnings.
 - 上线验收页现在隐藏普通的状态检查成功加载日志，正常路径依赖状态标识、下一步和检查列表，消息区域只留给需要处理的失败或告警。
 - Go-Live Acceptance management audit rows now use a quiet "Details" disclosure for technical ids and preserve mixed-case business terms such as Agent instead of forcing badge text to lowercase.

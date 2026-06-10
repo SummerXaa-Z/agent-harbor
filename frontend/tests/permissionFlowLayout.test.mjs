@@ -433,8 +433,14 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /text\.permissionChangeCompleteDetail/);
   assert.match(workbench, /productionReadiness\?\.generatedAt/);
   assert.match(workbench, /action\.exportProductionEvidence/);
+  assert.match(workbench, /action\.downloadAcceptanceReport/);
   assert.match(workbench, /action\.openAccessProfile/);
   assert.match(workbench, /action\.startPermissionApproval/);
+  const completionActionsStart = workbench.indexOf('<div className="approval-completion-actions">');
+  const completionActionsEnd = workbench.indexOf('</div>', completionActionsStart);
+  assert.notEqual(completionActionsStart, -1);
+  assert.notEqual(completionActionsEnd, -1);
+  assert.doesNotMatch(workbench.slice(completionActionsStart, completionActionsEnd), /className="primary-button"/);
   assert.match(workbench, /onOpenAccessProfile/);
   assert.match(workbench, /onStartNewPermissionChange/);
   assert.match(workbench, /const quickSecondaryActionLabel = goLiveReady/);
@@ -447,6 +453,7 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(app, /function startNewAiAdminPermissionChange\(\)/);
   assert.match(i18n, /"text\.policyGateApprovedDetail": "当前权限变更已记录审批。"/);
   assert.match(i18n, /"action\.permissionPackageApplied": "已应用"/);
+  assert.match(i18n, /"action\.downloadAcceptanceReport": "下载验收报告"/);
   assert.match(styles, /\.approval-completion\s*\{/);
   assert.match(styles, /\.approval-completion-actions\s*\{/);
 });

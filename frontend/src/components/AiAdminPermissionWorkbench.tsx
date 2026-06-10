@@ -942,9 +942,9 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                   </div>
                 </div>
                 <div className="approval-completion-actions">
-                  <button className="primary-button" disabled={liveDataBlocked || permissionRequestBusy} onClick={onExportProductionEvidence} type="button">
+                  <button className="secondary-button" disabled={liveDataBlocked || permissionRequestBusy} onClick={onExportProductionEvidence} type="button">
                     <Download size={14} />
-                    {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
+                    {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.downloadAcceptanceReport")}
                   </button>
                   <button className="secondary-button" disabled={permissionRequestBusy} onClick={onOpenAccessProfile} type="button">
                     <FileSearch size={14} />

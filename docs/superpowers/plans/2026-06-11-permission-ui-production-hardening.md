@@ -694,3 +694,44 @@ pnpm --dir frontend exec node --test tests/styleTheme.test.mjs
 make check
 make release-check
 ```
+
+Committed and pushed `dc5e063 fix: close connection settings on navigation` to `codex/production-readiness-gate`. GitHub PR #74 queued Backend, Frontend, and PostgreSQL integration for the new head.
+
+## Task 17: Remove Duplicate Primary Completion Action
+
+- [x] **Step 1: Re-scan the completed Permission Changes first viewport**
+
+Browser scan of `http://127.0.0.1:5174/#ai-admin` showed two visible primary `导出证据` buttons: one in the task header and one in the completion card. The page had no visible raw ids and the connection menu was closed, but the duplicate primary CTA weakened the one-next-action model.
+
+- [x] **Step 2: Convert completion-card export into a secondary exit**
+
+The task header keeps the single primary next action, `导出证据`. The completion card now uses a secondary button labeled `下载验收报告`, alongside `查看权限画像` and `新建权限变更`.
+
+- [x] **Step 3: Verify in focused tests and browser**
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+```
+
+Browser verification confirmed `primaryButtons=["导出证据"]`, `exportPrimaryCount=1`, completion-card buttons are all `secondary-button`, and the completion report exit reads `下载验收报告`.
+
+## Task 18: Release-Gate Duplicate Primary Cleanup
+
+- [x] **Step 1: Run focused and repository gates**
+
+Run `git diff --check`, `pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs`, `make check`, and `make release-check`.
+
+- [ ] **Step 2: Commit, push, and inspect PR checks**
+
+Commit the duplicate-primary cleanup, push branch `codex/production-readiness-gate`, and inspect PR #74 checks.
+
+Verified locally before commit:
+
+```bash
+git diff --check
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+make check
+make release-check
+```

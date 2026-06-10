@@ -887,6 +887,46 @@ make check
 make release-check
 ```
 
+- [x] **Step 5: Commit, push, and inspect PR checks**
+
+Commit and push if clean, then inspect PR #74.
+
+Committed and pushed `24a9cde fix: hide request step ratios` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=UNSTABLE` because Backend, Frontend, and PostgreSQL integration checks were in progress immediately after push.
+
+## Task 24: Hide Closed Connection Settings Popover
+
+- [x] **Step 1: Inspect the evidence page overlay**
+
+Browser verification on `http://127.0.0.1:5174/#evidence` showed the connection settings popover over the business page even though `.connection-menu.open=false`. The popover exposed `X-Admin-Key`, tenant id, and workspace id on the go-live acceptance page.
+
+- [x] **Step 2: Add explicit closed-state CSS**
+
+Added `.connection-menu:not([open]) .connection-popover { display: none; }` so closed connection settings cannot render sensitive setup fields even if browser `details` default hiding is overridden by app styles.
+
+- [x] **Step 3: Verify focused tests and browser**
+
+Run focused shell tests and verify the evidence page keeps connection settings collapsed.
+
+Verified:
+
+```bash
+git diff --check
+pnpm --dir frontend exec node --test tests/styleTheme.test.mjs tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+```
+
+Browser verification on `http://127.0.0.1:5174/#evidence` showed `.connection-menu.open=false`, `.connection-popover.display=none`, and `visibleAdminKeyLabel=false`.
+
+- [x] **Step 4: Run repository gates**
+
+Run `make check` and `make release-check`.
+
+Verified locally before commit:
+
+```bash
+make check
+make release-check
+```
+
 - [ ] **Step 5: Commit, push, and inspect PR checks**
 
 Commit and push if clean, then inspect PR #74.

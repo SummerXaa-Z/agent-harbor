@@ -439,6 +439,10 @@ button {
   box-shadow: var(--shadow-pop);
 }
 
+.connection-menu:not([open]) .connection-popover {
+  display: none;
+}
+
 .connection-popover-header {
   display: grid;
   gap: 3px;

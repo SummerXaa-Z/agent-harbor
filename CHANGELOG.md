@@ -52,6 +52,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 已完成的权限变更旅程现在把“已应用”呈现为状态标识，而不是禁用的主按钮，避免操作员把已完成事项误认为被阻断的操作。
 - The global connection settings menu now closes when switching workspaces, keeping technical fields such as admin key, tenant id, and workspace id out of the main business journey unless explicitly reopened.
 - 全局连接设置菜单现在会在切换工作区时自动收起，管理员密钥、租户 ID、工作区 ID 等技术字段不会停留在主业务旅程中，除非用户主动重新打开。
+- Closed connection settings now explicitly hide the popover content in CSS, preventing admin key and scope fields from overlaying business pages when the details state is closed.
+- 连接设置关闭后现在会通过 CSS 明确隐藏弹层内容，避免管理员密钥和范围字段在业务页面上继续覆盖显示。
 - Completed Permission Changes journeys now keep a single primary "Export evidence" action in the task header, while the completion card exposes secondary exits such as "Download acceptance report", access profile, and new change.
 - 已完成的权限变更旅程现在只在任务页头保留一个主按钮“导出证据”，完成卡里的“下载验收报告”、权限画像和新建变更都作为辅助出口呈现。
 - Permission Changes workbench preview no longer returns capability-count ratios on the request step, so completed request steps do not look partially incomplete in the process navigation.

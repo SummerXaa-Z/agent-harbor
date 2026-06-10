@@ -94,6 +94,7 @@ test("product shell removes demo controls and scopes connection settings", () =>
   assert.match(app, /setConnectionMenuOpen\(\(open\) => !open\)/);
   assert.match(app, /onToggle=\{\(event\) => setConnectionMenuOpen\(event\.currentTarget\.open\)\}/);
   assert.match(styles, /\.connection-popover\s*\{[^}]*box-shadow:\s*var\(--shadow-pop\);/s);
+  assert.match(styles, /\.connection-menu:not\(\[open\]\)\s+\.connection-popover\s*\{[^}]*display:\s*none;/s);
 });
 
 test("workspace telemetry is scoped to system check instead of repeating on every workspace", () => {

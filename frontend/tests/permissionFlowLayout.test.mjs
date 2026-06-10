@@ -469,6 +469,7 @@ test("permission request hides raw workspace identifiers from the primary path",
   assert.ok(workspaceLabelStart < technicalDetailsStart);
   assert.match(workbench.slice(workspaceLabelStart, technicalDetailsStart), /workspaceName/);
   assert.doesNotMatch(workbench.slice(workspaceLabelStart, technicalDetailsStart), /form\.workspaceId/);
+  assert.match(styles, /\.approval-details:not\(\[open\]\) > :not\(summary\)\s*\{/);
 });
 
 test("permission reviewer queue uses business labels before technical identifiers", () => {

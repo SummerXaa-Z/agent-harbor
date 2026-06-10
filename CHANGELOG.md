@@ -158,6 +158,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 权限变更现在把折叠的专家证据区从“高级检查项”改为“验收明细”，并明确运行验证证据是主操作流程背后的辅助证明。
 - Permission Changes now changes the header secondary action to navigate to Acceptance Details instead of running validation, keeping runtime validation inside the ordered go-live step.
 - 权限变更页头副操作现在改为跳转到“验收明细”，不再直接执行运行验证，确保运行验证只出现在有顺序的上线步骤中。
+- Permission Changes now explicitly hides collapsed technical detail contents so raw tenant, workspace, caller, and target ids cannot leak into the primary operator path while details are closed.
+- 权限变更现在显式隐藏已折叠技术详情内容，避免租户、工作区、调用方和目标原始 ID 在详情关闭时泄露到主操作路径。
 - Go-live acceptance now treats applied or production-ready evidence as approval-satisfied, preventing conflicting "approval not requested" progress copy after permissions are already active.
 - 上线验收现在会把已应用或已可上线的证据视为审批已满足，避免权限已生效后进度里仍出现“审批未发起”的冲突提示。
 - Web console visual design review follow-up: design tokens now govern component colors, shadows, focus rings, button sizing, technical-id display, System Self-Check telemetry, and Agent registry ordering.

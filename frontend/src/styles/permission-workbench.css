@@ -566,6 +566,10 @@
   display: none;
 }
 
+.approval-details:not([open]) > :not(summary) {
+  display: none;
+}
+
 .approval-details > label {
   padding: 0 12px 10px;
   color: var(--ink-3);

@@ -828,12 +828,23 @@
 }
 
 .approval-process-step {
+  border: 0;
   position: relative;
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
   gap: 10px;
+  width: 100%;
   min-width: 0;
   padding: 0 0 14px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.approval-process-step:hover {
+  color: var(--brand-strong);
 }
 
 .approval-process-step::before {

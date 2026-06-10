@@ -52,7 +52,8 @@ import type {
   PermissionPackageProductionReadinessCheck,
   PermissionPackageProductionReadinessStatus,
   PermissionPackageTemplate,
-  PermissionPackageWorkbenchPreview
+  PermissionPackageWorkbenchPreview,
+  PermissionPackageWorkbenchStepKey
 } from "../permissionPackages";
 import type {
   AccessDecisionExplainResult,
@@ -69,6 +70,7 @@ type Translator = ReturnType<typeof createTranslator>;
 const defaultWorkspaceId = "workspace-sandbox";
 
 type ApprovalDecisionAction = "approve" | "reject" | "withdraw";
+type PermissionRequestStepTarget = PermissionRequestWizardStep | "validation" | "acceptance";
 
 interface PendingApprovalDecision {
   action: ApprovalDecisionAction;
@@ -301,6 +303,12 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const updatePendingApprovalComment = (comment: string) => {
     setPendingApprovalDecision((current) => current ? { ...current, comment, error: "" } : current);
   };
+  function scrollToPermissionRequestStep(step: PermissionRequestStepTarget) {
+    document.getElementById(permissionRequestStepSectionId(step))?.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+  }
   const confirmPendingApprovalDecision = () => {
     if (!pendingApprovalDecision) return;
     const comment = pendingApprovalDecision.comment.trim();
@@ -427,12 +435,14 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     key: step.key,
     labelKey: permissionWorkbenchStepLabelKey(step.key),
     status: step.status,
+    targetStep: permissionRequestStepTarget(step.key),
     total: step.total
   })) ?? fallbackProcessSteps.map((step) => ({
     detail: step.detail,
     key: step.key,
     labelKey: step.labelKey,
     status: step.complete ? "complete" : currentWizardStep === step.key ? "current" : "waiting",
+    targetStep: step.key,
     count: undefined,
     total: undefined
   }));
@@ -586,7 +596,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
 
       <div className="approval-flow-layout">
         <main className="approval-request-panel">
-          <section className="approval-section approval-request-form-section">
+          <section className="approval-section approval-request-form-section" id={permissionRequestStepSectionId("scope")}>
             <header>
               <div>
                 <strong>{t("section.permissionRequestForm")}</strong>
@@ -660,7 +670,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                 />
               </div>
             </div>
-            <div className="approval-package-preview">
+            <div className="approval-package-preview" id={permissionRequestStepSectionId("template")}>
               <div>
                 <span>{t("section.permissionWizardTemplate")}</span>
                 <strong>{permissionPackageTemplateName(draft.template, t)}</strong>
@@ -736,10 +746,13 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
           </div>
           <div className="approval-process-list">
             {processSteps.map((step, index) => (
-              <article
+              <button
                 aria-current={step.status === "current" ? "step" : undefined}
                 className={`approval-process-step status-${step.status}`}
+                data-step-target={step.targetStep}
                 key={step.key}
+                onClick={() => scrollToPermissionRequestStep(step.targetStep)}
+                type="button"
               >
                 <span>{index + 1}</span>
                 <div>
@@ -747,10 +760,10 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                   <small>{step.detail}</small>
                 </div>
                 {typeof step.count === "number" && typeof step.total === "number" ? <em>{step.count}/{step.total}</em> : null}
-              </article>
+              </button>
             ))}
           </div>
-          <section className="approval-process-block">
+          <section className="approval-process-block" id={permissionRequestStepSectionId("approval")}>
             <header>
               <strong>{t("section.permissionWizardApproval")}</strong>
               <Badge tone={draft.policyGate.canApplyDirectly ? "success" : approvalRequest ? approvalStatusTone : "warning"}>
@@ -815,7 +828,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             ) : null}
             {approvalDecisionConfirmation}
           </section>
-          <section className="approval-process-block">
+          <section className="approval-process-block" id={permissionRequestStepSectionId("apply")}>
             <div className="approval-apply">
               <div>
                 <strong>{application ? t("text.permissionAppliedTitle") : canApply ? t("text.permissionApplyReadyTitle") : t("text.permissionApplyWaitingTitle")}</strong>
@@ -834,7 +847,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             {message ? <span className={`approval-inline-message status-${messageTone}`}>{message}</span> : null}
           </section>
 
-          <section className="approval-process-block approval-go-live-block">
+          <section className="approval-process-block approval-go-live-block" id={permissionRequestStepSectionId("goLive")}>
             <header>
               <strong>{t("section.permissionWizardGoLive")}</strong>
               <Badge tone={goLiveReady ? "success" : "warning"}>
@@ -843,7 +856,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             </header>
             <p>{goLiveReady ? t("text.aiAdminGoLiveReadyDetail") : t("text.aiAdminGoLiveWaitingDetail")}</p>
             {goLiveReady ? (
-              <div className="approval-completion">
+              <div className="approval-completion" id={permissionRequestStepSectionId("acceptance")}>
                 <div>
                   <CheckCircle2 size={18} />
                   <div>
@@ -869,7 +882,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               </div>
             ) : (
               <>
-                <div className="approval-next-line">
+                <div className="approval-next-line" id={permissionRequestStepSectionId("acceptance")}>
                   <span>{t("text.nextActions")}</span>
                   <strong>{t(goLiveNextKey)}</strong>
                 </div>
@@ -890,7 +903,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                 </div>
               </>
             )}
-            <div className="approval-runtime">
+            <div className="approval-runtime" id={permissionRequestStepSectionId("validation")}>
               <strong>{t("text.runtimeValidationResultTitle")}</strong>
               <span>{approvalJourneyResult ? t("text.runtimeValidationResultReady") : t("text.runtimeValidationResultPending")}</span>
               {approvalJourneyMessage ? <em>{approvalJourneyMessage}</em> : null}
@@ -1290,6 +1303,17 @@ function permissionPackageTemplateNameById(templateId: string, t: Translator) {
 
 function permissionPackageTemplateSummary(template: PermissionPackageTemplate, t: Translator) {
   return t(`permissionPackage.${template.id}.summary`, template.summary);
+}
+
+function permissionRequestStepSectionId(step: PermissionRequestStepTarget) {
+  return `permission-request-step-${step}`;
+}
+
+function permissionRequestStepTarget(step: PermissionPackageWorkbenchStepKey | PermissionRequestWizardStep): PermissionRequestStepTarget {
+  if (step === "request") return "scope";
+  if (step === "validation") return "validation";
+  if (step === "acceptance") return "acceptance";
+  return step;
 }
 
 function permissionDraftStatus(draft: PermissionPackageDraft): { labelKey: string; tone: Tone } {

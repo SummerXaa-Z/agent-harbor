@@ -396,6 +396,20 @@ export interface AccessProfileFilters {
   traceLimit?: number | string
 }
 
+export interface AccessProfileHandoffContext {
+  tenantId: string
+  tenantName: string
+  tenantPath?: string
+  workspaceId: string
+  workspaceName: string
+  callerInstanceId?: string
+  callerName?: string
+  targetId?: string
+  targetName?: string
+  capabilityId?: string
+  capabilityName?: string
+}
+
 export interface AccessProfileSummary {
   tenantCount: number
   grantCount: number

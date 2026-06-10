@@ -1714,6 +1714,38 @@ td code {
   margin-top: 2px;
 }
 
+.access-handoff-context {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--brand-border);
+  background: var(--brand-soft);
+  color: var(--ink);
+}
+
+.access-handoff-context svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--brand-strong);
+}
+
+.access-handoff-context div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.access-handoff-context strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.access-handoff-context span {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
 .access-selected-scope {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

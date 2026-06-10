@@ -20,6 +20,7 @@ import {
 import type {
   AccessDecisionExplainResult,
   AccessProfileFilters,
+  AccessProfileHandoffContext,
   AccessProfileSummary,
   Agent,
   Capability,
@@ -50,6 +51,7 @@ export function TenantAccessProfileView({
   explanationLoading,
   explanationMessage,
   filters,
+  handoffContext,
   loading,
   message,
   onChange,
@@ -66,6 +68,7 @@ export function TenantAccessProfileView({
   explanationLoading: boolean;
   explanationMessage: string;
   filters: AccessProfileFilters;
+  handoffContext?: AccessProfileHandoffContext | null;
   loading: boolean;
   message: string;
   onChange: (filters: AccessProfileFilters) => void;
@@ -90,10 +93,11 @@ export function TenantAccessProfileView({
   const profileScopeTenants = profile?.scopeTenants ?? [];
   const profileGrants = profile?.grants ?? [];
   const profileRecentTraces = profile?.recentTraces ?? [];
-  const workspaceLabel = filters.workspaceId?.trim() || t("form.workspaceAll");
-  const targetLabel = filters.targetId ? names[filters.targetId] ?? filters.targetId : t("form.anyTarget");
-  const capabilityLabel = filters.capabilityId?.trim() || t("form.anyCapability");
-  const callerLabel = filters.callerInstanceId ? names[filters.callerInstanceId] ?? filters.callerInstanceId : t("form.anyCaller");
+  const tenantLabel = handoffContext?.tenantName ?? profile?.tenant.name ?? scope.tenantId;
+  const workspaceLabel = handoffContext?.workspaceName ?? (filters.workspaceId?.trim() || t("form.workspaceAll"));
+  const targetLabel = handoffContext?.targetName ?? (filters.targetId ? names[filters.targetId] ?? filters.targetId : t("form.anyTarget"));
+  const capabilityLabel = handoffContext?.capabilityName ?? (filters.capabilityId?.trim() || t("form.anyCapability"));
+  const callerLabel = handoffContext?.callerName ?? (filters.callerInstanceId ? names[filters.callerInstanceId] ?? filters.callerInstanceId : t("form.anyCaller"));
   const subjectLabel = filters.subjectId?.trim() || t("text.notSpecified");
   const traceLimitLabel = String(filters.traceLimit ?? 20);
   const targetDropdownOptions = [
@@ -133,10 +137,20 @@ export function TenantAccessProfileView({
         </div>
       </section>
 
+      {handoffContext ? (
+        <section className="access-handoff-context" aria-label={t("text.accessProfileHandoffContext")}>
+          <CheckCircle2 size={16} />
+          <div>
+            <strong>{t("text.accessProfileHandoffTitle")}</strong>
+            <span>{t("text.accessProfileHandoffDetail")}</span>
+          </div>
+        </section>
+      ) : null}
+
       <section className="access-selected-scope" aria-label={t("text.selectedScope")}>
         <div>
           <span>{t("form.tenant")}</span>
-          <strong>{profile?.tenant.name ?? scope.tenantId}</strong>
+          <strong>{tenantLabel}</strong>
         </div>
         <div>
           <span>{t("form.workspace")}</span>

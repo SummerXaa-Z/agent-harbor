@@ -176,6 +176,7 @@ import { TenantAccessProfileView } from "./components/TenantAccessProfileView";
 import { Badge, EmptyRow } from "./components/ui";
 import type {
   AccessProfileFilters,
+  AccessProfileHandoffContext,
   AccessProfileSummary,
   AccessDecisionExplainRequest,
   AccessDecisionExplainResult,
@@ -394,6 +395,7 @@ function App() {
   const [accessLoading, setAccessLoading] = useState(false);
   const [accessMessage, setAccessMessage] = useState("");
   const [accessProfile, setAccessProfile] = useState<TenantAccessProfileData | null>(null);
+  const [accessProfileHandoffContext, setAccessProfileHandoffContext] = useState<AccessProfileHandoffContext | null>(null);
   const [accessDecisionExplanation, setAccessDecisionExplanation] = useState<AccessDecisionExplainResult | null>(null);
   const [accessDecisionExplainLoading, setAccessDecisionExplainLoading] = useState(false);
   const [accessDecisionExplainMessage, setAccessDecisionExplainMessage] = useState("");
@@ -858,15 +860,34 @@ function App() {
   }
 
   function openAiAdminAccessProfile() {
+    const tenantPath = permissionTenantPathLabel(aiAdminForm.tenantId, tenants, t);
+    const selectedCaller = agents.find((agent) => agent.id === aiAdminForm.callerInstanceId);
+    const selectedTarget = agents.find((agent) => agent.id === aiAdminForm.targetId);
+    const selectedCapability = aiAdminDraft.allowedCapabilities[0];
+    const subjectId = subjectIdExampleFromSelector(aiAdminForm.subjectSelector);
     setScope((current) => ({ ...current, tenantId: aiAdminForm.tenantId }));
     setAccessFilters((current) => ({
       ...current,
-      capabilityId: aiAdminDraft.allowedCapabilities[0]?.id ?? "",
+      capabilityId: selectedCapability?.id ?? "",
       callerInstanceId: aiAdminForm.callerInstanceId,
+      subjectId,
       targetId: aiAdminForm.targetId,
       traceLimit: current.traceLimit || "20",
       workspaceId: aiAdminForm.workspaceId
     }));
+    setAccessProfileHandoffContext({
+      capabilityId: selectedCapability?.id ?? "",
+      capabilityName: selectedCapability?.key ?? "",
+      callerInstanceId: aiAdminForm.callerInstanceId,
+      callerName: selectedCaller ? permissionEntityDisplayName(selectedCaller.name, t) : aiAdminForm.callerInstanceId,
+      targetId: aiAdminForm.targetId,
+      targetName: selectedTarget ? permissionEntityDisplayName(selectedTarget.name, t) : aiAdminForm.targetId,
+      tenantId: aiAdminForm.tenantId,
+      tenantName: permissionTenantPathLabel(aiAdminForm.tenantId, tenants, t).primary,
+      tenantPath: tenantPath.path,
+      workspaceId: aiAdminForm.workspaceId,
+      workspaceName: permissionWorkspaceDisplayName(aiAdminForm.workspaceId, agents, t)
+    });
     setAccessProfile(null);
     setAccessMessage("");
     setAccessDecisionExplanation(null);
@@ -1056,6 +1077,7 @@ function App() {
     setCoreJourneyMessage(t("message.coreJourneyReset"));
     setTraceFilters(resetTraceFilters);
     setAccessFilters(resetAccessFilters);
+    setAccessProfileHandoffContext(null);
     setAccessProfile(null);
     setScope(resetScope);
     try {
@@ -2480,10 +2502,12 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         explanationLoading={accessDecisionExplainLoading}
         explanationMessage={accessDecisionExplainMessage}
         filters={accessFilters}
+        handoffContext={accessProfileHandoffContext}
         loading={accessLoading}
         message={accessMessage}
         onChange={(filters) => {
           setAccessFilters(filters);
+          setAccessProfileHandoffContext(null);
           setAccessDecisionExplanation(null);
           setAccessDecisionExplainMessage("");
         }}
@@ -2491,6 +2515,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onRefresh={() => void refreshAccessProfile()}
         onTenantChange={(tenantId) => {
           setScope((current) => ({ ...current, tenantId }));
+          setAccessProfileHandoffContext(null);
           setAccessProfile(null);
           setAccessDecisionExplanation(null);
           setAccessDecisionExplainMessage("");

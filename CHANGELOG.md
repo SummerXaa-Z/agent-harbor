@@ -118,6 +118,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web 控制台权限变更页现在会在审批处理前展示审批人上下文，批准/拒绝必须先确认，拒绝必须填写理由，并在审批、应用、验证和证据动作之间共享统一进行中保护。
 - Web console Permission Changes now shows a concrete completion state after production readiness, with exits to export evidence, review the access profile, or start a new permission change; advanced-check success load messages are hidden while actionable warnings and errors remain visible.
 - Web 控制台权限变更页现在会在生产就绪后显示明确完成态，并提供导出证据、查看权限画像、开始新变更三个出口；高级检查区隐藏成功加载类噪声消息，同时保留需要处理的告警和错误。
+- Web console Permission Changes process steps are now clickable anchors for configuration, permissions, approval, apply, and readiness sections, so operators can navigate the full flow without manually hunting through the page.
+- Web 控制台权限变更页的处理流程步骤现在可点击定位到配置、权限、审批、应用和就绪区块，操作员不用手动在页面里查找下一步。
 - Web console visual design review follow-up: design tokens now govern component colors, shadows, focus rings, button sizing, technical-id display, System Self-Check telemetry, and Agent registry ordering.
 - Web 控制台视觉设计审查项已落地：设计 token 现在约束组件色值、阴影、焦点环、按钮尺寸、技术 ID 展示、系统自检指标展示范围和 Agent 注册表顺序。
 - Web console UX review follow-up: desktop navigation now keeps readable grouped labels at medium widths, Permission Changes uses one authoritative context bar with non-truncating core selectors, and Capability Governance prioritizes the grant operation area over KPI cards.
@@ -153,6 +155,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 - Withdrawn permission approval requests no longer remain usable for apply/preflight; only pending, unconsumed, unexpired requests owned by the original requester can be withdrawn.
 - 已撤回的权限审批请求不再可用于应用或预检；只有原申请人名下仍待审批、未消费、未过期的请求才能撤回。
+- The Permission Changes to Access Profile handoff now carries readable tenant, workspace, caller, target, capability, and subject context, so the Access Profile workspace no longer falls back to raw tenant ids before profile data loads.
+- 权限变更跳转到权限画像时现在会带入可读的租户、工作区、调用方、目标、能力和主体上下文，画像数据加载前不再回退显示原始租户 ID。
 - Permission Changes runtime validation now uses an isolated validation draft, approval request, and access-profile evidence state, so running validation no longer overwrites the operator's edited request, tenant/workspace context, or access-profile filters.
 - 权限变更运行验证现在使用独立的验证草案、审批请求和访问画像证据状态，执行验证不再覆盖操作员正在编辑的申请、租户/工作区上下文或访问画像筛选。
 - Permission Changes now blocks blank approval requests, duplicate pending approval submissions, double-click submission races, and the follow-up approve/reject click that can be generated when the submit button changes state under the pointer.

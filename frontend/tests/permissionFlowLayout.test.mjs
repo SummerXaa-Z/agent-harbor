@@ -69,6 +69,43 @@ test("permission request journey exposes the active step for production operator
   assert.match(styles, /\.approval-process-step\.status-complete\s*> span\s*\{/);
 });
 
+test("permission request process steps navigate to their operator sections", () => {
+  assert.match(workbench, /function permissionRequestStepSectionId/);
+  assert.match(workbench, /function permissionRequestStepTarget/);
+  assert.match(workbench, /function scrollToPermissionRequestStep/);
+  assert.match(workbench, /document\.getElementById\(permissionRequestStepSectionId\(step\)\)\?\.scrollIntoView/);
+  assert.match(workbench, /if \(step === "request"\) return "scope"/);
+  assert.match(workbench, /if \(step === "validation"\) return "validation"/);
+  assert.match(workbench, /if \(step === "acceptance"\) return "acceptance"/);
+  assert.match(workbench, /id=\{permissionRequestStepSectionId\("scope"\)\}/);
+  assert.match(workbench, /id=\{permissionRequestStepSectionId\("template"\)\}/);
+  assert.match(workbench, /id=\{permissionRequestStepSectionId\("approval"\)\}/);
+  assert.match(workbench, /id=\{permissionRequestStepSectionId\("apply"\)\}/);
+  assert.match(workbench, /id=\{permissionRequestStepSectionId\("goLive"\)\}/);
+  assert.match(workbench, /id=\{permissionRequestStepSectionId\("validation"\)\}/);
+  assert.match(workbench, /id=\{permissionRequestStepSectionId\("acceptance"\)\}/);
+  assert.match(workbench, /targetStep: permissionRequestStepTarget\(step\.key\)/);
+  assert.match(workbench, /<button[\s\S]*data-step-target=\{step\.targetStep\}[\s\S]*onClick=\{\(\) => scrollToPermissionRequestStep\(step\.targetStep\)\}/);
+  assert.match(styles, /\.approval-process-step\s*\{[^}]*border:\s*0;/s);
+  assert.match(styles, /\.approval-process-step:hover\s*\{/);
+});
+
+test("permission request carries readable context into access profile workspace", () => {
+  assert.match(accessProfileView, /handoffContext\?: AccessProfileHandoffContext \| null/);
+  assert.match(accessProfileView, /const tenantLabel = handoffContext\?\.tenantName \?\? profile\?\.tenant\.name \?\? scope\.tenantId/);
+  assert.match(accessProfileView, /const workspaceLabel = handoffContext\?\.workspaceName \?\? \(filters\.workspaceId\?\.trim\(\) \|\| t\("form\.workspaceAll"\)\)/);
+  assert.match(accessProfileView, /const callerLabel = handoffContext\?\.callerName \?\? \(filters\.callerInstanceId/);
+  assert.match(accessProfileView, /const targetLabel = handoffContext\?\.targetName \?\? \(filters\.targetId/);
+  assert.match(accessProfileView, /className="access-handoff-context"/);
+  assert.match(accessProfileView, /text\.accessProfileHandoffDetail/);
+  assert.match(app, /const \[accessProfileHandoffContext, setAccessProfileHandoffContext\] = useState<AccessProfileHandoffContext \| null>\(null\)/);
+  assert.match(app, /setAccessProfileHandoffContext\(\{/);
+  assert.match(app, /tenantName: permissionTenantPathLabel\(aiAdminForm\.tenantId, tenants, t\)\.primary/);
+  assert.match(app, /workspaceName: permissionWorkspaceDisplayName\(aiAdminForm\.workspaceId, agents, t\)/);
+  assert.match(app, /handoffContext=\{accessProfileHandoffContext\}/);
+  assert.match(i18n, /"text\.accessProfileHandoffDetail"/);
+});
+
 test("permission request evidence is secondary to the main operator task", () => {
   const auditStart = workbench.indexOf('<details className="approval-evidence">');
   assert.notEqual(auditStart, -1);
@@ -250,7 +287,7 @@ test("permission request dropdowns use deduplicated business labels", () => {
 
 test("permission request primary path avoids native select menus", () => {
   const formStart = workbench.indexOf('<div className="approval-form-grid">');
-  const formEnd = workbench.indexOf('<div className="approval-package-preview">', formStart);
+  const formEnd = workbench.indexOf('<div className="approval-package-preview"', formStart);
   const primaryForm = workbench.slice(formStart, formEnd);
   assert.notEqual(formStart, -1);
   assert.notEqual(formEnd, -1);
@@ -264,7 +301,7 @@ test("permission request primary path avoids native select menus", () => {
 
 test("permission request chooses access objects instead of raw subject selectors", () => {
   const formStart = workbench.indexOf('<div className="approval-form-grid">');
-  const formEnd = workbench.indexOf('<div className="approval-package-preview">', formStart);
+  const formEnd = workbench.indexOf('<div className="approval-package-preview"', formStart);
   const primaryForm = workbench.slice(formStart, formEnd);
   const advancedStart = workbench.indexOf('<details className="approval-details">');
   const processStart = workbench.indexOf('<aside className="approval-process-panel"', advancedStart);

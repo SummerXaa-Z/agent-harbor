@@ -1884,7 +1884,7 @@ func permissionPackageWorkbenchSteps(draft domain.PermissionPackageDraft, approv
 		acceptanceDetail = "acceptance_needed"
 	}
 	return []permissionPackageWorkbenchStep{
-		{Key: "request", Status: requestStatus, DetailCode: requestDetail, Count: len(draft.AllowedCapabilities), Total: len(draft.AllowedCapabilities) + len(draft.BlockedCapabilities)},
+		{Key: "request", Status: requestStatus, DetailCode: requestDetail},
 		{Key: "approval", Status: approvalStatus, DetailCode: approvalDetail},
 		{Key: "apply", Status: applyStatus, DetailCode: applyDetail},
 		{Key: "validation", Status: validationStatus, DetailCode: validationDetail},

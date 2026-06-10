@@ -735,3 +735,33 @@ pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i
 make check
 make release-check
 ```
+
+Committed and pushed `165fa47 fix: keep one primary completion action` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=CLEAN`; Backend, Frontend, and PostgreSQL integration were pending immediately after push.
+
+## Task 19: Remove Misleading Request Step Count
+
+- [x] **Step 1: Inspect the completed process navigation**
+
+Browser scan of `http://127.0.0.1:5174/#ai-admin` showed the request step as complete while still rendering `2/3`. That number came from backend workbench preview capability counts, not request form completion, and could make operators think the request was only partially complete.
+
+- [x] **Step 2: Add backend regression coverage**
+
+`TestPermissionPackageWorkbenchPreviewSummarizesPrimaryJourney` now asserts the `request` workbench step does not carry `count` / `total` capability ratios.
+
+- [x] **Step 3: Remove the count from workbench preview**
+
+`permissionPackageWorkbenchSteps` now returns the request step with status and detail code only. Capability counts remain available in the workbench summary and template/package areas where they are semantically meaningful.
+
+- [x] **Step 4: Run release gates and commit**
+
+Run focused backend and frontend tests, `make check`, `make release-check`, then commit and push if clean.
+
+Verified locally before commit:
+
+```bash
+git diff --check
+go test ./internal/httpapi -run TestPermissionPackageWorkbenchPreviewSummarizesPrimaryJourney -count=1
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+make check
+make release-check
+```

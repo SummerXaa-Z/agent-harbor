@@ -3490,6 +3490,9 @@ func TestPermissionPackageWorkbenchPreviewSummarizesPrimaryJourney(t *testing.T)
 		!permissionPackageWorkbenchHasStep(beforeApply.Summary.Steps, "validation", "waiting", "validation_waiting") {
 		t.Fatalf("expected approval complete and apply current steps, got %#v", beforeApply.Summary.Steps)
 	}
+	if requestStep, ok := permissionPackageWorkbenchStepByKey(beforeApply.Summary.Steps, "request"); !ok || requestStep.Count != 0 || requestStep.Total != 0 {
+		t.Fatalf("expected request step to avoid capability count noise, got step=%#v ok=%v", requestStep, ok)
+	}
 
 	applyInput := map[string]any{
 		"approvalRequestId": approved.ID,
@@ -5714,6 +5717,15 @@ func permissionPackageWorkbenchHasStep(steps []permissionPackageWorkbenchStep, k
 		}
 	}
 	return false
+}
+
+func permissionPackageWorkbenchStepByKey(steps []permissionPackageWorkbenchStep, key string) (permissionPackageWorkbenchStep, bool) {
+	for _, step := range steps {
+		if step.Key == key {
+			return step, true
+		}
+	}
+	return permissionPackageWorkbenchStep{}, false
 }
 
 func permissionPackageProductionReadinessPath(input map[string]any, approvalRequestID string, subjectID string) string {

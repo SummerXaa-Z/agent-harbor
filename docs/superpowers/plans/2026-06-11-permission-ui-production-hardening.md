@@ -599,14 +599,47 @@ Browser verification on `http://127.0.0.1:5174/#ai-admin` confirmed the expanded
 
 ## Task 13: Continue Completion-State Cleanup
 
-- [ ] **Step 1: Inspect completed-state primary controls**
+- [x] **Step 1: Inspect completed-state primary controls**
 
 Reload `http://127.0.0.1:5174/#ai-admin` and verify completed-state controls do not mix active action styling with disabled completed labels, especially the `已应用` primary button and duplicate `导出证据` actions.
 
-- [ ] **Step 2: Inspect acceptance page after completed-state queue cleanup**
+- [x] **Step 2: Inspect acceptance page after completed-state queue cleanup**
 
 Reload `http://127.0.0.1:5174/#evidence` and verify the status check, current permission-change context, historical evidence, management audit, and runtime signals appear in a sensible order without inviting unnecessary writes.
 
-- [ ] **Step 3: Pick the next smallest production-confidence fix**
+- [x] **Step 3: Pick the next smallest production-confidence fix**
 
 Prioritize safety and clarity over visual polish. If no critical main-journey issue remains, switch to CI status review and release notes cleanup.
+
+The selected issue was the completed Permission Changes journey still rendering `已应用` as a disabled primary button. That looked like a blocked action rather than a completed state, and it competed visually with the actual next safe action, `导出证据`. Completed journeys now render `已应用` as a neutral success status indicator; the real primary actions remain active buttons.
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+```
+
+Browser verification on `http://127.0.0.1:5174/#ai-admin` confirmed there is no visible `已应用` button, `.approval-action-status.is-complete` renders `已应用`, and the remaining primary actions are `导出证据`. Browser verification on `http://127.0.0.1:5174/#evidence` confirmed the acceptance route still keeps the current permission-change context, status check, and management audit in a sensible order with no visible raw UI ids.
+
+## Task 14: Release-Gate And PR Status Sweep
+
+- [x] **Step 1: Run whitespace and focused UI gates**
+
+Run `git diff --check` and the focused Permission Changes/i18n test suite.
+
+- [x] **Step 2: Run repository safety gates**
+
+Run `make check` and `make release-check`.
+
+- [ ] **Step 3: Commit, push, and inspect PR checks**
+
+Commit the completed-state status fix, push branch `codex/production-readiness-gate`, and inspect PR #74 check status. If checks are still queued, record that instead of claiming green CI.
+
+Verified locally before commit:
+
+```bash
+git diff --check
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+make check
+make release-check
+```

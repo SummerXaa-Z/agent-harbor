@@ -48,6 +48,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 上线验收页的管理审计行现在用更安静的“详情”折叠技术 ID，并保留 Agent 等中英混排业务词大小写，不再把徽标文字强制小写。
 - Completed Permission Changes journeys now render reviewer queue rows as read-only evidence, so stale pending requests no longer show approve/reject actions after permissions are already active.
 - 已完成的权限变更旅程现在会把待审批队列显示为只读证据；权限已经生效后，历史待审批项不再展示批准/拒绝操作。
+- Completed Permission Changes journeys now render the applied state as a status indicator instead of a disabled primary action, so operators do not mistake completed work for a blocked button.
+- 已完成的权限变更旅程现在把“已应用”呈现为状态标识，而不是禁用的主按钮，避免操作员把已完成事项误认为被阻断的操作。
 - `make ai-admin-browser-journey` now starts the API with split requester and reviewer admin identities by default, and the approval scenario verifies that requester-key impersonation of the reviewer is rejected before the real reviewer approves.
 - `make ai-admin-browser-journey` 现在默认用分离的申请人与审批人管理身份启动 API，并在审批场景中先验证申请人 key 冒充审批人会被拒绝，再由真实审批人批准。
 - Web console Permission Changes now treats not-yet-requested and pending approvals as pending work instead of production blockers, puts the next safe action in the task header, and keeps the tenant access profile in the dedicated Access workspace.

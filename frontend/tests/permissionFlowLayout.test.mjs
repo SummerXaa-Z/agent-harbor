@@ -344,7 +344,8 @@ test("permission request blocks main actions when sample fallback data is shown"
   assert.match(workbench, /message\.fallbackDataModeDetail/);
   assert.match(workbench, /const permissionRequestBusy =/);
   assert.match(workbench, /disabled=\{liveDataBlocked \|\| permissionRequestBusy/);
-  assert.match(workbench, /disabled=\{Boolean\(application\) \|\| liveDataBlocked \|\| permissionRequestBusy \|\| !canApply\}/);
+  assert.match(workbench, /disabled=\{liveDataBlocked \|\| permissionRequestBusy \|\| !canApply\}/);
+  assert.doesNotMatch(workbench, /disabled=\{Boolean\(application\) \|\| liveDataBlocked \|\| permissionRequestBusy \|\| !canApply\}/);
   assert.match(styles, /\.approval-live-warning\s*\{/);
 });
 
@@ -415,8 +416,13 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /approvalRequest\?\.status === "approved" \|\| Boolean\(application\) \|\| goLiveReady/);
   assert.match(workbench, /const runtimeValidationReady = Boolean\(approvalJourneyResult\) \|\| goLiveReady/);
   assert.match(workbench, /runtimeValidationReady \? t\("text\.runtimeValidationResultReady"\) : t\("text\.runtimeValidationResultPending"\)/);
-  assert.match(workbench, /disabled=\{Boolean\(application\) \|\| liveDataBlocked \|\| permissionRequestBusy \|\| !canApply\}/);
-  assert.match(workbench, /application \? t\("action\.permissionPackageApplied"\) : applying \? t\("action\.applyingPermissionPackage"\) : t\("action\.applyPermissionPackage"\)/);
+  assert.match(workbench, /application \? \(/);
+  assert.match(workbench, /className="approval-action-status is-complete"/);
+  assert.match(workbench, /t\("action\.permissionPackageApplied"\)/);
+  assert.doesNotMatch(workbench, /disabled=\{Boolean\(application\) \|\| liveDataBlocked \|\| permissionRequestBusy \|\| !canApply\}/);
+  assert.match(workbench, /disabled=\{liveDataBlocked \|\| permissionRequestBusy \|\| !canApply\}/);
+  assert.match(styles, /\.approval-action-status\s*\{/);
+  assert.match(styles, /\.approval-action-status\.is-complete\s*\{/);
   assert.match(workbench, /approvalDisplayStatus: PermissionPackageApprovalRequest\["status"\] \| null/);
   assert.match(workbench, /const showPendingApprovalActions = !application && !goLiveReady && approvalRequest\?\.status === "pending"/);
   assert.match(workbench, /permissionPolicyGateDetailKey\(draft\.policyGate\.canApplyDirectly, approvalDisplayStatus\)/);

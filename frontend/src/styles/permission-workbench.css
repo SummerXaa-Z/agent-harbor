@@ -150,6 +150,29 @@
   align-items: center;
 }
 
+.approval-action-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.approval-action-status.is-complete {
+  border-color: var(--success-border);
+  background: var(--success-surface);
+  color: var(--success-strong);
+}
+
 .approval-live-warning {
   display: flex;
   gap: 10px;

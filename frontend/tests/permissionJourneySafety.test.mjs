@@ -127,3 +127,24 @@ test("production evidence export reports the result on the main permission journ
   assert.match(block, /setAiAdminMessage\(t\("message\.productionEvidenceExported"\)\)/);
   assert.match(block, /setAiAdminMessage\(localizedErrorMessage\(t, language, error, "error\.exportProductionEvidence"\)\)/);
 });
+
+test("permission journey mutation handlers require live API before network writes", () => {
+  [
+    ["runAiAdminApprovalJourney", "message.fallbackDataModeActionBlocked", "createTenant("],
+    ["createAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "createPermissionPackageApprovalRequest("],
+    ["approveAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "approvePermissionPackageApprovalRequest("],
+    ["rejectAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "rejectPermissionPackageApprovalRequest("],
+    ["withdrawAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "withdrawPermissionPackageApprovalRequest("],
+    ["applyAiAdminPermissionPackage", "message.fallbackDataModeActionBlocked", "applyPermissionPackage("],
+    ["exportAiAdminProductionEvidence", "message.productionEvidenceRequiresLiveApi", "fetchPermissionPackageProductionEvidenceReport("],
+  ].forEach(([functionName, liveApiMessage, networkCall]) => {
+    const block = functionBlock(functionName);
+    const liveApiGuardIndex = block.indexOf("!data?.loadedFromApi");
+    const liveApiMessageIndex = block.indexOf(liveApiMessage);
+    const networkCallIndex = block.indexOf(networkCall);
+
+    assert.ok(liveApiGuardIndex >= 0, `${functionName} should check live API data`);
+    assert.ok(liveApiMessageIndex > liveApiGuardIndex, `${functionName} should explain the live API requirement`);
+    assert.ok(networkCallIndex > liveApiMessageIndex, `${functionName} should guard before ${networkCall}`);
+  });
+});

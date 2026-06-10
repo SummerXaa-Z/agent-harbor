@@ -36,6 +36,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - `GET /api/v1/permission-packages/access-subjects` 现在返回角色、部门和成员访问对象候选，权限变更界面可以先选择业务对象，再转换为技术主体选择器。
 - The web console color system is now centered on one restrained enterprise-blue brand token, with decorative cyan treatments removed and success/warning/danger kept as separate status colors.
 - Web 控制台色彩系统现在收敛为单一克制的企业蓝主题色，移除零散青蓝装饰色，同时保留成功/警告/危险作为独立状态色。
+- Web console Permission Changes now labels backend-unavailable fallback mode as a read-only sample preview, and safety tests assert mutation handlers require live API data before approval, apply, validation, or evidence network writes.
+- Web 控制台权限变更页现在把后端不可达时的兜底模式明确标记为“只读示例预览”，并用安全测试锁定审批、应用、验证和证据导出等写入入口必须先检查实时 API。
 - Web console Permission Changes now treats not-yet-requested and pending approvals as pending work instead of production blockers, puts the next safe action in the task header, and keeps the tenant access profile in the dedicated Access workspace.
 - Web 控制台权限变更页现在把未发起和待处理审批呈现为待处理事项而非生产阻断，在任务页头直接给出下一步安全动作，并将租户访问画像保留在独立的权限工作区。
 - Added an official MCP TypeScript SDK demo service under `scripts/real-mcp`, plus `make real-mcp`, so the local approval journey can run against a real Streamable HTTP MCP server.

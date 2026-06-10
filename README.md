@@ -204,7 +204,7 @@ pnpm install
 pnpm dev
 ```
 
-The console reads `VITE_API_BASE`; if unset, it uses `http://127.0.0.1:9090`. When the backend is unavailable during local development, the UI falls back to sample data so the console remains navigable, shows a persistent warning, and disables mutation actions that would otherwise imply a durable permission change.
+The console reads `VITE_API_BASE`; if unset, it uses `http://127.0.0.1:9090`. When the backend is unavailable during local development, the UI falls back to a read-only sample preview so the console remains navigable, shows a persistent warning, and disables mutation actions that would otherwise imply a durable permission change.
 
 The **Self-Check** workspace creates a fresh tenant tree, caller, MCP target, scoped capability grant chain, allowed call, denied call, and tenant access profile evidence through the real API. This lower-level core permission loop supports English and Simplified Chinese. The browser language is used on first load, and the visible `中文` / `EN` toggle persists the operator's choice locally.
 

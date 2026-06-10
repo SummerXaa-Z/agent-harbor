@@ -165,3 +165,10 @@ test("permission journey mutation handlers require live API before network write
     assert.ok(networkCallIndex > liveApiMessageIndex, `${functionName} should guard before ${networkCall}`);
   });
 });
+
+test("permission readiness messages use business field names for access subjects", () => {
+  const block = syncFunctionBlock("permissionReadinessMessages");
+
+  assert.match(block, /subjectSelector:\s*t\("form\.accessSubject"\)/);
+  assert.doesNotMatch(block, /fieldLabels\[field\] \?\? "subjectSelector"/);
+});

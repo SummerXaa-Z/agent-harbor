@@ -1318,3 +1318,13 @@ pnpm --dir frontend exec node --test tests/styleTheme.test.mjs
 ```
 
 Browser verification on `http://127.0.0.1:5174/#registry` confirmed Agent table state-change buttons render as neutral white buttons and `禁用` renders with the danger treatment, both at the compact 30px control height.
+
+## Task 38: Hide Technical Subject Selector From Readiness Copy
+
+- [x] **Step 1: Replace the leaked field name**
+
+Permission readiness messages now map the missing `subjectSelector` field to the business label `form.accessSubject`, so operators see "Access object" / "访问对象" instead of the raw technical field name.
+
+- [x] **Step 2: Add regression coverage**
+
+`frontend/tests/permissionJourneySafety.test.mjs` now asserts `permissionReadinessMessages` maps `subjectSelector` through `form.accessSubject`.

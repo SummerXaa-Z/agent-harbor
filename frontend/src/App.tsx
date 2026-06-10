@@ -4141,6 +4141,7 @@ function permissionSimulationReason(row: PermissionPackageSimulationRow, t: Tran
 function permissionReadinessMessages(readiness: PermissionPackageDraft["readiness"], t: Translator) {
   const fieldLabels: Record<string, string> = {
     callerInstanceId: t("form.callerInstance"),
+    subjectSelector: t("form.accessSubject"),
     targetId: t("form.target"),
     tenantId: t("form.tenantId"),
     workspaceId: t("form.workspaceId")

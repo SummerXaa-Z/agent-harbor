@@ -107,6 +107,15 @@ test("permission request process navigation hides request capability counts", ()
   assert.match(workbench, /typeof step\.count === "number" && typeof step\.total === "number"/);
 });
 
+test("permission request process steps prefer completed evidence over stale preview copy", () => {
+  assert.match(workbench, /function permissionWorkbenchStepDisplayDetailCode/);
+  assert.match(workbench, /function permissionWorkbenchStepDisplayStatus/);
+  assert.match(workbench, /permissionWorkbenchStepDisplayDetailCode\(step,\s*\{[\s\S]*goLiveReady[\s\S]*runtimeValidationReady[\s\S]*\}\)/);
+  assert.match(workbench, /permissionWorkbenchStepDisplayStatus\(step,\s*\{[\s\S]*approvalComplete[\s\S]*applicationReady[\s\S]*goLiveReady[\s\S]*runtimeValidationReady[\s\S]*\}\)/);
+  assert.match(workbench, /if \(args\.goLiveReady\) \{[\s\S]*if \(step\.key === "approval"\) return args\.approvalRequired \? "approval_approved" : "approval_not_required";[\s\S]*if \(step\.key === "apply"\) return "apply_done";[\s\S]*if \(step\.key === "validation"\) return "validation_ready";[\s\S]*if \(step\.key === "acceptance"\) return "acceptance_ready";[\s\S]*\}/);
+  assert.match(workbench, /if \(args\.goLiveReady\) return "complete";/);
+});
+
 test("permission request first viewport prioritizes one task flow", () => {
   const headerStart = workbench.indexOf('<section className="approval-header"');
   const contextStart = workbench.indexOf('<section className="approval-context-bar"', headerStart);

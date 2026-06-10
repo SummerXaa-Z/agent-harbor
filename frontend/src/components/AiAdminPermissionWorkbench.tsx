@@ -54,7 +54,8 @@ import type {
   PermissionPackageProductionReadinessStatus,
   PermissionPackageTemplate,
   PermissionPackageWorkbenchPreview,
-  PermissionPackageWorkbenchStepKey
+  PermissionPackageWorkbenchStepKey,
+  PermissionPackageWorkbenchStepStatus
 } from "../permissionPackages";
 import type {
   AccessDecisionExplainResult,
@@ -488,15 +489,29 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const readinessReadyCount = workbenchPreview?.summary.readinessReadyCount ?? productionSummary.readyCount;
   const readinessTotalCount = workbenchPreview?.summary.readinessTotalCount || productionSummary.totalCount;
   const fallbackProcessSteps = permissionRequestProcessStepStatuses(flowSteps, currentWizardStep);
-  const processSteps = workbenchPreview?.summary.steps.map((step) => ({
-    count: step.key === "request" ? undefined : step.count,
-    detail: t(permissionWorkbenchStepDetailKey(step.detailCode), step.detailCode),
-    key: step.key,
-    labelKey: permissionWorkbenchStepLabelKey(step.key),
-    status: step.status,
-    targetStep: permissionRequestStepTarget(step.key),
-    total: step.key === "request" ? undefined : step.total
-  })) ?? fallbackProcessSteps.map((step) => ({
+  const processSteps = workbenchPreview?.summary.steps.map((step) => {
+    const detailCode = permissionWorkbenchStepDisplayDetailCode(step, {
+      approvalRequired: !draft.policyGate.canApplyDirectly,
+      approvalStatus: approvalDisplayStatus,
+      applicationReady: Boolean(application),
+      goLiveReady,
+      runtimeValidationReady
+    });
+    return {
+      count: step.key === "request" ? undefined : step.count,
+      detail: t(permissionWorkbenchStepDetailKey(detailCode), detailCode),
+      key: step.key,
+      labelKey: permissionWorkbenchStepLabelKey(step.key),
+      status: permissionWorkbenchStepDisplayStatus(step, {
+        approvalComplete: approvalDisplayStatus === "approved" || draft.policyGate.canApplyDirectly,
+        applicationReady: Boolean(application),
+        goLiveReady,
+        runtimeValidationReady
+      }),
+      targetStep: permissionRequestStepTarget(step.key),
+      total: step.key === "request" ? undefined : step.total
+    };
+  }) ?? fallbackProcessSteps.map((step) => ({
     detail: step.detail,
     key: step.key,
     labelKey: step.labelKey,
@@ -1706,4 +1721,50 @@ function permissionWorkbenchStepLabelKey(key: string) {
 
 function permissionWorkbenchStepDetailKey(detailCode: string) {
   return `permissionWorkbench.detail.${detailCode}`;
+}
+
+function permissionWorkbenchStepDisplayDetailCode(
+  step: {
+    detailCode: string;
+    key: PermissionPackageWorkbenchStepKey;
+  },
+  args: {
+    approvalRequired: boolean;
+    approvalStatus: PermissionPackageApprovalRequest["status"] | null;
+    applicationReady: boolean;
+    goLiveReady: boolean;
+    runtimeValidationReady: boolean;
+  }
+) {
+  if (args.goLiveReady) {
+    if (step.key === "approval") return args.approvalRequired ? "approval_approved" : "approval_not_required";
+    if (step.key === "apply") return "apply_done";
+    if (step.key === "validation") return "validation_ready";
+    if (step.key === "acceptance") return "acceptance_ready";
+  }
+  if (step.key === "approval" && args.approvalStatus === "approved") {
+    return args.approvalRequired ? "approval_approved" : "approval_not_required";
+  }
+  if (step.key === "apply" && args.applicationReady) return "apply_done";
+  if (step.key === "validation" && args.runtimeValidationReady) return "validation_ready";
+  return step.detailCode;
+}
+
+function permissionWorkbenchStepDisplayStatus(
+  step: {
+    key: PermissionPackageWorkbenchStepKey;
+    status: PermissionPackageWorkbenchStepStatus;
+  },
+  args: {
+    approvalComplete: boolean;
+    applicationReady: boolean;
+    goLiveReady: boolean;
+    runtimeValidationReady: boolean;
+  }
+): PermissionPackageWorkbenchStepStatus {
+  if (args.goLiveReady) return "complete";
+  if (step.key === "approval" && args.approvalComplete) return "complete";
+  if (step.key === "apply" && args.applicationReady) return "complete";
+  if (step.key === "validation" && args.runtimeValidationReady) return "complete";
+  return step.status;
 }

@@ -1352,3 +1352,13 @@ When the access profile is opened from a completed permission change, the filter
 - [x] **Step 3: Add regression coverage**
 
 `frontend/tests/permissionFlowLayout.test.mjs` asserts the handoff scope includes capability, applies the handoff visual state, and switches the filter title/detail based on `handoffContext`. `frontend/tests/i18n.test.mjs` locks the new Chinese copy.
+
+## Task 41: Keep Completed Process Steps Consistent
+
+- [x] **Step 1: Prefer stronger completed evidence over stale preview text**
+
+The Permission Changes process navigation now normalizes workbench preview steps with the stronger evidence already available in the page. If the journey is go-live ready, approval, apply, validation, and acceptance all render complete details. If local approval, application, or runtime validation evidence is stronger than the preview, those individual steps also render complete.
+
+- [x] **Step 2: Add regression coverage**
+
+`frontend/tests/permissionFlowLayout.test.mjs` now asserts the process step display helpers override stale preview details and statuses with completed local evidence, preventing a ready journey from showing the approval step as pending.

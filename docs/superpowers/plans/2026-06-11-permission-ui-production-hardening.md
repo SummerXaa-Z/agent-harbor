@@ -457,6 +457,10 @@ Keep raw capability keys in the data model, tests, and technical/audit surfaces 
 
 Extend `frontend/tests/permissionFlowLayout.test.mjs` so future UI changes cannot reintroduce `capability.key` as the primary user-facing label.
 
+- [x] **Step 5: Localize capability governance agent names**
+
+Capability Governance now maps caller and target service names through the same business-name presenter, so table rows and selectors no longer show demo system names such as `Permission Package Approval MCP Target`.
+
 ## Task 9: Completed Approval Step State
 
 - [x] **Step 1: Treat applied changes as approval-resolved**

@@ -7,7 +7,6 @@ import {
   customAccessSubjectOption
 } from "../accessSubjects";
 import {
-  agentNameMap,
   capabilityDisplayName,
   capabilityDiscoveryStatusLabel,
   capabilityStatusTone,
@@ -71,7 +70,10 @@ export function CapabilityGovernanceView({
   tenantEntitlements: TenantEntitlement[];
   workspaceAssignments: WorkspaceAssignment[];
 }) {
-  const agentNames = useMemo(() => agentNameMap(agents), [agents]);
+  const agentNames = useMemo(
+    () => Object.fromEntries(agents.map((agent) => [agent.id, permissionEntityDisplayName(agent.name, t)])),
+    [agents, t]
+  );
   const tenantNames = useMemo(
     () => new Map(tenants.map((tenant) => [tenant.id, permissionEntityDisplayName(tenant.name, t)])),
     [tenants, t]
@@ -84,7 +86,7 @@ export function CapabilityGovernanceView({
   const selectedAccessSubject = accessSubjectOptionForSelector(form.subjectSelector);
   const targetOptions = [
     { value: "", label: t("form.allMcpTargets") },
-    ...mcpTargets.map((target) => ({ value: target.id, label: target.name }))
+    ...mcpTargets.map((target) => ({ value: target.id, label: permissionEntityDisplayName(target.name, t) }))
   ];
   const capabilityOptions = [
     { value: "", label: t("form.selectCapability") },
@@ -95,7 +97,7 @@ export function CapabilityGovernanceView({
   ];
   const callerOptions = [
     { value: "", label: t("form.selectCaller") },
-    ...agents.map((agent) => ({ value: agent.id, label: agent.name }))
+    ...agents.map((agent) => ({ value: agent.id, label: permissionEntityDisplayName(agent.name, t) }))
   ];
   const accessSubjectDropdownOptions = [
     ...accessSubjectOptions.map((option) => ({

@@ -215,6 +215,9 @@ test("capability names use business labels in primary UI", () => {
   assert.match(accessProfileView, /capabilityNameById\.get\(trace\.capabilityId\) \?\? trace\.capabilityId/);
   assert.match(accessProfileView, /const capabilityName = grant\.capability[\s\S]*capabilityDisplayName\(grant\.capability, t\)/);
   assert.match(capabilityGovernanceView, /label: capabilityDisplayName\(capability, t\)/);
+  assert.match(capabilityGovernanceView, /Object\.fromEntries\(agents\.map\(\(agent\) => \[agent\.id, permissionEntityDisplayName\(agent\.name, t\)\]\)\)/);
+  assert.match(capabilityGovernanceView, /label: permissionEntityDisplayName\(target\.name, t\)/);
+  assert.match(capabilityGovernanceView, /label: permissionEntityDisplayName\(agent\.name, t\)/);
   assert.match(capabilityGovernanceView, /<strong>\{capabilityDisplayName\(capability, t\)\}<\/strong>/);
   assert.match(capabilityGovernanceView, /capability \? capabilityDisplayName\(capability, t\) : entitlement\.capabilityId/);
   assert.match(app, /tenants=\{tenants\}/);

@@ -136,6 +136,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 权限变更页现在会把上线就绪证据视为运行验证已完成，完成态不再提示操作员再次执行运行验证。
 - Permission Changes now changes the disabled apply button to Applied after an application exists, making repeated apply unavailable and visually clear.
 - 权限变更页现在会在应用记录存在后把禁用的应用按钮显示为“已应用”，明确避免重复应用误导。
+- Capability Governance now localizes caller and target service names in selectors and table rows, so demo MCP targets no longer appear as raw English system names.
+- 能力治理页现在会在选择器和表格行中本地化调用方与目标服务名称，示例 MCP 目标不再以原始英文系统名出现在主界面。
 - Web console visual design review follow-up: design tokens now govern component colors, shadows, focus rings, button sizing, technical-id display, System Self-Check telemetry, and Agent registry ordering.
 - Web 控制台视觉设计审查项已落地：设计 token 现在约束组件色值、阴影、焦点环、按钮尺寸、技术 ID 展示、系统自检指标展示范围和 Agent 注册表顺序。
 - Web console UX review follow-up: desktop navigation now keeps readable grouped labels at medium widths, Permission Changes uses one authoritative context bar with non-truncating core selectors, and Capability Governance prioritizes the grant operation area over KPI cards.

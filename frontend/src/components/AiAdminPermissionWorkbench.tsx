@@ -369,6 +369,10 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       onCreateApprovalRequest();
       return;
     }
+    if (journeyStatus.nextActionKey === "action.startPermissionApproval") {
+      onStartNewPermissionChange();
+      return;
+    }
     if (primaryActionCode === "create_approval_request" || productionSummary.primaryActionKey === "action.createApprovalRequest") {
       onCreateApprovalRequest();
       return;
@@ -496,6 +500,34 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     : approvalJourneyRunning ? t("action.runningApprovalJourney") : t("action.runDemoPermissionRequest");
   const quickSecondaryActionDisabled = permissionRequestBusy || (!goLiveReady && liveDataBlocked);
   const runQuickSecondaryAction = goLiveReady ? onOpenAccessProfile : onRunApprovalJourney;
+  const goLivePrimaryActionKey = goLiveReady
+    ? "action.exportProductionEvidence"
+    : runtimeValidationReady
+      ? "action.checkProductionReadiness"
+      : "action.runApprovalJourney";
+  const goLivePrimaryActionIcon = goLivePrimaryActionKey === "action.exportProductionEvidence"
+    ? <Download size={14} />
+    : goLivePrimaryActionKey === "action.checkProductionReadiness"
+      ? <RefreshCw size={14} />
+      : <Workflow size={14} />;
+  const goLivePrimaryActionLabel = goLivePrimaryActionKey === "action.exportProductionEvidence" && productionEvidenceExporting
+    ? t("action.exportingProductionEvidence")
+    : goLivePrimaryActionKey === "action.checkProductionReadiness" && productionReadinessLoading
+      ? t("action.checkingProductionReadiness")
+      : goLivePrimaryActionKey === "action.runApprovalJourney" && approvalJourneyRunning
+        ? t("action.runningApprovalJourney")
+        : t(goLivePrimaryActionKey);
+  const runGoLivePrimaryAction = () => {
+    if (goLivePrimaryActionKey === "action.exportProductionEvidence") {
+      onExportProductionEvidence();
+      return;
+    }
+    if (goLivePrimaryActionKey === "action.checkProductionReadiness") {
+      onRefreshProductionReadiness();
+      return;
+    }
+    onRunApprovalJourney();
+  };
   const approvalDecisionConfirmation = pendingApprovalDecision ? (
     <div className="approval-decision-confirmation" role="group" aria-label={t("text.approvalDecisionConfirmTitle")}>
       <div>
@@ -917,18 +949,9 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                   <strong>{t(goLiveNextKey)}</strong>
                 </div>
                 <div className="approval-actions">
-                  <button
-                    className="primary-button"
-                    disabled={liveDataBlocked || permissionRequestBusy}
-                    onClick={onRunApprovalJourney}
-                    type="button"
-                  >
-                    <Workflow size={14} />
-                    {approvalJourneyRunning ? t("action.runningApprovalJourney") : t("action.runApprovalJourney")}
-                  </button>
-                  <button className="secondary-button" disabled={liveDataBlocked || permissionRequestBusy} onClick={onRefreshProductionReadiness} type="button">
-                    <RefreshCw size={14} />
-                    {productionReadinessLoading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
+                  <button className="primary-button" disabled={liveDataBlocked || permissionRequestBusy} onClick={runGoLivePrimaryAction} type="button">
+                    {goLivePrimaryActionIcon}
+                    {goLivePrimaryActionLabel}
                   </button>
                 </div>
               </>

@@ -428,6 +428,21 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(styles, /\.approval-completion-actions\s*\{/);
 });
 
+test("permission request go-live step presents one guided primary action", () => {
+  assert.match(workbench, /if \(journeyStatus\.nextActionKey === "action\.startPermissionApproval"\) \{\s*onStartNewPermissionChange\(\);/);
+  assert.match(workbench, /const goLivePrimaryActionKey = goLiveReady/);
+  assert.match(workbench, /runtimeValidationReady\s*\?\s*"action\.checkProductionReadiness"/);
+  assert.match(workbench, /const runGoLivePrimaryAction = \(\) => \{/);
+  assert.match(workbench, /goLivePrimaryActionKey === "action\.exportProductionEvidence"[\s\S]*onExportProductionEvidence\(\);/);
+  assert.match(workbench, /goLivePrimaryActionKey === "action\.checkProductionReadiness"[\s\S]*onRefreshProductionReadiness\(\);/);
+  assert.match(workbench, /onClick=\{runGoLivePrimaryAction\}/);
+  const goLiveBlockStart = workbench.indexOf('className="approval-process-block approval-go-live-block"');
+  const runtimeStart = workbench.indexOf('className="approval-runtime"', goLiveBlockStart);
+  const goLiveBlock = workbench.slice(goLiveBlockStart, runtimeStart);
+  assert.match(goLiveBlock, /goLivePrimaryActionLabel/);
+  assert.doesNotMatch(goLiveBlock, /onClick=\{onRunApprovalJourney\}[\s\S]*onClick=\{onRefreshProductionReadiness\}/);
+});
+
 test("permission request advanced messages suppress successful load noise", () => {
   assert.match(workbench, /function shouldShowAdvancedStatusMessage/);
   assert.match(workbench, /approvalReadinessMessage && shouldShowAdvancedStatusMessage\(approvalReadinessMessageTone\)/);

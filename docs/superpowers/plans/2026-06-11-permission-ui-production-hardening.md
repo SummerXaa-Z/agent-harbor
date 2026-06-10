@@ -631,7 +631,7 @@ Run `git diff --check` and the focused Permission Changes/i18n test suite.
 
 Run `make check` and `make release-check`.
 
-- [ ] **Step 3: Commit, push, and inspect PR checks**
+- [x] **Step 3: Commit, push, and inspect PR checks**
 
 Commit the completed-state status fix, push branch `codex/production-readiness-gate`, and inspect PR #74 check status. If checks are still queued, record that instead of claiming green CI.
 
@@ -643,3 +643,19 @@ pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i
 make check
 make release-check
 ```
+
+Committed and pushed `f888358 fix: render applied state as status` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=CLEAN`; `gh pr checks 74` showed Backend, Frontend, and PostgreSQL integration queued as pending immediately after push.
+
+## Task 15: Continue Main Journey Production Scan
+
+- [ ] **Step 1: Wait for remote checks to settle**
+
+Re-check PR #74 after the queued GitHub checks have had time to run. If any job fails, debug that failure before making more product changes.
+
+- [ ] **Step 2: Re-scan the first viewport and action set**
+
+Use the in-app browser on `http://127.0.0.1:5174/#ai-admin` to verify the first viewport still has one clear next action, no duplicate primary controls, and no exposed technical identifiers.
+
+- [ ] **Step 3: Choose the next production-confidence increment**
+
+If CI stays green, pick the next smallest issue that affects the configure -> approve -> apply -> status check -> acceptance path. Prefer removing ambiguity and accidental writes over adding new features.

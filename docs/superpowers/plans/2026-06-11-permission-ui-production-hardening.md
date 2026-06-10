@@ -807,6 +807,8 @@ make check
 make release-check
 ```
 
-- [ ] **Step 2: Commit, push, and inspect PR checks**
+- [x] **Step 2: Commit, push, and inspect PR checks**
 
 Commit the access-profile evidence cleanup, push branch `codex/production-readiness-gate`, and inspect PR #74 checks.
+
+Committed and pushed `f3cc9a2 fix: hide access profile technical ids` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=CLEAN`; no checks were reported immediately after push.

@@ -504,12 +504,14 @@ function App() {
     }
   }, [activeNav]);
 
+  const shouldLoadAiAdminCatalog = activeNav === "ai-admin" || activeNav === "evidence";
+
   useEffect(() => {
-    if (activeNav === "ai-admin") {
+    if (shouldLoadAiAdminCatalog) {
       void refreshAiAdminCatalog();
       void refreshAiAdminApprovalReadiness();
     }
-  }, [activeNav]);
+  }, [shouldLoadAiAdminCatalog]);
 
   useEffect(() => {
     if (!data) return;
@@ -569,8 +571,10 @@ function App() {
     });
   }, [data, scope]);
 
+  const shouldLoadAiAdminWorkbenchPreview = activeNav === "ai-admin" || activeNav === "evidence";
+
   useEffect(() => {
-    if (activeNav !== "ai-admin" || !data?.loadedFromApi) {
+    if (!shouldLoadAiAdminWorkbenchPreview || !data?.loadedFromApi) {
       setAiAdminServerDraft(null);
       setAiAdminWorkbenchPreview(null);
       return;
@@ -620,7 +624,7 @@ function App() {
         setAiAdminServerDraft(null);
       });
     return () => controller.abort();
-  }, [activeNav, adminKey, aiAdminForm, data?.loadedFromApi]);
+  }, [shouldLoadAiAdminWorkbenchPreview, adminKey, aiAdminForm, data?.loadedFromApi]);
 
   async function refresh() {
     try {
@@ -628,7 +632,7 @@ function App() {
       const next = await loadConsoleData(
         adminKey,
         traceFilters,
-        activeNav === "ai-admin" ? undefined : normalizedScope(scope)
+        shouldLoadAiAdminCatalog ? undefined : normalizedScope(scope)
       );
       setData(next);
       setLastRefresh(new Date());
@@ -2451,6 +2455,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       }),
     [aiAdminApplication, aiAdminApprovalRequest, aiAdminDraft, aiAdminProductionReadiness]
   );
+  const goLiveAcceptanceForm = aiAdminServerDraft?.input ?? aiAdminForm;
   const tracePanel = (className = "span-7") => (
     <Panel className={className} icon={<FileSearch size={18} />} title={t("panel.auditTraces")} action={<IconOpen title={t("action.open")} />}>
       <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} t={t} />
@@ -2466,11 +2471,12 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     <Panel className="span-12" icon={<ClipboardCheck size={18} />} title={t("section.goLiveAcceptance")}>
       <GoLiveAcceptanceOverview
         agents={agents}
+        draft={aiAdminServerDraft}
         form={aiAdminForm}
         liveDataAvailable={Boolean(data?.loadedFromApi)}
-        onExportProductionEvidence={() => void exportAiAdminProductionEvidence()}
+        onExportProductionEvidence={() => void exportAiAdminProductionEvidence(goLiveAcceptanceForm)}
         onOpenPermissionChange={() => setActiveNav("ai-admin")}
-        onRefreshProductionReadiness={() => void refreshAiAdminProductionReadiness()}
+        onRefreshProductionReadiness={() => void refreshAiAdminProductionReadiness(goLiveAcceptanceForm)}
         productionEvidenceExporting={aiAdminProductionEvidenceExporting}
         productionReadiness={aiAdminProductionReadiness}
         productionReadinessLoading={aiAdminProductionReadinessLoading}
@@ -3421,6 +3427,7 @@ function Panel({
 
 function GoLiveAcceptanceOverview({
   agents,
+  draft,
   form,
   liveDataAvailable,
   onExportProductionEvidence,
@@ -3436,6 +3443,7 @@ function GoLiveAcceptanceOverview({
   t
 }: {
   agents: Agent[];
+  draft: PermissionPackageDraft | null;
   form: PermissionPackageDraftInput;
   liveDataAvailable: boolean;
   onExportProductionEvidence: () => void;
@@ -3450,14 +3458,26 @@ function GoLiveAcceptanceOverview({
   tenants: Tenant[];
   t: Translator;
 }) {
-  const tenantPath = permissionTenantPathLabel(form.tenantId, tenants, t);
-  const template = templates.find((item) => item.id === form.templateId);
-  const caller = agents.find((agent) => agent.id === form.callerInstanceId);
-  const target = agents.find((agent) => agent.id === form.targetId);
-  const workspaceName = permissionWorkspaceDisplayName(form.workspaceId, agents, t);
-  const templateName = template ? permissionPackageTemplateName(template, t) : permissionPackageTemplateNameById(form.templateId, t);
-  const callerName = caller ? permissionEntityDisplayName(caller.name, t) : form.callerInstanceId || t("text.unknownCaller");
-  const targetName = target ? permissionEntityDisplayName(target.name, t) : form.targetId || t("text.unknownTarget");
+  const acceptanceInput = draft?.input ?? form;
+  const acceptanceTemplate = draft?.template;
+  const tenantPath = permissionTenantPathLabel(acceptanceInput.tenantId, tenants, t);
+  const template = acceptanceTemplate ?? templates.find((item) => item.id === acceptanceInput.templateId);
+  const caller = agents.find((agent) => agent.id === acceptanceInput.callerInstanceId);
+  const target = agents.find((agent) => agent.id === acceptanceInput.targetId);
+  const workspaceName = permissionWorkspaceDisplayName(acceptanceInput.workspaceId, agents, t);
+  const templateName = template
+    ? permissionPackageTemplateName(template, t)
+    : permissionPackageTemplateNameById(acceptanceInput.templateId, t);
+  const callerName = caller
+    ? permissionEntityDisplayName(caller.name, t)
+    : acceptanceInput.callerInstanceId
+      ? t("text.selectedCallerFallback")
+      : t("text.callerPendingSelection");
+  const targetName = target
+    ? permissionEntityDisplayName(target.name, t)
+    : acceptanceInput.targetId
+      ? t("text.selectedTargetFallback")
+      : t("text.targetPendingSelection");
   const readinessStatusLabel = productionReadinessStatusLabel(productionReadiness?.status, t);
   const statusLabel = productionReadiness ? readinessStatusLabel : productionConsoleStatusLabel(productionSummary, t);
   const statusTone = productionReadiness

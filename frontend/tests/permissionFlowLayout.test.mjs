@@ -308,6 +308,20 @@ test("workspace navigation is reflected in the URL hash", () => {
   assert.match(app, /navKeyFromHash\(window\.location\.hash\)/);
 });
 
+test("go-live evidence route loads the current permission change preview", () => {
+  assert.match(app, /const shouldLoadAiAdminCatalog = activeNav === "ai-admin" \|\| activeNav === "evidence"/);
+  assert.match(app, /shouldLoadAiAdminCatalog \? undefined : normalizedScope\(scope\)/);
+  assert.match(app, /const shouldLoadAiAdminWorkbenchPreview = activeNav === "ai-admin" \|\| activeNav === "evidence"/);
+  assert.match(app, /if \(!shouldLoadAiAdminWorkbenchPreview \|\| !data\?\.loadedFromApi\)/);
+  assert.match(app, /previewPermissionPackageWorkbench\(aiAdminForm, adminKey, controller\.signal\)/);
+  assert.match(app, /const goLiveAcceptanceForm = aiAdminServerDraft\?\.input \?\? aiAdminForm/);
+  assert.match(app, /draft=\{aiAdminServerDraft\}/);
+  assert.match(app, /const acceptanceInput = draft\?\.input \?\? form/);
+  assert.doesNotMatch(app, /form\.callerInstanceId \|\| t\("text\.unknownCaller"\)/);
+  assert.match(i18n, /"text\.callerPendingSelection": "请选择访问用户"/);
+  assert.match(i18n, /"text\.targetPendingSelection": "请选择 MCP 目标"/);
+});
+
 test("permission request blocks main actions when sample fallback data is shown", () => {
   assert.match(workbench, /liveDataAvailable: boolean/);
   assert.match(workbench, /const liveDataBlocked = !liveDataAvailable/);

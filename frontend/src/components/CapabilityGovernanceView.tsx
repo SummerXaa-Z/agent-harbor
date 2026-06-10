@@ -2,6 +2,7 @@ import { useMemo, type FormEvent } from "react";
 import { RefreshCw, ShieldCheck } from "lucide-react";
 
 import {
+  accessSubjectOptionForId,
   accessSubjectOptionForSelector,
   accessSubjectOptions,
   customAccessSubjectOption
@@ -14,6 +15,7 @@ import {
   dataScopeText,
   permissionEntityDisplayName,
   policyEffectLabel,
+  readableIdentifierLabel,
   riskTone,
   translatedValue,
   type Translator
@@ -85,6 +87,21 @@ export function CapabilityGovernanceView({
   }, [capabilities, form.targetId]);
   const selectedCapability = capabilities.find((capability) => capability.id === form.capabilityId);
   const selectedAccessSubject = accessSubjectOptionForSelector(form.subjectSelector);
+  const tenantOptions = [
+    ...tenants.map((tenant) => ({ value: tenant.id, label: permissionEntityDisplayName(tenant.name, t) })),
+    ...(form.tenantId && !tenants.some((tenant) => tenant.id === form.tenantId)
+      ? [{ value: form.tenantId, label: permissionEntityDisplayName(form.tenantId, t) }]
+      : [])
+  ];
+  const workspaceOptions = Array.from(
+    new Set([
+      form.workspaceId,
+      ...agents.map((agent) => agent.workspaceId)
+    ].filter(Boolean))
+  ).map((workspaceId) => ({
+    value: workspaceId,
+    label: capabilityWorkspaceDisplayName(workspaceId, agents, t)
+  }));
   const targetOptions = [
     { value: "", label: t("form.allMcpTargets") },
     ...mcpTargets.map((target) => ({ value: target.id, label: permissionEntityDisplayName(target.name, t) }))
@@ -148,7 +165,7 @@ export function CapabilityGovernanceView({
   }
 
   function handleAccessSubjectChange(accessSubjectId: string) {
-    const option = accessSubjectOptions.find((item) => item.id === accessSubjectId);
+    const option = accessSubjectOptionForId(accessSubjectId);
     if (!option) return;
     onChange({
       ...form,
@@ -249,8 +266,24 @@ export function CapabilityGovernanceView({
 
         <form className="control-form capability-grant-form" onSubmit={onCreateGrantChain}>
           <div className="form-row">
-            <label>{t("form.tenant")}<input required value={form.tenantId} onChange={(event) => onChange({ ...form, tenantId: event.target.value })} /></label>
-            <label>{t("form.workspace")}<input required value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} /></label>
+            <label>
+              {t("form.businessTenant")}
+              <ApprovalDropdown
+                label={t("form.businessTenant")}
+                options={tenantOptions}
+                value={form.tenantId}
+                onChange={(value) => onChange({ ...form, tenantId: value })}
+              />
+            </label>
+            <label>
+              {t("form.businessWorkspace")}
+              <ApprovalDropdown
+                label={t("form.businessWorkspace")}
+                options={workspaceOptions}
+                value={form.workspaceId}
+                onChange={(value) => onChange({ ...form, workspaceId: value })}
+              />
+            </label>
           </div>
           <label>
             {t("form.capability")}
@@ -281,9 +314,10 @@ export function CapabilityGovernanceView({
               />
             </label>
           </div>
-          {selectedAccessSubject.id === customAccessSubjectOption.id ? (
+          <details className="capability-grant-advanced" open={selectedAccessSubject.id === customAccessSubjectOption.id}>
+            <summary>{t("text.technicalDetails")}</summary>
             <label>{t("form.subjectSelector")}<input placeholder={t("form.subjectSelectorPlaceholder")} value={form.subjectSelector} onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })} /></label>
-          ) : null}
+          </details>
           <div className="capability-scope-strip">
             <span>{selectedCapability ? translatedValue(t, selectedCapability.sensitivity) : t("text.sensitivity")}</span>
             <span>{selectedCapability ? translatedValue(t, selectedCapability.riskLevel) : t("text.risk")}</span>
@@ -333,4 +367,13 @@ function FormFooter({ message, submitLabel }: { message: string; submitLabel: st
       {message ? <span>{message}</span> : null}
     </div>
   );
+}
+
+function capabilityWorkspaceDisplayName(workspaceId: string, agents: Agent[], t: Translator) {
+  const normalized = workspaceId.trim();
+  if (!normalized) return t("form.workspace");
+  if (normalized === "workspace-sandbox") return t("text.defaultWorkspaceName");
+  const agent = agents.find((item) => item.workspaceId === normalized);
+  if (agent?.workspaceId === "workspace-sandbox") return t("text.defaultWorkspaceName");
+  return t(`workspace.${normalized}.name`, readableIdentifierLabel(normalized));
 }

@@ -1008,3 +1008,41 @@ git diff --check
 make check
 make release-check
 ```
+
+Committed and pushed `7b1a678 fix: quiet runtime audit technical details` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=UNSTABLE` because Backend, Frontend, and PostgreSQL integration checks were in progress immediately after push.
+
+## Task 27: Use Business Pickers In Capability Governance
+
+- [x] **Step 1: Inspect the capability governance grant form**
+
+Browser verification on `http://127.0.0.1:5174/#capabilities` showed the grant-chain form still exposed technical defaults (`default`, `workspace-sandbox`, `user:ops-*`) as ordinary fields. This made the capability governance workspace feel like a demo admin console rather than a production permission-management surface.
+
+- [x] **Step 2: Replace raw scope inputs with business pickers**
+
+Capability governance now uses business-labeled tenant and workspace dropdowns, reuses localized caller/target/capability labels, and defaults the access object to the same support-role selector used by the permission change journey.
+
+- [x] **Step 3: Keep custom subject selectors in advanced settings**
+
+Custom subject selector editing moved into a `capability-grant-advanced` disclosure. The grant-chain mutation payload is unchanged; only the operator-facing form path changed.
+
+- [x] **Step 4: Verify focused tests and browser**
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs
+```
+
+Browser verification on `http://127.0.0.1:5174/#capabilities` showed the main grant form as `集团总部 / 客户服务工作区 / 角色 · 客服专员` and no visible `tenantId`, `workspaceId`, `default`, `workspace-sandbox`, or `user:ops-*` in the business path.
+
+- [x] **Step 5: Run repository gates, commit, push, and inspect PR checks**
+
+Run `git diff --check`, `make check`, and `make release-check`; then commit and push if clean.
+
+Verified locally before commit:
+
+```bash
+git diff --check
+make check
+make release-check
+```

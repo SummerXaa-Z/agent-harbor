@@ -704,7 +704,14 @@ test("access profile and capability governance are split from the app shell", ()
 test("capability governance uses business pickers instead of native select menus", () => {
   assert.match(capabilityGovernanceView, /accessSubjectOptions/);
   assert.match(capabilityGovernanceView, /accessSubjectDropdownOptions/);
+  assert.match(capabilityGovernanceView, /const tenantOptions =/);
+  assert.match(capabilityGovernanceView, /const workspaceOptions =/);
   assert.match(capabilityGovernanceView, /<ApprovalDropdown/);
   assert.doesNotMatch(capabilityGovernanceView, /<select/);
+  assert.doesNotMatch(capabilityGovernanceView, /<input required value=\{form\.tenantId\}/);
+  assert.doesNotMatch(capabilityGovernanceView, /<input required value=\{form\.workspaceId\}/);
   assert.match(capabilityGovernanceView, /selectedAccessSubject\.id === customAccessSubjectOption\.id/);
+  assert.match(capabilityGovernanceView, /<details className="capability-grant-advanced"/);
+  assert.match(app, /subjectSelector: "user:support-\*"/);
+  assert.doesNotMatch(app, /subjectSelector: "user:ops-\*"/);
 });

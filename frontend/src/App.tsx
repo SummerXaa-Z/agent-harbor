@@ -252,7 +252,7 @@ const defaultPolicyForm = { callerAgentId: "", effect: "allow", name: "", priori
 const defaultCapabilityGrantForm: CapabilityGrantForm = {
   callerInstanceId: "",
   capabilityId: "",
-  subjectSelector: "user:ops-*",
+  subjectSelector: "user:support-*",
   targetId: "",
   tenantId: defaultManagementScope.tenantId,
   workspaceId: defaultManagementScope.workspaceId

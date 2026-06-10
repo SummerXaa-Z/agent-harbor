@@ -341,6 +341,16 @@ function localizedErrorMessage(t: Translator, language: Language, error: unknown
   return fallback;
 }
 
+function retryFieldValidationMessage(message: string, t: Translator) {
+  if (message === "Retry attempts must be an integer between 1 and 4.") {
+    return t("message.validationRetryAttempts");
+  }
+  if (message === "Retry backoff must be an integer between 0 and 1000 ms.") {
+    return t("message.validationRetryBackoff");
+  }
+  return message;
+}
+
 function mockMcpHealthUrlFromEndpoint(endpointValue: string) {
   try {
     const endpointUrl = new URL(endpointValue);
@@ -1606,7 +1616,7 @@ function App() {
         maxAttemptsText: agentForm.retryMaxAttempts
       });
       if (!retry.ok) {
-        setAgentMessage(retry.message);
+        setAgentMessage(retryFieldValidationMessage(retry.message, t));
         return;
       }
       if (retry.requested) {
@@ -1748,7 +1758,7 @@ function App() {
         maxAttemptsText: policyForm.retryMaxAttempts
       });
       if (!retry.ok) {
-        setPolicyMessage(retry.message);
+        setPolicyMessage(retryFieldValidationMessage(retry.message, t));
         return;
       }
       await createRoutePolicy(

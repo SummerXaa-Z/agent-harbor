@@ -80,6 +80,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 密集表格操作现在区分普通状态切换和破坏性禁用，Agent 的普通状态变更不再沿用危险按钮样式。
 - Permission readiness messages now use business labels for tenant, workspace, caller, and access object instead of technical ID/selector field names.
 - 权限就绪提示现在使用租户、工作区、调用方、访问对象等业务字段，不再暴露技术 ID 或 selector 字段名。
+- Agent and route-policy retry validation errors now go through i18n before they appear in operator-facing panels.
+- Agent 与路由策略的重试参数校验错误现在会先经过 i18n，再展示在操作面板中。
 - Completed or approval-frozen Permission Changes now render the request configuration as a read-only review state, preventing operators from editing tenant, caller, target, access-object, or template fields after the change is under approval or already active.
 - 已完成或进入审批冻结的权限变更现在会把申请配置呈现为只读复核态，避免操作员在审批中或已生效后继续编辑租户、调用方、目标、访问对象或权限包。
 - Locked Permission Changes now rename the request section to "Configuration Review" and switch helper copy to review language, so production-ready journeys no longer read like editable drafts.

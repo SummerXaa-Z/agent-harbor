@@ -243,6 +243,8 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("empty.accessDecisionExplain.detail"), "选择租户、工作区、调用方、目标和能力后查看判定原因。");
   assert.equal(t("message.accessDecisionExplainLoaded"), "权限判定已加载。");
   assert.equal(t("message.accessDecisionExplainMissingFields"), "请先选择租户、工作区、调用方、目标和能力，再查看权限判定。");
+  assert.equal(t("message.validationRetryAttempts"), "重试次数必须是 1 到 4 之间的整数。");
+  assert.equal(t("message.validationRetryBackoff"), "重试退避必须是 0 到 1000 毫秒之间的整数。");
   assert.equal(t("text.nextActions"), "下一步动作");
   assert.equal(t("section.permissionApplicationImpact"), "影响范围");
   assert.equal(t("section.permissionApplicationHealth"), "落地结果");

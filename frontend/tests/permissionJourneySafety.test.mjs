@@ -178,3 +178,16 @@ test("permission readiness messages use business field names on the main journey
   assert.doesNotMatch(block, /callerInstanceId:\s*t\("form\.callerInstance"\)/);
   assert.doesNotMatch(block, /fieldLabels\[field\] \?\? "subjectSelector"/);
 });
+
+test("retry validation messages are localized before reaching operator panels", () => {
+  const agentBlock = functionBlock("submitAgent");
+  const routeBlock = functionBlock("submitRoutePolicy");
+  const helperBlock = syncFunctionBlock("retryFieldValidationMessage");
+
+  assert.match(helperBlock, /message\.validationRetryAttempts/);
+  assert.match(helperBlock, /message\.validationRetryBackoff/);
+  assert.match(agentBlock, /setAgentMessage\(retryFieldValidationMessage\(retry\.message, t\)\)/);
+  assert.match(routeBlock, /setPolicyMessage\(retryFieldValidationMessage\(retry\.message, t\)\)/);
+  assert.doesNotMatch(agentBlock, /setAgentMessage\(retry\.message\)/);
+  assert.doesNotMatch(routeBlock, /setPolicyMessage\(retry\.message\)/);
+});

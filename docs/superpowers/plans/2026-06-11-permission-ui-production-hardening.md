@@ -1328,3 +1328,13 @@ Permission readiness messages now map missing fields to main-journey business la
 - [x] **Step 2: Add regression coverage**
 
 `frontend/tests/permissionJourneySafety.test.mjs` now asserts `permissionReadinessMessages` maps `tenantId`, `workspaceId`, `callerInstanceId`, and `subjectSelector` through the business-facing labels.
+
+## Task 39: Localize Retry Validation Messages
+
+- [x] **Step 1: Stop leaking retry parser text into panels**
+
+Agent registration and route-policy forms now map retry parser validation messages through i18n before writing them to operator-facing message areas. The parser remains stable, but the UI now displays localized retry-attempt and retry-backoff errors.
+
+- [x] **Step 2: Add regression coverage**
+
+`frontend/tests/i18n.test.mjs` covers the Simplified Chinese retry validation strings. `frontend/tests/permissionJourneySafety.test.mjs` asserts Agent and Route Policy submit handlers call `retryFieldValidationMessage(...)` instead of sending `retry.message` directly to the panel.

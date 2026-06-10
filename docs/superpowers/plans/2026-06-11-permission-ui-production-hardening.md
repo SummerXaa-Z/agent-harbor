@@ -1009,7 +1009,7 @@ make check
 make release-check
 ```
 
-Committed and pushed `982cb92 fix: use business pickers for capability grants` to `codex/production-readiness-gate`. GitHub PR #74 reported fresh Backend, Frontend, and PostgreSQL integration checks as pending immediately after push.
+Committed and pushed `7b1a678 fix: quiet runtime audit technical details` to `codex/production-readiness-gate`. GitHub PR #74 reported fresh Backend, Frontend, and PostgreSQL integration checks as pending immediately after push.
 
 ## Task 28: Separate Runtime Group And Workspace Copy
 
@@ -1034,7 +1034,7 @@ make check
 make release-check
 ```
 
-Committed and pushed `7b1a678 fix: quiet runtime audit technical details` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=UNSTABLE` because Backend, Frontend, and PostgreSQL integration checks were in progress immediately after push.
+Committed and pushed `262d0fd fix: clarify runtime audit navigation copy` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=UNSTABLE` because Backend, Frontend, and PostgreSQL integration checks were in progress immediately after push.
 
 ## Task 27: Use Business Pickers In Capability Governance
 
@@ -1071,3 +1071,40 @@ git diff --check
 make check
 make release-check
 ```
+
+Committed and pushed `982cb92 fix: use business pickers for capability grants` to `codex/production-readiness-gate`. GitHub PR #74 reported fresh Backend, Frontend, and PostgreSQL integration checks as pending immediately after push.
+
+## Task 29: Freeze Completed Permission Configuration
+
+- [x] **Step 1: Inspect the completed Permission Changes first viewport**
+
+Browser verification on `http://127.0.0.1:5174/#ai-admin` showed the journey was already `可上线`, with primary action `导出证据` and secondary action `查看权限画像`, but the request configuration still looked editable. This made a completed production change feel like a draft editor and created an avoidable operator-risk path.
+
+- [x] **Step 2: Add a read-only review state**
+
+The Permission Changes workspace now treats pending approval, approved approval, applied permissions, and production-ready journeys as frozen request configurations. Tenant, caller, target service, access object, region, permission package, and advanced technical fields become disabled, while the panel displays a concise read-only review notice.
+
+- [x] **Step 3: Make the shared dropdown component truly disableable**
+
+`ApprovalDropdown` now has a `disabled` prop that prevents menu opening, keyboard selection, and option rendering, instead of relying on visual treatment alone.
+
+- [x] **Step 4: Verify focused tests, browser, and repository gates**
+
+Run focused frontend tests, inspect the browser state, then run `git diff --check`, `make check`, and `make release-check`.
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs tests/styleTheme.test.mjs
+git diff --check
+make check
+make release-check
+```
+
+Browser verification on `http://127.0.0.1:5174/#ai-admin` walked the local flow from `需要审批` through `提交审批` into `可上线`. The request configuration panel showed `当前配置仅供复核`, all 9 configuration controls were disabled, and the task header promoted `导出证据` as the primary action.
+
+- [x] **Step 5: Commit, push, and inspect PR checks**
+
+Commit and push if clean, then inspect PR #74.
+
+Committed the read-only review state update after focused tests, browser verification, `git diff --check`, `make check`, and `make release-check`.

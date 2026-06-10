@@ -66,7 +66,8 @@ test("approval decision actions use styled semantic buttons", () => {
 });
 
 test("approval dropdown renders as an in-app menu instead of native select chrome", () => {
-  assert.match(dropdown, /className=\{`approval-dropdown \$\{open \? "is-open" : ""\}`\}/);
+  assert.match(dropdown, /const menuOpen = open && !disabled/);
+  assert.match(dropdown, /className=\{`approval-dropdown \$\{menuOpen \? "is-open" : ""\} \$\{disabled \? "is-disabled" : ""\}`\}/);
   assert.match(dropdown, /role="listbox"/);
   assert.match(styles, /\.approval-dropdown-menu\s*\{[^}]*background:\s*var\(--surface\);/s);
   assert.match(styles, /\.approval-dropdown-menu\s*\{[^}]*box-shadow:\s*var\(--shadow-pop\);/s);

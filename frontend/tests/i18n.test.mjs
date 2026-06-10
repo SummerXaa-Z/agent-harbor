@@ -170,6 +170,9 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("status.currentStep"), "当前");
   assert.equal(t("text.permissionRequestGoLiveHelp"), "应用后执行运行验证，系统验证允许/拒绝调用并生成交接证据。");
   assert.equal(t("text.permissionRequestAdvancedSummary"), "主流程背后的辅助证据：环境、预检、审批队列、状态检查、权限判定、影响和运行证据。");
+  assert.equal(t("text.permissionRequestLockedTitle"), "当前配置仅供复核");
+  assert.equal(t("text.permissionRequestLockedActiveDetail"), "本次权限变更已经生效。如需修改范围或权限包，请新建权限变更。");
+  assert.equal(t("text.permissionRequestLockedApprovalDetail"), "申请已进入审批冻结状态。如需修改范围或权限包，请撤回后重新发起。");
   assert.equal(t("text.workspaceResolvedDetail"), "由所选租户和调用方确定；只有高级操作时才需要手动覆盖。");
   assert.equal(t("action.runDemoPermissionRequest"), "执行运行验证");
   assert.equal(t("text.permissionAppliedTitle"), "权限已生效");

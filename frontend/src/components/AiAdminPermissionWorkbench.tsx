@@ -256,6 +256,13 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     || Boolean(workbenchPreview?.summary.productionReady)
     || productionSummary.status === "ready";
   const goLiveReady = productionReady || goLiveReadiness.status === "ready";
+  const requestFormLocked = Boolean(application)
+    || goLiveReady
+    || approvalRequest?.status === "pending"
+    || approvalRequest?.status === "approved";
+  const requestFormLockedDetailKey = Boolean(application) || goLiveReady
+    ? "text.permissionRequestLockedActiveDetail"
+    : "text.permissionRequestLockedApprovalDetail";
   const reviewerQueueReadOnly = Boolean(application) || goLiveReady;
   const runtimeValidationReady = Boolean(approvalJourneyResult) || goLiveReady;
   const approvalEffectivelyResolved = !draft.policyGate.canApplyDirectly
@@ -672,7 +679,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
 
       <div className="approval-flow-layout">
         <main className="approval-request-panel">
-          <section className="approval-section approval-request-form-section" id={permissionRequestStepSectionId("scope")}>
+          <section className={`approval-section approval-request-form-section ${requestFormLocked ? "is-read-only" : ""}`} id={permissionRequestStepSectionId("scope")}>
             <header>
               <div>
                 <strong>{t("section.permissionRequestForm")}</strong>
@@ -680,9 +687,16 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               </div>
               <Badge tone={journeyStatus.tone}>{t(journeyStatus.labelKey)}</Badge>
             </header>
+            {requestFormLocked ? (
+              <div className="approval-lock-notice" role="status">
+                <strong>{t("text.permissionRequestLockedTitle")}</strong>
+                <span>{t(requestFormLockedDetailKey)}</span>
+              </div>
+            ) : null}
             <label className="approval-request">
               {t("form.adminRequest")}
               <textarea
+                disabled={requestFormLocked}
                 rows={3}
                 value={form.requestText}
                 onChange={(event) => onChange({ ...form, requestText: event.target.value })}
@@ -692,6 +706,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               <div className="approval-field is-wide">
                 <span className="approval-field-label">{t("form.businessTenant")}</span>
                 <ApprovalDropdown
+                  disabled={requestFormLocked}
                   label={t("form.businessTenant")}
                   options={tenantDropdownOptions}
                   value={form.tenantId}
@@ -707,6 +722,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               <div className="approval-field">
                 <span className="approval-field-label">{t("form.businessCaller")}</span>
                 <ApprovalDropdown
+                  disabled={requestFormLocked}
                   label={t("form.businessCaller")}
                   options={callerDropdownOptions}
                   value={form.callerInstanceId}
@@ -716,6 +732,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               <div className="approval-field">
                 <span className="approval-field-label">{t("form.target")}</span>
                 <ApprovalDropdown
+                  disabled={requestFormLocked}
                   label={t("form.target")}
                   options={targetDropdownOptions}
                   value={form.targetId}
@@ -725,6 +742,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               <div className="approval-field approval-subject-field is-wide">
                 <span className="approval-field-label">{t("form.accessSubject")}</span>
                 <ApprovalDropdown
+                  disabled={requestFormLocked}
                   label={t("form.accessSubject")}
                   options={accessSubjectDropdownOptions}
                   value={selectedAccessSubject.id}
@@ -734,11 +752,12 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               </div>
               <label>
                 {t("form.region")}
-                <input value={form.region} onChange={(event) => onChange({ ...form, region: event.target.value })} />
+                <input disabled={requestFormLocked} value={form.region} onChange={(event) => onChange({ ...form, region: event.target.value })} />
               </label>
               <div className="approval-select is-wide">
                 <span className="approval-field-label">{t("form.permissionPackage")}</span>
                 <ApprovalDropdown
+                  disabled={requestFormLocked}
                   label={t("form.permissionPackage")}
                   options={templateDropdownOptions}
                   value={form.templateId}
@@ -777,11 +796,12 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               <summary>{t("text.technicalDetails")}</summary>
               <label>
                 {t("form.workspaceId")}
-                <input value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} />
+                <input disabled={requestFormLocked} value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} />
               </label>
               <label>
                 {t("form.subjectSelector")}
                 <input
+                  disabled={requestFormLocked}
                   placeholder={t("form.subjectSelectorPlaceholder")}
                   value={form.subjectSelector ?? ""}
                   onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })}

@@ -8,12 +8,14 @@ export interface ApprovalDropdownOption {
 }
 
 export function ApprovalDropdown({
+  disabled = false,
   id,
   label,
   onChange,
   options,
   value
 }: {
+  disabled?: boolean;
   id?: string;
   label: string;
   onChange: (value: string) => void;
@@ -28,8 +30,10 @@ export function ApprovalDropdown({
   const rootId = id ?? generatedId.replaceAll(":", "");
   const labelId = `${rootId}-label`;
   const listboxId = `${rootId}-listbox`;
-  const activeOptionId = open && activeIndex >= 0 ? `${rootId}-option-${activeIndex}` : undefined;
+  const menuOpen = open && !disabled;
+  const activeOptionId = menuOpen && activeIndex >= 0 ? `${rootId}-option-${activeIndex}` : undefined;
   const openMenu = () => {
+    if (disabled) return;
     setActiveIndex(selectedIndex);
     setOpen(true);
   };
@@ -39,6 +43,7 @@ export function ApprovalDropdown({
     }
   };
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
     const action = dropdownKeyAction(event.key, open);
     if (action === "ignore") return;
     event.preventDefault();
@@ -62,16 +67,19 @@ export function ApprovalDropdown({
   };
 
   return (
-    <div className={`approval-dropdown ${open ? "is-open" : ""}`} onBlur={closeOnBlur}>
+    <div className={`approval-dropdown ${menuOpen ? "is-open" : ""} ${disabled ? "is-disabled" : ""}`} onBlur={closeOnBlur}>
       <span className="sr-only" id={labelId}>{label}</span>
       <button
         aria-activedescendant={activeOptionId}
         aria-controls={listboxId}
-        aria-expanded={open}
+        aria-disabled={disabled}
+        aria-expanded={menuOpen}
         aria-haspopup="listbox"
         aria-labelledby={labelId}
         className="approval-dropdown-trigger"
+        disabled={disabled}
         onClick={() => {
+          if (disabled) return;
           if (open) {
             setOpen(false);
             return;
@@ -85,7 +93,7 @@ export function ApprovalDropdown({
         <span>{selectedOption?.label ?? "-"}</span>
         <ChevronDown aria-hidden="true" size={15} />
       </button>
-      {open ? (
+      {menuOpen ? (
         <div className="approval-dropdown-menu" id={listboxId} role="listbox">
           {options.map((option, index) => {
             const selected = option.value === value;

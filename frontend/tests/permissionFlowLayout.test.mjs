@@ -671,6 +671,29 @@ test("permission request primary path avoids native select menus", () => {
   assert.doesNotMatch(primaryForm, /<select/);
 });
 
+test("permission request freezes configuration after approval or apply", () => {
+  const formStart = workbench.indexOf('<section className={`approval-section approval-request-form-section');
+  const formEnd = workbench.indexOf('<div className="approval-package-preview"', formStart);
+  const primaryForm = workbench.slice(formStart, formEnd);
+  const advancedStart = workbench.indexOf('<details className="approval-details">');
+  const processStart = workbench.indexOf('<aside className="approval-process-panel"', advancedStart);
+  const advancedForm = workbench.slice(advancedStart, processStart);
+
+  assert.match(workbench, /const requestFormLocked = Boolean\(application\)/);
+  assert.match(workbench, /approvalRequest\?\.status === "pending"/);
+  assert.match(workbench, /approvalRequest\?\.status === "approved"/);
+  assert.match(workbench, /requestFormLocked \? "is-read-only" : ""/);
+  assert.match(workbench, /text\.permissionRequestLockedTitle/);
+  assert.match(primaryForm, /disabled=\{requestFormLocked\}/);
+  assert.match(advancedForm, /disabled=\{requestFormLocked\}/);
+  assert.match(dropdown, /disabled\?: boolean/);
+  assert.match(dropdown, /disabled=\{disabled\}/);
+  assert.match(dropdown, /const menuOpen = open && !disabled/);
+  assert.match(styles, /\.approval-lock-notice\s*\{/);
+  assert.match(styles, /\.approval-request textarea:disabled,/);
+  assert.match(styles, /\.approval-dropdown\.is-disabled \.approval-dropdown-trigger:hover/);
+});
+
 test("permission request chooses access objects instead of raw subject selectors", () => {
   const formStart = workbench.indexOf('<div className="approval-form-grid">');
   const formEnd = workbench.indexOf('<div className="approval-package-preview"', formStart);

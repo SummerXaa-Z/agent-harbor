@@ -381,6 +381,43 @@
   resize: vertical;
 }
 
+.approval-request-form-section.is-read-only {
+  background: var(--surface);
+}
+
+.approval-lock-notice {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.approval-lock-notice strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.approval-lock-notice span {
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.approval-request textarea:disabled,
+.approval-form-grid input:disabled,
+.approval-dropdown-trigger:disabled,
+.approval-details input:disabled {
+  cursor: default;
+  border-color: var(--line-muted);
+  background: var(--surface-muted);
+  color: var(--ink-2);
+  opacity: 1;
+  -webkit-text-fill-color: var(--ink-2);
+}
+
 .approval-form-grid input,
 .approval-form-grid select,
 .approval-dropdown-trigger,
@@ -453,6 +490,11 @@
 .approval-dropdown-trigger:hover {
   border-color: var(--line-strong);
   background: var(--surface-raised);
+}
+
+.approval-dropdown.is-disabled .approval-dropdown-trigger:hover {
+  border-color: var(--line-muted);
+  background: var(--surface-muted);
 }
 
 .approval-dropdown-trigger span {

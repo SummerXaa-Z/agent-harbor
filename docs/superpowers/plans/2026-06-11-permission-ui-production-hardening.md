@@ -1170,3 +1170,34 @@ Browser verification on `http://127.0.0.1:5174/#ai-admin` confirmed the active l
 Commit and push if clean, then inspect PR #74.
 
 Committed the active locked-state new-change exit after focused tests, browser verification, `git diff --check`, `make check`, and `make release-check`.
+
+## Task 32: Isolate New Permission Change Drafts
+
+- [x] **Step 1: Browser-test the new-change exit**
+
+Clicking `新建权限变更` from the active locked review notice kept the UI in `可上线 / 配置复核`, with old completion evidence still visible. The reset cleared local state briefly, but the workbench preview immediately matched the same scope and rehydrated historical approval/application/readiness evidence.
+
+- [x] **Step 2: Add a new-draft boundary**
+
+`aiAdminNewDraftMode` now marks a newly started permission change. While active, the frontend still accepts preview drafts, but ignores historical approval request, application, and production-readiness evidence and suppresses automatic approval-queue loading. Creating a real approval request exits this mode.
+
+- [x] **Step 3: Verify focused tests, browser, and repository gates**
+
+Run focused tests and browser verification, then run `git diff --check`, `make check`, and `make release-check`.
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionJourneySafety.test.mjs tests/permissionFlowLayout.test.mjs
+git diff --check
+make check
+make release-check
+```
+
+Browser verification on `http://127.0.0.1:5174/#ai-admin` confirmed `新建权限变更` now resets to `需要审批 / 申请信息 / 提交审批`, hides the old completion card, and re-enables the 9 configuration controls instead of rehydrating old production-ready evidence.
+
+- [x] **Step 4: Commit, push, and inspect PR checks**
+
+Commit and push if clean, then inspect PR #74.
+
+Committed the new-draft isolation fix after focused tests, browser verification, `git diff --check`, `make check`, and `make release-check`.

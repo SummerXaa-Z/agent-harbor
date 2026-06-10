@@ -418,6 +418,7 @@ function App() {
   const [aiAdminAccessSubjects, setAiAdminAccessSubjects] = useState<AccessSubjectOption[]>(accessSubjectOptions);
   const [aiAdminServerDraft, setAiAdminServerDraft] = useState<PermissionPackageDraft | null>(null);
   const [aiAdminWorkbenchPreview, setAiAdminWorkbenchPreview] = useState<PermissionPackageWorkbenchPreview | null>(null);
+  const [aiAdminNewDraftMode, setAiAdminNewDraftMode] = useState(false);
   const [aiAdminApplication, setAiAdminApplication] = useState<PermissionPackageApplication | null>(null);
   const [aiAdminApplicationHealth, setAiAdminApplicationHealth] =
     useState<PermissionPackageApplicationHealth | null>(null);
@@ -577,8 +578,15 @@ function App() {
     const controller = new AbortController();
     previewPermissionPackageWorkbench(aiAdminForm, adminKey, controller.signal)
       .then((preview) => {
-        setAiAdminWorkbenchPreview(preview);
         setAiAdminServerDraft(preview.draft);
+        if (aiAdminNewDraftMode) {
+          setAiAdminWorkbenchPreview(null);
+          setAiAdminApplication(null);
+          setAiAdminProductionReadiness(null);
+          setAiAdminApprovalRequests([]);
+          return;
+        }
+        setAiAdminWorkbenchPreview(preview);
         if (preview.approvalRequest) {
           upsertAiAdminApprovalRequest(preview.approvalRequest);
           setAiAdminSelectedApprovalRequestId((current) => current || preview.approvalRequest?.id || "");
@@ -619,7 +627,7 @@ function App() {
         setAiAdminServerDraft(null);
       });
     return () => controller.abort();
-  }, [shouldLoadAiAdminWorkbenchPreview, adminKey, aiAdminForm, data?.loadedFromApi]);
+  }, [shouldLoadAiAdminWorkbenchPreview, adminKey, aiAdminForm, aiAdminNewDraftMode, data?.loadedFromApi]);
 
   async function refresh() {
     try {
@@ -907,6 +915,7 @@ function App() {
   }
 
   function startNewAiAdminPermissionChange() {
+    setAiAdminNewDraftMode(true);
     setAiAdminForm((current) => ({
       ...defaultAiAdminForm,
       callerInstanceId: current.callerInstanceId,
@@ -2043,6 +2052,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     try {
       const request = await createPermissionPackageApprovalRequest(aiAdminForm, adminKey);
       startApprovalResolutionCooldown();
+      setAiAdminNewDraftMode(false);
       upsertAiAdminApprovalRequest(request);
       setAiAdminApplyPreflight(null);
       setAiAdminApplyPreflightMessage("");
@@ -2351,7 +2361,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   );
 
   useEffect(() => {
-    if (activeNav !== "ai-admin" || !data?.loadedFromApi || !aiAdminDraft.readiness.canApply || aiAdminDraft.policyGate.canApplyDirectly) {
+    if (activeNav !== "ai-admin" || aiAdminNewDraftMode || !data?.loadedFromApi || !aiAdminDraft.readiness.canApply || aiAdminDraft.policyGate.canApplyDirectly) {
       setAiAdminApprovalRequests([]);
       return;
     }
@@ -2366,6 +2376,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     activeNav,
     adminKey,
     aiAdminDraft.id,
+    aiAdminNewDraftMode,
     aiAdminDraft.policyGate.canApplyDirectly,
     aiAdminDraft.readiness.canApply,
     data?.loadedFromApi

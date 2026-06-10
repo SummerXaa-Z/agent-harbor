@@ -121,6 +121,17 @@ test("go-live completion exits preserve context or reset the current permission 
   assert.match(resetBlock, /setAiAdminMessage\(""\)/);
 });
 
+test("new permission change ignores historical preview evidence until submitted", () => {
+  const resetBlock = syncFunctionBlock("startNewAiAdminPermissionChange");
+  const createBlock = functionBlock("createAiAdminApprovalRequest");
+
+  assert.match(app, /const \[aiAdminNewDraftMode, setAiAdminNewDraftMode\] = useState\(false\)/);
+  assert.match(resetBlock, /setAiAdminNewDraftMode\(true\)/);
+  assert.match(app, /if \(aiAdminNewDraftMode\) \{\s*setAiAdminWorkbenchPreview\(null\);\s*setAiAdminApplication\(null\);\s*setAiAdminProductionReadiness\(null\);\s*setAiAdminApprovalRequests\(\[\]\);\s*return;/s);
+  assert.match(app, /activeNav !== "ai-admin" \|\| aiAdminNewDraftMode \|\| !data\?\.loadedFromApi/);
+  assert.match(createBlock, /setAiAdminNewDraftMode\(false\)/);
+});
+
 test("production evidence export reports the result on the main permission journey", () => {
   const block = functionBlock("exportAiAdminProductionEvidence");
   assert.match(block, /setAiAdminMessage\(t\("message\.productionEvidenceRequiresLiveApi"\)\)/);

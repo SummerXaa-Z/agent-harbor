@@ -2437,6 +2437,26 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       <ManagementAuditTable events={auditEvents} t={t} />
     </Panel>
   );
+  const goLiveAcceptancePanel = (
+    <Panel className="span-12" icon={<ClipboardCheck size={18} />} title={t("section.goLiveAcceptance")}>
+      <GoLiveAcceptanceOverview
+        agents={agents}
+        form={aiAdminForm}
+        liveDataAvailable={Boolean(data?.loadedFromApi)}
+        onExportProductionEvidence={() => void exportAiAdminProductionEvidence()}
+        onOpenPermissionChange={() => setActiveNav("ai-admin")}
+        onRefreshProductionReadiness={() => void refreshAiAdminProductionReadiness()}
+        productionEvidenceExporting={aiAdminProductionEvidenceExporting}
+        productionReadiness={aiAdminProductionReadiness}
+        productionReadinessLoading={aiAdminProductionReadinessLoading}
+        productionReadinessMessage={aiAdminProductionReadinessMessage}
+        productionSummary={aiAdminProductionConsoleSummary}
+        templates={aiAdminTemplates}
+        tenants={tenants}
+        t={t}
+      />
+    </Panel>
+  );
   const routeGovernancePanel = (className = "span-8") => (
     <Panel className={className} icon={<Workflow size={18} />} title={t("panel.routeGovernance")} action={<IconMore title={t("action.more")} />}>
       <PolicyTable
@@ -2731,6 +2751,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       case "evidence":
         return (
           <section className="content-grid">
+            {goLiveAcceptancePanel}
             {evidenceRunsPanel("span-5")}
             {managementAuditPanel("span-7")}
             {runtimeSignalsPanel("span-12")}
@@ -3370,6 +3391,144 @@ function Panel({
       </header>
       {children}
     </section>
+  );
+}
+
+function GoLiveAcceptanceOverview({
+  agents,
+  form,
+  liveDataAvailable,
+  onExportProductionEvidence,
+  onOpenPermissionChange,
+  onRefreshProductionReadiness,
+  productionEvidenceExporting,
+  productionReadiness,
+  productionReadinessLoading,
+  productionReadinessMessage,
+  productionSummary,
+  templates,
+  tenants,
+  t
+}: {
+  agents: Agent[];
+  form: PermissionPackageDraftInput;
+  liveDataAvailable: boolean;
+  onExportProductionEvidence: () => void;
+  onOpenPermissionChange: () => void;
+  onRefreshProductionReadiness: () => void;
+  productionEvidenceExporting: boolean;
+  productionReadiness: PermissionPackageProductionReadiness | null;
+  productionReadinessLoading: boolean;
+  productionReadinessMessage: string;
+  productionSummary: AiAdminProductionConsoleSummary;
+  templates: PermissionPackageTemplate[];
+  tenants: Tenant[];
+  t: Translator;
+}) {
+  const tenantPath = permissionTenantPathLabel(form.tenantId, tenants, t);
+  const template = templates.find((item) => item.id === form.templateId);
+  const caller = agents.find((agent) => agent.id === form.callerInstanceId);
+  const target = agents.find((agent) => agent.id === form.targetId);
+  const workspaceName = permissionWorkspaceDisplayName(form.workspaceId, agents, t);
+  const templateName = template ? permissionPackageTemplateName(template, t) : permissionPackageTemplateNameById(form.templateId, t);
+  const callerName = caller ? permissionEntityDisplayName(caller.name, t) : form.callerInstanceId || t("text.unknownCaller");
+  const targetName = target ? permissionEntityDisplayName(target.name, t) : form.targetId || t("text.unknownTarget");
+  const readinessStatusLabel = productionReadinessStatusLabel(productionReadiness?.status, t);
+  const statusLabel = productionReadiness ? readinessStatusLabel : productionConsoleStatusLabel(productionSummary, t);
+  const statusTone = productionReadiness
+    ? productionReadinessStatusTone(productionReadiness.status)
+    : productionConsoleStatusTone(productionSummary.status);
+  const nextAction = productionReadiness?.nextActions[0]
+    ? permissionProductionReadinessNextAction(productionReadiness.nextActions[0], t)
+    : productionReadiness?.status === "ready"
+      ? t("text.productionReadinessReadyDetail")
+      : productionReadiness
+        ? t("text.productionReadinessPendingDetail")
+        : t("text.goLiveAcceptanceNoReadinessDetail");
+  const readyCount = productionReadiness?.summary.readyCount
+    ?? productionSummary.steps.filter((step) => step.status === "ready").length;
+  const totalCount = productionReadiness?.checks.length ?? productionSummary.steps.length;
+  const blockerCount = productionReadiness?.summary.blockingCount
+    ?? productionSummary.steps.filter((step) => step.status === "blocked").length;
+  const warningCount = productionReadiness?.summary.warningCount
+    ?? productionSummary.steps.filter((step) => step.status === "needs_review" || step.status === "pending").length;
+
+  return (
+    <div className="go-live-acceptance">
+      <section className="go-live-acceptance-main">
+        <div className="go-live-acceptance-heading">
+          <span>{t("text.goLiveAcceptanceTaskTitle")}</span>
+          <Badge tone={statusTone}>{statusLabel}</Badge>
+        </div>
+        <p>{nextAction}</p>
+        {!liveDataAvailable ? <p className="go-live-acceptance-warning">{t("message.fallbackDataModeDetail")}</p> : null}
+        {productionReadinessMessage ? <p className="go-live-acceptance-message">{productionReadinessMessage}</p> : null}
+        <div className="go-live-acceptance-actions">
+          <button className="primary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
+            <RefreshCw size={14} />
+            {productionReadinessLoading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
+          </button>
+          <button className="secondary-button" disabled={!liveDataAvailable || !productionReadiness || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
+            <Download size={14} />
+            {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
+          </button>
+          <button className="secondary-button" onClick={onOpenPermissionChange} type="button">
+            <ShieldCheck size={14} />
+            {t("action.openPermissionChange")}
+          </button>
+        </div>
+      </section>
+
+      <aside className="go-live-acceptance-context" aria-label={t("text.goLiveAcceptanceContext")}>
+        <strong>{t("text.goLiveAcceptanceContext")}</strong>
+        <dl>
+          <div>
+            <dt>{t("form.businessTenant")}</dt>
+            <dd>{tenantPath.primary}</dd>
+          </div>
+          <div>
+            <dt>{t("form.businessWorkspace")}</dt>
+            <dd>{workspaceName}</dd>
+          </div>
+          <div>
+            <dt>{t("form.businessCaller")}</dt>
+            <dd>{callerName} → {targetName}</dd>
+          </div>
+          <div>
+            <dt>{t("form.permissionPackage")}</dt>
+            <dd>{templateName}</dd>
+          </div>
+        </dl>
+      </aside>
+
+      <section className="go-live-acceptance-checks" aria-label={t("section.permissionRequestProcess")}>
+        <div className="go-live-acceptance-score">
+          <div>
+            <span>{t("metric.productionReadyChecks")}</span>
+            <strong>{readyCount}/{totalCount}</strong>
+          </div>
+          <div>
+            <span>{t("metric.productionWarnings")}</span>
+            <strong>{warningCount}</strong>
+          </div>
+          <div>
+            <span>{t("metric.productionBlockers")}</span>
+            <strong>{blockerCount}</strong>
+          </div>
+        </div>
+        <ol className="go-live-step-list">
+          {productionSummary.steps.map((step) => (
+            <li key={step.key}>
+              <span className={`go-live-step-dot tone-${productionConsoleStatusTone(step.status)}`} aria-hidden="true" />
+              <div>
+                <strong>{t(step.labelKey)}</strong>
+                <span>{step.detailKey ? t(step.detailKey) : step.detail}</span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </div>
   );
 }
 

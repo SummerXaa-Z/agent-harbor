@@ -722,6 +722,192 @@ button {
   letter-spacing: 0;
 }
 
+.go-live-acceptance {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  gap: 16px;
+  padding: 18px;
+}
+
+.go-live-acceptance-main {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.go-live-acceptance-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.go-live-acceptance-heading span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.go-live-acceptance-main p {
+  margin: 0;
+  max-width: 780px;
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.go-live-acceptance-warning,
+.go-live-acceptance-main .go-live-acceptance-warning {
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-control);
+  background: var(--warning-surface);
+  color: var(--warning-ink);
+  font-size: 13px;
+}
+
+.go-live-acceptance-message,
+.go-live-acceptance-main .go-live-acceptance-message {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.go-live-acceptance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.go-live-acceptance-context {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-subtle);
+}
+
+.go-live-acceptance-context > strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.go-live-acceptance-context dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.go-live-acceptance-context div {
+  display: grid;
+  gap: 2px;
+}
+
+.go-live-acceptance-context dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.go-live-acceptance-context dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.go-live-acceptance-checks {
+  display: grid;
+  align-items: start;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(240px, 0.38fr) minmax(0, 0.62fr);
+  gap: 16px;
+  padding-top: 2px;
+}
+
+.go-live-acceptance-score {
+  display: grid;
+  align-self: start;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.go-live-acceptance-score div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.go-live-acceptance-score span {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.go-live-acceptance-score strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 22px;
+}
+
+.go-live-step-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.go-live-step-list li {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 9px;
+  min-width: 0;
+}
+
+.go-live-step-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.go-live-step-dot.tone-success {
+  background: var(--success);
+}
+
+.go-live-step-dot.tone-warning {
+  background: var(--warning);
+}
+
+.go-live-step-dot.tone-danger {
+  background: var(--danger);
+}
+
+.go-live-step-list strong,
+.go-live-step-list span {
+  display: block;
+}
+
+.go-live-step-list strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.go-live-step-list span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .control-form {
   display: grid;
   gap: 10px;
@@ -2454,6 +2640,11 @@ td code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .go-live-acceptance,
+  .go-live-acceptance-checks {
+    grid-template-columns: 1fr;
+  }
+
   .access-query-grid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
@@ -2635,6 +2826,7 @@ td code {
   .approval-evidence-grid,
   .approval-metrics,
   .approval-review-row,
+  .go-live-acceptance-score,
   .form-row,
   .trace-filters,
   .capability-toolbar,
@@ -2678,13 +2870,15 @@ td code {
   }
 
   .approval-command > div,
-  .approval-actions {
+  .approval-actions,
+  .go-live-acceptance-actions {
     align-items: stretch;
     flex-direction: column;
   }
 
   .approval-command button,
-  .approval-actions button {
+  .approval-actions button,
+  .go-live-acceptance-actions button {
     width: 100%;
   }
 

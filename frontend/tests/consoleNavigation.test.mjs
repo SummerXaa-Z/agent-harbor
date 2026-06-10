@@ -47,3 +47,7 @@ test("default navigation opens the permission package production journey", () =>
   assert.equal(navItems[0].key, defaultNavKey);
   assert.equal(viewForNav("unknown").key, defaultNavKey);
 });
+
+test("go-live evidence navigation points to the acceptance workflow", () => {
+  assert.equal(viewForNav("evidence").primaryPanelKey, "goLiveAcceptance");
+});

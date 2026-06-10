@@ -87,7 +87,7 @@ const views: Record<NavKey, ConsoleView> = {
   },
   evidence: {
     key: "evidence",
-    primaryPanelKey: "evidenceRuns",
+    primaryPanelKey: "goLiveAcceptance",
     titleKey: "page.evidence",
   },
 }

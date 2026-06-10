@@ -146,6 +146,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 租户访问画像现在复用与权限变更一致的数据范围和默认租户展示逻辑，直接进入画像页时主路径不再暴露 `default`、`L0` 或原始区域码。
 - Go-live Evidence now localizes management audit actions, resource types, actors, and summaries while moving raw resource ids into expandable technical details.
 - 上线证据页现在会本地化管理审计的操作、资源类型、操作者和摘要，并把原始资源 ID 收进可展开的技术详情。
+- Go-live Evidence now opens with a go-live acceptance workflow that shows current permission-change context, readiness status, next actions, and progress before historical evidence tables.
+- 上线证据页现在先展示上线验收工作台，明确当前权限变更上下文、就绪状态、下一步动作和进度，再展示历史证据表。
 - Web console visual design review follow-up: design tokens now govern component colors, shadows, focus rings, button sizing, technical-id display, System Self-Check telemetry, and Agent registry ordering.
 - Web 控制台视觉设计审查项已落地：设计 token 现在约束组件色值、阴影、焦点环、按钮尺寸、技术 ID 展示、系统自检指标展示范围和 Agent 注册表顺序。
 - Web console UX review follow-up: desktop navigation now keeps readable grouped labels at medium widths, Permission Changes uses one authoritative context bar with non-truncating core selectors, and Capability Governance prioritizes the grant operation area over KPI cards.

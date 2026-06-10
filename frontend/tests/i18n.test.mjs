@@ -43,6 +43,12 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("navDetail.access"), "查看租户、工作区、调用方最终权限。");
   assert.equal(t("page.cockpit"), "系统自检");
   assert.equal(t("page.access"), "租户权限控制台");
+  assert.equal(t("page.evidence"), "上线验收");
+  assert.equal(t("panel.evidenceRuns"), "历史证据");
+  assert.equal(t("empty.evidenceRuns.title"), "暂无历史证据");
+  assert.equal(t("section.goLiveAcceptance"), "上线验收");
+  assert.equal(t("text.goLiveAcceptanceTaskTitle"), "确认这次权限变更是否可以上线");
+  assert.equal(t("text.goLiveAcceptanceNoReadinessDetail"), "先回到权限变更工作台执行运行验证或状态检查，系统会补齐运行、权限画像和审计证据。");
   assert.equal(t("metric.runtimeEvidence"), "运行证据");
   assert.equal(t("action.loadProfile"), "加载画像");
   assert.equal(t("panel.coreJourney"), "核心权限链路自检");

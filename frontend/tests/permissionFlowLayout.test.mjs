@@ -282,6 +282,24 @@ test("management audit evidence uses business labels before technical ids", () =
   assert.match(styles, /\.audit-technical summary\s*\{/);
 });
 
+test("go-live evidence page starts with acceptance workflow instead of historical runs", () => {
+  const viewSwitch = app.slice(app.indexOf("switch (activeView.key)"));
+  const evidenceCase = viewSwitch.slice(viewSwitch.indexOf('case "evidence":'), viewSwitch.indexOf('case "cockpit":'));
+  assert.match(app, /function GoLiveAcceptanceOverview/);
+  assert.match(app, /const goLiveAcceptancePanel =/);
+  assert.match(app, /className="go-live-acceptance"/);
+  assert.match(app, /productionReadinessStatusLabel\(productionReadiness\?\.status, t\)/);
+  assert.match(app, /onRefreshProductionReadiness/);
+  assert.match(app, /onExportProductionEvidence/);
+  assert.match(app, /onOpenPermissionChange/);
+  assert.match(evidenceCase, /goLiveAcceptancePanel/);
+  assert.ok(evidenceCase.indexOf("goLiveAcceptancePanel") < evidenceCase.indexOf("evidenceRunsPanel"));
+  assert.match(i18n, /"section\.goLiveAcceptance": "上线验收"/);
+  assert.match(i18n, /"text\.goLiveAcceptanceTaskTitle": "确认这次权限变更是否可以上线"/);
+  assert.match(i18n, /"empty\.evidenceRuns\.detail": "历史自检运行会在这里保留；当前权限变更请以上方上线验收状态为准。"/);
+  assert.match(styles, /\.go-live-acceptance\s*\{/);
+});
+
 test("permission request blocks main actions when sample fallback data is shown", () => {
   assert.match(workbench, /liveDataAvailable: boolean/);
   assert.match(workbench, /const liveDataBlocked = !liveDataAvailable/);

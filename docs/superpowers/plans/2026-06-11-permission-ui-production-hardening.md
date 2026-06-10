@@ -473,6 +473,10 @@ Tenant Access Profile now uses the shared data-scope label presenter, maps defau
 
 Go-live Evidence now localizes management audit actions, resource types, actors, and summaries, and moves raw resource ids behind expandable technical details.
 
+- [x] **Step 9: Promote go-live acceptance over historical evidence**
+
+Go-live Evidence now starts with a go-live acceptance workflow that shows current permission-change context, readiness status, next actions, and production progress before historical evidence runs, and retitles the secondary table as evidence history.
+
 ## Task 9: Completed Approval Step State
 
 - [x] **Step 1: Treat applied changes as approval-resolved**

@@ -153,6 +153,41 @@ test("production console summary reports ready after approval application and ru
   assert.equal(summary.steps.find((step) => step.key === "production")?.detailKey, "productionConsole.productionReady");
 });
 
+test("production console summary treats applied production evidence as approval satisfied", () => {
+  const summary = buildAiAdminProductionConsoleSummary({
+    application,
+    approvalRequest: null,
+    draft: baseDraft,
+    productionReadiness: {
+      status: "ready",
+      summary: {
+        readyCount: 8,
+        warningCount: 0,
+        blockingCount: 0,
+        hasApplication: true,
+        hasAllowedTrace: true,
+        hasDeniedTrace: true,
+        hasAppliedAudit: true,
+        accessProfileReady: true
+      },
+      checks: [],
+      latestApplication: application,
+      runtimeEvidence: {
+        allowedTrace: { id: "trace-allowed" },
+        deniedTrace: { id: "trace-denied" }
+      },
+      auditEvidence: { appliedEvent: { id: "audit-apply" } },
+      nextActions: [],
+      generatedAt: "2026-06-07T08:03:00Z"
+    }
+  });
+
+  const approvalStep = summary.steps.find((step) => step.key === "approval");
+  assert.equal(summary.status, "ready");
+  assert.equal(approvalStep?.status, "ready");
+  assert.equal(approvalStep?.detailKey, "productionConsole.approvalSatisfied");
+});
+
 test("production console summary treats direct apply packages as approval ready", () => {
   const directDraft = {
     ...baseDraft,

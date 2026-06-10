@@ -481,6 +481,10 @@ Go-live Evidence now starts with a go-live acceptance workflow that shows curren
 
 The console now reflects the active workspace in the URL hash and restores that workspace on reload, so operators can refresh or reopen `#evidence` without losing the go-live acceptance context.
 
+- [x] **Step 11: Align approval progress with applied evidence**
+
+Go-live acceptance now treats applied or production-ready evidence as approval-satisfied, so the production progress list no longer shows "approval not requested" after permissions are active.
+
 ## Task 9: Completed Approval Step State
 
 - [x] **Step 1: Treat applied changes as approval-resolved**

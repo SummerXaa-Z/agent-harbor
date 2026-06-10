@@ -45,7 +45,8 @@ export function buildAiAdminProductionConsoleSummary({
   productionReadiness
 }: AiAdminProductionConsoleInput): AiAdminProductionConsoleSummary {
   const approvalRequired = !draft.policyGate.canApplyDirectly;
-  const approved = !approvalRequired || approvalRequest?.status === "approved";
+  const approvalSatisfiedByEvidence = approvalRequired && (Boolean(application) || productionReadiness?.status === "ready");
+  const approved = !approvalRequired || approvalRequest?.status === "approved" || approvalSatisfiedByEvidence;
   const runtimeEvidenceCount = productionReadiness
     ? Number(Boolean(productionReadiness.runtimeEvidence.allowedTrace)) + Number(Boolean(productionReadiness.runtimeEvidence.deniedTrace))
     : 0;
@@ -64,10 +65,12 @@ export function buildAiAdminProductionConsoleSummary({
     {
       key: "approval",
       labelKey: "productionConsole.approval",
-      status: approvalRequired ? approvalStatus(approvalRequest) : "ready",
-      detail: approvalRequired ? approvalRequest?.id ?? "-" : "-",
+      status: approvalRequired ? approvalStatus(approvalRequest, approvalSatisfiedByEvidence) : "ready",
+      detail: approvalRequired ? approvalRequest?.id ?? application?.id ?? "-" : "-",
       detailKey: approvalRequired
-        ? approvalRequest
+        ? approvalSatisfiedByEvidence
+          ? "productionConsole.approvalSatisfied"
+          : approvalRequest
           ? `status.approval${capitalize(approvalRequest.status)}`
           : "status.approvalNotRequested"
         : "productionConsole.approvalNotRequired",
@@ -110,7 +113,8 @@ export function buildAiAdminProductionConsoleSummary({
   };
 }
 
-function approvalStatus(request: PermissionPackageApprovalRequest | null): AiAdminProductionConsoleStatus {
+function approvalStatus(request: PermissionPackageApprovalRequest | null, satisfiedByEvidence = false): AiAdminProductionConsoleStatus {
+  if (satisfiedByEvidence) return "ready";
   if (!request) return "pending";
   if (request.status === "approved") return "ready";
   if (request.status === "pending") return "pending";

@@ -172,6 +172,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("productionConsole.application"), "权限落地");
   assert.equal(t("productionConsole.runtime"), "运行验证");
   assert.equal(t("productionConsole.productionReadiness"), "上线就绪状态");
+  assert.equal(t("productionConsole.approvalSatisfied"), "审批已满足");
   assert.equal(t("productionConsole.requestConfigured"), "申请已配置");
   assert.equal(t("productionConsole.requestNeedsInput"), "申请待补充");
   assert.equal(t("productionConsole.approvalNotRequired"), "无需审批");

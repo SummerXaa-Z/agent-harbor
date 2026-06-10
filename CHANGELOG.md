@@ -150,6 +150,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 上线证据页现在先展示上线验收工作台，明确当前权限变更上下文、就绪状态、下一步动作和进度，再展示历史证据表。
 - Workspace navigation now writes the active workspace to the URL hash, so refreshing or reopening `#evidence` keeps operators in the same go-live acceptance context.
 - 工作区导航现在会把当前工作区写入 URL hash，刷新或重新打开 `#evidence` 时仍停留在同一个上线验收上下文。
+- Go-live acceptance now treats applied or production-ready evidence as approval-satisfied, preventing conflicting "approval not requested" progress copy after permissions are already active.
+- 上线验收现在会把已应用或已可上线的证据视为审批已满足，避免权限已生效后进度里仍出现“审批未发起”的冲突提示。
 - Web console visual design review follow-up: design tokens now govern component colors, shadows, focus rings, button sizing, technical-id display, System Self-Check telemetry, and Agent registry ordering.
 - Web 控制台视觉设计审查项已落地：设计 token 现在约束组件色值、阴影、焦点环、按钮尺寸、技术 ID 展示、系统自检指标展示范围和 Agent 注册表顺序。
 - Web console UX review follow-up: desktop navigation now keeps readable grouped labels at medium widths, Permission Changes uses one authoritative context bar with non-truncating core selectors, and Capability Governance prioritizes the grant operation area over KPI cards.

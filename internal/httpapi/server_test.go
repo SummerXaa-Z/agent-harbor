@@ -3520,6 +3520,23 @@ func TestPermissionPackageWorkbenchPreviewSummarizesPrimaryJourney(t *testing.T)
 		!permissionPackageWorkbenchHasStep(afterEvidence.Summary.Steps, "acceptance", "complete", "acceptance_ready") {
 		t.Fatalf("expected completed approval and acceptance after evidence, got %#v", afterEvidence.Summary.Steps)
 	}
+
+	secondApproval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
+	afterNewRequest := decodeData[permissionPackageWorkbenchPreviewResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/workbench:preview", input, ""))
+	if afterNewRequest.ApprovalRequest == nil || afterNewRequest.ApprovalRequest.ID != secondApproval.ID {
+		t.Fatalf("expected workbench preview to select the new pending request, got %#v", afterNewRequest.ApprovalRequest)
+	}
+	if afterNewRequest.LatestApplication != nil || afterNewRequest.ProductionReadiness != nil {
+		t.Fatalf("expected pending request to suppress historical production evidence, got app=%#v readiness=%#v", afterNewRequest.LatestApplication, afterNewRequest.ProductionReadiness)
+	}
+	if afterNewRequest.Summary.Status != "awaiting_approval" || afterNewRequest.Summary.PrimaryActionCode != "review_approval_request" ||
+		afterNewRequest.Summary.Applied || afterNewRequest.Summary.ProductionReady || afterNewRequest.Summary.CanApply {
+		t.Fatalf("expected pending request to restart the approval step, got %#v", afterNewRequest.Summary)
+	}
+	if !permissionPackageWorkbenchHasStep(afterNewRequest.Summary.Steps, "approval", "current", "approval_pending") ||
+		!permissionPackageWorkbenchHasStep(afterNewRequest.Summary.Steps, "apply", "waiting", "apply_waiting") {
+		t.Fatalf("expected pending approval and waiting apply steps, got %#v", afterNewRequest.Summary.Steps)
+	}
 }
 
 func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvidence(t *testing.T) {

@@ -130,6 +130,12 @@ test("new permission change ignores historical preview evidence until submitted"
   assert.match(app, /if \(aiAdminNewDraftMode\) \{\s*setAiAdminWorkbenchPreview\(null\);\s*setAiAdminApplication\(null\);\s*setAiAdminProductionReadiness\(null\);\s*setAiAdminApprovalRequests\(\[\]\);\s*return;/s);
   assert.match(app, /activeNav !== "ai-admin" \|\| aiAdminNewDraftMode \|\| !data\?\.loadedFromApi/);
   assert.match(createBlock, /setAiAdminNewDraftMode\(false\)/);
+  assert.match(createBlock, /setAiAdminSelectedApprovalRequestId\(request\.id\)/);
+  assert.match(createBlock, /setAiAdminWorkbenchPreview\(null\)/);
+  assert.match(createBlock, /setAiAdminApplication\(null\)/);
+  assert.match(createBlock, /setAiAdminApplicationHealth\(null\)/);
+  assert.match(createBlock, /setAiAdminApplicationImpact\(null\)/);
+  assert.match(createBlock, /setAiAdminProductionReadiness\(null\)/);
 });
 
 test("production evidence export reports the result on the main permission journey", () => {

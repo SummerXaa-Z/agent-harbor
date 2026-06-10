@@ -1629,7 +1629,7 @@ func (s *Server) permissionPackageWorkbenchPreview(ctx context.Context, req doma
 	}
 
 	var readiness *permissionPackageProductionReadinessResponse
-	if permissionPackageWorkbenchCanCheckReadiness(draft) {
+	if permissionPackageWorkbenchShouldCheckReadiness(draft, approval) {
 		next, err := s.permissionPackageProductionReadiness(ctx, permissionPackageProductionReadinessQueryFromApplyRequest(req))
 		if err != nil {
 			return permissionPackageWorkbenchPreviewResponse{}, err
@@ -1645,6 +1645,16 @@ func (s *Server) permissionPackageWorkbenchPreview(ctx context.Context, req doma
 		Summary:             permissionPackageWorkbenchSummaryFor(draft, approval, readiness),
 		GeneratedAt:         s.now(),
 	}, nil
+}
+
+func permissionPackageWorkbenchShouldCheckReadiness(draft domain.PermissionPackageDraft, approval *domain.PermissionPackageApprovalRequest) bool {
+	if !permissionPackageWorkbenchCanCheckReadiness(draft) {
+		return false
+	}
+	if approval == nil {
+		return true
+	}
+	return approval.Status == domain.PermissionPackageApprovalStatusApproved
 }
 
 func permissionPackageProductionReadinessQueryFromApplyRequest(req domain.PermissionPackageApplyRequest) permissionPackageProductionReadinessQuery {

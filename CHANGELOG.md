@@ -78,6 +78,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 已完成或进入审批冻结的权限变更现在会把申请配置呈现为只读复核态，避免操作员在审批中或已生效后继续编辑租户、调用方、目标、访问对象或权限包。
 - Locked Permission Changes now rename the request section to "Configuration Review" and switch helper copy to review language, so production-ready journeys no longer read like editable drafts.
 - 已锁定的权限变更现在会把申请区切换为“配置复核”并使用复核说明，避免生产可用旅程看起来仍像可编辑草稿。
+- Same-scope follow-up Permission Changes now stay on the current approval cycle instead of reusing historical application or production-readiness evidence while the new request is pending.
+- 同范围的后续权限变更现在会停留在当前审批周期；新请求待审批时，不再复用历史应用记录或上线就绪证据。
 - Active locked Permission Changes now expose a visible "New permission change" exit beside the read-only review notice, while approval-frozen requests still require the approval flow instead of bypassing withdrawal.
 - 已生效的锁定态权限变更现在会在只读复核提示旁提供可见的“新建权限变更”出口；审批冻结中的请求仍通过审批流程处理，避免绕过撤回。
 - Starting a new Permission Change now enters an isolated draft mode that ignores historical approval, application, and readiness evidence until the operator submits the new request.

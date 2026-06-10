@@ -1254,3 +1254,26 @@ Updated `docs/engineering/0.2.0-local-validation-evidence.md` with the post-UI-h
 Commit and push the evidence-only update, then inspect PR #74.
 
 Committed the evidence-only recheck update after `git diff --check`.
+
+## Task 35: Isolate Same-Scope Follow-Up Approval Cycles
+
+- [x] **Step 1: Close the historical-evidence boundary**
+
+After `新建权限变更`, a user can intentionally submit another approval request for the same tenant, caller, tool service, access object, and permission template. That new cycle must not inherit the previous cycle's application or production-readiness evidence while the new approval is still pending.
+
+The workbench preview now suppresses production-readiness lookup whenever the matching approval request is pending, rejected, or withdrawn. Existing completed journeys still show their active production evidence when there is no current blocking approval request, and approved unconsumed requests still proceed to apply preflight.
+
+- [x] **Step 2: Clear stale frontend evidence after creating the new request**
+
+Creating an approval request now immediately selects the new request and clears stale workbench preview, application, application health, impact, preflight, and production-readiness state. The UI therefore stays on the current approval cycle until that cycle is approved, applied, and verified.
+
+- [x] **Step 3: Verify focused tests**
+
+Verified:
+
+```bash
+go test ./internal/httpapi -run TestPermissionPackageWorkbenchPreviewSummarizesPrimaryJourney -count=1
+pnpm --dir frontend test -- permissionJourneySafety
+```
+
+The backend test now covers an already-ready permission journey followed by a second same-scope pending approval request, and asserts that the workbench returns `awaiting_approval` without historical application/readiness evidence.

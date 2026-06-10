@@ -2054,8 +2054,17 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       startApprovalResolutionCooldown();
       setAiAdminNewDraftMode(false);
       upsertAiAdminApprovalRequest(request);
+      setAiAdminSelectedApprovalRequestId(request.id);
+      setAiAdminWorkbenchPreview(null);
       setAiAdminApplyPreflight(null);
       setAiAdminApplyPreflightMessage("");
+      setAiAdminApplication(null);
+      setAiAdminApplicationHealth(null);
+      setAiAdminApplicationHealthMessage("");
+      setAiAdminApplicationImpact(null);
+      setAiAdminApplicationImpactMessage("");
+      setAiAdminProductionReadiness(null);
+      setAiAdminProductionReadinessMessage("");
       setAiAdminMessage(tx(t, "message.permissionApprovalCreated", { id: request.id }));
     } catch (error) {
       setAiAdminMessage(localizedErrorMessage(t, language, error, "error.createApprovalRequest"));

@@ -648,14 +648,49 @@ Committed and pushed `f888358 fix: render applied state as status` to `codex/pro
 
 ## Task 15: Continue Main Journey Production Scan
 
-- [ ] **Step 1: Wait for remote checks to settle**
+- [x] **Step 1: Wait for remote checks to settle**
 
 Re-check PR #74 after the queued GitHub checks have had time to run. If any job fails, debug that failure before making more product changes.
 
-- [ ] **Step 2: Re-scan the first viewport and action set**
+PR #74 at `2c4c8dd` reported Backend and Frontend passing. PostgreSQL integration failed before running project tests because GitHub Actions could not pull `postgres:16` from Docker Hub (`context deadline exceeded` / `Client.Timeout exceeded while awaiting headers`). This was classified as an external runner/network failure, not a code failure.
+
+- [x] **Step 2: Re-scan the first viewport and action set**
 
 Use the in-app browser on `http://127.0.0.1:5174/#ai-admin` to verify the first viewport still has one clear next action, no duplicate primary controls, and no exposed technical identifiers.
 
-- [ ] **Step 3: Choose the next production-confidence increment**
+- [x] **Step 3: Choose the next production-confidence increment**
 
 If CI stays green, pick the next smallest issue that affects the configure -> approve -> apply -> status check -> acceptance path. Prefer removing ambiguity and accidental writes over adding new features.
+
+The selected issue was the global connection settings menu staying open across SPA workspace navigation. When left open, technical fields such as `X-Admin-Key`, `tenantId`, and `workspaceId` remained visible at the top of business workspaces, which undermined the non-technical Permission Changes journey. The menu is now controlled by React state and closes whenever `activeNav` changes; the summary uses explicit state toggling so it remains keyboard/click operable.
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/styleTheme.test.mjs
+```
+
+Browser verification opened `连接设置` on `http://127.0.0.1:5174/#ai-admin`, switched to `http://127.0.0.1:5174/#evidence`, and confirmed the connection menu was closed with no visible `X-Admin-Key`, `tenantId`, or `workspaceId` fields in the acceptance route.
+
+## Task 16: Release-Gate Product Shell Cleanup
+
+- [x] **Step 1: Run focused and repository gates**
+
+Run `git diff --check`, `pnpm --dir frontend exec node --test tests/styleTheme.test.mjs`, `make check`, and `make release-check`.
+
+- [ ] **Step 2: Commit, push, and inspect PR checks**
+
+Commit the product shell connection-menu cleanup, push branch `codex/production-readiness-gate`, and inspect PR #74 checks.
+
+- [ ] **Step 3: Continue only if checks are green or queued cleanly**
+
+If CI fails, debug it before taking another product increment. If it is queued, record the state and continue with the next local product scan.
+
+Verified locally before commit:
+
+```bash
+git diff --check
+pnpm --dir frontend exec node --test tests/styleTheme.test.mjs
+make check
+make release-check
+```

@@ -87,6 +87,12 @@ test("product shell removes demo controls and scopes connection settings", () =>
   assert.match(app, /className="connection-menu"/);
   assert.match(app, /className="connection-trigger"/);
   assert.match(app, /className="connection-scope-grid"/);
+  assert.match(app, /const \[connectionMenuOpen, setConnectionMenuOpen\] = useState\(false\)/);
+  assert.match(app, /setConnectionMenuOpen\(false\)/);
+  assert.match(app, /<details className="connection-menu"[\s\S]*open=\{connectionMenuOpen\}/);
+  assert.match(app, /event\.preventDefault\(\)/);
+  assert.match(app, /setConnectionMenuOpen\(\(open\) => !open\)/);
+  assert.match(app, /onToggle=\{\(event\) => setConnectionMenuOpen\(event\.currentTarget\.open\)\}/);
   assert.match(styles, /\.connection-popover\s*\{[^}]*box-shadow:\s*var\(--shadow-pop\);/s);
 });
 

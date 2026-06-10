@@ -384,6 +384,7 @@ function App() {
   const approvalResolveBlockedRef = useRef(false);
   const approvalResolveCooldownTimerRef = useRef<number | null>(null);
   const [activeNav, setActiveNav] = useState<NavKey>(initialNavKey);
+  const [connectionMenuOpen, setConnectionMenuOpen] = useState(false);
   const [adminKey, setAdminKey] = useState("");
   const [scope, setScope] = useState<ManagementScope>(defaultManagementScope);
   const [data, setData] = useState<ConsoleData | null>(null);
@@ -502,6 +503,10 @@ function App() {
     if (activeNav === "access" && !accessProfile && !accessLoading) {
       void refreshAccessProfile();
     }
+  }, [activeNav]);
+
+  useEffect(() => {
+    setConnectionMenuOpen(false);
   }, [activeNav]);
 
   const shouldLoadAiAdminCatalog = activeNav === "ai-admin" || activeNav === "evidence";
@@ -2875,8 +2880,16 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
                 EN
               </button>
             </div>
-            <details className="connection-menu">
-              <summary aria-label={t("section.connectionSettings")} className="connection-trigger" title={t("section.connectionSettings")}>
+            <details className="connection-menu" onToggle={(event) => setConnectionMenuOpen(event.currentTarget.open)} open={connectionMenuOpen}>
+              <summary
+                aria-label={t("section.connectionSettings")}
+                className="connection-trigger"
+                onClick={(event) => {
+                  event.preventDefault();
+                  setConnectionMenuOpen((open) => !open);
+                }}
+                title={t("section.connectionSettings")}
+              >
                 <LockKeyhole size={15} />
                 <span>{t("section.connectionSettings")}</span>
               </summary>

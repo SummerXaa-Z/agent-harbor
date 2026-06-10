@@ -465,6 +465,10 @@ Capability Governance now maps caller and target service names through the same 
 
 Permission Changes now treats the default tenant and workspace ids as business context in the primary UI, including empty API states, and localizes the default security approver display name in the approval step. Capability Governance now uses localized capability summaries, translated sensitivity/risk labels, and translated data-scope labels before falling back to technical descriptions.
 
+- [x] **Step 7: Reuse business scope labels in access profile**
+
+Tenant Access Profile now uses the shared data-scope label presenter, maps default tenant ids to business tenant names, and renders tenant hierarchy as user-readable levels instead of `L0` badges.
+
 ## Task 9: Completed Approval Step State
 
 - [x] **Step 1: Treat applied changes as approval-resolved**

@@ -147,7 +147,7 @@ test("permission request copy avoids repeated step labels", () => {
 
 test("permission request carries readable context into access profile workspace", () => {
   assert.match(accessProfileView, /handoffContext\?: AccessProfileHandoffContext \| null/);
-  assert.match(accessProfileView, /const tenantLabel = handoffContext\?\.tenantName \?\? profile\?\.tenant\.name \?\? scope\.tenantId/);
+  assert.match(accessProfileView, /const tenantLabel = handoffContext\?\.tenantName[\s\S]*permissionEntityDisplayName\(profile\.tenant\.name \|\| profile\.tenant\.id, t\)[\s\S]*permissionEntityDisplayName\(scope\.tenantId, t\)/);
   assert.match(accessProfileView, /const workspaceLabel = handoffContext\?\.workspaceName \?\? \(filters\.workspaceId\?\.trim\(\) \|\| t\("form\.workspaceAll"\)\)/);
   assert.match(accessProfileView, /const callerLabel = handoffContext\?\.callerName \?\? \(filters\.callerInstanceId/);
   assert.match(accessProfileView, /const targetLabel = handoffContext\?\.targetName \?\? \(filters\.targetId/);
@@ -167,7 +167,8 @@ test("access profile tenant scope prefers business labels over raw tenant ids", 
   assert.match(workbench, /import \{ TechnicalId \} from "\.\/TechnicalId"/);
   assert.match(accessProfileView, /import \{ TechnicalId \} from "\.\/TechnicalId"/);
   assert.match(accessProfileView, /const tenantNameById = useMemo/);
-  assert.match(accessProfileView, /const tenantName = permissionEntityDisplayName\(tenant\.name, t\)/);
+  assert.match(accessProfileView, /const tenantName = permissionEntityDisplayName\(tenant\.name \|\| tenant\.id, t\)/);
+  assert.match(accessProfileView, /tenantLevelLabel\(tenant\.level, t\)/);
   assert.match(accessProfileView, /const parentTenantName = tenant\.parentTenantId \? tenantNameById\.get\(tenant\.parentTenantId\)/);
   assert.match(accessProfileView, /t\("text\.parentTenantOutsideScope"\)/);
   assert.match(i18n, /"text\.parentTenantOutsideScope": "上级租户未展开"/);
@@ -205,6 +206,11 @@ test("capability names use business labels in primary UI", () => {
   assert.match(presenters, /export function capabilityKeyDisplayName/);
   assert.match(presenters, /export function capabilitySummaryText/);
   assert.match(presenters, /capability\.\$\{capability\.key\}\.summary/);
+  assert.match(presenters, /export function dataScopeValueLabels/);
+  assert.match(presenters, /"us-east"/);
+  assert.match(presenters, /scope\.region/);
+  assert.match(presenters, /"default": t\("text\.defaultTenantName"\)/);
+  assert.match(presenters, /"default-bu": t\("demo\.permissionRequestApprovalTeam"\)/);
   assert.match(presenters, /"Default Tenant": t\("text\.defaultTenantName"\)/);
   assert.match(presenters, /"Default Business Unit": t\("demo\.permissionRequestApprovalTeam"\)/);
   assert.match(presenters, /"Default Workspace Team": t\("demo\.permissionRequestApprovalProject"\)/);
@@ -216,6 +222,8 @@ test("capability names use business labels in primary UI", () => {
   assert.match(i18n, /"capability\.export_contracts\.name": "导出合同"/);
   assert.match(i18n, /"capability\.export_contracts\.summary": "导出合同包；属于高风险能力，需要明确审批。"/);
   assert.match(i18n, /"dataScope\.support": "客服工单数据"/);
+  assert.match(i18n, /"dataScope\.us-east": "美东"/);
+  assert.match(i18n, /"text\.tenantLevel\.0": "1级租户"/);
   assert.match(i18n, /"text\.defaultTenantName": "集团总部"/);
   assert.match(i18n, /"text\.defaultWorkspaceName": "客户服务工作区"/);
   assert.doesNotMatch(i18n, /"text\.defaultWorkspaceName": "沙箱工作区"/);
@@ -227,6 +235,11 @@ test("capability names use business labels in primary UI", () => {
   assert.match(accessProfileView, /const capabilityNameById = useMemo/);
   assert.match(accessProfileView, /capabilityNameById\.get\(trace\.capabilityId\) \?\? trace\.capabilityId/);
   assert.match(accessProfileView, /const capabilityName = grant\.capability[\s\S]*capabilityDisplayName\(grant\.capability, t\)/);
+  assert.match(accessProfileView, /dataScopeValueLabels\(t\)/);
+  assert.match(accessProfileView, /tenantLevelLabel\(tenant\.level, t\)/);
+  assert.match(accessProfileView, /permissionEntityDisplayName\(profile\.tenant\.name \|\| profile\.tenant\.id, t\)/);
+  assert.match(accessProfileView, /summarizeDataScopes\(trace\.dataScopes, t\("text\.noDataScope"\), dataScopeLabels\)/);
+  assert.match(accessProfileView, /summarizeDataScopes\(grant\.effectiveTenantDataScopes, t\("text\.noDataScope"\), dataScopeLabels\)/);
   assert.match(capabilityGovernanceView, /label: capabilityDisplayName\(capability, t\)/);
   assert.match(capabilityGovernanceView, /Object\.fromEntries\(agents\.map\(\(agent\) => \[agent\.id, permissionEntityDisplayName\(agent\.name, t\)\]\)\)/);
   assert.match(capabilityGovernanceView, /label: permissionEntityDisplayName\(target\.name, t\)/);

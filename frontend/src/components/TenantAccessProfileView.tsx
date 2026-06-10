@@ -13,6 +13,7 @@ import {
   accessDecisionOutcomeTone,
   agentNameMap,
   capabilityDisplayName,
+  dataScopeValueLabels,
   formatDate,
   permissionEntityDisplayName,
   policyEffectLabel,
@@ -104,7 +105,9 @@ export function TenantAccessProfileView({
     () => new Map(capabilities.map((capability) => [capability.id, capabilityDisplayName(capability, t)])),
     [capabilities, t]
   );
-  const tenantLabel = handoffContext?.tenantName ?? profile?.tenant.name ?? scope.tenantId;
+  const dataScopeLabels = useMemo(() => dataScopeValueLabels(t), [t]);
+  const tenantLabel = handoffContext?.tenantName
+    ?? (profile?.tenant ? permissionEntityDisplayName(profile.tenant.name || profile.tenant.id, t) : permissionEntityDisplayName(scope.tenantId, t));
   const workspaceLabel = handoffContext?.workspaceName ?? (filters.workspaceId?.trim() || t("form.workspaceAll"));
   const targetLabel = handoffContext?.targetName ?? (filters.targetId ? names[filters.targetId] ?? filters.targetId : t("form.anyTarget"));
   const capabilityLabel = handoffContext?.capabilityName ?? (selectedCapability ? capabilityDisplayName(selectedCapability, t) : filters.capabilityId?.trim() || t("form.anyCapability"));
@@ -270,6 +273,7 @@ export function TenantAccessProfileView({
       </form>
 
       <AccessDecisionExplainPanel
+        dataScopeLabels={dataScopeLabels}
         explanation={explanation}
         loading={explanationLoading}
         message={explanationMessage}
@@ -281,7 +285,7 @@ export function TenantAccessProfileView({
       ) : (
         <>
           <div className="access-summary-grid">
-            <AccessSummaryCell label={t("summary.tenantScope")} value={String(profileSummary.tenantCount ?? profileScopeTenants.length)} detail={profile.tenant.name} />
+            <AccessSummaryCell label={t("summary.tenantScope")} value={String(profileSummary.tenantCount ?? profileScopeTenants.length)} detail={permissionEntityDisplayName(profile.tenant.name || profile.tenant.id, t)} />
             <AccessSummaryCell label={t("summary.grants")} value={String(profileSummary.grantCount ?? profileGrants.length)} detail={`${profileSummary.capabilityCount ?? 0} ${t("detail.capabilities")}`} />
             <AccessSummaryCell label={t("summary.assignments")} value={`${profileSummary.workspaceAssignmentCount ?? 0}/${profileSummary.instanceAssignmentCount ?? 0}`} detail={t("text.workspaceCaller")} />
             <AccessSummaryCell label={t("summary.recentDecisions")} value={`${profileSummary.recentAllowedTraceCount ?? 0}/${profileSummary.recentDeniedTraceCount ?? 0}`} detail={t("text.allowedDenied")} />
@@ -289,12 +293,12 @@ export function TenantAccessProfileView({
 
           <div className="access-tenant-list" aria-label={t("summary.tenantScope")}>
             {profileScopeTenants.map((tenant) => {
-              const tenantName = permissionEntityDisplayName(tenant.name, t);
+              const tenantName = permissionEntityDisplayName(tenant.name || tenant.id, t);
               const parentTenantName = tenant.parentTenantId ? tenantNameById.get(tenant.parentTenantId) ?? t("text.parentTenantOutsideScope") : "";
 
               return (
                 <div className="access-tenant-row" key={tenant.id}>
-                  <Badge tone={tenant.status === "active" ? "success" : "neutral"}>L{tenant.level}</Badge>
+                  <Badge tone={tenant.status === "active" ? "success" : "neutral"}>{tenantLevelLabel(tenant.level, t)}</Badge>
                   <div>
                     <strong>{tenantName}</strong>
                     <span>{tenant.parentTenantId ? `${t("text.parentTenant")} ${parentTenantName}` : t("text.rootTenant")}</span>
@@ -321,7 +325,7 @@ export function TenantAccessProfileView({
                 <EmptyRow title={t("empty.grantChains.title")} detail={t("empty.grantChains.detail")} />
               ) : null}
               {profileGrants.map((grant) => (
-                <AccessGrantRow grant={grant} key={grant.tenantEntitlement.id} t={t} />
+                <AccessGrantRow dataScopeLabels={dataScopeLabels} grant={grant} key={grant.tenantEntitlement.id} t={t} />
               ))}
             </section>
 
@@ -350,7 +354,7 @@ export function TenantAccessProfileView({
                           {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
                         </Badge>
                       </div>
-                      <span>{capabilityName} · {summarizeDataScopes(trace.dataScopes)} · {trace.reason || policyEffectLabel(trace.decision === "allowed" ? "allow" : "deny", t)}</span>
+                      <span>{capabilityName} · {summarizeDataScopes(trace.dataScopes, t("text.noDataScope"), dataScopeLabels)} · {trace.reason || policyEffectLabel(trace.decision === "allowed" ? "allow" : "deny", t)}</span>
                     </div>
                     <time>{formatDate(trace.createdAt)}</time>
                   </article>
@@ -374,12 +378,18 @@ function AccessSummaryCell({ label, value, detail }: { label: string; value: str
   );
 }
 
+function tenantLevelLabel(level: number, t: Translator) {
+  return t(`text.tenantLevel.${level}`, `L${level}`);
+}
+
 function AccessDecisionExplainPanel({
+  dataScopeLabels,
   explanation,
   loading,
   message,
   t
 }: {
+  dataScopeLabels: Record<string, string>;
   explanation: AccessDecisionExplainResult | null;
   loading: boolean;
   message: string;
@@ -422,7 +432,7 @@ function AccessDecisionExplainPanel({
           <div className="access-decision-footer">
             <div>
               <strong>{t("detail.dataScopes")}</strong>
-              <span>{summarizeDataScopes(dataScopes)}</span>
+              <span>{summarizeDataScopes(dataScopes, t("text.noDataScope"), dataScopeLabels)}</span>
             </div>
             <div>
               <strong>{t("text.nextActions")}</strong>
@@ -439,7 +449,15 @@ function AccessDecisionExplainPanel({
   );
 }
 
-function AccessGrantRow({ grant, t }: { grant: TenantAccessProfileGrant; t: Translator }) {
+function AccessGrantRow({
+  dataScopeLabels,
+  grant,
+  t
+}: {
+  dataScopeLabels: Record<string, string>;
+  grant: TenantAccessProfileGrant;
+  t: Translator;
+}) {
   const invalidRows = countInvalidGrantRows(grant);
   const capabilityName = grant.capability
     ? capabilityDisplayName(grant.capability, t)
@@ -459,7 +477,7 @@ function AccessGrantRow({ grant, t }: { grant: TenantAccessProfileGrant; t: Tran
       <div className="access-scope-line">
         <span>{t("text.tenantEntitlement")}</span>
         <code>{grant.tenantEntitlement.id}</code>
-        <span>{summarizeDataScopes(grant.effectiveTenantDataScopes)}</span>
+        <span>{summarizeDataScopes(grant.effectiveTenantDataScopes, t("text.noDataScope"), dataScopeLabels)}</span>
       </div>
       {grant.scopeReason ? <p className="access-invalid-reason">{grant.scopeReason}</p> : null}
       <div className="access-nested-list">
@@ -467,20 +485,28 @@ function AccessGrantRow({ grant, t }: { grant: TenantAccessProfileGrant; t: Tran
           <EmptyRow title={t("empty.workspaceAssignments.title")} detail={t("empty.workspaceAssignments.detail")} />
         ) : null}
         {grant.workspaceAssignments.map((workspace) => (
-          <AccessWorkspaceRow key={workspace.workspaceAssignment.id} workspace={workspace} t={t} />
+          <AccessWorkspaceRow dataScopeLabels={dataScopeLabels} key={workspace.workspaceAssignment.id} workspace={workspace} t={t} />
         ))}
       </div>
     </article>
   );
 }
 
-function AccessWorkspaceRow({ workspace, t }: { workspace: TenantAccessProfileWorkspace; t: Translator }) {
+function AccessWorkspaceRow({
+  dataScopeLabels,
+  workspace,
+  t
+}: {
+  dataScopeLabels: Record<string, string>;
+  workspace: TenantAccessProfileWorkspace;
+  t: Translator;
+}) {
   return (
     <div className="access-workspace-row">
       <div className="access-row-main">
         <div>
           <strong>{workspace.workspaceAssignment.workspaceId}</strong>
-          <span>{summarizeDataScopes(workspace.effectiveWorkspaceDataScopes)}</span>
+          <span>{summarizeDataScopes(workspace.effectiveWorkspaceDataScopes, t("text.noDataScope"), dataScopeLabels)}</span>
         </div>
         <Badge tone={scopeStatusTone(workspace.scopeStatus)}>{workspace.scopeStatus}</Badge>
       </div>
@@ -490,19 +516,27 @@ function AccessWorkspaceRow({ workspace, t }: { workspace: TenantAccessProfileWo
           <span className="access-empty-inline">{t("empty.callerInstances.title")}</span>
         ) : null}
         {workspace.instanceAssignments.map((instance) => (
-          <AccessInstanceRow instance={instance} key={instance.instanceAssignment.id} t={t} />
+          <AccessInstanceRow dataScopeLabels={dataScopeLabels} instance={instance} key={instance.instanceAssignment.id} t={t} />
         ))}
       </div>
     </div>
   );
 }
 
-function AccessInstanceRow({ instance, t }: { instance: TenantAccessProfileInstance; t: Translator }) {
+function AccessInstanceRow({
+  dataScopeLabels,
+  instance,
+  t
+}: {
+  dataScopeLabels: Record<string, string>;
+  instance: TenantAccessProfileInstance;
+  t: Translator;
+}) {
   return (
     <div className="access-instance-row">
       <div>
         <strong>{instance.callerInstance?.name ?? instance.instanceAssignment.callerInstanceId}</strong>
-        <span>{instance.instanceAssignment.subjectSelector || t("text.subjectsAll")} · {summarizeDataScopes(instance.effectiveInstanceDataScopes)}</span>
+        <span>{instance.instanceAssignment.subjectSelector || t("text.subjectsAll")} · {summarizeDataScopes(instance.effectiveInstanceDataScopes, t("text.noDataScope"), dataScopeLabels)}</span>
       </div>
       <Badge tone={scopeStatusTone(instance.scopeStatus)}>{instance.scopeStatus}</Badge>
       {instance.scopeReason ? <p className="access-invalid-reason">{instance.scopeReason}</p> : null}

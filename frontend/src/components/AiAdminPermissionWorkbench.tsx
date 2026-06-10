@@ -31,7 +31,7 @@ import type {
   AiAdminProductionConsoleSummary
 } from "../aiAdminProductionConsole";
 import type { MetricTone } from "../consoleMetrics";
-import { capabilityDisplayName, capabilityKeyDisplayName } from "../consolePresenters";
+import { capabilityDisplayName, capabilityKeyDisplayName, dataScopeValueLabels } from "../consolePresenters";
 import { createTranslator } from "../i18n";
 import {
   currentPermissionRequestWizardStep,
@@ -286,7 +286,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const goLiveCompletedAt = productionReadiness?.generatedAt
     ? tx(t, "text.permissionChangeCompletedAt", { date: formatDate(productionReadiness.generatedAt) })
     : "";
-  const dataScopeLabels = permissionDataScopeLabels(t);
+  const dataScopeLabels = dataScopeValueLabels(t);
   const messageTone = permissionInlineMessageTone(message);
   const approvalReadinessMessageTone = permissionInlineMessageTone(approvalReadinessMessage);
   const applyPreflightMessageTone = permissionInlineMessageTone(applyPreflightMessage);
@@ -1505,29 +1505,6 @@ function permissionPolicyReasonMessage(
 
 function translatedValue(t: Translator, value: string) {
   return t(`value.${value}`, value);
-}
-
-function permissionDataScopeLabels(t: Translator): Record<string, string> {
-  const values = [
-    "analytics",
-    "audit",
-    "contracts",
-    "contract_packages",
-    "crm",
-    "customers",
-    "confidential",
-    "finance",
-    "internal",
-    "invoices",
-    "packages",
-    "restricted",
-    "support",
-    "tickets"
-  ];
-  return values.reduce<Record<string, string>>((labels, value) => {
-    labels[value] = translatedValue(t, value);
-    return labels;
-  }, {});
 }
 
 function permissionInlineMessageTone(message: string): "error" | "info" | "success" | "warning" {

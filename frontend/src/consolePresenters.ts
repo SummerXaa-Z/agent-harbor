@@ -84,6 +84,33 @@ export function capabilitySummaryText(
     || t(`capability.${capability.key}.summary`, capability.description || readableIdentifierLabel(capability.key));
 }
 
+export function dataScopeValueLabels(t: Translator): Record<string, string> {
+  const values = [
+    "analytics",
+    "audit",
+    "contracts",
+    "contract_packages",
+    "crm",
+    "customers",
+    "confidential",
+    "eu-west",
+    "finance",
+    "internal",
+    "invoices",
+    "packages",
+    "restricted",
+    "support",
+    "tickets",
+    "us-east",
+    "us-west",
+    "华东"
+  ];
+  return values.reduce<Record<string, string>>((labels, value) => {
+    labels[value] = t(`dataScope.${value}`, translatedValue(t, value) || readableIdentifierLabel(value));
+    return labels;
+  }, {});
+}
+
 export function permissionEntityDisplayName(value: string, t: Translator) {
   const normalized = value.trim();
   if (!normalized) return value;
@@ -93,6 +120,9 @@ export function permissionEntityDisplayName(value: string, t: Translator) {
     "Core Journey Project": t("demo.coreJourneyProject"),
     "Core Journey Root": t("demo.coreJourneyRoot"),
     "Core Journey Team": t("demo.coreJourneyTeam"),
+    "default": t("text.defaultTenantName"),
+    "default-bu": t("demo.permissionRequestApprovalTeam"),
+    "default-bu-team": t("demo.permissionRequestApprovalProject"),
     "Default Business Unit": t("demo.permissionRequestApprovalTeam"),
     "Default Tenant": t("text.defaultTenantName"),
     "Default Workspace Team": t("demo.permissionRequestApprovalProject"),
@@ -129,7 +159,7 @@ export function dataScopeText(scopes?: DataScope[], t?: Translator) {
   if (!scopes || scopes.length === 0) return "";
   const labels = scopes
     .map((scope) =>
-      [scope.dataDomain, scope.dataset, scope.schema, scope.table, scope.field, scope.classification]
+      [scope.dataDomain, scope.dataset, scope.schema, scope.table, scope.field, scope.classification, scope.region]
         .map((part) => (part && t ? t(`dataScope.${part}`, readableIdentifierLabel(part)) : part))
         .filter(Boolean)
         .join("/")

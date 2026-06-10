@@ -128,6 +128,8 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("accessSubject.supportAgent.name"), "客服专员");
   assert.equal(t("accessSubject.supportAgent.detail"), "推荐选择。适用于当前工作区内处理客户工单的一线客服。");
   assert.equal(t("accessSubject.securityReviewer.name"), "安全审批人");
+  assert.equal(t("dataScope.us-east"), "美东");
+  assert.equal(t("text.tenantLevel.0"), "1级租户");
   assert.equal(t("text.technicalDetails"), "高级设置");
   assert.equal(t("text.tenantPath"), "租户层级");
   assert.equal(t("text.workspaceAlias"), "工作区名称");

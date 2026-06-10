@@ -252,6 +252,27 @@ test("access profile grant chain keeps technical ids in advanced details", () =>
   assert.match(styles, /\.access-instance-technical[^{]*\{/);
 });
 
+test("runtime audit keeps protocol details out of primary trace rows", () => {
+  assert.match(app, /function traceRouteBusinessLabel/);
+  assert.match(app, /className="trace-business-line"/);
+  assert.match(app, /className="trace-technical-details"/);
+  assert.match(app, /<summary>\{t\("text\.technicalDetails"\)\}<\/summary>/);
+  assert.doesNotMatch(app, /<input placeholder="runId"/);
+  assert.match(app, /placeholder=\{t\("form\.traceRunPlaceholder"\)\}/);
+  const traceRowStart = app.indexOf('<article className="trace-row"');
+  const traceTechnicalStart = app.indexOf('<details className="trace-technical-details"', traceRowStart);
+  assert.notEqual(traceRowStart, -1);
+  assert.notEqual(traceTechnicalStart, -1);
+  assert.doesNotMatch(app.slice(traceRowStart, traceTechnicalStart), /trace\.routeType/);
+  assert.doesNotMatch(app.slice(traceRowStart, traceTechnicalStart), /trace\.routeKey/);
+  assert.doesNotMatch(app.slice(traceRowStart, traceTechnicalStart), /trace\.capabilityId/);
+  assert.match(presenters, /traceReason\.filteredToolsListByCapabilityAssignments/);
+  assert.match(presenters, /traceReason\.capabilityNotApproved/);
+  assert.match(i18n, /"traceReason\.filteredToolsListByCapabilityAssignments": "工具列表已按权限收敛"/);
+  assert.match(i18n, /"traceReason\.capabilityNotApproved": "能力未审批，已拒绝"/);
+  assert.match(styles, /\.trace-technical-details\s*\{/);
+});
+
 test("capability names use business labels in primary UI", () => {
   assert.match(presenters, /export function capabilityDisplayName/);
   assert.match(presenters, /export function capabilityKeyDisplayName/);

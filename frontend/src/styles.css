@@ -1429,6 +1429,18 @@ td code {
   color: var(--brand);
 }
 
+.technical-id-field {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.technical-id-field > span:first-child {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -1532,8 +1544,7 @@ td code {
   white-space: nowrap;
 }
 
-.timeline p,
-.trace-meta-line {
+.timeline p {
   margin: 3px 0 0;
   color: var(--muted);
   font-size: 12px;
@@ -1633,18 +1644,48 @@ td code {
 
 .trace-filters {
   display: grid;
-  grid-template-columns: 1fr 0.8fr 1fr 1fr auto;
-  gap: 8px;
-  padding: 12px 14px 8px;
+  grid-template-columns: minmax(140px, 0.7fr) repeat(2, minmax(180px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px 14px 10px;
   border-bottom: 1px solid var(--line-subtle);
+}
+
+.trace-filters label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.trace-filter-advanced {
+  grid-column: 1 / -1;
+  padding-top: 2px;
+}
+
+.trace-filter-advanced summary,
+.trace-technical-details summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.trace-filter-advanced label {
+  max-width: 320px;
+  margin-top: 8px;
 }
 
 .trace-row {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) 76px;
   gap: 10px;
-  align-items: center;
-  min-height: 58px;
+  align-items: start;
+  min-height: 64px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--line-subtle);
 }
 
@@ -1653,7 +1694,7 @@ td code {
 }
 
 .trace-row strong,
-.trace-meta-line {
+.trace-business-line {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -1681,10 +1722,13 @@ td code {
   min-width: 48px;
 }
 
-.trace-meta-line {
+.trace-business-line {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .trace-route-text,
@@ -1703,9 +1747,47 @@ td code {
 }
 
 .trace-row time {
+  padding-top: 2px;
   color: var(--soft);
   font-size: 12px;
   text-align: right;
+}
+
+.trace-technical-details {
+  margin-top: 7px;
+}
+
+.trace-technical-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
+}
+
+.trace-technical-grid > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.trace-technical-grid > span > span:first-child {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.trace-technical-grid code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-family: var(--mono-font);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .capability-governance {

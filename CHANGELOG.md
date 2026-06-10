@@ -66,6 +66,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 租户访问画像的授权链现在把租户授权、工作区分配、工作区、目标和能力等技术 ID 收进折叠详情，主证据行不再直接展示原始 ID。
 - Tenant Access Profile instance and trace rows now show business caller, target, access-object, and localized decision-reason labels while moving caller ids, instance-assignment ids, and subject selectors into collapsed technical details.
 - 租户访问画像的实例授权和追踪证据行现在展示业务调用方、目标、访问对象和本地化判定原因，并把调用方 ID、实例分配 ID、主体选择器收进折叠技术详情。
+- Runtime Audit now shows business caller/target names, localized route and decision-reason labels, and keeps run id, route keys, and capability ids inside advanced technical details.
+- 运行审计现在展示业务调用方/目标、中文化路由和判定原因，并把运行批次、路由键和能力 ID 收进高级技术详情。
+- TechnicalId is now shared across dense console workspaces, preserving the same shortened, copyable identifier treatment outside the main business path.
+- TechnicalId 现在作为共享组件用于密集控制台视图，在主业务路径外保持一致的缩略和复制体验。
 - `make ai-admin-browser-journey` now starts the API with split requester and reviewer admin identities by default, and the approval scenario verifies that requester-key impersonation of the reviewer is rejected before the real reviewer approves.
 - `make ai-admin-browser-journey` 现在默认用分离的申请人与审批人管理身份启动 API，并在审批场景中先验证申请人 key 冒充审批人会被拒绝，再由真实审批人批准。
 - Web console Permission Changes now treats not-yet-requested and pending approvals as pending work instead of production blockers, puts the next safe action in the task header, and keeps the tenant access profile in the dedicated Access workspace.

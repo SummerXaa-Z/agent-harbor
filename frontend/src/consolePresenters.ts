@@ -24,7 +24,9 @@ export function accessTraceReasonLabel(reason: string | undefined, effect: "allo
   const reasonLabels: Record<string, string> = {
     "caller instance assignment matched": t("traceReason.callerInstanceAssignmentMatched"),
     "capability assignment matched": t("traceReason.capabilityAssignmentMatched"),
-    "workspace assignment matched": t("traceReason.workspaceAssignmentMatched")
+    "workspace assignment matched": t("traceReason.workspaceAssignmentMatched"),
+    "filtered tools/list by capability assignments": t("traceReason.filteredToolsListByCapabilityAssignments"),
+    "capability is not approved": t("traceReason.capabilityNotApproved")
   };
 
   return reasonLabels[normalized.toLowerCase()] ?? normalized;

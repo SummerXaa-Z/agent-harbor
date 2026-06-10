@@ -967,6 +967,44 @@ make check
 make release-check
 ```
 
-- [ ] **Step 5: Commit, push, and inspect PR checks**
+- [x] **Step 5: Commit, push, and inspect PR checks**
 
 Commit and push if clean, then inspect PR #74.
+
+Committed and pushed `9aba35a fix: prioritize evidence export when ready` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=UNSTABLE` because Backend, Frontend, and PostgreSQL integration checks were in progress immediately after push.
+
+## Task 26: Make Runtime Audit Business Readable
+
+- [x] **Step 1: Inspect the runtime audit workspace**
+
+Browser verification on `http://127.0.0.1:5174/#traces` showed the trace page still behaved like an engineering console: the filter row exposed `runId`, caller/target options used English demo names, and trace rows surfaced `mcp:tools/call`, `cap_...`, and raw English decision reasons.
+
+- [x] **Step 2: Move protocol details into advanced trace details**
+
+The runtime audit filter now keeps run id in advanced settings, caller and target options use localized business names, and trace rows show business route labels such as tool discovery/tool invocation. Protocol route fields, capability id, and run id are available inside each row's technical details disclosure.
+
+- [x] **Step 3: Share TechnicalId and localize trace reasons**
+
+`TechnicalId` is now the shared copyable component used by dense workspaces. Runtime audit maps known backend trace reasons (`filtered tools/list by capability assignments`, `capability is not approved`) to localized operator-facing labels.
+
+- [x] **Step 4: Verify focused tests and browser**
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs tests/styleTheme.test.mjs
+```
+
+Browser verification on `http://127.0.0.1:5174/#traces` showed primary rows such as `客服助手 → 工单工具服务 / 允许 / 工具发现 / 工具列表已按权限收敛` and no visible `runId`, `mcp:tools/call`, `cap_`, or English demo names in the primary trace rows.
+
+- [x] **Step 5: Run repository gates, commit, push, and inspect PR checks**
+
+Run `git diff --check`, `make check`, and `make release-check`; then commit and push if clean.
+
+Verified locally before commit:
+
+```bash
+git diff --check
+make check
+make release-check
+```

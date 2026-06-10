@@ -8,6 +8,7 @@ const styles = `${baseStyles}\n${workbenchStyles}`;
 const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
+const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 
 function stylesWithoutRootTokens(source) {
   return source.replace(/:root\s*\{[\s\S]*?\n\}/, "");
@@ -117,12 +118,13 @@ test("agent tools workspace prioritizes the registry before mutation forms", () 
 });
 
 test("technical identifiers use a readable copyable component in dense workspaces", () => {
-  assert.match(app, /function shortTechnicalId\(value: string\)/);
-  assert.match(app, /function TechnicalId\(\{ value, t \}: \{ value: string; t: Translator \}\)/);
-  assert.match(app, /className="technical-id"/);
-  assert.match(app, /navigator\.clipboard\?\.writeText\(value\)/);
-  assert.match(app, /<TechnicalId value=\{agent\.id\} t=\{t\} \/>/);
-  assert.match(app, /<TechnicalId value=\{trace\.capabilityId\} t=\{t\} \/>/);
+  assert.match(technicalId, /export function shortTechnicalId\(value: string\)/);
+  assert.match(technicalId, /export function TechnicalId/);
+  assert.match(technicalId, /className="technical-id"/);
+  assert.match(technicalId, /navigator\.clipboard\?\.writeText\(value\)/);
+  assert.match(app, /import \{ TechnicalId \} from "\.\/components\/TechnicalId"/);
+  assert.match(app, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} value=\{agent\.id\} \/>/);
+  assert.match(app, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.capability"\)\} value=\{trace\.capabilityId\} \/>/);
   assert.match(styles, /\.technical-id\s*\{/);
   assert.match(styles, /\.technical-id code\s*\{[^}]*font-family:\s*var\(--mono-font\);/s);
 });

@@ -33,7 +33,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("text.adminKeyStoredLocally"), "管理密钥只保存在当前浏览器会话，用于调用管理 API。");
   assert.equal(t("nav.cockpit"), "系统自检");
   assert.equal(t("nav.access"), "权限画像");
-  assert.equal(t("nav.traces"), "调用日志");
+  assert.equal(t("nav.traces"), "运行审计");
   assert.equal(t("nav.evidence"), "上线证据");
   assert.equal(t("nav.registry"), "Agent 与工具");
   assert.equal(t("navGroup.primary"), "主流程");
@@ -41,9 +41,12 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("navGroup.configuration"), "系统配置");
   assert.equal(t("navDetail.ai-admin"), "配置、审批、应用并验证权限变更。");
   assert.equal(t("navDetail.access"), "查看租户、工作区、调用方最终权限。");
+  assert.equal(t("navDetail.traces"), "查看允许、拒绝和异常调用记录。");
   assert.equal(t("page.cockpit"), "系统自检");
   assert.equal(t("page.access"), "租户权限控制台");
   assert.equal(t("page.evidence"), "上线验收");
+  assert.equal(t("page.traces"), "运行审计");
+  assert.equal(t("panel.auditTraces"), "运行审计");
   assert.equal(t("panel.evidenceRuns"), "历史证据");
   assert.equal(t("empty.evidenceRuns.title"), "暂无历史证据");
   assert.equal(t("section.goLiveAcceptance"), "上线验收");
@@ -67,6 +70,10 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("preflight.api.title"), "API 服务");
   assert.equal(t("preflight.mockMcp.title"), "MCP 工具服务");
   assert.equal(t("journey.step.grantChain"), "租户/工作区/实例授权");
+  assert.equal(t("traceRoute.mcpToolsCall"), "工具调用");
+  assert.equal(t("traceRoute.mcpToolsList"), "工具发现");
+  assert.equal(t("traceReason.filteredToolsListByCapabilityAssignments"), "工具列表已按权限收敛");
+  assert.equal(t("traceReason.capabilityNotApproved"), "能力未审批，已拒绝");
 });
 
 test("createTranslator returns Chinese labels for operator controls", () => {
@@ -78,6 +85,9 @@ test("createTranslator returns Chinese labels for operator controls", () => {
   assert.equal(t("action.createAgent"), "创建 Agent");
   assert.equal(t("action.rotateCredential"), "轮换凭据");
   assert.equal(t("table.policy"), "策略");
+  assert.equal(t("form.decision"), "判定结果");
+  assert.equal(t("form.traceRunId"), "运行批次");
+  assert.equal(t("form.traceRunPlaceholder"), "可选运行批次");
   assert.equal(t("status.agentDraft"), "草稿");
   assert.equal(t("status.policyAllow"), "允许");
   assert.equal(t("empty.routePolicies.title"), "暂无路由策略");

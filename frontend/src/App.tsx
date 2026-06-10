@@ -177,6 +177,7 @@ import {
 import { parseRetryFields } from "./retryForm";
 import { AiAdminPermissionWorkbench } from "./components/AiAdminPermissionWorkbench";
 import { CapabilityGovernanceView, type CapabilityGrantForm } from "./components/CapabilityGovernanceView";
+import { TechnicalId } from "./components/TechnicalId";
 import { TenantAccessProfileView } from "./components/TenantAccessProfileView";
 import { Badge, EmptyRow } from "./components/ui";
 import type {
@@ -358,26 +359,14 @@ function agentStatusLabel(status: AgentStatus, t: Translator) {
   return t("status.agentDraft");
 }
 
-function shortTechnicalId(value: string) {
-  if (value.length <= 24) return value;
-  return `${value.slice(0, 12)}...${value.slice(-8)}`;
-}
-
-function TechnicalId({ value, t }: { value: string; t: Translator }) {
-  return (
-    <span className="technical-id" title={value}>
-      <code>{shortTechnicalId(value)}</code>
-      <button
-        aria-label={`${t("action.copy")} ${shortTechnicalId(value)}`}
-        className="technical-id-copy"
-        onClick={() => void navigator.clipboard?.writeText(value)}
-        title={t("action.copy")}
-        type="button"
-      >
-        <Copy size={12} />
-      </button>
-    </span>
-  );
+function traceRouteBusinessLabel(trace: TraceEvent, t: Translator) {
+  if (trace.routeType === "mcp") {
+    if (trace.routeKey === "tools/call") return t("traceRoute.mcpToolsCall");
+    if (trace.routeKey === "tools/list") return t("traceRoute.mcpToolsList");
+    if (trace.routeKey === "initialize") return t("traceRoute.mcpInitialize");
+    if (!trace.routeKey) return t("traceRoute.mcpDefault");
+  }
+  return trace.routeKey ? readableIdentifierLabel(trace.routeKey) : t("text.traceDefaultRoute");
 }
 
 function App() {
@@ -3359,21 +3348,36 @@ function TraceFilterBar({
 }) {
   return (
     <div className="trace-filters">
-      <input placeholder="runId" value={filters.runId ?? ""} onChange={(event) => onChange({ ...filters, runId: event.target.value })} />
-      <select value={filters.decision ?? ""} onChange={(event) => onChange({ ...filters, decision: event.target.value as TraceDecision | "" })}>
-        <option value="">{t("form.anyDecision")}</option>
-        <option value="allowed">{t("text.decisionAllowed")}</option>
-        <option value="denied">{t("text.decisionDenied")}</option>
-      </select>
-      <select value={filters.callerAgentId ?? ""} onChange={(event) => onChange({ ...filters, callerAgentId: event.target.value })}>
-        <option value="">{t("form.anyCaller")}</option>
-        {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
-      </select>
-      <select value={filters.targetAgentId ?? ""} onChange={(event) => onChange({ ...filters, targetAgentId: event.target.value })}>
-        <option value="">{t("form.anyTarget")}</option>
-        {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
-      </select>
+      <label>
+        <span>{t("form.decision")}</span>
+        <select value={filters.decision ?? ""} onChange={(event) => onChange({ ...filters, decision: event.target.value as TraceDecision | "" })}>
+          <option value="">{t("form.anyDecision")}</option>
+          <option value="allowed">{t("text.decisionAllowed")}</option>
+          <option value="denied">{t("text.decisionDenied")}</option>
+        </select>
+      </label>
+      <label>
+        <span>{t("form.caller")}</span>
+        <select value={filters.callerAgentId ?? ""} onChange={(event) => onChange({ ...filters, callerAgentId: event.target.value })}>
+          <option value="">{t("form.anyCaller")}</option>
+          {agents.map((agent) => <option key={agent.id} value={agent.id}>{permissionEntityDisplayName(agent.name, t)}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>{t("form.target")}</span>
+        <select value={filters.targetAgentId ?? ""} onChange={(event) => onChange({ ...filters, targetAgentId: event.target.value })}>
+          <option value="">{t("form.anyTarget")}</option>
+          {agents.map((agent) => <option key={agent.id} value={agent.id}>{permissionEntityDisplayName(agent.name, t)}</option>)}
+        </select>
+      </label>
       <button className="secondary-button" type="button" onClick={onRefresh}><RefreshCw size={14} /> {t("action.refresh")}</button>
+      <details className="trace-filter-advanced">
+        <summary>{t("text.technicalDetails")}</summary>
+        <label>
+          <span>{t("form.traceRunId")}</span>
+          <input placeholder={t("form.traceRunPlaceholder")} value={filters.runId ?? ""} onChange={(event) => onChange({ ...filters, runId: event.target.value })} />
+        </label>
+      </details>
     </div>
   );
 }
@@ -3721,7 +3725,7 @@ function AgentTable({
             <tr className={agent.status === "disabled" ? "row-disabled" : undefined} key={agent.id}>
               <td>
                 <strong>{agent.name}</strong>
-                {agent.description ? <span>{agent.description}</span> : <TechnicalId value={agent.id} t={t} />}
+                {agent.description ? <span>{agent.description}</span> : <TechnicalId copyLabel={t("action.copy")} value={agent.id} />}
               </td>
               <td>{channelLabel(agent.channelType, channelLabels, t)}</td>
               <td className="truncate">{configText(agent, "endpoint") || t("status.localRuntime")}</td>
@@ -3855,11 +3859,25 @@ function TraceTable({ traces, agents, t }: { traces: TraceEvent[]; agents: Agent
                   {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
                 </Badge>
               </div>
-              <div className="trace-meta-line">
-                <span className="trace-route-text">{trace.routeType}:{trace.routeKey || t("text.traceDefaultRoute")}</span>
-                {trace.capabilityId ? <TechnicalId value={trace.capabilityId} t={t} /> : null}
+              <div className="trace-business-line">
+                <span className="trace-route-text">{traceRouteBusinessLabel(trace, t)}</span>
                 <span className="trace-reason">{accessTraceReasonLabel(trace.reason, trace.decision === "allowed" ? "allow" : "deny", t)}</span>
               </div>
+              <details className="trace-technical-details">
+                <summary>{t("text.technicalDetails")}</summary>
+                <div className="trace-technical-grid">
+                  <span>
+                    <span>{t("form.routeType")}</span>
+                    <code>{trace.routeType}</code>
+                  </span>
+                  <span>
+                    <span>{t("form.routeKey")}</span>
+                    <code>{trace.routeKey || t("text.traceDefaultRoute")}</code>
+                  </span>
+                  {trace.capabilityId ? <TechnicalId copyLabel={t("action.copy")} label={t("form.capability")} value={trace.capabilityId} /> : null}
+                  {trace.runId ? <TechnicalId copyLabel={t("action.copy")} label={t("form.traceRunId")} value={trace.runId} /> : null}
+                </div>
+              </details>
             </div>
             <time>{formatDate(trace.createdAt)}</time>
           </article>
@@ -3899,7 +3917,7 @@ function ManagementAuditTable({ events, t }: { events: AuditEvent[]; t: Translat
                 <strong>{auditResourceTypeLabel(event.resourceType, t)}</strong>
                 <details className="audit-technical">
                   <summary>{t("text.auditDetails")}</summary>
-                  <TechnicalId value={event.resourceId} t={t} />
+                  <TechnicalId copyLabel={t("action.copy")} value={event.resourceId} />
                 </details>
               </td>
               <td>{auditActorLabel(event.actor, t)}</td>

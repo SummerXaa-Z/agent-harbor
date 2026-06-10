@@ -17,6 +17,19 @@ export function policyEffectLabel(effect: "allow" | "deny", t: Translator) {
   return effect === "allow" ? t("status.policyAllow") : t("status.policyDeny");
 }
 
+export function accessTraceReasonLabel(reason: string | undefined, effect: "allow" | "deny", t: Translator) {
+  const normalized = reason?.trim();
+  if (!normalized) return policyEffectLabel(effect, t);
+
+  const reasonLabels: Record<string, string> = {
+    "caller instance assignment matched": t("traceReason.callerInstanceAssignmentMatched"),
+    "capability assignment matched": t("traceReason.capabilityAssignmentMatched"),
+    "workspace assignment matched": t("traceReason.workspaceAssignmentMatched")
+  };
+
+  return reasonLabels[normalized.toLowerCase()] ?? normalized;
+}
+
 export function accessDecisionOutcomeTone(outcome: AccessDecisionExplainResult["outcome"]): Tone {
   return outcome === "allowed" ? "success" : "danger";
 }

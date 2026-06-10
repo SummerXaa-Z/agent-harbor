@@ -1,6 +1,7 @@
 import { useMemo, type FormEvent } from "react";
 import { CheckCircle2, FileSearch, LockKeyhole, RefreshCw } from "lucide-react";
 
+import { accessSubjectOptionForSelector } from "../accessSubjects";
 import {
   countInvalidAccessProfileRows,
   countInvalidGrantRows,
@@ -11,6 +12,7 @@ import {
   accessDecisionEvidenceTone,
   accessDecisionOutcomeLabel,
   accessDecisionOutcomeTone,
+  accessTraceReasonLabel,
   agentNameMap,
   capabilityDisplayName,
   dataScopeValueLabels,
@@ -341,6 +343,10 @@ export function TenantAccessProfileView({
                 const capabilityName = trace.capabilityId
                   ? capabilityNameById.get(trace.capabilityId) ?? trace.capabilityId
                   : `${trace.routeType}:${trace.routeKey || t("text.traceDefaultRoute")}`;
+                const traceCallerName = trace.callerAgentId
+                  ? permissionEntityDisplayName(names[trace.callerAgentId] ?? trace.callerAgentId, t)
+                  : t("text.traceAnonymous");
+                const traceTargetName = permissionEntityDisplayName(names[trace.targetAgentId] ?? trace.targetAgentId, t);
 
                 return (
                   <article className="access-trace-row" key={trace.id}>
@@ -349,12 +355,12 @@ export function TenantAccessProfileView({
                     </div>
                     <div>
                       <div className="trace-title-line">
-                        <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? t("text.traceAnonymous")} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
+                        <strong>{traceCallerName} → {traceTargetName}</strong>
                         <Badge tone={trace.decision === "allowed" ? "success" : "danger"}>
                           {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
                         </Badge>
                       </div>
-                      <span>{capabilityName} · {summarizeDataScopes(trace.dataScopes, t("text.noDataScope"), dataScopeLabels)} · {trace.reason || policyEffectLabel(trace.decision === "allowed" ? "allow" : "deny", t)}</span>
+                      <span>{capabilityName} · {summarizeDataScopes(trace.dataScopes, t("text.noDataScope"), dataScopeLabels)} · {accessTraceReasonLabel(trace.reason, trace.decision === "allowed" ? "allow" : "deny", t)}</span>
                     </div>
                     <time>{formatDate(trace.createdAt)}</time>
                   </article>
@@ -549,14 +555,33 @@ function AccessInstanceRow({
   instance: TenantAccessProfileInstance;
   t: Translator;
 }) {
+  const callerName = instance.callerInstance
+    ? permissionEntityDisplayName(instance.callerInstance.name, t)
+    : permissionEntityDisplayName(instance.instanceAssignment.callerInstanceId, t);
+  const subjectLabel = subjectSelectorDisplayName(instance.instanceAssignment.subjectSelector, t);
+
   return (
     <div className="access-instance-row">
-      <div>
-        <strong>{instance.callerInstance?.name ?? instance.instanceAssignment.callerInstanceId}</strong>
-        <span>{instance.instanceAssignment.subjectSelector || t("text.subjectsAll")} · {summarizeDataScopes(instance.effectiveInstanceDataScopes, t("text.noDataScope"), dataScopeLabels)}</span>
+      <div className="access-instance-main">
+        <strong>{callerName}</strong>
+        <span>{subjectLabel} · {summarizeDataScopes(instance.effectiveInstanceDataScopes, t("text.noDataScope"), dataScopeLabels)}</span>
       </div>
       <Badge tone={scopeStatusTone(instance.scopeStatus)}>{instance.scopeStatus}</Badge>
+      <details className="access-instance-technical">
+        <summary>{t("text.technicalDetails")}</summary>
+        <div className="access-technical-grid">
+          <TechnicalId label={t("text.instanceAssignment")} value={instance.instanceAssignment.id} />
+          <TechnicalId label={t("form.callerInstance")} value={instance.instanceAssignment.callerInstanceId} />
+          <TechnicalId label={t("form.subjectSelector")} value={instance.instanceAssignment.subjectSelector} />
+        </div>
+      </details>
       {instance.scopeReason ? <p className="access-invalid-reason">{instance.scopeReason}</p> : null}
     </div>
   );
+}
+
+function subjectSelectorDisplayName(subjectSelector: string | undefined, t: Translator) {
+  if (!subjectSelector?.trim()) return t("text.subjectsAll");
+  const option = accessSubjectOptionForSelector(subjectSelector);
+  return option.id === "custom" ? t("text.customSubjectScope") : t(option.labelKey);
 }

@@ -812,3 +812,41 @@ make release-check
 Commit the access-profile evidence cleanup, push branch `codex/production-readiness-gate`, and inspect PR #74 checks.
 
 Committed and pushed `f3cc9a2 fix: hide access profile technical ids` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=CLEAN`; no checks were reported immediately after push.
+
+## Task 22: Hide Instance Selectors In Access Profile Evidence
+
+- [x] **Step 1: Inspect the remaining visible evidence noise**
+
+Browser verification on `http://127.0.0.1:5174/#access` showed the grant and workspace technical ids were collapsed, but instance rows and trace rows still showed English demo names such as `Permission Package Approval Caller`; instance rows also showed subject selectors such as `user:support-*`, and trace rows showed raw backend reasons such as `capability assignment matched` in the primary evidence path.
+
+- [x] **Step 2: Move instance technical fields into details**
+
+Instance rows now render the business caller label and access-object label in the primary row. Trace rows render business caller, target, and localized decision-reason labels. Instance-assignment id, caller instance id, and subject selector remain available through collapsed `TechnicalId` details.
+
+- [x] **Step 3: Verify focused tests and browser**
+
+Run focused frontend tests and verify the access profile page no longer exposes the raw instance selector in the visible primary instance row.
+
+Verified:
+
+```bash
+git diff --check
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+```
+
+Browser verification from Permission Changes through `查看权限画像` confirmed context `客户服务中心 / 客户服务工作区 / 客服助手 / 工单工具服务`; instance rows have `primaryHasSelector=false`; trace rows have `traceHasEnglishDemoName=false`, `traceHasRawReason=false`, and `traceHasLocalizedReason=true`.
+
+- [x] **Step 4: Run repository gates**
+
+Run `make check` and `make release-check`.
+
+Verified locally before commit:
+
+```bash
+make check
+make release-check
+```
+
+- [ ] **Step 5: Commit, push, and inspect PR checks**
+
+Commit and push if clean, then inspect PR #74.

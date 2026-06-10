@@ -68,6 +68,7 @@ import {
   runtimeEvidenceMetric
 } from "./consoleMetrics";
 import {
+  accessTraceReasonLabel,
   agentNameMap,
   capabilityDisplayName,
   capabilityKeyDisplayName,
@@ -3820,27 +3821,34 @@ function TraceTable({ traces, agents, t }: { traces: TraceEvent[]; agents: Agent
   return (
     <div className="trace-list">
       {traces.length === 0 ? <EmptyRow title={t("empty.auditTraces.title")} detail={t("empty.auditTraces.detail")} /> : null}
-      {traces.map((trace) => (
-        <article className="trace-row" key={trace.id}>
-          <div className={`trace-decision tone-${trace.decision === "allowed" ? "success" : "danger"}`}>
-            {trace.decision === "allowed" ? <CheckCircle2 size={15} /> : <LockKeyhole size={15} />}
-          </div>
-          <div>
-            <div className="trace-title-line">
-              <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? t("text.traceAnonymous")} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
-              <Badge tone={trace.decision === "allowed" ? "success" : "danger"}>
-                {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
-              </Badge>
+      {traces.map((trace) => {
+        const traceCallerName = trace.callerAgentId
+          ? permissionEntityDisplayName(names[trace.callerAgentId] ?? trace.callerAgentId, t)
+          : t("text.traceAnonymous");
+        const traceTargetName = permissionEntityDisplayName(names[trace.targetAgentId] ?? trace.targetAgentId, t);
+
+        return (
+          <article className="trace-row" key={trace.id}>
+            <div className={`trace-decision tone-${trace.decision === "allowed" ? "success" : "danger"}`}>
+              {trace.decision === "allowed" ? <CheckCircle2 size={15} /> : <LockKeyhole size={15} />}
             </div>
-            <div className="trace-meta-line">
-              <span className="trace-route-text">{trace.routeType}:{trace.routeKey || t("text.traceDefaultRoute")}</span>
-              {trace.capabilityId ? <TechnicalId value={trace.capabilityId} t={t} /> : null}
-              <span className="trace-reason">{trace.reason || policyEffectLabel(trace.decision === "allowed" ? "allow" : "deny", t)}</span>
+            <div>
+              <div className="trace-title-line">
+                <strong>{traceCallerName} → {traceTargetName}</strong>
+                <Badge tone={trace.decision === "allowed" ? "success" : "danger"}>
+                  {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
+                </Badge>
+              </div>
+              <div className="trace-meta-line">
+                <span className="trace-route-text">{trace.routeType}:{trace.routeKey || t("text.traceDefaultRoute")}</span>
+                {trace.capabilityId ? <TechnicalId value={trace.capabilityId} t={t} /> : null}
+                <span className="trace-reason">{accessTraceReasonLabel(trace.reason, trace.decision === "allowed" ? "allow" : "deny", t)}</span>
+              </div>
             </div>
-          </div>
-          <time>{formatDate(trace.createdAt)}</time>
-        </article>
-      ))}
+            <time>{formatDate(trace.createdAt)}</time>
+          </article>
+        );
+      })}
     </div>
   );
 }

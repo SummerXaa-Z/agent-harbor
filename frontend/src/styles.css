@@ -2428,8 +2428,8 @@ td code {
 .access-grant-header span,
 .access-row-main strong,
 .access-row-main span,
-.access-instance-row strong,
-.access-instance-row span {
+.access-instance-main strong,
+.access-instance-main span {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -2439,14 +2439,14 @@ td code {
 
 .access-grant-header strong,
 .access-row-main strong,
-.access-instance-row strong {
+.access-instance-main strong {
   color: var(--ink);
   font-size: 13px;
 }
 
 .access-grant-header span,
 .access-row-main span,
-.access-instance-row span {
+.access-instance-main span {
   color: var(--muted);
   font-size: 12px;
 }
@@ -2478,12 +2478,14 @@ td code {
   margin-top: 8px;
 }
 
-.access-workspace-technical {
+.access-workspace-technical,
+.access-instance-technical {
   margin-top: 8px;
 }
 
 .access-grant-technical summary,
-.access-workspace-technical summary {
+.access-workspace-technical summary,
+.access-instance-technical summary {
   color: var(--muted);
   cursor: pointer;
   font-size: 12px;
@@ -2521,6 +2523,14 @@ td code {
   border: 1px solid var(--line-subtle);
   border-radius: 7px;
   background: var(--surface);
+}
+
+.access-instance-main {
+  min-width: 0;
+}
+
+.access-instance-technical {
+  grid-column: 1 / -1;
 }
 
 .access-instance-row .access-invalid-reason {

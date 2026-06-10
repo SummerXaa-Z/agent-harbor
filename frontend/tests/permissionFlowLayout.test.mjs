@@ -204,6 +204,7 @@ test("access profile query keeps raw identifiers in advanced filters", () => {
 });
 
 test("access profile grant chain keeps technical ids in advanced details", () => {
+  assert.match(accessProfileView, /import \{ accessSubjectOptionForSelector \} from "\.\.\/accessSubjects"/);
   assert.match(accessProfileView, /const targetName = grant\.target \? permissionEntityDisplayName\(grant\.target\.name, t\) : t\("text\.unknownTarget"\)/);
   assert.match(accessProfileView, /const workspaceLabel = t\("text\.workspaceAssignment"\)/);
   const grantHeaderStart = accessProfileView.indexOf('<div className="access-grant-header">');
@@ -221,8 +222,28 @@ test("access profile grant chain keeps technical ids in advanced details", () =>
   assert.doesNotMatch(accessProfileView.slice(workspaceMainStart, workspaceTechnicalStart), /workspace\.workspaceAssignment\.workspaceId/);
   assert.match(accessProfileView, /<TechnicalId label=\{t\("text\.workspaceAssignment"\)\} value=\{workspace\.workspaceAssignment\.id\}/);
   assert.match(accessProfileView, /<TechnicalId label=\{t\("form\.workspaceId"\)\} value=\{workspace\.workspaceAssignment\.workspaceId\}/);
+  assert.match(accessProfileView, /const callerName = instance\.callerInstance[\s\S]*permissionEntityDisplayName\(instance\.callerInstance\.name, t\)[\s\S]*permissionEntityDisplayName\(instance\.instanceAssignment\.callerInstanceId, t\)/);
+  assert.match(accessProfileView, /const subjectLabel = subjectSelectorDisplayName\(instance\.instanceAssignment\.subjectSelector, t\)/);
+  const instanceMainStart = accessProfileView.indexOf('<div className="access-instance-main">');
+  const instanceTechnicalStart = accessProfileView.indexOf('<details className="access-instance-technical"', instanceMainStart);
+  assert.notEqual(instanceMainStart, -1);
+  assert.notEqual(instanceTechnicalStart, -1);
+  assert.doesNotMatch(accessProfileView.slice(instanceMainStart, instanceTechnicalStart), /instance\.instanceAssignment\.subjectSelector/);
+  assert.doesNotMatch(accessProfileView.slice(instanceMainStart, instanceTechnicalStart), /instance\.instanceAssignment\.callerInstanceId/);
+  assert.match(accessProfileView, /<TechnicalId label=\{t\("text\.instanceAssignment"\)\} value=\{instance\.instanceAssignment\.id\}/);
+  assert.match(accessProfileView, /<TechnicalId label=\{t\("form\.subjectSelector"\)\} value=\{instance\.instanceAssignment\.subjectSelector\}/);
+  assert.match(accessProfileView, /function subjectSelectorDisplayName/);
+  assert.match(accessProfileView, /const traceCallerName = trace\.callerAgentId[\s\S]*permissionEntityDisplayName\(names\[trace\.callerAgentId\] \?\? trace\.callerAgentId, t\)/);
+  assert.match(accessProfileView, /const traceTargetName = permissionEntityDisplayName\(names\[trace\.targetAgentId\] \?\? trace\.targetAgentId, t\)/);
+  assert.match(accessProfileView, /<strong>\{traceCallerName\} → \{traceTargetName\}<\/strong>/);
+  assert.match(accessProfileView, /accessTraceReasonLabel\(trace\.reason, trace\.decision === "allowed" \? "allow" : "deny", t\)/);
+  assert.match(app, /accessTraceReasonLabel\(trace\.reason, trace\.decision === "allowed" \? "allow" : "deny", t\)/);
+  assert.match(presenters, /export function accessTraceReasonLabel/);
+  assert.match(i18n, /"traceReason\.capabilityAssignmentMatched": "权限分配已命中"/);
+  assert.match(i18n, /"text\.customSubjectScope": "自定义主体范围"/);
   assert.match(styles, /\.access-grant-technical\s*\{/);
-  assert.match(styles, /\.access-workspace-technical\s*\{/);
+  assert.match(styles, /\.access-workspace-technical[^{]*\{/);
+  assert.match(styles, /\.access-instance-technical[^{]*\{/);
 });
 
 test("capability names use business labels in primary UI", () => {

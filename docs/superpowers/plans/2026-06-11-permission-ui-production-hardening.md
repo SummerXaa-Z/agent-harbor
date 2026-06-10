@@ -461,6 +461,10 @@ Extend `frontend/tests/permissionFlowLayout.test.mjs` so future UI changes canno
 
 Capability Governance now maps caller and target service names through the same business-name presenter, so table rows and selectors no longer show demo system names such as `Permission Package Approval MCP Target`.
 
+- [x] **Step 6: Localize default context and capability summaries**
+
+Permission Changes now treats the default tenant and workspace ids as business context in the primary UI, including empty API states. Capability Governance now uses localized capability summaries, translated sensitivity/risk labels, and translated data-scope labels before falling back to technical descriptions.
+
 ## Task 9: Completed Approval Step State
 
 - [x] **Step 1: Treat applied changes as approval-resolved**

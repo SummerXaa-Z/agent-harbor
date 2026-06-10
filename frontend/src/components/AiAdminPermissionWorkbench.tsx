@@ -1235,6 +1235,10 @@ function permissionTenantPathLabel(tenantId: string, tenants: Tenant[], t: Trans
   }, {});
   const selected = tenantById[normalizedTenantId];
   if (!selected) {
+    if (normalizedTenantId === "default") {
+      const defaultTenantName = t("text.defaultTenantName");
+      return { path: defaultTenantName, primary: defaultTenantName };
+    }
     return {
       path: tx(t, "text.unresolvedTenantDetail", { id: normalizedTenantId }),
       primary: t("text.unresolvedTenant")
@@ -1260,7 +1264,7 @@ function permissionWorkspaceDisplayName(workspaceId: string, agents: Agent[], t:
   const normalizedWorkspaceId = workspaceId.trim();
   if (!normalizedWorkspaceId) return "-";
   const agentInWorkspace = agents.find((agent) => agent.workspaceId === normalizedWorkspaceId);
-  if (agentInWorkspace?.workspaceId === defaultWorkspaceId) {
+  if (normalizedWorkspaceId === defaultWorkspaceId || agentInWorkspace?.workspaceId === defaultWorkspaceId) {
     return t("text.defaultWorkspaceName");
   }
   if (/permission[-_]?(request|package)[-_]?approval/i.test(normalizedWorkspaceId)) {

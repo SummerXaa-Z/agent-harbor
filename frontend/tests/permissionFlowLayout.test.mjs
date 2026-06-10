@@ -203,9 +203,20 @@ test("access profile query keeps raw identifiers in advanced filters", () => {
 test("capability names use business labels in primary UI", () => {
   assert.match(presenters, /export function capabilityDisplayName/);
   assert.match(presenters, /export function capabilityKeyDisplayName/);
+  assert.match(presenters, /export function capabilitySummaryText/);
+  assert.match(presenters, /capability\.\$\{capability\.key\}\.summary/);
+  assert.match(presenters, /"Default Tenant": t\("text\.defaultTenantName"\)/);
+  assert.match(presenters, /"Default Business Unit": t\("demo\.permissionRequestApprovalTeam"\)/);
+  assert.match(presenters, /"Default Workspace Team": t\("demo\.permissionRequestApprovalProject"\)/);
+  assert.match(presenters, /export function dataScopeText\(scopes\?: DataScope\[\], t\?: Translator\)/);
   assert.match(i18n, /"capability\.search_customer\.name": "查询客户"/);
   assert.match(i18n, /"capability\.update_ticket\.name": "更新工单"/);
   assert.match(i18n, /"capability\.export_contracts\.name": "导出合同"/);
+  assert.match(i18n, /"capability\.export_contracts\.summary": "导出合同包；属于高风险能力，需要明确审批。"/);
+  assert.match(i18n, /"dataScope\.support": "客服工单数据"/);
+  assert.match(i18n, /"text\.defaultTenantName": "集团总部"/);
+  assert.match(i18n, /"text\.defaultWorkspaceName": "客户服务工作区"/);
+  assert.doesNotMatch(i18n, /"text\.defaultWorkspaceName": "沙箱工作区"/);
   assert.match(app, /import \{[\s\S]*capabilityDisplayName,[\s\S]*\} from "\.\/consolePresenters"/);
   assert.match(app, /message\.capabilityApproved", \{ name: capabilityDisplayName\(capability, t\) \}/);
   assert.match(app, /key === "capability"[\s\S]*capabilityKeyDisplayName\(value, t\)/);
@@ -219,8 +230,16 @@ test("capability names use business labels in primary UI", () => {
   assert.match(capabilityGovernanceView, /label: permissionEntityDisplayName\(target\.name, t\)/);
   assert.match(capabilityGovernanceView, /label: permissionEntityDisplayName\(agent\.name, t\)/);
   assert.match(capabilityGovernanceView, /<strong>\{capabilityDisplayName\(capability, t\)\}<\/strong>/);
+  assert.match(capabilityGovernanceView, /capabilitySummaryText\(capability, t\)/);
+  assert.match(capabilityGovernanceView, /dataScopeText\(selectedCapability\?\.dataScopes, t\)/);
+  assert.match(capabilityGovernanceView, /translatedValue\(t, selectedCapability\.sensitivity\)/);
+  assert.match(capabilityGovernanceView, /translatedValue\(t, selectedCapability\.riskLevel\)/);
   assert.match(capabilityGovernanceView, /capability \? capabilityDisplayName\(capability, t\) : entitlement\.capabilityId/);
   assert.match(app, /tenants=\{tenants\}/);
+  assert.match(app, /normalizedTenantId === defaultManagementScope\.tenantId[\s\S]*text\.defaultTenantName/);
+  assert.match(app, /normalizedWorkspaceId === defaultManagementScope\.workspaceId[\s\S]*text\.defaultWorkspaceName/);
+  assert.match(workbench, /normalizedTenantId === "default"[\s\S]*text\.defaultTenantName/);
+  assert.match(workbench, /normalizedWorkspaceId === defaultWorkspaceId[\s\S]*text\.defaultWorkspaceName/);
   assert.match(capabilityGovernanceView, /tenants: Tenant\[\]/);
   assert.match(capabilityGovernanceView, /tenantNames\.get\(entitlement\.tenantId\) \?\? entitlement\.tenantId/);
   assert.doesNotMatch(capabilityGovernanceView, /\{entitlement\.tenantId\} · \{policyEffectLabel/);

@@ -9,6 +9,7 @@ import {
 import {
   capabilityDisplayName,
   capabilityDiscoveryStatusLabel,
+  capabilitySummaryText,
   capabilityStatusTone,
   dataScopeText,
   permissionEntityDisplayName,
@@ -213,7 +214,7 @@ export function CapabilityGovernanceView({
                     <tr key={capability.id}>
                       <td>
                         <strong>{capabilityDisplayName(capability, t)}</strong>
-                        <span>{dataScopeText(capability.dataScopes) || capability.description || capability.key}</span>
+                        <span>{capabilitySummaryText(capability, t)}</span>
                       </td>
                       <td>{agentNames[capability.targetId] ?? capability.targetId}</td>
                       <td><Badge tone={capability.action === "delete" || capability.action === "admin" ? "danger" : capability.action === "export" ? "warning" : "info"}>{translatedValue(t, capability.action)}</Badge></td>
@@ -284,9 +285,9 @@ export function CapabilityGovernanceView({
             <label>{t("form.subjectSelector")}<input placeholder={t("form.subjectSelectorPlaceholder")} value={form.subjectSelector} onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })} /></label>
           ) : null}
           <div className="capability-scope-strip">
-            <span>{selectedCapability?.sensitivity ?? t("text.sensitivity")}</span>
-            <span>{selectedCapability?.riskLevel ?? t("text.risk")}</span>
-            <span>{dataScopeText(selectedCapability?.dataScopes) || t("text.noDataScope")}</span>
+            <span>{selectedCapability ? translatedValue(t, selectedCapability.sensitivity) : t("text.sensitivity")}</span>
+            <span>{selectedCapability ? translatedValue(t, selectedCapability.riskLevel) : t("text.risk")}</span>
+            <span>{dataScopeText(selectedCapability?.dataScopes, t) || t("text.noDataScope")}</span>
           </div>
           <FormFooter
             message=""

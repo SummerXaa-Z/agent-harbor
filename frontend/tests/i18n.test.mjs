@@ -130,7 +130,9 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("text.technicalDetails"), "高级设置");
   assert.equal(t("text.tenantPath"), "租户层级");
   assert.equal(t("text.workspaceAlias"), "工作区名称");
-  assert.equal(t("text.unresolvedTenant"), "未匹配到租户名称");
+  assert.equal(t("text.defaultTenantName"), "集团总部");
+  assert.equal(t("text.defaultWorkspaceName"), "客户服务工作区");
+  assert.equal(t("text.unresolvedTenant"), "未选择租户");
   assert.equal(t("text.permissionRequestTaskTitle"), "权限变更配置");
   assert.equal(t("text.permissionRequestTaskBody"), "配置租户、调用方和权限包；审批通过后应用变更，并完成上线就绪检查。");
   assert.equal(t("text.permissionRequestStatusSummary"), "权限变更状态摘要");

@@ -76,6 +76,14 @@ export function capabilityKeyDisplayName(capabilityKey: string, t: Translator) {
   return t(`capability.${capabilityKey}.name`, readableIdentifierLabel(capabilityKey));
 }
 
+export function capabilitySummaryText(
+  capability: Pick<Capability, "dataScopes" | "description" | "key">,
+  t: Translator
+) {
+  return dataScopeText(capability.dataScopes, t)
+    || t(`capability.${capability.key}.summary`, capability.description || readableIdentifierLabel(capability.key));
+}
+
 export function permissionEntityDisplayName(value: string, t: Translator) {
   const normalized = value.trim();
   if (!normalized) return value;
@@ -85,6 +93,10 @@ export function permissionEntityDisplayName(value: string, t: Translator) {
     "Core Journey Project": t("demo.coreJourneyProject"),
     "Core Journey Root": t("demo.coreJourneyRoot"),
     "Core Journey Team": t("demo.coreJourneyTeam"),
+    "Default Business Unit": t("demo.permissionRequestApprovalTeam"),
+    "Default Tenant": t("text.defaultTenantName"),
+    "Default Workspace Team": t("demo.permissionRequestApprovalProject"),
+    "Operations Console Caller": t("demo.permissionRequestApprovalCaller"),
     "Permission Package Approval": t("demo.permissionRequestApproval"),
     "Permission Package Approval Root": t("demo.permissionRequestApprovalRoot"),
     "Permission Package Approval Team": t("demo.permissionRequestApprovalTeam"),
@@ -112,11 +124,12 @@ export function capabilityDiscoveryStatusLabel(status: Capability["discoveryStat
   return t("status.capabilityPendingReview");
 }
 
-export function dataScopeText(scopes?: DataScope[]) {
+export function dataScopeText(scopes?: DataScope[], t?: Translator) {
   if (!scopes || scopes.length === 0) return "";
   const labels = scopes
     .map((scope) =>
       [scope.dataDomain, scope.dataset, scope.schema, scope.table, scope.field, scope.classification]
+        .map((part) => (part && t ? t(`dataScope.${part}`, readableIdentifierLabel(part)) : part))
         .filter(Boolean)
         .join("/")
     )

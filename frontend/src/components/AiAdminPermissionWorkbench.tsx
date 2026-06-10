@@ -470,6 +470,11 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     : accessSubjectCatalog;
   const accessSubjectDropdownOptions = accessSubjectChoices.map((option) => accessSubjectDropdownOption(option, t));
   const liveDataBlocked = !liveDataAvailable;
+  const quickSecondaryActionLabel = goLiveReady
+    ? t("action.openAccessProfile")
+    : approvalJourneyRunning ? t("action.runningApprovalJourney") : t("action.runDemoPermissionRequest");
+  const quickSecondaryActionDisabled = permissionRequestBusy || (!goLiveReady && liveDataBlocked);
+  const runQuickSecondaryAction = goLiveReady ? onOpenAccessProfile : onRunApprovalJourney;
   const approvalDecisionConfirmation = pendingApprovalDecision ? (
     <div className="approval-decision-confirmation" role="group" aria-label={t("text.approvalDecisionConfirmTitle")}>
       <div>
@@ -550,9 +555,9 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               <CheckCircle2 size={14} />
               {t(journeyStatus.nextActionKey)}
             </button>
-            <button className="secondary-button" disabled={liveDataBlocked || permissionRequestBusy} onClick={onRunApprovalJourney} type="button">
-              <Workflow size={14} />
-              {approvalJourneyRunning ? t("action.runningApprovalJourney") : t("action.runDemoPermissionRequest")}
+            <button className="secondary-button" disabled={quickSecondaryActionDisabled} onClick={runQuickSecondaryAction} type="button">
+              {goLiveReady ? <FileSearch size={14} /> : <Workflow size={14} />}
+              {quickSecondaryActionLabel}
             </button>
           </div>
         </div>

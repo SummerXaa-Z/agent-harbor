@@ -249,6 +249,8 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /action\.startPermissionApproval/);
   assert.match(workbench, /onOpenAccessProfile/);
   assert.match(workbench, /onStartNewPermissionChange/);
+  assert.match(workbench, /const quickSecondaryActionLabel = goLiveReady/);
+  assert.match(workbench, /const runQuickSecondaryAction = goLiveReady \? onOpenAccessProfile : onRunApprovalJourney/);
   assert.match(app, /function openAiAdminAccessProfile\(\)/);
   assert.match(app, /setActiveNav\("access"\)/);
   assert.match(app, /function startNewAiAdminPermissionChange\(\)/);

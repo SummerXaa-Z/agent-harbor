@@ -412,3 +412,7 @@ Use the in-app browser at 390x844 and verify:
 - [x] **Step 4: Update tests and docs**
 
 Extend `frontend/tests/permissionFlowLayout.test.mjs` to lock the responsive cascade order, tablet two-column journey, mobile single-column strips, and removal of the approval-substatus badge from the journey header.
+
+- [x] **Step 5: Align completed quick actions**
+
+When `goLiveReady` is true, keep the primary action on evidence export and switch the header secondary action to Access Profile review. Browser verification confirmed the completed header reads `导出证据 / 查看权限画像` instead of sending users back to runtime validation.

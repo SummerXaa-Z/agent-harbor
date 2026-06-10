@@ -1044,13 +1044,19 @@ button {
   gap: 6px;
   min-height: var(--control-height-compact);
   padding: 0 var(--space-2);
-  border: 1px solid var(--danger-border);
+  border: 1px solid var(--line-muted);
   border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.table-action.is-danger {
+  border-color: var(--danger-border);
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
 }
 
 .table-action-group {

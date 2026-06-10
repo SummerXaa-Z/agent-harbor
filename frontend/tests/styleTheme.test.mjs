@@ -49,6 +49,7 @@ test("focus and button controls use the shared production interaction tokens", (
   assert.match(styles, /\.primary-button,\s*\n\.secondary-button\s*\{[^}]*min-height:\s*var\(--control-height\);/s);
   assert.match(styles, /\.primary-button,\s*\n\.secondary-button\s*\{[^}]*padding:\s*0 var\(--space-4\);/s);
   assert.match(styles, /\.table-action\s*\{[^}]*min-height:\s*var\(--control-height-compact\);/s);
+  assert.match(styles, /\.table-action\s*\{[^}]*background:\s*var\(--surface\);/s);
   assert.match(styles, /\.approval-action-button\s*\{[^}]*min-height:\s*var\(--control-height-compact\);/s);
   assert.deepEqual(bareScopedFocusSelectors, []);
 });
@@ -117,6 +118,13 @@ test("agent tools workspace prioritizes the registry before mutation forms", () 
   assert.ok(registryView.indexOf('{agentRegistryPanel("span-12")}') < registryView.indexOf("{createAgentPanel}"));
   assert.ok(registryView.indexOf("{createAgentPanel}") < registryView.indexOf("{createKeyPanel}"));
   assert.ok(registryView.indexOf("{createKeyPanel}") < registryView.indexOf("{rotateCredentialPanel}"));
+});
+
+test("table actions distinguish neutral state changes from destructive actions", () => {
+  assert.match(app, /className="table-action is-danger"[\s\S]*onClick=\{\(\) => onDisable\(policy\)\}/);
+  assert.match(app, /className="table-action"[\s\S]*onClick=\{\(\) => onStatusChange\(agent, agent\.status === "active" \? "draft" : "active"\)\}/);
+  assert.match(app, /className="table-action is-danger"[\s\S]*onClick=\{\(\) => onStatusChange\(agent, "disabled"\)\}/);
+  assert.match(styles, /\.table-action\.is-danger\s*\{[^}]*background:\s*var\(--danger-soft\);/s);
 });
 
 test("technical identifiers use a readable copyable component in dense workspaces", () => {

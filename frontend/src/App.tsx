@@ -3687,7 +3687,7 @@ function PolicyTable({
               <td>
                 {canDisable && policy.status === "enabled" ? (
                   <button
-                    className="table-action"
+                    className="table-action is-danger"
                     disabled={pendingActionId === policy.id}
                     onClick={() => onDisable(policy)}
                     type="button"
@@ -3764,7 +3764,7 @@ function AgentTable({
                       {pendingActionId === agent.id ? t("action.updating") : agent.status === "active" ? t("action.draft") : t("action.activate")}
                     </button>
                     <button
-                      className="table-action"
+                      className="table-action is-danger"
                       disabled={pendingActionId === agent.id}
                       onClick={() => onStatusChange(agent, "disabled")}
                       type="button"

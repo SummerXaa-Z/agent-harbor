@@ -1298,3 +1298,23 @@ pnpm --dir frontend build
 ```
 
 Browser verification on `http://127.0.0.1:5174/#access` found 3 empty states with icons and structured copy. The regular empty states rendered at `min-height: 128px`; the embedded permission-decision explanation kept its compact `min-height: 72px`.
+
+## Task 37: Separate Neutral And Destructive Table Actions
+
+- [x] **Step 1: Reduce destructive visual noise in dense tables**
+
+Shared `.table-action` buttons now default to a neutral surface treatment for ordinary state changes such as activating or moving an Agent back to draft. Destructive operations such as disabling a route policy or Agent opt into `.table-action.is-danger`.
+
+- [x] **Step 2: Add regression coverage**
+
+`frontend/tests/styleTheme.test.mjs` now asserts route-policy disable and Agent disable use `is-danger`, while Agent active/draft state changes remain neutral.
+
+- [x] **Step 3: Verify focused test and browser**
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/styleTheme.test.mjs
+```
+
+Browser verification on `http://127.0.0.1:5174/#registry` confirmed Agent table state-change buttons render as neutral white buttons and `禁用` renders with the danger treatment, both at the compact 30px control height.

@@ -40,6 +40,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web 控制台权限变更页现在把后端不可达时的兜底模式明确标记为“只读示例预览”，并用安全测试锁定审批、应用、验证和证据导出等写入入口必须先检查实时 API。
 - Web console Permission Changes now names the intermediate production gate "Status Check" while keeping "Go-Live Acceptance" for the final evidence handoff, so the main journey reads as configure, approve, apply, status check, and acceptance.
 - Web 控制台权限变更页现在将中间生产门禁命名为“状态检查”，将最终证据交接保留为“上线验收”，让主旅程清晰呈现为配置、审批、应用、状态检查和验收。
+- Web console Permission Changes now uses completed-state descriptions for finished approval, apply, runtime validation, and status-check steps instead of stale "waiting for next step" copy after the journey is already ready.
+- Web 控制台权限变更页现在对已完成的审批、应用、运行验证和状态检查步骤使用完成态描述，避免旅程已可上线后仍显示“等待下一步”的误导文案。
 - Web console Permission Changes now treats not-yet-requested and pending approvals as pending work instead of production blockers, puts the next safe action in the task header, and keeps the tenant access profile in the dedicated Access workspace.
 - Web 控制台权限变更页现在把未发起和待处理审批呈现为待处理事项而非生产阻断，在任务页头直接给出下一步安全动作，并将租户访问画像保留在独立的权限工作区。
 - Added an official MCP TypeScript SDK demo service under `scripts/real-mcp`, plus `make real-mcp`, so the local approval journey can run against a real Streamable HTTP MCP server.

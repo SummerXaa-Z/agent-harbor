@@ -135,10 +135,10 @@ test("permission request copy avoids repeated step labels", () => {
   assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.apply_done": "权限已应用。"/);
   assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.validation_ready": "运行证据已完整。"/);
   assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.acceptance_ready": "上线就绪检查已完成。"/);
-  assert.match(i18n, /"permissionWorkbench\.detail\.approval_approved": "已通过，等待应用。"/);
-  assert.match(i18n, /"permissionWorkbench\.detail\.apply_done": "已生效，等待验证。"/);
-  assert.match(i18n, /"permissionWorkbench\.detail\.validation_ready": "通过，等待状态检查。"/);
-  assert.match(i18n, /"permissionWorkbench\.detail\.acceptance_ready": "证据已完成。"/);
+  assert.match(i18n, /"permissionWorkbench\.detail\.approval_approved": "审批已满足。"/);
+  assert.match(i18n, /"permissionWorkbench\.detail\.apply_done": "权限已生效。"/);
+  assert.match(i18n, /"permissionWorkbench\.detail\.validation_ready": "运行验证已通过。"/);
+  assert.match(i18n, /"permissionWorkbench\.detail\.acceptance_ready": "状态检查已通过。"/);
   assert.match(i18n, /"section\.permissionWizardApproval": "审批处理"/);
   assert.match(i18n, /"section\.permissionWizardGoLive": "状态检查"/);
   assert.match(i18n, /"section\.goLiveAcceptance": "上线验收"/);

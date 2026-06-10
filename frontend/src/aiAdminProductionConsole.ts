@@ -55,11 +55,11 @@ export function buildAiAdminProductionConsoleSummary({
       key: "request",
       labelKey: "productionConsole.request",
       status: draft.readiness.canApply ? "ready" : "blocked",
-      detail: `${draft.input.tenantId} / ${draft.input.workspaceId}`,
-      detailKey: draft.policyGate.canApplyDirectly
-        ? "productionConsole.directApply"
-        : "productionConsole.approvalRequired",
-      metric: draft.input.subjectSelector || draft.input.callerInstanceId
+      detail: draft.template.id,
+      detailKey: draft.readiness.canApply
+        ? "productionConsole.requestConfigured"
+        : "productionConsole.requestNeedsInput",
+      metric: capabilitySummary(draft)
     },
     {
       key: "approval",
@@ -86,7 +86,7 @@ export function buildAiAdminProductionConsoleSummary({
       labelKey: "productionConsole.runtime",
       status: runtimeEvidenceCount === 2 ? "ready" : productionReadiness ? "blocked" : "pending",
       detail: productionReadiness ? `${runtimeEvidenceCount}/2` : "-",
-      detailKey: "productionConsole.runtimeEvidence",
+      detailKey: runtimeEvidenceCount === 2 ? "productionConsole.runtimeReady" : "productionConsole.runtimeEvidence",
       metric: `${runtimeEvidenceCount}/2`
     },
     {
@@ -94,7 +94,9 @@ export function buildAiAdminProductionConsoleSummary({
       labelKey: "productionConsole.productionReadiness",
       status: productionReadinessStatus(productionReadiness),
       detail: productionReadiness?.status ?? "-",
-      detailKey: productionReadiness ? `status.production${capitalizeProductionStatus(productionReadiness.status)}` : "productionConsole.productionPending",
+      detailKey: productionReadiness?.status === "ready"
+        ? "productionConsole.productionReady"
+        : productionReadiness ? `status.production${capitalizeProductionStatus(productionReadiness.status)}` : "productionConsole.productionPending",
       metric: productionReadiness ? `${productionReadiness.summary.readyCount}/${productionReadiness.checks.length}` : undefined
     }
   ];
@@ -120,6 +122,12 @@ function productionReadinessStatus(readiness: PermissionPackageProductionReadine
   if (readiness.status === "ready") return "ready";
   if (readiness.status === "needs_review") return "needs_review";
   return "blocked";
+}
+
+function capabilitySummary(draft: PermissionPackageDraft) {
+  const allowed = draft.allowedCapabilities[0]?.key ?? "0";
+  const blocked = draft.blockedCapabilities[0]?.key ?? "0";
+  return `${allowed} allowed / ${blocked} blocked`;
 }
 
 function overallStatus(steps: AiAdminProductionConsoleStep[]): AiAdminProductionConsoleStatus {

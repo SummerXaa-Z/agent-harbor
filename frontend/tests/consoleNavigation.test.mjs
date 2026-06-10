@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   defaultNavKey,
+  navGroups,
   navItems,
   viewForNav
 } from "../src/consoleNavigation.ts";
@@ -14,15 +15,31 @@ test("every primary navigation item resolves to a distinct workspace", () => {
   assert.deepEqual(viewKeys, [
     "ai-admin",
     "access",
-    "traces",
     "evidence",
+    "traces",
     "cockpit",
     "registry",
-    "routes",
+    "capabilities",
     "policies",
-    "capabilities"
+    "routes",
   ]);
   assert.equal(new Set(views.map((view) => view.primaryPanelKey)).size, views.length);
+});
+
+test("navigation is grouped by user task", () => {
+  assert.deepEqual(navGroups.map((group) => group.key), ["primary", "audit", "configuration"]);
+  assert.deepEqual(navItems.map((item) => item.groupKey), [
+    "primary",
+    "primary",
+    "primary",
+    "audit",
+    "audit",
+    "configuration",
+    "configuration",
+    "configuration",
+    "configuration"
+  ]);
+  assert.ok(navItems.every((item) => item.detailKey.startsWith("navDetail.")));
 });
 
 test("default navigation opens the permission package production journey", () => {

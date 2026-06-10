@@ -14,7 +14,7 @@ import type {
 
 export type PermissionPackageDecision = "allow" | "deny";
 export type PermissionPackagePolicyDecision = "allow" | "approval_required";
-export type PermissionPackageApprovalStatus = "pending" | "approved" | "rejected";
+export type PermissionPackageApprovalStatus = "pending" | "approved" | "rejected" | "withdrawn";
 
 export interface PermissionPackageTemplate {
   id: string;
@@ -200,9 +200,22 @@ export interface PermissionPackageProductionReadiness {
   accessProfile?: TenantAccessProfile;
   runtimeEvidence: PermissionPackageRuntimeEvidence;
   auditEvidence: PermissionPackageAuditEvidence;
+  nextActionCode?: PermissionPackageProductionNextActionCode;
   nextActions: string[];
   generatedAt: string;
 }
+
+export type PermissionPackageProductionNextActionCode =
+  | "resolve_preflight_blockers"
+  | "apply_permission_package"
+  | "review_application_scope"
+  | "review_application_health"
+  | "resolve_impact_blockers"
+  | "verify_access_profile"
+  | "run_allowed_runtime_call"
+  | "run_denied_runtime_call"
+  | "verify_applied_audit"
+  | "export_production_evidence";
 
 export interface PermissionPackageProductionReadinessSummary {
   readyCount: number;
@@ -239,6 +252,7 @@ export interface PermissionPackageProductionEvidenceReport {
   summary: PermissionPackageProductionReadinessSummary;
   checks: PermissionPackageProductionReadinessCheck[];
   evidence: PermissionPackageProductionEvidenceRefs;
+  nextActionCode?: PermissionPackageProductionNextActionCode;
   nextActions: string[];
   readinessGeneratedAt: string;
 }
@@ -286,6 +300,67 @@ export interface PermissionPackageProductionAuditEvidence {
 export interface PermissionPackageProductionEvidenceState {
   present: boolean;
   status?: string;
+}
+
+export type PermissionPackageWorkbenchStatus =
+  | "needs_input"
+  | "awaiting_approval"
+  | "ready_to_apply"
+  | "validating"
+  | "production_ready"
+  | "blocked";
+
+export type PermissionPackageWorkbenchActionCode =
+  | "complete_request"
+  | "create_approval_request"
+  | "review_approval_request"
+  | "apply_permission_package"
+  | "run_runtime_validation"
+  | "export_production_evidence";
+
+export type PermissionPackageWorkbenchStepKey =
+  | "request"
+  | "approval"
+  | "apply"
+  | "validation"
+  | "acceptance";
+
+export type PermissionPackageWorkbenchStepStatus = "complete" | "current" | "waiting" | "blocked";
+
+export interface PermissionPackageWorkbenchPreview {
+  draft: PermissionPackageDraft;
+  approvalRequest?: PermissionPackageApprovalRequest;
+  latestApplication?: PermissionPackageApplication;
+  productionReadiness?: PermissionPackageProductionReadiness;
+  summary: PermissionPackageWorkbenchSummary;
+  generatedAt: string;
+}
+
+export interface PermissionPackageWorkbenchSummary {
+  status: PermissionPackageWorkbenchStatus;
+  primaryActionCode: PermissionPackageWorkbenchActionCode;
+  nextActionCode?: PermissionPackageProductionNextActionCode;
+  approvalRequired: boolean;
+  canApply: boolean;
+  applied: boolean;
+  runtimeEvidenceReady: boolean;
+  productionReady: boolean;
+  allowedCapabilityCount: number;
+  blockedCapabilityCount: number;
+  plannedObjectCount: number;
+  readinessReadyCount: number;
+  readinessTotalCount: number;
+  blockingCount: number;
+  warningCount: number;
+  steps: PermissionPackageWorkbenchStep[];
+}
+
+export interface PermissionPackageWorkbenchStep {
+  key: PermissionPackageWorkbenchStepKey;
+  status: PermissionPackageWorkbenchStepStatus;
+  detailCode: string;
+  count?: number;
+  total?: number;
 }
 
 export interface PermissionPackageImpactRehearsal {
@@ -357,6 +432,7 @@ export interface PermissionPackageApprovalRequest {
   dataScopes?: DataScope[];
   allowedCapabilityIds: string[];
   allowedCapabilityKeys: string[];
+  allowedCapabilityFingerprints: string[];
   policyGate: PermissionPackagePolicyGate;
   status: PermissionPackageApprovalStatus;
   requestedBy?: string;
@@ -577,6 +653,9 @@ function buildReadiness(
   ]
     .filter(([, value]) => !value.trim())
     .map(([field]) => field);
+  if (!input.subjectSelector?.trim() || input.subjectSelector.trim() === "*") {
+    missingFields.push("subjectSelector");
+  }
   const warnings = allowedCapabilities.length === 0 ? ["No matching allowed capabilities for the selected target."] : [];
   return {
     canApply: missingFields.length === 0 && warnings.length === 0,
@@ -599,7 +678,7 @@ function buildPolicyGate(allowedCapabilities: Capability[]): PermissionPackagePo
   return {
     canApplyDirectly: false,
     decision: "approval_required",
-    nextActions: ["Request approval before applying this permission package."],
+    nextActions: ["Request approval before applying this permission request."],
     policyVersion: policyGateVersion,
     reasons,
   };

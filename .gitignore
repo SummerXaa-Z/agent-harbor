@@ -8,4 +8,5 @@ coverage.out
 .env
 .env.*
 !.env.example
+.claude/
 .DS_Store

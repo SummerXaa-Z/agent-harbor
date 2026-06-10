@@ -984,7 +984,7 @@ func (p *Postgres) ApplyPermissionPackage(ctx context.Context, mutation Permissi
 }
 
 func (p *Postgres) CreatePermissionPackageApprovalRequest(ctx context.Context, request domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, error) {
-	dataScopes, allowedCapabilityIDs, allowedCapabilityKeys, policyGate, err := marshalPermissionPackageApprovalRequestPayloads(request)
+	dataScopes, allowedCapabilityIDs, allowedCapabilityKeys, allowedCapabilityFingerprints, policyGate, err := marshalPermissionPackageApprovalRequestPayloads(request)
 	if err != nil {
 		return domain.PermissionPackageApprovalRequest{}, err
 	}
@@ -992,16 +992,18 @@ func (p *Postgres) CreatePermissionPackageApprovalRequest(ctx context.Context, r
 		insert into permission_package_approval_requests (
 			id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
 			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
-			allowed_capability_ids, allowed_capability_keys, policy_gate, status, requested_by,
+			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
+			policy_gate, status, requested_by,
 			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
 			consumed_at, consumed_by_application_id
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
 	`, request.ID, request.DraftID, request.TemplateID, request.TemplateVersion, request.PolicyVersion,
 		request.TenantID, request.WorkspaceID, request.TargetID, request.CallerInstanceID,
 		request.SubjectSelector, request.RequestText, request.Region, dataScopes, allowedCapabilityIDs,
-		allowedCapabilityKeys, policyGate, string(request.Status), request.RequestedBy, request.ReviewedBy,
-		request.ReviewComment, request.CreatedAt, request.UpdatedAt, nullTime(request.ResolvedAt),
-		request.ExpiresAt, nullTime(request.ConsumedAt), request.ConsumedByApplicationID)
+		allowedCapabilityKeys, allowedCapabilityFingerprints, policyGate, string(request.Status),
+		request.RequestedBy, request.ReviewedBy, request.ReviewComment, request.CreatedAt, request.UpdatedAt,
+		nullTime(request.ResolvedAt), request.ExpiresAt, nullTime(request.ConsumedAt),
+		request.ConsumedByApplicationID)
 	if err != nil {
 		return domain.PermissionPackageApprovalRequest{}, fmt.Errorf("insert permission package approval request: %w", err)
 	}
@@ -1012,7 +1014,8 @@ func (p *Postgres) ListPermissionPackageApprovalRequests(ctx context.Context, fi
 	query := `
 		select id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
 			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
-			allowed_capability_ids, allowed_capability_keys, policy_gate, status, requested_by,
+			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
+			policy_gate, status, requested_by,
 			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
 			consumed_at, consumed_by_application_id
 		from permission_package_approval_requests
@@ -1062,7 +1065,8 @@ func (p *Postgres) GetPermissionPackageApprovalRequest(ctx context.Context, id s
 	row := p.pool.QueryRow(ctx, `
 		select id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
 			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
-			allowed_capability_ids, allowed_capability_keys, policy_gate, status, requested_by,
+			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
+			policy_gate, status, requested_by,
 			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
 			consumed_at, consumed_by_application_id
 		from permission_package_approval_requests
@@ -1079,7 +1083,7 @@ func (p *Postgres) GetPermissionPackageApprovalRequest(ctx context.Context, id s
 }
 
 func (p *Postgres) UpdatePermissionPackageApprovalRequest(ctx context.Context, request domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, bool, error) {
-	dataScopes, allowedCapabilityIDs, allowedCapabilityKeys, policyGate, err := marshalPermissionPackageApprovalRequestPayloads(request)
+	dataScopes, allowedCapabilityIDs, allowedCapabilityKeys, allowedCapabilityFingerprints, policyGate, err := marshalPermissionPackageApprovalRequestPayloads(request)
 	if err != nil {
 		return domain.PermissionPackageApprovalRequest{}, false, err
 	}
@@ -1088,21 +1092,24 @@ func (p *Postgres) UpdatePermissionPackageApprovalRequest(ctx context.Context, r
 		set draft_id=$2, template_id=$3, template_version=$4, policy_version=$5, tenant_id=$6,
 			workspace_id=$7, target_agent_id=$8, caller_instance_id=$9, subject_selector=$10,
 			request_text=$11, region=$12, data_scopes=$13, allowed_capability_ids=$14,
-			allowed_capability_keys=$15, policy_gate=$16, status=$17, requested_by=$18,
-			reviewed_by=$19, review_comment=$20, created_at=$21, updated_at=$22, resolved_at=$23,
-			expires_at=$24, consumed_at=$25, consumed_by_application_id=$26
+			allowed_capability_keys=$15, allowed_capability_fingerprints=$16, policy_gate=$17,
+			status=$18, requested_by=$19, reviewed_by=$20, review_comment=$21, created_at=$22,
+			updated_at=$23, resolved_at=$24, expires_at=$25, consumed_at=$26,
+			consumed_by_application_id=$27
 		where id=$1
 		returning id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
 			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
-			allowed_capability_ids, allowed_capability_keys, policy_gate, status, requested_by,
+			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
+			policy_gate, status, requested_by,
 			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
 			consumed_at, consumed_by_application_id
 	`, request.ID, request.DraftID, request.TemplateID, request.TemplateVersion, request.PolicyVersion,
 		request.TenantID, request.WorkspaceID, request.TargetID, request.CallerInstanceID,
 		request.SubjectSelector, request.RequestText, request.Region, dataScopes, allowedCapabilityIDs,
-		allowedCapabilityKeys, policyGate, string(request.Status), request.RequestedBy, request.ReviewedBy,
-		request.ReviewComment, request.CreatedAt, request.UpdatedAt, nullTime(request.ResolvedAt),
-		request.ExpiresAt, nullTime(request.ConsumedAt), request.ConsumedByApplicationID)
+		allowedCapabilityKeys, allowedCapabilityFingerprints, policyGate, string(request.Status),
+		request.RequestedBy, request.ReviewedBy, request.ReviewComment, request.CreatedAt, request.UpdatedAt,
+		nullTime(request.ResolvedAt), request.ExpiresAt, nullTime(request.ConsumedAt),
+		request.ConsumedByApplicationID)
 	updated, err := scanPermissionPackageApprovalRequest(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.PermissionPackageApprovalRequest{}, false, nil
@@ -1123,7 +1130,8 @@ func (p *Postgres) consumePermissionPackageApprovalRequest(ctx context.Context, 
 			and expires_at > $2
 		returning id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
 			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
-			allowed_capability_ids, allowed_capability_keys, policy_gate, status, requested_by,
+			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
+			policy_gate, status, requested_by,
 			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
 			consumed_at, consumed_by_application_id
 	`, request.ID, nullTime(request.ConsumedAt), request.ConsumedByApplicationID, request.UpdatedAt,
@@ -2150,6 +2158,7 @@ func scanPermissionPackageApprovalRequest(row scanner) (domain.PermissionPackage
 	var dataScopes []byte
 	var allowedCapabilityIDs []byte
 	var allowedCapabilityKeys []byte
+	var allowedCapabilityFingerprints []byte
 	var policyGate []byte
 	var status string
 	var resolvedAt *time.Time
@@ -2158,7 +2167,7 @@ func scanPermissionPackageApprovalRequest(row scanner) (domain.PermissionPackage
 		&request.TemplateVersion, &request.PolicyVersion, &request.TenantID,
 		&request.WorkspaceID, &request.TargetID, &request.CallerInstanceID,
 		&request.SubjectSelector, &request.RequestText, &request.Region, &dataScopes,
-		&allowedCapabilityIDs, &allowedCapabilityKeys, &policyGate, &status,
+		&allowedCapabilityIDs, &allowedCapabilityKeys, &allowedCapabilityFingerprints, &policyGate, &status,
 		&request.RequestedBy, &request.ReviewedBy, &request.ReviewComment,
 		&request.CreatedAt, &request.UpdatedAt, &resolvedAt, &request.ExpiresAt,
 		&consumedAt, &request.ConsumedByApplicationID); err != nil {
@@ -2180,30 +2189,37 @@ func scanPermissionPackageApprovalRequest(row scanner) (domain.PermissionPackage
 	if err := unmarshalJSON(allowedCapabilityKeys, &request.AllowedCapabilityKeys, "permission package approval request capability keys"); err != nil {
 		return domain.PermissionPackageApprovalRequest{}, err
 	}
+	if err := unmarshalJSON(allowedCapabilityFingerprints, &request.AllowedCapabilityFingerprints, "permission package approval request capability fingerprints"); err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
+	}
 	if err := unmarshalJSON(policyGate, &request.PolicyGate, "permission package approval request policy gate"); err != nil {
 		return domain.PermissionPackageApprovalRequest{}, err
 	}
 	return request, nil
 }
 
-func marshalPermissionPackageApprovalRequestPayloads(request domain.PermissionPackageApprovalRequest) ([]byte, []byte, []byte, []byte, error) {
+func marshalPermissionPackageApprovalRequestPayloads(request domain.PermissionPackageApprovalRequest) ([]byte, []byte, []byte, []byte, []byte, error) {
 	dataScopes, err := json.Marshal(request.DataScopes)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("marshal permission package approval request data scopes: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("marshal permission package approval request data scopes: %w", err)
 	}
 	allowedCapabilityIDs, err := json.Marshal(request.AllowedCapabilityIDs)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("marshal permission package approval request capability ids: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("marshal permission package approval request capability ids: %w", err)
 	}
 	allowedCapabilityKeys, err := json.Marshal(request.AllowedCapabilityKeys)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("marshal permission package approval request capability keys: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("marshal permission package approval request capability keys: %w", err)
+	}
+	allowedCapabilityFingerprints, err := json.Marshal(request.AllowedCapabilityFingerprints)
+	if err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("marshal permission package approval request capability fingerprints: %w", err)
 	}
 	policyGate, err := json.Marshal(request.PolicyGate)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("marshal permission package approval request policy gate: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("marshal permission package approval request policy gate: %w", err)
 	}
-	return dataScopes, allowedCapabilityIDs, allowedCapabilityKeys, policyGate, nil
+	return dataScopes, allowedCapabilityIDs, allowedCapabilityKeys, allowedCapabilityFingerprints, policyGate, nil
 }
 
 func scanRoutePolicies(rows pgx.Rows) ([]domain.RoutePolicy, error) {

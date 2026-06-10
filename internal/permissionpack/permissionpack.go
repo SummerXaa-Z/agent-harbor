@@ -213,12 +213,16 @@ func buildReadiness(input domain.PermissionPackageDraftRequest, allowedCapabilit
 		{name: "tenantId", value: input.TenantID},
 		{name: "workspaceId", value: input.WorkspaceID},
 		{name: "callerInstanceId", value: input.CallerInstanceID},
+		{name: "subjectSelector", value: input.SubjectSelector},
 		{name: "targetId", value: input.TargetID},
 		{name: "templateId", value: input.TemplateID},
 	} {
 		if field.value == "" {
 			missingFields = append(missingFields, field.name)
 		}
+	}
+	if input.SubjectSelector == "*" {
+		missingFields = append(missingFields, "subjectSelector")
 	}
 	warnings := []string{}
 	if len(allowedCapabilities) == 0 {
@@ -301,7 +305,7 @@ func buildPolicyGate(allowedCapabilities []domain.Capability) domain.PermissionP
 	if len(reasons) > 0 {
 		gate.Decision = domain.PermissionPackagePolicyDecisionApprovalRequired
 		gate.CanApplyDirectly = false
-		gate.NextActions = []string{"Request approval before applying this permission package."}
+		gate.NextActions = []string{"Request approval before applying this permission request."}
 	}
 	return gate
 }

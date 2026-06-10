@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -9,6 +10,20 @@ import {
   permissionPackageProductionEvidenceReportPath,
   permissionPackageProductionReadinessPath
 } from "../src/apiPaths.ts";
+
+const apiSource = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
+
+test("permission package workbench preview posts the request body instead of query text", () => {
+  assert.match(apiSource, /function previewPermissionPackageWorkbench\(/);
+  assert.match(apiSource, /\/api\/v1\/permission-packages\/workbench:preview/);
+  assert.match(apiSource, /body,\s*[\r\n\s]*signal/s);
+  assert.doesNotMatch(apiSource, /workbench:preview\$\{query\}/);
+});
+
+test("permission package access subjects load from the management API", () => {
+  assert.match(apiSource, /function fetchPermissionPackageAccessSubjects\(/);
+  assert.match(apiSource, /\/api\/v1\/permission-packages\/access-subjects/);
+});
 
 test("permissionPackageApprovalRequestsPath includes reviewer routing query", () => {
   const path = permissionPackageApprovalRequestsPath({
@@ -26,6 +41,12 @@ test("permissionPackageApprovalRequestsPath includes reviewer routing query", ()
   assert.equal(url.searchParams.get("limit"), "20");
   assert.equal(url.searchParams.get("tenantId"), "tenant-east");
   assert.equal(url.searchParams.get("workspaceId"), "ws-support");
+});
+
+test("permission package approval request API exposes withdraw endpoint", () => {
+  assert.match(apiSource, /function withdrawPermissionPackageApprovalRequest\(/);
+  assert.match(apiSource, /permission-packages\/approval-requests\/\$\{encodeURIComponent\(id\)\}\/withdraw/);
+  assert.match(apiSource, /body: \{ comment\?: string \}/);
 });
 
 test("accessDecisionExplainPath includes effective permission scope query", () => {

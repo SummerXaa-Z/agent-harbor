@@ -328,7 +328,7 @@ export interface InstanceAssignment {
 export interface CreateInstanceAssignmentRequest {
   workspaceAssignmentId: string
   callerInstanceId: string
-  subjectSelector?: string
+  subjectSelector: string
   effect?: RoutePolicyEffect
   dataScopes?: DataScope[]
   status?: RoutePolicyStatus
@@ -363,6 +363,7 @@ export interface CatalogData {
 }
 
 export interface ConsoleData {
+  tenants: Tenant[]
   providers: ProviderContract[]
   channels: ChannelContract[]
   agents: Agent[]

@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   createAiAdminApprovalJourneyConfig,
-  evaluateAiAdminApprovalJourney
+  evaluateAiAdminApprovalJourney,
+  summarizeAiAdminGoLiveReadiness
 } from "../src/aiAdminApprovalJourney.ts";
 
 const now = "2026-06-05T09:00:00Z";
@@ -37,6 +38,11 @@ test("evaluateAiAdminApprovalJourney reports missing evidence before the live ru
   assert.equal(evaluation.totalCount, 8);
   assert.equal(evaluation.completeCount, 0);
   assert.deepEqual(new Set(evaluation.steps.map((step) => step.status)), new Set(["missing"]));
+
+  const readiness = summarizeAiAdminGoLiveReadiness(evaluation);
+  assert.equal(readiness.status, "waiting");
+  assert.equal(readiness.remainingCount, 8);
+  assert.equal(readiness.nextStep?.key, "tenantTree");
 });
 
 test("evaluateAiAdminApprovalJourney completes with approval, runtime, profile, and audit evidence", () => {
@@ -200,6 +206,11 @@ test("evaluateAiAdminApprovalJourney completes with approval, runtime, profile, 
   assert.equal(evaluation.readCapability?.id, readCapability.id);
   assert.equal(evaluation.writeCapability?.id, writeCapability.id);
   assert.equal(evaluation.deniedCapability?.id, deniedCapability.id);
+
+  const readiness = summarizeAiAdminGoLiveReadiness(evaluation);
+  assert.equal(readiness.status, "ready");
+  assert.equal(readiness.remainingCount, 0);
+  assert.equal(readiness.nextStep, undefined);
 });
 
 function agent(overrides) {

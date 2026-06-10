@@ -12,6 +12,7 @@ MOCK_MCP_HOST="${MOCK_MCP_HOST:-127.0.0.1}"
 MOCK_MCP_PORT="${MOCK_MCP_PORT:-8787}"
 MCP_ENDPOINT="${MCP_ENDPOINT:-http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/mcp}"
 START_MOCK_MCP="${START_MOCK_MCP:-true}"
+MCP_SERVER_MODE="${MCP_SERVER_MODE:-mock}"
 READ_TOOL="${READ_TOOL:-search_customer}"
 WRITE_TOOL="${WRITE_TOOL:-update_ticket}"
 DENIED_TOOL="${DENIED_TOOL:-export_contracts}"
@@ -98,7 +99,7 @@ expect_status() {
     echo "$HTTP_BODY" >&2
     if [[ "$HTTP_BODY" == *"endpoint host is not allowed"* ]]; then
       echo >&2
-      echo "local MCP endpoints require: AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run" >&2
+      echo "local MCP endpoints require: AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run" >&2
     fi
     exit 1
   fi
@@ -449,16 +450,17 @@ PY
 
 assert_listed_approval() {
   local expected_id="$1"
-  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_id" <<'PY'
+  local expected_status="${2:-pending}"
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_id" "$expected_status" <<'PY'
 import json
 import os
 import sys
 
 rows = json.loads(os.environ["RESPONSE_BODY"])["data"]
-expected_id = sys.argv[1]
+expected_id, expected_status = sys.argv[1:3]
 if not rows:
     raise SystemExit("expected one listed approval request")
-if rows[0]["id"] != expected_id or rows[0]["status"] != "pending":
+if rows[0]["id"] != expected_id or rows[0]["status"] != expected_status:
     raise SystemExit(f"unexpected listed approval request: {rows[:1]}")
 print("approval request list verified")
 PY
@@ -837,24 +839,39 @@ print("permission package approval audit evidence verified")
 PY
 }
 
-start_mock_mcp() {
+start_mcp_server() {
   if [[ "$START_MOCK_MCP" != "true" ]]; then
     return
   fi
   if curl -fsS "http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/healthz" >/dev/null 2>&1; then
-    echo "mock MCP server already running on ${MOCK_MCP_HOST}:${MOCK_MCP_PORT}"
+    echo "MCP server already running on ${MOCK_MCP_HOST}:${MOCK_MCP_PORT}"
     return
   fi
-  scripts/mock-mcp-server.py --host "$MOCK_MCP_HOST" --port "$MOCK_MCP_PORT" &
-  MOCK_MCP_PID="$!"
+  case "$MCP_SERVER_MODE" in
+    mock)
+      scripts/mock-mcp-server.py --host "$MOCK_MCP_HOST" --port "$MOCK_MCP_PORT" &
+      MOCK_MCP_PID="$!"
+      ;;
+    real)
+      need node
+      need pnpm
+      pnpm --dir scripts/real-mcp install --frozen-lockfile >/dev/null
+      (cd scripts/real-mcp && REAL_MCP_HOST="$MOCK_MCP_HOST" REAL_MCP_PORT="$MOCK_MCP_PORT" node server.mjs) &
+      MOCK_MCP_PID="$!"
+      ;;
+    *)
+      echo "MCP_SERVER_MODE must be mock or real" >&2
+      exit 1
+      ;;
+  esac
   for _ in $(seq 1 30); do
     if curl -fsS "http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/healthz" >/dev/null 2>&1; then
-      echo "started mock MCP server on ${MCP_ENDPOINT}"
+      echo "started ${MCP_SERVER_MODE} MCP server on ${MCP_ENDPOINT}"
       return
     fi
     sleep 0.2
   done
-  echo "mock MCP server did not become ready" >&2
+  echo "MCP server did not become ready" >&2
   exit 1
 }
 
@@ -864,6 +881,7 @@ need python3
 echo "AgentHarbor permission package approval scenario"
 echo "BASE_URL=$BASE_URL"
 echo "MCP_ENDPOINT=$MCP_ENDPOINT"
+echo "MCP_SERVER_MODE=$MCP_SERVER_MODE"
 echo "RUN_ID=$RUN_ID"
 echo "SUBJECT_ID=$SUBJECT_ID"
 if [[ -n "$ADMIN_KEY" ]]; then
@@ -872,7 +890,7 @@ else
   echo "ADMIN_KEY=not set"
 fi
 
-start_mock_mcp
+start_mcp_server
 
 request GET "/healthz"
 expect_status 200 "AgentHarbor health check"
@@ -916,6 +934,24 @@ assert_permission_package_preflight "false" "approval_request_missing"
 request POST "/api/v1/permission-packages:apply" "$(permission_package_body)"
 expect_status 400 "reject approval-required package without approval"
 echo "direct apply without approval rejected"
+
+request POST "/api/v1/permission-packages/approval-requests" "$(permission_package_body)"
+expect_status 201 "create withdrawable approval request"
+assert_approval_request "pending"
+WITHDRAWN_APPROVAL_REQUEST_ID="$(json_get data.id)"
+
+request POST "/api/v1/permission-packages/approval-requests/$WITHDRAWN_APPROVAL_REQUEST_ID/withdraw" "$(json_body approval-resolution "requester" "wrong scope for this request")"
+expect_status 200 "withdraw pending approval request"
+assert_approval_request "withdrawn" "$WITHDRAWN_APPROVAL_REQUEST_ID"
+
+request GET "/api/v1/permission-packages/approval-requests?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID&templateId=$TEMPLATE_ID&targetId=$TARGET_ID&callerInstanceId=$CALLER_ID&status=withdrawn&limit=1"
+expect_status 200 "list withdrawn approval request"
+assert_listed_approval "$WITHDRAWN_APPROVAL_REQUEST_ID" "withdrawn"
+
+request POST "/api/v1/permission-packages:apply" "$(permission_package_body "$WITHDRAWN_APPROVAL_REQUEST_ID")"
+expect_status 400 "reject withdrawn approval request"
+assert_body_contains "approved" "withdrawn approval apply"
+echo "withdrawn approval request cannot authorize apply"
 
 request POST "/api/v1/permission-packages/approval-requests" "$(permission_package_body)"
 expect_status 201 "create approval request"

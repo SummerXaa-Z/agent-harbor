@@ -93,6 +93,9 @@ test("production console summary stays pending before approval and application e
   assert.equal(summary.readyCount, 1);
   assert.equal(summary.totalCount, 5);
   assert.equal(summary.primaryActionKey, "action.createApprovalRequest");
+  assert.equal(summary.steps[0].detailKey, "productionConsole.requestConfigured");
+  assert.equal(summary.steps[0].detail, "support-ticket-triage");
+  assert.equal(summary.steps[0].metric, "search_customer allowed / export_contracts blocked");
   assert.deepEqual(
     summary.steps.map((step) => [step.key, step.status]),
     [
@@ -103,7 +106,6 @@ test("production console summary stays pending before approval and application e
       ["production", "pending"]
     ]
   );
-  assert.equal(summary.steps[0].detail, "tenant-east / ws-support");
 });
 
 test("production console summary reports ready after approval application and runtime evidence", () => {
@@ -147,6 +149,8 @@ test("production console summary reports ready after approval application and ru
   ]);
   assert.equal(summary.steps.find((step) => step.key === "application")?.detail, "app-1");
   assert.equal(summary.steps.find((step) => step.key === "runtime")?.metric, "2/2");
+  assert.equal(summary.steps.find((step) => step.key === "runtime")?.detailKey, "productionConsole.runtimeReady");
+  assert.equal(summary.steps.find((step) => step.key === "production")?.detailKey, "productionConsole.productionReady");
 });
 
 test("production console summary treats direct apply packages as approval ready", () => {

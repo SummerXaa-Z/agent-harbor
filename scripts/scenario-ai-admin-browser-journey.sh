@@ -10,6 +10,7 @@ FRONTEND_PORT="${AGENT_HARBOR_BROWSER_GATE_FRONTEND_PORT:-5174}"
 FRONTEND_ORIGIN="${FRONTEND_ORIGIN:-http://${FRONTEND_HOST}:${FRONTEND_PORT}}"
 MOCK_MCP_HOST="${MOCK_MCP_HOST:-127.0.0.1}"
 MOCK_MCP_PORT="${MOCK_MCP_PORT:-8787}"
+MCP_SERVER_MODE="${AGENT_HARBOR_BROWSER_GATE_MCP_MODE:-real}"
 RUN_ID="${RUN_ID:-ai-admin-browser-journey-$(date +%Y%m%d%H%M%S)}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -119,11 +120,12 @@ verify_subject_header_cors() {
 
 need curl
 need go
+need node
 need pnpm
 need python3
 
 assert_port_free "API" "$API_PORT"
-assert_port_free "mock MCP" "$MOCK_MCP_PORT"
+assert_port_free "MCP" "$MOCK_MCP_PORT"
 assert_port_free "frontend" "$FRONTEND_PORT"
 
 mkdir -p "$LOG_DIR"
@@ -132,20 +134,33 @@ cd "$ROOT_DIR"
 echo "AgentHarbor AI Admin browser journey gate"
 echo "BASE_URL=$BASE_URL"
 echo "FRONTEND_ORIGIN=$FRONTEND_ORIGIN"
-echo "MOCK_MCP=http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/mcp"
+echo "MCP=http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/mcp (${MCP_SERVER_MODE})"
 echo "RUN_ID=$RUN_ID"
 
 AGENT_HARBOR_ADDR="$API_ADDR" AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true AGENT_HARBOR_CORS_ORIGINS="$FRONTEND_ORIGIN" go run ./cmd/agent-harbor > "$LOG_DIR/api.log" 2>&1 &
 PIDS+=("$!")
 
-scripts/mock-mcp-server.py --host "$MOCK_MCP_HOST" --port "$MOCK_MCP_PORT" > "$LOG_DIR/mock-mcp.log" 2>&1 &
-PIDS+=("$!")
+case "$MCP_SERVER_MODE" in
+  real)
+    pnpm --dir scripts/real-mcp install --frozen-lockfile >/dev/null
+    (cd scripts/real-mcp && REAL_MCP_HOST="$MOCK_MCP_HOST" REAL_MCP_PORT="$MOCK_MCP_PORT" node server.mjs) > "$LOG_DIR/mcp.log" 2>&1 &
+    PIDS+=("$!")
+    ;;
+  mock)
+    scripts/mock-mcp-server.py --host "$MOCK_MCP_HOST" --port "$MOCK_MCP_PORT" > "$LOG_DIR/mcp.log" 2>&1 &
+    PIDS+=("$!")
+    ;;
+  *)
+    echo "AGENT_HARBOR_BROWSER_GATE_MCP_MODE must be real or mock" >&2
+    exit 1
+    ;;
+esac
 
 VITE_API_BASE="$BASE_URL" pnpm --dir frontend dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort > "$LOG_DIR/frontend.log" 2>&1 &
 PIDS+=("$!")
 
 wait_http "API" "$BASE_URL/healthz"
-wait_http "Mock MCP" "http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/healthz"
+wait_http "MCP" "http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/healthz"
 wait_http "Web console" "$FRONTEND_ORIGIN/"
 
 if ! curl -fsS "$FRONTEND_ORIGIN/" | grep -q 'id="root"'; then
@@ -159,6 +174,7 @@ verify_subject_header_cors
 START_MOCK_MCP=false \
   BASE_URL="$BASE_URL" \
   RUN_ID="$RUN_ID" \
+  MCP_SERVER_MODE="$MCP_SERVER_MODE" \
   MOCK_MCP_HOST="$MOCK_MCP_HOST" \
   MOCK_MCP_PORT="$MOCK_MCP_PORT" \
   bash scripts/scenario-permission-package-approval.sh

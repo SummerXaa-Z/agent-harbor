@@ -8,6 +8,7 @@ FRONTEND_HOST="${AGENT_HARBOR_DEMO_FRONTEND_HOST:-127.0.0.1}"
 FRONTEND_PORT="${AGENT_HARBOR_DEMO_FRONTEND_PORT:-5174}"
 MOCK_MCP_HOST="${MOCK_MCP_HOST:-127.0.0.1}"
 MOCK_MCP_PORT="${MOCK_MCP_PORT:-8787}"
+MCP_SERVER_MODE="${AGENT_HARBOR_DEMO_MCP_MODE:-real}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 PIDS=()
@@ -111,26 +112,40 @@ supervise() {
 }
 
 need go
+need node
 need python3
 need pnpm
 
 assert_port_free "API" "$API_PORT"
-assert_port_free "mock MCP" "$MOCK_MCP_PORT"
+assert_port_free "MCP" "$MOCK_MCP_PORT"
 assert_port_free "frontend" "$FRONTEND_PORT"
 
 cd "$ROOT_DIR"
 
 echo "Starting AgentHarbor demo..."
 echo "API:       http://${API_URL_HOST}:${API_PORT}"
-echo "mock MCP:  http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/mcp"
+echo "MCP:       http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/mcp (${MCP_SERVER_MODE})"
 echo "console:   http://${FRONTEND_HOST}:${FRONTEND_PORT}"
 echo
 
-AGENT_HARBOR_ADDR="$API_ADDR" AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true go run ./cmd/agent-harbor &
+AGENT_HARBOR_ADDR="$API_ADDR" AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true go run ./cmd/agent-harbor &
 PIDS+=("$!")
 
-scripts/mock-mcp-server.py --host "$MOCK_MCP_HOST" --port "$MOCK_MCP_PORT" &
-PIDS+=("$!")
+case "$MCP_SERVER_MODE" in
+  real)
+    pnpm --dir scripts/real-mcp install --frozen-lockfile >/dev/null
+    (cd scripts/real-mcp && REAL_MCP_HOST="$MOCK_MCP_HOST" REAL_MCP_PORT="$MOCK_MCP_PORT" node server.mjs) &
+    PIDS+=("$!")
+    ;;
+  mock)
+    scripts/mock-mcp-server.py --host "$MOCK_MCP_HOST" --port "$MOCK_MCP_PORT" &
+    PIDS+=("$!")
+    ;;
+  *)
+    echo "AGENT_HARBOR_DEMO_MCP_MODE must be real or mock" >&2
+    exit 1
+    ;;
+esac
 
 pnpm --dir frontend dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort &
 PIDS+=("$!")

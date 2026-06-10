@@ -54,6 +54,23 @@ test("summarizeDataScopes produces compact data-scope labels", () => {
   assert.equal(summarizeDataScopes([], "empty"), "empty");
 });
 
+test("summarizeDataScopes can render business-readable data-scope labels", () => {
+  assert.equal(
+    summarizeDataScopes([
+      { dataDomain: "support", dataset: "tickets", classification: "confidential", region: "华东" },
+      { dataDomain: "contracts", dataset: "contract_packages", classification: "restricted" }
+    ], "empty", {
+      contracts: "合同",
+      confidential: "机密",
+      contract_packages: "合同包",
+      restricted: "受限",
+      support: "客服",
+      tickets: "工单"
+    }),
+    "客服/工单/机密/华东, 合同/合同包/受限"
+  );
+});
+
 test("scopeStatusTone highlights invalid scope rows", () => {
   assert.equal(scopeStatusTone("valid"), "success");
   assert.equal(scopeStatusTone("invalid"), "danger");

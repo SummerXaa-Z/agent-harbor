@@ -28,7 +28,7 @@ This covers:
 - scenario script syntax checks via `make scenario-scripts-lint`
 - GitHub YAML configuration parse checks via `make github-config-lint`
 
-The production safety baseline starts a local memory-backed API with `AGENT_HARBOR_ADMIN_KEY` set and private upstreams disabled. It must prove that health remains public, management APIs reject missing or wrong admin keys, permission-package and management MCP endpoints use the same admin-key protection, loopback/private MCP upstreams are rejected by default, and public HTTPS MCP targets remain registrable.
+The production safety baseline starts a local memory-backed API with `AGENT_HARBOR_ADMIN_KEY` set and private upstreams disabled. It must prove that health remains public, management APIs reject missing or wrong admin keys, management routes fail closed when no admin authentication is configured, permission-package and management MCP endpoints use the same admin-key protection, loopback/private MCP upstreams are rejected by default, and public HTTPS MCP targets remain registrable.
 
 Run PostgreSQL integration when the change touches persistence, migrations, audit behavior, credential storage, route policies, or CI database wiring:
 
@@ -43,7 +43,7 @@ Run end-to-end scenarios when user-visible control-plane or data-plane behavior 
 ADMIN_KEY=local-admin-key make scenario-all
 ```
 
-For web console changes, run `make demo` and manually verify that the console opens on Permission Packages, the approval acceptance path is visible, and runtime checks are ready. Also verify the Self-Check workspace core permission loop can run against the local mock MCP server, and the non-destructive reset returns that self-check session to its default scope. Confirm the tenant access journey remains usable in both English and Simplified Chinese, including the language toggle, Tenant Permission Console, capability governance entry point, runtime evidence metrics, and trace evidence labels.
+For web console changes, run `make demo` and manually verify that the console opens directly on Permission Changes, the separate product-message card and old card-board UI are absent, the five-step approval and readiness path is visible, the current step is marked, advanced checks are collapsed by default, the main request form uses readable tenant/caller/target/access object choices, raw subject selectors stay in Advanced settings, and runtime checks are ready against the official SDK MCP demo service. Also verify the Self-Check workspace core permission loop can run against the local MCP service, and the non-destructive reset returns that self-check session to its default scope. Confirm the tenant access journey remains usable in both English and Simplified Chinese, including the language toggle, Tenant Permission Console, capability governance entry point, runtime evidence metrics, and trace evidence labels.
 
 For release-candidate validation of the browser-facing AI Admin path, run:
 
@@ -51,7 +51,7 @@ For release-candidate validation of the browser-facing AI Admin path, run:
 make ai-admin-browser-journey
 ```
 
-This gate starts the API, Mock MCP, and web console, verifies browser CORS allows `X-AgentHarbor-Subject-Id`, and then runs the approval-required permission package journey against those services.
+This gate starts the API, official SDK MCP demo service, and web console, verifies browser CORS allows `X-AgentHarbor-Subject-Id`, and then runs the approval-required permission package journey against those services.
 
 If the default local ports are already in use, run the same gate with isolated ports:
 
@@ -67,8 +67,8 @@ MOCK_MCP_PORT=18787 \
 Before declaring v0.2.0 permission-package work or a permission-package release candidate ready, also run the approval-required journey against a local API with private upstreams enabled:
 
 ```bash
-AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
-make scenario-permission-package-approval
+AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
+MCP_SERVER_MODE=real make scenario-permission-package-approval
 ```
 
 This scenario must prove draft, approval request, approval expiry metadata, approved apply, atomic one-time approval consumption, consumed-approval reuse rejection, runtime allow/deny, tenant access-profile, permission package application, and applied audit evidence.

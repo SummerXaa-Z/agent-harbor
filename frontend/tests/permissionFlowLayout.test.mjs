@@ -1,0 +1,301 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const i18n = readFileSync(new URL("../src/i18n.ts", import.meta.url), "utf8");
+const baseStyles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+const workbenchStyles = readFileSync(new URL("../src/styles/permission-workbench.css", import.meta.url), "utf8");
+const styles = `${baseStyles}\n${workbenchStyles}`;
+const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
+const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
+const accessProfileView = readFileSync(new URL("../src/components/TenantAccessProfileView.tsx", import.meta.url), "utf8");
+const capabilityGovernanceView = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
+const presenters = readFileSync(new URL("../src/consolePresenters.ts", import.meta.url), "utf8");
+
+test("permission request journey renders as one production workspace instead of a demo board", () => {
+  assert.match(workbench, /export function AiAdminPermissionWorkbench\(props/);
+  assert.match(workbench, /className=\{`approval-studio status-\$\{productionSummary\.status\}`\}/);
+  assert.match(workbench, /className="approval-header"/);
+  assert.match(workbench, /className="approval-context-bar"/);
+  assert.match(workbench, /className="approval-overview"/);
+  assert.match(workbench, /className="approval-flow-layout"/);
+  assert.match(workbench, /className="approval-request-panel"/);
+  assert.match(workbench, /className="approval-process-panel"/);
+  assert.match(styles, /\.approval-studio\s*\{[^}]*grid-column:\s*span 12;/s);
+  assert.match(styles, /\.approval-overview\s*\{[^}]*grid-template-columns:\s*minmax\(260px,\s*0\.8fr\)\s*minmax\(0,\s*1\.5fr\);/s);
+  assert.match(styles, /\.approval-overview-metrics\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/s);
+  assert.match(styles, /\.approval-flow-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(340px,\s*400px\);/s);
+  assert.match(styles, /\.approval-context-bar\s*\{[^}]*position:\s*sticky;/s);
+  assert.equal(styles.includes("counter-reset: approval-section"), false);
+  assert.equal(styles.includes(".approval-section::before"), false);
+});
+
+test("permission request workspace does not render the removed product-message UI", () => {
+  assert.equal(app.includes("function ProductKeyMessage"), false);
+  assert.equal(app.includes("function AiAdminPermissionWorkbenchLegacy"), false);
+  assert.equal(app.includes("cockpit-key-message"), false);
+  assert.equal(styles.includes(".cockpit-key-message"), false);
+  assert.equal(styles.includes(".permission-wizard-card"), false);
+  assert.equal(workbench.includes("approval-status-strip"), false);
+  assert.equal(workbench.includes("approval-progress"), false);
+  assert.equal(workbench.includes("approval-sidebar"), false);
+  assert.equal(workbench.includes("ops-"), false);
+  assert.equal(styles.includes(".ops-"), false);
+});
+
+test("permission request journey separates approval and apply into ordered steps", () => {
+  const orderedKeys = [
+    "permissionWorkbench.step.request",
+    "permissionWorkbench.step.approval",
+    "permissionWorkbench.step.apply",
+    "permissionWorkbench.step.validation",
+    "permissionWorkbench.step.acceptance",
+  ];
+  let previousIndex = -1;
+  for (const key of orderedKeys) {
+    const nextIndex = i18n.indexOf(key);
+    assert.ok(nextIndex > previousIndex, `${key} should appear after the previous step`);
+    previousIndex = nextIndex;
+  }
+  assert.equal(workbench.includes("section.permissionWizardApprovalApply"), false);
+});
+
+test("permission request journey exposes the active step for production operators", () => {
+  assert.match(workbench, /currentPermissionRequestWizardStep\(/);
+  assert.match(workbench, /aria-current=\{step\.status === "current" \? "step" : undefined\}/);
+  assert.match(workbench, /className=\{`approval-process-step status-\$\{step\.status\}`\}/);
+  assert.match(styles, /\.approval-process-step\.status-current\s*> span\s*\{/);
+  assert.match(styles, /\.approval-process-step\.status-complete\s*> span\s*\{/);
+});
+
+test("permission request evidence is secondary to the main operator task", () => {
+  const auditStart = workbench.indexOf('<details className="approval-evidence">');
+  assert.notEqual(auditStart, -1);
+  assert.ok(auditStart > workbench.indexOf('<aside className="approval-process-panel"'));
+  assert.match(workbench.slice(auditStart), /section\.aiAdminReadiness/);
+  assert.match(workbench.slice(auditStart), /section\.permissionProductionReadiness/);
+});
+
+test("permission request blocks main actions when sample fallback data is shown", () => {
+  assert.match(workbench, /liveDataAvailable: boolean/);
+  assert.match(workbench, /const liveDataBlocked = !liveDataAvailable/);
+  assert.match(workbench, /className="approval-live-warning"/);
+  assert.match(workbench, /message\.fallbackDataModeTitle/);
+  assert.match(workbench, /message\.fallbackDataModeDetail/);
+  assert.match(workbench, /const permissionRequestBusy =/);
+  assert.match(workbench, /disabled=\{liveDataBlocked \|\| permissionRequestBusy/);
+  assert.match(workbench, /disabled=\{liveDataBlocked \|\| permissionRequestBusy \|\| !canApply\}/);
+  assert.match(styles, /\.approval-live-warning\s*\{/);
+});
+
+test("permission request approval decisions show reviewer context before resolving", () => {
+  assert.match(workbench, /useState/);
+  assert.match(workbench, /pendingApprovalDecision/);
+  assert.match(workbench, /beginApprovalDecision\("approve"/);
+  assert.match(workbench, /beginApprovalDecision\("reject"/);
+  assert.match(workbench, /className="approval-reviewer-context"/);
+  assert.match(workbench, /text\.approvalReviewerIdentity/);
+  assert.match(workbench, /text\.approvalReviewerSeparationDetail/);
+  assert.match(workbench, /className="approval-decision-confirmation"/);
+  assert.match(workbench, /action\.confirmApprovePermissionRequest/);
+  assert.match(workbench, /action\.cancelApprovalDecision/);
+  assert.doesNotMatch(workbench, /onClick=\{\(\) => onApproveApprovalRequest\(\)\}/);
+  assert.doesNotMatch(workbench, /onClick=\{\(\) => onRejectApprovalRequest\(\)\}/);
+  assert.match(styles, /\.approval-reviewer-context\s*\{/);
+  assert.match(styles, /\.approval-decision-confirmation\s*\{/);
+});
+
+test("permission request rejection requires a reviewer reason", () => {
+  assert.match(workbench, /form\.approvalRejectReason/);
+  assert.match(workbench, /pendingApprovalDecision\.comment\.trim\(\)/);
+  assert.match(workbench, /message\.permissionApprovalRejectReasonRequired/);
+  assert.match(workbench, /onRejectApprovalRequest\(pendingApprovalDecision\.requestId, comment\)/);
+  assert.match(workbench, /action\.confirmRejectPermissionRequest/);
+  assert.match(workbench, /text\.approvalRejectReasonHelp/);
+  assert.match(app, /async function rejectAiAdminApprovalRequest\(requestId\?: string, comment\?: string\)/);
+  assert.match(app, /const reviewerComment = comment\?\.trim\(\)/);
+  assert.match(app, /comment: reviewerComment/);
+});
+
+test("permission request can withdraw a pending approval request", () => {
+  assert.match(workbench, /onWithdrawApprovalRequest: \(comment\?: string\) => void/);
+  assert.match(workbench, /type ApprovalDecisionAction = "approve" \| "reject" \| "withdraw"/);
+  assert.match(workbench, /beginApprovalDecision\("withdraw"/);
+  assert.match(workbench, /action\.withdrawPermissionRequest/);
+  assert.match(workbench, /action\.confirmWithdrawPermissionRequest/);
+  assert.match(workbench, /text\.approvalWithdrawHelp/);
+  assert.match(workbench, /approvalRequest\.status !== "pending" && approvalRequest\.status !== "approved"/);
+  assert.match(workbench, /permissionApprovalStatusLabel\(approvalRequest\.status, t\)/);
+  assert.match(i18n, /"status\.approvalWithdrawn"/);
+  assert.match(i18n, /"message\.permissionApprovalWithdrawn"/);
+  assert.match(app, /async function withdrawAiAdminApprovalRequest\(comment\?: string\)/);
+});
+
+test("permission request primary operations share one busy guard", () => {
+  assert.match(workbench, /const permissionRequestBusy =/);
+  assert.match(workbench, /approvalJourneyRunning/);
+  assert.match(workbench, /approvalReadinessChecking/);
+  assert.match(workbench, /applyPreflightLoading/);
+  assert.match(workbench, /productionReadinessLoading/);
+  assert.match(workbench, /productionEvidenceExporting/);
+  assert.match(workbench, /accessDecisionExplanationLoading/);
+  assert.match(workbench, /applicationHealthLoading/);
+  assert.match(workbench, /applicationImpactLoading/);
+  assert.match(workbench, /reviewerQueueLoading/);
+  assert.match(workbench, /disabled=\{liveDataBlocked \|\| permissionRequestBusy/);
+});
+
+test("permission request shows a concrete completion state with three exits", () => {
+  assert.match(workbench, /const productionReady =/);
+  assert.match(workbench, /productionReadiness\?\.status === "ready"/);
+  assert.match(workbench, /workbenchPreview\?\.summary\.productionReady/);
+  assert.match(workbench, /productionSummary\.status === "ready"/);
+  assert.match(workbench, /className="approval-completion"/);
+  assert.match(workbench, /text\.permissionChangeCompleteTitle/);
+  assert.match(workbench, /text\.permissionChangeCompleteDetail/);
+  assert.match(workbench, /productionReadiness\?\.generatedAt/);
+  assert.match(workbench, /action\.exportProductionEvidence/);
+  assert.match(workbench, /action\.openAccessProfile/);
+  assert.match(workbench, /action\.startPermissionApproval/);
+  assert.match(workbench, /onOpenAccessProfile/);
+  assert.match(workbench, /onStartNewPermissionChange/);
+  assert.match(app, /function openAiAdminAccessProfile\(\)/);
+  assert.match(app, /setActiveNav\("access"\)/);
+  assert.match(app, /function startNewAiAdminPermissionChange\(\)/);
+  assert.match(styles, /\.approval-completion\s*\{/);
+  assert.match(styles, /\.approval-completion-actions\s*\{/);
+});
+
+test("permission request advanced messages suppress successful load noise", () => {
+  assert.match(workbench, /function shouldShowAdvancedStatusMessage/);
+  assert.match(workbench, /approvalReadinessMessage && shouldShowAdvancedStatusMessage\(approvalReadinessMessageTone\)/);
+  assert.match(workbench, /applyPreflightMessage && shouldShowAdvancedStatusMessage\(applyPreflightMessageTone\)/);
+  assert.match(workbench, /productionReadinessMessage && shouldShowAdvancedStatusMessage\(productionReadinessMessageTone\)/);
+  assert.match(workbench, /applicationHealthMessage && shouldShowAdvancedStatusMessage\(applicationHealthMessageTone\)/);
+  assert.match(workbench, /applicationImpactMessage && shouldShowAdvancedStatusMessage\(applicationImpactMessageTone\)/);
+  assert.match(workbench, /accessDecisionExplanationMessage && shouldShowAdvancedStatusMessage\(accessDecisionExplanationMessageTone\)/);
+  assert.doesNotMatch(workbench, /approvalReadinessMessage \? <span/);
+  assert.doesNotMatch(workbench, /productionReadinessMessage \? <span/);
+  assert.doesNotMatch(workbench, /applicationHealthMessage \? <span/);
+});
+
+test("permission request hides raw workspace identifiers from the primary path", () => {
+  const workspaceLabelStart = workbench.indexOf('approval-readonly-field');
+  const technicalDetailsStart = workbench.indexOf('<details className="approval-details">');
+  assert.notEqual(workspaceLabelStart, -1);
+  assert.notEqual(technicalDetailsStart, -1);
+  assert.ok(workspaceLabelStart < technicalDetailsStart);
+  assert.match(workbench.slice(workspaceLabelStart, technicalDetailsStart), /workspaceName/);
+  assert.doesNotMatch(workbench.slice(workspaceLabelStart, technicalDetailsStart), /form\.workspaceId/);
+});
+
+test("permission request keeps tenant workspace and caller context visible", () => {
+  const contextStart = workbench.indexOf('<section className="approval-context-bar"');
+  const overviewStart = workbench.indexOf('<section className="approval-overview"', contextStart);
+  const context = workbench.slice(contextStart, overviewStart);
+  assert.notEqual(contextStart, -1);
+  assert.notEqual(overviewStart, -1);
+  assert.ok(contextStart < overviewStart);
+  assert.match(context, /text\.currentWorkspaceContext/);
+  assert.match(context, /form\.businessTenant/);
+  assert.match(context, /form\.businessWorkspace/);
+  assert.match(context, /form\.businessCaller/);
+  assert.match(context, /tenantPath\.primary/);
+  assert.match(context, /workspaceName/);
+  assert.match(context, /callerName/);
+  assert.doesNotMatch(context, /form\.workspaceId/);
+  assert.doesNotMatch(context, /callerInstanceId/);
+});
+
+test("permission request overview keeps context in one authoritative bar", () => {
+  const contextStart = workbench.indexOf('<section className="approval-context-bar"');
+  const overviewStart = workbench.indexOf('<section className="approval-overview"', contextStart);
+  const flowStart = workbench.indexOf('<div className="approval-flow-layout">', overviewStart);
+  const context = workbench.slice(contextStart, overviewStart);
+  const overview = workbench.slice(overviewStart, flowStart);
+
+  assert.notEqual(contextStart, -1);
+  assert.notEqual(overviewStart, -1);
+  assert.notEqual(flowStart, -1);
+  assert.match(context, /form\.businessTenant/);
+  assert.match(context, /form\.businessWorkspace/);
+  assert.match(context, /form\.businessCaller/);
+  assert.match(overview, /approval-status-summary/);
+  assert.doesNotMatch(overview, /form\.businessTenant/);
+  assert.doesNotMatch(overview, /tenantPath\.primary/);
+  assert.doesNotMatch(overview, /workspaceName/);
+  assert.doesNotMatch(overview, /callerName/);
+});
+
+test("permission request core selectors avoid forced ellipsis at review widths", () => {
+  assert.match(workbench, /className="approval-field is-wide"/);
+  assert.match(workbench, /className="approval-readonly-field is-wide"/);
+  assert.match(workbench, /className="approval-field approval-subject-field is-wide"/);
+  assert.match(workbench, /className="approval-select is-wide"/);
+  assert.match(styles, /\.approval-form-grid \.approval-dropdown-trigger span\s*\{[^}]*white-space:\s*normal;/s);
+  assert.match(styles, /\.approval-form-grid \.approval-dropdown-trigger span\s*\{[^}]*text-overflow:\s*clip;/s);
+  assert.match(styles, /@media \(max-width: 1120px\)\s*\{[\s\S]*\.approval-flow-layout,\s*[\s\S]*\.approval-form-grid\s*\{[^}]*grid-template-columns:\s*1fr;/s);
+});
+
+test("permission request dropdowns use deduplicated business labels", () => {
+  assert.match(workbench, /function uniquePermissionEntityOptions/);
+  assert.match(workbench, /const tenantOptions = uniquePermissionEntityOptions/);
+  assert.match(workbench, /const callerOptions = uniquePermissionEntityOptions/);
+  assert.match(workbench, /const targetOptions = uniquePermissionEntityOptions/);
+  assert.match(workbench, /tenantDropdownOptions/);
+  assert.match(workbench, /callerDropdownOptions/);
+  assert.match(workbench, /targetDropdownOptions/);
+});
+
+test("permission request primary path avoids native select menus", () => {
+  const formStart = workbench.indexOf('<div className="approval-form-grid">');
+  const formEnd = workbench.indexOf('<div className="approval-package-preview">', formStart);
+  const primaryForm = workbench.slice(formStart, formEnd);
+  assert.notEqual(formStart, -1);
+  assert.notEqual(formEnd, -1);
+  assert.match(dropdown, /export function ApprovalDropdown/);
+  assert.match(dropdown, /label: string/);
+  assert.match(dropdown, /aria-labelledby=\{labelId\}/);
+  assert.match(dropdown, /aria-activedescendant=\{activeOptionId\}/);
+  assert.match(primaryForm, /<ApprovalDropdown/);
+  assert.doesNotMatch(primaryForm, /<select/);
+});
+
+test("permission request chooses access objects instead of raw subject selectors", () => {
+  const formStart = workbench.indexOf('<div className="approval-form-grid">');
+  const formEnd = workbench.indexOf('<div className="approval-package-preview">', formStart);
+  const primaryForm = workbench.slice(formStart, formEnd);
+  const advancedStart = workbench.indexOf('<details className="approval-details">');
+  const processStart = workbench.indexOf('<aside className="approval-process-panel"', advancedStart);
+  const advancedForm = workbench.slice(advancedStart, processStart);
+
+  assert.match(app, /fetchPermissionPackageAccessSubjects/);
+  assert.match(app, /aiAdminAccessSubjects/);
+  assert.match(workbench, /accessSubjectCatalog = normalizeAccessSubjectOptions/);
+  assert.match(workbench, /selectedAccessSubject = accessSubjectOptionForSelectorFrom/);
+  assert.match(primaryForm, /form\.accessSubject/);
+  assert.match(primaryForm, /accessSubjectDropdownOptions/);
+  assert.doesNotMatch(primaryForm, /form\.subjectSelector/);
+  assert.match(advancedForm, /form\.subjectSelector/);
+  assert.match(advancedForm, /text\.subjectSelectorAdvancedHelp/);
+});
+
+test("access profile and capability governance are split from the app shell", () => {
+  assert.match(app, /import \{ TenantAccessProfileView \} from "\.\/components\/TenantAccessProfileView"/);
+  assert.match(app, /import \{ CapabilityGovernanceView, type CapabilityGrantForm \} from "\.\/components\/CapabilityGovernanceView"/);
+  assert.doesNotMatch(app, /function TenantAccessProfileView\(/);
+  assert.doesNotMatch(app, /function CapabilityGovernanceView\(/);
+  assert.match(accessProfileView, /export function TenantAccessProfileView/);
+  assert.match(capabilityGovernanceView, /export function CapabilityGovernanceView/);
+  assert.match(presenters, /export function permissionEntityDisplayName/);
+  assert.match(presenters, /export function capabilityStatusTone/);
+});
+
+test("capability governance uses business pickers instead of native select menus", () => {
+  assert.match(capabilityGovernanceView, /accessSubjectOptions/);
+  assert.match(capabilityGovernanceView, /accessSubjectDropdownOptions/);
+  assert.match(capabilityGovernanceView, /<ApprovalDropdown/);
+  assert.doesNotMatch(capabilityGovernanceView, /<select/);
+  assert.match(capabilityGovernanceView, /selectedAccessSubject\.id === customAccessSubjectOption\.id/);
+});

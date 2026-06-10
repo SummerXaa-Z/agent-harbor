@@ -125,18 +125,19 @@ type metricResponse struct {
 }
 
 type capabilityResponse struct {
-	ID              string `json:"id"`
-	TargetID        string `json:"targetId"`
-	Type            string `json:"type"`
-	Key             string `json:"key"`
-	DisplayName     string `json:"displayName"`
-	Description     string `json:"description"`
-	Action          string `json:"action"`
-	Sensitivity     string `json:"sensitivity"`
-	RiskLevel       string `json:"riskLevel"`
-	EnforcementMode string `json:"enforcementMode"`
-	DiscoveryStatus string `json:"discoveryStatus"`
-	Version         int    `json:"version"`
+	ID              string              `json:"id"`
+	TargetID        string              `json:"targetId"`
+	Type            string              `json:"type"`
+	Key             string              `json:"key"`
+	DisplayName     string              `json:"displayName"`
+	Description     string              `json:"description"`
+	Action          string              `json:"action"`
+	DataScopes      []dataScopeResponse `json:"dataScopes"`
+	Sensitivity     string              `json:"sensitivity"`
+	RiskLevel       string              `json:"riskLevel"`
+	EnforcementMode string              `json:"enforcementMode"`
+	DiscoveryStatus string              `json:"discoveryStatus"`
+	Version         int                 `json:"version"`
 }
 
 type dataScopeResponse struct {
@@ -305,7 +306,43 @@ type permissionPackageProductionReadinessResponse struct {
 	Preflight         *permissionPackageApplyPreflightResponse    `json:"preflight"`
 	RuntimeEvidence   permissionPackageRuntimeEvidence            `json:"runtimeEvidence"`
 	AuditEvidence     permissionPackageAuditEvidence              `json:"auditEvidence"`
+	NextActionCode    string                                      `json:"nextActionCode"`
 	NextActions       []string                                    `json:"nextActions"`
+}
+
+type permissionPackageWorkbenchPreviewResponse struct {
+	Draft               permissionPackageDraftResponse                `json:"draft"`
+	ApprovalRequest     *permissionPackageApprovalRequestResponse     `json:"approvalRequest"`
+	LatestApplication   *permissionPackageApplicationResponse         `json:"latestApplication"`
+	ProductionReadiness *permissionPackageProductionReadinessResponse `json:"productionReadiness"`
+	Summary             permissionPackageWorkbenchSummary             `json:"summary"`
+}
+
+type permissionPackageWorkbenchSummary struct {
+	Status                 string                           `json:"status"`
+	PrimaryActionCode      string                           `json:"primaryActionCode"`
+	NextActionCode         string                           `json:"nextActionCode"`
+	ApprovalRequired       bool                             `json:"approvalRequired"`
+	CanApply               bool                             `json:"canApply"`
+	Applied                bool                             `json:"applied"`
+	RuntimeEvidenceReady   bool                             `json:"runtimeEvidenceReady"`
+	ProductionReady        bool                             `json:"productionReady"`
+	AllowedCapabilityCount int                              `json:"allowedCapabilityCount"`
+	BlockedCapabilityCount int                              `json:"blockedCapabilityCount"`
+	PlannedObjectCount     int                              `json:"plannedObjectCount"`
+	ReadinessReadyCount    int                              `json:"readinessReadyCount"`
+	ReadinessTotalCount    int                              `json:"readinessTotalCount"`
+	BlockingCount          int                              `json:"blockingCount"`
+	WarningCount           int                              `json:"warningCount"`
+	Steps                  []permissionPackageWorkbenchStep `json:"steps"`
+}
+
+type permissionPackageWorkbenchStep struct {
+	Key        string `json:"key"`
+	Status     string `json:"status"`
+	DetailCode string `json:"detailCode"`
+	Count      int    `json:"count"`
+	Total      int    `json:"total"`
 }
 
 type permissionPackageProductionReadinessSummary struct {
@@ -342,6 +379,7 @@ type permissionPackageProductionEvidenceReportResponse struct {
 	Summary              permissionPackageProductionReadinessSummary `json:"summary"`
 	Checks               []permissionPackageProductionReadinessCheck `json:"checks"`
 	Evidence             permissionPackageProductionEvidenceRefs     `json:"evidence"`
+	NextActionCode       string                                      `json:"nextActionCode"`
 	NextActions          []string                                    `json:"nextActions"`
 	ReadinessGeneratedAt string                                      `json:"readinessGeneratedAt"`
 }
@@ -560,7 +598,7 @@ type instanceAssignmentResponse struct {
 }
 
 func newRouter() http.Handler {
-	return httpapi.New(store.NewMemory()).Router()
+	return httpapi.New(store.NewMemory(), httpapi.WithUnauthenticatedAdminAllowed(true)).Router()
 }
 
 func newRouterWithAdmin(adminKey string) http.Handler {
@@ -568,19 +606,35 @@ func newRouterWithAdmin(adminKey string) http.Handler {
 }
 
 func newRouterWithRepo(repo store.Repository) http.Handler {
-	return httpapi.New(repo).Router()
+	return httpapi.New(repo, httpapi.WithUnauthenticatedAdminAllowed(true)).Router()
 }
 
 func newRouterWithRepoAndApprovalReviewers(repo store.Repository, reviewers []domain.PermissionPackageApprovalReviewer) http.Handler {
-	return httpapi.New(repo, httpapi.WithPermissionPackageApprovalReviewers(reviewers)).Router()
+	return httpapi.New(
+		repo,
+		httpapi.WithUnauthenticatedAdminAllowed(true),
+		httpapi.WithPermissionPackageApprovalReviewers(reviewers),
+	).Router()
+}
+
+func newRouterWithRepoAndAdminIdentities(repo store.Repository, identities []httpapi.AdminIdentity) http.Handler {
+	return httpapi.New(repo, httpapi.WithAdminIdentities(identities)).Router()
 }
 
 func newRouterWithPrivateUpstreams() http.Handler {
-	return httpapi.New(store.NewMemory(), httpapi.WithPrivateUpstreamsAllowed(true)).Router()
+	return httpapi.New(
+		store.NewMemory(),
+		httpapi.WithUnauthenticatedAdminAllowed(true),
+		httpapi.WithPrivateUpstreamsAllowed(true),
+	).Router()
 }
 
 func newRouterWithCORSOrigins(origins []string) http.Handler {
-	return httpapi.New(store.NewMemory(), httpapi.WithCORSOrigins(origins)).Router()
+	return httpapi.New(
+		store.NewMemory(),
+		httpapi.WithUnauthenticatedAdminAllowed(true),
+		httpapi.WithCORSOrigins(origins),
+	).Router()
 }
 
 func TestHealthAndContracts(t *testing.T) {
@@ -599,6 +653,20 @@ func TestHealthAndContracts(t *testing.T) {
 	channels := decodeData[[]map[string]any](t, request(t, router, http.MethodGet, "/api/v1/contracts/channels", nil, ""))
 	if len(channels) < 3 {
 		t.Fatalf("expected channel catalog, got %#v", channels)
+	}
+}
+
+func TestAdminEndpointsRequireConfiguredAuthenticationByDefault(t *testing.T) {
+	router := httpapi.New(store.NewMemory()).Router()
+
+	health := request(t, router, http.MethodGet, "/healthz", nil, "")
+	if health.Code != http.StatusOK {
+		t.Fatalf("health should remain public, got %d", health.Code)
+	}
+
+	agents := request(t, router, http.MethodGet, "/api/v1/agents", nil, "")
+	if agents.Code != http.StatusUnauthorized || !strings.Contains(agents.Body.String(), "admin authentication is required") {
+		t.Fatalf("admin endpoint should reject missing configured auth, status=%d body=%s", agents.Code, agents.Body.String())
 	}
 }
 
@@ -2983,9 +3051,22 @@ func TestMCPCapabilityDiscoveryAndAssignmentManagement(t *testing.T) {
 	if workspaceAssignment.WorkspaceID != "ws-sales" {
 		t.Fatalf("unexpected workspace assignment: %#v", workspaceAssignment)
 	}
+	for _, subjectSelector := range []string{"", " ", "*"} {
+		resp := request(t, router, http.MethodPost, "/api/v1/instance-assignments", map[string]any{
+			"workspaceAssignmentId": workspaceAssignment.ID,
+			"callerInstanceId":      caller.ID,
+			"subjectSelector":       subjectSelector,
+			"effect":                "allow",
+			"status":                "enabled",
+		}, "")
+		if resp.Code != http.StatusBadRequest || !strings.Contains(resp.Body.String(), "subjectSelector") {
+			t.Fatalf("subjectSelector %q should be rejected, status=%d body=%s", subjectSelector, resp.Code, resp.Body.String())
+		}
+	}
 	instanceAssignment := decodeData[instanceAssignmentResponse](t, request(t, router, http.MethodPost, "/api/v1/instance-assignments", map[string]any{
 		"workspaceAssignmentId": workspaceAssignment.ID,
 		"callerInstanceId":      caller.ID,
+		"subjectSelector":       "user:sales-*",
 		"effect":                "allow",
 		"status":                "enabled",
 	}, ""))
@@ -3012,6 +3093,10 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	templates := decodeData[[]permissionPackageTemplateResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/templates", nil, ""))
 	if len(templates) == 0 || templates[0].ID != "sales-readonly" || templates[0].Version != 1 {
 		t.Fatalf("expected sales-readonly template first, got %#v", templates)
+	}
+	accessSubjects := decodeData[[]domain.PermissionPackageAccessSubject](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/access-subjects", nil, ""))
+	if len(accessSubjects) == 0 || accessSubjects[0].ID != "role:support-agent" || accessSubjects[0].SubjectSelector != "user:support-*" {
+		t.Fatalf("expected support-agent access subject first, got %#v", accessSubjects)
 	}
 
 	input := map[string]any{
@@ -3290,6 +3375,7 @@ func TestPermissionPackagePreflightApprovalRequiredStates(t *testing.T) {
 		"callerInstanceId": caller.ID,
 		"region":           "us-east",
 		"requestText":      "Allow support triage updates for this tenant.",
+		"subjectSelector":  "user:support-*",
 		"targetId":         target.ID,
 		"templateId":       "support-ticket-triage",
 		"tenantId":         "tenant-east",
@@ -3302,7 +3388,9 @@ func TestPermissionPackagePreflightApprovalRequiredStates(t *testing.T) {
 	}
 
 	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
-	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", nil, ""))
+	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", map[string]any{
+		"reviewer": "security",
+	}, ""))
 	if approved.Status != "approved" {
 		t.Fatalf("expected approved request, got %#v", approved)
 	}
@@ -3311,6 +3399,7 @@ func TestPermissionPackagePreflightApprovalRequiredStates(t *testing.T) {
 		"callerInstanceId":  caller.ID,
 		"region":            "us-east",
 		"requestText":       "Allow support triage updates for this tenant.",
+		"subjectSelector":   "user:support-*",
 		"targetId":          target.ID,
 		"templateId":        "support-ticket-triage",
 		"tenantId":          "tenant-east",
@@ -3343,6 +3432,7 @@ func TestPermissionPackagePreflightApprovalRequiredStates(t *testing.T) {
 		"callerInstanceId":  caller.ID,
 		"region":            "eu-west",
 		"requestText":       "Allow support triage updates for this tenant.",
+		"subjectSelector":   "user:support-*",
 		"targetId":          target.ID,
 		"templateId":        "support-ticket-triage",
 		"tenantId":          "tenant-east",
@@ -3351,6 +3441,81 @@ func TestPermissionPackagePreflightApprovalRequiredStates(t *testing.T) {
 	mismatched := decodeData[permissionPackageApplyPreflightResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:preflight", mismatchedInput, ""))
 	if mismatched.Summary.CanApply || !permissionPackagePreflightHasCheck(mismatched.Checks, "approval_request_invalid", "blocking") {
 		t.Fatalf("expected mismatched approval to block preflight, got %#v", mismatched)
+	}
+}
+
+func TestPermissionPackageWorkbenchPreviewSummarizesPrimaryJourney(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	searchCustomer := createDirectCapabilityWithAction(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	updateTicket := createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	exportContracts := createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow support triage updates for this tenant.",
+		"subjectSelector":  "user:support-*",
+		"targetId":         target.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
+	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", map[string]any{
+		"reviewer": "security",
+	}, ""))
+
+	beforeApply := decodeData[permissionPackageWorkbenchPreviewResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/workbench:preview", input, ""))
+	if beforeApply.ApprovalRequest == nil || beforeApply.ApprovalRequest.ID != approved.ID {
+		t.Fatalf("expected workbench preview to select the approved request, got %#v", beforeApply.ApprovalRequest)
+	}
+	if beforeApply.Summary.Status != "ready_to_apply" || beforeApply.Summary.PrimaryActionCode != "apply_permission_package" ||
+		!beforeApply.Summary.ApprovalRequired || !beforeApply.Summary.CanApply || beforeApply.Summary.Applied ||
+		beforeApply.Summary.AllowedCapabilityCount != 2 || beforeApply.Summary.BlockedCapabilityCount != 1 ||
+		beforeApply.Summary.PlannedObjectCount != 6 || beforeApply.ProductionReadiness == nil ||
+		beforeApply.ProductionReadiness.NextActionCode != "apply_permission_package" {
+		t.Fatalf("expected ready-to-apply workbench summary, got %#v", beforeApply.Summary)
+	}
+	if !permissionPackageWorkbenchHasStep(beforeApply.Summary.Steps, "approval", "complete", "approval_approved") ||
+		!permissionPackageWorkbenchHasStep(beforeApply.Summary.Steps, "apply", "current", "apply_ready") ||
+		!permissionPackageWorkbenchHasStep(beforeApply.Summary.Steps, "validation", "waiting", "validation_waiting") {
+		t.Fatalf("expected approval complete and apply current steps, got %#v", beforeApply.Summary.Steps)
+	}
+
+	applyInput := map[string]any{
+		"approvalRequestId": approved.ID,
+		"callerInstanceId":  caller.ID,
+		"region":            input["region"],
+		"requestText":       input["requestText"],
+		"subjectSelector":   input["subjectSelector"],
+		"targetId":          target.ID,
+		"templateId":        input["templateId"],
+		"tenantId":          input["tenantId"],
+		"workspaceId":       input["workspaceId"],
+	}
+	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", applyInput, ""))
+	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionDenied, caller, target, exportContracts, "export_contracts", "user:support-001", now.Add(time.Minute))
+	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionAllowed, caller, target, searchCustomer, "search_customer", "user:support-001", now.Add(2*time.Minute))
+	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionAllowed, caller, target, updateTicket, "update_ticket", "user:support-001", now.Add(3*time.Minute))
+
+	afterEvidence := decodeData[permissionPackageWorkbenchPreviewResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/workbench:preview", input, ""))
+	if afterEvidence.LatestApplication == nil || afterEvidence.LatestApplication.ID != applied.Application.ID ||
+		afterEvidence.Summary.Status != "production_ready" || afterEvidence.Summary.PrimaryActionCode != "export_production_evidence" ||
+		!afterEvidence.Summary.Applied || !afterEvidence.Summary.RuntimeEvidenceReady || !afterEvidence.Summary.ProductionReady {
+		t.Fatalf("expected production-ready workbench summary after evidence, got summary=%#v app=%#v", afterEvidence.Summary, afterEvidence.LatestApplication)
+	}
+	if !permissionPackageWorkbenchHasStep(afterEvidence.Summary.Steps, "approval", "complete", "approval_approved") ||
+		!permissionPackageWorkbenchHasStep(afterEvidence.Summary.Steps, "acceptance", "complete", "acceptance_ready") {
+		t.Fatalf("expected completed approval and acceptance after evidence, got %#v", afterEvidence.Summary.Steps)
 	}
 }
 
@@ -3380,7 +3545,9 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		"workspaceId":      "ws-support",
 	}
 	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
-	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", nil, ""))
+	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", map[string]any{
+		"reviewer": "security",
+	}, ""))
 	if approved.Status != "approved" {
 		t.Fatalf("expected approved request, got %#v", approved)
 	}
@@ -3388,6 +3555,9 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 	before := decodeData[permissionPackageProductionReadinessResponse](t, request(t, router, http.MethodGet, permissionPackageProductionReadinessPath(input, approved.ID, "user:support-001"), nil, ""))
 	if before.Status != "blocked" || before.Summary.BlockingCount == 0 || before.Summary.HasApplication {
 		t.Fatalf("expected production readiness to block before apply, got %#v", before)
+	}
+	if before.NextActionCode != "apply_permission_package" {
+		t.Fatalf("expected apply next action before application evidence, got %q", before.NextActionCode)
 	}
 	if !permissionPackageProductionReadinessHasCheck(before.Checks, "preflight_ready", "passed") ||
 		!permissionPackageProductionReadinessHasCheck(before.Checks, "application_present", "blocking") {
@@ -3397,6 +3567,7 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 	if beforeReport.ReportVersion != "production-readiness-report/v1" || beforeReport.Status != "blocked" ||
 		beforeReport.Scope.TenantID != "tenant-east" || beforeReport.Scope.SubjectID != "user:support-001" ||
 		beforeReport.Evidence.Application.Present || beforeReport.Summary.BlockingCount == 0 ||
+		beforeReport.NextActionCode != "apply_permission_package" ||
 		!permissionPackageProductionReadinessHasCheck(beforeReport.Checks, "application_present", "blocking") {
 		t.Fatalf("expected blocked production evidence report before apply, got %#v", beforeReport)
 	}
@@ -3425,6 +3596,9 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		!after.Summary.AccessProfileReady || after.LatestApplication == nil || after.LatestApplication.ID != applied.Application.ID {
 		t.Fatalf("expected production readiness after evidence, got %#v", after)
 	}
+	if after.NextActionCode != "export_production_evidence" {
+		t.Fatalf("expected evidence export next action after readiness, got %q", after.NextActionCode)
+	}
 	if after.RuntimeEvidence.AllowedTrace == nil || after.RuntimeEvidence.AllowedTrace.CapabilityID != updateTicket.ID ||
 		after.RuntimeEvidence.DeniedTrace == nil || after.RuntimeEvidence.DeniedTrace.CapabilityID != exportContracts.ID ||
 		after.AuditEvidence.AppliedEvent == nil || after.AuditEvidence.AppliedEvent.ResourceID != applied.Application.ID {
@@ -3437,6 +3611,7 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		len(afterReport.Evidence.Application.AllowedCapabilityIDs) != len(applied.Application.AllowedCapabilityIDs) ||
 		afterReport.Evidence.Runtime.AllowedTraceID == "" || afterReport.Evidence.Runtime.DeniedTraceID == "" ||
 		afterReport.Evidence.Audit.AppliedEventID == "" ||
+		afterReport.NextActionCode != "export_production_evidence" ||
 		afterReport.Evidence.AccessProfile.Present != true ||
 		afterReport.ReadinessGeneratedAt == "" {
 		t.Fatalf("expected ready production evidence report after evidence, got %#v", afterReport)
@@ -3457,6 +3632,7 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 	limitedTracePath := permissionPackageProductionReadinessPath(input, "", "user:support-001") + "&traceLimit=1"
 	limitedTrace := decodeData[permissionPackageProductionReadinessResponse](t, request(t, router, http.MethodGet, limitedTracePath, nil, ""))
 	if limitedTrace.Status != "blocked" || limitedTrace.RuntimeEvidence.AllowedTrace == nil || limitedTrace.RuntimeEvidence.DeniedTrace != nil ||
+		limitedTrace.NextActionCode != "run_denied_runtime_call" ||
 		!permissionPackageProductionReadinessHasCheck(limitedTrace.Checks, "runtime_denied_trace_present", "blocking") {
 		t.Fatalf("expected traceLimit=1 to inspect only latest trace and block on missing denied evidence, got %#v", limitedTrace)
 	}
@@ -3695,6 +3871,7 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 		"callerInstanceId": caller.ID,
 		"region":           "us-east",
 		"requestText":      "Allow support triage updates for this tenant.",
+		"subjectSelector":  "user:support-*",
 		"targetId":         target.ID,
 		"templateId":       "support-ticket-triage",
 		"tenantId":         "tenant-east",
@@ -3767,6 +3944,7 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 		"callerInstanceId":  caller.ID,
 		"region":            "us-east",
 		"requestText":       "Allow support triage updates for this tenant.",
+		"subjectSelector":   "user:support-*",
 		"targetId":          target.ID,
 		"templateId":        "support-ticket-triage",
 		"tenantId":          "tenant-east",
@@ -3789,8 +3967,10 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 	}
 
 	secondApproval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
-	approvedApproval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+secondApproval.ID+"/approve", nil, ""))
-	if approvedApproval.Status != "approved" || approvedApproval.ReviewedBy != "local-dev" {
+	approvedApproval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+secondApproval.ID+"/approve", map[string]any{
+		"reviewer": "security",
+	}, ""))
+	if approvedApproval.Status != "approved" || approvedApproval.ReviewedBy != "security" {
 		t.Fatalf("unexpected approved approval request: %#v", approvedApproval)
 	}
 	mismatchedApplyInput := map[string]any{
@@ -3798,6 +3978,7 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 		"callerInstanceId":  caller.ID,
 		"region":            "eu-west",
 		"requestText":       "Allow support triage updates for this tenant.",
+		"subjectSelector":   "user:support-*",
 		"targetId":          target.ID,
 		"templateId":        "support-ticket-triage",
 		"tenantId":          "tenant-east",
@@ -3822,6 +4003,7 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 		"callerInstanceId":  caller.ID,
 		"region":            "us-east",
 		"requestText":       "Allow support triage updates for this tenant.",
+		"subjectSelector":   "user:support-*",
 		"targetId":          target.ID,
 		"templateId":        "support-ticket-triage",
 		"tenantId":          "tenant-east",
@@ -3833,7 +4015,9 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 	}
 
 	thirdApproval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
-	thirdApproval = decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+thirdApproval.ID+"/approve", nil, ""))
+	thirdApproval = decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+thirdApproval.ID+"/approve", map[string]any{
+		"reviewer": "security",
+	}, ""))
 	approvedApplyInput["approvalRequestId"] = thirdApproval.ID
 	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", approvedApplyInput, ""))
 	if len(applied.TenantEntitlements) != 1 || applied.TenantEntitlements[0].CapabilityID != updateTicket.ID ||
@@ -3873,6 +4057,286 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 	}
 	if len(applications) != 1 {
 		t.Fatalf("consumed approval retry should not write duplicate applications: %#v", applications)
+	}
+}
+
+func TestPermissionPackageApprovalRejectsCapabilityDriftAfterApproval(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	updateTicket := createDirectCapabilityWithActionAndScopes(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, []domain.DataScope{{
+		DataDomain:   "crm",
+		Region:       "us-east",
+		TenantFilter: "tenant_id = 'tenant-east'",
+	}}, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow support triage updates for this tenant.",
+		"subjectSelector":  "user:support-*",
+		"targetId":         target.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
+	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", map[string]any{
+		"reviewer": "security",
+	}, ""))
+	if approved.Status != "approved" {
+		t.Fatalf("expected approved request, got %#v", approved)
+	}
+
+	changed := decodeData[capabilityResponse](t, request(t, router, http.MethodPatch, "/api/v1/capabilities/"+updateTicket.ID, map[string]any{
+		"dataScopes": []map[string]any{{"dataDomain": "crm"}},
+	}, ""))
+	if len(changed.DataScopes) != 1 || changed.DataScopes[0].Region != "" {
+		t.Fatalf("expected capability boundary to be widened, got %#v", changed.DataScopes)
+	}
+
+	applyInput := map[string]any{
+		"approvalRequestId": approved.ID,
+		"callerInstanceId":  caller.ID,
+		"region":            input["region"],
+		"requestText":       input["requestText"],
+		"subjectSelector":   input["subjectSelector"],
+		"targetId":          target.ID,
+		"templateId":        input["templateId"],
+		"tenantId":          input["tenantId"],
+		"workspaceId":       input["workspaceId"],
+	}
+	applyResp := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", applyInput, "")
+	if applyResp.Code != http.StatusBadRequest || !strings.Contains(applyResp.Body.String(), "does not match") {
+		t.Fatalf("capability drift should invalidate approval request, status=%d body=%s", applyResp.Code, applyResp.Body.String())
+	}
+}
+
+func TestPermissionPackageApprovalRejectsTemplateAndPolicyVersionDrift(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow support triage updates for this tenant.",
+		"subjectSelector":  "user:support-*",
+		"targetId":         target.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
+	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", map[string]any{
+		"reviewer": "security",
+	}, ""))
+	stored, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), approved.ID)
+	if err != nil || !ok {
+		t.Fatalf("get approval request for version drift: ok=%v err=%v", ok, err)
+	}
+	stored.TemplateVersion++
+	stored.PolicyVersion++
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(t.Context(), stored); err != nil || !ok {
+		t.Fatalf("update approval request version drift: ok=%v err=%v", ok, err)
+	}
+
+	applyInput := map[string]any{
+		"approvalRequestId": approved.ID,
+		"callerInstanceId":  caller.ID,
+		"region":            input["region"],
+		"requestText":       input["requestText"],
+		"subjectSelector":   input["subjectSelector"],
+		"targetId":          target.ID,
+		"templateId":        input["templateId"],
+		"tenantId":          input["tenantId"],
+		"workspaceId":       input["workspaceId"],
+	}
+	applyResp := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", applyInput, "")
+	if applyResp.Code != http.StatusBadRequest || !strings.Contains(applyResp.Body.String(), "does not match") {
+		t.Fatalf("template or policy version drift should invalidate approval request, status=%d body=%s", applyResp.Code, applyResp.Body.String())
+	}
+}
+
+func TestPermissionPackageApprovalRejectsSelfApproval(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow support triage updates for this tenant.",
+		"subjectSelector":  "user:support-*",
+		"targetId":         target.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
+	resp := request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", nil, "")
+	if resp.Code != http.StatusForbidden || !strings.Contains(resp.Body.String(), "own permission package approval request") {
+		t.Fatalf("self approval should be rejected, status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	loaded, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), approval.ID)
+	if err != nil || !ok {
+		t.Fatalf("get approval after rejected self approval: ok=%v err=%v", ok, err)
+	}
+	if loaded.Status != domain.PermissionPackageApprovalStatusPending || loaded.ReviewedBy != "" {
+		t.Fatalf("self approval rejection must leave request pending, got %#v", loaded)
+	}
+}
+
+func TestPermissionPackageApprovalRequestWithdraw(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "requester", Key: "requester-key"},
+		{Actor: "security", Key: "security-key"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow support triage updates for this tenant.",
+		"subjectSelector":  "user:support-*",
+		"targetId":         target.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	approval := decodeData[permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, "", "requester-key"))
+	impersonation := requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/withdraw", map[string]any{
+		"comment": "not my request",
+	}, "", "security-key")
+	if impersonation.Code != http.StatusForbidden || !strings.Contains(impersonation.Body.String(), "requester can withdraw") {
+		t.Fatalf("non-requester withdraw should be rejected, status=%d body=%s", impersonation.Code, impersonation.Body.String())
+	}
+
+	withdrawn := decodeData[permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/withdraw", map[string]any{
+		"comment": "wrong scope",
+	}, "", "requester-key"))
+	if withdrawn.Status != "withdrawn" || withdrawn.ReviewedBy != "requester" || withdrawn.ReviewComment != "wrong scope" || withdrawn.ResolvedAt.IsZero() {
+		t.Fatalf("unexpected withdrawn approval request: %#v", withdrawn)
+	}
+	pending := decodeData[[]permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?tenantId=tenant-root&workspaceId=ws-support&status=pending&limit=10", nil, "", "requester-key"))
+	if len(pending) != 0 {
+		t.Fatalf("withdrawn approval should leave pending queue, got %#v", pending)
+	}
+	withdrawnRows := decodeData[[]permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?tenantId=tenant-root&workspaceId=ws-support&status=withdrawn&limit=10", nil, "", "requester-key"))
+	if len(withdrawnRows) != 1 || withdrawnRows[0].ID != approval.ID {
+		t.Fatalf("expected withdrawn approval in withdrawn list, got %#v", withdrawnRows)
+	}
+	withdrawnApplyInput := map[string]any{
+		"approvalRequestId": approval.ID,
+		"callerInstanceId":  caller.ID,
+		"region":            "us-east",
+		"requestText":       "Allow support triage updates for this tenant.",
+		"subjectSelector":   "user:support-*",
+		"targetId":          target.ID,
+		"templateId":        "support-ticket-triage",
+		"tenantId":          "tenant-east",
+		"workspaceId":       "ws-support",
+	}
+	withdrawnApply := requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages:apply", withdrawnApplyInput, "", "requester-key")
+	if withdrawnApply.Code != http.StatusBadRequest || !strings.Contains(withdrawnApply.Body.String(), "approved") {
+		t.Fatalf("withdrawn approval request should not authorize apply, status=%d body=%s", withdrawnApply.Code, withdrawnApply.Body.String())
+	}
+	events, err := repo.ListAuditEvents(t.Context(), store.AuditEventFilter{Action: "permission_package.approval_withdrawn"})
+	if err != nil {
+		t.Fatalf("list withdraw audit events: %v", err)
+	}
+	if len(events) != 1 || events[0].Actor != "requester" || events[0].ResourceID != approval.ID || events[0].Metadata["status"] != domain.PermissionPackageApprovalStatusWithdrawn {
+		t.Fatalf("expected withdrawn audit event, got %#v", events)
+	}
+
+	approvedApproval := decodeData[permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, "", "requester-key"))
+	approvedApproval = decodeData[permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approvedApproval.ID+"/approve", nil, "", "security-key"))
+	withdrawApproved := requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approvedApproval.ID+"/withdraw", map[string]any{
+		"comment": "too late",
+	}, "", "requester-key")
+	if withdrawApproved.Code != http.StatusBadRequest || !strings.Contains(withdrawApproved.Body.String(), "already resolved") {
+		t.Fatalf("approved approval should not be withdrawable, status=%d body=%s", withdrawApproved.Code, withdrawApproved.Body.String())
+	}
+	loaded, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), approvedApproval.ID)
+	if err != nil || !ok {
+		t.Fatalf("get approved approval after withdraw attempt: ok=%v err=%v", ok, err)
+	}
+	if loaded.Status != domain.PermissionPackageApprovalStatusApproved {
+		t.Fatalf("approved approval should remain approved, got %#v", loaded)
+	}
+}
+
+func TestPermissionPackageApprovalReviewerUsesAuthenticatedAdminIdentity(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "requester", Key: "requester-key"},
+		{Actor: "security", Key: "security-key"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow support triage updates for this tenant.",
+		"subjectSelector":  "user:support-*",
+		"targetId":         target.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	approval := decodeData[permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, "", "requester-key"))
+	if approval.RequestedBy != "requester" {
+		t.Fatalf("approval request should be attributed to authenticated requester, got %#v", approval)
+	}
+	impersonation := requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", map[string]any{
+		"reviewer": "requester",
+	}, "", "security-key")
+	if impersonation.Code != http.StatusForbidden || !strings.Contains(impersonation.Body.String(), "authenticated admin identity") {
+		t.Fatalf("reviewer impersonation should be rejected, status=%d body=%s", impersonation.Code, impersonation.Body.String())
+	}
+	approved := decodeData[permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", nil, "", "security-key"))
+	if approved.Status != "approved" || approved.ReviewedBy != "security" {
+		t.Fatalf("approval should use authenticated reviewer identity, got %#v", approved)
 	}
 }
 
@@ -4074,6 +4538,7 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		!mcpToolNamesContain(tools.Result.Tools, "list_permission_package_approval_requests") ||
 		!mcpToolNamesContain(tools.Result.Tools, "approve_permission_package_approval_request") ||
 		!mcpToolNamesContain(tools.Result.Tools, "reject_permission_package_approval_request") ||
+		!mcpToolNamesContain(tools.Result.Tools, "withdraw_permission_package_approval_request") ||
 		!mcpToolNamesContain(tools.Result.Tools, "list_permission_package_applications") ||
 		!mcpToolNamesContain(tools.Result.Tools, "check_permission_package_production_readiness") ||
 		!mcpToolNamesContain(tools.Result.Tools, "export_permission_package_production_evidence") {
@@ -4247,6 +4712,7 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		"callerInstanceId": caller.ID,
 		"region":           "us-east",
 		"requestText":      "Allow support triage updates for this tenant.",
+		"subjectSelector":  "user:support-*",
 		"targetId":         target.ID,
 		"templateId":       "support-ticket-triage",
 		"tenantId":         "tenant-east",
@@ -4329,6 +4795,39 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		t.Fatalf("unexpected management MCP approval request list: %#v", approvals)
 	}
 
+	withdrawCreateCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-create-withdraw",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "create_permission_package_approval_request",
+			"arguments": args,
+		},
+	}, ""))
+	var withdrawApproval permissionPackageApprovalRequestResponse
+	if err := json.Unmarshal(withdrawCreateCall.Result.StructuredContent, &withdrawApproval); err != nil {
+		t.Fatalf("decode withdraw approval structured content: %v", err)
+	}
+	withdrawCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-withdraw",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "withdraw_permission_package_approval_request",
+			"arguments": map[string]any{
+				"id":      withdrawApproval.ID,
+				"comment": "replaced by narrower request",
+			},
+		},
+	}, ""))
+	var withdrawn permissionPackageApprovalRequestResponse
+	if err := json.Unmarshal(withdrawCall.Result.StructuredContent, &withdrawn); err != nil {
+		t.Fatalf("decode withdrawn structured content: %v", err)
+	}
+	if withdrawn.Status != "withdrawn" || withdrawn.ReviewedBy != "local-dev" || withdrawn.ReviewComment != "replaced by narrower request" {
+		t.Fatalf("unexpected management MCP withdrawn request: %#v", withdrawn)
+	}
+
 	approveCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "approval-approve",
@@ -4355,6 +4854,7 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		"callerInstanceId":  caller.ID,
 		"region":            "us-east",
 		"requestText":       "Allow support triage updates for this tenant.",
+		"subjectSelector":   "user:support-*",
 		"targetId":          target.ID,
 		"templateId":        "support-ticket-triage",
 		"tenantId":          "tenant-east",
@@ -4558,6 +5058,7 @@ func TestManagementMCPExplainPermissionPackageDraftRequiresApproval(t *testing.T
 				"callerInstanceId": caller.ID,
 				"region":           "us-east",
 				"requestText":      "Allow support triage updates for this tenant.",
+				"subjectSelector":  "user:support-*",
 				"targetId":         target.ID,
 				"templateId":       "support-ticket-triage",
 				"tenantId":         "tenant-east",
@@ -4808,6 +5309,7 @@ func TestCapabilityAssignmentDataScopesMustNarrowHierarchy(t *testing.T) {
 	instanceAssignment := decodeData[instanceAssignmentResponse](t, request(t, router, http.MethodPost, "/api/v1/instance-assignments", map[string]any{
 		"workspaceAssignmentId": workspaceAssignment.ID,
 		"callerInstanceId":      caller.ID,
+		"subjectSelector":       "user:sales-*",
 		"effect":                "allow",
 		"status":                "enabled",
 	}, ""))
@@ -4815,6 +5317,7 @@ func TestCapabilityAssignmentDataScopesMustNarrowHierarchy(t *testing.T) {
 		TenantID:         caller.TenantID,
 		WorkspaceID:      caller.WorkspaceID,
 		CallerInstanceID: caller.ID,
+		SubjectID:        "user:sales-001",
 		TargetID:         target.ID,
 		CapabilityID:     capability.ID,
 		Now:              now,
@@ -4837,6 +5340,10 @@ func TestMCPCapabilityGovernanceFiltersToolsListDeniesUnassignedToolAndTracesEvi
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		accept := r.Header.Get("Accept")
+		if !strings.Contains(accept, "application/json") || !strings.Contains(accept, "text/event-stream") {
+			t.Fatalf("MCP upstream request should accept JSON and event-stream responses, got %q", accept)
+		}
 		var payload struct {
 			ID     any    `json:"id"`
 			Method string `json:"method"`
@@ -4892,15 +5399,16 @@ func TestMCPCapabilityGovernanceFiltersToolsListDeniesUnassignedToolAndTracesEvi
 	instanceAssignment := decodeData[instanceAssignmentResponse](t, request(t, router, http.MethodPost, "/api/v1/instance-assignments", map[string]any{
 		"workspaceAssignmentId": workspaceAssignment.ID,
 		"callerInstanceId":      caller.ID,
+		"subjectSelector":       "user:sales-*",
 		"effect":                "allow",
 		"status":                "enabled",
 	}, ""))
 
-	listResp := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+	listResp := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "list-1",
 		"method":  "tools/list",
-	}, key.Key, "cap-list-run")
+	}, key.Key, "cap-list-run", "user:sales-001")
 	if listResp.Code != http.StatusOK {
 		t.Fatalf("tools/list failed: status=%d body=%s", listResp.Code, listResp.Body.String())
 	}
@@ -4908,22 +5416,22 @@ func TestMCPCapabilityGovernanceFiltersToolsListDeniesUnassignedToolAndTracesEvi
 		t.Fatalf("tools/list should include only assigned tool, got %s", listResp.Body.String())
 	}
 
-	denied := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+	denied := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "call-denied",
 		"method":  "tools/call",
 		"params":  map[string]any{"name": "export_contracts", "arguments": map[string]any{}},
-	}, key.Key, "cap-denied-run")
+	}, key.Key, "cap-denied-run", "user:sales-001")
 	if denied.Code != http.StatusForbidden {
 		t.Fatalf("unassigned tool should be denied, got %d body=%s", denied.Code, denied.Body.String())
 	}
 
-	allowed := requestWithRunID(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+	allowed := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "call-allowed",
 		"method":  "tools/call",
 		"params":  map[string]any{"name": "search_customer", "arguments": map[string]any{"query": "Acme"}},
-	}, key.Key, "cap-allowed-run")
+	}, key.Key, "cap-allowed-run", "user:sales-001")
 	if allowed.Code != http.StatusAccepted {
 		t.Fatalf("assigned tool should be allowed, got %d body=%s", allowed.Code, allowed.Body.String())
 	}
@@ -5106,7 +5614,7 @@ func createDirectPermissionPackageApprovalRequest(t *testing.T, repo store.Repos
 				ReasonKey:     "permissionPolicy.actionApprovalRequired",
 				ReasonValues:  map[string]string{"action": "write"},
 			}},
-			NextActions: []string{"Request approval before applying this permission package."},
+			NextActions: []string{"Request approval before applying this permission request."},
 		},
 		Status:      domain.PermissionPackageApprovalStatusPending,
 		RequestedBy: "admin-key",
@@ -5193,6 +5701,15 @@ func permissionPackagePreflightHasCheck(checks []permissionPackageApplyPreflight
 func permissionPackageProductionReadinessHasCheck(checks []permissionPackageProductionReadinessCheck, code string, severity string) bool {
 	for _, check := range checks {
 		if check.Code == code && check.Severity == severity {
+			return true
+		}
+	}
+	return false
+}
+
+func permissionPackageWorkbenchHasStep(steps []permissionPackageWorkbenchStep, key string, status string, detailCode string) bool {
+	for _, step := range steps {
+		if step.Key == key && step.Status == status && step.DetailCode == detailCode {
 			return true
 		}
 	}
@@ -5293,12 +5810,29 @@ func requestWithRunID(t *testing.T, router http.Handler, method string, path str
 	return requestWithRunIDAndAdmin(t, router, method, path, body, bearer, runID, "")
 }
 
+func requestWithRunIDAndSubject(t *testing.T, router http.Handler, method string, path string, body any, bearer string, runID string, subjectID string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec, req := buildRequest(t, method, path, body, bearer, runID, "")
+	if subjectID != "" {
+		req.Header.Set("X-AgentHarbor-Subject-Id", subjectID)
+	}
+	router.ServeHTTP(rec, req)
+	return rec
+}
+
 func requestWithAdmin(t *testing.T, router http.Handler, method string, path string, body any, bearer string, adminKey string) *httptest.ResponseRecorder {
 	t.Helper()
 	return requestWithRunIDAndAdmin(t, router, method, path, body, bearer, "", adminKey)
 }
 
 func requestWithRunIDAndAdmin(t *testing.T, router http.Handler, method string, path string, body any, bearer string, runID string, adminKey string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec, req := buildRequest(t, method, path, body, bearer, runID, adminKey)
+	router.ServeHTTP(rec, req)
+	return rec
+}
+
+func buildRequest(t *testing.T, method string, path string, body any, bearer string, runID string, adminKey string) (*httptest.ResponseRecorder, *http.Request) {
 	t.Helper()
 	var payload bytes.Buffer
 	if body != nil {
@@ -5318,8 +5852,7 @@ func requestWithRunIDAndAdmin(t *testing.T, router http.Handler, method string, 
 		req.Header.Set("X-Admin-Key", adminKey)
 	}
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	return rec
+	return rec, req
 }
 
 func decodeData[T any](t *testing.T, rec *httptest.ResponseRecorder) T {

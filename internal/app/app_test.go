@@ -32,6 +32,7 @@ func TestPostgresCredentialKeyFromEnvParsesRawKey(t *testing.T) {
 
 func TestNewAllowsPrivateUpstreamsFromEnv(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS", "true")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "test-admin")
 
 	app, err := New(context.Background())
 	if err != nil {
@@ -54,12 +55,49 @@ func TestNewAllowsPrivateUpstreamsFromEnv(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin")
 	rec := httptest.NewRecorder()
 
 	app.Router().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("private upstream env flag should allow local endpoint, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestNewRejectsAdminEndpointsWithoutConfiguredAuthentication(t *testing.T) {
+	app, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("new app: %v", err)
+	}
+	defer app.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents", nil)
+	rec := httptest.NewRecorder()
+
+	app.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("admin endpoint without configured auth should be unauthorized, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestNewAllowsExplicitUnauthenticatedAdminForDevelopment(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN", "true")
+
+	app, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("new app: %v", err)
+	}
+	defer app.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents", nil)
+	rec := httptest.NewRecorder()
+
+	app.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("explicit unauthenticated admin dev flag should allow admin route, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -94,6 +132,15 @@ func TestPrivateUpstreamsEnvRejectsInvalidBoolean(t *testing.T) {
 	_, err := privateUpstreamsAllowedFromEnv()
 	if err == nil {
 		t.Fatalf("expected invalid private upstream env value to fail")
+	}
+}
+
+func TestUnauthenticatedAdminEnvRejectsInvalidBoolean(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN", "sometimes")
+
+	_, err := unauthenticatedAdminAllowedFromEnv()
+	if err == nil {
+		t.Fatalf("expected invalid unauthenticated admin env value to fail")
 	}
 }
 

@@ -52,10 +52,22 @@ func New(ctx context.Context) (*App, error) {
 		closeFn()
 		return nil, err
 	}
+	adminIdentities, err := adminIdentitiesFromEnv()
+	if err != nil {
+		closeFn()
+		return nil, err
+	}
+	allowUnauthenticatedAdmin, err := unauthenticatedAdminAllowedFromEnv()
+	if err != nil {
+		closeFn()
+		return nil, err
+	}
 	return &App{
 		server: httpapi.New(
 			repo,
 			httpapi.WithAdminKey(os.Getenv("AGENT_HARBOR_ADMIN_KEY")),
+			httpapi.WithAdminIdentities(adminIdentities),
+			httpapi.WithUnauthenticatedAdminAllowed(allowUnauthenticatedAdmin),
 			httpapi.WithPrivateUpstreamsAllowed(allowPrivateUpstreams),
 			httpapi.WithPermissionPackageApprovalReviewers(approvalReviewers),
 			httpapi.WithCORSOrigins(corsOriginsFromEnv()),
@@ -92,6 +104,18 @@ func privateUpstreamsAllowedFromEnv() (bool, error) {
 	return allowed, nil
 }
 
+func unauthenticatedAdminAllowedFromEnv() (bool, error) {
+	raw := strings.TrimSpace(os.Getenv("AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN"))
+	if raw == "" {
+		return false, nil
+	}
+	allowed, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN must be a boolean")
+	}
+	return allowed, nil
+}
+
 func corsOriginsFromEnv() []string {
 	raw := strings.TrimSpace(os.Getenv("AGENT_HARBOR_CORS_ORIGINS"))
 	if raw == "" {
@@ -109,6 +133,36 @@ func corsOriginsFromEnv() []string {
 		origins = append(origins, origin)
 	}
 	return origins
+}
+
+func adminIdentitiesFromEnv() ([]httpapi.AdminIdentity, error) {
+	raw := strings.TrimSpace(os.Getenv("AGENT_HARBOR_ADMIN_IDENTITIES"))
+	if raw == "" {
+		return nil, nil
+	}
+	entries := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == ';'
+	})
+	identities := make([]httpapi.AdminIdentity, 0, len(entries))
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		actor, key, ok := strings.Cut(entry, "=")
+		if !ok {
+			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES entries must use actor=key")
+		}
+		identity := httpapi.AdminIdentity{
+			Actor: strings.TrimSpace(actor),
+			Key:   strings.TrimSpace(key),
+		}
+		if identity.Actor == "" || identity.Key == "" {
+			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES entries must include actor and key")
+		}
+		identities = append(identities, identity)
+	}
+	return identities, nil
 }
 
 func approvalReviewersFromEnv() ([]domain.PermissionPackageApprovalReviewer, error) {

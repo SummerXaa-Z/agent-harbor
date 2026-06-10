@@ -1532,6 +1532,7 @@ func clonePermissionPackageApprovalRequest(request domain.PermissionPackageAppro
 	request.DataScopes = cloneDataScopes(request.DataScopes)
 	request.AllowedCapabilityIDs = cloneStrings(request.AllowedCapabilityIDs)
 	request.AllowedCapabilityKeys = cloneStrings(request.AllowedCapabilityKeys)
+	request.AllowedCapabilityFingerprints = cloneStrings(request.AllowedCapabilityFingerprints)
 	request.PolicyGate = clonePermissionPackagePolicyGate(request.PolicyGate)
 	return request
 }

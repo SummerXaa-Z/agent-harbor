@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   Activity,
   Boxes,
@@ -10,7 +10,6 @@ import {
   Download,
   ExternalLink,
   FileSearch,
-  Filter,
   Gauge,
   KeyRound,
   Layers3,
@@ -19,7 +18,6 @@ import {
   Network,
   RefreshCw,
   Route,
-  Search,
   ServerCog,
   ShieldCheck,
   TriangleAlert,
@@ -46,6 +44,7 @@ import {
   disableRoutePolicy,
   fetchAccessDecisionExplanation,
   fetchAuditEvents,
+  fetchPermissionPackageAccessSubjects,
   fetchPermissionPackageApplicationHealth,
   fetchPermissionPackageApplicationImpact,
   fetchPermissionPackageApprovalRequests,
@@ -56,23 +55,37 @@ import {
   loadConsoleData,
   loadTenantAccessProfile,
   preflightPermissionPackage,
+  previewPermissionPackageWorkbench,
   rejectPermissionPackageApprovalRequest,
   refreshTargetCapabilities,
   rotateAgentCredentials,
   updateAgent,
-  updateCapability
+  updateCapability,
+  withdrawPermissionPackageApprovalRequest
 } from "./api";
+import { parseAccessProfileTraceLimit } from "./accessProfile";
 import {
-  countInvalidAccessProfileRows,
-  countInvalidGrantRows,
-  parseAccessProfileTraceLimit,
-  scopeStatusTone,
-  summarizeDataScopes
-} from "./accessProfile";
-import {
-  runtimeEvidenceMetric,
-  type MetricTone
+  runtimeEvidenceMetric
 } from "./consoleMetrics";
+import {
+  agentNameMap,
+  capabilityDiscoveryStatusLabel,
+  capabilityStatusTone,
+  dataScopeText,
+  formatDate,
+  permissionEntityDisplayName,
+  policyEffectLabel,
+  readableIdentifierLabel,
+  riskTone,
+  translatedValue,
+  type Tone,
+  type Translator
+} from "./consolePresenters";
+import {
+  accessSubjectOptions,
+  normalizeAccessSubjectOptions,
+  type AccessSubjectOption
+} from "./accessSubjects";
 import {
   createTranslator,
   resolveInitialLanguage,
@@ -80,6 +93,7 @@ import {
 } from "./i18n";
 import {
   defaultNavKey,
+  navGroups,
   navItems,
   viewForNav,
   type NavKey
@@ -104,6 +118,7 @@ import {
 import {
   createAiAdminApprovalJourneyConfig,
   evaluateAiAdminApprovalJourney,
+  summarizeAiAdminGoLiveReadiness,
   type AiAdminApprovalJourneyConfig,
   type AiAdminApprovalJourneyEvaluation,
   type AiAdminApprovalJourneyResult,
@@ -146,9 +161,19 @@ import {
   type PermissionPackageProductionReadinessStatus,
   type PermissionPackageRemediationAction,
   type PermissionPackageSimulationRow,
-  type PermissionPackageTemplate
+  type PermissionPackageTemplate,
+  type PermissionPackageWorkbenchPreview,
+  type PermissionPackageWorkbenchStep
 } from "./permissionPackages";
+import {
+  currentPermissionRequestWizardStep,
+  type PermissionRequestWizardStep
+} from "./permissionRequestJourney";
 import { parseRetryFields } from "./retryForm";
+import { AiAdminPermissionWorkbench } from "./components/AiAdminPermissionWorkbench";
+import { CapabilityGovernanceView, type CapabilityGrantForm } from "./components/CapabilityGovernanceView";
+import { TenantAccessProfileView } from "./components/TenantAccessProfileView";
+import { Badge, EmptyRow } from "./components/ui";
 import type {
   AccessProfileFilters,
   AccessProfileSummary,
@@ -168,19 +193,14 @@ import type {
   ManagementScope,
   RoutePolicy,
   SystemMetric,
+  Tenant,
   TenantAccessProfileData,
-  TenantAccessProfileGrant,
-  TenantAccessProfileInstance,
-  TenantAccessProfileWorkspace,
   TenantEntitlement,
   TraceDecision,
   TraceEvent,
   TraceFilters,
   WorkspaceAssignment
 } from "./types";
-
-type Tone = MetricTone;
-type Translator = ReturnType<typeof createTranslator>;
 
 interface CoreJourneyRunResult {
   allowedStatus: number;
@@ -201,12 +221,12 @@ const emptyAccessProfileSummary: AccessProfileSummary = {
   recentDeniedTraceCount: 0
 };
 
-const workspaceTabs = ["Prod", "Staging", "Sandbox"];
 const defaultManagementScope: ManagementScope = {
   tenantId: "default",
   workspaceId: "workspace-sandbox"
 };
 const languageStorageKey = "agent-harbor-language";
+const approvalResolveCooldownMs = 1200;
 const defaultAgentForm = {
   channelType: "local",
   credentialHeader: "",
@@ -222,10 +242,10 @@ const defaultAgentForm = {
 const defaultKeyForm = { agentId: "", expiresInSeconds: "900", name: "console key" };
 const defaultRotateForm = { agentId: "", credentialName: "apiToken", credentialValue: "" };
 const defaultPolicyForm = { callerAgentId: "", effect: "allow", name: "", priority: "100", retryBackoffMs: "0", retryMaxAttempts: "1", routeKey: "", routeType: "mcp", targetAgentId: "" };
-const defaultCapabilityGrantForm = {
+const defaultCapabilityGrantForm: CapabilityGrantForm = {
   callerInstanceId: "",
   capabilityId: "",
-  subjectSelector: "",
+  subjectSelector: "user:ops-*",
   targetId: "",
   tenantId: defaultManagementScope.tenantId,
   workspaceId: defaultManagementScope.workspaceId
@@ -297,8 +317,13 @@ function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
 }
 
-function translatedValue(t: Translator, value?: string) {
-  return value ? t(`value.${value}`, value) : "";
+function localizedErrorMessage(t: Translator, language: Language, error: unknown, fallbackKey: string) {
+  const fallback = t(fallbackKey);
+  if (!(error instanceof Error) || !error.message.trim()) return fallback;
+  if (language === "en" || /[\u4e00-\u9fa5]/.test(error.message)) {
+    return error.message;
+  }
+  return fallback;
 }
 
 function mockMcpHealthUrlFromEndpoint(endpointValue: string) {
@@ -319,13 +344,33 @@ function agentStatusLabel(status: AgentStatus, t: Translator) {
   return t("status.agentDraft");
 }
 
-function policyEffectLabel(effect: "allow" | "deny", t: Translator) {
-  return effect === "allow" ? t("status.policyAllow") : t("status.policyDeny");
+function shortTechnicalId(value: string) {
+  if (value.length <= 24) return value;
+  return `${value.slice(0, 12)}...${value.slice(-8)}`;
+}
+
+function TechnicalId({ value, t }: { value: string; t: Translator }) {
+  return (
+    <span className="technical-id" title={value}>
+      <code>{shortTechnicalId(value)}</code>
+      <button
+        aria-label={`${t("action.copy")} ${shortTechnicalId(value)}`}
+        className="technical-id-copy"
+        onClick={() => void navigator.clipboard?.writeText(value)}
+        title={t("action.copy")}
+        type="button"
+      >
+        <Copy size={12} />
+      </button>
+    </span>
+  );
 }
 
 function App() {
+  const approvalCreateInFlightRef = useRef(false);
+  const approvalResolveBlockedRef = useRef(false);
+  const approvalResolveCooldownTimerRef = useRef<number | null>(null);
   const [activeNav, setActiveNav] = useState(defaultNavKey);
-  const [activeWorkspace, setActiveWorkspace] = useState("Prod");
   const [adminKey, setAdminKey] = useState("");
   const [scope, setScope] = useState<ManagementScope>(defaultManagementScope);
   const [data, setData] = useState<ConsoleData | null>(null);
@@ -365,7 +410,9 @@ function App() {
   const [aiAdminMessage, setAiAdminMessage] = useState("");
   const [aiAdminApplying, setAiAdminApplying] = useState(false);
   const [aiAdminTemplates, setAiAdminTemplates] = useState<PermissionPackageTemplate[]>(permissionPackageTemplates);
+  const [aiAdminAccessSubjects, setAiAdminAccessSubjects] = useState<AccessSubjectOption[]>(accessSubjectOptions);
   const [aiAdminServerDraft, setAiAdminServerDraft] = useState<PermissionPackageDraft | null>(null);
+  const [aiAdminWorkbenchPreview, setAiAdminWorkbenchPreview] = useState<PermissionPackageWorkbenchPreview | null>(null);
   const [aiAdminApplication, setAiAdminApplication] = useState<PermissionPackageApplication | null>(null);
   const [aiAdminApplicationHealth, setAiAdminApplicationHealth] =
     useState<PermissionPackageApplicationHealth | null>(null);
@@ -384,7 +431,8 @@ function App() {
   const [aiAdminProductionEvidenceExporting, setAiAdminProductionEvidenceExporting] = useState(false);
   const [aiAdminProductionReadinessMessage, setAiAdminProductionReadinessMessage] = useState("");
   const [aiAdminApprovalRequests, setAiAdminApprovalRequests] = useState<PermissionPackageApprovalRequest[]>([]);
-  const [aiAdminApprovalAction, setAiAdminApprovalAction] = useState<"" | "create" | "approve" | "reject">("");
+  const [aiAdminApprovalAction, setAiAdminApprovalAction] = useState<"" | "create" | "approve" | "reject" | "withdraw">("");
+  const [aiAdminApprovalResolutionCoolingDown, setAiAdminApprovalResolutionCoolingDown] = useState(false);
   const [aiAdminApprovalReviewer, setAiAdminApprovalReviewer] = useState("Security Reviewer");
   const [aiAdminReviewerQueueLoading, setAiAdminReviewerQueueLoading] = useState(false);
   const [aiAdminReviewerQueueMessage, setAiAdminReviewerQueueMessage] = useState("");
@@ -401,6 +449,10 @@ function App() {
   const [aiAdminApprovalJourneyResult, setAiAdminApprovalJourneyResult] =
     useState<AiAdminApprovalJourneyResult | null>(null);
   const [aiAdminApprovalAuditEvent, setAiAdminApprovalAuditEvent] = useState<AuditEvent | null>(null);
+  const [aiAdminApprovalJourneyAccessProfile, setAiAdminApprovalJourneyAccessProfile] =
+    useState<TenantAccessProfileData | null>(null);
+  const [aiAdminApprovalJourneyApprovalRequest, setAiAdminApprovalJourneyApprovalRequest] =
+    useState<PermissionPackageApprovalRequest | null>(null);
   const [aiAdminApprovalReadiness, setAiAdminApprovalReadiness] =
     useState<AiAdminApprovalReadinessState>(defaultAiAdminApprovalReadiness);
   const [aiAdminApprovalReadinessChecking, setAiAdminApprovalReadinessChecking] = useState(false);
@@ -409,6 +461,12 @@ function App() {
 
   useEffect(() => {
     void refresh();
+  }, []);
+
+  useEffect(() => () => {
+    if (approvalResolveCooldownTimerRef.current !== null) {
+      window.clearTimeout(approvalResolveCooldownTimerRef.current);
+    }
   }, []);
 
   useEffect(() => {
@@ -500,15 +558,52 @@ function App() {
   useEffect(() => {
     if (activeNav !== "ai-admin" || !data?.loadedFromApi) {
       setAiAdminServerDraft(null);
+      setAiAdminWorkbenchPreview(null);
       return;
     }
     const controller = new AbortController();
-    createPermissionPackageDraftFromApi(aiAdminForm, adminKey, controller.signal)
-      .then((draft) => setAiAdminServerDraft(draft))
-      .catch((error) => {
-        if (!isAbortError(error)) {
-          setAiAdminServerDraft(null);
+    previewPermissionPackageWorkbench(aiAdminForm, adminKey, controller.signal)
+      .then((preview) => {
+        setAiAdminWorkbenchPreview(preview);
+        setAiAdminServerDraft(preview.draft);
+        if (preview.approvalRequest) {
+          upsertAiAdminApprovalRequest(preview.approvalRequest);
+          setAiAdminSelectedApprovalRequestId((current) => current || preview.approvalRequest?.id || "");
         }
+        setAiAdminApplication(preview.latestApplication ?? null);
+        setAiAdminProductionReadiness(preview.productionReadiness ?? null);
+        if (preview.productionReadiness?.preflight) {
+          setAiAdminApplyPreflight(preview.productionReadiness.preflight);
+        }
+        if (preview.productionReadiness?.applicationHealth) {
+          setAiAdminApplicationHealth({
+            applications: [preview.productionReadiness.applicationHealth],
+            summary: {
+              drifted: preview.productionReadiness.applicationHealth.status === "drifted" ? 1 : 0,
+              needsReview: preview.productionReadiness.applicationHealth.status === "needs_review" ? 1 : 0,
+              ready: preview.productionReadiness.applicationHealth.status === "ready" ? 1 : 0,
+              total: 1
+            }
+          });
+        }
+        if (preview.productionReadiness?.applicationImpact) {
+          setAiAdminApplicationImpact(preview.productionReadiness.applicationImpact);
+        }
+      })
+      .catch((error) => {
+        if (isAbortError(error)) return;
+        setAiAdminWorkbenchPreview(null);
+        if (isApiCompatibilityFallbackError(error)) {
+          createPermissionPackageDraftFromApi(aiAdminForm, adminKey, controller.signal)
+            .then((draft) => setAiAdminServerDraft(draft))
+            .catch((draftError) => {
+              if (!isAbortError(draftError)) {
+                setAiAdminServerDraft(null);
+              }
+            });
+          return;
+        }
+        setAiAdminServerDraft(null);
       });
     return () => controller.abort();
   }, [activeNav, adminKey, aiAdminForm, data?.loadedFromApi]);
@@ -524,7 +619,7 @@ function App() {
       setData(next);
       setLastRefresh(new Date());
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "console data unavailable");
+      setLoadError(localizedErrorMessage(t, language, error, "error.consoleDataUnavailable"));
     }
     if (activeNav === "access") {
       await refreshAccessProfile();
@@ -534,15 +629,17 @@ function App() {
   async function refreshAiAdminCatalog() {
     try {
       setLoadError("");
-      const [next, templates] = await Promise.all([
+      const [next, templates, accessSubjects] = await Promise.all([
         loadConsoleData(adminKey, traceFilters),
-        fetchPermissionPackageTemplates(adminKey).catch(() => permissionPackageTemplates)
+        fetchPermissionPackageTemplates(adminKey).catch(() => permissionPackageTemplates),
+        fetchPermissionPackageAccessSubjects(adminKey).catch(() => accessSubjectOptions)
       ]);
       setData(next);
       setAiAdminTemplates(templates.length > 0 ? templates : permissionPackageTemplates);
+      setAiAdminAccessSubjects(normalizeAccessSubjectOptions(accessSubjects));
       setLastRefresh(new Date());
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "console data unavailable");
+      setLoadError(localizedErrorMessage(t, language, error, "error.consoleDataUnavailable"));
     }
   }
 
@@ -563,7 +660,7 @@ function App() {
       setAccessProfile(next);
       setAccessMessage(next.loadedFromApi ? t("status.profileRefreshed") : t("status.profileFallback"));
     } catch (error) {
-      setAccessMessage(error instanceof Error ? error.message : "Unable to load tenant access profile");
+      setAccessMessage(localizedErrorMessage(t, language, error, "error.loadTenantAccessProfile"));
     } finally {
       setAccessLoading(false);
     }
@@ -594,7 +691,7 @@ function App() {
       setAccessDecisionExplanation(next);
       setAccessDecisionExplainMessage(t("message.accessDecisionExplainLoaded"));
     } catch (error) {
-      setAccessDecisionExplainMessage(error instanceof Error ? error.message : "Unable to explain access decision");
+      setAccessDecisionExplainMessage(localizedErrorMessage(t, language, error, "error.explainAccessDecision"));
     } finally {
       setAccessDecisionExplainLoading(false);
     }
@@ -627,7 +724,7 @@ function App() {
       setAiAdminAccessDecisionExplanation(next);
       setAiAdminAccessDecisionExplainMessage(t("message.accessDecisionExplainLoaded"));
     } catch (error) {
-      setAiAdminAccessDecisionExplainMessage(error instanceof Error ? error.message : "Unable to explain access decision");
+      setAiAdminAccessDecisionExplainMessage(localizedErrorMessage(t, language, error, "error.explainAccessDecision"));
     } finally {
       setAiAdminAccessDecisionExplainLoading(false);
     }
@@ -660,7 +757,7 @@ function App() {
       setAiAdminApplicationHealthMessage(t("message.permissionApplicationHealthLoaded"));
       return next;
     } catch (error) {
-      setAiAdminApplicationHealthMessage(error instanceof Error ? error.message : "Unable to refresh application health");
+      setAiAdminApplicationHealthMessage(localizedErrorMessage(t, language, error, "error.refreshApplicationHealth"));
       return null;
     } finally {
       setAiAdminApplicationHealthLoading(false);
@@ -729,7 +826,7 @@ function App() {
       setAiAdminProductionReadinessMessage(t("message.permissionProductionReadinessLoaded"));
       return next;
     } catch (error) {
-      setAiAdminProductionReadinessMessage(error instanceof Error ? error.message : "Unable to check production readiness");
+      setAiAdminProductionReadinessMessage(localizedErrorMessage(t, language, error, "error.checkProductionReadiness"));
       return null;
     } finally {
       setAiAdminProductionReadinessLoading(false);
@@ -738,10 +835,11 @@ function App() {
 
   async function exportAiAdminProductionEvidence(formInput: PermissionPackageDraftInput = aiAdminForm) {
     if (!data?.loadedFromApi) {
-      setAiAdminProductionReadinessMessage(t("message.productionEvidenceRequiresLiveApi"));
+      setAiAdminMessage(t("message.productionEvidenceRequiresLiveApi"));
       return null;
     }
     setAiAdminProductionEvidenceExporting(true);
+    setAiAdminMessage("");
     setAiAdminProductionReadinessMessage("");
     try {
       const report = await fetchPermissionPackageProductionEvidenceReport(
@@ -749,14 +847,65 @@ function App() {
         adminKey
       );
       downloadJson(report, productionEvidenceReportFilename(report));
-      setAiAdminProductionReadinessMessage(t("message.productionEvidenceExported"));
+      setAiAdminMessage(t("message.productionEvidenceExported"));
       return report;
     } catch (error) {
-      setAiAdminProductionReadinessMessage(error instanceof Error ? error.message : "Unable to export production evidence");
+      setAiAdminMessage(localizedErrorMessage(t, language, error, "error.exportProductionEvidence"));
       return null;
     } finally {
       setAiAdminProductionEvidenceExporting(false);
     }
+  }
+
+  function openAiAdminAccessProfile() {
+    setScope((current) => ({ ...current, tenantId: aiAdminForm.tenantId }));
+    setAccessFilters((current) => ({
+      ...current,
+      capabilityId: aiAdminDraft.allowedCapabilities[0]?.id ?? "",
+      callerInstanceId: aiAdminForm.callerInstanceId,
+      targetId: aiAdminForm.targetId,
+      traceLimit: current.traceLimit || "20",
+      workspaceId: aiAdminForm.workspaceId
+    }));
+    setAccessProfile(null);
+    setAccessMessage("");
+    setAccessDecisionExplanation(null);
+    setAccessDecisionExplainMessage("");
+    setActiveNav("access");
+  }
+
+  function startNewAiAdminPermissionChange() {
+    setAiAdminForm((current) => ({
+      ...defaultAiAdminForm,
+      callerInstanceId: current.callerInstanceId,
+      region: current.region,
+      subjectSelector: current.subjectSelector,
+      targetId: current.targetId,
+      templateId: current.templateId,
+      tenantId: current.tenantId,
+      workspaceId: current.workspaceId
+    }));
+    setAiAdminServerDraft(null);
+    setAiAdminWorkbenchPreview(null);
+    setAiAdminApplication(null);
+    setAiAdminApplicationHealth(null);
+    setAiAdminApplicationHealthMessage("");
+    setAiAdminApplyPreflight(null);
+    setAiAdminApplyPreflightMessage("");
+    setAiAdminApplicationImpact(null);
+    setAiAdminApplicationImpactMessage("");
+    setAiAdminProductionReadiness(null);
+    setAiAdminProductionReadinessMessage("");
+    setAiAdminApprovalRequests([]);
+    setAiAdminSelectedApprovalRequestId("");
+    setAiAdminAccessDecisionExplanation(null);
+    setAiAdminAccessDecisionExplainMessage("");
+    setAiAdminApprovalJourneyMessage("");
+    setAiAdminApprovalJourneyResult(null);
+    setAiAdminApprovalAuditEvent(null);
+    setAiAdminApprovalJourneyAccessProfile(null);
+    setAiAdminApprovalJourneyApprovalRequest(null);
+    setAiAdminMessage("");
   }
 
   async function reviewAiAdminApplicationImpact(applicationOverride?: PermissionPackageApplication) {
@@ -784,7 +933,7 @@ function App() {
       setAiAdminApplicationImpact(next);
       setAiAdminApplicationImpactMessage(t("message.permissionApplicationImpactLoaded"));
     } catch (error) {
-      setAiAdminApplicationImpactMessage(error instanceof Error ? error.message : "Unable to review application impact");
+      setAiAdminApplicationImpactMessage(localizedErrorMessage(t, language, error, "error.reviewApplicationImpact"));
     } finally {
       setAiAdminApplicationImpactLoading(false);
     }
@@ -814,7 +963,7 @@ function App() {
       setAiAdminApplicationImpact(next);
       setAiAdminApplicationImpactMessage(t("message.permissionApplicationDriftRehearsalLoaded"));
     } catch (error) {
-      setAiAdminApplicationImpactMessage(error instanceof Error ? error.message : "Unable to rehearse application drift");
+      setAiAdminApplicationImpactMessage(localizedErrorMessage(t, language, error, "error.rehearseApplicationDrift"));
     } finally {
       setAiAdminApplicationImpactLoading(false);
     }
@@ -843,7 +992,7 @@ function App() {
     } else {
       const detail = [
         apiHealth.status === "ok" ? "" : `API ${apiHealth.message}`,
-        mockMcpHealth.status === "ok" ? "" : `Mock MCP ${mockMcpHealth.message}`
+        mockMcpHealth.status === "ok" ? "" : `MCP service ${mockMcpHealth.message}`
       ].filter(Boolean).join(" · ");
       setCoreJourneyPreflightMessage(tx(t, "message.coreJourneyPreflightFailed", { detail: detail || "unknown" }));
     }
@@ -865,7 +1014,7 @@ function App() {
     };
     const detail = [
       apiHealth.status === "ok" ? "" : `API ${apiHealth.message}`,
-      mockMcpHealth.status === "ok" ? "" : `Mock MCP ${mockMcpHealth.message}`,
+      mockMcpHealth.status === "ok" ? "" : `MCP service ${mockMcpHealth.message}`,
       subjectHeaderHealth.status === "ok" ? "" : `Subject header ${subjectHeaderHealth.message}`
     ].filter(Boolean).join(" · ");
     return {
@@ -915,7 +1064,7 @@ function App() {
       setData(nextData);
       setLastRefresh(new Date());
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "console data unavailable");
+      setLoadError(localizedErrorMessage(t, language, error, "error.consoleDataUnavailable"));
     }
     await refreshCoreJourneyPreflight();
   }
@@ -1042,12 +1191,20 @@ function App() {
           dataScopes: [{ field: "email" }],
           effect: "allow",
           status: "enabled",
+          subjectSelector: nextConfig.subjectSelector,
           workspaceAssignmentId: workspaceAssignment.id
         },
         adminKey
       );
 
-      const toolList = await callMcpRpc(target.id, mcpToolsListPayload(), callerKey.key, nextConfig.runId, adminKey);
+      const toolList = await callMcpRpc(
+        target.id,
+        mcpToolsListPayload(),
+        callerKey.key,
+        nextConfig.runId,
+        adminKey,
+        nextConfig.subjectId
+      );
       if (!toolList.ok) throw new Error(tx(t, "message.coreJourneyRpcUnexpected", { status: toolList.status }));
       const listedTools = toolNamesFromPayload(toolList.payload);
       if (!listedTools.includes(nextConfig.allowedTool) || listedTools.includes(nextConfig.deniedTool)) {
@@ -1058,7 +1215,8 @@ function App() {
         mcpToolCallPayload(nextConfig.deniedTool),
         callerKey.key,
         nextConfig.runId,
-        adminKey
+        adminKey,
+        nextConfig.subjectId
       );
       if (deniedCall.status !== 403) {
         throw new Error(tx(t, "message.coreJourneyDeniedUnexpected", { status: deniedCall.status }));
@@ -1068,14 +1226,11 @@ function App() {
         mcpToolCallPayload(nextConfig.allowedTool),
         callerKey.key,
         nextConfig.runId,
-        adminKey
+        adminKey,
+        nextConfig.subjectId
       );
       if (!allowedCall.ok) throw new Error(tx(t, "message.coreJourneyRpcUnexpected", { status: allowedCall.status }));
 
-      const nextScope = {
-        tenantId: nextConfig.childTenantId,
-        workspaceId: nextConfig.workspaceId
-      };
       const nextTraceFilters = {
         callerAgentId: caller.id,
         decision: "" as TraceDecision | "",
@@ -1085,6 +1240,7 @@ function App() {
       const nextAccessFilters = {
         callerInstanceId: caller.id,
         capabilityId: "",
+        subjectId: nextConfig.subjectId,
         targetId: target.id,
         traceLimit: "10",
         workspaceId: nextConfig.workspaceId
@@ -1096,9 +1252,7 @@ function App() {
           traceLimit: 10
         })
       ]);
-      setScope(nextScope);
       setTraceFilters(nextTraceFilters);
-      setAccessFilters(nextAccessFilters);
       setData(nextData);
       setAccessProfile(nextProfile);
       setLastRefresh(new Date());
@@ -1111,17 +1265,26 @@ function App() {
       });
       setCoreJourneyMessage(t("message.coreJourneyComplete"));
     } catch (error) {
-      setCoreJourneyMessage(error instanceof Error ? error.message : "Core journey failed");
+      setCoreJourneyMessage(localizedErrorMessage(t, language, error, "error.coreJourneyFailed"));
     } finally {
       setCoreJourneyRunning(false);
     }
   }
 
   async function runAiAdminApprovalJourney() {
-    const nextConfig = createAiAdminApprovalJourneyConfig();
+    if (!data?.loadedFromApi) {
+      setAiAdminApprovalJourneyMessage(t("message.fallbackDataModeActionBlocked"));
+      return;
+    }
+    const nextConfig = {
+      ...createAiAdminApprovalJourneyConfig(),
+      requestText: t("default.aiAdminApprovalJourneyRequestText")
+    };
     setAiAdminApprovalJourneyConfig(nextConfig);
     setAiAdminApprovalJourneyResult(null);
     setAiAdminApprovalAuditEvent(null);
+    setAiAdminApprovalJourneyAccessProfile(null);
+    setAiAdminApprovalJourneyApprovalRequest(null);
     setAiAdminApplicationHealth(null);
     setAiAdminApplicationHealthMessage("");
     setAiAdminApplyPreflight(null);
@@ -1141,7 +1304,7 @@ function App() {
       await createTenant(
         {
           id: nextConfig.rootTenantId,
-          name: "Permission Package Approval Root",
+          name: "Permission Request Approval Root",
           status: "active"
         },
         adminKey
@@ -1149,7 +1312,7 @@ function App() {
       await createTenant(
         {
           id: nextConfig.childTenantId,
-          name: "Permission Package Approval Team",
+          name: "Permission Request Approval Team",
           parentTenantId: nextConfig.rootTenantId,
           status: "active"
         },
@@ -1158,7 +1321,7 @@ function App() {
       await createTenant(
         {
           id: nextConfig.grandchildTenantId,
-          name: "Permission Package Approval Project",
+          name: "Permission Request Approval Project",
           parentTenantId: nextConfig.childTenantId,
           status: "active"
         },
@@ -1168,8 +1331,8 @@ function App() {
       const caller = await createAgent(
         {
           channelType: "local",
-          description: "Permission package approval browser caller",
-          name: "Permission Package Approval Caller",
+          description: "Permission request approval browser caller",
+          name: "Permission Request Approval Caller",
           status: "active",
           tenantId: nextConfig.childTenantId,
           workspaceId: nextConfig.workspaceId
@@ -1180,7 +1343,7 @@ function App() {
         {
           agentId: caller.id,
           expiresInSeconds: 900,
-          name: "permission package approval key"
+          name: "permission request approval key"
         },
         adminKey
       );
@@ -1191,8 +1354,8 @@ function App() {
             transport: "streamable-http"
           },
           channelType: "mcp",
-          description: "Permission package approval MCP target",
-          name: "Permission Package Approval MCP Target",
+          description: "Permission request approval MCP target",
+          name: "Permission Request Approval MCP Target",
           status: "active",
           tenantId: nextConfig.rootTenantId,
           workspaceId: nextConfig.workspaceId
@@ -1214,7 +1377,7 @@ function App() {
         );
       }
 
-      const nextForm: PermissionPackageDraftInput = {
+      const validationForm: PermissionPackageDraftInput = {
         callerInstanceId: caller.id,
         region: nextConfig.region,
         requestText: nextConfig.requestText,
@@ -1224,7 +1387,6 @@ function App() {
         tenantId: nextConfig.childTenantId,
         workspaceId: nextConfig.workspaceId
       };
-      setAiAdminForm(nextForm);
       setAiAdminApplication(null);
       setAiAdminApplicationHealth(null);
       setAiAdminApplicationHealthMessage("");
@@ -1232,9 +1394,7 @@ function App() {
       setAiAdminApplyPreflightMessage("");
       setAiAdminApplicationImpact(null);
       setAiAdminApplicationImpactMessage("");
-      setAiAdminApprovalRequests([]);
-      const draft = await createPermissionPackageDraftFromApi(nextForm, adminKey);
-      setAiAdminServerDraft(draft);
+      const draft = await createPermissionPackageDraftFromApi(validationForm, adminKey);
       if (!draft.readiness.canApply) {
         throw new Error(tx(t, "message.permissionPackageNotReady", { detail: permissionReadinessMessages(draft.readiness, t).join(", ") }));
       }
@@ -1242,7 +1402,7 @@ function App() {
         throw new Error(t("message.aiAdminApprovalJourneyApprovalGateMissing"));
       }
 
-      const pendingApproval = await createPermissionPackageApprovalRequest(nextForm, adminKey);
+      const pendingApproval = await createPermissionPackageApprovalRequest(validationForm, adminKey);
       const approvedApproval = await approvePermissionPackageApprovalRequest(
         pendingApproval.id,
         {
@@ -1251,11 +1411,11 @@ function App() {
         },
         adminKey
       );
-      setAiAdminApprovalRequests([approvedApproval]);
+      setAiAdminApprovalJourneyApprovalRequest(approvedApproval);
 
       const journeyPreflight = await preflightPermissionPackage(
         {
-          ...nextForm,
+          ...validationForm,
           approvalRequestId: approvedApproval.id
         },
         adminKey
@@ -1278,7 +1438,7 @@ function App() {
 
       const applied = await applyPermissionPackage(
         {
-          ...nextForm,
+          ...validationForm,
           approvalRequestId: approvedApproval.id
         },
         adminKey
@@ -1333,17 +1493,13 @@ function App() {
       );
       if (!allowedCall.ok) throw new Error(tx(t, "message.aiAdminApprovalJourneyRpcUnexpected", { status: allowedCall.status }));
 
-      const nextScope = {
-        tenantId: nextConfig.childTenantId,
-        workspaceId: nextConfig.workspaceId
-      };
       const nextTraceFilters = {
         callerAgentId: caller.id,
         decision: "" as TraceDecision | "",
         runId: nextConfig.runId,
         targetAgentId: target.id
       };
-      const nextAccessFilters = {
+      const validationAccessFilters = {
         callerInstanceId: caller.id,
         capabilityId: "",
         targetId: target.id,
@@ -1353,7 +1509,7 @@ function App() {
       const [nextData, nextProfile, auditRows] = await Promise.all([
         loadConsoleData(adminKey, nextTraceFilters),
         loadTenantAccessProfile(nextConfig.childTenantId, adminKey, {
-          ...nextAccessFilters,
+          ...validationAccessFilters,
           traceLimit: 10
         }),
         fetchAuditEvents(
@@ -1367,11 +1523,9 @@ function App() {
         )
       ]);
       const appliedAudit = auditRows.find((event) => event.metadata?.approvalRequestId === approvedApproval.id) ?? auditRows[0] ?? null;
-      setScope(nextScope);
       setTraceFilters(nextTraceFilters);
-      setAccessFilters(nextAccessFilters);
       setData(appliedAudit ? { ...nextData, auditEvents: [appliedAudit, ...nextData.auditEvents.filter((event) => event.id !== appliedAudit.id)] } : nextData);
-      setAccessProfile(nextProfile);
+      setAiAdminApprovalJourneyAccessProfile(nextProfile);
       setAiAdminApprovalAuditEvent(appliedAudit);
       setLastRefresh(new Date());
       setAiAdminApprovalJourneyResult({
@@ -1383,8 +1537,8 @@ function App() {
         targetId: target.id,
         toolListStatus: toolList.status
       });
-      await refreshAiAdminApplicationHealth(nextForm, { requireLiveApi: false });
-      await refreshAiAdminProductionReadiness(nextForm, {
+      await refreshAiAdminApplicationHealth(validationForm, { requireLiveApi: false });
+      await refreshAiAdminProductionReadiness(validationForm, {
         approvalRequestId: approvedApproval.id,
         requireLiveApi: false,
         subjectId: nextConfig.subjectId
@@ -1392,7 +1546,7 @@ function App() {
       setAiAdminApprovalJourneyMessage(t("message.aiAdminApprovalJourneyComplete"));
       setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: applied.tenantEntitlements.length }));
     } catch (error) {
-      setAiAdminApprovalJourneyMessage(error instanceof Error ? error.message : "Permission package approval journey failed");
+      setAiAdminApprovalJourneyMessage(localizedErrorMessage(t, language, error, "error.permissionPackageApprovalJourneyFailed"));
     } finally {
       setAiAdminApprovalJourneyRunning(false);
     }
@@ -1450,7 +1604,7 @@ function App() {
       setAgentMessage(t("message.agentCreated"));
       await refresh();
     } catch (error) {
-      setAgentMessage(error instanceof Error ? error.message : "Unable to create agent");
+      setAgentMessage(localizedErrorMessage(t, language, error, "error.createAgent"));
     }
   }
 
@@ -1466,7 +1620,7 @@ function App() {
       setAgentMessage(tx(t, "message.statusChanged", { name: agent.name, status: agentStatusLabel(status, t) }));
       await refresh();
     } catch (error) {
-      setAgentMessage(error instanceof Error ? error.message : "Unable to update agent status");
+      setAgentMessage(localizedErrorMessage(t, language, error, "error.updateAgentStatus"));
     } finally {
       setCleanupActionId("");
     }
@@ -1480,7 +1634,7 @@ function App() {
       setPolicyMessage(t("message.policyDisabled"));
       await refresh();
     } catch (error) {
-      setPolicyMessage(error instanceof Error ? error.message : "Unable to disable route policy");
+      setPolicyMessage(localizedErrorMessage(t, language, error, "error.disableRoutePolicy"));
     } finally {
       setCleanupActionId("");
     }
@@ -1508,7 +1662,7 @@ function App() {
       setKeyMessage(t("message.keyCreated"));
       setKeyForm({ ...defaultKeyForm, agentId: keyForm.agentId });
     } catch (error) {
-      setKeyMessage(error instanceof Error ? error.message : "Unable to create key");
+      setKeyMessage(localizedErrorMessage(t, language, error, "error.createKey"));
     }
   }
 
@@ -1534,7 +1688,7 @@ function App() {
       setRotateMessage(t("message.credentialRotated"));
       await refresh();
     } catch (error) {
-      setRotateMessage(error instanceof Error ? error.message : "Unable to rotate credential");
+      setRotateMessage(localizedErrorMessage(t, language, error, "error.rotateCredential"));
     }
   }
 
@@ -1574,7 +1728,7 @@ function App() {
       setPolicyForm({ ...defaultPolicyForm, callerAgentId: policyForm.callerAgentId });
       await refresh();
     } catch (error) {
-      setPolicyMessage(error instanceof Error ? error.message : "Unable to create route policy");
+      setPolicyMessage(localizedErrorMessage(t, language, error, "error.createRoutePolicy"));
     }
   }
 
@@ -1603,7 +1757,7 @@ function App() {
         setCapabilityMessage(t("message.capabilityFallback"));
         return;
       }
-      setCapabilityMessage(error instanceof Error ? error.message : "Unable to refresh capabilities");
+      setCapabilityMessage(localizedErrorMessage(t, language, error, "error.refreshCapabilities"));
     } finally {
       setCapabilityActionId("");
     }
@@ -1641,7 +1795,7 @@ function App() {
         setCapabilityMessage(tx(t, "message.capabilityApprovedFallback", { name: capability.key }));
         return;
       }
-      setCapabilityMessage(error instanceof Error ? error.message : "Unable to approve capability");
+      setCapabilityMessage(localizedErrorMessage(t, language, error, "error.approveCapability"));
     } finally {
       setCapabilityActionId("");
     }
@@ -1660,6 +1814,11 @@ function App() {
     }
     if (!tenantId || !workspaceId || !callerInstanceId) {
       setCapabilityMessage(t("message.validationTenantWorkspaceCaller"));
+      return;
+    }
+    const subjectSelector = capabilityForm.subjectSelector.trim();
+    if (!subjectSelector || subjectSelector === "*") {
+      setCapabilityMessage(t("message.validationSubjectSelectorRequired"));
       return;
     }
     const dataScopes = capability.dataScopes ?? [];
@@ -1693,7 +1852,7 @@ function App() {
           dataScopes,
           effect: "allow",
           status: "enabled",
-          subjectSelector: capabilityForm.subjectSelector.trim() || undefined,
+          subjectSelector,
           workspaceAssignmentId: workspaceAssignment.id
         },
         adminKey
@@ -1708,7 +1867,7 @@ function App() {
         setCapabilityMessage(t("message.grantChainCreatedFallback"));
         return;
       }
-      setCapabilityMessage(error instanceof Error ? error.message : "Unable to create grant chain");
+      setCapabilityMessage(localizedErrorMessage(t, language, error, "error.createGrantChain"));
     } finally {
       setCapabilityActionId("");
     }
@@ -1739,8 +1898,8 @@ function App() {
     setAiAdminApprovalRequests((current) => [request, ...current.filter((item) => item.id !== request.id)]);
   }
 
-  function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
-    const approvalRequestId = aiAdminApprovalRequest?.id.trim();
+function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
+    const approvalRequestId = aiAdminApprovalRequest?.status === "approved" ? aiAdminApprovalRequest.id.trim() : "";
     return approvalRequestId ? { ...aiAdminForm, approvalRequestId } : { ...aiAdminForm };
   }
 
@@ -1768,7 +1927,7 @@ function App() {
     } catch (error) {
       if (!isAbortError(error)) {
         setAiAdminApplyPreflight(null);
-        setAiAdminApplyPreflightMessage(error instanceof Error ? error.message : "Unable to run permission package preflight");
+        setAiAdminApplyPreflightMessage(localizedErrorMessage(t, language, error, "error.runPermissionPackagePreflight"));
       }
       return null;
     } finally {
@@ -1808,38 +1967,74 @@ function App() {
       setAiAdminReviewerQueueMessage(tx(t, "message.reviewerQueueLoaded", { count: rows.length }));
     } catch (error) {
       if (!isAbortError(error)) {
-        setAiAdminReviewerQueueMessage(error instanceof Error ? error.message : "Unable to load reviewer queue");
+        setAiAdminReviewerQueueMessage(localizedErrorMessage(t, language, error, "error.loadReviewerQueue"));
       }
     } finally {
       setAiAdminReviewerQueueLoading(false);
     }
   }
 
+  function startApprovalResolutionCooldown() {
+    approvalResolveBlockedRef.current = true;
+    setAiAdminApprovalResolutionCoolingDown(true);
+    if (approvalResolveCooldownTimerRef.current !== null) {
+      window.clearTimeout(approvalResolveCooldownTimerRef.current);
+    }
+    approvalResolveCooldownTimerRef.current = window.setTimeout(() => {
+      approvalResolveBlockedRef.current = false;
+      approvalResolveCooldownTimerRef.current = null;
+      setAiAdminApprovalResolutionCoolingDown(false);
+    }, approvalResolveCooldownMs);
+  }
+
   async function createAiAdminApprovalRequest() {
+    if (approvalCreateInFlightRef.current || aiAdminApprovalAction === "create") {
+      return;
+    }
     if (!data?.loadedFromApi) {
       setAiAdminMessage(t("message.permissionApprovalRequiresLiveApi"));
       return;
     }
+    if (!aiAdminForm.requestText.trim()) {
+      setAiAdminMessage(t("message.permissionApprovalRequestTextRequired"));
+      return;
+    }
+    if (aiAdminApprovalRequest?.status === "pending") {
+      setAiAdminSelectedApprovalRequestId(aiAdminApprovalRequest.id);
+      setAiAdminMessage(t("message.permissionApprovalAlreadyPending"));
+      return;
+    }
+    approvalCreateInFlightRef.current = true;
     setAiAdminApprovalAction("create");
     setAiAdminMessage("");
     try {
       const request = await createPermissionPackageApprovalRequest(aiAdminForm, adminKey);
+      startApprovalResolutionCooldown();
       upsertAiAdminApprovalRequest(request);
       setAiAdminApplyPreflight(null);
       setAiAdminApplyPreflightMessage("");
       setAiAdminMessage(tx(t, "message.permissionApprovalCreated", { id: request.id }));
     } catch (error) {
-      setAiAdminMessage(error instanceof Error ? error.message : "Unable to create approval request");
+      setAiAdminMessage(localizedErrorMessage(t, language, error, "error.createApprovalRequest"));
     } finally {
+      approvalCreateInFlightRef.current = false;
       setAiAdminApprovalAction("");
     }
   }
 
-  async function approveAiAdminApprovalRequest(requestId?: string) {
+  async function approveAiAdminApprovalRequest(requestId?: string, comment?: string) {
+    if (approvalResolveBlockedRef.current) {
+      return;
+    }
+    if (!data?.loadedFromApi) {
+      setAiAdminMessage(t("message.permissionApprovalRequiresLiveApi"));
+      return;
+    }
     const targetRequest = requestId
       ? aiAdminApprovalRequests.find((request) => request.id === requestId)
       : aiAdminApprovalRequest;
     if (!targetRequest) return;
+    const reviewerComment = comment?.trim();
     setAiAdminApprovalAction("approve");
     setAiAdminMessage("");
     try {
@@ -1847,7 +2042,7 @@ function App() {
       const request = await approvePermissionPackageApprovalRequest(
         targetRequest.id,
         {
-          comment: requestId ? "Approved from permission package reviewer queue" : "Approved from permission package console",
+          comment: reviewerComment || (requestId ? "Approved from permission package reviewer queue" : "Approved from permission package console"),
           ...(reviewer ? { reviewer } : {})
         },
         adminKey
@@ -1857,17 +2052,29 @@ function App() {
       setAiAdminApplyPreflightMessage("");
       setAiAdminMessage(tx(t, "message.permissionApprovalApproved", { id: request.id }));
     } catch (error) {
-      setAiAdminMessage(error instanceof Error ? error.message : "Unable to approve request");
+      setAiAdminMessage(localizedErrorMessage(t, language, error, "error.approveRequest"));
     } finally {
       setAiAdminApprovalAction("");
     }
   }
 
-  async function rejectAiAdminApprovalRequest(requestId?: string) {
+  async function rejectAiAdminApprovalRequest(requestId?: string, comment?: string) {
+    if (approvalResolveBlockedRef.current) {
+      return;
+    }
+    if (!data?.loadedFromApi) {
+      setAiAdminMessage(t("message.permissionApprovalRequiresLiveApi"));
+      return;
+    }
     const targetRequest = requestId
       ? aiAdminApprovalRequests.find((request) => request.id === requestId)
       : aiAdminApprovalRequest;
     if (!targetRequest) return;
+    const reviewerComment = comment?.trim();
+    if (!reviewerComment) {
+      setAiAdminMessage(t("message.permissionApprovalRejectReasonRequired"));
+      return;
+    }
     setAiAdminApprovalAction("reject");
     setAiAdminMessage("");
     try {
@@ -1875,7 +2082,7 @@ function App() {
       const request = await rejectPermissionPackageApprovalRequest(
         targetRequest.id,
         {
-          comment: requestId ? "Rejected from permission package reviewer queue" : "Rejected from permission package console",
+          comment: reviewerComment,
           ...(reviewer ? { reviewer } : {})
         },
         adminKey
@@ -1885,7 +2092,41 @@ function App() {
       setAiAdminApplyPreflightMessage("");
       setAiAdminMessage(tx(t, "message.permissionApprovalRejected", { id: request.id }));
     } catch (error) {
-      setAiAdminMessage(error instanceof Error ? error.message : "Unable to reject request");
+      setAiAdminMessage(localizedErrorMessage(t, language, error, "error.rejectRequest"));
+    } finally {
+      setAiAdminApprovalAction("");
+    }
+  }
+
+  async function withdrawAiAdminApprovalRequest(comment?: string) {
+    if (!data?.loadedFromApi) {
+      setAiAdminMessage(t("message.permissionApprovalRequiresLiveApi"));
+      return;
+    }
+    if (!aiAdminApprovalRequest || aiAdminApprovalRequest.status !== "pending") {
+      setAiAdminMessage(t("message.permissionApprovalWithdrawUnavailable"));
+      return;
+    }
+    const withdrawComment = comment?.trim();
+    setAiAdminApprovalAction("withdraw");
+    setAiAdminMessage("");
+    try {
+      const request = await withdrawPermissionPackageApprovalRequest(aiAdminApprovalRequest.id, { comment: withdrawComment }, adminKey);
+      upsertAiAdminApprovalRequest(request);
+      setAiAdminSelectedApprovalRequestId(request.id);
+      setAiAdminWorkbenchPreview(null);
+      setAiAdminApplyPreflight(null);
+      setAiAdminApplyPreflightMessage("");
+      setAiAdminApplication(null);
+      setAiAdminApplicationHealth(null);
+      setAiAdminApplicationHealthMessage("");
+      setAiAdminApplicationImpact(null);
+      setAiAdminApplicationImpactMessage("");
+      setAiAdminProductionReadiness(null);
+      setAiAdminProductionReadinessMessage("");
+      setAiAdminMessage(t("message.permissionApprovalWithdrawn"));
+    } catch (error) {
+      setAiAdminMessage(localizedErrorMessage(t, language, error, "error.withdrawRequest"));
     } finally {
       setAiAdminApprovalAction("");
     }
@@ -1899,6 +2140,10 @@ function App() {
     setAiAdminApplicationImpactMessage("");
     setAiAdminProductionReadiness(null);
     setAiAdminProductionReadinessMessage("");
+    if (!data?.loadedFromApi) {
+      setAiAdminMessage(t("message.fallbackDataModeActionBlocked"));
+      return;
+    }
     if (!aiAdminDraft.readiness.canApply) {
       const detail = permissionReadinessMessages(aiAdminDraft.readiness, t).join(", ");
       setAiAdminMessage(tx(t, "message.permissionPackageNotReady", { detail: detail || "not ready" }));
@@ -1920,6 +2165,10 @@ function App() {
       }
       if (aiAdminApprovalRequest.status === "rejected") {
         setAiAdminMessage(t("message.permissionApprovalRejectedApply"));
+        return;
+      }
+      if (aiAdminApprovalRequest.status === "withdrawn") {
+        setAiAdminMessage(t("message.permissionApprovalWithdrawnApply"));
         return;
       }
     }
@@ -1991,7 +2240,7 @@ function App() {
       setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: appliedCount }));
       await loadAiAdminApprovalRequestsForDraft(aiAdminDraft).catch(() => undefined);
     } catch (error) {
-      setAiAdminMessage(error instanceof Error ? error.message : "Unable to apply permission package");
+      setAiAdminMessage(localizedErrorMessage(t, language, error, "error.applyPermissionPackage"));
     } finally {
       setAiAdminApplying(false);
     }
@@ -2035,7 +2284,7 @@ function App() {
           dataScopes: aiAdminDraft.dataScopes,
           effect: "allow",
           status: "enabled",
-          subjectSelector: aiAdminForm.subjectSelector?.trim() || undefined,
+          subjectSelector: (aiAdminForm.subjectSelector ?? "").trim(),
           workspaceAssignmentId: workspaceAssignment.id
         },
         adminKey
@@ -2045,6 +2294,7 @@ function App() {
   }
 
   const agents = data?.agents ?? [];
+  const tenants = data?.tenants ?? [];
   const traces = data?.traces ?? [];
   const auditEvents = data?.auditEvents ?? [];
   const channels = data?.channels ?? [];
@@ -2099,7 +2349,6 @@ function App() {
   const activePolicies = policies.filter((policy) => policy.status === "enabled").length;
   const deniedTraces = traces.filter((trace) => trace.decision === "denied").length;
   const allowedTraces = traces.filter((trace) => trace.decision === "allowed").length;
-  const pendingCapabilities = capabilities.filter((capability) => capability.discoveryStatus === "pending_review").length;
   const runtimeEvidence = runtimeEvidenceMetric(allowedTraces, deniedTraces);
   const dataSourceLabel = loadError
     ? t("dataSource.apiError")
@@ -2109,11 +2358,7 @@ function App() {
   const activeView = viewForNav(activeNav);
   const activeNavItem = navItems.find((item) => item.key === activeView.key) ?? navItems[0];
   const activeNavLabel = t(`nav.${activeNavItem.key}`, activeNavItem.label);
-  const isCapabilitiesView = activeView.key === "capabilities";
-  const isAccessView = activeView.key === "access";
-  const showWorkspaceTelemetry = activeView.key !== "ai-admin";
-  const accessSummary = accessProfile?.summary;
-  const invalidAccessRows = countInvalidAccessProfileRows(accessProfile);
+  const showWorkspaceTelemetry = activeView.key === "cockpit";
   const pageTitle = t(activeView.titleKey, t("app.title"));
 
   useEffect(() => {
@@ -2127,9 +2372,9 @@ function App() {
   const aiAdminApprovalJourneyEvaluation = useMemo(
     () =>
       evaluateAiAdminApprovalJourney({
-        accessProfile,
+        accessProfile: aiAdminApprovalJourneyAccessProfile ?? accessProfile,
         application: aiAdminApplication,
-        approvalRequest: aiAdminApprovalRequest,
+        approvalRequest: aiAdminApprovalJourneyApprovalRequest ?? aiAdminApprovalRequest,
         auditEvent: aiAdminApprovalAuditEvent,
         config: aiAdminApprovalJourneyConfig,
         data,
@@ -2137,6 +2382,8 @@ function App() {
       }),
     [
       accessProfile,
+      aiAdminApprovalJourneyAccessProfile,
+      aiAdminApprovalJourneyApprovalRequest,
       aiAdminApplication,
       aiAdminApprovalAuditEvent,
       aiAdminApprovalJourneyConfig,
@@ -2255,8 +2502,8 @@ function App() {
     </Panel>
   );
   const aiAdminPanel = (
-    <Panel className="span-12" icon={<ShieldCheck size={18} />} title={t("panel.aiAdminPermissionWorkbench")}>
       <AiAdminPermissionWorkbench
+        accessSubjects={aiAdminAccessSubjects}
         agents={agents}
         approvalAction={aiAdminApprovalAction}
         approvalAuditEvent={aiAdminApprovalAuditEvent}
@@ -2268,9 +2515,12 @@ function App() {
         approvalReadiness={aiAdminApprovalReadiness}
         approvalReadinessChecking={aiAdminApprovalReadinessChecking}
         approvalReadinessMessage={aiAdminApprovalReadinessMessage}
+        approvalResolutionBlocked={aiAdminApprovalResolutionCoolingDown}
         approvalRequest={aiAdminApprovalRequest}
         approvalRequests={aiAdminApprovalRequests}
         approvalReviewer={aiAdminApprovalReviewer}
+        workbenchPreview={aiAdminWorkbenchPreview}
+        liveDataAvailable={Boolean(data?.loadedFromApi)}
         productionSummary={aiAdminProductionConsoleSummary}
         applyPreflight={aiAdminApplyPreflight}
         applyPreflightLoading={aiAdminApplyPreflightLoading}
@@ -2296,9 +2546,10 @@ function App() {
         mcpTargets={mcpTargets}
         onApply={() => void applyAiAdminPermissionPackage()}
         onApprovalReviewerChange={setAiAdminApprovalReviewer}
-        onApproveApprovalRequest={(requestId) => void approveAiAdminApprovalRequest(requestId)}
+        onApproveApprovalRequest={(requestId, comment) => void approveAiAdminApprovalRequest(requestId, comment)}
         onChange={(nextForm) => {
           setAiAdminForm(nextForm);
+          setAiAdminWorkbenchPreview(null);
           setAiAdminApplication(null);
           setAiAdminApplicationHealth(null);
           setAiAdminApplicationHealthMessage("");
@@ -2317,13 +2568,14 @@ function App() {
         }}
         onCreateApprovalRequest={() => void createAiAdminApprovalRequest()}
         onExplainAccessDecision={() => void explainAiAdminAccessDecision()}
+        onOpenAccessProfile={openAiAdminAccessProfile}
         onRefreshApplyPreflight={() => void refreshAiAdminApplyPreflight()}
         onRefreshApprovalReadiness={() => void refreshAiAdminApprovalReadiness()}
         onRefreshApplicationHealth={() => void refreshAiAdminApplicationHealth()}
         onExportProductionEvidence={() => void exportAiAdminProductionEvidence()}
         onRefreshProductionReadiness={() => void refreshAiAdminProductionReadiness()}
         onRefreshReviewerQueue={() => void refreshAiAdminReviewerQueue()}
-        onRejectApprovalRequest={(requestId) => void rejectAiAdminApprovalRequest(requestId)}
+        onRejectApprovalRequest={(requestId, comment) => void rejectAiAdminApprovalRequest(requestId, comment)}
         onRehearseApplicationDrift={() => void rehearseAiAdminApplicationDrift()}
         onReviewApplicationHealthRow={(application) => void reviewAiAdminApplicationImpact(application)}
         onReviewApplicationImpact={() => void reviewAiAdminApplicationImpact()}
@@ -2333,13 +2585,15 @@ function App() {
           setAiAdminApplicationImpact(null);
           setAiAdminApplicationImpactMessage("");
         }}
+        onStartNewPermissionChange={startNewAiAdminPermissionChange}
+        onWithdrawApprovalRequest={(comment) => void withdrawAiAdminApprovalRequest(comment)}
         reviewerQueueLoading={aiAdminReviewerQueueLoading}
         reviewerQueueMessage={aiAdminReviewerQueueMessage}
         selectedApprovalRequestId={aiAdminSelectedApprovalRequestId}
         templates={aiAdminTemplates}
+        tenants={tenants}
         t={t}
       />
-    </Panel>
   );
   const createAgentPanel = (
     <Panel className="span-4" icon={<Boxes size={18} />} title={t("panel.createAgent")}>
@@ -2397,30 +2651,21 @@ function App() {
       />
     </Panel>
   );
-  const focusPermissionApprovalAction = () => {
-    if (typeof document === "undefined") return;
-    document.getElementById("permission-package-workbench")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.setTimeout(() => {
-      document.querySelector<HTMLButtonElement>("[data-primary-approval-action]")?.focus();
-    }, 0);
-  };
-  const productKeyMessage = <ProductKeyMessage onPrimaryAction={focusPermissionApprovalAction} t={t} />;
   const viewContent = (() => {
     switch (activeView.key) {
       case "ai-admin":
         return (
           <section className="content-grid">
-            {productKeyMessage}
             {aiAdminPanel}
           </section>
         );
       case "registry":
         return (
           <section className="content-grid">
+            {agentRegistryPanel("span-12")}
             {createAgentPanel}
             {createKeyPanel}
             {rotateCredentialPanel}
-            {agentRegistryPanel("span-8")}
             {contractMatrixPanel("span-4")}
           </section>
         );
@@ -2443,9 +2688,7 @@ function App() {
       case "capabilities":
         return (
           <section className="content-grid">
-            {capabilityGovernancePanel("span-12")}
-            {tracePanel("span-7")}
-            {managementAuditPanel("span-5")}
+            {capabilityGovernancePanel()}
           </section>
         );
       case "access":
@@ -2492,56 +2735,47 @@ function App() {
           </div>
         </div>
 
-        <nav className="nav-list">
-          {navItems.map((item) => {
-            const Icon = navIconFor(item.key);
-            const itemLabel = t(`nav.${item.key}`, item.label);
+        <nav className="nav-list" aria-label={t("navGroup.mainNavigation")}>
+          {navGroups.map((group) => {
+            const groupItems = navItems.filter((item) => item.groupKey === group.key);
             return (
-              <button
-                aria-label={itemLabel}
-                className={activeView.key === item.key ? "nav-item active" : "nav-item"}
-                key={item.key}
-                onClick={() => setActiveNav(item.key)}
-                title={itemLabel}
-                type="button"
-              >
-                <Icon size={17} />
-                <span>{itemLabel}</span>
-              </button>
+              <section className="nav-group" key={group.key}>
+                <div className="section-kicker">{t(group.labelKey)}</div>
+                <div className="nav-group-items">
+                  {groupItems.map((item) => {
+                    const Icon = navIconFor(item.key);
+                    const itemLabel = t(`nav.${item.key}`, item.label);
+                    const itemDetail = t(item.detailKey);
+                    return (
+                      <button
+                        aria-current={activeView.key === item.key ? "page" : undefined}
+                        aria-label={`${itemLabel} - ${itemDetail}`}
+                        className={activeView.key === item.key ? "nav-item active" : "nav-item"}
+                        key={item.key}
+                        onClick={() => setActiveNav(item.key)}
+                        title={`${itemLabel} - ${itemDetail}`}
+                        type="button"
+                      >
+                        <Icon size={16} />
+                        <span>
+                          <strong>{itemLabel}</strong>
+                          <small>{itemDetail}</small>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
             );
           })}
         </nav>
 
-        <div className="sidebar-section">
-          <div className="section-kicker">{t("section.environments")}</div>
-          <div className="env-stack">
-            {workspaceTabs.map((tab) => (
-              <button
-                className={activeWorkspace === tab ? "env-pill selected" : "env-pill"}
-                key={tab}
-                onClick={() => setActiveWorkspace(tab)}
-                type="button"
-              >
-                <CircleDot size={12} />
-                {tab}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="sidebar-health">
-          <div>
-            <span className="health-dot" />
-            <strong>{t("app.controlPlane")}</strong>
-          </div>
-          <span>{loadError ? t("dataSource.apiError") : data?.loadedFromApi ? t("status.controlLive") : t("status.controlFallback")}</span>
-        </div>
       </aside>
 
-      <main className="workspace">
+      <main className="workspace" aria-busy={!data}>
         <header className="topbar">
           <div className="topbar-title">
-            <div className="breadcrumb">{t("app.gateway")} / {activeWorkspace} / {activeNavLabel}</div>
+            <div className="breadcrumb">{t("app.gateway")} / {activeNavLabel}</div>
             <h1>{pageTitle}</h1>
           </div>
           <div className="topbar-actions">
@@ -2561,22 +2795,55 @@ function App() {
                 EN
               </button>
             </div>
-            <label className="admin-key-box">
-              <LockKeyhole size={16} />
-              <input
-                onChange={(event) => setAdminKey(event.target.value)}
-                placeholder={t("control.adminKey")}
-                type="password"
-                value={adminKey}
-              />
-            </label>
-            <label className="search-box">
-              <Search size={16} />
-              <input placeholder={t("control.search")} />
-            </label>
-            <button aria-label={t("control.filter")} className="icon-button" title={t("control.filter")} type="button">
-              <Filter size={17} />
-            </button>
+            <details className="connection-menu">
+              <summary aria-label={t("section.connectionSettings")} className="connection-trigger" title={t("section.connectionSettings")}>
+                <LockKeyhole size={15} />
+                <span>{t("section.connectionSettings")}</span>
+              </summary>
+              <div className="connection-popover">
+                <div className="connection-popover-header">
+                  <strong>{t("section.connectionSettings")}</strong>
+                  <span>{t("text.connectionSettingsDetail")}</span>
+                </div>
+                <label className="connection-field">
+                  <span>{t("control.adminKey")}</span>
+                  <input
+                    onChange={(event) => setAdminKey(event.target.value)}
+                    placeholder={t("control.adminKey")}
+                    type="password"
+                    value={adminKey}
+                  />
+                </label>
+                <div className="connection-scope-grid">
+                  <label className="connection-field">
+                    <span>{t("form.tenantId")}</span>
+                    <input
+                      onBlur={() => void refresh()}
+                      onChange={(event) => setScope((current) => ({ ...current, tenantId: event.target.value }))}
+                      placeholder="tenantId"
+                      value={scope.tenantId}
+                    />
+                  </label>
+                  <label className="connection-field">
+                    <span>{t("form.workspaceId")}</span>
+                    <input
+                      onBlur={() => void refresh()}
+                      onChange={(event) => setScope((current) => ({ ...current, workspaceId: event.target.value }))}
+                      placeholder="workspaceId"
+                      value={scope.workspaceId}
+                    />
+                  </label>
+                </div>
+                <p className="connection-note">{t("text.adminKeyStoredLocally")}</p>
+                <div className="connection-status">
+                  <span className="health-dot" />
+                  <div>
+                    <strong>{loadError ? t("dataSource.apiError") : data?.loadedFromApi ? t("status.controlLive") : t("status.controlFallback")}</strong>
+                    <span>{dataSourceLabel}</span>
+                  </div>
+                </div>
+              </div>
+            </details>
             <button aria-label={t("action.refresh")} className="icon-button" onClick={refresh} title={t("action.refresh")} type="button">
               <RefreshCw size={17} />
             </button>
@@ -2623,37 +2890,49 @@ function App() {
             <section className="metric-grid" aria-label="Gateway metrics">
               <MetricCard
                 icon={<ServerCog size={18} />}
-                label={isAccessView ? t("metric.scopeTenants") : t("metric.managedAgents")}
-                value={String(isAccessView ? accessSummary?.tenantCount ?? 0 : agents.length)}
-                detail={isAccessView ? accessProfile?.tenant.name ?? normalizedScope(scope).tenantId : `${activeAgents} ${t("detail.active")}`}
+                label={t("metric.managedAgents")}
+                value={String(agents.length)}
+                detail={`${activeAgents} ${t("detail.active")}`}
                 tone="info"
               />
               <MetricCard
                 icon={<KeyRound size={18} />}
-                label={isAccessView ? t("metric.grantChains") : t("metric.activePolicies")}
-                value={String(isAccessView ? accessSummary?.grantCount ?? 0 : activePolicies)}
-                detail={isAccessView ? `${accessSummary?.targetCount ?? 0} ${t("detail.targets")}` : data?.routePoliciesLoadedFromApi ? t("detail.liveRoutePolicies") : t("detail.sampleFallback")}
+                label={t("metric.activePolicies")}
+                value={String(activePolicies)}
+                detail={data?.routePoliciesLoadedFromApi ? t("detail.liveRoutePolicies") : t("detail.sampleFallback")}
                 tone="success"
               />
               <MetricCard
                 icon={<TriangleAlert size={18} />}
-                label={isAccessView ? t("metric.invalidRows") : isCapabilitiesView ? t("metric.pendingCaps") : t("metric.deniedTraces")}
-                value={String(isAccessView ? invalidAccessRows : isCapabilitiesView ? pendingCapabilities : deniedTraces)}
-                detail={isAccessView ? `${accessSummary?.workspaceAssignmentCount ?? 0} ${t("detail.workspaces")}` : isCapabilitiesView ? `${capabilities.length} ${t("detail.discovered")}` : `${allowedTraces} ${t("detail.allowed")}`}
-                tone={(isAccessView ? invalidAccessRows : isCapabilitiesView ? pendingCapabilities : deniedTraces) > 0 ? "warning" : "success"}
+                label={t("metric.deniedTraces")}
+                value={String(deniedTraces)}
+                detail={`${allowedTraces} ${t("detail.allowed")}`}
+                tone={deniedTraces > 0 ? "warning" : "success"}
               />
               <MetricCard
                 icon={<ClipboardCheck size={18} />}
-                label={isAccessView ? t("metric.traceEvidence") : t("metric.runtimeEvidence")}
-                value={isAccessView ? String((accessSummary?.recentAllowedTraceCount ?? 0) + (accessSummary?.recentDeniedTraceCount ?? 0)) : runtimeEvidence.value}
-                detail={isAccessView ? `${accessSummary?.recentDeniedTraceCount ?? 0} ${t("detail.denied")}` : runtimeEvidence.value === "0" ? t("detail.noTraces") : `${allowedTraces} ${t("detail.allowed")} / ${deniedTraces} ${t("detail.denied")}`}
-                tone={isAccessView ? "neutral" : runtimeEvidence.tone}
+                label={t("metric.runtimeEvidence")}
+                value={runtimeEvidence.value}
+                detail={runtimeEvidence.value === "0" ? t("detail.noTraces") : `${allowedTraces} ${t("detail.allowed")} / ${deniedTraces} ${t("detail.denied")}`}
+                tone={runtimeEvidence.tone}
               />
             </section>
           </>
         ) : null}
 
-        {viewContent}
+        {!data ? (
+          <section className="workspace-loading" role="status" aria-live="polite">
+            <div className="workspace-loading-copy">
+              <strong>{t("status.loadingConsole")}</strong>
+              <span>{t("text.loadingConsoleDetail")}</span>
+            </div>
+            <div className="workspace-loading-skeleton" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          </section>
+        ) : viewContent}
       </main>
     </div>
   );
@@ -2804,1195 +3083,8 @@ function CoreJourneyWorkbench({
   );
 }
 
-function ProductKeyMessage({ onPrimaryAction, t }: { onPrimaryAction: () => void; t: Translator }) {
-  const messages = [
-    {
-      detailKey: "text.cockpitKeyMessageBoundaryDetail",
-      icon: <ShieldCheck size={16} />,
-      titleKey: "text.cockpitKeyMessageBoundary"
-    },
-    {
-      detailKey: "text.cockpitKeyMessageOperationsDetail",
-      icon: <ClipboardCheck size={16} />,
-      titleKey: "text.cockpitKeyMessageOperations"
-    },
-    {
-      detailKey: "text.cockpitKeyMessageEvidenceDetail",
-      icon: <FileSearch size={16} />,
-      titleKey: "text.cockpitKeyMessageEvidence"
-    }
-  ];
 
-  return (
-    <section className="cockpit-key-message span-12" aria-labelledby="cockpit-key-message-title">
-      <div className="cockpit-key-message-copy">
-        <h2 id="cockpit-key-message-title">{t("text.cockpitKeyMessageTitle")}</h2>
-        <p>{t("text.cockpitKeyMessageBody")}</p>
-        <div className="cockpit-key-message-actions">
-          <button className="secondary-button cockpit-key-message-action" onClick={onPrimaryAction} type="button">
-            <ClipboardCheck size={14} />
-            {t("action.startPermissionApproval")}
-          </button>
-        </div>
-      </div>
-      <div className="cockpit-key-message-points">
-        {messages.map((message) => (
-          <article className="cockpit-key-message-point" key={message.titleKey}>
-            <span>{message.icon}</span>
-            <div>
-              <strong>{t(message.titleKey)}</strong>
-              <p>{t(message.detailKey)}</p>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
 
-function AiAdminPermissionWorkbench({
-  agents,
-  application,
-  approvalAction,
-  approvalAuditEvent,
-  approvalJourneyConfig,
-  approvalJourneyEvaluation,
-  approvalJourneyMessage,
-  approvalJourneyResult,
-  approvalJourneyRunning,
-  approvalReadiness,
-  approvalReadinessChecking,
-  approvalReadinessMessage,
-  approvalRequest,
-  approvalRequests,
-  approvalReviewer,
-  productionSummary,
-  applyPreflight,
-  applyPreflightLoading,
-  applyPreflightMessage,
-  applicationHealth,
-  applicationHealthLoading,
-  applicationHealthMessage,
-  applicationImpact,
-  applicationImpactLoading,
-  applicationImpactMessage,
-  productionReadiness,
-  productionEvidenceExporting,
-  productionReadinessLoading,
-  productionReadinessMessage,
-  accessDecisionExplanation,
-  accessDecisionExplanationLoading,
-  accessDecisionExplanationMessage,
-  applying,
-  draft,
-  form,
-  message,
-  mcpTargets,
-  onApply,
-  onApprovalReviewerChange,
-  onApproveApprovalRequest,
-  onChange,
-  onCreateApprovalRequest,
-  onExplainAccessDecision,
-  onRefreshApplyPreflight,
-  onRefreshApprovalReadiness,
-  onRefreshApplicationHealth,
-  onExportProductionEvidence,
-  onRefreshProductionReadiness,
-  onRefreshReviewerQueue,
-  onRejectApprovalRequest,
-  onRehearseApplicationDrift,
-  onReviewApplicationHealthRow,
-  onReviewApplicationImpact,
-  onRunApprovalJourney,
-  onSelectApprovalRequest,
-  reviewerQueueLoading,
-  reviewerQueueMessage,
-  selectedApprovalRequestId,
-  templates,
-  t
-}: {
-  agents: Agent[];
-  application: PermissionPackageApplication | null;
-  approvalAction: "" | "create" | "approve" | "reject";
-  approvalAuditEvent: AuditEvent | null;
-  approvalJourneyConfig: AiAdminApprovalJourneyConfig;
-  approvalJourneyEvaluation: AiAdminApprovalJourneyEvaluation;
-  approvalJourneyMessage: string;
-  approvalJourneyResult: AiAdminApprovalJourneyResult | null;
-  approvalJourneyRunning: boolean;
-  approvalReadiness: AiAdminApprovalReadinessState;
-  approvalReadinessChecking: boolean;
-  approvalReadinessMessage: string;
-  approvalRequest: PermissionPackageApprovalRequest | null;
-  approvalRequests: PermissionPackageApprovalRequest[];
-  approvalReviewer: string;
-  productionSummary: AiAdminProductionConsoleSummary;
-  applyPreflight: PermissionPackageApplyPreflight | null;
-  applyPreflightLoading: boolean;
-  applyPreflightMessage: string;
-  applicationHealth: PermissionPackageApplicationHealth | null;
-  applicationHealthLoading: boolean;
-  applicationHealthMessage: string;
-  applicationImpact: PermissionPackageApplicationImpact | null;
-  applicationImpactLoading: boolean;
-  applicationImpactMessage: string;
-  productionReadiness: PermissionPackageProductionReadiness | null;
-  productionEvidenceExporting: boolean;
-  productionReadinessLoading: boolean;
-  productionReadinessMessage: string;
-  accessDecisionExplanation: AccessDecisionExplainResult | null;
-  accessDecisionExplanationLoading: boolean;
-  accessDecisionExplanationMessage: string;
-  applying: boolean;
-  draft: PermissionPackageDraft;
-  form: PermissionPackageDraftInput;
-  message: string;
-  mcpTargets: Agent[];
-  onApply: () => void;
-  onApprovalReviewerChange: (reviewer: string) => void;
-  onApproveApprovalRequest: (requestId?: string) => void;
-  onChange: (form: PermissionPackageDraftInput) => void;
-  onCreateApprovalRequest: () => void;
-  onExplainAccessDecision: () => void;
-  onRefreshApplyPreflight: () => void;
-  onRefreshApprovalReadiness: () => void;
-  onRefreshApplicationHealth: () => void;
-  onExportProductionEvidence: () => void;
-  onRefreshProductionReadiness: () => void;
-  onRefreshReviewerQueue: () => void;
-  onRejectApprovalRequest: (requestId?: string) => void;
-  onRehearseApplicationDrift: () => void;
-  onReviewApplicationHealthRow: (application: PermissionPackageApplication) => void;
-  onReviewApplicationImpact: () => void;
-  onRunApprovalJourney: () => void;
-  onSelectApprovalRequest: (requestId: string) => void;
-  reviewerQueueLoading: boolean;
-  reviewerQueueMessage: string;
-  selectedApprovalRequestId: string;
-  templates: PermissionPackageTemplate[];
-  t: Translator;
-}) {
-  const callers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
-  const hasApprovedRequest = approvalRequest?.status === "approved";
-  const canApply = draft.readiness.canApply && (draft.policyGate.canApplyDirectly || hasApprovedRequest);
-  const draftStatus = permissionDraftStatus(draft);
-  const approvalStatusTone = approvalRequest ? permissionApprovalStatusTone(approvalRequest.status) : "warning";
-  const reviewerQueueRequests = approvalRequests.filter((request) => request.status === "pending");
-  const runProductionPrimaryAction = () => {
-    if (productionSummary.primaryActionKey === "action.createApprovalRequest") {
-      onCreateApprovalRequest();
-      return;
-    }
-    if (productionSummary.primaryActionKey === "action.applyPermissionPackage") {
-      onApply();
-      return;
-    }
-    if (productionSummary.primaryActionKey === "action.exportProductionEvidence") {
-      onExportProductionEvidence();
-      return;
-    }
-    onRefreshProductionReadiness();
-  };
-  return (
-    <div className="ai-admin-workbench">
-      <section className={`ai-admin-production-console status-${productionSummary.status}`} id="permission-package-workbench">
-        <div className="ai-admin-production-console-header">
-          <div>
-            <strong>{t("section.aiAdminProductionConsole")}</strong>
-            <span>{t("text.aiAdminProductionConsoleHelp")}</span>
-          </div>
-          <div className="ai-admin-production-console-actions">
-            <div className="core-journey-score">
-              <strong>{productionSummary.readyCount}/{productionSummary.totalCount}</strong>
-              <span>{t("text.aiAdminApprovalJourneyCompletion")}</span>
-            </div>
-            <Badge tone={productionConsoleStatusTone(productionSummary.status)}>
-              {productionConsoleStatusLabel(productionSummary, t)}
-            </Badge>
-            <button
-              className="primary-button"
-              data-primary-approval-action
-              disabled={approvalJourneyRunning || applying || approvalAction === "create" || productionEvidenceExporting}
-              onClick={runProductionPrimaryAction}
-              type="button"
-            >
-              <CheckCircle2 size={14} />
-              {t(productionSummary.primaryActionKey)}
-            </button>
-          </div>
-        </div>
-        <ol className="ai-admin-production-rail">
-          {productionSummary.steps.map((step, index) => (
-            <li className={`ai-admin-production-step status-${step.status}`} key={step.key}>
-              <span className="ai-admin-production-step-index">{index + 1}</span>
-              <div>
-                <strong>{t(step.labelKey)}</strong>
-                {step.detailKey ? <span>{t(step.detailKey)}</span> : null}
-                {step.detail !== "-" ? <code>{step.detail}</code> : null}
-              </div>
-              {step.metric ? <small>{step.metric}</small> : null}
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <details className="ai-admin-evidence-details" open={approvalJourneyRunning || approvalJourneyEvaluation.completeCount > 0}>
-        <summary>
-          <span>{t("section.aiAdminApprovalJourney")}</span>
-          <Badge tone={approvalJourneyEvaluation.completeCount === approvalJourneyEvaluation.totalCount ? "success" : "neutral"}>
-            {approvalJourneyEvaluation.completeCount}/{approvalJourneyEvaluation.totalCount}
-          </Badge>
-        </summary>
-        <section className="ai-admin-live-journey">
-        <div className="ai-admin-journey-toolbar">
-          <div className="core-journey-score">
-            <strong>{approvalJourneyEvaluation.completeCount}/{approvalJourneyEvaluation.totalCount}</strong>
-            <span>{t("text.aiAdminApprovalJourneyCompletion")}</span>
-          </div>
-          <div className="ai-admin-journey-meta">
-            <div>
-              <span>{t("detail.runId")}</span>
-              <code>{approvalJourneyConfig.runId}</code>
-            </div>
-            <div>
-              <span>{t("detail.subjectId")}</span>
-              <code>{approvalJourneyConfig.subjectId}</code>
-            </div>
-            <div>
-              <span>{t("form.permissionPackage")}</span>
-              <strong>{approvalJourneyConfig.templateId}</strong>
-            </div>
-            <div>
-              <span>{t("form.endpoint")}</span>
-              <code>{approvalJourneyConfig.mcpEndpoint}</code>
-            </div>
-          </div>
-          <button className="primary-button" disabled={approvalJourneyRunning || applying} onClick={onRunApprovalJourney} type="button">
-            <Workflow size={14} />
-            {approvalJourneyRunning ? t("action.runningApprovalJourney") : t("action.runApprovalJourney")}
-          </button>
-        </div>
-        <div className="ai-admin-readiness">
-          <div className="core-journey-preflight-header">
-            <div>
-              <strong>{t("section.aiAdminReadiness")}</strong>
-              {approvalReadinessMessage ? <span>{approvalReadinessMessage}</span> : null}
-            </div>
-            <div className="core-journey-preflight-actions">
-              <button className="secondary-button" disabled={approvalJourneyRunning || approvalReadinessChecking} onClick={onRefreshApprovalReadiness} type="button">
-                <RefreshCw size={14} />
-                {approvalReadinessChecking ? t("action.checkingApprovalReadiness") : t("action.checkApprovalReadiness")}
-              </button>
-            </div>
-          </div>
-          <div className="ai-admin-readiness-grid">
-            {aiAdminApprovalReadinessRows(approvalReadiness).map((row) => (
-              <AiAdminApprovalReadinessRow key={row.key} row={row} t={t} />
-            ))}
-          </div>
-        </div>
-        <div className="ai-admin-journey-result">
-          <strong>{t("section.aiAdminApprovalJourney")}</strong>
-          {approvalJourneyResult ? (
-            <span>
-              tools/list {approvalJourneyResult.toolListStatus} · {approvalJourneyConfig.deniedTool} {approvalJourneyResult.deniedStatus} · {approvalJourneyConfig.writeTool} {approvalJourneyResult.allowedStatus}
-            </span>
-          ) : (
-            <span>{approvalJourneyConfig.childTenantId}</span>
-          )}
-          {approvalAuditEvent ? <code>{approvalAuditEvent.id}</code> : null}
-          {approvalJourneyMessage ? <em>{approvalJourneyMessage}</em> : null}
-        </div>
-        <div className="ai-admin-journey-steps">
-          {approvalJourneyEvaluation.steps.map((step) => (
-            <AiAdminApprovalJourneyStepRow key={step.key} step={step} t={t} />
-          ))}
-        </div>
-        </section>
-      </details>
-
-      <details className="ai-admin-config-details">
-        <summary>
-          <span>{t("section.permissionDraft")}</span>
-          <div className="ai-admin-config-summary">
-            <code>{permissionPackageTemplateName(draft.template, t)}</code>
-            <Badge tone={draftStatus.tone}>
-              {t(draftStatus.labelKey)}
-            </Badge>
-          </div>
-        </summary>
-        <div className="ai-admin-config-body">
-          <div className="ai-admin-request">
-            <label className="ai-admin-request-text">
-              {t("form.adminRequest")}
-              <textarea
-                rows={4}
-                value={form.requestText}
-                onChange={(event) => onChange({ ...form, requestText: event.target.value })}
-              />
-            </label>
-            <div className="ai-admin-fields">
-              <label>
-                {t("form.permissionPackage")}
-                <select value={form.templateId} onChange={(event) => onChange({ ...form, templateId: event.target.value })}>
-                  {templates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {permissionPackageTemplateName(template, t)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t("form.tenantId")}
-                <input value={form.tenantId} onChange={(event) => onChange({ ...form, tenantId: event.target.value })} />
-              </label>
-              <label>
-                {t("form.workspaceId")}
-                <input value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} />
-              </label>
-              <label>
-                {t("form.region")}
-                <input value={form.region} onChange={(event) => onChange({ ...form, region: event.target.value })} />
-              </label>
-              <label>
-                {t("form.callerInstance")}
-                <select value={form.callerInstanceId} onChange={(event) => onChange({ ...form, callerInstanceId: event.target.value })}>
-                  <option value="">{t("form.selectCaller")}</option>
-                  {callers.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t("form.target")}
-                <select value={form.targetId} onChange={(event) => onChange({ ...form, targetId: event.target.value })}>
-                  <option value="">{t("form.allMcpTargets")}</option>
-                  {mcpTargets.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t("form.subjectSelector")}
-                <input
-                  placeholder={t("form.subjectSelectorPlaceholder")}
-                  value={form.subjectSelector ?? ""}
-                  onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })}
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="permission-package-grid">
-        <section className="permission-package-summary">
-          <div className="permission-section-title">
-            <strong>{t("section.permissionDraft")}</strong>
-            <Badge tone={draftStatus.tone}>
-              {t(draftStatus.labelKey)}
-            </Badge>
-          </div>
-          <div className="permission-package-template">
-            <strong>{permissionPackageTemplateName(draft.template, t)}</strong>
-            <span>{permissionPackageTemplateSummary(draft.template, t)}</span>
-          </div>
-          <PermissionApplicationHealthPanel
-            health={applicationHealth}
-            loading={applicationHealthLoading}
-            message={applicationHealthMessage}
-            onRefresh={onRefreshApplicationHealth}
-            onReview={onReviewApplicationHealthRow}
-            t={t}
-          />
-          <PermissionProductionReadinessPanel
-            exporting={productionEvidenceExporting}
-            loading={productionReadinessLoading}
-            message={productionReadinessMessage}
-            onExport={onExportProductionEvidence}
-            onRefresh={onRefreshProductionReadiness}
-            readiness={productionReadiness}
-            t={t}
-          />
-          {application ? (
-            <div className="permission-application-evidence">
-              <div className="permission-section-title">
-                <strong>{t("section.permissionApplicationEvidence")}</strong>
-                <Badge tone="success">v{application.templateVersion}</Badge>
-              </div>
-              <div className="permission-application-grid">
-                <div>
-                  <span>{t("detail.applicationId")}</span>
-                  <code>{application.id}</code>
-                </div>
-                <div>
-                  <span>{t("detail.draftId")}</span>
-                  <code>{application.draftId}</code>
-                </div>
-                <div>
-                  <span>{t("detail.createdObjects")}</span>
-                  <strong>
-                    {application.tenantEntitlementIds.length + application.workspaceAssignmentIds.length + application.instanceAssignmentIds.length}
-                  </strong>
-                </div>
-                <div>
-                  <span>{t("detail.dataScopes")}</span>
-                  <strong>{application.dataScopes?.length ?? 0}</strong>
-                </div>
-              </div>
-              <PermissionApplicationImpactPanel
-                impact={applicationImpact}
-                loading={applicationImpactLoading}
-                message={applicationImpactMessage}
-                onRehearse={onRehearseApplicationDrift}
-                onReview={onReviewApplicationImpact}
-                t={t}
-              />
-            </div>
-          ) : null}
-          <div className="permission-metrics">
-            <div>
-              <span>{t("metric.allowedCapabilities")}</span>
-              <strong>{draft.allowedCapabilities.length}</strong>
-            </div>
-            <div>
-              <span>{t("metric.blockedCapabilities")}</span>
-              <strong>{draft.blockedCapabilities.length}</strong>
-            </div>
-            <div>
-              <span>{t("metric.simulationChecks")}</span>
-              <strong>{draft.simulationRows.length}</strong>
-            </div>
-          </div>
-          <CapabilityChipList
-            capabilities={draft.allowedCapabilities}
-            emptyLabel={t("empty.permissionAllowed.detail")}
-            label={t("section.allowedByPackage")}
-            tone="success"
-            t={t}
-          />
-          <CapabilityChipList
-            capabilities={draft.blockedCapabilities}
-            emptyLabel={t("empty.permissionBlocked.detail")}
-            label={t("section.blockedByPackage")}
-            tone="danger"
-            t={t}
-          />
-          <div className="permission-scope-list">
-            <strong>{t("section.dataScope")}</strong>
-            {draft.dataScopes.map((scope, index) => (
-              <code key={`${scope.dataDomain ?? "scope"}:${index}`}>{summarizeDataScopes([scope])}</code>
-            ))}
-          </div>
-          {draft.readiness.missingFields.length > 0 || draft.readiness.warnings.length > 0 ? (
-            <div className="permission-warning">
-              <TriangleAlert size={15} />
-              <span>{permissionReadinessMessages(draft.readiness, t).join(" · ")}</span>
-            </div>
-          ) : null}
-          <div className={`permission-policy-gate ${draft.policyGate.canApplyDirectly ? "is-direct" : "is-approval"}`}>
-            <div className="permission-section-title">
-              <strong>{t("section.permissionPolicyGate")}</strong>
-              <Badge tone={draft.policyGate.canApplyDirectly ? "success" : "warning"}>
-                {draft.policyGate.canApplyDirectly ? t("status.directApplyAllowed") : t("status.approvalRequired")}
-              </Badge>
-            </div>
-            <span>
-              {draft.policyGate.canApplyDirectly ? t("text.policyGateDirectDetail") : t("text.policyGateApprovalDetail")}
-            </span>
-            {draft.policyGate.reasons.length > 0 ? (
-              <ul>
-                {draft.policyGate.reasons.slice(0, 4).map((reason) => (
-                  <li key={reason.id}>{permissionPolicyReasonMessage(reason, t)}</li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-          <PermissionPackageApplyPreflightPanel
-            loading={applyPreflightLoading}
-            message={applyPreflightMessage}
-            onRefresh={onRefreshApplyPreflight}
-            preflight={applyPreflight}
-            t={t}
-          />
-          <AccessDecisionExplainPanel
-            explanation={accessDecisionExplanation}
-            loading={accessDecisionExplanationLoading}
-            message={accessDecisionExplanationMessage}
-            onExplain={onExplainAccessDecision}
-            t={t}
-          />
-          <div className="permission-reviewer-queue">
-            <div className="permission-section-title">
-              <strong>{t("section.permissionReviewerQueue")}</strong>
-              <span>{t("text.reviewerQueueHelp")}</span>
-            </div>
-            <div className="permission-reviewer-controls">
-              <label>
-                {t("form.approvalReviewer")}
-                <input
-                  value={approvalReviewer}
-                  onChange={(event) => onApprovalReviewerChange(event.target.value)}
-                />
-              </label>
-              <button disabled={reviewerQueueLoading || Boolean(approvalAction)} onClick={onRefreshReviewerQueue} type="button">
-                <RefreshCw size={14} />
-                {reviewerQueueLoading ? t("action.loading") : t("action.refreshReviewerQueue")}
-              </button>
-            </div>
-            {selectedApprovalRequestId ? (
-              <span className="permission-reviewer-selected">
-                {t("text.reviewerQueueSelected")} <code>{selectedApprovalRequestId}</code>
-              </span>
-            ) : null}
-            {reviewerQueueMessage ? <span className="permission-reviewer-message">{reviewerQueueMessage}</span> : null}
-            <div className="permission-reviewer-list">
-              {reviewerQueueRequests.length === 0 ? (
-                <EmptyRow title={t("section.permissionReviewerQueue")} detail={t("empty.reviewerQueue.detail")} />
-              ) : null}
-              {reviewerQueueRequests.map((request) => (
-                <article
-                  className={`permission-reviewer-row ${request.id === selectedApprovalRequestId ? "is-selected" : ""}`}
-                  key={request.id}
-                >
-                  <button onClick={() => onSelectApprovalRequest(request.id)} type="button">
-                    <strong>{request.id}</strong>
-                    <span>{permissionPackageApprovalRouteLabel(request)}</span>
-                    <code>{request.templateId} · {formatDate(request.expiresAt)}</code>
-                  </button>
-                  <Badge tone={permissionApprovalStatusTone(request.status)}>
-                    {permissionApprovalStatusLabel(request.status, t)}
-                  </Badge>
-                  <div className="permission-reviewer-row-actions">
-                    <button disabled={Boolean(approvalAction) || applying} onClick={() => onApproveApprovalRequest(request.id)} type="button">
-                      <CheckCircle2 size={13} />
-                      {approvalAction === "approve" ? t("action.approving") : t("action.approvePermissionRequest")}
-                    </button>
-                    <button disabled={Boolean(approvalAction) || applying} onClick={() => onRejectApprovalRequest(request.id)} type="button">
-                      <TriangleAlert size={13} />
-                      {approvalAction === "reject" ? t("action.rejecting") : t("action.rejectPermissionRequest")}
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-          {!draft.policyGate.canApplyDirectly ? (
-            <div className="permission-approval-request">
-              <div className="permission-section-title">
-                <strong>{t("section.permissionApprovalRequest")}</strong>
-                <Badge tone={approvalRequest ? approvalStatusTone : "warning"}>
-                  {approvalRequest ? permissionApprovalStatusLabel(approvalRequest.status, t) : t("status.approvalNotRequested")}
-                </Badge>
-              </div>
-              {approvalRequest ? (
-                <div className="permission-approval-grid">
-                  <div>
-                    <span>{t("detail.approvalRequestId")}</span>
-                    <code>{approvalRequest.id}</code>
-                  </div>
-                  <div>
-                    <span>{t("table.version")}</span>
-                    <strong>v{approvalRequest.templateVersion} / p{approvalRequest.policyVersion}</strong>
-                  </div>
-                  <div>
-                    <span>{t("detail.createdObjects")}</span>
-                    <strong>{approvalRequest.allowedCapabilityIds.length}</strong>
-                  </div>
-                  <div>
-                    <span>{t("table.actor")}</span>
-                    <strong>{approvalRequest.reviewedBy || approvalRequest.requestedBy || "-"}</strong>
-                  </div>
-                </div>
-              ) : (
-                <span>{t("text.approvalRequestEmpty")}</span>
-              )}
-              <div className="permission-review-actions">
-                {approvalRequest?.status === "pending" ? (
-                  <>
-                    <button disabled={Boolean(approvalAction) || applying} onClick={() => onApproveApprovalRequest()} type="button">
-                      <CheckCircle2 size={14} />
-                      {approvalAction === "approve" ? t("action.approving") : t("action.approvePermissionRequest")}
-                    </button>
-                    <button disabled={Boolean(approvalAction) || applying} onClick={() => onRejectApprovalRequest()} type="button">
-                      <TriangleAlert size={14} />
-                      {approvalAction === "reject" ? t("action.rejecting") : t("action.rejectPermissionRequest")}
-                    </button>
-                  </>
-                ) : null}
-                {approvalRequest?.status !== "pending" && approvalRequest?.status !== "approved" ? (
-                  <button disabled={Boolean(approvalAction) || applying || !draft.readiness.canApply} onClick={onCreateApprovalRequest} type="button">
-                    <ClipboardCheck size={14} />
-                    {approvalAction === "create" ? t("action.creatingApprovalRequest") : t("action.createApprovalRequest")}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-          <div className="permission-actions">
-            <button className="primary-button" disabled={applying || !canApply} onClick={onApply} type="button">
-              <CheckCircle2 size={14} />
-              {applying ? t("action.applyingPermissionPackage") : t("action.applyPermissionPackage")}
-            </button>
-            {message ? <span>{message}</span> : null}
-          </div>
-        </section>
-
-        <section className="permission-simulation">
-          <div className="permission-section-title">
-            <strong>{t("section.permissionSimulation")}</strong>
-            <span>{t("text.aiAdminSimulationHint")}</span>
-          </div>
-          <PermissionSimulationTable rows={draft.simulationRows} t={t} />
-        </section>
-          </div>
-        </div>
-      </details>
-    </div>
-  );
-}
-
-function PermissionPackageApplyPreflightPanel({
-  loading,
-  message,
-  onRefresh,
-  preflight,
-  t
-}: {
-  loading: boolean;
-  message: string;
-  onRefresh: () => void;
-  preflight: PermissionPackageApplyPreflight | null;
-  t: Translator;
-}) {
-  const checks = preflight?.checks ?? [];
-  const visibleChecks = [...checks]
-    .sort((left, right) => permissionApplyPreflightSeverityRank(right.severity) - permissionApplyPreflightSeverityRank(left.severity))
-    .slice(0, 5);
-  const summary = preflight?.summary;
-  const statusTone: Tone = !summary ? "neutral" : summary.canApply ? "success" : "danger";
-  return (
-    <div className={`permission-apply-preflight ${summary?.canApply === false ? "is-blocked" : ""}`}>
-      <div className="permission-health-header">
-        <div>
-          <strong>{t("section.permissionApplyPreflight")}</strong>
-          {message ? <span>{message}</span> : <span>{t("text.permissionApplyPreflightHint")}</span>}
-        </div>
-        <div className="permission-preflight-actions">
-          <Badge tone={statusTone}>
-            {!summary ? t("status.preflightPending") : summary.canApply ? t("status.preflightOk") : t("status.preflightError")}
-          </Badge>
-          <button className="secondary-button" disabled={loading} onClick={onRefresh} type="button">
-            <RefreshCw size={14} />
-            {loading ? t("action.checkingPreflight") : t("action.checkPreflight")}
-          </button>
-        </div>
-      </div>
-
-      <div className="permission-health-metrics permission-preflight-metrics">
-        <div>
-          <span>{t("metric.preflightBlockers")}</span>
-          <strong>{summary?.blockingCount ?? 0}</strong>
-        </div>
-        <div>
-          <span>{t("metric.preflightWarnings")}</span>
-          <strong>{summary?.warningCount ?? 0}</strong>
-        </div>
-        <div>
-          <span>{t("metric.preflightPlannedObjects")}</span>
-          <strong>
-            {summary
-              ? summary.plannedTenantEntitlementCount + summary.plannedWorkspaceAssignmentCount + summary.plannedInstanceAssignmentCount
-              : 0}
-          </strong>
-        </div>
-        <div>
-          <span>{t("metric.preflightExistingGrants")}</span>
-          <strong>{summary?.existingGrantCount ?? 0}</strong>
-        </div>
-      </div>
-
-      {visibleChecks.length > 0 ? (
-        <div className="permission-preflight-list">
-          {visibleChecks.map((check) => (
-            <article className={`permission-preflight-row severity-${check.severity}`} key={`${check.code}:${check.capabilityId ?? check.message}`}>
-              <Badge tone={permissionApplyPreflightTone(check.severity)}>
-                {permissionApplyPreflightSeverityLabel(check.severity, t)}
-              </Badge>
-              <div>
-                <strong>{permissionApplyPreflightCheckLabel(check.code, t)}</strong>
-                <span>{permissionApplyPreflightCheckMessage(check, t)}</span>
-              </div>
-              {check.capabilityKey ? <code>{check.capabilityKey}</code> : null}
-            </article>
-          ))}
-        </div>
-      ) : (
-        <span className="permission-health-empty">{t("empty.permissionApplyPreflight.detail")}</span>
-      )}
-
-      {preflight?.nextActions.length ? (
-        <ul className="permission-preflight-next-actions">
-          {preflight.nextActions.slice(0, 2).map((action) => (
-            <li key={action}>{permissionApplyPreflightNextAction(action, t)}</li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
-function PermissionProductionReadinessPanel({
-  exporting,
-  loading,
-  message,
-  onExport,
-  onRefresh,
-  readiness,
-  t
-}: {
-  exporting: boolean;
-  loading: boolean;
-  message: string;
-  onExport: () => void;
-  onRefresh: () => void;
-  readiness: PermissionPackageProductionReadiness | null;
-  t: Translator;
-}) {
-  const summary = readiness?.summary;
-  const visibleChecks = [...(readiness?.checks ?? [])]
-    .sort((left, right) => permissionApplyPreflightSeverityRank(right.severity) - permissionApplyPreflightSeverityRank(left.severity))
-    .slice(0, 6);
-  return (
-    <div className={`permission-apply-preflight permission-production-readiness status-${readiness?.status ?? "pending"}`}>
-      <div className="permission-health-header">
-        <div>
-          <strong>{t("section.permissionProductionReadiness")}</strong>
-          {message ? <span>{message}</span> : <span>{t("empty.permissionProductionReadiness.detail")}</span>}
-        </div>
-        <div className="permission-preflight-actions">
-          <Badge tone={productionReadinessStatusTone(readiness?.status)}>
-            {productionReadinessStatusLabel(readiness?.status, t)}
-          </Badge>
-          <button className="secondary-button" disabled={loading} onClick={onRefresh} type="button">
-            <RefreshCw size={14} />
-            {loading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
-          </button>
-          <button className="secondary-button" disabled={exporting} onClick={onExport} type="button">
-            <Download size={14} />
-            {exporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
-          </button>
-        </div>
-      </div>
-
-      <div className="permission-health-metrics permission-preflight-metrics">
-        <div>
-          <span>{t("metric.productionReadyChecks")}</span>
-          <strong>{summary?.readyCount ?? 0}</strong>
-        </div>
-        <div>
-          <span>{t("metric.productionBlockers")}</span>
-          <strong>{summary?.blockingCount ?? 0}</strong>
-        </div>
-        <div>
-          <span>{t("metric.productionWarnings")}</span>
-          <strong>{summary?.warningCount ?? 0}</strong>
-        </div>
-        <div>
-          <span>{t("detail.applicationId")}</span>
-          <strong>{summary?.hasApplication ? "1" : "0"}</strong>
-        </div>
-      </div>
-
-      {readiness ? (
-        <div className="permission-application-grid permission-production-evidence">
-          <div>
-            <span>{t("detail.applicationId")}</span>
-            {readiness.latestApplication ? <code>{readiness.latestApplication.id}</code> : <strong>0</strong>}
-          </div>
-          <div>
-            <span>{t("productionCheck.runtime_allowed_trace_present")}</span>
-            {readiness.runtimeEvidence.allowedTrace ? <code>{readiness.runtimeEvidence.allowedTrace.id}</code> : <strong>0</strong>}
-          </div>
-          <div>
-            <span>{t("productionCheck.runtime_denied_trace_present")}</span>
-            {readiness.runtimeEvidence.deniedTrace ? <code>{readiness.runtimeEvidence.deniedTrace.id}</code> : <strong>0</strong>}
-          </div>
-          <div>
-            <span>{t("productionCheck.applied_audit_event_present")}</span>
-            {readiness.auditEvidence.appliedEvent ? <code>{readiness.auditEvidence.appliedEvent.id}</code> : <strong>0</strong>}
-          </div>
-        </div>
-      ) : null}
-
-      {visibleChecks.length > 0 ? (
-        <div className="permission-preflight-list">
-          {visibleChecks.map((check) => (
-            <article className={`permission-preflight-row severity-${check.severity}`} key={`${check.code}:${check.evidenceId ?? check.message}`}>
-              <Badge tone={permissionApplyPreflightTone(check.severity)}>
-                {permissionApplyPreflightSeverityLabel(check.severity, t)}
-              </Badge>
-              <div>
-                <strong>{permissionProductionReadinessCheckLabel(check.code, t)}</strong>
-                <span>{permissionProductionReadinessCheckMessage(check, t)}</span>
-              </div>
-              {check.evidenceId ? <code>{check.evidenceId}</code> : null}
-            </article>
-          ))}
-        </div>
-      ) : (
-        <span className="permission-health-empty">{t("empty.permissionProductionReadiness.detail")}</span>
-      )}
-
-      {readiness?.nextActions.length ? (
-        <ul className="permission-preflight-next-actions">
-          {readiness.nextActions.slice(0, 3).map((action) => (
-            <li key={action}>{permissionProductionReadinessNextAction(action, t)}</li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
-function PermissionApplicationHealthPanel({
-  health,
-  loading,
-  message,
-  onRefresh,
-  onReview,
-  t
-}: {
-  health: PermissionPackageApplicationHealth | null;
-  loading: boolean;
-  message: string;
-  onRefresh: () => void;
-  onReview: (application: PermissionPackageApplication) => void;
-  t: Translator;
-}) {
-  const rows = health?.applications ?? [];
-  return (
-    <div className="permission-application-health">
-      <div className="permission-health-header">
-        <div>
-          <strong>{t("section.permissionApplicationHealth")}</strong>
-          {message ? <span>{message}</span> : null}
-        </div>
-        <button className="secondary-button" disabled={loading} onClick={onRefresh} type="button">
-          <RefreshCw size={14} />
-          {loading ? t("action.loading") : t("action.refreshApplicationHealth")}
-        </button>
-      </div>
-
-      <div className="permission-health-metrics">
-        <div>
-          <span>{t("metric.totalApplications")}</span>
-          <strong>{health?.summary.total ?? 0}</strong>
-        </div>
-        <div>
-          <span>{t("metric.readyApplications")}</span>
-          <strong>{health?.summary.ready ?? 0}</strong>
-        </div>
-        <div>
-          <span>{t("metric.driftedApplications")}</span>
-          <strong>{health?.summary.drifted ?? 0}</strong>
-        </div>
-        <div>
-          <span>{t("metric.needsReviewApplications")}</span>
-          <strong>{health?.summary.needsReview ?? 0}</strong>
-        </div>
-      </div>
-
-      {rows.length > 0 ? (
-        <div className="permission-health-list">
-          {rows.map((row) => (
-            <PermissionApplicationHealthRowView key={row.application.id} onReview={onReview} row={row} t={t} />
-          ))}
-        </div>
-      ) : (
-        <span className="permission-health-empty">{t("empty.permissionApplicationHealth.detail")}</span>
-      )}
-    </div>
-  );
-}
-
-function PermissionApplicationHealthRowView({
-  onReview,
-  row,
-  t
-}: {
-  onReview: (application: PermissionPackageApplication) => void;
-  row: PermissionPackageApplicationHealthRow;
-  t: Translator;
-}) {
-  const blockerLabels = permissionImpactBlockerLabels(row.blockerCodes ?? [], [], t);
-  return (
-    <article className={`permission-health-row status-${row.status}`}>
-      <Badge tone={permissionApplicationHealthTone(row.status)}>
-        {permissionApplicationHealthLabel(row.status, t)}
-      </Badge>
-      <div>
-        <strong>{row.application.templateId}</strong>
-        <code>{row.application.id}</code>
-        <span>{row.application.tenantId} / {row.application.workspaceId}</span>
-        {blockerLabels.length > 0 ? (
-          <ul className="permission-impact-blockers">
-            {blockerLabels.map((blocker) => (
-              <li key={blocker}>{blocker}</li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
-      <span>
-        {row.activeObjectCount}/{row.createdObjectCount} {t("metric.activeObjects")} · {row.missingObjectCount} {t("metric.missingObjects")}
-      </span>
-      <button className="secondary-button" onClick={() => onReview(row.application)} type="button">
-        <FileSearch size={14} />
-        {t("action.reviewApplicationImpact")}
-      </button>
-    </article>
-  );
-}
-
-function PermissionApplicationImpactPanel({
-  impact,
-  loading,
-  message,
-  onRehearse,
-  onReview,
-  t
-}: {
-  impact: PermissionPackageApplicationImpact | null;
-  loading: boolean;
-  message: string;
-  onRehearse: () => void;
-  onReview: () => void;
-  t: Translator;
-}) {
-  const rehearsal = impact?.rehearsal;
-  const rollbackBlockers = impact?.rollbackReview.blockers ?? [];
-  const rollbackBlockerCodes = impact?.rollbackReview.blockerCodes ?? [];
-  const rollbackSteps = impact?.rollbackReview.steps ?? [];
-  const remediationPlan = impact?.remediationPlan;
-  const remediationBlockers = remediationPlan?.blockers ?? [];
-  const remediationBlockerCodes = remediationPlan?.blockerCodes ?? [];
-  const remediationActions = remediationPlan?.actions ?? [];
-  const rollbackBlockerLabels = permissionImpactBlockerLabels(rollbackBlockerCodes, rollbackBlockers, t);
-  const remediationBlockerLabels = permissionImpactBlockerLabels(remediationBlockerCodes, remediationBlockers, t);
-  return (
-    <div className="permission-application-impact">
-      <div className="permission-impact-header">
-        <div>
-          <strong>{t("section.permissionApplicationImpact")}</strong>
-          {message ? <span>{message}</span> : null}
-        </div>
-        <div className="permission-impact-actions">
-          <button className="secondary-button" disabled={loading} onClick={onReview} type="button">
-            <FileSearch size={14} />
-            {loading ? t("action.loading") : t("action.reviewApplicationImpact")}
-          </button>
-          <button className="secondary-button" disabled={loading} onClick={onRehearse} type="button">
-            <TriangleAlert size={14} />
-            {loading ? t("action.loading") : t("action.rehearseApplicationDrift")}
-          </button>
-        </div>
-      </div>
-
-      {impact ? (
-        <>
-          {rehearsal?.enabled ? (
-            <div className="permission-impact-rehearsal">
-              <Badge tone="warning">{t("text.rehearsalMode")}</Badge>
-              <div>
-                <strong>{t(`rehearsal.${rehearsal.scenario}`, rehearsal.scenario || t("text.rehearsalMode"))}</strong>
-                <span>{t("text.rehearsalReadOnlyDetail")}</span>
-              </div>
-            </div>
-          ) : null}
-          <div className="permission-impact-metrics">
-            <div>
-              <span>{t("detail.createdObjects")}</span>
-              <strong>{impact.summary.createdObjectCount}</strong>
-            </div>
-            <div>
-              <span>{t("metric.activeObjects")}</span>
-              <strong>{impact.summary.activeObjectCount}</strong>
-            </div>
-            <div>
-              <span>{t("metric.missingObjects")}</span>
-              <strong>{impact.summary.missingObjectCount}</strong>
-            </div>
-          </div>
-
-          <div className="permission-impact-list">
-            {impact.createdObjects.map((item) => (
-              <article className="permission-impact-row" key={`${item.type}:${item.id}`}>
-                <Badge tone={permissionImpactStatusTone(item.currentStatus)}>
-                  {permissionImpactStatusLabel(item.currentStatus, t)}
-                </Badge>
-                <div>
-                  <strong>{permissionImpactObjectLabel(item.type, t)}</strong>
-                  <code>{item.id}</code>
-                  {item.dataScopes?.length ? <span>{item.dataScopes.map((scope) => summarizeDataScopes([scope])).join(" · ")}</span> : null}
-                </div>
-                <span>{translatedValue(t, item.rollbackAction)}</span>
-              </article>
-            ))}
-          </div>
-
-          <div className="permission-impact-review">
-            <div className="permission-section-title">
-              <strong>{t("text.capabilityReview")}</strong>
-              <span>{impact.capabilityReviews.length} {t("detail.capabilities")}</span>
-            </div>
-            <div className="permission-impact-list">
-              {impact.capabilityReviews.map((item) => (
-                <article className="permission-impact-row" key={item.id}>
-                  <Badge tone={permissionImpactStatusTone(item.currentStatus)}>
-                    {permissionImpactStatusLabel(item.currentStatus, t)}
-                  </Badge>
-                  <div>
-                    <strong>{item.key || item.id}</strong>
-                    <code>{item.id}</code>
-                  </div>
-                  <span>{translatedValue(t, item.rollbackAction)}</span>
-                </article>
-              ))}
-            </div>
-          </div>
-
-          <div className="permission-impact-review">
-            <div className="permission-section-title">
-              <strong>{t("text.rollbackReview")}</strong>
-              <Badge tone={impact.rollbackReview.ready ? "success" : "warning"}>
-                {impact.rollbackReview.ready ? t("status.readyToApply") : t("status.needsReview")}
-              </Badge>
-            </div>
-            {rollbackBlockerLabels.length > 0 ? (
-              <ul className="permission-impact-blockers">
-                {rollbackBlockerLabels.map((blocker) => (
-                  <li key={blocker}>{blocker}</li>
-                ))}
-              </ul>
-            ) : null}
-            <ol>
-              {rollbackSteps.map((step) => (
-                <li key={step}>{permissionRollbackStepLabel(step, t)}</li>
-              ))}
-            </ol>
-          </div>
-
-          <div className="permission-impact-review permission-remediation-plan">
-            <div className="permission-section-title">
-              <strong>{t("text.remediationPlan")}</strong>
-              <span>{remediationActions.length} {t("metric.plannedActions")}</span>
-            </div>
-            <div className="permission-remediation-summary">
-              <Badge tone={remediationPlan?.ready ? "success" : "warning"}>
-                {remediationPlan?.ready ? t("status.readyToApply") : t("status.needsReview")}
-              </Badge>
-              <Badge tone="info">
-                {translatedValue(t, remediationPlan?.executionMode) || t("text.readOnlyPlan")}
-              </Badge>
-            </div>
-            {remediationBlockerLabels.length > 0 ? (
-              <ul className="permission-impact-blockers">
-                {remediationBlockerLabels.map((blocker) => (
-                  <li key={blocker}>{blocker}</li>
-                ))}
-              </ul>
-            ) : null}
-            {remediationActions.length > 0 ? (
-              <div className="permission-impact-list">
-                {remediationActions.map((action) => (
-                  <article className="permission-impact-row permission-remediation-row" key={action.id}>
-                    <Badge tone={permissionRemediationActionTone(action.action)}>
-                      #{action.order}
-                    </Badge>
-                    <div>
-                      <strong>{permissionRemediationTargetLabel(action.targetType, t)}</strong>
-                      <code>{action.targetId || action.id}</code>
-                      <span>{translatedValue(t, action.reason)}</span>
-                    </div>
-                    <span>
-                      {action.readOnly ? `${t("text.readOnlyPlan")} · ` : ""}
-                      {translatedValue(t, action.action)}
-                    </span>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <span className="permission-impact-empty">{t("empty.remediationActions.detail")}</span>
-            )}
-          </div>
-        </>
-      ) : (
-        <span className="permission-impact-empty">{t("empty.permissionApplicationImpact.detail")}</span>
-      )}
-    </div>
-  );
-}
-
-function CapabilityChipList({
-  capabilities,
-  emptyLabel,
-  label,
-  tone,
-  t
-}: {
-  capabilities: Capability[];
-  emptyLabel: string;
-  label: string;
-  tone: Tone;
-  t: Translator;
-}) {
-  return (
-    <div className="permission-chip-list">
-      <strong>{label}</strong>
-      {capabilities.length === 0 ? <span>{emptyLabel}</span> : null}
-      {capabilities.map((capability) => (
-        <Badge key={capability.id} tone={tone}>
-          {capability.key} · {translatedValue(t, capability.action)}
-        </Badge>
-      ))}
-    </div>
-  );
-}
-
-function PermissionSimulationTable({ rows, t }: { rows: PermissionPackageSimulationRow[]; t: Translator }) {
-  return (
-    <div className="table-wrap">
-      <table className="permission-simulation-table">
-        <thead>
-          <tr>
-            <th>{t("table.check")}</th>
-            <th>{t("table.decision")}</th>
-            <th>{t("table.reason")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <td>
-                <strong>{row.capabilityKey}</strong>
-                <span>{row.capabilityId ?? t("text.packageGuardrail")}</span>
-              </td>
-              <td>
-                <Badge tone={row.expectedDecision === "allow" ? "success" : "danger"}>
-                  {row.expectedDecision === "allow" ? t("text.decisionAllowed") : t("text.decisionDenied")}
-                </Badge>
-              </td>
-              <td>{permissionSimulationReason(row, t)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 function CoreJourneyStepRow({ step, t }: { step: CoreJourneyStep; t: Translator }) {
   return (
@@ -4003,35 +3095,6 @@ function CoreJourneyStepRow({ step, t }: { step: CoreJourneyStep; t: Translator 
         <span>{step.detail}</span>
       </div>
       <code>{step.metric}</code>
-    </article>
-  );
-}
-
-function AiAdminApprovalJourneyStepRow({ step, t }: { step: AiAdminApprovalJourneyStep; t: Translator }) {
-  return (
-    <article className={`ai-admin-journey-step status-${step.status}`}>
-      <Badge tone={aiAdminApprovalJourneyStatusTone(step.status)}>
-        {aiAdminApprovalJourneyStatusLabel(step.status, t)}
-      </Badge>
-      <div>
-        <strong>{t(`journey.aiAdmin.step.${step.key}`)}</strong>
-        <span>{step.detail}</span>
-      </div>
-      <code>{step.metric}</code>
-    </article>
-  );
-}
-
-function AiAdminApprovalReadinessRow({ row, t }: { row: AiAdminApprovalReadinessRow; t: Translator }) {
-  return (
-    <article className={`ai-admin-readiness-row status-${row.status}`}>
-      <Badge tone={aiAdminApprovalReadinessStatusTone(row.status)}>
-        {aiAdminApprovalReadinessStatusLabel(row.status, t)}
-      </Badge>
-      <div>
-        <strong>{t(row.titleKey)}</strong>
-        <span>{t(row.detailKey)}</span>
-      </div>
     </article>
   );
 }
@@ -4393,7 +3456,7 @@ function AgentTable({
             <tr className={agent.status === "disabled" ? "row-disabled" : undefined} key={agent.id}>
               <td>
                 <strong>{agent.name}</strong>
-                <span>{agent.description || agent.id}</span>
+                {agent.description ? <span>{agent.description}</span> : <TechnicalId value={agent.id} t={t} />}
               </td>
               <td>{channelLabel(agent.channelType, channelLabels, t)}</td>
               <td className="truncate">{configText(agent, "endpoint") || t("status.localRuntime")}</td>
@@ -4521,622 +3584,15 @@ function TraceTable({ traces, agents, t }: { traces: TraceEvent[]; agents: Agent
                 {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
               </Badge>
             </div>
-            <span>
-              {trace.routeType}:{trace.routeKey || t("text.traceDefaultRoute")}
-              {trace.capabilityId ? ` · ${trace.capabilityId}` : ""}
-              {" · "}
-              {trace.reason || policyEffectLabel(trace.decision === "allowed" ? "allow" : "deny", t)}
-            </span>
+            <div className="trace-meta-line">
+              <span className="trace-route-text">{trace.routeType}:{trace.routeKey || t("text.traceDefaultRoute")}</span>
+              {trace.capabilityId ? <TechnicalId value={trace.capabilityId} t={t} /> : null}
+              <span className="trace-reason">{trace.reason || policyEffectLabel(trace.decision === "allowed" ? "allow" : "deny", t)}</span>
+            </div>
           </div>
           <time>{formatDate(trace.createdAt)}</time>
         </article>
       ))}
-    </div>
-  );
-}
-
-function TenantAccessProfileView({
-  agents,
-  capabilities,
-  explanation,
-  explanationLoading,
-  explanationMessage,
-  filters,
-  loading,
-  message,
-  onChange,
-  onExplainAccessDecision,
-  onRefresh,
-  onTenantChange,
-  profile,
-  scope,
-  t
-}: {
-  agents: Agent[];
-  capabilities: Capability[];
-  explanation: AccessDecisionExplainResult | null;
-  explanationLoading: boolean;
-  explanationMessage: string;
-  filters: AccessProfileFilters;
-  loading: boolean;
-  message: string;
-  onChange: (filters: AccessProfileFilters) => void;
-  onExplainAccessDecision: () => void;
-  onRefresh: () => void;
-  onTenantChange: (tenantId: string) => void;
-  profile: TenantAccessProfileData | null;
-  scope: ManagementScope;
-  t: Translator;
-}) {
-  const names = useMemo(() => agentNameMap(agents), [agents]);
-  const targetAgents = agents.filter((agent) => agent.channelType !== "local");
-  const visibleCapabilities = filters.targetId
-    ? capabilities.filter((capability) => capability.targetId === filters.targetId)
-    : capabilities;
-  const sourceLabel = profile
-    ? profile.loadedFromApi
-      ? t("status.sourceLive")
-      : t("status.sourceFallback")
-    : t("status.sourceNotLoaded");
-  const profileSummary = profile?.summary ?? emptyAccessProfileSummary;
-  const profileScopeTenants = profile?.scopeTenants ?? [];
-  const profileGrants = profile?.grants ?? [];
-  const profileRecentTraces = profile?.recentTraces ?? [];
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onRefresh();
-  }
-
-  return (
-    <div className="access-profile">
-      <form className="access-toolbar" onSubmit={submit}>
-        <label>
-          {t("form.tenant")}
-          <input value={scope.tenantId} onChange={(event) => onTenantChange(event.target.value)} />
-        </label>
-        <label>
-          {t("form.workspace")}
-          <input
-            placeholder={t("form.workspaceAll")}
-            value={filters.workspaceId ?? ""}
-            onChange={(event) => onChange({ ...filters, workspaceId: event.target.value })}
-          />
-        </label>
-        <label>
-          {t("form.target")}
-          <select
-            value={filters.targetId ?? ""}
-            onChange={(event) => onChange({ ...filters, capabilityId: "", targetId: event.target.value })}
-          >
-            <option value="">{t("form.anyTarget")}</option>
-            {targetAgents.map((agent) => (
-              <option key={agent.id} value={agent.id}>
-                {agent.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("form.capability")}
-          <select
-            value={filters.capabilityId ?? ""}
-            onChange={(event) => onChange({ ...filters, capabilityId: event.target.value })}
-          >
-            <option value="">{t("form.anyCapability")}</option>
-            {visibleCapabilities.map((capability) => (
-              <option key={capability.id} value={capability.id}>
-                {capability.key}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("form.caller")}
-          <select
-            value={filters.callerInstanceId ?? ""}
-            onChange={(event) => onChange({ ...filters, callerInstanceId: event.target.value })}
-          >
-            <option value="">{t("form.anyCaller")}</option>
-            {agents.map((agent) => (
-              <option key={agent.id} value={agent.id}>
-                {agent.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("form.subjectId")}
-          <input
-            placeholder={t("detail.subjectId")}
-            value={filters.subjectId ?? ""}
-            onChange={(event) => onChange({ ...filters, subjectId: event.target.value })}
-          />
-        </label>
-        <label>
-          {t("form.traces")}
-          <input
-            inputMode="numeric"
-            max={100}
-            min={0}
-            type="number"
-            value={String(filters.traceLimit ?? "")}
-            onChange={(event) => onChange({ ...filters, traceLimit: event.target.value })}
-          />
-        </label>
-        <button className="secondary-button" disabled={loading} type="submit">
-          <RefreshCw size={14} />
-          {loading ? t("action.loading") : t("action.loadProfile")}
-        </button>
-      </form>
-
-      <div className="access-source-line">
-        <span>{sourceLabel}</span>
-        {profile ? <span>{t("status.generated")} {formatDate(profile.generatedAt)}</span> : null}
-        {message ? <strong>{message}</strong> : null}
-      </div>
-
-      <AccessDecisionExplainPanel
-        explanation={explanation}
-        loading={explanationLoading}
-        message={explanationMessage}
-        onExplain={onExplainAccessDecision}
-        t={t}
-      />
-
-      {!profile ? (
-        <EmptyRow title={t("empty.accessProfile.title")} detail={t("empty.accessProfile.detail")} />
-      ) : (
-        <>
-          <div className="access-summary-grid">
-            <AccessSummaryCell label={t("summary.tenantScope")} value={String(profileSummary.tenantCount ?? profileScopeTenants.length)} detail={profile.tenant.name} />
-            <AccessSummaryCell label={t("summary.grants")} value={String(profileSummary.grantCount ?? profileGrants.length)} detail={`${profileSummary.capabilityCount ?? 0} ${t("detail.capabilities")}`} />
-            <AccessSummaryCell label={t("summary.assignments")} value={`${profileSummary.workspaceAssignmentCount ?? 0}/${profileSummary.instanceAssignmentCount ?? 0}`} detail={t("text.workspaceCaller")} />
-            <AccessSummaryCell label={t("summary.recentDecisions")} value={`${profileSummary.recentAllowedTraceCount ?? 0}/${profileSummary.recentDeniedTraceCount ?? 0}`} detail={t("text.allowedDenied")} />
-          </div>
-
-          <div className="access-tenant-list" aria-label={t("summary.tenantScope")}>
-            {profileScopeTenants.map((tenant) => (
-              <div className="access-tenant-row" key={tenant.id}>
-                <Badge tone={tenant.status === "active" ? "success" : "neutral"}>L{tenant.level}</Badge>
-                <div>
-                  <strong>{tenant.name}</strong>
-                  <span>{tenant.id}{tenant.parentTenantId ? ` · ${t("text.parentTenant")} ${tenant.parentTenantId}` : ""}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="access-layout">
-            <section className="access-grant-chain" aria-label={t("section.effectiveGrantChain")}>
-              <header>
-                <strong>{t("section.effectiveGrantChain")}</strong>
-                <span>{countInvalidAccessProfileRows(profile)} {t("text.invalidRows")}</span>
-              </header>
-              {profileGrants.length === 0 ? (
-                <EmptyRow title={t("empty.grantChains.title")} detail={t("empty.grantChains.detail")} />
-              ) : null}
-              {profileGrants.map((grant) => (
-                <AccessGrantRow grant={grant} key={grant.tenantEntitlement.id} t={t} />
-              ))}
-            </section>
-
-            <section className="access-trace-evidence" aria-label={t("section.traceEvidence")}>
-              <header>
-                <strong>{t("section.traceEvidence")}</strong>
-                <span>{profileRecentTraces.length} {t("text.recentTraces")}</span>
-              </header>
-              {profileRecentTraces.length === 0 ? (
-                <EmptyRow title={t("empty.traceEvidence.title")} detail={t("empty.traceEvidence.detail")} />
-              ) : null}
-              {profileRecentTraces.map((trace) => (
-                <article className="access-trace-row" key={trace.id}>
-                  <div className={`trace-decision tone-${trace.decision === "allowed" ? "success" : "danger"}`}>
-                    {trace.decision === "allowed" ? <CheckCircle2 size={15} /> : <LockKeyhole size={15} />}
-                  </div>
-                  <div>
-                    <div className="trace-title-line">
-                      <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? t("text.traceAnonymous")} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
-                      <Badge tone={trace.decision === "allowed" ? "success" : "danger"}>
-                        {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
-                      </Badge>
-                    </div>
-                    <span>{trace.capabilityId ?? `${trace.routeType}:${trace.routeKey || t("text.traceDefaultRoute")}`} · {summarizeDataScopes(trace.dataScopes)} · {trace.reason || policyEffectLabel(trace.decision === "allowed" ? "allow" : "deny", t)}</span>
-                  </div>
-                  <time>{formatDate(trace.createdAt)}</time>
-                </article>
-              ))}
-            </section>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function AccessSummaryCell({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <div className="access-summary-cell">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </div>
-  );
-}
-
-function AccessDecisionExplainPanel({
-  explanation,
-  loading,
-  message,
-  onExplain,
-  t
-}: {
-  explanation: AccessDecisionExplainResult | null;
-  loading: boolean;
-  message: string;
-  onExplain: () => void;
-  t: Translator;
-}) {
-  const dataScopes = explanation?.dataScopes ?? explanation?.decision.dataScopes ?? [];
-  return (
-    <section className="access-decision-explain">
-      <header>
-        <div>
-          <strong>{t("section.accessDecisionExplain")}</strong>
-          {message ? <span>{message}</span> : null}
-        </div>
-        <button className="secondary-button" disabled={loading} onClick={onExplain} type="button">
-          <FileSearch size={14} />
-          {loading ? t("action.loading") : t("action.explainAccessDecision")}
-        </button>
-      </header>
-      {!explanation ? (
-        <EmptyRow title={t("section.accessDecisionExplain")} detail={t("empty.accessDecisionExplain.detail")} />
-      ) : (
-        <>
-          <div className="access-decision-summary">
-            <Badge tone={accessDecisionOutcomeTone(explanation.outcome)}>
-              {accessDecisionOutcomeLabel(explanation.outcome, t)}
-            </Badge>
-            <div>
-              <strong>{explanation.summary}</strong>
-              <span>{explanation.decision.source} · {explanation.decision.reason}</span>
-            </div>
-          </div>
-          <div className="access-decision-evidence">
-            {explanation.evidence.map((row) => (
-              <article key={`${row.layer}:${row.id ?? row.status}`}>
-                <Badge tone={accessDecisionEvidenceTone(row.status)}>{row.status}</Badge>
-                <div>
-                  <strong>{row.layer}</strong>
-                  <span>{row.message}</span>
-                  {row.id ? <code>{row.id}</code> : null}
-                </div>
-              </article>
-            ))}
-          </div>
-          <div className="access-decision-footer">
-            <div>
-              <strong>{t("detail.dataScopes")}</strong>
-              <span>{summarizeDataScopes(dataScopes)}</span>
-            </div>
-            <div>
-              <strong>{t("text.nextActions")}</strong>
-              <ul>
-                {explanation.nextActions.map((action) => (
-                  <li key={action}>{action}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
-
-function AccessGrantRow({ grant, t }: { grant: TenantAccessProfileGrant; t: Translator }) {
-  const invalidRows = countInvalidGrantRows(grant);
-  return (
-    <article className={invalidRows > 0 ? "access-grant-row invalid" : "access-grant-row"}>
-      <div className="access-grant-header">
-        <div>
-          <strong>{grant.capability?.displayName ?? grant.capability?.key ?? grant.tenantEntitlement.capabilityId}</strong>
-          <span>{grant.target?.name ?? grant.tenantEntitlement.targetId}</span>
-        </div>
-        <div className="access-badge-group">
-          <Badge tone={scopeStatusTone(grant.scopeStatus)}>{grant.scopeStatus}</Badge>
-          <Badge tone={grant.tenantEntitlement.effect === "allow" ? "success" : "danger"}>{policyEffectLabel(grant.tenantEntitlement.effect, t)}</Badge>
-        </div>
-      </div>
-      <div className="access-scope-line">
-        <span>{t("text.tenantEntitlement")}</span>
-        <code>{grant.tenantEntitlement.id}</code>
-        <span>{summarizeDataScopes(grant.effectiveTenantDataScopes)}</span>
-      </div>
-      {grant.scopeReason ? <p className="access-invalid-reason">{grant.scopeReason}</p> : null}
-      <div className="access-nested-list">
-        {grant.workspaceAssignments.length === 0 ? (
-          <EmptyRow title={t("empty.workspaceAssignments.title")} detail={t("empty.workspaceAssignments.detail")} />
-        ) : null}
-        {grant.workspaceAssignments.map((workspace) => (
-          <AccessWorkspaceRow key={workspace.workspaceAssignment.id} workspace={workspace} t={t} />
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function AccessWorkspaceRow({ workspace, t }: { workspace: TenantAccessProfileWorkspace; t: Translator }) {
-  return (
-    <div className="access-workspace-row">
-      <div className="access-row-main">
-        <div>
-          <strong>{workspace.workspaceAssignment.workspaceId}</strong>
-          <span>{summarizeDataScopes(workspace.effectiveWorkspaceDataScopes)}</span>
-        </div>
-        <Badge tone={scopeStatusTone(workspace.scopeStatus)}>{workspace.scopeStatus}</Badge>
-      </div>
-      {workspace.scopeReason ? <p className="access-invalid-reason">{workspace.scopeReason}</p> : null}
-      <div className="access-instance-list">
-        {workspace.instanceAssignments.length === 0 ? (
-          <span className="access-empty-inline">{t("empty.callerInstances.title")}</span>
-        ) : null}
-        {workspace.instanceAssignments.map((instance) => (
-          <AccessInstanceRow instance={instance} key={instance.instanceAssignment.id} t={t} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function AccessInstanceRow({ instance, t }: { instance: TenantAccessProfileInstance; t: Translator }) {
-  return (
-    <div className="access-instance-row">
-      <div>
-        <strong>{instance.callerInstance?.name ?? instance.instanceAssignment.callerInstanceId}</strong>
-        <span>{instance.instanceAssignment.subjectSelector || t("text.subjectsAll")} · {summarizeDataScopes(instance.effectiveInstanceDataScopes)}</span>
-      </div>
-      <Badge tone={scopeStatusTone(instance.scopeStatus)}>{instance.scopeStatus}</Badge>
-      {instance.scopeReason ? <p className="access-invalid-reason">{instance.scopeReason}</p> : null}
-    </div>
-  );
-}
-
-function CapabilityGovernanceView({
-  actionId,
-  agents,
-  capabilities,
-  form,
-  instanceAssignments,
-  message,
-  mcpTargets,
-  onApprove,
-  onChange,
-  onCreateGrantChain,
-  onRefreshTarget,
-  t,
-  tenantEntitlements,
-  workspaceAssignments
-}: {
-  actionId: string;
-  agents: Agent[];
-  capabilities: Capability[];
-  form: typeof defaultCapabilityGrantForm;
-  instanceAssignments: InstanceAssignment[];
-  message: string;
-  mcpTargets: Agent[];
-  onApprove: (capability: Capability) => void;
-  onChange: (form: typeof defaultCapabilityGrantForm) => void;
-  onCreateGrantChain: (event: FormEvent<HTMLFormElement>) => void;
-  onRefreshTarget: () => void;
-  t: Translator;
-  tenantEntitlements: TenantEntitlement[];
-  workspaceAssignments: WorkspaceAssignment[];
-}) {
-  const agentNames = useMemo(() => agentNameMap(agents), [agents]);
-  const visibleCapabilities = useMemo(() => {
-    const targetId = form.targetId.trim();
-    return targetId ? capabilities.filter((capability) => capability.targetId === targetId) : capabilities;
-  }, [capabilities, form.targetId]);
-  const selectedCapability = capabilities.find((capability) => capability.id === form.capabilityId);
-  const entitlementIdsByCapability = useMemo(() => {
-    return tenantEntitlements.reduce<Record<string, string[]>>((acc, entitlement) => {
-      acc[entitlement.capabilityId] = [...(acc[entitlement.capabilityId] ?? []), entitlement.id];
-      return acc;
-    }, {});
-  }, [tenantEntitlements]);
-  const workspaceIdsByEntitlement = useMemo(() => {
-    return workspaceAssignments.reduce<Record<string, string[]>>((acc, assignment) => {
-      acc[assignment.tenantEntitlementId] = [...(acc[assignment.tenantEntitlementId] ?? []), assignment.id];
-      return acc;
-    }, {});
-  }, [workspaceAssignments]);
-  const instancesByWorkspaceAssignment = useMemo(() => {
-    return instanceAssignments.reduce<Record<string, InstanceAssignment[]>>((acc, assignment) => {
-      acc[assignment.workspaceAssignmentId] = [...(acc[assignment.workspaceAssignmentId] ?? []), assignment];
-      return acc;
-    }, {});
-  }, [instanceAssignments]);
-
-  function handleTargetChange(targetId: string) {
-    const nextCapability = capabilities.find((capability) => capability.targetId === targetId);
-    onChange({
-      ...form,
-      capabilityId: nextCapability?.id ?? "",
-      targetId
-    });
-  }
-
-  function handleCapabilityChange(capabilityId: string) {
-    const capability = capabilities.find((item) => item.id === capabilityId);
-    onChange({
-      ...form,
-      capabilityId,
-      targetId: capability?.targetId ?? form.targetId
-    });
-  }
-
-  return (
-    <div className="capability-governance">
-      <div className="capability-toolbar">
-        <label>
-          {t("form.target")}
-          <select value={form.targetId} onChange={(event) => handleTargetChange(event.target.value)}>
-            <option value="">{t("form.allMcpTargets")}</option>
-            {mcpTargets.map((target) => (
-              <option key={target.id} value={target.id}>
-                {target.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          className="secondary-button"
-          disabled={!form.targetId || actionId === `refresh:${form.targetId}`}
-          onClick={onRefreshTarget}
-          type="button"
-        >
-          <RefreshCw size={14} />
-          {actionId === `refresh:${form.targetId}` ? t("action.loading") : t("action.refresh")}
-        </button>
-        {message ? <span className="capability-message">{message}</span> : null}
-      </div>
-
-      <div className="capability-layout">
-        <div className="capability-catalog">
-          <div className="table-wrap">
-            <table className="capability-table">
-              <thead>
-                <tr>
-                  <th>{t("table.capability")}</th>
-                  <th>{t("table.target")}</th>
-                  <th>{t("table.action")}</th>
-                  <th>{t("table.risk")}</th>
-                  <th>{t("table.status")}</th>
-                  <th>{t("table.grants")}</th>
-                  <th>{t("table.action")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleCapabilities.length === 0 ? (
-                  <tr>
-                    <td colSpan={7}>
-                      <EmptyRow title={t("empty.capabilities.title")} detail={t("empty.capabilities.detail")} />
-                    </td>
-                  </tr>
-                ) : null}
-                {visibleCapabilities.map((capability) => {
-                  const entitlementIds = entitlementIdsByCapability[capability.id] ?? [];
-                  const workspaceIds = entitlementIds.flatMap((id) => workspaceIdsByEntitlement[id] ?? []);
-                  const instanceCount = workspaceIds.reduce(
-                    (total, id) => total + (instancesByWorkspaceAssignment[id]?.length ?? 0),
-                    0
-                  );
-                  return (
-                    <tr key={capability.id}>
-                      <td>
-                        <strong>{capability.displayName || capability.key}</strong>
-                        <span>{dataScopeText(capability.dataScopes) || capability.description || capability.key}</span>
-                      </td>
-                      <td>{agentNames[capability.targetId] ?? capability.targetId}</td>
-                      <td><Badge tone={capability.action === "delete" || capability.action === "admin" ? "danger" : capability.action === "export" ? "warning" : "info"}>{translatedValue(t, capability.action)}</Badge></td>
-                      <td><Badge tone={riskTone(capability.riskLevel)}>{translatedValue(t, capability.riskLevel)}</Badge></td>
-                      <td><Badge tone={capabilityStatusTone(capability.discoveryStatus)}>{capabilityDiscoveryStatusLabel(capability.discoveryStatus, t)}</Badge></td>
-                      <td>
-                        <strong>{entitlementIds.length}/{workspaceIds.length}/{instanceCount}</strong>
-                        <span>{t("detail.tenantWorkspaceInstance")}</span>
-                      </td>
-                      <td>
-                        {capability.discoveryStatus === "approved" ? (
-                          <span className="muted-action">{t("status.capabilityApproved")}</span>
-                        ) : (
-                          <button
-                            className="table-action"
-                            disabled={actionId === capability.id}
-                            onClick={() => onApprove(capability)}
-                            type="button"
-                          >
-                            <ShieldCheck size={13} />
-                            {actionId === capability.id ? t("action.approving") : t("action.approve")}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <form className="control-form capability-grant-form" onSubmit={onCreateGrantChain}>
-          <div className="form-row">
-            <label>{t("form.tenant")}<input required value={form.tenantId} onChange={(event) => onChange({ ...form, tenantId: event.target.value })} /></label>
-            <label>{t("form.workspace")}<input required value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} /></label>
-          </div>
-          <label>
-            {t("form.capability")}
-            <select required value={form.capabilityId} onChange={(event) => handleCapabilityChange(event.target.value)}>
-              <option value="">{t("form.selectCapability")}</option>
-              {visibleCapabilities.map((capability) => (
-                <option key={capability.id} value={capability.id}>
-                  {capability.key}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="form-row">
-            <label>
-              {t("form.callerInstance")}
-              <select required value={form.callerInstanceId} onChange={(event) => onChange({ ...form, callerInstanceId: event.target.value })}>
-                <option value="">{t("form.selectCaller")}</option>
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>{t("form.subjectSelector")}<input placeholder={t("form.subjectSelectorPlaceholder")} value={form.subjectSelector} onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })} /></label>
-          </div>
-          <div className="capability-scope-strip">
-            <span>{selectedCapability?.sensitivity ?? t("text.sensitivity")}</span>
-            <span>{selectedCapability?.riskLevel ?? t("text.risk")}</span>
-            <span>{dataScopeText(selectedCapability?.dataScopes) || t("text.noDataScope")}</span>
-          </div>
-          <FormFooter
-            message=""
-            submitLabel={actionId === `grant:${form.capabilityId}` ? t("action.loading") : t("action.grantChain")}
-          />
-        </form>
-
-        <div className="assignment-list">
-          {tenantEntitlements.length === 0 ? (
-            <EmptyRow title={t("empty.grantChains.title")} detail={t("empty.grantChains.assignmentDetail")} />
-          ) : null}
-          {tenantEntitlements.map((entitlement) => {
-            const capability = capabilities.find((item) => item.id === entitlement.capabilityId);
-            const children = workspaceAssignments.filter((item) => item.tenantEntitlementId === entitlement.id);
-            const instanceCount = children.reduce(
-              (total, item) => total + instanceAssignments.filter((instance) => instance.workspaceAssignmentId === item.id).length,
-              0
-            );
-            return (
-              <article className="assignment-row" key={entitlement.id}>
-                <div>
-                  <strong>{capability?.key ?? entitlement.capabilityId}</strong>
-                  <span>{entitlement.tenantId} · {policyEffectLabel(entitlement.effect, t)} · {translatedValue(t, entitlement.status)}</span>
-                </div>
-                <div className="assignment-metrics">
-                  <span>{children.length} {t("text.workspaces")}</span>
-                  <span>{instanceCount} {t("text.callers")}</span>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 }
@@ -5182,19 +3638,6 @@ function ManagementAuditTable({ events, t }: { events: AuditEvent[]; t: Translat
   );
 }
 
-function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
-  return <span className={`badge tone-${tone}`}>{children}</span>;
-}
-
-function EmptyRow({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="empty-row">
-      <strong>{title}</strong>
-      <span>{detail}</span>
-    </div>
-  );
-}
-
 function IconMore({ title = "More" }: { title?: string }) {
   return (
     <button aria-label={title} className="icon-button compact" title={title} type="button">
@@ -5233,38 +3676,71 @@ function accessDecisionExplainRequestComplete(request: AccessDecisionExplainRequ
   );
 }
 
-function accessDecisionOutcomeTone(outcome: AccessDecisionExplainResult["outcome"]): Tone {
-  return outcome === "allowed" ? "success" : "danger";
-}
-
-function accessDecisionOutcomeLabel(outcome: AccessDecisionExplainResult["outcome"], t: Translator) {
-  return outcome === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied");
-}
-
-function accessDecisionEvidenceTone(status: string): Tone {
-  if (status === "matched") return "success";
-  if (status === "blocking" || status === "missing" || status === "mismatch") return "danger";
-  if (status === "not_approved" || status === "inactive") return "warning";
-  return "neutral";
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  });
-}
-
-function agentNameMap(agents: Agent[]) {
-  return agents.reduce<Record<string, string>>((acc, agent) => {
-    acc[agent.id] = agent.name;
+function permissionTenantPathLabel(tenantId: string, tenants: Tenant[], t: Translator): { path: string; primary: string } {
+  const normalizedTenantId = tenantId.trim();
+  if (!normalizedTenantId) return { path: "-", primary: t("text.unresolvedTenant") };
+  const tenantById = tenants.reduce<Record<string, Tenant>>((acc, tenant) => {
+    acc[tenant.id] = tenant;
     return acc;
   }, {});
+  const selected = tenantById[normalizedTenantId];
+  if (!selected) {
+    return {
+      path: tx(t, "text.unresolvedTenantDetail", { id: normalizedTenantId }),
+      primary: t("text.unresolvedTenant")
+    };
+  }
+
+  const path: Tenant[] = [];
+  const visited = new Set<string>();
+  let current: Tenant | undefined = selected;
+  while (current && !visited.has(current.id)) {
+    path.unshift(current);
+    visited.add(current.id);
+    current = current.parentTenantId ? tenantById[current.parentTenantId] : undefined;
+  }
+  const names = path.map((tenant) => permissionEntityDisplayName(tenant.name.trim() || tenant.id, t));
+  return {
+    path: names.join(" > "),
+    primary: permissionEntityDisplayName(selected.name.trim() || selected.id, t)
+  };
+}
+
+function permissionWorkspaceDisplayName(workspaceId: string, agents: Agent[], t: Translator) {
+  const normalizedWorkspaceId = workspaceId.trim();
+  if (!normalizedWorkspaceId) return "-";
+  const agentInWorkspace = agents.find((agent) => agent.workspaceId === normalizedWorkspaceId);
+  if (agentInWorkspace?.workspaceId === defaultManagementScope.workspaceId) {
+    return t("text.defaultWorkspaceName");
+  }
+  if (/permission[-_]?(request|package)[-_]?approval/i.test(normalizedWorkspaceId)) {
+    return t("demo.permissionRequestWorkspace");
+  }
+  if (/core[-_]?journey/i.test(normalizedWorkspaceId)) {
+    return t("demo.coreJourneyWorkspace");
+  }
+  return permissionEntityDisplayName(readableIdentifierLabel(normalizedWorkspaceId), t);
+}
+
+function uniquePermissionEntityOptions<T extends { id: string }>(
+  entities: T[],
+  selectedId: string,
+  labelFor: (entity: T) => string
+): Array<{ id: string; label: string }> {
+  const selected = entities.find((entity) => entity.id === selectedId);
+  const ordered = selected ? [selected, ...entities.filter((entity) => entity.id !== selected.id)] : entities;
+  const seen = new Set<string>();
+  const options: Array<{ id: string; label: string }> = [];
+
+  for (const entity of ordered) {
+    const label = labelFor(entity).trim() || entity.id;
+    const key = label.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    options.push({ id: entity.id, label });
+  }
+
+  return options;
 }
 
 function auditCredentialVersion(event: AuditEvent) {
@@ -5283,13 +3759,6 @@ function evidenceStatusLabel(status: EvidenceRun["status"], t: Translator) {
   return t("status.evidenceWarning");
 }
 
-function capabilityDiscoveryStatusLabel(status: Capability["discoveryStatus"], t: Translator) {
-  if (status === "approved") return t("status.capabilityApproved");
-  if (status === "deprecated") return t("status.capabilityDeprecated");
-  if (status === "removed") return t("status.capabilityRemoved");
-  return t("status.capabilityPendingReview");
-}
-
 function policyRetryText(policy: RoutePolicy, t: Translator) {
   if (!policy.retry) return t("text.targetRetry");
   const statuses = policy.retry.statusCodes.length > 0 ? policy.retry.statusCodes.join("/") : t("text.retryNone");
@@ -5298,6 +3767,10 @@ function policyRetryText(policy: RoutePolicy, t: Translator) {
 
 function permissionPackageTemplateName(template: PermissionPackageTemplate, t: Translator) {
   return t(`permissionPackage.${template.id}.name`, template.name);
+}
+
+function permissionPackageTemplateNameById(templateId: string, t: Translator) {
+  return t(`permissionPackage.${templateId}.name`, templateId);
 }
 
 function permissionPackageTemplateSummary(template: PermissionPackageTemplate, t: Translator) {
@@ -5389,11 +3862,15 @@ function permissionApplyPreflightCheckMessage(check: PermissionPackageApplyPrefl
 function permissionApplyPreflightNextAction(action: string, t: Translator) {
   const keyByAction: Record<string, string> = {
     "Apply this permission package when the reviewer is ready.": "permissionPreflight.next.applyWhenReady",
+    "Apply this permission request when the reviewer is ready.": "permissionPreflight.next.applyWhenReady",
     "Create and approve a permission package approval request, then preflight again with approvalRequestId.": "permissionPreflight.next.createApproval",
+    "Create and approve an approval request for this permission request, then preflight again with approvalRequestId.": "permissionPreflight.next.createApproval",
     "Fix draft readiness blockers before applying this permission package.": "permissionPreflight.next.fixDraft",
+    "Fix draft readiness blockers before applying this permission request.": "permissionPreflight.next.fixDraft",
     "Narrow region or data scopes so the package stays inside every capability boundary.": "permissionPreflight.next.narrowScope",
     "Refresh approval or create a new approval request for the current draft.": "permissionPreflight.next.refreshApproval",
     "Review existing grant chains before applying another permission package for the same caller and capability.": "permissionPreflight.next.reviewExistingGrants",
+    "Review existing grant chains before applying another permission request for the same caller and capability.": "permissionPreflight.next.reviewExistingGrants",
     "Use an approved approvalRequestId that matches the current draft.": "permissionPreflight.next.useApprovedRequest"
   };
   return keyByAction[action] ? t(keyByAction[action], action) : action;
@@ -5423,12 +3900,14 @@ function permissionApplyPreflightSeverityRank(severity: PermissionPackageApplyPr
 function permissionApprovalStatusLabel(status: PermissionPackageApprovalRequest["status"], t: Translator) {
   if (status === "approved") return t("status.approvalApproved");
   if (status === "rejected") return t("status.approvalRejected");
+  if (status === "withdrawn") return t("status.approvalWithdrawn");
   return t("status.approvalPending");
 }
 
 function permissionApprovalStatusTone(status: PermissionPackageApprovalRequest["status"]): Tone {
   if (status === "approved") return "success";
   if (status === "rejected") return "danger";
+  if (status === "withdrawn") return "warning";
   return "warning";
 }
 
@@ -5442,6 +3921,12 @@ function permissionApplicationHealthTone(status: PermissionPackageApplicationHea
   if (status === "ready") return "success";
   if (status === "drifted") return "warning";
   return "info";
+}
+
+function permissionApplicationHealthRowSummary(row: PermissionPackageApplicationHealthRow, t: Translator) {
+  if (row.status === "ready") return t("text.applicationHealthReadyDetail");
+  if (row.status === "drifted") return t("text.applicationHealthDriftedDetail");
+  return t("text.applicationHealthNeedsReviewDetail");
 }
 
 function productionReadinessStatusLabel(status: PermissionPackageProductionReadinessStatus | undefined, t: Translator) {
@@ -5591,6 +4076,7 @@ function matchingPermissionPackageApprovalRequest(
   return matching.find((request) => request.status === "approved")
     ?? matching.find((request) => request.status === "pending")
     ?? matching.find((request) => request.status === "rejected")
+    ?? matching.find((request) => request.status === "withdrawn")
     ?? null;
 }
 
@@ -5715,7 +4201,7 @@ function appendLocalCapabilityGrantChain(
   const tenantId = form.tenantId.trim() || defaultManagementScope.tenantId;
   const workspaceId = form.workspaceId.trim() || defaultManagementScope.workspaceId;
   const callerInstanceId = form.callerInstanceId.trim();
-  const subjectSelector = form.subjectSelector.trim() || undefined;
+  const subjectSelector = form.subjectSelector.trim();
 
   const existingEntitlement = current.tenantEntitlements.find(
     (item) => item.tenantId === tenantId && item.targetId === capability.targetId && item.capabilityId === capability.id
@@ -5831,32 +4317,6 @@ function safeIdPart(value: string) {
   return value.trim().replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase();
 }
 
-function dataScopeText(scopes?: DataScope[]) {
-  if (!scopes || scopes.length === 0) return "";
-  const labels = scopes
-    .map((scope) =>
-      [scope.dataDomain, scope.dataset, scope.schema, scope.table, scope.field, scope.classification]
-        .filter(Boolean)
-        .join("/")
-    )
-    .filter(Boolean);
-  if (labels.length === 0) return "";
-  return labels.length > 2 ? `${labels.slice(0, 2).join(", ")} +${labels.length - 2}` : labels.join(", ");
-}
-
-function riskTone(risk: Capability["riskLevel"]): Tone {
-  if (risk === "critical" || risk === "high") return "danger";
-  if (risk === "medium") return "warning";
-  return "success";
-}
-
-function capabilityStatusTone(status: Capability["discoveryStatus"]): Tone {
-  if (status === "approved") return "success";
-  if (status === "pending_review") return "warning";
-  if (status === "removed") return "danger";
-  return "neutral";
-}
-
 function coreJourneyStatusTone(status: CoreJourneyStepStatus): Tone {
   if (status === "complete") return "success";
   if (status === "partial") return "warning";
@@ -5886,6 +4346,51 @@ function productionConsoleStatusTone(status: AiAdminProductionConsoleStatus): To
   if (status === "needs_review") return "warning";
   if (status === "blocked") return "danger";
   return "neutral";
+}
+
+function permissionWorkbenchActionKey(code: string | undefined, fallback: string) {
+  switch (code) {
+    case "complete_request":
+      return "action.completePermissionRequest";
+    case "create_approval_request":
+      return "action.createApprovalRequest";
+    case "review_approval_request":
+      return "action.reviewApprovalRequest";
+    case "apply_permission_package":
+      return "action.applyPermissionPackage";
+    case "run_runtime_validation":
+      return "action.runApprovalJourney";
+    case "export_production_evidence":
+      return "action.exportProductionEvidence";
+    default:
+      return fallback;
+  }
+}
+
+function permissionWorkbenchStatusLabelKey(status: string | undefined) {
+  if (!status) return "permissionWorkbench.status.pending";
+  return `permissionWorkbench.status.${status}`;
+}
+
+function permissionWorkbenchStatusDetailKey(status: string | undefined) {
+  if (!status) return "permissionWorkbench.statusDetail.pending";
+  return `permissionWorkbench.statusDetail.${status}`;
+}
+
+function permissionWorkbenchStatusTone(status: string | undefined, fallback: AiAdminProductionConsoleStatus): Tone {
+  if (status === "production_ready") return "success";
+  if (status === "blocked") return "danger";
+  if (status === "ready_to_apply" || status === "validating" || status === "awaiting_approval") return "warning";
+  if (status === "needs_input") return "neutral";
+  return productionConsoleStatusTone(fallback);
+}
+
+function permissionWorkbenchStepLabelKey(key: string) {
+  return `permissionWorkbench.step.${key}`;
+}
+
+function permissionWorkbenchStepDetailKey(detailCode: string) {
+  return `permissionWorkbench.detail.${detailCode}`;
 }
 
 function productionConsoleStatusLabel(summary: AiAdminProductionConsoleSummary, t: Translator) {

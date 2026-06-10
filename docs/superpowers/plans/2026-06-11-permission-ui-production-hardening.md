@@ -847,6 +847,46 @@ make check
 make release-check
 ```
 
+- [x] **Step 5: Commit, push, and inspect PR checks**
+
+Commit and push if clean, then inspect PR #74.
+
+Committed and pushed `67fb16a fix: localize access profile evidence rows` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=UNSTABLE` because Backend, Frontend, and PostgreSQL integration checks were still queued immediately after push.
+
+## Task 23: Suppress Request Step Ratios In The UI
+
+- [x] **Step 1: Inspect the visible regression**
+
+Browser verification on `http://127.0.0.1:5174/#ai-admin` still showed `2/3` on the completed `填写申请` process step when the running API returned old workbench preview counts.
+
+- [x] **Step 2: Defend in the frontend process mapping**
+
+The workbench now discards `count` and `total` for the `request` step before rendering process navigation. Backend preview already omits these values, but the frontend also guards stale preview data.
+
+- [x] **Step 3: Verify focused tests and browser**
+
+Run focused frontend tests and verify the browser no longer shows `2/3` on `填写申请`.
+
+Verified:
+
+```bash
+git diff --check
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+```
+
+Browser verification showed request step text `1填写申请已选择租户、调用方、工具服务和权限模板。` with `hasRatio=false`.
+
+- [x] **Step 4: Run repository gates**
+
+Run `make check` and `make release-check`.
+
+Verified locally before commit:
+
+```bash
+make check
+make release-check
+```
+
 - [ ] **Step 5: Commit, push, and inspect PR checks**
 
 Commit and push if clean, then inspect PR #74.

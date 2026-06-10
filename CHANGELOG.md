@@ -56,6 +56,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 已完成的权限变更旅程现在只在任务页头保留一个主按钮“导出证据”，完成卡里的“下载验收报告”、权限画像和新建变更都作为辅助出口呈现。
 - Permission Changes workbench preview no longer returns capability-count ratios on the request step, so completed request steps do not look partially incomplete in the process navigation.
 - 权限变更工作台预览不再在“填写申请”步骤返回能力数量比例，避免已完成的申请步骤在流程导航里看起来像“部分完成”。
+- Permission Changes process navigation now also suppresses request-step capability ratios on the frontend, so stale previews cannot show misleading `2/3` request progress.
+- 权限变更流程导航现在也会在前端屏蔽“填写申请”的能力数量比例，避免旧预览数据继续显示误导性的 `2/3` 进度。
 - Tenant Access Profile grant chains now keep grant, workspace-assignment, workspace, target, and capability technical ids in collapsed technical details instead of showing raw ids in the main evidence rows.
 - 租户访问画像的授权链现在把租户授权、工作区分配、工作区、目标和能力等技术 ID 收进折叠详情，主证据行不再直接展示原始 ID。
 - Tenant Access Profile instance and trace rows now show business caller, target, access-object, and localized decision-reason labels while moving caller ids, instance-assignment ids, and subject selectors into collapsed technical details.

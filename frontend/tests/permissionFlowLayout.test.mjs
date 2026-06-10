@@ -101,6 +101,12 @@ test("permission request process steps navigate to their operator sections", () 
   assert.match(styles, /\.approval-process-step:hover\s*\{/);
 });
 
+test("permission request process navigation hides request capability counts", () => {
+  assert.match(workbench, /count: step\.key === "request" \? undefined : step\.count/);
+  assert.match(workbench, /total: step\.key === "request" \? undefined : step\.total/);
+  assert.match(workbench, /typeof step\.count === "number" && typeof step\.total === "number"/);
+});
+
 test("permission request first viewport prioritizes one task flow", () => {
   const headerStart = workbench.indexOf('<section className="approval-header"');
   const contextStart = workbench.indexOf('<section className="approval-context-bar"', headerStart);

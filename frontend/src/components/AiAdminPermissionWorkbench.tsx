@@ -479,13 +479,13 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const readinessTotalCount = workbenchPreview?.summary.readinessTotalCount || productionSummary.totalCount;
   const fallbackProcessSteps = permissionRequestProcessStepStatuses(flowSteps, currentWizardStep);
   const processSteps = workbenchPreview?.summary.steps.map((step) => ({
-    count: step.count,
+    count: step.key === "request" ? undefined : step.count,
     detail: t(permissionWorkbenchStepDetailKey(step.detailCode), step.detailCode),
     key: step.key,
     labelKey: permissionWorkbenchStepLabelKey(step.key),
     status: step.status,
     targetStep: permissionRequestStepTarget(step.key),
-    total: step.total
+    total: step.key === "request" ? undefined : step.total
   })) ?? fallbackProcessSteps.map((step) => ({
     detail: step.detail,
     key: step.key,

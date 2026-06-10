@@ -12,6 +12,7 @@ import {
   accessDecisionOutcomeLabel,
   accessDecisionOutcomeTone,
   agentNameMap,
+  capabilityDisplayName,
   formatDate,
   permissionEntityDisplayName,
   policyEffectLabel,
@@ -85,6 +86,7 @@ export function TenantAccessProfileView({
   const visibleCapabilities = filters.targetId
     ? capabilities.filter((capability) => capability.targetId === filters.targetId)
     : capabilities;
+  const selectedCapability = capabilities.find((capability) => capability.id === filters.capabilityId);
   const sourceLabel = profile
     ? profile.loadedFromApi
       ? t("status.sourceLive")
@@ -98,10 +100,14 @@ export function TenantAccessProfileView({
     () => new Map(profileScopeTenants.map((tenant) => [tenant.id, permissionEntityDisplayName(tenant.name, t)])),
     [profileScopeTenants, t]
   );
+  const capabilityNameById = useMemo(
+    () => new Map(capabilities.map((capability) => [capability.id, capabilityDisplayName(capability, t)])),
+    [capabilities, t]
+  );
   const tenantLabel = handoffContext?.tenantName ?? profile?.tenant.name ?? scope.tenantId;
   const workspaceLabel = handoffContext?.workspaceName ?? (filters.workspaceId?.trim() || t("form.workspaceAll"));
   const targetLabel = handoffContext?.targetName ?? (filters.targetId ? names[filters.targetId] ?? filters.targetId : t("form.anyTarget"));
-  const capabilityLabel = handoffContext?.capabilityName ?? (filters.capabilityId?.trim() || t("form.anyCapability"));
+  const capabilityLabel = handoffContext?.capabilityName ?? (selectedCapability ? capabilityDisplayName(selectedCapability, t) : filters.capabilityId?.trim() || t("form.anyCapability"));
   const callerLabel = handoffContext?.callerName ?? (filters.callerInstanceId ? names[filters.callerInstanceId] ?? filters.callerInstanceId : t("form.anyCaller"));
   const traceLimitLabel = String(filters.traceLimit ?? 20);
   const targetDropdownOptions = [
@@ -110,7 +116,7 @@ export function TenantAccessProfileView({
   ];
   const capabilityDropdownOptions = [
     { value: "", label: t("form.anyCapability") },
-    ...visibleCapabilities.map((capability) => ({ value: capability.id, label: capability.key }))
+    ...visibleCapabilities.map((capability) => ({ value: capability.id, label: capabilityDisplayName(capability, t) }))
   ];
   const callerDropdownOptions = [
     { value: "", label: t("form.anyCaller") },
@@ -327,23 +333,29 @@ export function TenantAccessProfileView({
               {profileRecentTraces.length === 0 ? (
                 <EmptyRow title={t("empty.traceEvidence.title")} detail={t("empty.traceEvidence.detail")} />
               ) : null}
-              {profileRecentTraces.map((trace) => (
-                <article className="access-trace-row" key={trace.id}>
-                  <div className={`trace-decision tone-${trace.decision === "allowed" ? "success" : "danger"}`}>
-                    {trace.decision === "allowed" ? <CheckCircle2 size={15} /> : <LockKeyhole size={15} />}
-                  </div>
-                  <div>
-                    <div className="trace-title-line">
-                      <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? t("text.traceAnonymous")} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
-                      <Badge tone={trace.decision === "allowed" ? "success" : "danger"}>
-                        {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
-                      </Badge>
+              {profileRecentTraces.map((trace) => {
+                const capabilityName = trace.capabilityId
+                  ? capabilityNameById.get(trace.capabilityId) ?? trace.capabilityId
+                  : `${trace.routeType}:${trace.routeKey || t("text.traceDefaultRoute")}`;
+
+                return (
+                  <article className="access-trace-row" key={trace.id}>
+                    <div className={`trace-decision tone-${trace.decision === "allowed" ? "success" : "danger"}`}>
+                      {trace.decision === "allowed" ? <CheckCircle2 size={15} /> : <LockKeyhole size={15} />}
                     </div>
-                    <span>{trace.capabilityId ?? `${trace.routeType}:${trace.routeKey || t("text.traceDefaultRoute")}`} · {summarizeDataScopes(trace.dataScopes)} · {trace.reason || policyEffectLabel(trace.decision === "allowed" ? "allow" : "deny", t)}</span>
-                  </div>
-                  <time>{formatDate(trace.createdAt)}</time>
-                </article>
-              ))}
+                    <div>
+                      <div className="trace-title-line">
+                        <strong>{names[trace.callerAgentId ?? ""] ?? trace.callerAgentId ?? t("text.traceAnonymous")} → {names[trace.targetAgentId] ?? trace.targetAgentId}</strong>
+                        <Badge tone={trace.decision === "allowed" ? "success" : "danger"}>
+                          {trace.decision === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
+                        </Badge>
+                      </div>
+                      <span>{capabilityName} · {summarizeDataScopes(trace.dataScopes)} · {trace.reason || policyEffectLabel(trace.decision === "allowed" ? "allow" : "deny", t)}</span>
+                    </div>
+                    <time>{formatDate(trace.createdAt)}</time>
+                  </article>
+                );
+              })}
             </section>
           </div>
         </>
@@ -429,11 +441,14 @@ function AccessDecisionExplainPanel({
 
 function AccessGrantRow({ grant, t }: { grant: TenantAccessProfileGrant; t: Translator }) {
   const invalidRows = countInvalidGrantRows(grant);
+  const capabilityName = grant.capability
+    ? capabilityDisplayName(grant.capability, t)
+    : grant.tenantEntitlement.capabilityId;
   return (
     <article className={invalidRows > 0 ? "access-grant-row invalid" : "access-grant-row"}>
       <div className="access-grant-header">
         <div>
-          <strong>{grant.capability?.displayName ?? grant.capability?.key ?? grant.tenantEntitlement.capabilityId}</strong>
+          <strong>{capabilityName}</strong>
           <span>{grant.target?.name ?? grant.tenantEntitlement.targetId}</span>
         </div>
         <div className="access-badge-group">

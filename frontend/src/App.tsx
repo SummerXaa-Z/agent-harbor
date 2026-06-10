@@ -69,6 +69,8 @@ import {
 } from "./consoleMetrics";
 import {
   agentNameMap,
+  capabilityDisplayName,
+  capabilityKeyDisplayName,
   capabilityDiscoveryStatusLabel,
   capabilityStatusTone,
   dataScopeText,
@@ -877,7 +879,7 @@ function App() {
     }));
     setAccessProfileHandoffContext({
       capabilityId: selectedCapability?.id ?? "",
-      capabilityName: selectedCapability?.key ?? "",
+      capabilityName: selectedCapability ? capabilityDisplayName(selectedCapability, t) : "",
       callerInstanceId: aiAdminForm.callerInstanceId,
       callerName: selectedCaller ? permissionEntityDisplayName(selectedCaller.name, t) : aiAdminForm.callerInstanceId,
       targetId: aiAdminForm.targetId,
@@ -1799,7 +1801,7 @@ function App() {
           }
           : current
       );
-      setCapabilityMessage(tx(t, "message.capabilityApproved", { name: capability.key }));
+      setCapabilityMessage(tx(t, "message.capabilityApproved", { name: capabilityDisplayName(capability, t) }));
     } catch (error) {
       if (shouldUseLocalCapabilityFallback(error, data)) {
         setData((current) =>
@@ -1814,7 +1816,7 @@ function App() {
               }
             : current
         );
-        setCapabilityMessage(tx(t, "message.capabilityApprovedFallback", { name: capability.key }));
+        setCapabilityMessage(tx(t, "message.capabilityApprovedFallback", { name: capabilityDisplayName(capability, t) }));
         return;
       }
       setCapabilityMessage(localizedErrorMessage(t, language, error, "error.approveCapability"));
@@ -2488,6 +2490,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onCreateGrantChain={submitCapabilityGrantChain}
         onRefreshTarget={handleRefreshTargetCapabilities}
         t={t}
+        tenants={tenants}
         tenantEntitlements={tenantEntitlements}
         workspaceAssignments={workspaceAssignments}
       />
@@ -3861,7 +3864,9 @@ function permissionPolicyReasonMessage(
 ) {
   if (!reason.reasonKey) return reason.message;
   const values = Object.entries(reason.reasonValues ?? {}).reduce<Record<string, string>>((acc, [key, value]) => {
-    if (key === "action" || key === "risk" || key === "sensitivity") {
+    if (key === "capability") {
+      acc[key] = capabilityKeyDisplayName(value, t);
+    } else if (key === "action" || key === "risk" || key === "sensitivity") {
       acc[key] = translatedValue(t, value);
     } else {
       acc[key] = value;

@@ -65,6 +65,17 @@ export function readableIdentifierLabel(value: string) {
     .join(" ");
 }
 
+export function capabilityDisplayName(capability: Pick<Capability, "displayName" | "key">, t: Translator) {
+  const fallback = capability.displayName && capability.displayName !== capability.key
+    ? capability.displayName
+    : readableIdentifierLabel(capability.key);
+  return t(`capability.${capability.key}.name`, fallback);
+}
+
+export function capabilityKeyDisplayName(capabilityKey: string, t: Translator) {
+  return t(`capability.${capabilityKey}.name`, readableIdentifierLabel(capabilityKey));
+}
+
 export function permissionEntityDisplayName(value: string, t: Translator) {
   const normalized = value.trim();
   if (!normalized) return value;

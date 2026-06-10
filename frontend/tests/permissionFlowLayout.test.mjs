@@ -153,6 +153,7 @@ test("permission request carries readable context into access profile workspace"
   assert.match(accessProfileView, /text\.accessProfileHandoffDetail/);
   assert.match(app, /const \[accessProfileHandoffContext, setAccessProfileHandoffContext\] = useState<AccessProfileHandoffContext \| null>\(null\)/);
   assert.match(app, /setAccessProfileHandoffContext\(\{/);
+  assert.match(app, /capabilityName: selectedCapability \? capabilityDisplayName\(selectedCapability, t\) : ""/);
   assert.match(app, /tenantName: permissionTenantPathLabel\(aiAdminForm\.tenantId, tenants, t\)\.primary/);
   assert.match(app, /workspaceName: permissionWorkspaceDisplayName\(aiAdminForm\.workspaceId, agents, t\)/);
   assert.match(app, /handoffContext=\{accessProfileHandoffContext\}/);
@@ -195,6 +196,31 @@ test("access profile query keeps raw identifiers in advanced filters", () => {
   assert.match(accessProfileView, /<details className="access-advanced-filters" open=\{!handoffContext\}>/);
   assert.doesNotMatch(accessProfileView, /<span>\{subjectLabel\}<\/span>/);
   assert.match(styles, /\.access-advanced-filters\s*\{/);
+});
+
+test("capability names use business labels in primary UI", () => {
+  assert.match(presenters, /export function capabilityDisplayName/);
+  assert.match(presenters, /export function capabilityKeyDisplayName/);
+  assert.match(i18n, /"capability\.search_customer\.name": "查询客户"/);
+  assert.match(i18n, /"capability\.update_ticket\.name": "更新工单"/);
+  assert.match(i18n, /"capability\.export_contracts\.name": "导出合同"/);
+  assert.match(app, /import \{[\s\S]*capabilityDisplayName,[\s\S]*\} from "\.\/consolePresenters"/);
+  assert.match(app, /message\.capabilityApproved", \{ name: capabilityDisplayName\(capability, t\) \}/);
+  assert.match(app, /key === "capability"[\s\S]*capabilityKeyDisplayName\(value, t\)/);
+  assert.match(workbench, /capabilityDisplayName\(capability, t\)\} · \{t\(`value\.\$\{capability\.action\}`/);
+  assert.match(workbench, /key === "capability"[\s\S]*capabilityKeyDisplayName\(value, t\)/);
+  assert.match(accessProfileView, /const capabilityNameById = useMemo/);
+  assert.match(accessProfileView, /capabilityNameById\.get\(trace\.capabilityId\) \?\? trace\.capabilityId/);
+  assert.match(accessProfileView, /const capabilityName = grant\.capability[\s\S]*capabilityDisplayName\(grant\.capability, t\)/);
+  assert.match(capabilityGovernanceView, /label: capabilityDisplayName\(capability, t\)/);
+  assert.match(capabilityGovernanceView, /<strong>\{capabilityDisplayName\(capability, t\)\}<\/strong>/);
+  assert.match(capabilityGovernanceView, /capability \? capabilityDisplayName\(capability, t\) : entitlement\.capabilityId/);
+  assert.match(app, /tenants=\{tenants\}/);
+  assert.match(capabilityGovernanceView, /tenants: Tenant\[\]/);
+  assert.match(capabilityGovernanceView, /tenantNames\.get\(entitlement\.tenantId\) \?\? entitlement\.tenantId/);
+  assert.doesNotMatch(capabilityGovernanceView, /\{entitlement\.tenantId\} · \{policyEffectLabel/);
+  assert.doesNotMatch(capabilityGovernanceView, /capability\.displayName \|\| capability\.key/);
+  assert.doesNotMatch(workbench, /\{capability\.key\} · \{t\(`value\.\$\{capability\.action\}`/);
 });
 
 test("permission request evidence is secondary to the main operator task", () => {

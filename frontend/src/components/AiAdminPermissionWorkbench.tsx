@@ -31,6 +31,7 @@ import type {
   AiAdminProductionConsoleSummary
 } from "../aiAdminProductionConsole";
 import type { MetricTone } from "../consoleMetrics";
+import { capabilityDisplayName, capabilityKeyDisplayName } from "../consolePresenters";
 import { createTranslator } from "../i18n";
 import {
   currentPermissionRequestWizardStep,
@@ -1187,7 +1188,7 @@ function CapabilityChipList({
       <div>
         {capabilities.map((capability) => (
           <span key={capability.id}>
-            {capability.key} · {t(`value.${capability.action}`, capability.action)}
+            {capabilityDisplayName(capability, t)} · {t(`value.${capability.action}`, capability.action)}
           </span>
         ))}
       </div>
@@ -1460,7 +1461,9 @@ function permissionPolicyReasonMessage(
 ) {
   if (!reason.reasonKey) return reason.message;
   const values = Object.entries(reason.reasonValues ?? {}).reduce<Record<string, string>>((acc, [key, value]) => {
-    if (key === "action" || key === "risk" || key === "sensitivity") {
+    if (key === "capability") {
+      acc[key] = capabilityKeyDisplayName(value, t);
+    } else if (key === "action" || key === "risk" || key === "sensitivity") {
       acc[key] = translatedValue(t, value);
     } else {
       acc[key] = value;

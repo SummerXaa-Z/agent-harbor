@@ -8,9 +8,11 @@ import {
 } from "../accessSubjects";
 import {
   agentNameMap,
+  capabilityDisplayName,
   capabilityDiscoveryStatusLabel,
   capabilityStatusTone,
   dataScopeText,
+  permissionEntityDisplayName,
   policyEffectLabel,
   riskTone,
   translatedValue,
@@ -20,6 +22,7 @@ import type {
   Agent,
   Capability,
   InstanceAssignment,
+  Tenant,
   TenantEntitlement,
   WorkspaceAssignment
 } from "../types";
@@ -48,6 +51,7 @@ export function CapabilityGovernanceView({
   onCreateGrantChain,
   onRefreshTarget,
   t,
+  tenants,
   tenantEntitlements,
   workspaceAssignments
 }: {
@@ -63,10 +67,15 @@ export function CapabilityGovernanceView({
   onCreateGrantChain: (event: FormEvent<HTMLFormElement>) => void;
   onRefreshTarget: () => void;
   t: Translator;
+  tenants: Tenant[];
   tenantEntitlements: TenantEntitlement[];
   workspaceAssignments: WorkspaceAssignment[];
 }) {
   const agentNames = useMemo(() => agentNameMap(agents), [agents]);
+  const tenantNames = useMemo(
+    () => new Map(tenants.map((tenant) => [tenant.id, permissionEntityDisplayName(tenant.name, t)])),
+    [tenants, t]
+  );
   const visibleCapabilities = useMemo(() => {
     const targetId = form.targetId.trim();
     return targetId ? capabilities.filter((capability) => capability.targetId === targetId) : capabilities;
@@ -81,7 +90,7 @@ export function CapabilityGovernanceView({
     { value: "", label: t("form.selectCapability") },
     ...visibleCapabilities.map((capability) => ({
       value: capability.id,
-      label: capability.displayName || capability.key
+      label: capabilityDisplayName(capability, t)
     }))
   ];
   const callerOptions = [
@@ -201,7 +210,7 @@ export function CapabilityGovernanceView({
                   return (
                     <tr key={capability.id}>
                       <td>
-                        <strong>{capability.displayName || capability.key}</strong>
+                        <strong>{capabilityDisplayName(capability, t)}</strong>
                         <span>{dataScopeText(capability.dataScopes) || capability.description || capability.key}</span>
                       </td>
                       <td>{agentNames[capability.targetId] ?? capability.targetId}</td>
@@ -294,11 +303,12 @@ export function CapabilityGovernanceView({
               (total, item) => total + instanceAssignments.filter((instance) => instance.workspaceAssignmentId === item.id).length,
               0
             );
+            const tenantName = tenantNames.get(entitlement.tenantId) ?? entitlement.tenantId;
             return (
               <article className="assignment-row" key={entitlement.id}>
                 <div>
-                  <strong>{capability?.key ?? entitlement.capabilityId}</strong>
-                  <span>{entitlement.tenantId} · {policyEffectLabel(entitlement.effect, t)} · {translatedValue(t, entitlement.status)}</span>
+                  <strong>{capability ? capabilityDisplayName(capability, t) : entitlement.capabilityId}</strong>
+                  <span>{tenantName} · {policyEffectLabel(entitlement.effect, t)} · {translatedValue(t, entitlement.status)}</span>
                 </div>
                 <div className="assignment-metrics">
                   <span>{children.length} {t("text.workspaces")}</span>

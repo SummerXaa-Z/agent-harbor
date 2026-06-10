@@ -438,3 +438,21 @@ Browser verification confirmed tenant-scope rows render `客户服务中心` and
 - [x] **Step 5: Fold handoff technical filters**
 
 Move Access Profile `tenantId`, `workspaceId`, `subjectId`, and trace limit inputs into `access-advanced-filters`. Browser verification confirmed the handoff query panel keeps target, capability, caller, load, and explain actions visible while advanced identifiers are collapsed by default.
+
+## Task 8: Business Capability Names In Primary UI
+
+- [x] **Step 1: Add shared capability presenter**
+
+Use a single `capabilityDisplayName` presenter backed by localized capability-name keys, so demo and discovered capabilities can keep stable keys for API/audit while the console shows business-readable labels.
+
+- [x] **Step 2: Replace primary-path capability keys**
+
+Use the presenter in Permission Changes capability chips, Tenant Access Profile filter summary, grant rows, trace rows, Capability Governance pickers, capability catalog rows, grant-chain rows, approval-success messages, policy-gate reason messages, and Access Profile handoff context. Capability Governance grant-chain rows also map tenant ids to business tenant names in the primary line.
+
+- [x] **Step 3: Keep technical keys out of the operator path**
+
+Keep raw capability keys in the data model, tests, and technical/audit surfaces only. Do not rename API fields or persisted ids.
+
+- [x] **Step 4: Add regression coverage**
+
+Extend `frontend/tests/permissionFlowLayout.test.mjs` so future UI changes cannot reintroduce `capability.key` as the primary user-facing label.

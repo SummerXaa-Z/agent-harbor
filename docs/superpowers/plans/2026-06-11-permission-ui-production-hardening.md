@@ -1382,3 +1382,13 @@ Permission Changes process step buttons now expose `text.permissionProcessStepAr
 - [x] **Step 2: Add regression coverage**
 
 `frontend/tests/permissionFlowLayout.test.mjs` asserts the process step buttons build their aria label from the localized template, and `frontend/tests/i18n.test.mjs` locks the Simplified Chinese label template.
+
+## Task 44: Soften Reviewer Queue Trace Details
+
+- [x] **Step 1: Rename folded request identifiers as trace details**
+
+Permission Changes reviewer queue rows still retain request, tenant, workspace, caller, and target identifiers for audit and troubleshooting. The collapsed summary now reads `Trace details` / `追溯详情` instead of technical request identifiers, so a completed production journey does not frame raw ids as the operator's active task.
+
+- [x] **Step 2: Add regression coverage**
+
+`frontend/tests/permissionFlowLayout.test.mjs` now asserts reviewer queue details use `text.reviewerQueueTraceDetails`, keeps the Simplified Chinese label locked, and prevents the queue summary from reverting to the generic technical-request wording.

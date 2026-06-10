@@ -1134,7 +1134,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                       </div>
                     )}
                     <details className="approval-details">
-                      <summary>{t("text.technicalRequestIds")}</summary>
+                      <summary>{t("text.reviewerQueueTraceDetails")}</summary>
                       <div className="approval-review-row-technical">
                         <TechnicalId label={t("table.request")} value={request.id} />
                         <TechnicalId label={t("form.tenantId")} value={request.tenantId} />

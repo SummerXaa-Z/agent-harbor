@@ -602,6 +602,9 @@ test("permission reviewer queue uses business labels before technical identifier
   assert.doesNotMatch(workbench.slice(queueStart, advancedStart), /permissionPackageApprovalRouteLabel\(request\)/);
   assert.doesNotMatch(workbench.slice(queueStart, advancedStart), /request\.tenantId/);
   assert.doesNotMatch(workbench.slice(queueStart, advancedStart), /request\.callerInstanceId/);
+  assert.match(workbench, /<summary>\{t\("text\.reviewerQueueTraceDetails"\)\}<\/summary>/);
+  assert.match(i18n, /"text\.reviewerQueueTraceDetails": "追溯详情"/);
+  assert.doesNotMatch(workbench, /<summary>\{t\("text\.technicalRequestIds"\)\}<\/summary>/);
   assert.match(styles, /\.approval-review-row-main\s*\{/);
   assert.match(styles, /\.approval-review-row-meta\s*\{/);
 });

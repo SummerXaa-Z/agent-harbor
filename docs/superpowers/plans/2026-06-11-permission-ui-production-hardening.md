@@ -470,3 +470,7 @@ Hide approve, reject, and withdraw actions from the main approval step once the 
 - [x] **Step 3: Verify in browser**
 
 Browser verification confirmed the completed Permission Changes approval block reads `已批准 / 当前权限变更已记录审批。`, with no `待审批` status and no approve/reject/withdraw actions in the main path.
+
+- [x] **Step 4: Separate step title from action wording**
+
+The Simplified Chinese approval step title now reads `审批处理` while the primary action remains `提交审批`, so a completed journey no longer looks like it is asking the operator to submit again.

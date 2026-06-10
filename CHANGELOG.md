@@ -130,6 +130,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 权限变更、租户访问画像和能力治理现在在主界面展示“查询客户、更新工单、导出合同”等业务能力名称；能力治理授权链主行也优先展示业务租户名，而不是租户 ID。
 - Permission Changes now treats applied or production-ready requests as approval-resolved in the main approval step, so stale pending queue items no longer make a completed journey look unapproved.
 - 权限变更页现在会把已应用或已上线的请求视为主审批步骤已闭环，旧的待审批队列项不再让完成态旅程看起来仍未审批。
+- Permission Changes now uses a neutral approval-step title in Simplified Chinese, separating the step state from the "submit for approval" action.
+- 权限变更页中文主流程现在使用中性的“审批处理”步骤标题，将步骤状态和“提交审批”按钮动作区分开。
 - Web console visual design review follow-up: design tokens now govern component colors, shadows, focus rings, button sizing, technical-id display, System Self-Check telemetry, and Agent registry ordering.
 - Web 控制台视觉设计审查项已落地：设计 token 现在约束组件色值、阴影、焦点环、按钮尺寸、技术 ID 展示、系统自检指标展示范围和 Agent 注册表顺序。
 - Web console UX review follow-up: desktop navigation now keeps readable grouped labels at medium widths, Permission Changes uses one authoritative context bar with non-truncating core selectors, and Capability Governance prioritizes the grant operation area over KPI cards.

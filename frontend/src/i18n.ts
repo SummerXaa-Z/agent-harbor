@@ -1347,7 +1347,7 @@ const translations: Record<Language, Record<string, string>> = {
     "section.permissionRequestTask": "权限变更",
     "section.permissionRequestForm": "申请信息",
     "section.permissionRequestProcess": "处理流程",
-    "section.permissionWizardApproval": "提交审批",
+    "section.permissionWizardApproval": "审批处理",
     "section.permissionWizardApply": "应用权限",
     "section.permissionWizardGoLive": "上线就绪",
     "section.permissionWizardScope": "选择对象",

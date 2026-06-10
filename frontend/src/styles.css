@@ -949,6 +949,28 @@ table {
   min-width: 860px;
 }
 
+.audit-technical {
+  margin-top: 6px;
+}
+
+.audit-technical summary {
+  display: inline-flex;
+  width: fit-content;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  list-style: none;
+}
+
+.audit-technical summary::-webkit-details-marker {
+  display: none;
+}
+
+.audit-technical[open] summary {
+  margin-bottom: 6px;
+  color: var(--brand);
+}
+
 .policy-table th:nth-child(1),
 .policy-table td:nth-child(1) {
   width: 25%;

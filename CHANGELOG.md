@@ -144,6 +144,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 权限变更页现在会在审批步骤本地化默认安全审批人展示名，同时保留底层审批人身份用于 API 校验。
 - Tenant Access Profile now shares the same business data-scope labels and default-tenant presenter as Permission Changes, so direct access-profile review no longer exposes `default`, `L0`, or raw region codes in the primary path.
 - 租户访问画像现在复用与权限变更一致的数据范围和默认租户展示逻辑，直接进入画像页时主路径不再暴露 `default`、`L0` 或原始区域码。
+- Go-live Evidence now localizes management audit actions, resource types, actors, and summaries while moving raw resource ids into expandable technical details.
+- 上线证据页现在会本地化管理审计的操作、资源类型、操作者和摘要，并把原始资源 ID 收进可展开的技术详情。
 - Web console visual design review follow-up: design tokens now govern component colors, shadows, focus rings, button sizing, technical-id display, System Self-Check telemetry, and Agent registry ordering.
 - Web 控制台视觉设计审查项已落地：设计 token 现在约束组件色值、阴影、焦点环、按钮尺寸、技术 ID 展示、系统自检指标展示范围和 Agent 注册表顺序。
 - Web console UX review follow-up: desktop navigation now keeps readable grouped labels at medium widths, Permission Changes uses one authoritative context bar with non-truncating core selectors, and Capability Governance prioritizes the grant operation area over KPI cards.

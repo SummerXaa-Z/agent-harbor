@@ -3650,14 +3650,17 @@ function ManagementAuditTable({ events, t }: { events: AuditEvent[]; t: Translat
           {events.map((event) => (
             <tr key={event.id}>
               <td>{formatDate(event.createdAt)}</td>
-              <td><Badge tone={auditTone(event.action)}>{event.action}</Badge></td>
+              <td><Badge tone={auditTone(event.action)}>{auditActionLabel(event.action, t)}</Badge></td>
               <td>
-                <strong>{event.resourceType}</strong>
-                <span>{event.resourceId}</span>
+                <strong>{auditResourceTypeLabel(event.resourceType, t)}</strong>
+                <details className="audit-technical">
+                  <summary>{t("text.technicalDetails")}</summary>
+                  <TechnicalId value={event.resourceId} t={t} />
+                </details>
               </td>
-              <td>{event.actor || "-"}</td>
+              <td>{auditActorLabel(event.actor, t)}</td>
               <td>{auditCredentialVersion(event)}</td>
-              <td>{event.summary || "-"}</td>
+              <td>{auditSummaryLabel(event.summary, t)}</td>
             </tr>
           ))}
         </tbody>
@@ -3779,6 +3782,25 @@ function auditCredentialVersion(event: AuditEvent) {
   const value = event.metadata?.credentialVersion;
   if (typeof value === "number" || typeof value === "string") return String(value);
   return "-";
+}
+
+function auditActionLabel(action: string, t: Translator) {
+  return t(`auditAction.${action}`, readableIdentifierLabel(action));
+}
+
+function auditActorLabel(actor: string | undefined, t: Translator) {
+  if (!actor) return "-";
+  return t(`auditActor.${actor}`, actor);
+}
+
+function auditResourceTypeLabel(resourceType: string, t: Translator) {
+  return t(`auditResource.${resourceType}`, readableIdentifierLabel(resourceType));
+}
+
+function auditSummaryLabel(summary: string | undefined, t: Translator) {
+  if (!summary) return "-";
+  const key = summary.trim().replaceAll(" ", "_").toLowerCase();
+  return t(`auditSummary.${key}`, summary);
 }
 
 function channelLabel(channelType: string, channelLabels: Record<string, string>, t: Translator) {

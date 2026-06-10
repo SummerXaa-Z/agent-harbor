@@ -270,6 +270,18 @@ test("permission request evidence is secondary to the main operator task", () =>
   assert.match(workbench.slice(auditStart), /section\.permissionProductionReadiness/);
 });
 
+test("management audit evidence uses business labels before technical ids", () => {
+  assert.match(app, /auditActionLabel\(event\.action, t\)/);
+  assert.match(app, /auditResourceTypeLabel\(event\.resourceType, t\)/);
+  assert.match(app, /auditActorLabel\(event\.actor, t\)/);
+  assert.match(app, /auditSummaryLabel\(event\.summary, t\)/);
+  assert.match(app, /className="audit-technical"/);
+  assert.doesNotMatch(app, /<span>\{event\.resourceId\}<\/span>/);
+  assert.match(i18n, /"auditAction\.permission_package\.applied": "应用权限包"/);
+  assert.match(i18n, /"auditActor\.local-dev": "本地管理员"/);
+  assert.match(styles, /\.audit-technical summary\s*\{/);
+});
+
 test("permission request blocks main actions when sample fallback data is shown", () => {
   assert.match(workbench, /liveDataAvailable: boolean/);
   assert.match(workbench, /const liveDataBlocked = !liveDataAvailable/);

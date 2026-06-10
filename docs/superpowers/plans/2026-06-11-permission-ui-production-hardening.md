@@ -1232,3 +1232,25 @@ Browser verification on `http://127.0.0.1:5174/#ai-admin` confirmed early/approv
 Commit and push if clean, then inspect PR #74.
 
 Committed the staged secondary-action copy after focused tests, browser verification, `git diff --check`, `make check`, and `make release-check`.
+
+## Task 34: Re-run Browser Journey Gate After UI Hardening
+
+- [x] **Step 1: Run the publishing-grade browser journey gate**
+
+Run the isolated-port AI Admin browser journey after the read-only review, new-draft isolation, and staged secondary-action updates:
+
+```bash
+AGENT_HARBOR_BROWSER_GATE_API_PORT=19090 AGENT_HARBOR_BROWSER_GATE_FRONTEND_PORT=15174 MOCK_MCP_PORT=18787 make ai-admin-browser-journey
+```
+
+Result: passed with run id `ai-admin-browser-journey-20260611054116`. The gate covered approval withdrawal, split requester/reviewer admin identities, approval, apply, runtime allow/deny, access profile, health, impact, audit, status check, and production evidence report.
+
+- [x] **Step 2: Record evidence**
+
+Updated `docs/engineering/0.2.0-local-validation-evidence.md` with the post-UI-hardening browser journey run id and coverage.
+
+- [x] **Step 3: Commit, push, and inspect PR checks**
+
+Commit and push the evidence-only update, then inspect PR #74.
+
+Committed the evidence-only recheck update after `git diff --check`.

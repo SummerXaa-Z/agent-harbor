@@ -3497,6 +3497,9 @@ function GoLiveAcceptanceOverview({
     ?? productionSummary.steps.filter((step) => step.status === "blocked").length;
   const warningCount = productionReadiness?.summary.warningCount
     ?? productionSummary.steps.filter((step) => step.status === "needs_review" || step.status === "pending").length;
+  const statusMessage = productionReadinessMessage === t("message.permissionProductionReadinessLoaded")
+    ? ""
+    : productionReadinessMessage;
 
   return (
     <div className="go-live-acceptance">
@@ -3507,7 +3510,7 @@ function GoLiveAcceptanceOverview({
         </div>
         <p>{nextAction}</p>
         {!liveDataAvailable ? <p className="go-live-acceptance-warning">{t("message.fallbackDataModeDetail")}</p> : null}
-        {productionReadinessMessage ? <p className="go-live-acceptance-message">{productionReadinessMessage}</p> : null}
+        {statusMessage ? <p className="go-live-acceptance-message">{statusMessage}</p> : null}
         <div className="go-live-acceptance-actions">
           <button className="primary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
             <RefreshCw size={14} />

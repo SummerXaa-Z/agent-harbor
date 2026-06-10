@@ -296,6 +296,8 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   assert.match(app, /onRefreshProductionReadiness/);
   assert.match(app, /onExportProductionEvidence/);
   assert.match(app, /onOpenPermissionChange/);
+  assert.match(app, /const statusMessage = productionReadinessMessage === t\("message\.permissionProductionReadinessLoaded"\)/);
+  assert.match(app, /statusMessage \? <p className="go-live-acceptance-message">\{statusMessage\}<\/p> : null/);
   assert.match(evidenceCase, /goLiveAcceptancePanel/);
   assert.ok(evidenceCase.indexOf("goLiveAcceptancePanel") < evidenceCase.indexOf("evidenceRunsPanel"));
   assert.match(i18n, /"section\.goLiveAcceptance": "上线验收"/);

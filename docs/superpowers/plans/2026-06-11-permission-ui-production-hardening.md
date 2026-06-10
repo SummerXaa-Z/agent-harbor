@@ -1362,3 +1362,13 @@ The Permission Changes process navigation now normalizes workbench preview steps
 - [x] **Step 2: Add regression coverage**
 
 `frontend/tests/permissionFlowLayout.test.mjs` now asserts the process step display helpers override stale preview details and statuses with completed local evidence, preventing a ready journey from showing the approval step as pending.
+
+## Task 42: Align Process Step Wording With AI Admin
+
+- [x] **Step 1: Replace requester-oriented step labels**
+
+The first two Permission Changes process steps now read `Configure scope` / `配置范围` and `Approval review` / `审批处理`. This matches the AI Admin mental model better than `Request` / `填写申请`, while keeping the submit button copy as the concrete action.
+
+- [x] **Step 2: Add i18n coverage**
+
+`frontend/tests/i18n.test.mjs` now locks the Simplified Chinese process labels so the main journey keeps admin-oriented wording.

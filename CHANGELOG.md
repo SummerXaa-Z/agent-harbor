@@ -44,6 +44,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web 控制台权限变更页现在对已完成的审批、应用、运行验证和状态检查步骤使用完成态描述，避免旅程已可上线后仍显示“等待下一步”的误导文案。
 - Permission Changes process navigation now prefers stronger completed local evidence over stale workbench preview step text, so a go-live-ready journey cannot show an approval step as still pending.
 - 权限变更流程导航现在会用更强的本地完成证据覆盖滞后的工作台预览文案，避免可上线旅程里审批步骤仍显示待处理。
+- Permission Changes process navigation now uses AI Admin wording for the first two steps: configure scope and approval review, instead of requester-oriented request labels.
+- 权限变更流程导航现在用 AI Admin 视角命名前两步：配置范围和审批处理，不再沿用偏申请人视角的申请文案。
 - Go-Live Acceptance now suppresses generic status-check success logs and relies on the status badge, next action, and check list for the normal path, leaving the message area for actionable failures or warnings.
 - 上线验收页现在隐藏普通的状态检查成功加载日志，正常路径依赖状态标识、下一步和检查列表，消息区域只留给需要处理的失败或告警。
 - Go-Live Acceptance management audit rows now use a quiet "Details" disclosure for technical ids and preserve mixed-case business terms such as Agent instead of forcing badge text to lowercase.

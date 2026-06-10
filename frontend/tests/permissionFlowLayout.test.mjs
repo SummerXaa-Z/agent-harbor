@@ -502,6 +502,17 @@ test("permission reviewer queue uses business labels before technical identifier
   assert.match(styles, /\.approval-review-row-meta\s*\{/);
 });
 
+test("completed permission journeys make reviewer queue read-only", () => {
+  assert.match(workbench, /const reviewerQueueReadOnly = Boolean\(application\) \|\| goLiveReady/);
+  assert.match(workbench, /reviewerQueueReadOnly \? <span className="approval-inline-message status-info">\{t\("text\.reviewerQueueReadOnlyDetail"\)\}<\/span> : null/);
+  assert.match(workbench, /reviewerQueueReadOnly \? \(/);
+  assert.match(workbench, /className="approval-review-row-state"/);
+  assert.match(workbench, /t\("text\.reviewerQueueReadOnlyAction"\)/);
+  assert.match(i18n, /"text\.reviewerQueueReadOnlyDetail": "权限已经生效，待审批队列仅用于追溯。"/);
+  assert.match(i18n, /"text\.reviewerQueueReadOnlyAction": "只读"/);
+  assert.match(styles, /\.approval-review-row-state\s*\{/);
+});
+
 test("permission request keeps tenant workspace and caller context visible", () => {
   const contextStart = workbench.indexOf('<section className="approval-context-bar"');
   const overviewStart = workbench.indexOf('<section className="approval-overview"', contextStart);

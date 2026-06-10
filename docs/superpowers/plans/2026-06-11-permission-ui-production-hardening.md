@@ -575,14 +575,38 @@ Browser verification on `http://127.0.0.1:5174/#evidence` confirmed no visible r
 
 ## Task 12: Continue Acceptance And Main Journey Scan
 
-- [ ] **Step 1: Re-check the Permission Changes route after audit polish**
+- [x] **Step 1: Re-check the Permission Changes route after audit polish**
 
 Reload `http://127.0.0.1:5174/#ai-admin` and verify the first viewport still has one obvious next action, no duplicate status sources, no raw identifiers in the primary path, and no native select controls in the main journey.
 
-- [ ] **Step 2: Re-check the Acceptance route after audit polish**
+- [x] **Step 2: Re-check the Acceptance route after audit polish**
 
 Reload `http://127.0.0.1:5174/#evidence` and verify the management audit table stays secondary, the acceptance status and current permission-change context remain dominant, and technical detail disclosures are visually quiet.
 
-- [ ] **Step 3: Pick the next production-confidence fix**
+- [x] **Step 3: Pick the next production-confidence fix**
 
 Choose the smallest remaining issue that affects safety, stability, or user confidence; implement it with tests, docs, browser verification, `make check`, `make release-check`, commit, and push.
+
+The selected issue was the completed Permission Changes journey still showing stale reviewer-queue rows with active approve/reject actions inside Acceptance Details. After permissions are already active or the status check is ready, those actions can make an operator think they still need to approve an old request. The queue now switches to read-only evidence: it keeps the business row and technical request ids, shows `Read-only` / `只读`, and removes approve/reject actions.
+
+Verified:
+
+```bash
+pnpm --dir frontend exec node --test tests/permissionFlowLayout.test.mjs tests/i18n.test.mjs
+```
+
+Browser verification on `http://127.0.0.1:5174/#ai-admin` confirmed the expanded Acceptance Details reviewer queue shows `权限已经生效，待审批队列仅用于追溯。`, has no `批准请求` or `拒绝请求` buttons, and marks pending rows as `只读`.
+
+## Task 13: Continue Completion-State Cleanup
+
+- [ ] **Step 1: Inspect completed-state primary controls**
+
+Reload `http://127.0.0.1:5174/#ai-admin` and verify completed-state controls do not mix active action styling with disabled completed labels, especially the `已应用` primary button and duplicate `导出证据` actions.
+
+- [ ] **Step 2: Inspect acceptance page after completed-state queue cleanup**
+
+Reload `http://127.0.0.1:5174/#evidence` and verify the status check, current permission-change context, historical evidence, management audit, and runtime signals appear in a sensible order without inviting unnecessary writes.
+
+- [ ] **Step 3: Pick the next smallest production-confidence fix**
+
+Prioritize safety and clarity over visual polish. If no critical main-journey issue remains, switch to CI status review and release notes cleanup.

@@ -1153,6 +1153,18 @@ button.approval-mini-row {
   justify-content: flex-end;
 }
 
+.approval-review-row-state {
+  justify-self: end;
+  padding: 4px 9px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .approval-review-row > .approval-details {
   grid-column: 1 / -1;
   margin-top: 2px;

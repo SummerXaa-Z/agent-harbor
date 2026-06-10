@@ -256,6 +256,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     || Boolean(workbenchPreview?.summary.productionReady)
     || productionSummary.status === "ready";
   const goLiveReady = productionReady || goLiveReadiness.status === "ready";
+  const reviewerQueueReadOnly = Boolean(application) || goLiveReady;
   const runtimeValidationReady = Boolean(approvalJourneyResult) || goLiveReady;
   const approvalEffectivelyResolved = !draft.policyGate.canApplyDirectly
     && (approvalRequest?.status === "approved" || Boolean(application) || goLiveReady);
@@ -1043,6 +1044,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               <input value={approvalReviewer} onChange={(event) => onApprovalReviewerChange(event.target.value)} />
             </label>
             {reviewerQueueMessage && shouldShowAdvancedStatusMessage(reviewerQueueMessageTone) ? <span className={`approval-inline-message status-${reviewerQueueMessageTone}`}>{reviewerQueueMessage}</span> : null}
+            {reviewerQueueReadOnly ? <span className="approval-inline-message status-info">{t("text.reviewerQueueReadOnlyDetail")}</span> : null}
             <div className="approval-mini-list">
               {reviewerQueueRequests.length === 0 ? (
                 <EmptyRow title={t("section.permissionReviewerQueue")} detail={t("empty.reviewerQueue.detail")} />
@@ -1058,16 +1060,20 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                       </span>
                       <span className="approval-review-row-meta">{tx(t, "text.permissionQueueExpires", { date: formatDate(request.expiresAt) })}</span>
                     </button>
-                    <div>
-                      <button className="approval-action-button is-primary" disabled={liveDataBlocked || permissionRequestBusy} onClick={() => beginApprovalDecision("approve", request.id)} type="button">
-                        <CheckCircle2 size={13} />
-                        {t("action.approvePermissionRequest")}
-                      </button>
-                      <button className="approval-action-button is-danger" disabled={liveDataBlocked || permissionRequestBusy} onClick={() => beginApprovalDecision("reject", request.id)} type="button">
-                        <TriangleAlert size={13} />
-                        {t("action.rejectPermissionRequest")}
-                      </button>
-                    </div>
+                    {reviewerQueueReadOnly ? (
+                      <span className="approval-review-row-state">{t("text.reviewerQueueReadOnlyAction")}</span>
+                    ) : (
+                      <div>
+                        <button className="approval-action-button is-primary" disabled={liveDataBlocked || permissionRequestBusy} onClick={() => beginApprovalDecision("approve", request.id)} type="button">
+                          <CheckCircle2 size={13} />
+                          {t("action.approvePermissionRequest")}
+                        </button>
+                        <button className="approval-action-button is-danger" disabled={liveDataBlocked || permissionRequestBusy} onClick={() => beginApprovalDecision("reject", request.id)} type="button">
+                          <TriangleAlert size={13} />
+                          {t("action.rejectPermissionRequest")}
+                        </button>
+                      </div>
+                    )}
                     <details className="approval-details">
                       <summary>{t("text.technicalRequestIds")}</summary>
                       <div className="approval-review-row-technical">

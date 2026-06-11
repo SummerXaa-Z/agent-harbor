@@ -14,6 +14,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web 控制台 Agent 注册表和能力治理页现在提供关键词/状态筛选和低噪声详情面板；Agent 行状态变更收进紧凑的“更多”菜单，表格保持生产控制台的信息密度。
 - Access Policies now opens with a policy-creation task state when empty and keeps management audit collapsed until requested, so operators can focus on creating and reviewing access rules first.
 - 访问策略页在空状态下优先呈现创建策略任务，并默认收起管理审计，方便管理员先完成访问规则创建与复核。
+- Web console view composition now starts moving out of `App.tsx`: NavKey page shells live in `ConsoleViews`, operational tables and policy workspace live in `OperationalViews`, and the Self-Check workbench lives in `CoreJourneyWorkbench`.
+- Web 控制台视图编排已开始从 `App.tsx` 拆出：NavKey 页面壳进入 `ConsoleViews`，运营表格和访问策略工作区进入 `OperationalViews`，自检工作台进入 `CoreJourneyWorkbench`。
 - Added approval-request withdrawal for permission changes: REST now exposes `POST /api/v1/permission-packages/approval-requests/{id}/withdraw`, Management MCP exposes `withdraw_permission_package_approval_request`, and withdrawn requests are audited as `permission_package.approval_withdrawn`.
 - 新增权限变更审批请求撤回能力：REST 提供 `POST /api/v1/permission-packages/approval-requests/{id}/withdraw`，Management MCP 提供 `withdraw_permission_package_approval_request`，撤回审计事件记录为 `permission_package.approval_withdrawn`。
 - Added a draft 0.3.0 requirements document (`docs/product/0.3.0-permission-platform-requirements.md`) covering permission package resource-type expansion, an end-user self-service consumption portal, model access with budget quotas, and grant lifecycle automation, with personas, slices, and acceptance criteria.

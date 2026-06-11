@@ -53,8 +53,10 @@
 
 ## Task 6: Extract Views From `App.tsx` (`ui-1`)
 
-- [ ] Extract view components by `NavKey` without changing behavior.
-- [ ] Keep `App.tsx` as shell/orchestration and move presentational blocks into owned files.
+- [x] Extract first-pass view composition by `NavKey` without changing behavior: `ConsoleViews` now owns page shells.
+- [x] Move operational list and policy workspace presentation into `OperationalViews`, and move Self-Check presentation into `CoreJourneyWorkbench`.
+- [x] Add focused tests that prevent `AgentTable`, `PolicyTable`, `ContractMatrix`, `AccessPolicyWorkspace`, and `CoreJourneyWorkbench` from drifting back into `App.tsx`.
+- [ ] Continue extracting large panel/form renderers so `App.tsx` becomes shell/orchestration instead of owning most page bodies.
 - [ ] Run full frontend tests and release gates after each safe extraction batch.
 
 ## Verification Gates

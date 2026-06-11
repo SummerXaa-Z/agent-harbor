@@ -12,6 +12,8 @@ const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", 
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const accessProfileView = readFileSync(new URL("../src/components/TenantAccessProfileView.tsx", import.meta.url), "utf8");
 const capabilityGovernanceView = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
+const consoleViews = readFileSync(new URL("../src/components/ConsoleViews.tsx", import.meta.url), "utf8");
+const coreJourneyWorkbench = readFileSync(new URL("../src/components/CoreJourneyWorkbench.tsx", import.meta.url), "utf8");
 const presenters = readFileSync(new URL("../src/consolePresenters.ts", import.meta.url), "utf8");
 
 test("permission request journey renders as one production workspace instead of a demo board", () => {
@@ -309,12 +311,12 @@ test("runtime audit keeps protocol details out of primary trace rows", () => {
 });
 
 test("system self-check uses structured configuration and copyable runtime context", () => {
-  const panelStart = app.indexOf("function CoreJourneyWorkbench");
-  const panelEnd = app.indexOf("function CoreJourneyStepRow", panelStart);
-  const panel = app.slice(panelStart, panelEnd);
-  const rowStart = app.indexOf("function CoreJourneyStepRow");
-  const rowEnd = app.indexOf("function AgentCreateForm", rowStart);
-  const row = app.slice(rowStart, rowEnd);
+  const panelStart = coreJourneyWorkbench.indexOf("export function CoreJourneyWorkbench");
+  const panelEnd = coreJourneyWorkbench.indexOf("function CoreJourneyStepRow", panelStart);
+  const panel = coreJourneyWorkbench.slice(panelStart, panelEnd);
+  const rowStart = coreJourneyWorkbench.indexOf("function CoreJourneyStepRow");
+  const rowEnd = coreJourneyWorkbench.indexOf("function coreJourneyStatusTone", rowStart);
+  const row = coreJourneyWorkbench.slice(rowStart, rowEnd);
 
   assert.match(panel, /className="core-journey-config"/);
   assert.match(panel, /className="core-journey-config-grid"/);
@@ -421,8 +423,10 @@ test("management audit evidence uses business labels before technical ids", () =
 });
 
 test("go-live evidence page starts with acceptance workflow instead of historical runs", () => {
-  const viewSwitch = app.slice(app.indexOf("switch (activeView.key)"));
-  const evidenceCase = viewSwitch.slice(viewSwitch.indexOf('case "evidence":'), viewSwitch.indexOf('case "cockpit":'));
+  const evidenceStart = consoleViews.indexOf("export function EvidenceView");
+  const cockpitStart = consoleViews.indexOf("export function CockpitView", evidenceStart);
+  const evidenceCase = consoleViews.slice(evidenceStart, cockpitStart);
+  const evidenceRender = evidenceCase.slice(evidenceCase.indexOf("return ("));
   assert.match(app, /function GoLiveAcceptanceOverview/);
   assert.match(app, /const goLiveAcceptancePanel =/);
   assert.match(app, /className="go-live-acceptance"/);
@@ -436,7 +440,7 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   assert.match(app, /acceptanceReady \? \([\s\S]*className="primary-button"[\s\S]*onClick=\{onExportProductionEvidence\}[\s\S]*className="secondary-button"[\s\S]*onClick=\{onRefreshProductionReadiness\}/);
   assert.match(app, /: \([\s\S]*className="primary-button"[\s\S]*onClick=\{onRefreshProductionReadiness\}[\s\S]*className="secondary-button"[\s\S]*onClick=\{onExportProductionEvidence\}/);
   assert.match(evidenceCase, /goLiveAcceptancePanel/);
-  assert.ok(evidenceCase.indexOf("goLiveAcceptancePanel") < evidenceCase.indexOf("evidenceRunsPanel"));
+  assert.ok(evidenceRender.indexOf("{goLiveAcceptancePanel}") < evidenceRender.indexOf("{evidenceRunsPanel}"));
   assert.match(i18n, /"section\.goLiveAcceptance": "上线验收"/);
   assert.match(i18n, /"text\.goLiveAcceptanceTaskTitle": "确认这次权限变更是否可以上线"/);
   assert.match(i18n, /"empty\.evidenceRuns\.detail": "历史自检运行会在这里保留；当前权限变更请以上方上线验收状态为准。"/);

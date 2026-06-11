@@ -8,6 +8,8 @@ const styles = `${baseStyles}\n${workbenchStyles}`;
 const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
 const capabilityGovernanceView = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
+const consoleViews = readFileSync(new URL("../src/components/ConsoleViews.tsx", import.meta.url), "utf8");
+const operationalViews = readFileSync(new URL("../src/components/OperationalViews.tsx", import.meta.url), "utf8");
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const ui = readFileSync(new URL("../src/components/ui.tsx", import.meta.url), "utf8");
@@ -108,36 +110,34 @@ test("workspace telemetry is scoped to system check instead of repeating on ever
 });
 
 test("agent tools workspace prioritizes the registry before mutation forms", () => {
-  const viewSwitchStart = app.indexOf("const viewContent = (() => {");
-  const registryStart = app.indexOf('case "registry":', viewSwitchStart);
-  const routesStart = app.indexOf('case "routes":', registryStart);
-  const registryView = app.slice(registryStart, routesStart);
+  const registryStart = consoleViews.indexOf("export function RegistryView");
+  const routesStart = consoleViews.indexOf("export function RoutesView", registryStart);
+  const registryView = consoleViews.slice(registryStart, routesStart);
 
-  assert.notEqual(viewSwitchStart, -1);
   assert.notEqual(registryStart, -1);
   assert.notEqual(routesStart, -1);
-  assert.ok(registryView.indexOf('{agentRegistryPanel("span-12")}') < registryView.indexOf("{createAgentPanel}"));
+  assert.ok(registryView.indexOf("{agentRegistryPanel}") < registryView.indexOf("{createAgentPanel}"));
   assert.ok(registryView.indexOf("{createAgentPanel}") < registryView.indexOf("{createKeyPanel}"));
   assert.ok(registryView.indexOf("{createKeyPanel}") < registryView.indexOf("{rotateCredentialPanel}"));
 });
 
 test("agent registry provides search status filtering and a details entry", () => {
-  assert.match(app, /const \[agentQuery, setAgentQuery\] = useState\(""\)/);
-  assert.match(app, /const \[agentStatusFilter, setAgentStatusFilter\] = useState<AgentStatus \| "">\(""\)/);
-  assert.match(app, /const \[selectedAgentId, setSelectedAgentId\] = useState\(""\)/);
-  assert.match(app, /const visibleAgents = agents\.filter/);
-  assert.match(app, /className="table-toolbar"/);
-  assert.match(app, /placeholder=\{t\("form\.searchAgents"\)\}/);
-  assert.match(app, /className="table-detail-panel"/);
-  assert.match(app, /setSelectedAgentId\(agent\.id\)/);
+  assert.match(operationalViews, /const \[agentQuery, setAgentQuery\] = useState\(""\)/);
+  assert.match(operationalViews, /const \[agentStatusFilter, setAgentStatusFilter\] = useState<AgentStatus \| "">\(""\)/);
+  assert.match(operationalViews, /const \[selectedAgentId, setSelectedAgentId\] = useState\(""\)/);
+  assert.match(operationalViews, /const visibleAgents = agents\.filter/);
+  assert.match(operationalViews, /className="table-toolbar"/);
+  assert.match(operationalViews, /placeholder=\{t\("form\.searchAgents"\)\}/);
+  assert.match(operationalViews, /className="table-detail-panel"/);
+  assert.match(operationalViews, /setSelectedAgentId\(agent\.id\)/);
   assert.match(styles, /\.table-toolbar\s*\{/);
   assert.match(styles, /\.table-detail-panel\s*\{/);
 });
 
 test("table actions distinguish neutral state changes from destructive actions", () => {
-  assert.match(app, /className="table-action is-danger"[\s\S]*onClick=\{\(\) => onDisable\(policy\)\}/);
-  assert.match(app, /className="table-action"[\s\S]*onClick=\{\(\) => onStatusChange\(agent, agent\.status === "active" \? "draft" : "active"\)\}/);
-  assert.match(app, /className="table-action is-danger"[\s\S]*onClick=\{\(\) => onStatusChange\(agent, "disabled"\)\}/);
+  assert.match(operationalViews, /className="table-action is-danger"[\s\S]*onClick=\{\(\) => onDisable\(policy\)\}/);
+  assert.match(operationalViews, /className="table-action"[\s\S]*onClick=\{\(\) => onStatusChange\(agent, agent\.status === "active" \? "draft" : "active"\)\}/);
+  assert.match(operationalViews, /className="table-action is-danger"[\s\S]*onClick=\{\(\) => onStatusChange\(agent, "disabled"\)\}/);
   assert.match(styles, /\.table-action\.is-danger\s*\{[^}]*background:\s*var\(--danger-soft\);/s);
 });
 
@@ -147,7 +147,7 @@ test("technical identifiers use a readable copyable component in dense workspace
   assert.match(technicalId, /className="technical-id"/);
   assert.match(technicalId, /navigator\.clipboard\?\.writeText\(value\)/);
   assert.match(app, /import \{ TechnicalId \} from "\.\/components\/TechnicalId"/);
-  assert.match(app, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} value=\{agent\.id\} \/>/);
+  assert.match(operationalViews, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} value=\{agent\.id\} \/>/);
   assert.match(app, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.capability"\)\} value=\{trace\.capabilityId\} \/>/);
   assert.match(styles, /\.technical-id\s*\{/);
   assert.match(styles, /\.technical-id code\s*\{[^}]*font-family:\s*var\(--mono-font\);/s);
@@ -211,7 +211,8 @@ test("mobile shell keeps navigation labels readable", () => {
 });
 
 test("capability workspace compresses metrics and prioritizes grant operations", () => {
-  assert.match(app, /case "capabilities":\s*return \(\s*<section className="content-grid">\s*\{capabilityGovernancePanel\(\)\}/s);
+  assert.match(app, /<CapabilitiesView capabilityGovernancePanel=\{capabilityGovernancePanel\(\)\} \/>/);
+  assert.match(consoleViews, /export function CapabilitiesView[\s\S]*<section className="content-grid">[\s\S]*\{capabilityGovernancePanel\}/);
   assert.match(styles, /\.capability-layout\s*\{[^}]*grid-template-areas:\s*"grant catalog"[\s\S]*"assignments catalog";/s);
 });
 
@@ -227,17 +228,31 @@ test("capability catalog provides search status filtering and a details entry", 
 });
 
 test("access policy page keeps policy creation primary when no policies exist", () => {
-  const viewSwitchStart = app.indexOf("const viewContent = (() => {");
-  const policiesStart = app.indexOf('case "policies":', viewSwitchStart);
-  const capabilitiesStart = app.indexOf('case "capabilities":', policiesStart);
-  const policiesView = app.slice(policiesStart, capabilitiesStart);
+  const policiesStart = consoleViews.indexOf("export function PoliciesView");
+  const capabilitiesStart = consoleViews.indexOf("export function CapabilitiesView", policiesStart);
+  const policiesView = consoleViews.slice(policiesStart, capabilitiesStart);
 
-  assert.match(app, /function AccessPolicyWorkspace/);
+  assert.match(operationalViews, /function AccessPolicyWorkspace/);
   assert.match(policiesView, /<AccessPolicyWorkspace/);
-  assert.match(app, /className="policy-empty-action"/);
-  assert.match(app, /t\("action\.createFirstPolicy"\)/);
-  assert.match(app, /auditCollapsed/);
-  assert.doesNotMatch(policiesView, /\{managementAuditPanel\("span-5"\)\}/);
+  assert.match(operationalViews, /className="policy-empty-action"/);
+  assert.match(operationalViews, /t\("action\.createFirstPolicy"\)/);
+  assert.match(operationalViews, /auditCollapsed/);
+  assert.doesNotMatch(app, /\{managementAuditPanel\("span-5"\)\}/);
   assert.match(styles, /\.policy-workspace\s*\{/);
   assert.match(styles, /\.policy-empty-action\s*\{/);
+});
+
+test("operational list components are split from the app shell", () => {
+  assert.match(app, /from "\.\/components\/OperationalViews"/);
+  assert.match(app, /from "\.\/components\/ConsoleViews"/);
+  assert.doesNotMatch(app, /function AgentTable/);
+  assert.doesNotMatch(app, /function PolicyTable/);
+  assert.doesNotMatch(app, /function ContractMatrix/);
+  assert.doesNotMatch(app, /function AccessPolicyWorkspace/);
+  assert.match(consoleViews, /export function RegistryView/);
+  assert.match(consoleViews, /export function PoliciesView/);
+  assert.match(operationalViews, /export function AgentTable/);
+  assert.match(operationalViews, /export function PolicyTable/);
+  assert.match(operationalViews, /export function ContractMatrix/);
+  assert.match(operationalViews, /export function AccessPolicyWorkspace/);
 });

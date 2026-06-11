@@ -3,7 +3,6 @@ import {
   Activity,
   Boxes,
   CheckCircle2,
-  CircleDot,
   ClipboardCheck,
   Copy,
   DatabaseZap,
@@ -77,7 +76,6 @@ import {
   dataScopeText,
   formatDate,
   permissionEntityDisplayName,
-  policyEffectLabel,
   readableIdentifierLabel,
   riskTone,
   translatedValue,
@@ -109,16 +107,12 @@ import {
   evaluateCoreJourney,
   type CoreJourneyConfig,
   type CoreJourneyEvaluation,
-  type CoreJourneyForm,
-  type CoreJourneyStep,
-  type CoreJourneyStepStatus
+  type CoreJourneyForm
 } from "./coreJourney";
 import {
   coreJourneyPreflightCanRun,
-  coreJourneyPreflightRows,
   defaultCoreJourneyPreflight,
-  type CoreJourneyPreflightState,
-  type CoreJourneyPreflightStatus
+  type CoreJourneyPreflightState
 } from "./coreJourneyPreflight";
 import {
   createAiAdminApprovalJourneyConfig,
@@ -177,6 +171,23 @@ import {
 import { parseRetryFields } from "./retryForm";
 import { AiAdminPermissionWorkbench } from "./components/AiAdminPermissionWorkbench";
 import { CapabilityGovernanceView, type CapabilityGrantForm } from "./components/CapabilityGovernanceView";
+import {
+  AccessView,
+  AiAdminView,
+  CapabilitiesView,
+  CockpitView,
+  EvidenceView,
+  PoliciesView,
+  RegistryView,
+  RoutesView,
+  TracesView
+} from "./components/ConsoleViews";
+import { CoreJourneyWorkbench } from "./components/CoreJourneyWorkbench";
+import {
+  AgentTable,
+  ContractMatrix,
+  PolicyTable
+} from "./components/OperationalViews";
 import { TechnicalId } from "./components/TechnicalId";
 import { TenantAccessProfileView } from "./components/TenantAccessProfileView";
 import { Badge, EmptyRow } from "./components/ui";
@@ -190,7 +201,6 @@ import type {
   AgentStatus,
   AuditEvent,
   Capability,
-  ChannelContract,
   ConsoleData,
   CreateAgentKeyResponse,
   DataScope,
@@ -2788,76 +2798,66 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const viewContent = (() => {
     switch (activeView.key) {
       case "ai-admin":
-        return (
-          <section className="content-grid">
-            {aiAdminPanel}
-          </section>
-        );
+        return <AiAdminView aiAdminPanel={aiAdminPanel} />;
       case "registry":
         return (
-          <section className="content-grid">
-            {agentRegistryPanel("span-12")}
-            {createAgentPanel}
-            {createKeyPanel}
-            {rotateCredentialPanel}
-            {contractMatrixPanel("span-4")}
-          </section>
+          <RegistryView
+            agentRegistryPanel={agentRegistryPanel("span-12")}
+            contractMatrixPanel={contractMatrixPanel("span-4")}
+            createAgentPanel={createAgentPanel}
+            createKeyPanel={createKeyPanel}
+            rotateCredentialPanel={rotateCredentialPanel}
+          />
         );
       case "routes":
         return (
-          <section className="content-grid">
-            {createPolicyPanel}
-            {routeGovernancePanel("span-8")}
-            {tracePanel("span-12")}
-          </section>
+          <RoutesView
+            createPolicyPanel={createPolicyPanel}
+            routeGovernancePanel={routeGovernancePanel("span-8")}
+            tracePanel={tracePanel("span-12")}
+          />
         );
       case "policies":
         return (
-          <section className="content-grid">
-            <AccessPolicyWorkspace
-              createPolicyPanel={createPolicyPanel}
-              managementAuditPanel={managementAuditPanel("span-12")}
-              policies={policies}
-              routeGovernancePanel={routeGovernancePanel("span-8")}
-              t={t}
-            />
-            {capabilityGovernancePanel("span-12")}
-          </section>
+          <PoliciesView
+            capabilityGovernancePanel={capabilityGovernancePanel("span-12")}
+            createPolicyPanel={createPolicyPanel}
+            managementAuditPanel={managementAuditPanel("span-12")}
+            policies={policies}
+            routeGovernancePanel={routeGovernancePanel("span-8")}
+            t={t}
+          />
         );
       case "capabilities":
-        return (
-          <section className="content-grid">
-            {capabilityGovernancePanel()}
-          </section>
-        );
+        return <CapabilitiesView capabilityGovernancePanel={capabilityGovernancePanel()} />;
       case "access":
-        return <section className="content-grid">{accessProfilePanel}</section>;
+        return <AccessView accessProfilePanel={accessProfilePanel} />;
       case "traces":
         return (
-          <section className="content-grid">
-            {tracePanel("span-12")}
-            {managementAuditPanel("span-12")}
-          </section>
+          <TracesView
+            managementAuditPanel={managementAuditPanel("span-12")}
+            tracePanel={tracePanel("span-12")}
+          />
         );
       case "evidence":
         return (
-          <section className="content-grid">
-            {goLiveAcceptancePanel}
-            {evidenceRunsPanel("span-5")}
-            {managementAuditPanel("span-7")}
-            {runtimeSignalsPanel("span-12")}
-          </section>
+          <EvidenceView
+            evidenceRunsPanel={evidenceRunsPanel("span-5")}
+            goLiveAcceptancePanel={goLiveAcceptancePanel}
+            managementAuditPanel={managementAuditPanel("span-7")}
+            runtimeSignalsPanel={runtimeSignalsPanel("span-12")}
+          />
         );
       case "cockpit":
       default:
         return (
-          <section className="content-grid">
-            {coreJourneyPanel}
-            {runtimeSignalsPanel("span-5")}
-            {tracePanel("span-7")}
-            {evidenceRunsPanel("span-4")}
-            {agentRegistryPanel("span-8")}
-          </section>
+          <CockpitView
+            agentRegistryPanel={agentRegistryPanel("span-8")}
+            coreJourneyPanel={coreJourneyPanel}
+            evidenceRunsPanel={evidenceRunsPanel("span-4")}
+            runtimeSignalsPanel={runtimeSignalsPanel("span-5")}
+            tracePanel={tracePanel("span-7")}
+          />
         );
     }
   })();
@@ -3083,187 +3083,6 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         ) : viewContent}
       </main>
     </div>
-  );
-}
-
-function CoreJourneyWorkbench({
-  config,
-  evaluation,
-  form,
-  message,
-  onChange,
-  onOpen,
-  onRefreshPreflight,
-  onReset,
-  onRun,
-  preflight,
-  preflightChecking,
-  preflightMessage,
-  result,
-  running,
-  t
-}: {
-  config: CoreJourneyConfig;
-  evaluation: CoreJourneyEvaluation;
-  form: CoreJourneyForm;
-  message: string;
-  onChange: (form: CoreJourneyForm) => void;
-  onOpen: (key: NavKey) => void;
-  onRefreshPreflight: () => void;
-  onReset: () => void;
-  onRun: () => void;
-  preflight: CoreJourneyPreflightState;
-  preflightChecking: boolean;
-  preflightMessage: string;
-  result: CoreJourneyRunResult | null;
-  running: boolean;
-  t: Translator;
-}) {
-  const canRun = coreJourneyPreflightCanRun(preflight);
-  const runtimeEvidenceSummary = result
-    ? `tools/list ${result.toolListStatus} · ${form.deniedTool} ${result.deniedStatus} · ${form.allowedTool} ${result.allowedStatus}`
-    : t("text.selfCheckRuntimePending");
-  return (
-    <div className="core-journey">
-      <p className="core-journey-intro">{t("text.coreJourneyIntro")}</p>
-      <section className="core-journey-config">
-        <header>
-          <div>
-            <strong>{t("section.selfCheckConfig")}</strong>
-            <span>{t("text.selfCheckConfigDetail")}</span>
-          </div>
-          <div className="core-journey-score">
-            <strong>{evaluation.completeCount}/{evaluation.totalCount}</strong>
-            <span>{t("text.coreJourneyCompletion")}</span>
-          </div>
-        </header>
-        <div className="core-journey-config-grid">
-          <label>
-            {t("form.workspace")}
-            <input
-              disabled={running}
-              value={form.workspaceId}
-              onChange={(event) => onChange({ ...form, workspaceId: event.target.value })}
-            />
-          </label>
-          <label>
-            {t("form.endpoint")}
-            <input
-              disabled={running}
-              value={form.mcpEndpoint}
-              onChange={(event) => onChange({ ...form, mcpEndpoint: event.target.value })}
-            />
-          </label>
-          <label>
-            {t("form.allowedTool")}
-            <input
-              disabled={running}
-              value={form.allowedTool}
-              onChange={(event) => onChange({ ...form, allowedTool: event.target.value })}
-            />
-          </label>
-          <label>
-            {t("form.deniedTool")}
-            <input
-              disabled={running}
-              value={form.deniedTool}
-              onChange={(event) => onChange({ ...form, deniedTool: event.target.value })}
-            />
-          </label>
-        </div>
-        <div className="core-journey-config-actions">
-          <button className="primary-button" disabled={running || preflightChecking || !canRun} onClick={onRun} type="button">
-            <Workflow size={14} />
-            {running ? t("action.runningJourney") : t("action.runCoreJourney")}
-          </button>
-        </div>
-      </section>
-
-      <div className="core-journey-preflight">
-        <div className="core-journey-preflight-header">
-          <div>
-            <strong>{t("section.preflight")}</strong>
-            {preflightMessage ? <span>{preflightMessage}</span> : null}
-          </div>
-          <div className="core-journey-preflight-actions">
-            <button className="secondary-button" disabled={running || preflightChecking} onClick={onRefreshPreflight} type="button">
-              <RefreshCw size={14} />
-              {preflightChecking ? t("action.checkingPreflight") : t("action.checkPreflight")}
-            </button>
-            <button className="secondary-button" disabled={running} onClick={onReset} type="button">
-              <RefreshCw size={14} />
-              {t("action.resetCoreJourney")}
-            </button>
-          </div>
-        </div>
-        <div className="core-journey-preflight-grid">
-          {coreJourneyPreflightRows(preflight).map((row) => (
-            <article className={`core-journey-preflight-row status-${row.status}`} key={row.key}>
-              <Badge tone={preflightTone(row.status)}>{preflightStatusLabel(row.status, t)}</Badge>
-              <div>
-                <strong>{t(row.titleKey)}</strong>
-                <span>{t(row.detailKey)}</span>
-              </div>
-            </article>
-          ))}
-        </div>
-      </div>
-
-      <div className="core-journey-runtime-summary" aria-label={t("section.selfCheckRuntime")}>
-        <TechnicalId copyLabel={t("action.copy")} label={t("detail.runId")} value={config.runId} />
-        <TechnicalId copyLabel={t("action.copy")} label={t("form.tenantId")} value={config.childTenantId} />
-        <span className="core-journey-runtime-field">
-          <span>{t("form.allowedTool")}</span>
-          <code translate="no">{form.allowedTool}</code>
-        </span>
-        <span className="core-journey-runtime-field">
-          <span>{t("form.deniedTool")}</span>
-          <code translate="no">{form.deniedTool}</code>
-        </span>
-        <span className="core-journey-runtime-field is-wide">
-          <span>{t("section.selfCheckRuntime")}</span>
-          <strong>{runtimeEvidenceSummary}</strong>
-        </span>
-        {message ? <strong className="core-journey-message">{message}</strong> : null}
-      </div>
-
-      <div className="core-journey-steps">
-        {evaluation.steps.map((step) => (
-          <CoreJourneyStepRow key={step.key} step={step} t={t} />
-        ))}
-      </div>
-
-      <div className="core-journey-actions">
-        <button className="secondary-button" onClick={() => onOpen("access")} type="button">
-          <LockKeyhole size={14} />
-          {t("action.openAccess")}
-        </button>
-        <button className="secondary-button" onClick={() => onOpen("capabilities")} type="button">
-          <DatabaseZap size={14} />
-          {t("action.openCapabilities")}
-        </button>
-        <button className="secondary-button" onClick={() => onOpen("traces")} type="button">
-          <FileSearch size={14} />
-          {t("action.openTraces")}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-
-
-
-function CoreJourneyStepRow({ step, t }: { step: CoreJourneyStep; t: Translator }) {
-  return (
-    <article className={`core-journey-step status-${step.status}`}>
-      <Badge tone={coreJourneyStatusTone(step.status)}>{coreJourneyStatusLabel(step.status, t)}</Badge>
-      <div>
-        <strong>{t(`journey.step.${step.key}`)}</strong>
-        <span className="core-journey-step-detail" translate="no">{step.detail}</span>
-      </div>
-      <code className="core-journey-step-metric">{step.metric}</code>
-    </article>
   );
 }
 
@@ -3699,287 +3518,6 @@ function GoLiveAcceptanceOverview({
   );
 }
 
-function PolicyTable({
-  agents,
-  canDisable,
-  onDisable,
-  pendingActionId,
-  policies,
-  t
-}: {
-  agents: Agent[];
-  canDisable: boolean;
-  onDisable: (policy: RoutePolicy) => void;
-  pendingActionId: string;
-  policies: RoutePolicy[];
-  t: Translator;
-}) {
-  const names = agentNameMap(agents);
-
-  return (
-    <div className="table-wrap">
-      <table className="policy-table">
-        <thead>
-          <tr>
-            <th>{t("table.policy")}</th>
-            <th>{t("table.caller")}</th>
-            <th>{t("table.target")}</th>
-            <th>{t("table.route")}</th>
-            <th>{t("table.decision")}</th>
-            <th>{t("table.action")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {policies.length === 0 ? (
-            <tr>
-              <td colSpan={6}>
-                <EmptyRow title={t("empty.routePolicies.title")} detail={t("empty.routePolicies.detail")} />
-              </td>
-            </tr>
-          ) : null}
-          {policies.map((policy) => (
-            <tr className={policy.status === "disabled" ? "row-disabled" : undefined} key={policy.id}>
-              <td>
-                <strong>{policy.name}</strong>
-                <span>{tx(t, "text.policyPriority", { priority: policy.priority })} · {policyRetryText(policy, t)} · {tx(t, "text.policyMatched", { date: formatDate(policy.lastMatchedAt ?? policy.createdAt) })}</span>
-              </td>
-              <td>{names[policy.callerAgentId] ?? policy.callerAgentId}</td>
-              <td>{names[policy.targetAgentId] ?? policy.targetAgentId}</td>
-              <td>
-                <code>{policy.routeType}:{policy.routeKey || t("text.routeWildcard")}</code>
-              </td>
-              <td><Badge tone={policy.effect === "allow" ? "success" : "danger"}>{policyEffectLabel(policy.effect, t)}</Badge></td>
-              <td>
-                {canDisable && policy.status === "enabled" ? (
-                  <button
-                    className="table-action is-danger"
-                    disabled={pendingActionId === policy.id}
-                    onClick={() => onDisable(policy)}
-                    type="button"
-                  >
-                    <LockKeyhole size={13} />
-                    {pendingActionId === policy.id ? t("action.disabling") : t("action.disable")}
-                  </button>
-                ) : (
-                  <span className="muted-action">{policy.status === "disabled" ? t("status.agentDisabled") : t("status.sample")}</span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function AccessPolicyWorkspace({
-  createPolicyPanel,
-  managementAuditPanel,
-  policies,
-  routeGovernancePanel,
-  t
-}: {
-  createPolicyPanel: ReactNode;
-  managementAuditPanel: ReactNode;
-  policies: RoutePolicy[];
-  routeGovernancePanel: ReactNode;
-  t: Translator;
-}) {
-  const [auditCollapsed, setAuditCollapsed] = useState(true);
-
-  function focusPolicyForm() {
-    document.getElementById("policy-create-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
-
-  return (
-    <>
-      {policies.length === 0 ? (
-        <section className="policy-workspace span-12">
-          <div>
-            <span className="section-kicker">{t("nav.policies")}</span>
-            <h3>{t("text.policyEmptyTitle")}</h3>
-            <p>{t("text.policyEmptyDetail")}</p>
-          </div>
-          <button className="policy-empty-action" type="button" onClick={focusPolicyForm}>
-            <Route size={14} />
-            {t("action.createFirstPolicy")}
-          </button>
-        </section>
-      ) : null}
-      {createPolicyPanel}
-      {routeGovernancePanel}
-      <section className="policy-audit-disclosure span-12">
-        <button
-          className="secondary-button"
-          onClick={() => setAuditCollapsed((collapsed) => !collapsed)}
-          type="button"
-        >
-          <ClipboardCheck size={14} />
-          {auditCollapsed ? t("action.showAudit") : t("action.hideAudit")}
-        </button>
-        {!auditCollapsed ? managementAuditPanel : null}
-      </section>
-    </>
-  );
-}
-
-function AgentTable({
-  agents,
-  channelLabels,
-  onStatusChange,
-  pendingActionId,
-  t
-}: {
-  agents: Agent[];
-  channelLabels: Record<string, string>;
-  onStatusChange: (agent: Agent, status: AgentStatus) => void;
-  pendingActionId: string;
-  t: Translator;
-}) {
-  const [agentQuery, setAgentQuery] = useState("");
-  const [agentStatusFilter, setAgentStatusFilter] = useState<AgentStatus | "">("");
-  const [selectedAgentId, setSelectedAgentId] = useState("");
-  const normalizedAgentQuery = agentQuery.trim().toLowerCase();
-  const visibleAgents = agents.filter((agent) => {
-    const agentStatus = agentStatusLabel(agent.status, t);
-    const searchable = [
-      agent.name,
-      agent.description ?? "",
-      channelLabel(agent.channelType, channelLabels, t),
-      agentStatus,
-      configText(agent, "endpoint"),
-      agent.ownerId ?? ""
-    ].join(" ").toLowerCase();
-    return (!agentStatusFilter || agent.status === agentStatusFilter) && (!normalizedAgentQuery || searchable.includes(normalizedAgentQuery));
-  });
-  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
-
-  return (
-    <div>
-      <div className="table-toolbar">
-        <label>
-          <span>{t("form.agent")}</span>
-          <input
-            placeholder={t("form.searchAgents")}
-            value={agentQuery}
-            onChange={(event) => setAgentQuery(event.target.value)}
-          />
-        </label>
-        <label>
-          <span>{t("table.status")}</span>
-          <select
-            value={agentStatusFilter}
-            onChange={(event) => setAgentStatusFilter(event.target.value as AgentStatus | "")}
-          >
-            <option value="">{t("form.anyStatus")}</option>
-            <option value="active">{t("status.agentActive")}</option>
-            <option value="draft">{t("status.agentDraft")}</option>
-            <option value="disabled">{t("status.agentDisabled")}</option>
-          </select>
-        </label>
-        <span>{tx(t, "text.visibleRowCount", { count: visibleAgents.length, total: agents.length })}</span>
-      </div>
-      <div className="table-wrap">
-        <table className="agent-table">
-          <thead>
-            <tr>
-              <th>{t("table.name")}</th>
-              <th>{t("table.channel")}</th>
-              <th>{t("table.endpoint")}</th>
-              <th>{t("table.status")}</th>
-              <th>{t("table.owner")}</th>
-              <th>{t("table.action")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleAgents.length === 0 ? (
-              <tr>
-                <td colSpan={6}>
-                  <EmptyRow
-                    title={agents.length === 0 ? t("empty.registry.title") : t("empty.filteredResults.title")}
-                    detail={agents.length === 0 ? t("empty.registry.detail") : t("empty.filteredResults.detail")}
-                  />
-                </td>
-              </tr>
-            ) : null}
-            {visibleAgents.map((agent) => (
-              <tr className={agent.status === "disabled" ? "row-disabled" : undefined} key={agent.id}>
-                <td>
-                  <strong>{permissionEntityDisplayName(agent.name, t)}</strong>
-                  {agent.description ? <span>{agent.description}</span> : <TechnicalId copyLabel={t("action.copy")} value={agent.id} />}
-                </td>
-                <td>{channelLabel(agent.channelType, channelLabels, t)}</td>
-                <td className="truncate">{configText(agent, "endpoint") || t("status.localRuntime")}</td>
-                <td><Badge tone={agent.status === "active" ? "success" : agent.status === "draft" ? "warning" : "neutral"}>{agentStatusLabel(agent.status, t)}</Badge></td>
-                <td>{agent.ownerId || t("text.ownerPlatform")}</td>
-                <td>
-                  <div className="table-action-group">
-                    <button
-                      className="table-action"
-                      onClick={() => setSelectedAgentId(agent.id)}
-                      type="button"
-                    >
-                      <FileSearch size={13} />
-                      {t("action.viewDetails")}
-                    </button>
-                    {agent.status !== "disabled" ? (
-                      <details className="row-action-menu">
-                        <summary className="table-action">
-                          <MoreHorizontal size={13} />
-                          {t("action.more")}
-                        </summary>
-                        <div className="row-action-menu-list">
-                        <button
-                          className="table-action"
-                          disabled={pendingActionId === agent.id}
-                          onClick={() => onStatusChange(agent, agent.status === "active" ? "draft" : "active")}
-                          type="button"
-                        >
-                          {agent.status === "active" ? <CircleDot size={13} /> : <CheckCircle2 size={13} />}
-                          {pendingActionId === agent.id ? t("action.updating") : agent.status === "active" ? t("action.draft") : t("action.activate")}
-                        </button>
-                        <button
-                          className="table-action is-danger"
-                          disabled={pendingActionId === agent.id}
-                          onClick={() => onStatusChange(agent, "disabled")}
-                          type="button"
-                        >
-                          <LockKeyhole size={13} />
-                          {t("action.disable")}
-                        </button>
-                        </div>
-                      </details>
-                    ) : (
-                      <span className="muted-action">{t("status.agentDisabled")}</span>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {selectedAgent ? (
-        <aside className="table-detail-panel">
-          <div>
-            <span className="section-kicker">{t("text.agentDetails")}</span>
-            <h3>{permissionEntityDisplayName(selectedAgent.name, t)}</h3>
-            {selectedAgent.description ? <p>{selectedAgent.description}</p> : null}
-          </div>
-          <div className="table-detail-grid">
-            <span>{t("table.status")}<strong>{agentStatusLabel(selectedAgent.status, t)}</strong></span>
-            <span>{t("table.channel")}<strong>{channelLabel(selectedAgent.channelType, channelLabels, t)}</strong></span>
-            <span>{t("table.endpoint")}<strong>{configText(selectedAgent, "endpoint") || t("status.localRuntime")}</strong></span>
-            <span>{t("table.owner")}<strong>{selectedAgent.ownerId || t("text.ownerPlatform")}</strong></span>
-            <span>{t("form.workspace")}<strong>{selectedAgent.workspaceId || t("text.notSpecified")}</strong></span>
-            <span>{t("text.technicalDetails")}<TechnicalId copyLabel={t("action.copy")} value={selectedAgent.id} /></span>
-          </div>
-        </aside>
-      ) : null}
-    </div>
-  );
-}
-
 function EvidenceTimeline({ runs, t }: { runs: EvidenceRun[]; t: Translator }) {
   return (
     <div className="timeline">
@@ -3998,37 +3536,6 @@ function EvidenceTimeline({ runs, t }: { runs: EvidenceRun[]; t: Translator }) {
           </div>
         </article>
       ))}
-    </div>
-  );
-}
-
-function ContractMatrix({
-  channels,
-  providers,
-  t
-}: {
-  channels: ChannelContract[];
-  providers: Array<{ key: string; label: string; channelType: string; requiredCreds?: string[] }>;
-  t: Translator;
-}) {
-  return (
-    <div className="contract-list">
-      {channels.map((channel) => (
-        <div className="contract-row" key={channel.key}>
-          <div>
-            <strong>{channelLabel(channel.key, { [channel.key]: channel.label }, t)}</strong>
-            <span>{channel.key}</span>
-          </div>
-          <Badge tone={channel.endpointRequiredWhenActive ? "warning" : "neutral"}>
-            {channel.endpointRequiredWhenActive ? t("form.endpoint") : translatedValue(t, "local")}
-          </Badge>
-        </div>
-      ))}
-      <div className="provider-strip">
-        {providers.map((provider) => (
-          <span key={provider.key}>{tx(t, "text.provider", { label: provider.label, channelType: translatedValue(t, provider.channelType) })}</span>
-        ))}
-      </div>
     </div>
   );
 }
@@ -4172,11 +3679,6 @@ function IconOpen({ title = "Open" }: { title?: string }) {
   );
 }
 
-function configText(agent: Agent, key: string) {
-  const value = agent.channelConfig?.[key];
-  return typeof value === "string" ? value : "";
-}
-
 function normalizedScope(scope: ManagementScope): ManagementScope {
   return {
     tenantId: scope.tenantId.trim() || defaultManagementScope.tenantId,
@@ -4290,20 +3792,10 @@ function auditSummaryLabel(summary: string | undefined, t: Translator) {
   return t(`auditSummary.${key}`, summary);
 }
 
-function channelLabel(channelType: string, channelLabels: Record<string, string>, t: Translator) {
-  return t(`value.${channelType}`, channelLabels[channelType] ?? channelType);
-}
-
 function evidenceStatusLabel(status: EvidenceRun["status"], t: Translator) {
   if (status === "passed") return t("status.evidencePassed");
   if (status === "failed") return t("status.evidenceFailed");
   return t("status.evidenceWarning");
-}
-
-function policyRetryText(policy: RoutePolicy, t: Translator) {
-  if (!policy.retry) return t("text.targetRetry");
-  const statuses = policy.retry.statusCodes.length > 0 ? policy.retry.statusCodes.join("/") : t("text.retryNone");
-  return `retry ${policy.retry.maxAttempts}x ${policy.retry.backoffMs}ms ${statuses}`;
 }
 
 function permissionPackageTemplateName(template: PermissionPackageTemplate, t: Translator) {
@@ -4861,18 +4353,6 @@ function safeIdPart(value: string) {
   return value.trim().replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase();
 }
 
-function coreJourneyStatusTone(status: CoreJourneyStepStatus): Tone {
-  if (status === "complete") return "success";
-  if (status === "partial") return "warning";
-  return "neutral";
-}
-
-function coreJourneyStatusLabel(status: CoreJourneyStepStatus, t: Translator) {
-  if (status === "complete") return t("status.stepComplete");
-  if (status === "partial") return t("status.stepPartial");
-  return t("status.stepMissing");
-}
-
 function aiAdminApprovalJourneyStatusTone(status: AiAdminApprovalJourneyStepStatus): Tone {
   if (status === "complete") return "success";
   if (status === "partial") return "warning";
@@ -4953,20 +4433,6 @@ function aiAdminApprovalReadinessStatusTone(status: AiAdminApprovalReadinessStat
 }
 
 function aiAdminApprovalReadinessStatusLabel(status: AiAdminApprovalReadinessStatus, t: Translator) {
-  if (status === "ok") return t("status.preflightOk");
-  if (status === "warning") return t("status.preflightWarning");
-  if (status === "error") return t("status.preflightError");
-  return t("status.preflightPending");
-}
-
-function preflightTone(status: CoreJourneyPreflightStatus): Tone {
-  if (status === "ok") return "success";
-  if (status === "warning") return "warning";
-  if (status === "error") return "danger";
-  return "neutral";
-}
-
-function preflightStatusLabel(status: CoreJourneyPreflightStatus, t: Translator) {
   if (status === "ok") return t("status.preflightOk");
   if (status === "warning") return t("status.preflightWarning");
   if (status === "error") return t("status.preflightError");

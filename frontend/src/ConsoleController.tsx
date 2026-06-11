@@ -2157,7 +2157,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           <GettingStartedConsoleView
             gettingStartedPanel={(
               <GettingStartedView
-                liveDataAvailable={Boolean(data?.loadedFromApi)}
+                setupDataAvailable={Boolean(data?.setupLoadedFromApi)}
                 steps={setupSteps}
                 t={t}
               />

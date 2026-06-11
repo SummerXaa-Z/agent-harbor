@@ -20,15 +20,19 @@ test("getting started workspace is registered as a console view", () => {
   assert.match(controller, /import \{ GettingStartedView \} from "\.\/components\/GettingStartedView"/);
   assert.match(controller, /gettingStartedSteps\(data\)/);
   assert.match(controller, /case "getting-started":/);
+  assert.match(controller, /setupDataAvailable=\{Boolean\(data\?\.setupLoadedFromApi\)\}/);
 });
 
-test("getting started view renders checklist, chain, actions, and sample badges", () => {
+test("getting started view renders checklist, chain, actions, and sample notice", () => {
   assert.match(gettingStartedView, /export function GettingStartedView/);
   assert.match(gettingStartedView, /className="getting-started-chain"/);
   assert.match(gettingStartedView, /className=\{`getting-started-step status-\$\{status\}`\}/);
   assert.match(gettingStartedView, /href=\{step\.targetHash\}/);
+  assert.match(gettingStartedView, /setupDataAvailable: boolean/);
   assert.match(gettingStartedView, /gettingStarted\.sampleBadge/);
   assert.match(gettingStartedView, /gettingStarted\.sampleNotice/);
+  assert.doesNotMatch(gettingStartedView, /showSampleBadge/);
+  assert.doesNotMatch(gettingStartedView, /step\.key !== "connect-api"/);
   assert.match(gettingStartedView, /steps\.findIndex\(\(step\) => !step\.done\)/);
 });
 
@@ -56,6 +60,10 @@ test("getting started copy is bilingual and token-styled", () => {
   assert.match(styles, /\.getting-started\s*\{/);
   assert.match(styles, /\.getting-started-step\.status-current\s+\.getting-started-step-index\s*\{/);
   assert.match(styles, /\.getting-started-chain\s*\{/);
+  assert.match(styles, /\.getting-started-notice\s*>\s*span:not\(\.badge\)/);
+  assert.match(styles, /\.getting-started-step-copy\s*>\s*span\s*\{/);
+  assert.match(styles, /\.getting-started-notice\s*>\s*\.badge\s*\{[^}]*flex:\s*0 0 auto;/s);
+  assert.doesNotMatch(styles, /\.getting-started-step-copy\s+span\s*\{/);
 });
 
 test("console resolves first-run default navigation once after data loads", () => {

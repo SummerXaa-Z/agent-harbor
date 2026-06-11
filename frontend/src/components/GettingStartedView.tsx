@@ -5,12 +5,12 @@ import type { Translator } from "../consolePresenters";
 import { Badge } from "./ui";
 
 interface GettingStartedViewProps {
-  liveDataAvailable: boolean;
+  setupDataAvailable: boolean;
   steps: GettingStartedStep[];
   t: Translator;
 }
 
-export function GettingStartedView({ liveDataAvailable, steps, t }: GettingStartedViewProps) {
+export function GettingStartedView({ setupDataAvailable, steps, t }: GettingStartedViewProps) {
   const currentIndex = steps.findIndex((step) => !step.done);
   const currentStepIndex = currentIndex === -1 ? steps.length - 1 : currentIndex;
 
@@ -22,7 +22,7 @@ export function GettingStartedView({ liveDataAvailable, steps, t }: GettingStart
           <h2>{t("gettingStarted.title")}</h2>
           <p>{t("gettingStarted.lead")}</p>
         </div>
-        {!liveDataAvailable ? (
+        {!setupDataAvailable ? (
           <div className="getting-started-notice">
             <Badge tone="warning">{t("gettingStarted.sampleBadge")}</Badge>
             <span>{t("gettingStarted.sampleNotice")}</span>
@@ -39,7 +39,6 @@ export function GettingStartedView({ liveDataAvailable, steps, t }: GettingStart
       <ol className="getting-started-steps">
         {steps.map((step, index) => {
           const status = step.done ? "complete" : index === currentStepIndex ? "current" : "pending";
-          const showSampleBadge = !liveDataAvailable && step.key !== "connect-api" && step.done;
           return (
             <li className={`getting-started-step status-${status}`} key={step.key}>
               <span className="getting-started-step-index" aria-hidden="true">
@@ -48,7 +47,6 @@ export function GettingStartedView({ liveDataAvailable, steps, t }: GettingStart
               <div className="getting-started-step-copy">
                 <strong>{t(`gettingStarted.step.${step.key}.title`)}</strong>
                 <span>{t(`gettingStarted.step.${step.key}.detail`)}</span>
-                {showSampleBadge ? <Badge tone="warning">{t("gettingStarted.sampleBadge")}</Badge> : null}
               </div>
               <a className="secondary-button" href={step.targetHash}>
                 <span>{t(`gettingStarted.step.${step.key}.action`)}</span>

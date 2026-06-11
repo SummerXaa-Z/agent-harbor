@@ -1606,8 +1606,8 @@ td span {
 }
 
 .getting-started-header p,
-.getting-started-notice span,
-.getting-started-step-copy span {
+.getting-started-notice > span:not(.badge),
+.getting-started-step-copy > span {
   margin: 0;
   color: var(--muted);
   font-size: var(--text-sm);
@@ -1623,6 +1623,10 @@ td span {
   border: 1px solid var(--warning-border);
   border-radius: var(--radius-control);
   background: var(--warning-soft);
+}
+
+.getting-started-notice > .badge {
+  flex: 0 0 auto;
 }
 
 .getting-started-chain {

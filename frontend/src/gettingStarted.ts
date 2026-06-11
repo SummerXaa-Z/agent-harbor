@@ -15,34 +15,36 @@ export interface GettingStartedStep {
 }
 
 export function gettingStartedSteps(data: ConsoleData): GettingStartedStep[] {
+  const setupDataAvailable = data.setupLoadedFromApi
+
   return [
     {
-      done: data.loadedFromApi,
+      done: setupDataAvailable,
       key: "connect-api",
       targetHash: "#getting-started"
     },
     {
-      done: data.tenants.length > 0 && data.agents.some((agent) => agent.status === "active"),
+      done: setupDataAvailable && data.tenants.length > 0 && data.agents.some((agent) => agent.status === "active"),
       key: "register-agents",
       targetHash: "#registry"
     },
     {
-      done: data.capabilities.length > 0,
+      done: setupDataAvailable && data.capabilities.length > 0,
       key: "discover-capabilities",
       targetHash: "#capabilities"
     },
     {
-      done: data.tenantEntitlements.length > 0,
+      done: setupDataAvailable && data.tenantEntitlements.length > 0,
       key: "create-grant-chain",
       targetHash: "#ai-admin"
     },
     {
-      done: data.traces.length > 0,
+      done: data.loadedFromApi && data.traces.length > 0,
       key: "run-decision",
       targetHash: "#traces"
     },
     {
-      done: data.evidenceRuns.length > 0,
+      done: data.loadedFromApi && data.evidenceRuns.length > 0,
       key: "review-evidence",
       targetHash: "#evidence"
     }

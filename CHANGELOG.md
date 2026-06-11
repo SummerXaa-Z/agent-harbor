@@ -295,6 +295,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- Getting Started no longer treats fallback sample tenants, Agents, capabilities, grants, traces, or evidence as completed setup progress; sample mode now shows one page-level read-only notice and keeps the real first step focused on connecting the backend API.
+- 开始使用页不再把回退示例租户、Agent、能力、授权、运行记录或证据算作已完成配置；示例模式现在只显示一条页面级只读提示，并把真实第一步聚焦在连接后端 API。
 - Permission Changes result messages now store translation keys and parameters instead of rendered strings, so approval, apply, and evidence-export feedback follows the active UI language after switching between English and Simplified Chinese.
 - 权限变更结果提示现在存储翻译 key 和参数，而不是已渲染字符串；在中英文之间切换界面语言后，审批、应用和导出证据反馈会跟随当前语言刷新。
 - Withdrawn permission approval requests no longer remain usable for apply/preflight; only pending, unconsumed, unexpired requests owned by the original requester can be withdrawn.

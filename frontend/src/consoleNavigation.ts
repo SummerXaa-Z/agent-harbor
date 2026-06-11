@@ -1,4 +1,5 @@
 export type NavKey =
+  | "getting-started"
   | "cockpit"
   | "ai-admin"
   | "registry"
@@ -9,7 +10,7 @@ export type NavKey =
   | "traces"
   | "evidence"
 
-export type NavGroupKey = "primary" | "audit" | "configuration"
+export type NavGroupKey = "onboarding" | "configuration" | "primary" | "audit"
 
 export interface NavItem {
   detailKey: string
@@ -28,24 +29,31 @@ export const defaultNavKey: NavKey = "ai-admin"
 const navHashPrefix = "#"
 
 export const navGroups: Array<{ key: NavGroupKey; labelKey: string }> = [
+  { key: "onboarding", labelKey: "navGroup.onboarding" },
+  { key: "configuration", labelKey: "navGroup.configuration" },
   { key: "primary", labelKey: "navGroup.primary" },
   { key: "audit", labelKey: "navGroup.audit" },
-  { key: "configuration", labelKey: "navGroup.configuration" },
 ]
 
 export const navItems: NavItem[] = [
-  { detailKey: "navDetail.ai-admin", groupKey: "primary", key: "ai-admin", label: "Permission Changes" },
-  { detailKey: "navDetail.access", groupKey: "primary", key: "access", label: "Access Profile" },
-  { detailKey: "navDetail.evidence", groupKey: "primary", key: "evidence", label: "Go-Live Evidence" },
-  { detailKey: "navDetail.traces", groupKey: "audit", key: "traces", label: "Call Logs" },
-  { detailKey: "navDetail.cockpit", groupKey: "audit", key: "cockpit", label: "System Check" },
+  { detailKey: "navDetail.getting-started", groupKey: "onboarding", key: "getting-started", label: "Getting Started" },
   { detailKey: "navDetail.registry", groupKey: "configuration", key: "registry", label: "Agents & Tools" },
   { detailKey: "navDetail.capabilities", groupKey: "configuration", key: "capabilities", label: "Tool Capabilities" },
   { detailKey: "navDetail.policies", groupKey: "configuration", key: "policies", label: "Access Policies" },
   { detailKey: "navDetail.routes", groupKey: "configuration", key: "routes", label: "Routing Rules" },
+  { detailKey: "navDetail.ai-admin", groupKey: "primary", key: "ai-admin", label: "Permission Changes" },
+  { detailKey: "navDetail.access", groupKey: "primary", key: "access", label: "Access Profile" },
+  { detailKey: "navDetail.traces", groupKey: "audit", key: "traces", label: "Call Logs" },
+  { detailKey: "navDetail.evidence", groupKey: "audit", key: "evidence", label: "Go-Live Evidence" },
+  { detailKey: "navDetail.cockpit", groupKey: "audit", key: "cockpit", label: "System Check" },
 ]
 
 const views: Record<NavKey, ConsoleView> = {
+  "getting-started": {
+    key: "getting-started",
+    primaryPanelKey: "gettingStarted",
+    titleKey: "page.gettingStarted",
+  },
   cockpit: {
     key: "cockpit",
     primaryPanelKey: "runtimeSignals",

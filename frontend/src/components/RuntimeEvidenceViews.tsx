@@ -71,7 +71,14 @@ export function TraceTable({ traces, agents, t }: { traces: TraceEvent[]; agents
 
   return (
     <div className="trace-list">
-      {traces.length === 0 ? <EmptyRow title={t("empty.auditTraces.title")} detail={t("empty.auditTraces.detail")} /> : null}
+      {traces.length === 0 ? (
+        <EmptyRow
+          title={t("empty.auditTraces.title")}
+          detail={t("empty.auditTraces.detail")}
+          actionLabel={t("empty.auditTraces.action")}
+          actionHash="#getting-started"
+        />
+      ) : null}
       {traces.length > 0 ? (
         <div className="trace-list-header">
           <span>{tx(t, "text.visibleTraceCount", { count: traces.length })}</span>

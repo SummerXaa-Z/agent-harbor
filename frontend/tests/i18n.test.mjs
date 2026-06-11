@@ -36,9 +36,9 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("nav.traces"), "运行审计");
   assert.equal(t("nav.evidence"), "上线证据");
   assert.equal(t("nav.registry"), "Agent 与工具");
-  assert.equal(t("navGroup.primary"), "主流程");
-  assert.equal(t("navGroup.audit"), "运行与审计");
-  assert.equal(t("navGroup.configuration"), "系统配置");
+  assert.equal(t("navGroup.primary"), "权限运营");
+  assert.equal(t("navGroup.audit"), "审计与证据");
+  assert.equal(t("navGroup.configuration"), "接入配置");
   assert.equal(t("navDetail.ai-admin"), "配置、审批、应用并验证权限变更。");
   assert.equal(t("navDetail.access"), "查看租户、工作区、调用方最终权限。");
   assert.equal(t("navDetail.traces"), "查看允许、拒绝和异常调用记录。");

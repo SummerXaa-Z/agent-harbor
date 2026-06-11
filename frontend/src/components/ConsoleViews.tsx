@@ -12,6 +12,14 @@ export function AiAdminView({ aiAdminPanel }: { aiAdminPanel: ReactNode }) {
   );
 }
 
+export function GettingStartedConsoleView({ gettingStartedPanel }: { gettingStartedPanel: ReactNode }) {
+  return (
+    <section className="content-grid">
+      {gettingStartedPanel}
+    </section>
+  );
+}
+
 export function RegistryView({
   agentRegistryPanel,
   contractMatrixPanel,

@@ -225,6 +225,8 @@ export function AgentTable({
                   <EmptyRow
                     title={agents.length === 0 ? t("empty.registry.title") : t("empty.filteredResults.title")}
                     detail={agents.length === 0 ? t("empty.registry.detail") : t("empty.filteredResults.detail")}
+                    actionLabel={agents.length === 0 ? t("empty.registry.action") : undefined}
+                    actionHash={agents.length === 0 ? "#getting-started" : undefined}
                   />
                 </td>
               </tr>

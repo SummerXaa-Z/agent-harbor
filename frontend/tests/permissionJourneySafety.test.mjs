@@ -102,7 +102,7 @@ test("approval withdraw uses the requester action and resets approval-dependent 
   assert.match(block, /setAiAdminWorkbenchPreview\(null\)/);
   assert.match(block, /setAiAdminApplyPreflight\(null\)/);
   assert.match(block, /setAiAdminProductionReadiness\(null\)/);
-  assert.match(block, /setAiAdminMessage\(t\("message\.permissionApprovalWithdrawn"\)\)/);
+  assert.match(block, /setAiAdminMessage\(\{ key: "message\.permissionApprovalWithdrawn" \}\)/);
 });
 
 test("go-live completion exits preserve context or reset the current permission change", () => {
@@ -118,7 +118,7 @@ test("go-live completion exits preserve context or reset the current permission 
   assert.match(resetBlock, /setAiAdminApplication\(null\)/);
   assert.match(resetBlock, /setAiAdminProductionReadiness\(null\)/);
   assert.match(resetBlock, /setAiAdminApprovalRequests\(\[\]\)/);
-  assert.match(resetBlock, /setAiAdminMessage\(""\)/);
+  assert.match(resetBlock, /setAiAdminMessage\(null\)/);
 });
 
 test("new permission change ignores historical preview evidence until submitted", () => {
@@ -140,9 +140,25 @@ test("new permission change ignores historical preview evidence until submitted"
 
 test("production evidence export reports the result on the main permission journey", () => {
   const block = functionBlock("exportAiAdminProductionEvidence");
-  assert.match(block, /setAiAdminMessage\(t\("message\.productionEvidenceRequiresLiveApi"\)\)/);
-  assert.match(block, /setAiAdminMessage\(t\("message\.productionEvidenceExported"\)\)/);
-  assert.match(block, /setAiAdminMessage\(localizedErrorMessage\(t, language, error, "error\.exportProductionEvidence"\)\)/);
+  assert.match(block, /setAiAdminMessage\(\{ key: "message\.productionEvidenceRequiresLiveApi" \}\)/);
+  assert.match(block, /setAiAdminMessage\(\{ key: "message\.productionEvidenceExported" \}\)/);
+  assert.match(block, /setAiAdminMessage\(localizedErrorMessageState\(error, "error\.exportProductionEvidence"\)\)/);
+});
+
+test("permission journey messages store translation keys instead of rendered language snapshots", () => {
+  const createBlock = functionBlock("createAiAdminApprovalRequest");
+  const applyBlock = functionBlock("applyAiAdminPermissionPackage");
+  const exportBlock = functionBlock("exportAiAdminProductionEvidence");
+
+  assert.match(app, /type LocalizedMessage =/);
+  assert.match(app, /function localizedMessageText\(message: LocalizedMessage \| null, t: Translator, language: Language\)/);
+  assert.match(app, /const \[aiAdminMessage, setAiAdminMessage\] = useState<LocalizedMessage \| null>\(null\)/);
+  assert.match(app, /const renderedAiAdminMessage = localizedMessageText\(aiAdminMessage, t, language\)/);
+  assert.match(app, /message=\{renderedAiAdminMessage\}/);
+  assert.match(createBlock, /setAiAdminMessage\(\{ key: "message\.permissionApprovalCreated", params: \{ id: request\.id \} \}\)/);
+  assert.match(applyBlock, /setAiAdminMessage\(\{ key: "message\.permissionPackageApplied", params: \{ count: appliedCount \} \}\)/);
+  assert.match(exportBlock, /setAiAdminMessage\(\{ key: "message\.productionEvidenceExported" \}\)/);
+  assert.doesNotMatch(app, /setAiAdminMessage\(tx\(t,/);
 });
 
 test("permission journey mutation handlers require live API before network writes", () => {

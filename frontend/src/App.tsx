@@ -328,6 +328,27 @@ function tx(t: Translator, key: string, values: Record<string, string | number>)
   );
 }
 
+type LocalizedMessage =
+  | {
+      key: string;
+      params?: Record<string, string | number>;
+    }
+  | {
+      render: (t: Translator, language: Language) => string;
+    };
+
+function localizedMessageText(message: LocalizedMessage | null, t: Translator, language: Language) {
+  if (!message) return "";
+  if ("render" in message) return message.render(t, language);
+  return message.params ? tx(t, message.key, message.params) : t(message.key);
+}
+
+function localizedErrorMessageState(error: unknown, fallbackKey: string): LocalizedMessage {
+  return {
+    render: (t, language) => localizedErrorMessage(t, language, error, fallbackKey)
+  };
+}
+
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
 }
@@ -422,7 +443,7 @@ function App() {
   const [coreJourneyPreflightChecking, setCoreJourneyPreflightChecking] = useState(false);
   const [coreJourneyPreflightMessage, setCoreJourneyPreflightMessage] = useState("");
   const [aiAdminForm, setAiAdminForm] = useState<PermissionPackageDraftInput>(defaultAiAdminForm);
-  const [aiAdminMessage, setAiAdminMessage] = useState("");
+  const [aiAdminMessage, setAiAdminMessage] = useState<LocalizedMessage | null>(null);
   const [aiAdminApplying, setAiAdminApplying] = useState(false);
   const [aiAdminTemplates, setAiAdminTemplates] = useState<PermissionPackageTemplate[]>(permissionPackageTemplates);
   const [aiAdminAccessSubjects, setAiAdminAccessSubjects] = useState<AccessSubjectOption[]>(accessSubjectOptions);
@@ -474,6 +495,7 @@ function App() {
   const [aiAdminApprovalReadinessChecking, setAiAdminApprovalReadinessChecking] = useState(false);
   const [aiAdminApprovalReadinessMessage, setAiAdminApprovalReadinessMessage] = useState("");
   const t = useMemo(() => createTranslator(language), [language]);
+  const renderedAiAdminMessage = localizedMessageText(aiAdminMessage, t, language);
 
   useEffect(() => {
     void refresh();
@@ -866,11 +888,11 @@ function App() {
 
   async function exportAiAdminProductionEvidence(formInput: PermissionPackageDraftInput = aiAdminForm) {
     if (!data?.loadedFromApi) {
-      setAiAdminMessage(t("message.productionEvidenceRequiresLiveApi"));
+      setAiAdminMessage({ key: "message.productionEvidenceRequiresLiveApi" });
       return null;
     }
     setAiAdminProductionEvidenceExporting(true);
-    setAiAdminMessage("");
+    setAiAdminMessage(null);
     setAiAdminProductionReadinessMessage("");
     try {
       const report = await fetchPermissionPackageProductionEvidenceReport(
@@ -878,10 +900,10 @@ function App() {
         adminKey
       );
       downloadJson(report, productionEvidenceReportFilename(report));
-      setAiAdminMessage(t("message.productionEvidenceExported"));
+      setAiAdminMessage({ key: "message.productionEvidenceExported" });
       return report;
     } catch (error) {
-      setAiAdminMessage(localizedErrorMessage(t, language, error, "error.exportProductionEvidence"));
+      setAiAdminMessage(localizedErrorMessageState(error, "error.exportProductionEvidence"));
       return null;
     } finally {
       setAiAdminProductionEvidenceExporting(false);
@@ -956,7 +978,7 @@ function App() {
     setAiAdminApprovalAuditEvent(null);
     setAiAdminApprovalJourneyAccessProfile(null);
     setAiAdminApprovalJourneyApprovalRequest(null);
-    setAiAdminMessage("");
+    setAiAdminMessage(null);
   }
 
   async function reviewAiAdminApplicationImpact(applicationOverride?: PermissionPackageApplication) {
@@ -1345,7 +1367,7 @@ function App() {
     setAiAdminApplicationImpactMessage("");
     setAiAdminApprovalJourneyRunning(true);
     setAiAdminApprovalJourneyMessage(t("message.aiAdminApprovalJourneyRunning"));
-    setAiAdminMessage("");
+    setAiAdminMessage(null);
     try {
       const readinessResult = await refreshAiAdminApprovalReadiness(nextConfig);
       if (!aiAdminApprovalReadinessCanRun(readinessResult.state)) {
@@ -1596,7 +1618,7 @@ function App() {
         subjectId: nextConfig.subjectId
       });
       setAiAdminApprovalJourneyMessage(t("message.aiAdminApprovalJourneyComplete"));
-      setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: applied.tenantEntitlements.length }));
+      setAiAdminMessage({ key: "message.permissionPackageApplied", params: { count: applied.tenantEntitlements.length } });
     } catch (error) {
       setAiAdminApprovalJourneyMessage(localizedErrorMessage(t, language, error, "error.permissionPackageApprovalJourneyFailed"));
     } finally {
@@ -2044,21 +2066,21 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       return;
     }
     if (!data?.loadedFromApi) {
-      setAiAdminMessage(t("message.permissionApprovalRequiresLiveApi"));
+      setAiAdminMessage({ key: "message.permissionApprovalRequiresLiveApi" });
       return;
     }
     if (!aiAdminForm.requestText.trim()) {
-      setAiAdminMessage(t("message.permissionApprovalRequestTextRequired"));
+      setAiAdminMessage({ key: "message.permissionApprovalRequestTextRequired" });
       return;
     }
     if (aiAdminApprovalRequest?.status === "pending") {
       setAiAdminSelectedApprovalRequestId(aiAdminApprovalRequest.id);
-      setAiAdminMessage(t("message.permissionApprovalAlreadyPending"));
+      setAiAdminMessage({ key: "message.permissionApprovalAlreadyPending" });
       return;
     }
     approvalCreateInFlightRef.current = true;
     setAiAdminApprovalAction("create");
-    setAiAdminMessage("");
+    setAiAdminMessage(null);
     try {
       const request = await createPermissionPackageApprovalRequest(aiAdminForm, adminKey);
       startApprovalResolutionCooldown();
@@ -2075,9 +2097,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       setAiAdminApplicationImpactMessage("");
       setAiAdminProductionReadiness(null);
       setAiAdminProductionReadinessMessage("");
-      setAiAdminMessage(tx(t, "message.permissionApprovalCreated", { id: request.id }));
+      setAiAdminMessage({ key: "message.permissionApprovalCreated", params: { id: request.id } });
     } catch (error) {
-      setAiAdminMessage(localizedErrorMessage(t, language, error, "error.createApprovalRequest"));
+      setAiAdminMessage(localizedErrorMessageState(error, "error.createApprovalRequest"));
     } finally {
       approvalCreateInFlightRef.current = false;
       setAiAdminApprovalAction("");
@@ -2089,7 +2111,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       return;
     }
     if (!data?.loadedFromApi) {
-      setAiAdminMessage(t("message.permissionApprovalRequiresLiveApi"));
+      setAiAdminMessage({ key: "message.permissionApprovalRequiresLiveApi" });
       return;
     }
     const targetRequest = requestId
@@ -2098,7 +2120,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     if (!targetRequest) return;
     const reviewerComment = comment?.trim();
     setAiAdminApprovalAction("approve");
-    setAiAdminMessage("");
+    setAiAdminMessage(null);
     try {
       const reviewer = aiAdminApprovalReviewer.trim();
       const request = await approvePermissionPackageApprovalRequest(
@@ -2112,9 +2134,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       upsertAiAdminApprovalRequest(request);
       setAiAdminApplyPreflight(null);
       setAiAdminApplyPreflightMessage("");
-      setAiAdminMessage(tx(t, "message.permissionApprovalApproved", { id: request.id }));
+      setAiAdminMessage({ key: "message.permissionApprovalApproved", params: { id: request.id } });
     } catch (error) {
-      setAiAdminMessage(localizedErrorMessage(t, language, error, "error.approveRequest"));
+      setAiAdminMessage(localizedErrorMessageState(error, "error.approveRequest"));
     } finally {
       setAiAdminApprovalAction("");
     }
@@ -2125,7 +2147,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       return;
     }
     if (!data?.loadedFromApi) {
-      setAiAdminMessage(t("message.permissionApprovalRequiresLiveApi"));
+      setAiAdminMessage({ key: "message.permissionApprovalRequiresLiveApi" });
       return;
     }
     const targetRequest = requestId
@@ -2134,11 +2156,11 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     if (!targetRequest) return;
     const reviewerComment = comment?.trim();
     if (!reviewerComment) {
-      setAiAdminMessage(t("message.permissionApprovalRejectReasonRequired"));
+      setAiAdminMessage({ key: "message.permissionApprovalRejectReasonRequired" });
       return;
     }
     setAiAdminApprovalAction("reject");
-    setAiAdminMessage("");
+    setAiAdminMessage(null);
     try {
       const reviewer = aiAdminApprovalReviewer.trim();
       const request = await rejectPermissionPackageApprovalRequest(
@@ -2152,9 +2174,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       upsertAiAdminApprovalRequest(request);
       setAiAdminApplyPreflight(null);
       setAiAdminApplyPreflightMessage("");
-      setAiAdminMessage(tx(t, "message.permissionApprovalRejected", { id: request.id }));
+      setAiAdminMessage({ key: "message.permissionApprovalRejected", params: { id: request.id } });
     } catch (error) {
-      setAiAdminMessage(localizedErrorMessage(t, language, error, "error.rejectRequest"));
+      setAiAdminMessage(localizedErrorMessageState(error, "error.rejectRequest"));
     } finally {
       setAiAdminApprovalAction("");
     }
@@ -2162,16 +2184,16 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
 
   async function withdrawAiAdminApprovalRequest(comment?: string) {
     if (!data?.loadedFromApi) {
-      setAiAdminMessage(t("message.permissionApprovalRequiresLiveApi"));
+      setAiAdminMessage({ key: "message.permissionApprovalRequiresLiveApi" });
       return;
     }
     if (!aiAdminApprovalRequest || aiAdminApprovalRequest.status !== "pending") {
-      setAiAdminMessage(t("message.permissionApprovalWithdrawUnavailable"));
+      setAiAdminMessage({ key: "message.permissionApprovalWithdrawUnavailable" });
       return;
     }
     const withdrawComment = comment?.trim();
     setAiAdminApprovalAction("withdraw");
-    setAiAdminMessage("");
+    setAiAdminMessage(null);
     try {
       const request = await withdrawPermissionPackageApprovalRequest(aiAdminApprovalRequest.id, { comment: withdrawComment }, adminKey);
       upsertAiAdminApprovalRequest(request);
@@ -2186,16 +2208,16 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       setAiAdminApplicationImpactMessage("");
       setAiAdminProductionReadiness(null);
       setAiAdminProductionReadinessMessage("");
-      setAiAdminMessage(t("message.permissionApprovalWithdrawn"));
+      setAiAdminMessage({ key: "message.permissionApprovalWithdrawn" });
     } catch (error) {
-      setAiAdminMessage(localizedErrorMessage(t, language, error, "error.withdrawRequest"));
+      setAiAdminMessage(localizedErrorMessageState(error, "error.withdrawRequest"));
     } finally {
       setAiAdminApprovalAction("");
     }
   }
 
   async function applyAiAdminPermissionPackage() {
-    setAiAdminMessage("");
+    setAiAdminMessage(null);
     setAiAdminApplicationHealth(null);
     setAiAdminApplicationHealthMessage("");
     setAiAdminApplicationImpact(null);
@@ -2203,49 +2225,57 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     setAiAdminProductionReadiness(null);
     setAiAdminProductionReadinessMessage("");
     if (!data?.loadedFromApi) {
-      setAiAdminMessage(t("message.fallbackDataModeActionBlocked"));
+      setAiAdminMessage({ key: "message.fallbackDataModeActionBlocked" });
       return;
     }
     if (!aiAdminDraft.readiness.canApply) {
-      const detail = permissionReadinessMessages(aiAdminDraft.readiness, t).join(", ");
-      setAiAdminMessage(tx(t, "message.permissionPackageNotReady", { detail: detail || "not ready" }));
+      setAiAdminMessage({
+        render: (t) => {
+          const detail = permissionReadinessMessages(aiAdminDraft.readiness, t).join(", ");
+          return tx(t, "message.permissionPackageNotReady", { detail: detail || "not ready" });
+        }
+      });
       return;
     }
     if (!aiAdminDraft.policyGate.canApplyDirectly) {
       if (!data?.loadedFromApi) {
-        setAiAdminMessage(t("message.permissionApprovalRequiresLiveApi"));
+        setAiAdminMessage({ key: "message.permissionApprovalRequiresLiveApi" });
         return;
       }
       if (!aiAdminApprovalRequest) {
-        const detail = permissionPolicyGateMessages(aiAdminDraft.policyGate, t).join(", ");
-        setAiAdminMessage(tx(t, "message.permissionPackageApprovalRequired", { detail: detail || t("status.approvalRequired") }));
+        setAiAdminMessage({
+          render: (t) => {
+            const detail = permissionPolicyGateMessages(aiAdminDraft.policyGate, t).join(", ");
+            return tx(t, "message.permissionPackageApprovalRequired", { detail: detail || t("status.approvalRequired") });
+          }
+        });
         return;
       }
       if (aiAdminApprovalRequest.status === "pending") {
-        setAiAdminMessage(t("message.permissionApprovalPending"));
+        setAiAdminMessage({ key: "message.permissionApprovalPending" });
         return;
       }
       if (aiAdminApprovalRequest.status === "rejected") {
-        setAiAdminMessage(t("message.permissionApprovalRejectedApply"));
+        setAiAdminMessage({ key: "message.permissionApprovalRejectedApply" });
         return;
       }
       if (aiAdminApprovalRequest.status === "withdrawn") {
-        setAiAdminMessage(t("message.permissionApprovalWithdrawnApply"));
+        setAiAdminMessage({ key: "message.permissionApprovalWithdrawnApply" });
         return;
       }
     }
     if (data?.loadedFromApi) {
       const preflight = await refreshAiAdminApplyPreflight(undefined, { silent: true });
       if (!preflight) {
-        setAiAdminMessage(t("message.permissionPackagePreflightRequiresLiveApi"));
+        setAiAdminMessage({ key: "message.permissionPackagePreflightRequiresLiveApi" });
         return;
       }
       if (!preflight.summary.canApply) {
-        setAiAdminMessage(
-          tx(t, "message.permissionPackagePreflightApplyBlocked", {
+        setAiAdminMessage({
+          render: (t) => tx(t, "message.permissionPackagePreflightApplyBlocked", {
             detail: permissionApplyPreflightCheckMessage(firstBlockingApplyPreflightCheck(preflight), t)
           })
-        );
+        });
         return;
       }
     }
@@ -2299,10 +2329,10 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       }
       setAiAdminApplicationImpact(null);
       setAiAdminApplicationImpactMessage("");
-      setAiAdminMessage(tx(t, "message.permissionPackageApplied", { count: appliedCount }));
+      setAiAdminMessage({ key: "message.permissionPackageApplied", params: { count: appliedCount } });
       await loadAiAdminApprovalRequestsForDraft(aiAdminDraft).catch(() => undefined);
     } catch (error) {
-      setAiAdminMessage(localizedErrorMessage(t, language, error, "error.applyPermissionPackage"));
+      setAiAdminMessage(localizedErrorMessageState(error, "error.applyPermissionPackage"));
     } finally {
       setAiAdminApplying(false);
     }
@@ -2646,7 +2676,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         draft={aiAdminDraft}
         form={aiAdminForm}
         application={aiAdminApplication}
-        message={aiAdminMessage}
+        message={renderedAiAdminMessage}
         mcpTargets={mcpTargets}
         onApply={() => void applyAiAdminPermissionPackage()}
         onApprovalReviewerChange={setAiAdminApprovalReviewer}

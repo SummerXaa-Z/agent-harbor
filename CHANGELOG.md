@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Added a follow-up console UI review (`docs/engineering/ui-review-2026-06-11.md`) that verifies the 2026-06-10 fixes are live in the running console and reports the next findings: the 4820-line `App.tsx` view monolith, language-snapshot result messages, missing list search/filter at scale, overloaded "Advanced settings" wording, policy-page layout confusion, self-check page alignment, and onboarding concept load.
+- 新增控制台 UI 复查报告（`docs/engineering/ui-review-2026-06-11.md`），实测确认 2026-06-10 各项修复已在运行中的控制台生效，并提出下一轮 finding：`App.tsx` 4820 行视图单体、结果消息语言快照、列表页缺搜索过滤、"高级设置"一词多义、访问策略页版面混淆、系统自检页排版、上手概念负担。
 - Added approval-request withdrawal for permission changes: REST now exposes `POST /api/v1/permission-packages/approval-requests/{id}/withdraw`, Management MCP exposes `withdraw_permission_package_approval_request`, and withdrawn requests are audited as `permission_package.approval_withdrawn`.
 - 新增权限变更审批请求撤回能力：REST 提供 `POST /api/v1/permission-packages/approval-requests/{id}/withdraw`，Management MCP 提供 `withdraw_permission_package_approval_request`，撤回审计事件记录为 `permission_package.approval_withdrawn`。
 - Added a draft 0.3.0 requirements document (`docs/product/0.3.0-permission-platform-requirements.md`) covering permission package resource-type expansion, an end-user self-service consumption portal, model access with budget quotas, and grant lifecycle automation, with personas, slices, and acceptance criteria.
@@ -267,6 +269,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- Permission Changes result messages now store translation keys and parameters instead of rendered strings, so approval, apply, and evidence-export feedback follows the active UI language after switching between English and Simplified Chinese.
+- 权限变更结果提示现在存储翻译 key 和参数，而不是已渲染字符串；在中英文之间切换界面语言后，审批、应用和导出证据反馈会跟随当前语言刷新。
 - Withdrawn permission approval requests no longer remain usable for apply/preflight; only pending, unconsumed, unexpired requests owned by the original requester can be withdrawn.
 - 已撤回的权限审批请求不再可用于应用或预检；只有原申请人名下仍待审批、未消费、未过期的请求才能撤回。
 - The Permission Changes to Access Profile handoff now carries readable tenant, workspace, caller, target, capability, and subject context, so the Access Profile workspace no longer falls back to raw tenant ids before profile data loads.

@@ -41,15 +41,15 @@
 
 ## Task 4: Add Search, Filters, and Details to Operational Lists (`ui-3`)
 
-- [ ] Add keyword and status filters to Agent registry.
-- [ ] Add search/grouping affordances to capability lists.
-- [ ] Add a details entry that does not overload row actions.
+- [x] Add keyword and status filters to Agent registry.
+- [x] Add search/grouping affordances to capability lists.
+- [x] Add a details entry that does not overload row actions.
 
 ## Task 5: Rework Access Policy Page Information Architecture (`ui-5`)
 
-- [ ] Make the policy page action-oriented when empty.
-- [ ] Move or fold management audit content so it does not dominate the empty state.
-- [ ] Add focused tests for page structure.
+- [x] Make the policy page action-oriented when empty.
+- [x] Move or fold management audit content so it does not dominate the empty state.
+- [x] Add focused tests for page structure.
 
 ## Task 6: Extract Views From `App.tsx` (`ui-1`)
 

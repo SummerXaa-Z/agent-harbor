@@ -2814,8 +2814,13 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       case "policies":
         return (
           <section className="content-grid">
-            {routeGovernancePanel("span-7")}
-            {managementAuditPanel("span-5")}
+            <AccessPolicyWorkspace
+              createPolicyPanel={createPolicyPanel}
+              managementAuditPanel={managementAuditPanel("span-12")}
+              policies={policies}
+              routeGovernancePanel={routeGovernancePanel("span-8")}
+              t={t}
+            />
             {capabilityGovernancePanel("span-12")}
           </section>
         );
@@ -3373,7 +3378,7 @@ function PolicyCreateForm({
   t: Translator;
 }) {
   return (
-    <form className="control-form" onSubmit={onSubmit}>
+    <form className="control-form policy-create-form" id="policy-create-form" onSubmit={onSubmit}>
       <label>{t("form.name")}<input placeholder="Allow MCP tools/call" value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
       <label>{t("form.caller")}<select required value={form.callerAgentId} onChange={(event) => onChange({ ...form, callerAgentId: event.target.value })}><option value="">{t("form.selectCaller")}</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
       <label>{t("form.target")}<select required value={form.targetAgentId} onChange={(event) => onChange({ ...form, targetAgentId: event.target.value })}><option value="">{t("form.anyTarget")}</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
@@ -3767,6 +3772,57 @@ function PolicyTable({
   );
 }
 
+function AccessPolicyWorkspace({
+  createPolicyPanel,
+  managementAuditPanel,
+  policies,
+  routeGovernancePanel,
+  t
+}: {
+  createPolicyPanel: ReactNode;
+  managementAuditPanel: ReactNode;
+  policies: RoutePolicy[];
+  routeGovernancePanel: ReactNode;
+  t: Translator;
+}) {
+  const [auditCollapsed, setAuditCollapsed] = useState(true);
+
+  function focusPolicyForm() {
+    document.getElementById("policy-create-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  return (
+    <>
+      {policies.length === 0 ? (
+        <section className="policy-workspace span-12">
+          <div>
+            <span className="section-kicker">{t("nav.policies")}</span>
+            <h3>{t("text.policyEmptyTitle")}</h3>
+            <p>{t("text.policyEmptyDetail")}</p>
+          </div>
+          <button className="policy-empty-action" type="button" onClick={focusPolicyForm}>
+            <Route size={14} />
+            {t("action.createFirstPolicy")}
+          </button>
+        </section>
+      ) : null}
+      {createPolicyPanel}
+      {routeGovernancePanel}
+      <section className="policy-audit-disclosure span-12">
+        <button
+          className="secondary-button"
+          onClick={() => setAuditCollapsed((collapsed) => !collapsed)}
+          type="button"
+        >
+          <ClipboardCheck size={14} />
+          {auditCollapsed ? t("action.showAudit") : t("action.hideAudit")}
+        </button>
+        {!auditCollapsed ? managementAuditPanel : null}
+      </section>
+    </>
+  );
+}
+
 function AgentTable({
   agents,
   channelLabels,
@@ -3780,67 +3836,146 @@ function AgentTable({
   pendingActionId: string;
   t: Translator;
 }) {
+  const [agentQuery, setAgentQuery] = useState("");
+  const [agentStatusFilter, setAgentStatusFilter] = useState<AgentStatus | "">("");
+  const [selectedAgentId, setSelectedAgentId] = useState("");
+  const normalizedAgentQuery = agentQuery.trim().toLowerCase();
+  const visibleAgents = agents.filter((agent) => {
+    const agentStatus = agentStatusLabel(agent.status, t);
+    const searchable = [
+      agent.name,
+      agent.description ?? "",
+      channelLabel(agent.channelType, channelLabels, t),
+      agentStatus,
+      configText(agent, "endpoint"),
+      agent.ownerId ?? ""
+    ].join(" ").toLowerCase();
+    return (!agentStatusFilter || agent.status === agentStatusFilter) && (!normalizedAgentQuery || searchable.includes(normalizedAgentQuery));
+  });
+  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
+
   return (
-    <div className="table-wrap">
-      <table className="agent-table">
-        <thead>
-          <tr>
-            <th>{t("table.name")}</th>
-            <th>{t("table.channel")}</th>
-            <th>{t("table.endpoint")}</th>
-            <th>{t("table.status")}</th>
-            <th>{t("table.owner")}</th>
-            <th>{t("table.action")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {agents.length === 0 ? (
+    <div>
+      <div className="table-toolbar">
+        <label>
+          <span>{t("form.agent")}</span>
+          <input
+            placeholder={t("form.searchAgents")}
+            value={agentQuery}
+            onChange={(event) => setAgentQuery(event.target.value)}
+          />
+        </label>
+        <label>
+          <span>{t("table.status")}</span>
+          <select
+            value={agentStatusFilter}
+            onChange={(event) => setAgentStatusFilter(event.target.value as AgentStatus | "")}
+          >
+            <option value="">{t("form.anyStatus")}</option>
+            <option value="active">{t("status.agentActive")}</option>
+            <option value="draft">{t("status.agentDraft")}</option>
+            <option value="disabled">{t("status.agentDisabled")}</option>
+          </select>
+        </label>
+        <span>{tx(t, "text.visibleRowCount", { count: visibleAgents.length, total: agents.length })}</span>
+      </div>
+      <div className="table-wrap">
+        <table className="agent-table">
+          <thead>
             <tr>
-              <td colSpan={6}>
-                <EmptyRow title={t("empty.registry.title")} detail={t("empty.registry.detail")} />
-              </td>
+              <th>{t("table.name")}</th>
+              <th>{t("table.channel")}</th>
+              <th>{t("table.endpoint")}</th>
+              <th>{t("table.status")}</th>
+              <th>{t("table.owner")}</th>
+              <th>{t("table.action")}</th>
             </tr>
-          ) : null}
-          {agents.map((agent) => (
-            <tr className={agent.status === "disabled" ? "row-disabled" : undefined} key={agent.id}>
-              <td>
-                <strong>{agent.name}</strong>
-                {agent.description ? <span>{agent.description}</span> : <TechnicalId copyLabel={t("action.copy")} value={agent.id} />}
-              </td>
-              <td>{channelLabel(agent.channelType, channelLabels, t)}</td>
-              <td className="truncate">{configText(agent, "endpoint") || t("status.localRuntime")}</td>
-              <td><Badge tone={agent.status === "active" ? "success" : agent.status === "draft" ? "warning" : "neutral"}>{agentStatusLabel(agent.status, t)}</Badge></td>
-              <td>{agent.ownerId || t("text.ownerPlatform")}</td>
-              <td>
-                {agent.status !== "disabled" ? (
+          </thead>
+          <tbody>
+            {visibleAgents.length === 0 ? (
+              <tr>
+                <td colSpan={6}>
+                  <EmptyRow
+                    title={agents.length === 0 ? t("empty.registry.title") : t("empty.filteredResults.title")}
+                    detail={agents.length === 0 ? t("empty.registry.detail") : t("empty.filteredResults.detail")}
+                  />
+                </td>
+              </tr>
+            ) : null}
+            {visibleAgents.map((agent) => (
+              <tr className={agent.status === "disabled" ? "row-disabled" : undefined} key={agent.id}>
+                <td>
+                  <strong>{permissionEntityDisplayName(agent.name, t)}</strong>
+                  {agent.description ? <span>{agent.description}</span> : <TechnicalId copyLabel={t("action.copy")} value={agent.id} />}
+                </td>
+                <td>{channelLabel(agent.channelType, channelLabels, t)}</td>
+                <td className="truncate">{configText(agent, "endpoint") || t("status.localRuntime")}</td>
+                <td><Badge tone={agent.status === "active" ? "success" : agent.status === "draft" ? "warning" : "neutral"}>{agentStatusLabel(agent.status, t)}</Badge></td>
+                <td>{agent.ownerId || t("text.ownerPlatform")}</td>
+                <td>
                   <div className="table-action-group">
                     <button
                       className="table-action"
-                      disabled={pendingActionId === agent.id}
-                      onClick={() => onStatusChange(agent, agent.status === "active" ? "draft" : "active")}
+                      onClick={() => setSelectedAgentId(agent.id)}
                       type="button"
                     >
-                      {agent.status === "active" ? <CircleDot size={13} /> : <CheckCircle2 size={13} />}
-                      {pendingActionId === agent.id ? t("action.updating") : agent.status === "active" ? t("action.draft") : t("action.activate")}
+                      <FileSearch size={13} />
+                      {t("action.viewDetails")}
                     </button>
-                    <button
-                      className="table-action is-danger"
-                      disabled={pendingActionId === agent.id}
-                      onClick={() => onStatusChange(agent, "disabled")}
-                      type="button"
-                    >
-                      <LockKeyhole size={13} />
-                      {t("action.disable")}
-                    </button>
+                    {agent.status !== "disabled" ? (
+                      <details className="row-action-menu">
+                        <summary className="table-action">
+                          <MoreHorizontal size={13} />
+                          {t("action.more")}
+                        </summary>
+                        <div className="row-action-menu-list">
+                        <button
+                          className="table-action"
+                          disabled={pendingActionId === agent.id}
+                          onClick={() => onStatusChange(agent, agent.status === "active" ? "draft" : "active")}
+                          type="button"
+                        >
+                          {agent.status === "active" ? <CircleDot size={13} /> : <CheckCircle2 size={13} />}
+                          {pendingActionId === agent.id ? t("action.updating") : agent.status === "active" ? t("action.draft") : t("action.activate")}
+                        </button>
+                        <button
+                          className="table-action is-danger"
+                          disabled={pendingActionId === agent.id}
+                          onClick={() => onStatusChange(agent, "disabled")}
+                          type="button"
+                        >
+                          <LockKeyhole size={13} />
+                          {t("action.disable")}
+                        </button>
+                        </div>
+                      </details>
+                    ) : (
+                      <span className="muted-action">{t("status.agentDisabled")}</span>
+                    )}
                   </div>
-                ) : (
-                  <span className="muted-action">{t("status.agentDisabled")}</span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {selectedAgent ? (
+        <aside className="table-detail-panel">
+          <div>
+            <span className="section-kicker">{t("text.agentDetails")}</span>
+            <h3>{permissionEntityDisplayName(selectedAgent.name, t)}</h3>
+            {selectedAgent.description ? <p>{selectedAgent.description}</p> : null}
+          </div>
+          <div className="table-detail-grid">
+            <span>{t("table.status")}<strong>{agentStatusLabel(selectedAgent.status, t)}</strong></span>
+            <span>{t("table.channel")}<strong>{channelLabel(selectedAgent.channelType, channelLabels, t)}</strong></span>
+            <span>{t("table.endpoint")}<strong>{configText(selectedAgent, "endpoint") || t("status.localRuntime")}</strong></span>
+            <span>{t("table.owner")}<strong>{selectedAgent.ownerId || t("text.ownerPlatform")}</strong></span>
+            <span>{t("form.workspace")}<strong>{selectedAgent.workspaceId || t("text.notSpecified")}</strong></span>
+            <span>{t("text.technicalDetails")}<TechnicalId copyLabel={t("action.copy")} value={selectedAgent.id} /></span>
+          </div>
+        </aside>
+      ) : null}
     </div>
   );
 }

@@ -10,6 +10,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 - Added a follow-up console UI review (`docs/engineering/ui-review-2026-06-11.md`) that verifies the 2026-06-10 fixes are live in the running console and reports the next findings: the 4820-line `App.tsx` view monolith, language-snapshot result messages, missing list search/filter at scale, overloaded "Advanced settings" wording, policy-page layout confusion, self-check page alignment, and onboarding concept load.
 - 新增控制台 UI 复查报告（`docs/engineering/ui-review-2026-06-11.md`），实测确认 2026-06-10 各项修复已在运行中的控制台生效，并提出下一轮 finding：`App.tsx` 4820 行视图单体、结果消息语言快照、列表页缺搜索过滤、"高级设置"一词多义、访问策略页版面混淆、系统自检页排版、上手概念负担。
+- Web console Agent Registry and Capability Governance now include keyword/status filtering plus low-noise details panels; Agent row state changes move under a compact More menu so the table keeps a production-console density.
+- Web 控制台 Agent 注册表和能力治理页现在提供关键词/状态筛选和低噪声详情面板；Agent 行状态变更收进紧凑的“更多”菜单，表格保持生产控制台的信息密度。
+- Access Policies now opens with a policy-creation task state when empty and keeps management audit collapsed until requested, so operators can focus on creating and reviewing access rules first.
+- 访问策略页在空状态下优先呈现创建策略任务，并默认收起管理审计，方便管理员先完成访问规则创建与复核。
 - Added approval-request withdrawal for permission changes: REST now exposes `POST /api/v1/permission-packages/approval-requests/{id}/withdraw`, Management MCP exposes `withdraw_permission_package_approval_request`, and withdrawn requests are audited as `permission_package.approval_withdrawn`.
 - 新增权限变更审批请求撤回能力：REST 提供 `POST /api/v1/permission-packages/approval-requests/{id}/withdraw`，Management MCP 提供 `withdraw_permission_package_approval_request`，撤回审计事件记录为 `permission_package.approval_withdrawn`。
 - Added a draft 0.3.0 requirements document (`docs/product/0.3.0-permission-platform-requirements.md`) covering permission package resource-type expansion, an end-user self-service consumption portal, model access with budget quotas, and grant lifecycle automation, with personas, slices, and acceptance criteria.

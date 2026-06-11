@@ -7,6 +7,7 @@ const workbenchStyles = readFileSync(new URL("../src/styles/permission-workbench
 const styles = `${baseStyles}\n${workbenchStyles}`;
 const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
+const capabilityGovernanceView = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const ui = readFileSync(new URL("../src/components/ui.tsx", import.meta.url), "utf8");
@@ -120,6 +121,19 @@ test("agent tools workspace prioritizes the registry before mutation forms", () 
   assert.ok(registryView.indexOf("{createKeyPanel}") < registryView.indexOf("{rotateCredentialPanel}"));
 });
 
+test("agent registry provides search status filtering and a details entry", () => {
+  assert.match(app, /const \[agentQuery, setAgentQuery\] = useState\(""\)/);
+  assert.match(app, /const \[agentStatusFilter, setAgentStatusFilter\] = useState<AgentStatus \| "">\(""\)/);
+  assert.match(app, /const \[selectedAgentId, setSelectedAgentId\] = useState\(""\)/);
+  assert.match(app, /const visibleAgents = agents\.filter/);
+  assert.match(app, /className="table-toolbar"/);
+  assert.match(app, /placeholder=\{t\("form\.searchAgents"\)\}/);
+  assert.match(app, /className="table-detail-panel"/);
+  assert.match(app, /setSelectedAgentId\(agent\.id\)/);
+  assert.match(styles, /\.table-toolbar\s*\{/);
+  assert.match(styles, /\.table-detail-panel\s*\{/);
+});
+
 test("table actions distinguish neutral state changes from destructive actions", () => {
   assert.match(app, /className="table-action is-danger"[\s\S]*onClick=\{\(\) => onDisable\(policy\)\}/);
   assert.match(app, /className="table-action"[\s\S]*onClick=\{\(\) => onStatusChange\(agent, agent\.status === "active" \? "draft" : "active"\)\}/);
@@ -199,4 +213,31 @@ test("mobile shell keeps navigation labels readable", () => {
 test("capability workspace compresses metrics and prioritizes grant operations", () => {
   assert.match(app, /case "capabilities":\s*return \(\s*<section className="content-grid">\s*\{capabilityGovernancePanel\(\)\}/s);
   assert.match(styles, /\.capability-layout\s*\{[^}]*grid-template-areas:\s*"grant catalog"[\s\S]*"assignments catalog";/s);
+});
+
+test("capability catalog provides search status filtering and a details entry", () => {
+  assert.match(capabilityGovernanceView, /const \[capabilityQuery, setCapabilityQuery\] = useState\(""\)/);
+  assert.match(capabilityGovernanceView, /const \[capabilityStatusFilter, setCapabilityStatusFilter\] = useState\(""\)/);
+  assert.match(capabilityGovernanceView, /const \[selectedCapabilityId, setSelectedCapabilityId\] = useState\(""\)/);
+  assert.match(capabilityGovernanceView, /const visibleCapabilities = useMemo/);
+  assert.match(capabilityGovernanceView, /placeholder=\{t\("form\.searchCapabilities"\)\}/);
+  assert.match(capabilityGovernanceView, /className="capability-detail-panel"/);
+  assert.match(capabilityGovernanceView, /setSelectedCapabilityId\(capability\.id\)/);
+  assert.match(styles, /\.capability-detail-panel\s*\{/);
+});
+
+test("access policy page keeps policy creation primary when no policies exist", () => {
+  const viewSwitchStart = app.indexOf("const viewContent = (() => {");
+  const policiesStart = app.indexOf('case "policies":', viewSwitchStart);
+  const capabilitiesStart = app.indexOf('case "capabilities":', policiesStart);
+  const policiesView = app.slice(policiesStart, capabilitiesStart);
+
+  assert.match(app, /function AccessPolicyWorkspace/);
+  assert.match(policiesView, /<AccessPolicyWorkspace/);
+  assert.match(app, /className="policy-empty-action"/);
+  assert.match(app, /t\("action\.createFirstPolicy"\)/);
+  assert.match(app, /auditCollapsed/);
+  assert.doesNotMatch(policiesView, /\{managementAuditPanel\("span-5"\)\}/);
+  assert.match(styles, /\.policy-workspace\s*\{/);
+  assert.match(styles, /\.policy-empty-action\s*\{/);
 });

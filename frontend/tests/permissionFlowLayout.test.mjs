@@ -135,6 +135,19 @@ test("permission request first viewport prioritizes one task flow", () => {
   assert.match(styles, /\.approval-process-panel\s*\{[^}]*position:\s*sticky;/s);
 });
 
+test("permission request embeds a concise concept guide without blocking the task flow", () => {
+  assert.match(workbench, /<details className="approval-concept-guide">/);
+  assert.match(workbench, /<summary>\{t\("section\.permissionConceptGuide"\)\}<\/summary>/);
+  assert.match(workbench, /className="approval-concept-grid"/);
+  assert.match(workbench, /concept\.tenant/);
+  assert.match(workbench, /concept\.caller/);
+  assert.match(workbench, /concept\.permissionPackage/);
+  assert.match(workbench, /concept\.evidence/);
+  assert.match(styles, /\.approval-concept-guide\s*\{/);
+  assert.match(styles, /\.approval-concept-grid\s*\{/);
+  assert.match(i18n, /"section\.permissionConceptGuide": "概念速览"/);
+});
+
 test("permission request stays navigable at tablet desktop widths", () => {
   const globalResponsiveIndex = baseStyles.indexOf("@media (max-width: 1120px)");
   const permissionOverrideIndex = baseStyles.lastIndexOf("@media (min-width: 900px) and (max-width: 1120px)");
@@ -221,6 +234,7 @@ test("access profile query keeps raw identifiers in advanced filters", () => {
   assert.match(accessProfileView.slice(advancedFiltersStart, querySummaryStart), /name="tenantId"/);
   assert.match(accessProfileView.slice(advancedFiltersStart, querySummaryStart), /name="workspaceId"/);
   assert.match(accessProfileView.slice(advancedFiltersStart, querySummaryStart), /name="subjectId"/);
+  assert.match(accessProfileView, /<summary>\{t\("text\.filterSettings"\)\}<\/summary>/);
   assert.match(accessProfileView, /<details className="access-advanced-filters" open=\{!handoffContext\}>/);
   assert.doesNotMatch(accessProfileView, /<span>\{subjectLabel\}<\/span>/);
   assert.match(styles, /\.access-advanced-filters\s*\{/);
@@ -273,7 +287,11 @@ test("runtime audit keeps protocol details out of primary trace rows", () => {
   assert.match(app, /function traceRouteBusinessLabel/);
   assert.match(app, /className="trace-business-line"/);
   assert.match(app, /className="trace-technical-details"/);
-  assert.match(app, /<summary>\{t\("text\.technicalDetails"\)\}<\/summary>/);
+  assert.match(app, /const \[traceDetailsExpanded, setTraceDetailsExpanded\] = useState\(false\)/);
+  assert.match(app, /open=\{traceDetailsExpanded\}/);
+  assert.match(app, /traceDetailsExpanded \? t\("action\.collapseTraceDetails"\) : t\("action\.expandTraceDetails"\)/);
+  assert.match(app, /<summary>\{t\("text\.traceDetails"\)\}<\/summary>/);
+  assert.match(app, /<summary>\{t\("text\.filterSettings"\)\}<\/summary>/);
   assert.doesNotMatch(app, /<input placeholder="runId"/);
   assert.match(app, /placeholder=\{t\("form\.traceRunPlaceholder"\)\}/);
   const traceRowStart = app.indexOf('<article className="trace-row"');
@@ -288,6 +306,27 @@ test("runtime audit keeps protocol details out of primary trace rows", () => {
   assert.match(i18n, /"traceReason\.filteredToolsListByCapabilityAssignments": "工具列表已按权限收敛"/);
   assert.match(i18n, /"traceReason\.capabilityNotApproved": "能力未审批，已拒绝"/);
   assert.match(styles, /\.trace-technical-details\s*\{/);
+});
+
+test("system self-check uses structured configuration and copyable runtime context", () => {
+  const panelStart = app.indexOf("function CoreJourneyWorkbench");
+  const panelEnd = app.indexOf("function CoreJourneyStepRow", panelStart);
+  const panel = app.slice(panelStart, panelEnd);
+  const rowStart = app.indexOf("function CoreJourneyStepRow");
+  const rowEnd = app.indexOf("function AgentCreateForm", rowStart);
+  const row = app.slice(rowStart, rowEnd);
+
+  assert.match(panel, /className="core-journey-config"/);
+  assert.match(panel, /className="core-journey-config-grid"/);
+  assert.match(panel, /className="core-journey-runtime-summary"/);
+  assert.match(panel, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("detail\.runId"\)\} value=\{config\.runId\} \/>/);
+  assert.match(panel, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.tenantId"\)\} value=\{config\.childTenantId\} \/>/);
+  assert.doesNotMatch(panel, /<div className="core-journey-meta">/);
+  assert.match(row, /className="core-journey-step-detail" translate="no"/);
+  assert.match(row, /className="core-journey-step-metric"/);
+  assert.match(styles, /\.core-journey-config-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
+  assert.match(styles, /\.core-journey-runtime-summary\s*\{/);
+  assert.match(styles, /\.core-journey-step-detail\s*\{/);
 });
 
 test("capability names use business labels in primary UI", () => {
@@ -585,6 +624,7 @@ test("permission request hides raw workspace identifiers from the primary path",
   assert.ok(workspaceLabelStart < technicalDetailsStart);
   assert.match(workbench.slice(workspaceLabelStart, technicalDetailsStart), /workspaceName/);
   assert.doesNotMatch(workbench.slice(workspaceLabelStart, technicalDetailsStart), /form\.workspaceId/);
+  assert.match(workbench, /<summary>\{t\("text\.technicalOverrides"\)\}<\/summary>/);
   assert.match(styles, /\.approval-details:not\(\[open\]\) > :not\(summary\)\s*\{/);
 });
 
@@ -604,6 +644,9 @@ test("permission reviewer queue uses business labels before technical identifier
   assert.doesNotMatch(workbench.slice(queueStart, advancedStart), /request\.callerInstanceId/);
   assert.match(workbench, /<summary>\{t\("text\.reviewerQueueTraceDetails"\)\}<\/summary>/);
   assert.match(i18n, /"text\.reviewerQueueTraceDetails": "追溯详情"/);
+  assert.match(i18n, /"text\.technicalOverrides": "技术覆盖"/);
+  assert.match(i18n, /"text\.filterSettings": "筛选条件"/);
+  assert.match(i18n, /"text\.traceDetails": "追踪详情"/);
   assert.doesNotMatch(workbench, /<summary>\{t\("text\.technicalRequestIds"\)\}<\/summary>/);
   assert.match(styles, /\.approval-review-row-main\s*\{/);
   assert.match(styles, /\.approval-review-row-meta\s*\{/);

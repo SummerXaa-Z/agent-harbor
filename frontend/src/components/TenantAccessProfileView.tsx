@@ -233,7 +233,7 @@ export function TenantAccessProfileView({
           </div>
         </div>
         <details className="access-advanced-filters" open={!handoffContext}>
-          <summary>{t("text.technicalDetails")}</summary>
+          <summary>{t("text.filterSettings")}</summary>
           <div className="access-query-grid is-technical">
             <label className="access-field">
               <span>{t("form.tenant")}</span>

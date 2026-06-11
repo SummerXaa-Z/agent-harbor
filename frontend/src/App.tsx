@@ -3115,51 +3115,64 @@ function CoreJourneyWorkbench({
   t: Translator;
 }) {
   const canRun = coreJourneyPreflightCanRun(preflight);
+  const runtimeEvidenceSummary = result
+    ? `tools/list ${result.toolListStatus} · ${form.deniedTool} ${result.deniedStatus} · ${form.allowedTool} ${result.allowedStatus}`
+    : t("text.selfCheckRuntimePending");
   return (
     <div className="core-journey">
       <p className="core-journey-intro">{t("text.coreJourneyIntro")}</p>
-      <div className="core-journey-toolbar">
-        <div className="core-journey-score">
-          <strong>{evaluation.completeCount}/{evaluation.totalCount}</strong>
-          <span>{t("text.coreJourneyCompletion")}</span>
+      <section className="core-journey-config">
+        <header>
+          <div>
+            <strong>{t("section.selfCheckConfig")}</strong>
+            <span>{t("text.selfCheckConfigDetail")}</span>
+          </div>
+          <div className="core-journey-score">
+            <strong>{evaluation.completeCount}/{evaluation.totalCount}</strong>
+            <span>{t("text.coreJourneyCompletion")}</span>
+          </div>
+        </header>
+        <div className="core-journey-config-grid">
+          <label>
+            {t("form.workspace")}
+            <input
+              disabled={running}
+              value={form.workspaceId}
+              onChange={(event) => onChange({ ...form, workspaceId: event.target.value })}
+            />
+          </label>
+          <label>
+            {t("form.endpoint")}
+            <input
+              disabled={running}
+              value={form.mcpEndpoint}
+              onChange={(event) => onChange({ ...form, mcpEndpoint: event.target.value })}
+            />
+          </label>
+          <label>
+            {t("form.allowedTool")}
+            <input
+              disabled={running}
+              value={form.allowedTool}
+              onChange={(event) => onChange({ ...form, allowedTool: event.target.value })}
+            />
+          </label>
+          <label>
+            {t("form.deniedTool")}
+            <input
+              disabled={running}
+              value={form.deniedTool}
+              onChange={(event) => onChange({ ...form, deniedTool: event.target.value })}
+            />
+          </label>
         </div>
-        <label>
-          {t("form.workspace")}
-          <input
-            disabled={running}
-            value={form.workspaceId}
-            onChange={(event) => onChange({ ...form, workspaceId: event.target.value })}
-          />
-        </label>
-        <label>
-          {t("form.endpoint")}
-          <input
-            disabled={running}
-            value={form.mcpEndpoint}
-            onChange={(event) => onChange({ ...form, mcpEndpoint: event.target.value })}
-          />
-        </label>
-        <label>
-          {t("form.allowedTool")}
-          <input
-            disabled={running}
-            value={form.allowedTool}
-            onChange={(event) => onChange({ ...form, allowedTool: event.target.value })}
-          />
-        </label>
-        <label>
-          {t("form.deniedTool")}
-          <input
-            disabled={running}
-            value={form.deniedTool}
-            onChange={(event) => onChange({ ...form, deniedTool: event.target.value })}
-          />
-        </label>
-        <button className="primary-button" disabled={running || preflightChecking || !canRun} onClick={onRun} type="button">
-          <Workflow size={14} />
-          {running ? t("action.runningJourney") : t("action.runCoreJourney")}
-        </button>
-      </div>
+        <div className="core-journey-config-actions">
+          <button className="primary-button" disabled={running || preflightChecking || !canRun} onClick={onRun} type="button">
+            <Workflow size={14} />
+            {running ? t("action.runningJourney") : t("action.runCoreJourney")}
+          </button>
+        </div>
+      </section>
 
       <div className="core-journey-preflight">
         <div className="core-journey-preflight-header">
@@ -3191,15 +3204,22 @@ function CoreJourneyWorkbench({
         </div>
       </div>
 
-      <div className="core-journey-meta">
-        <code>{config.runId}</code>
-        <span>{config.childTenantId}</span>
-        {result ? (
-          <span>
-            tools/list {result.toolListStatus} · {form.deniedTool} {result.deniedStatus} · {form.allowedTool} {result.allowedStatus}
-          </span>
-        ) : null}
-        {message ? <strong>{message}</strong> : null}
+      <div className="core-journey-runtime-summary" aria-label={t("section.selfCheckRuntime")}>
+        <TechnicalId copyLabel={t("action.copy")} label={t("detail.runId")} value={config.runId} />
+        <TechnicalId copyLabel={t("action.copy")} label={t("form.tenantId")} value={config.childTenantId} />
+        <span className="core-journey-runtime-field">
+          <span>{t("form.allowedTool")}</span>
+          <code translate="no">{form.allowedTool}</code>
+        </span>
+        <span className="core-journey-runtime-field">
+          <span>{t("form.deniedTool")}</span>
+          <code translate="no">{form.deniedTool}</code>
+        </span>
+        <span className="core-journey-runtime-field is-wide">
+          <span>{t("section.selfCheckRuntime")}</span>
+          <strong>{runtimeEvidenceSummary}</strong>
+        </span>
+        {message ? <strong className="core-journey-message">{message}</strong> : null}
       </div>
 
       <div className="core-journey-steps">
@@ -3235,9 +3255,9 @@ function CoreJourneyStepRow({ step, t }: { step: CoreJourneyStep; t: Translator 
       <Badge tone={coreJourneyStatusTone(step.status)}>{coreJourneyStatusLabel(step.status, t)}</Badge>
       <div>
         <strong>{t(`journey.step.${step.key}`)}</strong>
-        <span>{step.detail}</span>
+        <span className="core-journey-step-detail" translate="no">{step.detail}</span>
       </div>
-      <code>{step.metric}</code>
+      <code className="core-journey-step-metric">{step.metric}</code>
     </article>
   );
 }
@@ -3432,7 +3452,7 @@ function TraceFilterBar({
       </label>
       <button className="secondary-button" type="button" onClick={onRefresh}><RefreshCw size={14} /> {t("action.refresh")}</button>
       <details className="trace-filter-advanced">
-        <summary>{t("text.technicalDetails")}</summary>
+        <summary>{t("text.filterSettings")}</summary>
         <label>
           <span>{t("form.traceRunId")}</span>
           <input placeholder={t("form.traceRunPlaceholder")} value={filters.runId ?? ""} onChange={(event) => onChange({ ...filters, runId: event.target.value })} />
@@ -3897,10 +3917,20 @@ function SignalBoard({ metrics, t }: { metrics: SystemMetric[]; t: Translator })
 
 function TraceTable({ traces, agents, t }: { traces: TraceEvent[]; agents: Agent[]; t: Translator }) {
   const names = useMemo(() => agentNameMap(agents), [agents]);
+  const [traceDetailsExpanded, setTraceDetailsExpanded] = useState(false);
 
   return (
     <div className="trace-list">
       {traces.length === 0 ? <EmptyRow title={t("empty.auditTraces.title")} detail={t("empty.auditTraces.detail")} /> : null}
+      {traces.length > 0 ? (
+        <div className="trace-list-header">
+          <span>{tx(t, "text.visibleTraceCount", { count: traces.length })}</span>
+          <button className="secondary-button trace-detail-toggle" onClick={() => setTraceDetailsExpanded(!traceDetailsExpanded)} type="button">
+            <FileSearch size={14} />
+            {traceDetailsExpanded ? t("action.collapseTraceDetails") : t("action.expandTraceDetails")}
+          </button>
+        </div>
+      ) : null}
       {traces.map((trace) => {
         const traceCallerName = trace.callerAgentId
           ? permissionEntityDisplayName(names[trace.callerAgentId] ?? trace.callerAgentId, t)
@@ -3923,8 +3953,8 @@ function TraceTable({ traces, agents, t }: { traces: TraceEvent[]; agents: Agent
                 <span className="trace-route-text">{traceRouteBusinessLabel(trace, t)}</span>
                 <span className="trace-reason">{accessTraceReasonLabel(trace.reason, trace.decision === "allowed" ? "allow" : "deny", t)}</span>
               </div>
-              <details className="trace-technical-details">
-                <summary>{t("text.technicalDetails")}</summary>
+              <details className="trace-technical-details" open={traceDetailsExpanded}>
+                <summary>{t("text.traceDetails")}</summary>
                 <div className="trace-technical-grid">
                   <span>
                     <span>{t("form.routeType")}</span>

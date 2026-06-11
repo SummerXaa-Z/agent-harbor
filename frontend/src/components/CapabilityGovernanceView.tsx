@@ -315,7 +315,7 @@ export function CapabilityGovernanceView({
             </label>
           </div>
           <details className="capability-grant-advanced" open={selectedAccessSubject.id === customAccessSubjectOption.id}>
-            <summary>{t("text.technicalDetails")}</summary>
+            <summary>{t("text.technicalOverrides")}</summary>
             <label>{t("form.subjectSelector")}<input placeholder={t("form.subjectSelectorPlaceholder")} value={form.subjectSelector} onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })} /></label>
           </details>
           <div className="capability-scope-strip">

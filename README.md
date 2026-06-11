@@ -116,17 +116,53 @@ The scenario starts the dependency-free mock MCP server automatically and points
 
 ## Try the Permission Changes Console
 
-The Permission Changes console proves the v0.2.0 approval-required permission change path for the primary product journey: create a three-level tenant tree, register a caller and MCP target, discover read/write/export tools, start a request from the **Support ticket triage** permission package template, create, withdraw, recreate, and approve matching approval requests, run apply preflight, apply it with `approvalRequestId`, run allowed and denied MCP calls with a subject id, and verify access-profile, application, approval, trace, audit, read-only health, read-only impact, status-check evidence, and the production evidence report. The first screen is now a task-first workspace for completing one permission change: current status and next action at the top, request information on the left, approval/apply/validation handling on the right, and advanced checks collapsed below. `POST /api/v1/permission-packages/workbench:preview` provides the read-only projection behind this screen so the UI does not stitch together draft, approval, application, and readiness objects as peer cards. The console is intentionally business-first: the default view asks who needs access, which permission package template should be used, whether approval is required, and what the next action is. The current step is exposed with `aria-current="step"` and localized process wording. The main journey shows readable tenant hierarchy, workspace, caller, target service, and access object labels; raw tenant, workspace, caller, and target ids plus technical subject selectors stay in folded Advanced settings or **Advanced Checks** for audit and troubleshooting. Permission drafts and instance assignments require an explicit access object selector and reject empty or bare `*` selectors. Apply preflight is read-only: it checks draft readiness, approval match, capability configuration fingerprints, data-scope fit, planned grant objects, and existing grant chains without creating entitlements, applications, audit events, or consuming approval. The console also includes an Approval queue that filters pending approvals by approver identity and the current request scope. Approval requests expire after 24 hours, reject self-approval, can be withdrawn by the original requester while still pending, snapshot per-capability permission configuration fingerprints, and are consumed transactionally by the first successful permission application. The application health panel derives ready, drifted, and needs-review status from the same impact calculation; it is not a scheduler, notification system, or rollback executor. The impact review panel resolves the created entitlement, workspace assignment, instance assignment, and capability ids so operators can inspect rollback readiness before any future rollback mutation exists. The Status Check panel is the final read-only go/no-go gate before acceptance: it combines preflight, latest application, health, impact, access-profile, allowed/denied runtime traces, and applied audit evidence before reporting ready, needs review, or blocked. Readiness and evidence responses include a stable `nextActionCode` for UI localization and admin-agent planning, while keeping the human-readable `nextActions` list for compatibility. The same panel can export a bounded local JSON evidence report for security handoff. The adjacent **Rehearse drift** action calls `rehearsal=grant_drift` to simulate missing/inactive grant blockers in the response only; it does not mutate permission state.
+### What this validates
 
-权限变更与状态检查控制台验证 v0.2.0 需要审批的权限变更主旅程：创建三级租户树，注册调用方和 MCP 目标，发现读/写/导出工具，基于 **客服工单处理包** 权限包模板发起权限变更，创建、撤回、重新创建并批准匹配的审批请求，运行应用前预检，携带 `approvalRequestId` 应用权限，用主体 ID 跑通允许和拒绝调用，并验证访问画像、应用记录、审批、追踪、审计、只读落地状态、只读影响复核、状态检查证据和上线证据报告。首屏现在不再展示产品主张卡片或状态看板，而是直接进入完成一单权限变更的任务工作台：顶部给出当前状态和下一步，左侧填写申请信息，右侧处理审批、应用和运行验证，高级检查默认折叠。`POST /api/v1/permission-packages/workbench:preview` 为这个界面提供只读工作台投影，避免前端把草案、审批、应用和状态检查对象拼成同级卡片。控制台默认采用业务优先表达：先问谁需要访问、用哪个权限包模板、是否需要审批、下一步做什么；主旅程展示可读的租户层级、工作区、调用方、目标服务和访问对象，原始租户、工作区、调用方和目标 ID 以及主体选择器只收进高级设置或 **高级检查项**，用于审计和排障。应用前预检是只读安全门：它检查草案就绪、审批匹配、数据范围边界、计划授权对象和已有授权链，不会创建授权、应用记录、审计事件，也不会消费审批。审批请求 24 小时后过期，拒绝自审批，待审批状态下可由原申请人撤回。落地状态面板复用同一套影响计算派生正常、漂移、需复核状态；它不是调度器、通知系统或回滚执行器。状态检查面板是上线验收前最后一个只读门禁：汇总预检、最新应用、落地状态、影响复核、访问画像、允许/拒绝运行追踪和应用审计证据后，给出可上线、需复核或阻断。状态检查和证据报告会返回稳定 `nextActionCode`，便于 UI 本地化和管理 Agent 规划下一步，同时保留原有人类可读 `nextActions` 以兼容旧客户端。同一面板可以导出有边界的本地 JSON 证据报告，用于安全交接。相邻的 **演练漂移** 动作会调用 `rehearsal=grant_drift`，仅在响应中模拟缺失/未启用授权阻断，不会修改权限状态。
+The console exercises the v0.2.0 permission-change journey end to end:
+
+1. Create a three-level tenant tree, a caller, and an MCP target.
+2. Discover read, write, and export tools from the target.
+3. Start from the **Support ticket triage** permission package template.
+4. Create, withdraw, recreate, and approve scoped approval requests.
+5. Run read-only apply preflight, apply with `approvalRequestId`, and verify allowed and denied MCP calls.
+6. Review access profile, application health, impact, trace, audit, status-check evidence, and the production evidence report.
+
+The UI is intentionally task-first. It asks who needs access, which permission package template should apply, whether approval is required, and what the next safe action is. Technical IDs and subject selectors stay in **Technical overrides**; go-live proof stays in **Acceptance Details**. The status-check and evidence APIs return stable `nextActionCode` values so the UI and admin agents can localize next actions without parsing English text.
+
+### 这会验证什么
+
+权限变更控制台用于验证 v0.2.0 的审批型权限变更主旅程:
+
+1. 创建三级租户树、调用方和 MCP 目标。
+2. 从目标服务发现读、写、导出工具。
+3. 基于 **客服工单处理包** 权限包模板发起变更。
+4. 创建、撤回、重新创建并批准匹配的审批请求。
+5. 执行只读应用前预检，携带 `approvalRequestId` 应用权限，并验证允许/拒绝 MCP 调用。
+6. 复核访问画像、落地状态、影响范围、追踪、审计、状态检查证据和上线证据报告。
+
+界面默认服务一个任务: 谁需要访问、使用哪个权限包模板、是否需要审批、下一步做什么。技术 ID 和主体选择器收进 **技术覆盖**，上线证据收进 **验收明细**。状态检查和证据报告返回稳定的 `nextActionCode`，便于 UI 和管理 Agent 本地化下一步动作。
+
+### Run it locally
 
 ```bash
 make demo
 ```
 
-Then open `http://127.0.0.1:5174/`, switch to **Permission Changes**, click **Run validation**, confirm **Status Check** reaches ready, confirm **Application Health** shows a healthy row, confirm **Status Check** reports ready, export the production evidence JSON, click that row's **Review impact** action, and optionally click **Rehearse drift** to preview the read-only blocker state.
+1. Start the local demo stack with `make demo`.
+2. Open `http://127.0.0.1:5174/` and switch to **Permission Changes**.
+3. Click **Run validation**.
+4. Confirm **Status Check** reaches ready and **Application Health** shows a healthy row.
+5. Export the production evidence JSON.
+6. Open **Review impact** or **Rehearse drift** when you want to inspect read-only impact or drift blockers.
 
-然后打开 `http://127.0.0.1:5174/`，切换到 **权限变更**，点击 **Run validation / 执行运行验证**，确认 **Status Check / 状态检查** 达到可上线，确认 **Application Health / 落地状态** 出现正常应用行，确认状态检查结果显示可上线，并导出上线证据 JSON，再点击该行的 **Review impact / 查看影响**，也可以点击 **Rehearse drift / 演练漂移** 预览只读阻断状态。
+### 本地运行
+
+1. 启动本地演示环境: `make demo`。
+2. 打开 `http://127.0.0.1:5174/`，进入 **权限变更**。
+3. 点击 **Run validation / 执行运行验证**。
+4. 确认 **Status Check / 状态检查** 达到可上线，并确认 **Application Health / 落地状态** 出现正常应用行。
+5. 导出上线证据 JSON。
+6. 需要复核影响或演练漂移时，再打开 **Review impact / 查看影响** 或 **Rehearse drift / 演练漂移**。
 
 Use the CLI scenario when you want the same path as a scriptable regression check:
 

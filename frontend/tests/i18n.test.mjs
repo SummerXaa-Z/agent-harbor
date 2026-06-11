@@ -153,7 +153,12 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("accessSubject.securityReviewer.name"), "安全审批人");
   assert.equal(t("dataScope.us-east"), "美东");
   assert.equal(t("text.tenantLevel.0"), "1级租户");
-  assert.equal(t("text.technicalDetails"), "高级设置");
+  assert.equal(t("text.technicalDetails"), "技术详情");
+  assert.equal(t("text.technicalOverrides"), "技术覆盖");
+  assert.equal(t("text.filterSettings"), "筛选条件");
+  assert.equal(t("text.traceDetails"), "追踪详情");
+  assert.equal(t("action.expandTraceDetails"), "展开追踪详情");
+  assert.equal(t("action.collapseTraceDetails"), "收起追踪详情");
   assert.equal(t("text.tenantPath"), "租户层级");
   assert.equal(t("text.workspaceAlias"), "工作区名称");
   assert.equal(t("text.defaultTenantName"), "集团总部");
@@ -164,7 +169,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("text.permissionRequestStatusSummary"), "权限变更状态摘要");
   assert.equal(t("text.currentWorkspaceContext"), "当前工作上下文");
   assert.equal(t("text.permissionRequestNextAction"), "建议下一步");
-  assert.equal(t("text.permissionRequestScopeHelp"), "选择业务租户、调用方、工具服务和访问角色；技术 ID 只在高级设置里保留。");
+  assert.equal(t("text.permissionRequestScopeHelp"), "选择业务租户、调用方、工具服务和访问角色；技术 ID 只在技术覆盖里保留。");
   assert.equal(t("section.permissionRequestReview"), "配置复核");
   assert.equal(t("text.permissionRequestReviewHelp"), "复核本次生效的租户、调用方、工具服务、访问角色和权限包；需要调整时请新建变更。");
   assert.equal(t("text.permissionRequestTemplateHelp"), "从模板开始，系统会自动带出允许工具、阻断工具和数据范围。");

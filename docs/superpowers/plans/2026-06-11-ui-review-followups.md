@@ -29,15 +29,15 @@
 
 ## Task 2: Split Overloaded Advanced Controls (`ui-4`)
 
-- [ ] Rename technical override, trace details, and filter controls with separate i18n keys.
-- [ ] Add expand/collapse-all controls where repeated audit trace rows are shown.
-- [ ] Test copy semantics and visible controls.
+- [x] Rename technical override, trace details, and filter controls with separate i18n keys.
+- [x] Add expand/collapse-all controls where repeated audit trace rows are shown.
+- [x] Test copy semantics and visible controls.
 
 ## Task 3: Tighten Self-Check and Onboarding Surfaces (`ui-6`, `ui-7`)
 
-- [ ] Align self-check rows into label/value grids and reuse copyable technical detail affordances.
-- [ ] Split README onboarding sections into short numbered steps.
-- [ ] Add lightweight in-product concept guidance for the permission journey.
+- [x] Align self-check rows into label/value grids and reuse copyable technical detail affordances.
+- [x] Split README onboarding sections into short numbered steps.
+- [x] Add lightweight in-product concept guidance for the permission journey.
 
 ## Task 4: Add Search, Filters, and Details to Operational Lists (`ui-3`)
 

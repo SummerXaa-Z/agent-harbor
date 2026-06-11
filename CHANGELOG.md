@@ -186,6 +186,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- Web console wording now separates Technical overrides, Filter settings, Trace details, and Technical details, adds expand/collapse trace controls to Runtime Audit, reshapes System Self-Check into structured configuration/runtime grids, and adds a concise in-product permission concept guide.
+- Web 控制台现在区分“技术覆盖、筛选条件、追踪详情、技术详情”，运行审计新增追踪详情统一展开/收起，系统自检改为结构化配置/运行摘要网格，并在权限变更中加入轻量概念速览。
+- README Permission Changes onboarding is now split into bilingual validation and local-run steps instead of long dense paragraphs.
+- README 权限变更上手说明现在拆成中英双语的验证内容和本地运行步骤，不再使用大段密集说明。
 - Web console Permission Changes now lets the original requester withdraw a pending approval request from the main approval flow, confirms the action, clears approval-dependent evidence, and returns the journey to a safe submit-again state.
 - Web 控制台权限变更页现在允许原申请人在主审批流程中撤回待审批请求，撤回前二次确认，撤回后清空依赖该审批的证据状态，并回到可重新提交的安全状态。
 - Web console Permission Changes now shows reviewer context before approval resolution, requires an explicit confirmation for approve/reject decisions, requires a rejection reason, and shares one busy guard across the main approval, apply, validation, and evidence actions.

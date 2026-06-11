@@ -723,6 +723,27 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                 ) : null}
               </div>
             ) : null}
+            <details className="approval-concept-guide">
+              <summary>{t("section.permissionConceptGuide")}</summary>
+              <div className="approval-concept-grid">
+                <article>
+                  <strong>{t("concept.tenant")}</strong>
+                  <span>{t("concept.tenant.detail")}</span>
+                </article>
+                <article>
+                  <strong>{t("concept.caller")}</strong>
+                  <span>{t("concept.caller.detail")}</span>
+                </article>
+                <article>
+                  <strong>{t("concept.permissionPackage")}</strong>
+                  <span>{t("concept.permissionPackage.detail")}</span>
+                </article>
+                <article>
+                  <strong>{t("concept.evidence")}</strong>
+                  <span>{t("concept.evidence.detail")}</span>
+                </article>
+              </div>
+            </details>
             <label className="approval-request">
               {t("form.adminRequest")}
               <textarea
@@ -823,7 +844,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               </div>
             </div>
             <details className="approval-details">
-              <summary>{t("text.technicalDetails")}</summary>
+              <summary>{t("text.technicalOverrides")}</summary>
               <label>
                 {t("form.workspaceId")}
                 <input disabled={requestFormLocked} value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} />

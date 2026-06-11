@@ -647,6 +647,58 @@
   display: none;
 }
 
+.approval-concept-guide {
+  border: 1px solid var(--line-subtle);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+
+.approval-concept-guide > summary {
+  min-height: 36px;
+  cursor: pointer;
+  padding: 9px 12px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  list-style: none;
+}
+
+.approval-concept-guide > summary::-webkit-details-marker {
+  display: none;
+}
+
+.approval-concept-guide:not([open]) > :not(summary) {
+  display: none;
+}
+
+.approval-concept-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.approval-concept-grid article {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.approval-concept-grid strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.approval-concept-grid span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .approval-details > label {
   padding: 0 12px 10px;
   color: var(--ink-3);
@@ -1268,6 +1320,10 @@ button.approval-mini-row {
 }
 
 @media (max-width: 720px) {
+  .approval-concept-grid {
+    grid-template-columns: 1fr;
+  }
+
   .approval-lock-notice {
     align-items: stretch;
     flex-direction: column;

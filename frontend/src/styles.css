@@ -1309,10 +1309,10 @@ th {
 :root[lang="zh-CN"] .section-kicker,
 :root[lang="zh-CN"] .status-strip span,
 :root[lang="zh-CN"] .control-form label,
-  :root[lang="zh-CN"] th,
-  :root[lang="zh-CN"] .capability-toolbar label,
-  :root[lang="zh-CN"] .core-journey-toolbar label,
-  :root[lang="zh-CN"] .access-summary-cell span {
+:root[lang="zh-CN"] th,
+:root[lang="zh-CN"] .capability-toolbar label,
+:root[lang="zh-CN"] .core-journey-config label,
+:root[lang="zh-CN"] .access-summary-cell span {
   text-transform: none;
 }
 
@@ -1660,10 +1660,211 @@ td code {
   background: var(--brand);
 }
 
+.core-journey {
+  display: grid;
+  gap: 14px;
+}
+
+.core-journey-intro {
+  max-width: 860px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.core-journey-config,
+.core-journey-preflight,
+.core-journey-runtime-summary {
+  border: 1px solid var(--line-muted);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.core-journey-config {
+  padding: 14px;
+}
+
+.core-journey-config header,
+.core-journey-preflight-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.core-journey-config header span,
+.core-journey-preflight-header span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.core-journey-score {
+  display: grid;
+  justify-items: end;
+  min-width: 96px;
+}
+
+.core-journey-score strong {
+  font-size: 22px;
+}
+
+.core-journey-score span {
+  margin-top: 0;
+}
+
+.core-journey-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.core-journey-config-grid label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.core-journey-config-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.core-journey-runtime-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 12px;
+  padding: 12px 14px;
+}
+
+.core-journey-runtime-summary .technical-id-field,
+.core-journey-runtime-field,
+.core-journey-message {
+  min-width: 0;
+}
+
+.core-journey-runtime-field {
+  display: grid;
+  gap: 4px;
+}
+
+.core-journey-runtime-field > span,
+.core-journey-message {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.core-journey-runtime-field code,
+.core-journey-runtime-field strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--mono-font);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-journey-runtime-field.is-wide,
+.core-journey-message {
+  grid-column: span 2;
+}
+
+.core-journey-preflight {
+  padding: 14px;
+}
+
+.core-journey-preflight-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.core-journey-preflight-grid,
+.core-journey-steps {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.core-journey-preflight-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.core-journey-preflight-row,
+.core-journey-step {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+}
+
+.core-journey-preflight-row {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.core-journey-preflight-row span,
+.core-journey-step-detail {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-journey-step {
+  grid-template-columns: auto minmax(0, 1fr) minmax(52px, auto);
+}
+
+.core-journey-step-metric {
+  justify-self: end;
+  color: var(--ink-2);
+  font-family: var(--mono-font);
+  font-size: 12px;
+}
+
+.core-journey-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .trace-list {
   display: grid;
   gap: 0;
   padding: 4px 14px 10px;
+}
+
+.trace-list-header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-subtle);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.trace-detail-toggle {
+  min-height: 32px;
+  padding: 0 10px;
 }
 
 .trace-filters {
@@ -2728,7 +2929,8 @@ td code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .core-journey-toolbar,
+  .core-journey-config-grid,
+  .core-journey-runtime-summary,
   .core-journey-preflight-grid,
   .core-journey-steps,
   .approval-header,
@@ -2959,7 +3161,8 @@ td code {
   .status-strip,
   .metric-grid,
   .signal-grid,
-  .core-journey-toolbar,
+  .core-journey-config-grid,
+  .core-journey-runtime-summary,
   .core-journey-preflight-grid,
   .core-journey-steps,
   .approval-header,

@@ -9,7 +9,7 @@ import {
   resolveInitialLanguage
 } from "../src/i18n.ts";
 
-const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
 
 test("normalizeLanguage supports English and Simplified Chinese", () => {
   assert.equal(normalizeLanguage("zh-CN"), "zh-CN");

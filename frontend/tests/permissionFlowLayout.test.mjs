@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
 const i18n = readFileSync(new URL("../src/i18n.ts", import.meta.url), "utf8");
 const baseStyles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const workbenchStyles = readFileSync(new URL("../src/styles/permission-workbench.css", import.meta.url), "utf8");
@@ -14,6 +14,9 @@ const accessProfileView = readFileSync(new URL("../src/components/TenantAccessPr
 const capabilityGovernanceView = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
 const consoleViews = readFileSync(new URL("../src/components/ConsoleViews.tsx", import.meta.url), "utf8");
 const coreJourneyWorkbench = readFileSync(new URL("../src/components/CoreJourneyWorkbench.tsx", import.meta.url), "utf8");
+const goLiveAcceptanceOverview = readFileSync(new URL("../src/components/GoLiveAcceptanceOverview.tsx", import.meta.url), "utf8");
+const managementForms = readFileSync(new URL("../src/components/ManagementForms.tsx", import.meta.url), "utf8");
+const runtimeEvidenceViews = readFileSync(new URL("../src/components/RuntimeEvidenceViews.tsx", import.meta.url), "utf8");
 const presenters = readFileSync(new URL("../src/consolePresenters.ts", import.meta.url), "utf8");
 
 test("permission request journey renders as one production workspace instead of a demo board", () => {
@@ -276,7 +279,7 @@ test("access profile grant chain keeps technical ids in advanced details", () =>
   assert.match(accessProfileView, /const traceTargetName = permissionEntityDisplayName\(names\[trace\.targetAgentId\] \?\? trace\.targetAgentId, t\)/);
   assert.match(accessProfileView, /<strong>\{traceCallerName\} → \{traceTargetName\}<\/strong>/);
   assert.match(accessProfileView, /accessTraceReasonLabel\(trace\.reason, trace\.decision === "allowed" \? "allow" : "deny", t\)/);
-  assert.match(app, /accessTraceReasonLabel\(trace\.reason, trace\.decision === "allowed" \? "allow" : "deny", t\)/);
+  assert.match(runtimeEvidenceViews, /accessTraceReasonLabel\(trace\.reason, trace\.decision === "allowed" \? "allow" : "deny", t\)/);
   assert.match(presenters, /export function accessTraceReasonLabel/);
   assert.match(i18n, /"traceReason\.capabilityAssignmentMatched": "权限分配已命中"/);
   assert.match(i18n, /"text\.customSubjectScope": "自定义主体范围"/);
@@ -286,23 +289,23 @@ test("access profile grant chain keeps technical ids in advanced details", () =>
 });
 
 test("runtime audit keeps protocol details out of primary trace rows", () => {
-  assert.match(app, /function traceRouteBusinessLabel/);
-  assert.match(app, /className="trace-business-line"/);
-  assert.match(app, /className="trace-technical-details"/);
-  assert.match(app, /const \[traceDetailsExpanded, setTraceDetailsExpanded\] = useState\(false\)/);
-  assert.match(app, /open=\{traceDetailsExpanded\}/);
-  assert.match(app, /traceDetailsExpanded \? t\("action\.collapseTraceDetails"\) : t\("action\.expandTraceDetails"\)/);
-  assert.match(app, /<summary>\{t\("text\.traceDetails"\)\}<\/summary>/);
-  assert.match(app, /<summary>\{t\("text\.filterSettings"\)\}<\/summary>/);
-  assert.doesNotMatch(app, /<input placeholder="runId"/);
-  assert.match(app, /placeholder=\{t\("form\.traceRunPlaceholder"\)\}/);
-  const traceRowStart = app.indexOf('<article className="trace-row"');
-  const traceTechnicalStart = app.indexOf('<details className="trace-technical-details"', traceRowStart);
+  assert.match(runtimeEvidenceViews, /function traceRouteBusinessLabel/);
+  assert.match(runtimeEvidenceViews, /className="trace-business-line"/);
+  assert.match(runtimeEvidenceViews, /className="trace-technical-details"/);
+  assert.match(runtimeEvidenceViews, /const \[traceDetailsExpanded, setTraceDetailsExpanded\] = useState\(false\)/);
+  assert.match(runtimeEvidenceViews, /open=\{traceDetailsExpanded\}/);
+  assert.match(runtimeEvidenceViews, /traceDetailsExpanded \? t\("action\.collapseTraceDetails"\) : t\("action\.expandTraceDetails"\)/);
+  assert.match(runtimeEvidenceViews, /<summary>\{t\("text\.traceDetails"\)\}<\/summary>/);
+  assert.match(managementForms, /<summary>\{t\("text\.filterSettings"\)\}<\/summary>/);
+  assert.doesNotMatch(managementForms, /<input placeholder="runId"/);
+  assert.match(managementForms, /placeholder=\{t\("form\.traceRunPlaceholder"\)\}/);
+  const traceRowStart = runtimeEvidenceViews.indexOf('<article className="trace-row"');
+  const traceTechnicalStart = runtimeEvidenceViews.indexOf('<details className="trace-technical-details"', traceRowStart);
   assert.notEqual(traceRowStart, -1);
   assert.notEqual(traceTechnicalStart, -1);
-  assert.doesNotMatch(app.slice(traceRowStart, traceTechnicalStart), /trace\.routeType/);
-  assert.doesNotMatch(app.slice(traceRowStart, traceTechnicalStart), /trace\.routeKey/);
-  assert.doesNotMatch(app.slice(traceRowStart, traceTechnicalStart), /trace\.capabilityId/);
+  assert.doesNotMatch(runtimeEvidenceViews.slice(traceRowStart, traceTechnicalStart), /trace\.routeType/);
+  assert.doesNotMatch(runtimeEvidenceViews.slice(traceRowStart, traceTechnicalStart), /trace\.routeKey/);
+  assert.doesNotMatch(runtimeEvidenceViews.slice(traceRowStart, traceTechnicalStart), /trace\.capabilityId/);
   assert.match(presenters, /traceReason\.filteredToolsListByCapabilityAssignments/);
   assert.match(presenters, /traceReason\.capabilityNotApproved/);
   assert.match(i18n, /"traceReason\.filteredToolsListByCapabilityAssignments": "工具列表已按权限收敛"/);
@@ -403,17 +406,17 @@ test("permission request evidence is secondary to the main operator task", () =>
 });
 
 test("management audit evidence uses business labels before technical ids", () => {
-  const auditTableStart = app.indexOf("function ManagementAuditTable");
-  const auditTableEnd = app.indexOf("function IconMore", auditTableStart);
-  const auditTable = app.slice(auditTableStart, auditTableEnd);
-  assert.match(app, /auditActionLabel\(event\.action, t\)/);
-  assert.match(app, /auditResourceTypeLabel\(event\.resourceType, t\)/);
-  assert.match(app, /auditActorLabel\(event\.actor, t\)/);
-  assert.match(app, /auditSummaryLabel\(event\.summary, t\)/);
-  assert.match(app, /className="audit-technical"/);
+  const auditTableStart = runtimeEvidenceViews.indexOf("export function ManagementAuditTable");
+  const auditTableEnd = runtimeEvidenceViews.indexOf("export function EvidenceTimeline", auditTableStart);
+  const auditTable = runtimeEvidenceViews.slice(auditTableStart, auditTableEnd >= 0 ? auditTableEnd : undefined);
+  assert.match(runtimeEvidenceViews, /auditActionLabel\(event\.action, t\)/);
+  assert.match(runtimeEvidenceViews, /auditResourceTypeLabel\(event\.resourceType, t\)/);
+  assert.match(runtimeEvidenceViews, /auditActorLabel\(event\.actor, t\)/);
+  assert.match(runtimeEvidenceViews, /auditSummaryLabel\(event\.summary, t\)/);
+  assert.match(runtimeEvidenceViews, /className="audit-technical"/);
   assert.match(auditTable, /<summary>\{t\("text\.auditDetails"\)\}<\/summary>/);
   assert.doesNotMatch(auditTable, /text\.technicalDetails/);
-  assert.doesNotMatch(app, /<span>\{event\.resourceId\}<\/span>/);
+  assert.doesNotMatch(runtimeEvidenceViews, /<span>\{event\.resourceId\}<\/span>/);
   assert.match(i18n, /"auditAction\.permission_package\.applied": "应用权限包"/);
   assert.match(i18n, /"auditActor\.local-dev": "本地管理员"/);
   assert.match(i18n, /"text\.auditDetails": "详情"/);
@@ -427,18 +430,18 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   const cockpitStart = consoleViews.indexOf("export function CockpitView", evidenceStart);
   const evidenceCase = consoleViews.slice(evidenceStart, cockpitStart);
   const evidenceRender = evidenceCase.slice(evidenceCase.indexOf("return ("));
-  assert.match(app, /function GoLiveAcceptanceOverview/);
+  assert.match(goLiveAcceptanceOverview, /export function GoLiveAcceptanceOverview/);
   assert.match(app, /const goLiveAcceptancePanel =/);
-  assert.match(app, /className="go-live-acceptance"/);
-  assert.match(app, /productionReadinessStatusLabel\(productionReadiness\?\.status, t\)/);
-  assert.match(app, /onRefreshProductionReadiness/);
-  assert.match(app, /onExportProductionEvidence/);
-  assert.match(app, /onOpenPermissionChange/);
-  assert.match(app, /const statusMessage = productionReadinessMessage === t\("message\.permissionProductionReadinessLoaded"\)/);
-  assert.match(app, /statusMessage \? <p className="go-live-acceptance-message">\{statusMessage\}<\/p> : null/);
-  assert.match(app, /const acceptanceReady = productionReadiness\?\.status === "ready"/);
-  assert.match(app, /acceptanceReady \? \([\s\S]*className="primary-button"[\s\S]*onClick=\{onExportProductionEvidence\}[\s\S]*className="secondary-button"[\s\S]*onClick=\{onRefreshProductionReadiness\}/);
-  assert.match(app, /: \([\s\S]*className="primary-button"[\s\S]*onClick=\{onRefreshProductionReadiness\}[\s\S]*className="secondary-button"[\s\S]*onClick=\{onExportProductionEvidence\}/);
+  assert.match(goLiveAcceptanceOverview, /className="go-live-acceptance"/);
+  assert.match(goLiveAcceptanceOverview, /productionReadinessStatusLabel\(productionReadiness\?\.status, t\)/);
+  assert.match(goLiveAcceptanceOverview, /onRefreshProductionReadiness/);
+  assert.match(goLiveAcceptanceOverview, /onExportProductionEvidence/);
+  assert.match(goLiveAcceptanceOverview, /onOpenPermissionChange/);
+  assert.match(goLiveAcceptanceOverview, /const statusMessage = productionReadinessMessage === t\("message\.permissionProductionReadinessLoaded"\)/);
+  assert.match(goLiveAcceptanceOverview, /statusMessage \? <p className="go-live-acceptance-message">\{statusMessage\}<\/p> : null/);
+  assert.match(goLiveAcceptanceOverview, /const acceptanceReady = productionReadiness\?\.status === "ready"/);
+  assert.match(goLiveAcceptanceOverview, /acceptanceReady \? \([\s\S]*className="primary-button"[\s\S]*onClick=\{onExportProductionEvidence\}[\s\S]*className="secondary-button"[\s\S]*onClick=\{onRefreshProductionReadiness\}/);
+  assert.match(goLiveAcceptanceOverview, /: \([\s\S]*className="primary-button"[\s\S]*onClick=\{onRefreshProductionReadiness\}[\s\S]*className="secondary-button"[\s\S]*onClick=\{onExportProductionEvidence\}/);
   assert.match(evidenceCase, /goLiveAcceptancePanel/);
   assert.ok(evidenceRender.indexOf("{goLiveAcceptancePanel}") < evidenceRender.indexOf("{evidenceRunsPanel}"));
   assert.match(i18n, /"section\.goLiveAcceptance": "上线验收"/);
@@ -463,8 +466,8 @@ test("go-live evidence route loads the current permission change preview", () =>
   assert.match(app, /previewPermissionPackageWorkbench\(aiAdminForm, adminKey, controller\.signal\)/);
   assert.match(app, /const goLiveAcceptanceForm = aiAdminServerDraft\?\.input \?\? aiAdminForm/);
   assert.match(app, /draft=\{aiAdminServerDraft\}/);
-  assert.match(app, /const acceptanceInput = draft\?\.input \?\? form/);
-  assert.doesNotMatch(app, /form\.callerInstanceId \|\| t\("text\.unknownCaller"\)/);
+  assert.match(goLiveAcceptanceOverview, /const acceptanceInput = draft\?\.input \?\? form/);
+  assert.doesNotMatch(goLiveAcceptanceOverview, /form\.callerInstanceId \|\| t\("text\.unknownCaller"\)/);
   assert.match(i18n, /"text\.callerPendingSelection": "请选择访问用户"/);
   assert.match(i18n, /"text\.targetPendingSelection": "请选择 MCP 目标"/);
 });

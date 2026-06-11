@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
 
 function functionBlock(name) {
   const start = app.indexOf(`async function ${name}(`);

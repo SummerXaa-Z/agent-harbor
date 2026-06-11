@@ -16,6 +16,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 访问策略页在空状态下优先呈现创建策略任务，并默认收起管理审计，方便管理员先完成访问规则创建与复核。
 - Web console view composition now starts moving out of `App.tsx`: NavKey page shells live in `ConsoleViews`, operational tables and policy workspace live in `OperationalViews`, and the Self-Check workbench lives in `CoreJourneyWorkbench`.
 - Web 控制台视图编排已开始从 `App.tsx` 拆出：NavKey 页面壳进入 `ConsoleViews`，运营表格和访问策略工作区进入 `OperationalViews`，自检工作台进入 `CoreJourneyWorkbench`。
+- Web console form, runtime-evidence, and go-live acceptance views are now split into owned components, and the production entry shell delegates to `ConsoleController`; `App.tsx` is now a 5-line shell with regression tests preventing view, form, or state logic from returning to the entry file.
+- Web 控制台表单、运行证据和上线验收视图已拆入独立组件，生产入口外壳下沉到 `ConsoleController`；`App.tsx` 现在是 5 行入口文件，并有回归测试防止视图、表单或状态逻辑回流到入口文件。
 - Added approval-request withdrawal for permission changes: REST now exposes `POST /api/v1/permission-packages/approval-requests/{id}/withdraw`, Management MCP exposes `withdraw_permission_package_approval_request`, and withdrawn requests are audited as `permission_package.approval_withdrawn`.
 - 新增权限变更审批请求撤回能力：REST 提供 `POST /api/v1/permission-packages/approval-requests/{id}/withdraw`，Management MCP 提供 `withdraw_permission_package_approval_request`，撤回审计事件记录为 `permission_package.approval_withdrawn`。
 - Added a draft 0.3.0 requirements document (`docs/product/0.3.0-permission-platform-requirements.md`) covering permission package resource-type expansion, an end-user self-service consumption portal, model access with budget quotas, and grant lifecycle automation, with personas, slices, and acceptance criteria.

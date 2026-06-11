@@ -21,7 +21,7 @@
 ## Task 1: Fix Permission Journey Result Message Language Snapshots (`ui-2`)
 
 - [x] **Step 1: Add a regression test** in `frontend/tests/permissionJourneySafety.test.mjs` that requires `aiAdminMessage` to store translation descriptors instead of rendered strings.
-- [x] **Step 2: Replace string state** in `frontend/src/App.tsx` with `LocalizedMessage | null` and render through `localizedMessageText(...)`.
+- [x] **Step 2: Replace string state** with `LocalizedMessage | null` and render through `localizedMessageText(...)`; after the shell split this lives in `frontend/src/ConsoleController.tsx`.
 - [x] **Step 3: Convert approval/apply/evidence result messages** to `{ key, params }` descriptors or localized render closures for dynamic readiness details.
 - [x] **Step 4: Run focused gate** for permission journey safety, layout, i18n, and frontend build.
 - [x] **Step 5: Browser-check language switching** on the permission journey result message.
@@ -56,8 +56,12 @@
 - [x] Extract first-pass view composition by `NavKey` without changing behavior: `ConsoleViews` now owns page shells.
 - [x] Move operational list and policy workspace presentation into `OperationalViews`, and move Self-Check presentation into `CoreJourneyWorkbench`.
 - [x] Add focused tests that prevent `AgentTable`, `PolicyTable`, `ContractMatrix`, `AccessPolicyWorkspace`, and `CoreJourneyWorkbench` from drifting back into `App.tsx`.
-- [ ] Continue extracting large panel/form renderers so `App.tsx` becomes shell/orchestration instead of owning most page bodies.
-- [ ] Run full frontend tests and release gates after each safe extraction batch.
+- [x] Move management forms, runtime evidence views, shared console primitives, and go-live acceptance presentation into owned component files.
+- [x] Add focused tests that prevent management forms, runtime evidence views, go-live acceptance, and shared console primitives from drifting back into `App.tsx`.
+- [x] Move the remaining state/API orchestration out of the entry file into `ConsoleController`, reducing `App.tsx` to a 5-line shell and adding a regression test that keeps it under 20 lines.
+- [x] Run full frontend tests, browser route smoke checks, and release gates for this extraction batch.
+
+**Follow-up hardening:** `ConsoleController.tsx` still centralizes orchestration and can be split into domain hooks later. That is now a controller-layer maintainability task, not the `App.tsx` UI monolith described by `ui-1`.
 
 ## Verification Gates
 

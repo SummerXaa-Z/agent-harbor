@@ -5,11 +5,16 @@ import test from "node:test";
 const baseStyles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const workbenchStyles = readFileSync(new URL("../src/styles/permission-workbench.css", import.meta.url), "utf8");
 const styles = `${baseStyles}\n${workbenchStyles}`;
-const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const appEntry = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
 const capabilityGovernanceView = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
 const consoleViews = readFileSync(new URL("../src/components/ConsoleViews.tsx", import.meta.url), "utf8");
+const consolePrimitives = readFileSync(new URL("../src/components/ConsolePrimitives.tsx", import.meta.url), "utf8");
+const goLiveAcceptanceOverview = readFileSync(new URL("../src/components/GoLiveAcceptanceOverview.tsx", import.meta.url), "utf8");
+const managementForms = readFileSync(new URL("../src/components/ManagementForms.tsx", import.meta.url), "utf8");
 const operationalViews = readFileSync(new URL("../src/components/OperationalViews.tsx", import.meta.url), "utf8");
+const runtimeEvidenceViews = readFileSync(new URL("../src/components/RuntimeEvidenceViews.tsx", import.meta.url), "utf8");
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const ui = readFileSync(new URL("../src/components/ui.tsx", import.meta.url), "utf8");
@@ -28,6 +33,13 @@ test("theme tokens define one restrained brand color system", () => {
   assert.match(styles, /--brand-soft:\s*#edf5ff;/);
   assert.match(styles, /--brand-border:\s*#b9d7fb;/);
   assert.match(styles, /--shadow-focus:\s*0 0 0 3px rgba\(0,\s*113,\s*227,\s*0\.18\);/);
+});
+
+test("app entry stays as a thin production shell", () => {
+  assert.ok(appEntry.split("\n").length <= 20, "App.tsx should only delegate to the console controller");
+  assert.match(appEntry, /import \{ ConsoleController \} from "\.\/ConsoleController"/);
+  assert.match(appEntry, /return <ConsoleController \/>/);
+  assert.doesNotMatch(appEntry, /useState|useEffect|fetch|<section|<details|navGroups|AgentCreateForm|AiAdminPermissionWorkbench/);
 });
 
 test("component styles consume tokens instead of ad hoc visual values", () => {
@@ -148,7 +160,7 @@ test("technical identifiers use a readable copyable component in dense workspace
   assert.match(technicalId, /navigator\.clipboard\?\.writeText\(value\)/);
   assert.match(app, /import \{ TechnicalId \} from "\.\/components\/TechnicalId"/);
   assert.match(operationalViews, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} value=\{agent\.id\} \/>/);
-  assert.match(app, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.capability"\)\} value=\{trace\.capabilityId\} \/>/);
+  assert.match(runtimeEvidenceViews, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.capability"\)\} value=\{trace\.capabilityId\} \/>/);
   assert.match(styles, /\.technical-id\s*\{/);
   assert.match(styles, /\.technical-id code\s*\{[^}]*font-family:\s*var\(--mono-font\);/s);
 });
@@ -255,4 +267,48 @@ test("operational list components are split from the app shell", () => {
   assert.match(operationalViews, /export function PolicyTable/);
   assert.match(operationalViews, /export function ContractMatrix/);
   assert.match(operationalViews, /export function AccessPolicyWorkspace/);
+});
+
+test("management forms and console primitives are split from the app shell", () => {
+  assert.match(app, /from "\.\/components\/ManagementForms"/);
+  assert.match(app, /from "\.\/components\/ConsolePrimitives"/);
+  assert.doesNotMatch(app, /function AgentCreateForm/);
+  assert.doesNotMatch(app, /function KeyCreateForm/);
+  assert.doesNotMatch(app, /function CredentialRotateForm/);
+  assert.doesNotMatch(app, /function PolicyCreateForm/);
+  assert.doesNotMatch(app, /function TraceFilterBar/);
+  assert.doesNotMatch(app, /function MetricCard/);
+  assert.doesNotMatch(app, /function Panel/);
+  assert.match(managementForms, /export function AgentCreateForm/);
+  assert.match(managementForms, /export function KeyCreateForm/);
+  assert.match(managementForms, /export function CredentialRotateForm/);
+  assert.match(managementForms, /export function PolicyCreateForm/);
+  assert.match(managementForms, /export function TraceFilterBar/);
+  assert.match(consolePrimitives, /export function MetricCard/);
+  assert.match(consolePrimitives, /export function Panel/);
+});
+
+test("runtime evidence views are split from the app shell", () => {
+  assert.match(app, /from "\.\/components\/RuntimeEvidenceViews"/);
+  assert.doesNotMatch(app, /function EvidenceTimeline/);
+  assert.doesNotMatch(app, /function SignalBoard/);
+  assert.doesNotMatch(app, /function TraceTable/);
+  assert.doesNotMatch(app, /function ManagementAuditTable/);
+  assert.doesNotMatch(app, /function auditCredentialVersion/);
+  assert.doesNotMatch(app, /function metricRatio/);
+  assert.match(runtimeEvidenceViews, /export function EvidenceTimeline/);
+  assert.match(runtimeEvidenceViews, /export function SignalBoard/);
+  assert.match(runtimeEvidenceViews, /export function TraceTable/);
+  assert.match(runtimeEvidenceViews, /export function ManagementAuditTable/);
+  assert.match(consolePrimitives, /export function IconMore/);
+  assert.match(consolePrimitives, /export function IconOpen/);
+});
+
+test("go-live acceptance overview is split from the app shell", () => {
+  assert.match(app, /from "\.\/components\/GoLiveAcceptanceOverview"/);
+  assert.doesNotMatch(app, /function GoLiveAcceptanceOverview/);
+  assert.doesNotMatch(app, /function productionReadinessStatusLabel/);
+  assert.doesNotMatch(app, /function permissionProductionReadinessNextAction/);
+  assert.match(goLiveAcceptanceOverview, /export function GoLiveAcceptanceOverview/);
+  assert.match(goLiveAcceptanceOverview, /className="go-live-acceptance"/);
 });

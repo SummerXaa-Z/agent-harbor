@@ -62,7 +62,7 @@
 - [x] Update this plan with completed checkboxes and measured line/state reduction.
 - [x] Run `pnpm --dir frontend test`, `pnpm --dir frontend build`, `git diff --check`, `make check`, and `make release-check`.
 - [x] Browser-smoke `#ai-admin`, `#registry`, `#capabilities`, `#access`, and `#cockpit`.
-- [ ] Commit, push, and confirm PR checks.
+- [x] Commit, push, and confirm PR checks.
 
 ## Implementation Notes
 
@@ -71,3 +71,4 @@
 - Focused verification passed with `pnpm --dir frontend exec tsc -p tsconfig.json --noEmit` and `pnpm --dir frontend exec node --test tests/styleTheme.test.mjs tests/permissionFlowLayout.test.mjs tests/permissionJourneySafety.test.mjs`.
 - Full verification passed with `pnpm --dir frontend test`, `pnpm --dir frontend build`, `git diff --check`, `make check`, and `make release-check`.
 - Browser smoke passed on `#ai-admin`, `#registry`, `#capabilities`, `#access`, and `#cockpit` with no current console errors from a clean browser tab.
+- PR #74 CI passed for Backend, Frontend, and PostgreSQL integration on commit `353c359`.

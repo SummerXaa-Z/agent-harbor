@@ -28,13 +28,10 @@ import {
   createInstanceAssignment,
   createPermissionPackageApprovalRequest,
   createPermissionPackageDraftFromApi,
-  createRoutePolicy,
   createTenant,
   createTenantEntitlement,
   createWorkspaceAssignment,
   defaultMockMcpHealthUrl,
-  disableAgent,
-  disableRoutePolicy,
   fetchAccessDecisionExplanation,
   fetchAuditEvents,
   fetchPermissionPackageAccessSubjects,
@@ -51,12 +48,10 @@ import {
   previewPermissionPackageWorkbench,
   rejectPermissionPackageApprovalRequest,
   refreshTargetCapabilities,
-  rotateAgentCredentials,
   updateAgent,
   updateCapability,
   withdrawPermissionPackageApprovalRequest
 } from "./api";
-import { parseAccessProfileTraceLimit } from "./accessProfile";
 import {
   runtimeEvidenceMetric
 } from "./consoleMetrics";
@@ -93,18 +88,9 @@ import {
   type NavKey
 } from "./consoleNavigation";
 import {
-  createCoreJourneyConfig,
-  defaultCoreJourneyForm,
   evaluateCoreJourney,
-  type CoreJourneyConfig,
-  type CoreJourneyEvaluation,
-  type CoreJourneyForm
+  type CoreJourneyEvaluation
 } from "./coreJourney";
-import {
-  coreJourneyPreflightCanRun,
-  defaultCoreJourneyPreflight,
-  type CoreJourneyPreflightState
-} from "./coreJourneyPreflight";
 import {
   createAiAdminApprovalJourneyConfig,
   evaluateAiAdminApprovalJourney,
@@ -156,9 +142,8 @@ import {
   currentPermissionRequestWizardStep,
   type PermissionRequestWizardStep
 } from "./permissionRequestJourney";
-import { parseRetryFields } from "./retryForm";
 import { AiAdminPermissionWorkbench } from "./components/AiAdminPermissionWorkbench";
-import { CapabilityGovernanceView, type CapabilityGrantForm } from "./components/CapabilityGovernanceView";
+import { CapabilityGovernanceView } from "./components/CapabilityGovernanceView";
 import { IconMore, IconOpen, MetricCard, Panel } from "./components/ConsolePrimitives";
 import {
   AccessView,
@@ -177,11 +162,7 @@ import {
   CredentialRotateForm,
   KeyCreateForm,
   PolicyCreateForm,
-  TraceFilterBar,
-  type AgentCreateFormState,
-  type CredentialRotateFormState,
-  type KeyCreateFormState,
-  type PolicyCreateFormState
+  TraceFilterBar
 } from "./components/ManagementForms";
 import { GoLiveAcceptanceOverview } from "./components/GoLiveAcceptanceOverview";
 import {
@@ -198,6 +179,10 @@ import {
 import { TechnicalId } from "./components/TechnicalId";
 import { TenantAccessProfileView } from "./components/TenantAccessProfileView";
 import { Badge } from "./components/ui";
+import { useAccessProfileController } from "./hooks/useAccessProfileController";
+import { useCapabilityGovernanceController } from "./hooks/useCapabilityGovernanceController";
+import { useCoreJourneyController } from "./hooks/useCoreJourneyController";
+import { useManagementOperations } from "./hooks/useManagementOperations";
 import type {
   AccessProfileFilters,
   AccessProfileHandoffContext,
@@ -223,14 +208,6 @@ import type {
   WorkspaceAssignment
 } from "./types";
 
-interface CoreJourneyRunResult {
-  allowedStatus: number;
-  callerId: string;
-  deniedStatus: number;
-  targetId: string;
-  toolListStatus: number;
-}
-
 const emptyAccessProfileSummary: AccessProfileSummary = {
   tenantCount: 0,
   grantCount: 0,
@@ -248,29 +225,6 @@ const defaultManagementScope: ManagementScope = {
 };
 const languageStorageKey = "agent-harbor-language";
 const approvalResolveCooldownMs = 1200;
-const defaultAgentForm: AgentCreateFormState = {
-  channelType: "local",
-  credentialHeader: "",
-  credentialName: "",
-  credentialValue: "",
-  description: "",
-  endpoint: "",
-  name: "",
-  retryBackoffMs: "0",
-  retryMaxAttempts: "1",
-  status: "draft" as AgentStatus
-};
-const defaultKeyForm: KeyCreateFormState = { agentId: "", expiresInSeconds: "900", name: "console key" };
-const defaultRotateForm: CredentialRotateFormState = { agentId: "", credentialName: "apiToken", credentialValue: "" };
-const defaultPolicyForm: PolicyCreateFormState = { callerAgentId: "", effect: "allow", name: "", priority: "100", retryBackoffMs: "0", retryMaxAttempts: "1", routeKey: "", routeType: "mcp", targetAgentId: "" };
-const defaultCapabilityGrantForm: CapabilityGrantForm = {
-  callerInstanceId: "",
-  capabilityId: "",
-  subjectSelector: "user:support-*",
-  targetId: "",
-  tenantId: defaultManagementScope.tenantId,
-  workspaceId: defaultManagementScope.workspaceId
-};
 const defaultAiAdminForm: PermissionPackageDraftInput = {
   ...defaultPermissionPackageDraftInput,
   tenantId: defaultManagementScope.tenantId,
@@ -307,9 +261,6 @@ const defaultAccessProfileFilters: AccessProfileFilters = {
   traceLimit: "20",
   workspaceId: ""
 };
-const coreJourneyCallerName = "Core Journey Caller";
-const coreJourneyTargetName = "Core Journey MCP Target";
-
 function navIconFor(key: NavKey) {
   switch (key) {
     case "ai-admin":
@@ -375,16 +326,6 @@ function localizedErrorMessage(t: Translator, language: Language, error: unknown
   return fallback;
 }
 
-function retryFieldValidationMessage(message: string, t: Translator) {
-  if (message === "Retry attempts must be an integer between 1 and 4.") {
-    return t("message.validationRetryAttempts");
-  }
-  if (message === "Retry backoff must be an integer between 0 and 1000 ms.") {
-    return t("message.validationRetryBackoff");
-  }
-  return message;
-}
-
 function mockMcpHealthUrlFromEndpoint(endpointValue: string) {
   try {
     const endpointUrl = new URL(endpointValue);
@@ -414,37 +355,8 @@ export function ConsoleController() {
   const [data, setData] = useState<ConsoleData | null>(null);
   const [loadError, setLoadError] = useState("");
   const [lastRefresh, setLastRefresh] = useState(new Date());
-  const [agentForm, setAgentForm] = useState(defaultAgentForm);
-  const [agentMessage, setAgentMessage] = useState("");
-  const [keyForm, setKeyForm] = useState(defaultKeyForm);
-  const [keyMessage, setKeyMessage] = useState("");
-  const [createdKey, setCreatedKey] = useState<CreateAgentKeyResponse | null>(null);
-  const [rotateForm, setRotateForm] = useState(defaultRotateForm);
-  const [rotateMessage, setRotateMessage] = useState("");
-  const [policyForm, setPolicyForm] = useState(defaultPolicyForm);
-  const [policyMessage, setPolicyMessage] = useState("");
-  const [capabilityForm, setCapabilityForm] = useState(defaultCapabilityGrantForm);
-  const [capabilityMessage, setCapabilityMessage] = useState("");
-  const [capabilityActionId, setCapabilityActionId] = useState("");
-  const [cleanupActionId, setCleanupActionId] = useState("");
   const [traceFilters, setTraceFilters] = useState<TraceFilters>(defaultTraceFilters);
-  const [accessFilters, setAccessFilters] = useState<AccessProfileFilters>(defaultAccessProfileFilters);
-  const [accessLoading, setAccessLoading] = useState(false);
-  const [accessMessage, setAccessMessage] = useState("");
-  const [accessProfile, setAccessProfile] = useState<TenantAccessProfileData | null>(null);
-  const [accessProfileHandoffContext, setAccessProfileHandoffContext] = useState<AccessProfileHandoffContext | null>(null);
-  const [accessDecisionExplanation, setAccessDecisionExplanation] = useState<AccessDecisionExplainResult | null>(null);
-  const [accessDecisionExplainLoading, setAccessDecisionExplainLoading] = useState(false);
-  const [accessDecisionExplainMessage, setAccessDecisionExplainMessage] = useState("");
   const [language, setLanguage] = useState<Language>(initialLanguage);
-  const [coreJourneyForm, setCoreJourneyForm] = useState<CoreJourneyForm>(defaultCoreJourneyForm);
-  const [coreJourneyConfig, setCoreJourneyConfig] = useState<CoreJourneyConfig>(() => createCoreJourneyConfig());
-  const [coreJourneyMessage, setCoreJourneyMessage] = useState("");
-  const [coreJourneyRunning, setCoreJourneyRunning] = useState(false);
-  const [coreJourneyResult, setCoreJourneyResult] = useState<CoreJourneyRunResult | null>(null);
-  const [coreJourneyPreflight, setCoreJourneyPreflight] = useState<CoreJourneyPreflightState>(defaultCoreJourneyPreflight);
-  const [coreJourneyPreflightChecking, setCoreJourneyPreflightChecking] = useState(false);
-  const [coreJourneyPreflightMessage, setCoreJourneyPreflightMessage] = useState("");
   const [aiAdminForm, setAiAdminForm] = useState<PermissionPackageDraftInput>(defaultAiAdminForm);
   const [aiAdminMessage, setAiAdminMessage] = useState<LocalizedMessage | null>(null);
   const [aiAdminApplying, setAiAdminApplying] = useState(false);
@@ -499,6 +411,48 @@ export function ConsoleController() {
   const [aiAdminApprovalReadinessMessage, setAiAdminApprovalReadinessMessage] = useState("");
   const t = useMemo(() => createTranslator(language), [language]);
   const renderedAiAdminMessage = localizedMessageText(aiAdminMessage, t, language);
+  const management = useManagementOperations({
+    adminKey,
+    defaultScope: defaultManagementScope,
+    language,
+    onRefresh: refresh,
+    scope,
+    t
+  });
+  const capabilityGovernance = useCapabilityGovernanceController({
+    adminKey,
+    data,
+    defaultScope: defaultManagementScope,
+    language,
+    onRefresh: refresh,
+    setData,
+    t
+  });
+  const accessProfileController = useAccessProfileController({
+    activeNav,
+    adminKey,
+    dataLoadedFromApi: Boolean(data?.loadedFromApi),
+    defaultScope: defaultManagementScope,
+    language,
+    scope,
+    setScope,
+    t
+  });
+  const coreJourney = useCoreJourneyController({
+    adminKey,
+    defaultAccessFilters: defaultAccessProfileFilters,
+    defaultScope: defaultManagementScope,
+    defaultTraceFilters,
+    language,
+    setAccessFilters: accessProfileController.updateFilters,
+    setAccessProfile: accessProfileController.setProfile,
+    setData,
+    setLastRefresh,
+    setLoadError,
+    setScope,
+    setTraceFilters,
+    t
+  });
 
   useEffect(() => {
     void refresh();
@@ -508,10 +462,6 @@ export function ConsoleController() {
     if (approvalResolveCooldownTimerRef.current !== null) {
       window.clearTimeout(approvalResolveCooldownTimerRef.current);
     }
-  }, []);
-
-  useEffect(() => {
-    void refreshCoreJourneyPreflight();
   }, []);
 
   useEffect(() => {
@@ -526,12 +476,6 @@ export function ConsoleController() {
   }, [language]);
 
   useEffect(() => {
-    if (activeNav === "access" && !accessProfile && !accessLoading) {
-      void refreshAccessProfile();
-    }
-  }, [activeNav]);
-
-  useEffect(() => {
     setConnectionMenuOpen(false);
   }, [activeNav]);
 
@@ -543,31 +487,6 @@ export function ConsoleController() {
       void refreshAiAdminApprovalReadiness();
     }
   }, [shouldLoadAiAdminCatalog]);
-
-  useEffect(() => {
-    if (!data) return;
-    setCapabilityForm((current) => {
-      const mcpTarget = data.agents.find((agent) => agent.channelType === "mcp");
-      const targetId = current.targetId || mcpTarget?.id || "";
-      const capability = data.capabilities.find((item) => item.id === current.capabilityId && item.targetId === targetId)
-        ?? data.capabilities.find((item) => item.targetId === targetId)
-        ?? data.capabilities[0];
-      const caller = data.agents.find(
-        (agent) =>
-          agent.status === "active" &&
-          agent.tenantId === current.tenantId &&
-          agent.workspaceId === current.workspaceId &&
-          agent.channelType === "local"
-      ) ?? data.agents.find((agent) => agent.status === "active" && agent.channelType === "local");
-      const next = {
-        ...current,
-        callerInstanceId: current.callerInstanceId || caller?.id || "",
-        capabilityId: current.capabilityId || capability?.id || "",
-        targetId
-      };
-      return shallowEqualCapabilityForm(current, next) ? current : next;
-    });
-  }, [data]);
 
   useEffect(() => {
     if (!data) return;
@@ -678,7 +597,7 @@ export function ConsoleController() {
       setLoadError(localizedErrorMessage(t, language, error, "error.consoleDataUnavailable"));
     }
     if (activeNav === "access") {
-      await refreshAccessProfile();
+      await accessProfileController.refresh();
     }
   }
 
@@ -696,60 +615,6 @@ export function ConsoleController() {
       setLastRefresh(new Date());
     } catch (error) {
       setLoadError(localizedErrorMessage(t, language, error, "error.consoleDataUnavailable"));
-    }
-  }
-
-  async function refreshAccessProfile() {
-    const traceLimit = parseAccessProfileTraceLimit(accessFilters.traceLimit);
-    if (!traceLimit.ok) {
-      setAccessMessage(traceLimit.message);
-      return;
-    }
-    const requestScope = normalizedScope(scope);
-    setAccessLoading(true);
-    setAccessMessage("");
-    try {
-      const next = await loadTenantAccessProfile(requestScope.tenantId, adminKey, {
-        ...accessFilters,
-        traceLimit: traceLimit.value
-      });
-      setAccessProfile(next);
-      setAccessMessage(next.loadedFromApi ? t("status.profileRefreshed") : t("status.profileFallback"));
-    } catch (error) {
-      setAccessMessage(localizedErrorMessage(t, language, error, "error.loadTenantAccessProfile"));
-    } finally {
-      setAccessLoading(false);
-    }
-  }
-
-  async function explainAccessDecisionFromProfile() {
-    if (!data?.loadedFromApi) {
-      setAccessDecisionExplainMessage(t("message.accessDecisionExplainRequiresLiveApi"));
-      return;
-    }
-    const requestScope = normalizedScope(scope);
-    const request: AccessDecisionExplainRequest = {
-      callerInstanceId: accessFilters.callerInstanceId?.trim() ?? "",
-      capabilityId: accessFilters.capabilityId?.trim() ?? "",
-      subjectId: accessFilters.subjectId?.trim() || undefined,
-      targetId: accessFilters.targetId?.trim() ?? "",
-      tenantId: requestScope.tenantId,
-      workspaceId: accessFilters.workspaceId?.trim() || requestScope.workspaceId
-    };
-    if (!accessDecisionExplainRequestComplete(request)) {
-      setAccessDecisionExplainMessage(t("message.accessDecisionExplainMissingFields"));
-      return;
-    }
-    setAccessDecisionExplainLoading(true);
-    setAccessDecisionExplainMessage("");
-    try {
-      const next = await fetchAccessDecisionExplanation(request, adminKey);
-      setAccessDecisionExplanation(next);
-      setAccessDecisionExplainMessage(t("message.accessDecisionExplainLoaded"));
-    } catch (error) {
-      setAccessDecisionExplainMessage(localizedErrorMessage(t, language, error, "error.explainAccessDecision"));
-    } finally {
-      setAccessDecisionExplainLoading(false);
     }
   }
 
@@ -920,16 +785,15 @@ export function ConsoleController() {
     const selectedCapability = aiAdminDraft.allowedCapabilities[0];
     const subjectId = subjectIdExampleFromSelector(aiAdminForm.subjectSelector);
     setScope((current) => ({ ...current, tenantId: aiAdminForm.tenantId }));
-    setAccessFilters((current) => ({
-      ...current,
+    accessProfileController.clearForPermissionChangeHandoff({
+      ...accessProfileController.filters,
       capabilityId: selectedCapability?.id ?? "",
       callerInstanceId: aiAdminForm.callerInstanceId,
       subjectId,
       targetId: aiAdminForm.targetId,
-      traceLimit: current.traceLimit || "20",
+      traceLimit: accessProfileController.filters.traceLimit || "20",
       workspaceId: aiAdminForm.workspaceId
-    }));
-    setAccessProfileHandoffContext({
+    }, {
       capabilityId: selectedCapability?.id ?? "",
       capabilityName: selectedCapability ? capabilityDisplayName(selectedCapability, t) : "",
       callerInstanceId: aiAdminForm.callerInstanceId,
@@ -942,10 +806,6 @@ export function ConsoleController() {
       workspaceId: aiAdminForm.workspaceId,
       workspaceName: permissionWorkspaceDisplayName(aiAdminForm.workspaceId, agents, t)
     });
-    setAccessProfile(null);
-    setAccessMessage("");
-    setAccessDecisionExplanation(null);
-    setAccessDecisionExplainMessage("");
     setActiveNav("access");
   }
 
@@ -1045,36 +905,6 @@ export function ConsoleController() {
     }
   }
 
-  async function refreshCoreJourneyPreflight() {
-    setCoreJourneyPreflightChecking(true);
-    setCoreJourneyPreflightMessage(t("message.coreJourneyPreflightChecking"));
-    setCoreJourneyPreflight((current) => ({
-      ...current,
-      api: "pending",
-      mockMcp: "pending"
-    }));
-    const [apiHealth, mockMcpHealth] = await Promise.all([
-      checkApiHealth(),
-      checkMockMcpHealth(mockMcpHealthUrlFromEndpoint(coreJourneyForm.mcpEndpoint))
-    ]);
-    const nextPreflight: CoreJourneyPreflightState = {
-      api: apiHealth.status === "ok" ? "ok" : "error",
-      mockMcp: mockMcpHealth.status === "ok" ? "ok" : "error",
-      privateUpstreams: "warning"
-    };
-    setCoreJourneyPreflight(nextPreflight);
-    if (coreJourneyPreflightCanRun(nextPreflight)) {
-      setCoreJourneyPreflightMessage(t("message.coreJourneyPreflightReady"));
-    } else {
-      const detail = [
-        apiHealth.status === "ok" ? "" : `API ${apiHealth.message}`,
-        mockMcpHealth.status === "ok" ? "" : `MCP service ${mockMcpHealth.message}`
-      ].filter(Boolean).join(" · ");
-      setCoreJourneyPreflightMessage(tx(t, "message.coreJourneyPreflightFailed", { detail: detail || "unknown" }));
-    }
-    setCoreJourneyPreflightChecking(false);
-  }
-
   async function checkAiAdminApprovalReadiness(config: AiAdminApprovalJourneyConfig) {
     const [apiHealth, mockMcpHealth, subjectHeaderHealth] = await Promise.all([
       checkApiHealth(),
@@ -1119,232 +949,6 @@ export function ConsoleController() {
       return result;
     } finally {
       setAiAdminApprovalReadinessChecking(false);
-    }
-  }
-
-  async function resetCoreJourneySession() {
-    const resetScope = defaultManagementScope;
-    const resetTraceFilters = defaultTraceFilters;
-    const resetAccessFilters = defaultAccessProfileFilters;
-    const nextConfig = createCoreJourneyConfig(coreJourneyForm);
-    setCoreJourneyConfig(nextConfig);
-    setCoreJourneyResult(null);
-    setCoreJourneyMessage(t("message.coreJourneyReset"));
-    setTraceFilters(resetTraceFilters);
-    setAccessFilters(resetAccessFilters);
-    setAccessProfileHandoffContext(null);
-    setAccessProfile(null);
-    setScope(resetScope);
-    try {
-      setLoadError("");
-      const nextData = await loadConsoleData(adminKey, resetTraceFilters, normalizedScope(resetScope));
-      setData(nextData);
-      setLastRefresh(new Date());
-    } catch (error) {
-      setLoadError(localizedErrorMessage(t, language, error, "error.consoleDataUnavailable"));
-    }
-    await refreshCoreJourneyPreflight();
-  }
-
-  async function runCoreJourney() {
-    const nextConfig = createCoreJourneyConfig(coreJourneyForm);
-    if (!coreJourneyPreflightCanRun(coreJourneyPreflight)) {
-      setCoreJourneyMessage(t("message.coreJourneyPreflightBlocked"));
-      await refreshCoreJourneyPreflight();
-      return;
-    }
-    const tenantScope: DataScope[] = [
-      {
-        dataDomain: "crm",
-        region: "us-east",
-        tenantFilter: `tenant_id = '${nextConfig.childTenantId}'`
-      }
-    ];
-    setCoreJourneyConfig(nextConfig);
-    setCoreJourneyResult(null);
-    setCoreJourneyRunning(true);
-    setCoreJourneyMessage(t("message.coreJourneyRunning"));
-    try {
-      await createTenant(
-        {
-          id: nextConfig.rootTenantId,
-          name: "Core Journey Root",
-          status: "active"
-        },
-        adminKey
-      );
-      await createTenant(
-        {
-          id: nextConfig.childTenantId,
-          name: "Core Journey Team",
-          parentTenantId: nextConfig.rootTenantId,
-          status: "active"
-        },
-        adminKey
-      );
-      await createTenant(
-        {
-          id: nextConfig.grandchildTenantId,
-          name: "Core Journey Project",
-          parentTenantId: nextConfig.childTenantId,
-          status: "active"
-        },
-        adminKey
-      );
-
-      const caller = await createAgent(
-        {
-          channelType: "local",
-          description: "Core journey browser caller",
-          name: coreJourneyCallerName,
-          status: "active",
-          tenantId: nextConfig.childTenantId,
-          workspaceId: nextConfig.workspaceId
-        },
-        adminKey
-      );
-      const callerKey = await createAgentKey(
-        {
-          agentId: caller.id,
-          expiresInSeconds: 900,
-          name: "core journey key"
-        },
-        adminKey
-      );
-      const target = await createAgent(
-        {
-          channelConfig: {
-            endpoint: nextConfig.mcpEndpoint,
-            transport: "streamable-http"
-          },
-          channelType: "mcp",
-          description: "Core journey MCP target",
-          name: coreJourneyTargetName,
-          status: "active",
-          tenantId: nextConfig.rootTenantId,
-          workspaceId: nextConfig.workspaceId
-        },
-        adminKey
-      );
-
-      const discovered = await refreshTargetCapabilities(target.id, adminKey);
-      const allowedCapability = discovered.find((capability) => capability.key === nextConfig.allowedTool);
-      const deniedCapability = discovered.find((capability) => capability.key === nextConfig.deniedTool);
-      if (!allowedCapability || !deniedCapability) {
-        throw new Error(tx(t, "message.coreJourneyMissingTools", { allowed: nextConfig.allowedTool, denied: nextConfig.deniedTool }));
-      }
-      const scopedCapability = await updateCapability(
-        allowedCapability.id,
-        {
-          dataScopes: tenantScope,
-          discoveryStatus: "approved"
-        },
-        adminKey
-      );
-      const entitlement = await createTenantEntitlement(
-        {
-          capabilityId: scopedCapability.id,
-          effect: "allow",
-          priority: 50,
-          status: "enabled",
-          targetId: target.id,
-          tenantId: nextConfig.childTenantId
-        },
-        adminKey
-      );
-      const workspaceAssignment = await createWorkspaceAssignment(
-        {
-          dataScopes: [{ table: "accounts" }],
-          effect: "allow",
-          status: "enabled",
-          tenantEntitlementId: entitlement.id,
-          workspaceId: nextConfig.workspaceId
-        },
-        adminKey
-      );
-      await createInstanceAssignment(
-        {
-          callerInstanceId: caller.id,
-          dataScopes: [{ field: "email" }],
-          effect: "allow",
-          status: "enabled",
-          subjectSelector: nextConfig.subjectSelector,
-          workspaceAssignmentId: workspaceAssignment.id
-        },
-        adminKey
-      );
-
-      const toolList = await callMcpRpc(
-        target.id,
-        mcpToolsListPayload(),
-        callerKey.key,
-        nextConfig.runId,
-        adminKey,
-        nextConfig.subjectId
-      );
-      if (!toolList.ok) throw new Error(tx(t, "message.coreJourneyRpcUnexpected", { status: toolList.status }));
-      const listedTools = toolNamesFromPayload(toolList.payload);
-      if (!listedTools.includes(nextConfig.allowedTool) || listedTools.includes(nextConfig.deniedTool)) {
-        throw new Error(t("message.coreJourneyToolsListInvalid"));
-      }
-      const deniedCall = await callMcpRpc(
-        target.id,
-        mcpToolCallPayload(nextConfig.deniedTool),
-        callerKey.key,
-        nextConfig.runId,
-        adminKey,
-        nextConfig.subjectId
-      );
-      if (deniedCall.status !== 403) {
-        throw new Error(tx(t, "message.coreJourneyDeniedUnexpected", { status: deniedCall.status }));
-      }
-      const allowedCall = await callMcpRpc(
-        target.id,
-        mcpToolCallPayload(nextConfig.allowedTool),
-        callerKey.key,
-        nextConfig.runId,
-        adminKey,
-        nextConfig.subjectId
-      );
-      if (!allowedCall.ok) throw new Error(tx(t, "message.coreJourneyRpcUnexpected", { status: allowedCall.status }));
-
-      const nextTraceFilters = {
-        callerAgentId: caller.id,
-        decision: "" as TraceDecision | "",
-        runId: nextConfig.runId,
-        targetAgentId: target.id
-      };
-      const nextAccessFilters = {
-        callerInstanceId: caller.id,
-        capabilityId: "",
-        subjectId: nextConfig.subjectId,
-        targetId: target.id,
-        traceLimit: "10",
-        workspaceId: nextConfig.workspaceId
-      };
-      const [nextData, nextProfile] = await Promise.all([
-        loadConsoleData(adminKey, nextTraceFilters),
-        loadTenantAccessProfile(nextConfig.childTenantId, adminKey, {
-          ...nextAccessFilters,
-          traceLimit: 10
-        })
-      ]);
-      setTraceFilters(nextTraceFilters);
-      setData(nextData);
-      setAccessProfile(nextProfile);
-      setLastRefresh(new Date());
-      setCoreJourneyResult({
-        allowedStatus: allowedCall.status,
-        callerId: caller.id,
-        deniedStatus: deniedCall.status,
-        targetId: target.id,
-        toolListStatus: toolList.status
-      });
-      setCoreJourneyMessage(t("message.coreJourneyComplete"));
-    } catch (error) {
-      setCoreJourneyMessage(localizedErrorMessage(t, language, error, "error.coreJourneyFailed"));
-    } finally {
-      setCoreJourneyRunning(false);
     }
   }
 
@@ -1626,327 +1230,6 @@ export function ConsoleController() {
       setAiAdminApprovalJourneyMessage(localizedErrorMessage(t, language, error, "error.permissionPackageApprovalJourneyFailed"));
     } finally {
       setAiAdminApprovalJourneyRunning(false);
-    }
-  }
-
-  async function submitAgent(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setAgentMessage("");
-    try {
-      const channelConfig: JsonObject = {};
-      const endpoint = agentForm.endpoint.trim();
-      if (endpoint) channelConfig.endpoint = endpoint;
-      const retry = parseRetryFields({
-        backoffMsText: agentForm.retryBackoffMs,
-        maxAttemptsText: agentForm.retryMaxAttempts
-      });
-      if (!retry.ok) {
-        setAgentMessage(retryFieldValidationMessage(retry.message, t));
-        return;
-      }
-      if (retry.requested) {
-        channelConfig.retry = {
-          backoffMs: retry.backoffMs,
-          maxAttempts: retry.maxAttempts
-        };
-      }
-      const credentialHeader = agentForm.credentialHeader.trim();
-      const credentialName = agentForm.credentialName.trim();
-      const credentialValue = agentForm.credentialValue;
-      const hasCredentialInput = Boolean(credentialHeader || credentialName || credentialValue.trim());
-      let credentials: Record<string, string> | undefined;
-      if (hasCredentialInput) {
-        if (!credentialHeader || !credentialName || !credentialValue.trim()) {
-          setAgentMessage(t("message.validationCredentialGroup"));
-          return;
-        }
-        channelConfig.credentialHeaders = { [credentialHeader]: credentialName };
-        credentials = { [credentialName]: credentialValue };
-      }
-      const requestScope = normalizedScope(scope);
-      await createAgent(
-        {
-          channelConfig: Object.keys(channelConfig).length > 0 ? channelConfig : undefined,
-          channelType: agentForm.channelType.trim() || "local",
-          credentials,
-          description: agentForm.description.trim() || undefined,
-          name: agentForm.name.trim(),
-          status: agentForm.status,
-          tenantId: requestScope.tenantId,
-          workspaceId: requestScope.workspaceId
-        },
-        adminKey
-      );
-      setAgentForm(defaultAgentForm);
-      setAgentMessage(t("message.agentCreated"));
-      await refresh();
-    } catch (error) {
-      setAgentMessage(localizedErrorMessage(t, language, error, "error.createAgent"));
-    }
-  }
-
-  async function handleAgentStatusChange(agent: Agent, status: AgentStatus) {
-    setAgentMessage("");
-    setCleanupActionId(agent.id);
-    try {
-      if (status === "disabled") {
-        await disableAgent(agent.id, adminKey);
-      } else {
-        await updateAgent(agent.id, { status }, adminKey);
-      }
-      setAgentMessage(tx(t, "message.statusChanged", { name: agent.name, status: agentStatusLabel(status, t) }));
-      await refresh();
-    } catch (error) {
-      setAgentMessage(localizedErrorMessage(t, language, error, "error.updateAgentStatus"));
-    } finally {
-      setCleanupActionId("");
-    }
-  }
-
-  async function handleDisablePolicy(policy: RoutePolicy) {
-    setPolicyMessage("");
-    setCleanupActionId(policy.id);
-    try {
-      await disableRoutePolicy(policy.id, adminKey);
-      setPolicyMessage(t("message.policyDisabled"));
-      await refresh();
-    } catch (error) {
-      setPolicyMessage(localizedErrorMessage(t, language, error, "error.disableRoutePolicy"));
-    } finally {
-      setCleanupActionId("");
-    }
-  }
-
-  async function submitKey(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setKeyMessage("");
-    setCreatedKey(null);
-    try {
-      const ttl = Number(keyForm.expiresInSeconds);
-      if (!Number.isInteger(ttl) || ttl < 1 || ttl > 3600) {
-        setKeyMessage(t("message.validationTtl"));
-        return;
-      }
-      const next = await createAgentKey(
-        {
-          agentId: keyForm.agentId,
-          expiresInSeconds: ttl,
-          name: keyForm.name.trim() || undefined
-        },
-        adminKey
-      );
-      setCreatedKey(next);
-      setKeyMessage(t("message.keyCreated"));
-      setKeyForm({ ...defaultKeyForm, agentId: keyForm.agentId });
-    } catch (error) {
-      setKeyMessage(localizedErrorMessage(t, language, error, "error.createKey"));
-    }
-  }
-
-  async function submitCredentialRotation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setRotateMessage("");
-    try {
-      const credentialName = rotateForm.credentialName.trim();
-      if (!rotateForm.agentId) {
-        setRotateMessage(t("message.validationRotateAgent"));
-        return;
-      }
-      if (!credentialName || !rotateForm.credentialValue.trim()) {
-        setRotateMessage(t("message.validationCredentialRequired"));
-        return;
-      }
-      await rotateAgentCredentials(
-        rotateForm.agentId,
-        { credentials: { [credentialName]: rotateForm.credentialValue } },
-        adminKey
-      );
-      setRotateForm({ ...defaultRotateForm, agentId: rotateForm.agentId, credentialName });
-      setRotateMessage(t("message.credentialRotated"));
-      await refresh();
-    } catch (error) {
-      setRotateMessage(localizedErrorMessage(t, language, error, "error.rotateCredential"));
-    }
-  }
-
-  async function submitRoutePolicy(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPolicyMessage("");
-    try {
-      const priority = Number(policyForm.priority);
-      if (!Number.isInteger(priority) || priority < 0) {
-        setPolicyMessage(t("message.validationPriority"));
-        return;
-      }
-      const retry = parseRetryFields({
-        backoffMsText: policyForm.retryBackoffMs,
-        maxAttemptsText: policyForm.retryMaxAttempts
-      });
-      if (!retry.ok) {
-        setPolicyMessage(retryFieldValidationMessage(retry.message, t));
-        return;
-      }
-      await createRoutePolicy(
-        {
-          callerAgentId: policyForm.callerAgentId,
-          effect: policyForm.effect as "allow" | "deny",
-          name: policyForm.name.trim() || undefined,
-          priority,
-          retry: retry.requested
-            ? { backoffMs: retry.backoffMs, maxAttempts: retry.maxAttempts, statusCodes: [502, 503, 504] }
-            : undefined,
-          routeKey: policyForm.routeKey.trim() || undefined,
-          routeType: policyForm.routeType.trim(),
-          targetAgentId: policyForm.targetAgentId
-        },
-        adminKey
-      );
-      setPolicyMessage(t("message.policyCreated"));
-      setPolicyForm({ ...defaultPolicyForm, callerAgentId: policyForm.callerAgentId });
-      await refresh();
-    } catch (error) {
-      setPolicyMessage(localizedErrorMessage(t, language, error, "error.createRoutePolicy"));
-    }
-  }
-
-  async function handleRefreshTargetCapabilities() {
-    const targetId = capabilityForm.targetId.trim();
-    if (!targetId) {
-      setCapabilityMessage(t("message.validationMcpTargetRequired"));
-      return;
-    }
-    setCapabilityMessage("");
-    setCapabilityActionId(`refresh:${targetId}`);
-    try {
-      const refreshed = await refreshTargetCapabilities(targetId, adminKey);
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              capabilities: mergeCapabilitiesForTarget(current.capabilities, refreshed, targetId),
-              capabilitiesLoadedFromApi: true
-            }
-          : current
-      );
-      setCapabilityMessage(tx(t, "message.refreshedCapabilities", { count: refreshed.length }));
-    } catch (error) {
-      if (shouldUseLocalCapabilityFallback(error, data)) {
-        setCapabilityMessage(t("message.capabilityFallback"));
-        return;
-      }
-      setCapabilityMessage(localizedErrorMessage(t, language, error, "error.refreshCapabilities"));
-    } finally {
-      setCapabilityActionId("");
-    }
-  }
-
-  async function handleApproveCapability(capability: Capability) {
-    setCapabilityMessage("");
-    setCapabilityActionId(capability.id);
-    try {
-      const updated = await updateCapability(capability.id, { discoveryStatus: "approved" }, adminKey);
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              capabilities: current.capabilities.map((item) => (item.id === updated.id ? updated : item)),
-              capabilitiesLoadedFromApi: true
-          }
-          : current
-      );
-      setCapabilityMessage(tx(t, "message.capabilityApproved", { name: capabilityDisplayName(capability, t) }));
-    } catch (error) {
-      if (shouldUseLocalCapabilityFallback(error, data)) {
-        setData((current) =>
-          current
-            ? {
-                ...current,
-                capabilities: current.capabilities.map((item) =>
-                  item.id === capability.id
-                    ? { ...item, discoveryStatus: "approved", updatedAt: new Date().toISOString() }
-                    : item
-                )
-              }
-            : current
-        );
-        setCapabilityMessage(tx(t, "message.capabilityApprovedFallback", { name: capabilityDisplayName(capability, t) }));
-        return;
-      }
-      setCapabilityMessage(localizedErrorMessage(t, language, error, "error.approveCapability"));
-    } finally {
-      setCapabilityActionId("");
-    }
-  }
-
-  async function submitCapabilityGrantChain(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setCapabilityMessage("");
-    const capability = data?.capabilities.find((item) => item.id === capabilityForm.capabilityId);
-    const tenantId = capabilityForm.tenantId.trim();
-    const workspaceId = capabilityForm.workspaceId.trim();
-    const callerInstanceId = capabilityForm.callerInstanceId.trim();
-    if (!capability) {
-      setCapabilityMessage(t("message.validationCapabilityRequired"));
-      return;
-    }
-    if (!tenantId || !workspaceId || !callerInstanceId) {
-      setCapabilityMessage(t("message.validationTenantWorkspaceCaller"));
-      return;
-    }
-    const subjectSelector = capabilityForm.subjectSelector.trim();
-    if (!subjectSelector || subjectSelector === "*") {
-      setCapabilityMessage(t("message.validationSubjectSelectorRequired"));
-      return;
-    }
-    const dataScopes = capability.dataScopes ?? [];
-    setCapabilityActionId(`grant:${capability.id}`);
-    try {
-      const entitlement = await createTenantEntitlement(
-        {
-          capabilityId: capability.id,
-          dataScopes,
-          effect: "allow",
-          priority: 50,
-          status: "enabled",
-          targetId: capability.targetId,
-          tenantId
-        },
-        adminKey
-      );
-      const workspaceAssignment = await createWorkspaceAssignment(
-        {
-          dataScopes,
-          effect: "allow",
-          status: "enabled",
-          tenantEntitlementId: entitlement.id,
-          workspaceId
-        },
-        adminKey
-      );
-      await createInstanceAssignment(
-        {
-          callerInstanceId,
-          dataScopes,
-          effect: "allow",
-          status: "enabled",
-          subjectSelector,
-          workspaceAssignmentId: workspaceAssignment.id
-        },
-        adminKey
-      );
-      setCapabilityMessage(t("message.grantChainCreated"));
-      await refresh();
-    } catch (error) {
-      if (shouldUseLocalCapabilityFallback(error, data) && data) {
-        setData((current) =>
-          current ? appendLocalCapabilityGrantChain(current, capability, capabilityForm, dataScopes) : current
-        );
-        setCapabilityMessage(t("message.grantChainCreatedFallback"));
-        return;
-      }
-      setCapabilityMessage(localizedErrorMessage(t, language, error, "error.createGrantChain"));
-    } finally {
-      setCapabilityActionId("");
     }
   }
 
@@ -2321,9 +1604,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         })
       ]);
       setScope(nextScope);
-      setAccessFilters(nextAccessFilters);
+      accessProfileController.updateFilters(nextAccessFilters);
       setData(nextData);
-      setAccessProfile(nextProfile);
+      accessProfileController.setProfile(nextProfile);
       setLastRefresh(new Date());
       setAiAdminApplication(application);
       if (application) {
@@ -2477,13 +1760,13 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     document.querySelector(".workspace")?.scrollTo({ left: 0, top: 0 });
   }, [activeView.key]);
   const coreJourneyEvaluation = useMemo(
-    () => evaluateCoreJourney(data, accessProfile, coreJourneyConfig),
-    [accessProfile, coreJourneyConfig, data]
+    () => evaluateCoreJourney(data, accessProfileController.profile, coreJourney.config),
+    [accessProfileController.profile, coreJourney.config, data]
   );
   const aiAdminApprovalJourneyEvaluation = useMemo(
     () =>
       evaluateAiAdminApprovalJourney({
-        accessProfile: aiAdminApprovalJourneyAccessProfile ?? accessProfile,
+        accessProfile: aiAdminApprovalJourneyAccessProfile ?? accessProfileController.profile,
         application: aiAdminApplication,
         approvalRequest: aiAdminApprovalJourneyApprovalRequest ?? aiAdminApprovalRequest,
         auditEvent: aiAdminApprovalAuditEvent,
@@ -2492,7 +1775,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         result: aiAdminApprovalJourneyResult
       }),
     [
-      accessProfile,
+      accessProfileController.profile,
       aiAdminApprovalJourneyAccessProfile,
       aiAdminApprovalJourneyApprovalRequest,
       aiAdminApplication,
@@ -2551,8 +1834,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       <PolicyTable
         agents={agents}
         canDisable={Boolean(data?.routePoliciesLoadedFromApi)}
-        onDisable={handleDisablePolicy}
-        pendingActionId={cleanupActionId}
+        onDisable={management.handleDisablePolicy}
+        pendingActionId={management.cleanupActionId}
         policies={policies}
         t={t}
       />
@@ -2573,8 +1856,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       <AgentTable
         agents={agents}
         channelLabels={channelLabels}
-        onStatusChange={handleAgentStatusChange}
-        pendingActionId={cleanupActionId}
+        onStatusChange={management.handleAgentStatusChange}
+        pendingActionId={management.cleanupActionId}
         t={t}
       />
     </Panel>
@@ -2587,17 +1870,17 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const capabilityGovernancePanel = (className = "span-12") => (
     <Panel className={className} icon={<DatabaseZap size={18} />} title={t("panel.mcpCapabilities")} action={<IconMore title={t("action.more")} />}>
       <CapabilityGovernanceView
-        actionId={capabilityActionId}
+        actionId={capabilityGovernance.actionId}
         agents={agents}
         capabilities={capabilities}
-        form={capabilityForm}
+        form={capabilityGovernance.form}
         instanceAssignments={instanceAssignments}
-        message={capabilityMessage}
+        message={capabilityGovernance.message}
         mcpTargets={mcpTargets}
-        onApprove={handleApproveCapability}
-        onChange={setCapabilityForm}
-        onCreateGrantChain={submitCapabilityGrantChain}
-        onRefreshTarget={handleRefreshTargetCapabilities}
+        onApprove={capabilityGovernance.handleApproveCapability}
+        onChange={capabilityGovernance.setForm}
+        onCreateGrantChain={capabilityGovernance.submitCapabilityGrantChain}
+        onRefreshTarget={capabilityGovernance.handleRefreshTargetCapabilities}
         t={t}
         tenants={tenants}
         tenantEntitlements={tenantEntitlements}
@@ -2610,29 +1893,18 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       <TenantAccessProfileView
         agents={agents}
         capabilities={capabilities}
-        explanation={accessDecisionExplanation}
-        explanationLoading={accessDecisionExplainLoading}
-        explanationMessage={accessDecisionExplainMessage}
-        filters={accessFilters}
-        handoffContext={accessProfileHandoffContext}
-        loading={accessLoading}
-        message={accessMessage}
-        onChange={(filters) => {
-          setAccessFilters(filters);
-          setAccessProfileHandoffContext(null);
-          setAccessDecisionExplanation(null);
-          setAccessDecisionExplainMessage("");
-        }}
-        onExplainAccessDecision={() => void explainAccessDecisionFromProfile()}
-        onRefresh={() => void refreshAccessProfile()}
-        onTenantChange={(tenantId) => {
-          setScope((current) => ({ ...current, tenantId }));
-          setAccessProfileHandoffContext(null);
-          setAccessProfile(null);
-          setAccessDecisionExplanation(null);
-          setAccessDecisionExplainMessage("");
-        }}
-        profile={accessProfile}
+        explanation={accessProfileController.decisionExplanation}
+        explanationLoading={accessProfileController.decisionExplainLoading}
+        explanationMessage={accessProfileController.decisionExplainMessage}
+        filters={accessProfileController.filters}
+        handoffContext={accessProfileController.handoffContext}
+        loading={accessProfileController.loading}
+        message={accessProfileController.message}
+        onChange={accessProfileController.updateFilters}
+        onExplainAccessDecision={() => void accessProfileController.explainAccessDecision()}
+        onRefresh={() => void accessProfileController.refresh()}
+        onTenantChange={accessProfileController.changeTenant}
+        profile={accessProfileController.profile}
         scope={scope}
         t={t}
       />
@@ -2734,35 +2006,48 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   );
   const createAgentPanel = (
     <Panel className="span-4" icon={<Boxes size={18} />} title={t("panel.createAgent")}>
-      <AgentCreateForm form={agentForm} message={agentMessage} onChange={setAgentForm} onSubmit={submitAgent} t={t} />
+      <AgentCreateForm
+        form={management.agentForm}
+        message={management.agentMessage}
+        onChange={management.setAgentForm}
+        onSubmit={management.submitAgent}
+        t={t}
+      />
     </Panel>
   );
   const createKeyPanel = (
     <Panel className="span-4" icon={<KeyRound size={18} />} title={t("panel.createKey")}>
       <KeyCreateForm
         agents={localCallers}
-        createdKey={createdKey}
-        form={keyForm}
-        message={keyMessage}
-        onChange={setKeyForm}
-        onSubmit={submitKey}
+        createdKey={management.createdKey}
+        form={management.keyForm}
+        message={management.keyMessage}
+        onChange={management.setKeyForm}
+        onSubmit={management.submitKey}
         t={t}
       />
     </Panel>
   );
   const createPolicyPanel = (
     <Panel className="span-4" icon={<Route size={18} />} title={t("panel.createPolicy")}>
-      <PolicyCreateForm agents={agents} form={policyForm} message={policyMessage} onChange={setPolicyForm} onSubmit={submitRoutePolicy} t={t} />
+      <PolicyCreateForm
+        agents={agents}
+        form={management.policyForm}
+        message={management.policyMessage}
+        onChange={management.setPolicyForm}
+        onSubmit={management.submitRoutePolicy}
+        t={t}
+      />
     </Panel>
   );
   const rotateCredentialPanel = (
     <Panel className="span-4" icon={<KeyRound size={18} />} title={t("panel.rotateCredential")}>
       <CredentialRotateForm
         agents={agents}
-        form={rotateForm}
-        message={rotateMessage}
-        onChange={setRotateForm}
-        onSubmit={submitCredentialRotation}
+        form={management.rotateForm}
+        message={management.rotateMessage}
+        onChange={management.setRotateForm}
+        onSubmit={management.submitCredentialRotation}
         t={t}
       />
     </Panel>
@@ -2770,20 +2055,20 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const coreJourneyPanel = (
     <Panel className="span-12" icon={<Workflow size={18} />} title={t("panel.coreJourney")}>
       <CoreJourneyWorkbench
-        config={coreJourneyConfig}
+        config={coreJourney.config}
         evaluation={coreJourneyEvaluation}
-        form={coreJourneyForm}
-        message={coreJourneyMessage}
-        onChange={setCoreJourneyForm}
+        form={coreJourney.form}
+        message={coreJourney.message}
+        onChange={coreJourney.setForm}
         onOpen={setActiveNav}
-        onRefreshPreflight={() => void refreshCoreJourneyPreflight()}
-        onReset={() => void resetCoreJourneySession()}
-        onRun={() => void runCoreJourney()}
-        preflight={coreJourneyPreflight}
-        preflightChecking={coreJourneyPreflightChecking}
-        preflightMessage={coreJourneyPreflightMessage}
-        result={coreJourneyResult}
-        running={coreJourneyRunning}
+        onRefreshPreflight={() => void coreJourney.refreshPreflight()}
+        onReset={() => void coreJourney.resetSession()}
+        onRun={() => void coreJourney.run()}
+        preflight={coreJourney.preflight}
+        preflightChecking={coreJourney.preflightChecking}
+        preflightMessage={coreJourney.preflightMessage}
+        result={coreJourney.result}
+        running={coreJourney.running}
         t={t}
       />
     </Panel>
@@ -3466,20 +2751,6 @@ function sameDataScopes(left: DataScope[], right: DataScope[]) {
   return left.every((scope, index) => JSON.stringify(scope) === JSON.stringify(right[index]));
 }
 
-function shallowEqualCapabilityForm(
-  left: typeof defaultCapabilityGrantForm,
-  right: typeof defaultCapabilityGrantForm
-) {
-  return (
-    left.callerInstanceId === right.callerInstanceId &&
-    left.capabilityId === right.capabilityId &&
-    left.subjectSelector === right.subjectSelector &&
-    left.targetId === right.targetId &&
-    left.tenantId === right.tenantId &&
-    left.workspaceId === right.workspaceId
-  );
-}
-
 function shallowEqualAiAdminForm(
   left: PermissionPackageDraftInput,
   right: PermissionPackageDraftInput
@@ -3494,144 +2765,6 @@ function shallowEqualAiAdminForm(
     left.tenantId === right.tenantId &&
     left.workspaceId === right.workspaceId
   );
-}
-
-function mergeCapabilitiesForTarget(existing: Capability[], refreshed: Capability[], targetId: string) {
-  return [
-    ...existing.filter((capability) => capability.targetId !== targetId),
-    ...refreshed
-  ].sort((left, right) => `${left.targetId}:${left.key}`.localeCompare(`${right.targetId}:${right.key}`));
-}
-
-function shouldUseLocalCapabilityFallback(error: unknown, data: ConsoleData | null) {
-  if (error instanceof TypeError) return true;
-  return Boolean(data && (!data.loadedFromApi || !data.capabilitiesLoadedFromApi || !data.capabilityAssignmentsLoadedFromApi));
-}
-
-function appendLocalCapabilityGrantChain(
-  current: ConsoleData,
-  capability: Capability,
-  form: typeof defaultCapabilityGrantForm,
-  dataScopes: DataScope[]
-): ConsoleData {
-  const now = new Date().toISOString();
-  const tenantId = form.tenantId.trim() || defaultManagementScope.tenantId;
-  const workspaceId = form.workspaceId.trim() || defaultManagementScope.workspaceId;
-  const callerInstanceId = form.callerInstanceId.trim();
-  const subjectSelector = form.subjectSelector.trim();
-
-  const existingEntitlement = current.tenantEntitlements.find(
-    (item) => item.tenantId === tenantId && item.targetId === capability.targetId && item.capabilityId === capability.id
-  );
-  const entitlement: TenantEntitlement = existingEntitlement
-    ? {
-        ...existingEntitlement,
-        dataScopes,
-        effect: "allow",
-        status: "enabled",
-        updatedAt: now
-      }
-    : {
-        id: nextLocalId("ent", [capability.id, tenantId], current.tenantEntitlements.map((item) => item.id)),
-        tenantId,
-        targetId: capability.targetId,
-        capabilityId: capability.id,
-        effect: "allow",
-        dataScopes,
-        status: "enabled",
-        priority: 50,
-        createdAt: now,
-        updatedAt: now
-      };
-
-  const tenantEntitlements = existingEntitlement
-    ? current.tenantEntitlements.map((item) => (item.id === entitlement.id ? entitlement : item))
-    : [...current.tenantEntitlements, entitlement];
-
-  const existingWorkspaceAssignment = current.workspaceAssignments.find(
-    (item) => item.tenantEntitlementId === entitlement.id && item.workspaceId === workspaceId
-  );
-  const workspaceAssignment: WorkspaceAssignment = existingWorkspaceAssignment
-    ? {
-        ...existingWorkspaceAssignment,
-        dataScopes,
-        effect: "allow",
-        status: "enabled",
-        updatedAt: now
-      }
-    : {
-        id: nextLocalId(
-          "wsa",
-          [capability.id, tenantId, workspaceId],
-          current.workspaceAssignments.map((item) => item.id)
-        ),
-        tenantEntitlementId: entitlement.id,
-        tenantId,
-        workspaceId,
-        effect: "allow",
-        dataScopes,
-        status: "enabled",
-        createdAt: now,
-        updatedAt: now
-      };
-
-  const workspaceAssignments = existingWorkspaceAssignment
-    ? current.workspaceAssignments.map((item) => (item.id === workspaceAssignment.id ? workspaceAssignment : item))
-    : [...current.workspaceAssignments, workspaceAssignment];
-
-  const existingInstanceAssignment = current.instanceAssignments.find(
-    (item) => item.workspaceAssignmentId === workspaceAssignment.id && item.callerInstanceId === callerInstanceId
-  );
-  const instanceAssignment: InstanceAssignment = existingInstanceAssignment
-    ? {
-        ...existingInstanceAssignment,
-        dataScopes,
-        effect: "allow",
-        status: "enabled",
-        subjectSelector,
-        updatedAt: now
-      }
-    : {
-        id: nextLocalId(
-          "ina",
-          [capability.id, tenantId, workspaceId, callerInstanceId],
-          current.instanceAssignments.map((item) => item.id)
-        ),
-        workspaceAssignmentId: workspaceAssignment.id,
-        tenantId,
-        workspaceId,
-        callerInstanceId,
-        subjectSelector,
-        effect: "allow",
-        dataScopes,
-        status: "enabled",
-        createdAt: now,
-        updatedAt: now
-      };
-
-  const instanceAssignments = existingInstanceAssignment
-    ? current.instanceAssignments.map((item) => (item.id === instanceAssignment.id ? instanceAssignment : item))
-    : [...current.instanceAssignments, instanceAssignment];
-
-  return {
-    ...current,
-    tenantEntitlements,
-    workspaceAssignments,
-    instanceAssignments,
-    capabilityAssignmentsLoadedFromApi: false
-  };
-}
-
-function nextLocalId(prefix: string, parts: string[], existing: string[]) {
-  const base = `${prefix}_${parts.map(safeIdPart).filter(Boolean).join("_") || "local"}`;
-  if (!existing.includes(base)) return base;
-  let counter = 2;
-  while (existing.includes(`${base}_${counter}`)) counter += 1;
-  return `${base}_${counter}`;
-}
-
-function safeIdPart(value: string) {
-  return value.trim().replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase();
 }
 
 function aiAdminApprovalJourneyStatusTone(status: AiAdminApprovalJourneyStepStatus): Tone {

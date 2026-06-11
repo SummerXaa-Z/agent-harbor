@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -18,6 +19,15 @@ const runtimeEvidenceViews = readFileSync(new URL("../src/components/RuntimeEvid
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const ui = readFileSync(new URL("../src/components/ui.tsx", import.meta.url), "utf8");
+const managementOperationsHookUrl = new URL("../src/hooks/useManagementOperations.ts", import.meta.url);
+const capabilityGovernanceHookUrl = new URL("../src/hooks/useCapabilityGovernanceController.ts", import.meta.url);
+const accessProfileHookUrl = new URL("../src/hooks/useAccessProfileController.ts", import.meta.url);
+const coreJourneyHookUrl = new URL("../src/hooks/useCoreJourneyController.ts", import.meta.url);
+
+function readExistingFile(url) {
+  assert.equal(existsSync(url), true, `${url.pathname} should exist`);
+  return readFileSync(url, "utf8");
+}
 
 function stylesWithoutRootTokens(source) {
   return source.replace(/:root\s*\{[\s\S]*?\n\}/, "");
@@ -40,6 +50,51 @@ test("app entry stays as a thin production shell", () => {
   assert.match(appEntry, /import \{ ConsoleController \} from "\.\/ConsoleController"/);
   assert.match(appEntry, /return <ConsoleController \/>/);
   assert.doesNotMatch(appEntry, /useState|useEffect|fetch|<section|<details|navGroups|AgentCreateForm|AiAdminPermissionWorkbench/);
+});
+
+test("console controller delegates non-ai-admin state domains to hooks", () => {
+  const managementOperations = readExistingFile(managementOperationsHookUrl);
+  const capabilityGovernance = readExistingFile(capabilityGovernanceHookUrl);
+  const accessProfile = readExistingFile(accessProfileHookUrl);
+  const coreJourney = readExistingFile(coreJourneyHookUrl);
+  const localStateCells = app.match(/\buseState(?:<|\()/g) ?? [];
+
+  assert.match(app, /from "\.\/hooks\/useManagementOperations"/);
+  assert.match(app, /from "\.\/hooks\/useCapabilityGovernanceController"/);
+  assert.match(app, /from "\.\/hooks\/useAccessProfileController"/);
+  assert.match(app, /from "\.\/hooks\/useCoreJourneyController"/);
+  assert.ok(localStateCells.length <= 52, `ConsoleController still owns ${localStateCells.length} local useState cells`);
+
+  assert.match(managementOperations, /export function useManagementOperations/);
+  assert.match(capabilityGovernance, /export function useCapabilityGovernanceController/);
+  assert.match(accessProfile, /export function useAccessProfileController/);
+  assert.match(coreJourney, /export function useCoreJourneyController/);
+
+  for (const movedHandler of [
+    "async function submitAgent",
+    "async function handleAgentStatusChange",
+    "async function submitKey",
+    "async function submitCredentialRotation",
+    "async function submitRoutePolicy",
+    "async function handleRefreshTargetCapabilities",
+    "async function handleApproveCapability",
+    "async function submitCapabilityGrantChain",
+    "async function refreshAccessProfile",
+    "async function explainAccessDecisionFromProfile",
+    "async function refreshCoreJourneyPreflight",
+    "async function resetCoreJourneySession",
+    "async function runCoreJourney"
+  ]) {
+    assert.equal(app.includes(movedHandler), false, `${movedHandler} should live in a domain hook`);
+  }
+});
+
+test("ai admin workbench has a growth guard while controller hooks are split", () => {
+  assert.ok(
+    workbench.split("\n").length <= 1850,
+    "AiAdminPermissionWorkbench is already large; split subcomponents instead of growing this file"
+  );
+  assert.doesNotMatch(workbench, /useManagementOperations|useCoreJourneyController|useAccessProfileController/);
 });
 
 test("component styles consume tokens instead of ad hoc visual values", () => {

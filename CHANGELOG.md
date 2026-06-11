@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Web console controller state is now split into domain hooks for management operations, capability governance, tenant access profiles, and the core journey; architecture tests cap `ConsoleController.tsx` state growth and keep `AiAdminPermissionWorkbench.tsx` under a guarded size limit.
+- Web 控制台 Controller 状态已拆入管理操作、能力治理、租户访问画像和核心旅程等 domain hooks；架构测试现在会限制 `ConsoleController.tsx` 状态继续膨胀，并给 `AiAdminPermissionWorkbench.tsx` 设置文件规模守护。
 - Added a follow-up console UI review (`docs/engineering/ui-review-2026-06-11.md`) that verifies the 2026-06-10 fixes are live in the running console and reports the next findings: the 4820-line `App.tsx` view monolith, language-snapshot result messages, missing list search/filter at scale, overloaded "Advanced settings" wording, policy-page layout confusion, self-check page alignment, and onboarding concept load.
 - 新增控制台 UI 复查报告（`docs/engineering/ui-review-2026-06-11.md`），实测确认 2026-06-10 各项修复已在运行中的控制台生效，并提出下一轮 finding：`App.tsx` 4820 行视图单体、结果消息语言快照、列表页缺搜索过滤、"高级设置"一词多义、访问策略页版面混淆、系统自检页排版、上手概念负担。
 - Web console Agent Registry and Capability Governance now include keyword/status filtering plus low-noise details panels; Agent row state changes move under a compact More menu so the table keeps a production-console density.

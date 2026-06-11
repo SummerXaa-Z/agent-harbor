@@ -3,29 +3,30 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
+const managementHook = readFileSync(new URL("../src/hooks/useManagementOperations.ts", import.meta.url), "utf8");
 
-function functionBlock(name) {
-  const start = app.indexOf(`async function ${name}(`);
+function functionBlock(name, source = app) {
+  const start = source.indexOf(`async function ${name}(`);
   assert.notEqual(start, -1, `${name} function should exist`);
-  return blockFromIndex(name, start);
+  return blockFromIndex(name, start, source);
 }
 
-function syncFunctionBlock(name) {
-  const start = app.indexOf(`function ${name}(`);
+function syncFunctionBlock(name, source = app) {
+  const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} function should exist`);
-  return blockFromIndex(name, start);
+  return blockFromIndex(name, start, source);
 }
 
-function blockFromIndex(name, start) {
-  const braceStart = app.indexOf("{", start);
+function blockFromIndex(name, start, source) {
+  const braceStart = source.indexOf("{", start);
   assert.notEqual(braceStart, -1, `${name} function should have a body`);
   let depth = 0;
-  for (let index = braceStart; index < app.length; index += 1) {
-    const char = app[index];
+  for (let index = braceStart; index < source.length; index += 1) {
+    const char = source[index];
     if (char === "{") depth += 1;
     if (char === "}") {
       depth -= 1;
-      if (depth === 0) return app.slice(start, index + 1);
+      if (depth === 0) return source.slice(start, index + 1);
     }
   }
   throw new Error(`could not parse ${name} function body`);
@@ -196,9 +197,9 @@ test("permission readiness messages use business field names on the main journey
 });
 
 test("retry validation messages are localized before reaching operator panels", () => {
-  const agentBlock = functionBlock("submitAgent");
-  const routeBlock = functionBlock("submitRoutePolicy");
-  const helperBlock = syncFunctionBlock("retryFieldValidationMessage");
+  const agentBlock = functionBlock("submitAgent", managementHook);
+  const routeBlock = functionBlock("submitRoutePolicy", managementHook);
+  const helperBlock = syncFunctionBlock("retryFieldValidationMessage", managementHook);
 
   assert.match(helperBlock, /message\.validationRetryAttempts/);
   assert.match(helperBlock, /message\.validationRetryBackoff/);
@@ -206,4 +207,6 @@ test("retry validation messages are localized before reaching operator panels", 
   assert.match(routeBlock, /setPolicyMessage\(retryFieldValidationMessage\(retry\.message, t\)\)/);
   assert.doesNotMatch(agentBlock, /setAgentMessage\(retry\.message\)/);
   assert.doesNotMatch(routeBlock, /setPolicyMessage\(retry\.message\)/);
+  assert.doesNotMatch(app, /async function submitAgent\(/);
+  assert.doesNotMatch(app, /async function submitRoutePolicy\(/);
 });

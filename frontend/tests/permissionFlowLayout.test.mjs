@@ -18,6 +18,11 @@ const goLiveAcceptanceOverview = readFileSync(new URL("../src/components/GoLiveA
 const managementForms = readFileSync(new URL("../src/components/ManagementForms.tsx", import.meta.url), "utf8");
 const runtimeEvidenceViews = readFileSync(new URL("../src/components/RuntimeEvidenceViews.tsx", import.meta.url), "utf8");
 const presenters = readFileSync(new URL("../src/consolePresenters.ts", import.meta.url), "utf8");
+const accessProfileHook = readFileSync(new URL("../src/hooks/useAccessProfileController.ts", import.meta.url), "utf8");
+const capabilityGovernanceHook = readFileSync(
+  new URL("../src/hooks/useCapabilityGovernanceController.ts", import.meta.url),
+  "utf8"
+);
 
 test("permission request journey renders as one production workspace instead of a demo board", () => {
   assert.match(workbench, /export function AiAdminPermissionWorkbench\(props/);
@@ -195,12 +200,14 @@ test("permission request carries readable context into access profile workspace"
   assert.match(accessProfileView, /<span>\{t\("form\.capability"\)\}<\/span>\s*<strong>\{capabilityLabel\}<\/strong>/);
   assert.match(accessProfileView, /handoffContext \? t\("section\.accessProfileAdjustScope"\) : t\("section\.accessProfileFilters"\)/);
   assert.match(accessProfileView, /handoffContext \? t\("text\.accessProfileAdjustScopeDetail"\) : t\("text\.accessProfileFiltersDetail"\)/);
-  assert.match(app, /const \[accessProfileHandoffContext, setAccessProfileHandoffContext\] = useState<AccessProfileHandoffContext \| null>\(null\)/);
-  assert.match(app, /setAccessProfileHandoffContext\(\{/);
+  assert.match(accessProfileHook, /const \[handoffContext, setHandoffContext\] = useState<AccessProfileHandoffContext \| null>\(null\)/);
+  assert.match(accessProfileHook, /function clearForPermissionChangeHandoff\(nextFilters: AccessProfileFilters, nextContext: AccessProfileHandoffContext\)/);
+  assert.match(accessProfileHook, /setHandoffContext\(nextContext\)/);
+  assert.match(app, /accessProfileController\.clearForPermissionChangeHandoff\(\{/);
   assert.match(app, /capabilityName: selectedCapability \? capabilityDisplayName\(selectedCapability, t\) : ""/);
   assert.match(app, /tenantName: permissionTenantPathLabel\(aiAdminForm\.tenantId, tenants, t\)\.primary/);
   assert.match(app, /workspaceName: permissionWorkspaceDisplayName\(aiAdminForm\.workspaceId, agents, t\)/);
-  assert.match(app, /handoffContext=\{accessProfileHandoffContext\}/);
+  assert.match(app, /handoffContext=\{accessProfileController\.handoffContext\}/);
   assert.match(i18n, /"text\.accessProfileHandoffDetail"/);
   assert.match(i18n, /"section\.accessProfileAdjustScope"/);
 });
@@ -361,7 +368,7 @@ test("capability names use business labels in primary UI", () => {
   assert.match(i18n, /"text\.defaultWorkspaceName": "客户服务工作区"/);
   assert.doesNotMatch(i18n, /"text\.defaultWorkspaceName": "沙箱工作区"/);
   assert.match(app, /import \{[\s\S]*capabilityDisplayName,[\s\S]*\} from "\.\/consolePresenters"/);
-  assert.match(app, /message\.capabilityApproved", \{ name: capabilityDisplayName\(capability, t\) \}/);
+  assert.match(capabilityGovernanceHook, /message\.capabilityApproved", \{ name: capabilityDisplayName\(capability, t\) \}/);
   assert.match(app, /key === "capability"[\s\S]*capabilityKeyDisplayName\(value, t\)/);
   assert.match(workbench, /capabilityDisplayName\(capability, t\)\} · \{t\(`value\.\$\{capability\.action\}`/);
   assert.match(workbench, /key === "capability"[\s\S]*capabilityKeyDisplayName\(value, t\)/);
@@ -802,7 +809,8 @@ test("permission request chooses access objects instead of raw subject selectors
 
 test("access profile and capability governance are split from the app shell", () => {
   assert.match(app, /import \{ TenantAccessProfileView \} from "\.\/components\/TenantAccessProfileView"/);
-  assert.match(app, /import \{ CapabilityGovernanceView, type CapabilityGrantForm \} from "\.\/components\/CapabilityGovernanceView"/);
+  assert.match(app, /import \{ CapabilityGovernanceView \} from "\.\/components\/CapabilityGovernanceView"/);
+  assert.match(capabilityGovernanceHook, /import type \{ CapabilityGrantForm \} from "\.\.\/components\/CapabilityGovernanceView"/);
   assert.doesNotMatch(app, /function TenantAccessProfileView\(/);
   assert.doesNotMatch(app, /function CapabilityGovernanceView\(/);
   assert.match(accessProfileView, /export function TenantAccessProfileView/);
@@ -822,6 +830,6 @@ test("capability governance uses business pickers instead of native select menus
   assert.doesNotMatch(capabilityGovernanceView, /<input required value=\{form\.workspaceId\}/);
   assert.match(capabilityGovernanceView, /selectedAccessSubject\.id === customAccessSubjectOption\.id/);
   assert.match(capabilityGovernanceView, /<details className="capability-grant-advanced"/);
-  assert.match(app, /subjectSelector: "user:support-\*"/);
+  assert.match(capabilityGovernanceHook, /subjectSelector: "user:support-\*"/);
   assert.doesNotMatch(app, /subjectSelector: "user:ops-\*"/);
 });

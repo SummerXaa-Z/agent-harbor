@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Capability Governance now opens as a catalog-first workspace: the page shows scope, capability inventory, and active grants by default, while grant-chain creation opens in an on-demand side panel instead of occupying the main page.
+- 能力治理页现在改为清单优先工作台：默认展示范围、能力清单和已有授权，创建授权链改为按需打开侧边面板，不再常驻占用主页面。
 - Web console now has an answer-first **Access Query** workspace for configured systems: operators ask whether a caller can access a target capability, see the evidence chain, and carry denied decisions into Permission Changes as a one-time prefilled fix.
 - Web 控制台新增配置完成后的答案优先 **访问查询** 工作区：管理员先查询调用方是否能访问目标能力，查看判定链路，并可把拒绝判定一次性带入权限变更形成预填修复。
 - Permission Changes now accepts Access Query handoff context without auto-submitting or auto-generating a draft, and shows a dismissible context notice before the operator continues approval and apply.

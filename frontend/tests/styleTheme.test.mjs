@@ -277,10 +277,12 @@ test("mobile shell keeps navigation labels readable", () => {
   assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*\.connection-popover\s*\{[^}]*position:\s*fixed;/s);
 });
 
-test("capability workspace compresses metrics and prioritizes grant operations", () => {
+test("capability workspace compresses metrics and opens grant operations on demand", () => {
   assert.match(app, /<CapabilitiesView capabilityGovernancePanel=\{capabilityGovernancePanel\(\)\} \/>/);
   assert.match(consoleViews, /export function CapabilitiesView[\s\S]*<section className="content-grid">[\s\S]*\{capabilityGovernancePanel\}/);
-  assert.match(styles, /\.capability-layout\s*\{[^}]*grid-template-areas:\s*"grant catalog"[\s\S]*"assignments catalog";/s);
+  assert.match(styles, /\.capability-layout\s*\{[^}]*grid-template-areas:\s*"catalog assignments";/s);
+  assert.match(capabilityGovernanceView, /className="primary-button capability-grant-launcher"/);
+  assert.match(capabilityGovernanceView, /className="capability-grant-sheet"/);
 });
 
 test("capability catalog provides search status filtering and a details entry", () => {

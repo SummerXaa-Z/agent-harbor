@@ -88,6 +88,7 @@
   --shadow-context: 0 10px 24px rgba(29, 37, 45, 0.08);
   --shadow: 0 18px 48px rgba(25, 35, 45, 0.08);
   --surface-glass: rgba(255, 255, 255, 0.96);
+  --overlay-scrim: rgba(29, 37, 45, 0.18);
 }
 
 * {
@@ -209,7 +210,7 @@ button {
   grid-template-columns: 22px minmax(0, 1fr);
   gap: 9px;
   width: 100%;
-  min-height: 52px;
+  min-height: 40px;
   padding: 8px 10px;
   border-radius: 7px;
   color: var(--ink-2);
@@ -248,6 +249,7 @@ button {
 }
 
 .nav-item small {
+  display: none;
   color: var(--ink-3);
   font-size: 11px;
   font-weight: 600;
@@ -270,7 +272,12 @@ button {
 }
 
 .nav-item.active small {
+  display: -webkit-box;
+  overflow: hidden;
   color: var(--brand-text);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
 }
 
 .section-kicker {
@@ -1156,7 +1163,7 @@ button {
 
 .table-toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px);
   gap: var(--space-3);
   align-items: end;
   margin-bottom: var(--space-4);
@@ -1322,7 +1329,7 @@ table {
 }
 
 .capability-table {
-  min-width: 980px;
+  min-width: 760px;
 }
 
 .agent-table {
@@ -1387,31 +1394,27 @@ table {
 
 .capability-table th:nth-child(1),
 .capability-table td:nth-child(1) {
-  width: 26%;
+  width: 32%;
 }
 
 .capability-table th:nth-child(2),
 .capability-table td:nth-child(2) {
-  width: 17%;
+  width: 18%;
 }
 
 .capability-table th:nth-child(3),
-.capability-table td:nth-child(3),
+.capability-table td:nth-child(3) {
+  width: 24%;
+}
+
 .capability-table th:nth-child(4),
-.capability-table td:nth-child(4),
+.capability-table td:nth-child(4) {
+  width: 14%;
+}
+
 .capability-table th:nth-child(5),
 .capability-table td:nth-child(5) {
-  width: 11%;
-}
-
-.capability-table th:nth-child(6),
-.capability-table td:nth-child(6) {
-  width: 13%;
-}
-
-.capability-table th:nth-child(7),
-.capability-table td:nth-child(7) {
-  width: 10%;
+  width: 12%;
 }
 
 .agent-table th:nth-child(1),
@@ -1499,6 +1502,7 @@ th {
 :root[lang="zh-CN"] .control-form label,
 :root[lang="zh-CN"] th,
 :root[lang="zh-CN"] .capability-toolbar label,
+:root[lang="zh-CN"] .capability-scope-controls label,
 :root[lang="zh-CN"] .core-journey-config label,
 :root[lang="zh-CN"] .access-summary-cell span {
   text-transform: none;
@@ -2603,16 +2607,54 @@ td code {
   min-width: 0;
 }
 
-.capability-toolbar {
+.capability-scope-bar {
   display: grid;
-  grid-template-columns: minmax(220px, 360px) auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: end;
-  padding: 12px 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
+  gap: var(--space-4);
+  align-items: center;
+  padding: 16px 18px;
   border-bottom: 1px solid var(--line-subtle);
+  background: var(--surface-raised);
 }
 
-.capability-toolbar label {
+.capability-scope-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.capability-scope-copy .section-kicker {
+  margin-bottom: 0;
+  padding-left: 0;
+}
+
+.capability-scope-copy strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capability-scope-copy p,
+.capability-catalog-heading p,
+.capability-grant-panel-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 18px;
+}
+
+.capability-scope-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  min-width: 0;
+}
+
+.capability-scope-controls label {
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -2622,23 +2664,10 @@ td code {
   text-transform: uppercase;
 }
 
-.capability-toolbar select {
-  width: 100%;
-  min-width: 0;
-  height: 34px;
-  padding: 0 9px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 13px;
-  outline: 0;
-}
-
 .capability-message {
+  grid-column: 1 / -1;
   min-width: 0;
   overflow: hidden;
-  padding-bottom: 7px;
   color: var(--muted);
   font-size: 12px;
   text-overflow: ellipsis;
@@ -2647,22 +2676,127 @@ td code {
 
 .capability-layout {
   display: grid;
-  grid-template-columns: minmax(330px, 0.9fr) minmax(0, 1.6fr);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   grid-template-areas:
-    "grant catalog"
-    "assignments catalog";
+    "catalog assignments";
   min-width: 0;
 }
 
 .capability-catalog {
   grid-area: catalog;
   min-width: 0;
-  border-left: 1px solid var(--line-subtle);
+  padding: 16px;
+  border-right: 1px solid var(--line-subtle);
+}
+
+.capability-catalog-heading,
+.capability-grant-panel-heading,
+.assignment-list-heading {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.capability-catalog-heading {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.capability-catalog-heading .section-kicker,
+.capability-grant-panel-heading .section-kicker,
+.assignment-list-heading .section-kicker {
+  margin-bottom: 0;
+  padding-left: 0;
+}
+
+.capability-catalog-heading h3,
+.capability-grant-panel-heading h3 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capability-catalog-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.capability-catalog-actions > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid var(--line-muted);
+  border-radius: var(--radius-full);
+  background: var(--surface-muted);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.capability-grant-launcher {
+  min-height: 32px;
+  padding-inline: var(--space-3);
+}
+
+.capability-grant-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  justify-content: end;
+  background: var(--overlay-scrim);
+}
+
+.capability-grant-sheet {
+  display: grid;
+  align-content: start;
+  width: min(520px, calc(100vw - 24px));
+  height: 100vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+
+.capability-grant-sheet-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: 18px 18px 8px;
+}
+
+.capability-grant-sheet-header .section-kicker {
+  margin-bottom: 0;
+  padding-left: 0;
+}
+
+.capability-grant-sheet-header h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 24px;
+}
+
+.capability-grant-sheet-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 18px;
 }
 
 .capability-grant-form {
-  grid-area: grant;
-  border-bottom: 1px solid var(--line-subtle);
+  padding: 14px 18px 18px;
 }
 
 .capability-grant-advanced {
@@ -2699,12 +2833,30 @@ td code {
   white-space: nowrap;
 }
 
+.capability-meta-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
 .assignment-list {
   display: grid;
   grid-area: assignments;
   align-content: start;
   gap: 8px;
-  padding: 10px 14px 14px;
+  padding: 14px;
+  border-left: 1px solid var(--line-subtle);
+}
+
+.assignment-list-heading {
+  padding-bottom: 2px;
+}
+
+.assignment-list-heading strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 18px;
 }
 
 .assignment-row {
@@ -3596,7 +3748,6 @@ td code {
   .capability-layout {
     grid-template-columns: 1fr;
     grid-template-areas:
-      "grant"
       "catalog"
       "assignments";
   }
@@ -3646,8 +3797,12 @@ td code {
   }
 
   .capability-catalog {
-    border-left: 0;
+    border-right: 0;
     border-bottom: 1px solid var(--line-subtle);
+  }
+
+  .assignment-list {
+    border-left: 0;
   }
 
   .span-4,
@@ -3731,10 +3886,19 @@ td code {
     display: none;
   }
 
+  .nav-item.active small {
+    display: none;
+  }
+
   .nav-item.active {
     border-color: var(--brand-border);
     background: var(--brand-soft);
     box-shadow: inset 0 -2px 0 var(--brand);
+  }
+
+  .capability-grant-sheet {
+    width: 100vw;
+    border-left: 0;
   }
 
   .workspace {
@@ -3825,6 +3989,9 @@ td code {
   .table-detail-grid,
   .policy-workspace,
   .capability-toolbar,
+  .capability-scope-bar,
+  .capability-scope-controls,
+  .capability-catalog-heading,
   .access-hero,
   .access-selected-scope,
   .access-query-grid,

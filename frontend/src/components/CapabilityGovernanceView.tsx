@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { FileSearch, RefreshCw, ShieldCheck } from "lucide-react";
+import { FileSearch, RefreshCw, ShieldCheck, X } from "lucide-react";
 
 import {
   accessSubjectOptionForId,
@@ -78,6 +78,7 @@ export function CapabilityGovernanceView({
 }) {
   const [capabilityQuery, setCapabilityQuery] = useState("");
   const [capabilityStatusFilter, setCapabilityStatusFilter] = useState("");
+  const [grantPanelOpen, setGrantPanelOpen] = useState(false);
   const [selectedCapabilityId, setSelectedCapabilityId] = useState("");
   const agentNames = useMemo(
     () => Object.fromEntries(agents.map((agent) => [agent.id, permissionEntityDisplayName(agent.name, t)])),
@@ -112,6 +113,7 @@ export function CapabilityGovernanceView({
   const selectedCapability = capabilities.find((capability) => capability.id === form.capabilityId);
   const selectedCatalogCapability = capabilities.find((capability) => capability.id === selectedCapabilityId) ?? null;
   const selectedAccessSubject = accessSubjectOptionForSelector(form.subjectSelector);
+  const currentTargetLabel = form.targetId ? agentNames[form.targetId] ?? form.targetId : t("form.allMcpTargets");
   const capabilityEmptyActionLabel = targetCapabilities.length > 0
     ? undefined
     : mcpTargets.length === 0
@@ -214,32 +216,64 @@ export function CapabilityGovernanceView({
     });
   }
 
+  function openGrantPanel(capability?: Capability) {
+    if (capability) {
+      onChange({
+        ...form,
+        capabilityId: capability.id,
+        targetId: capability.targetId
+      });
+    }
+    setGrantPanelOpen(true);
+  }
+
   return (
     <div className="capability-governance">
-      <div className="capability-toolbar">
-        <label>
-          {t("form.target")}
-          <ApprovalDropdown
-            label={t("form.target")}
-            options={targetOptions}
-            value={form.targetId}
-            onChange={handleTargetChange}
-          />
-        </label>
-        <button
-          className="secondary-button"
-          disabled={!form.targetId || actionId === `refresh:${form.targetId}`}
-          onClick={onRefreshTarget}
-          type="button"
-        >
-          <RefreshCw size={14} />
-          {actionId === `refresh:${form.targetId}` ? t("action.loading") : t("action.refresh")}
-        </button>
-        {message ? <span className="capability-message">{message}</span> : null}
+      <div className="capability-scope-bar">
+        <div className="capability-scope-copy">
+          <span className="section-kicker">{t("section.currentCapabilityScope")}</span>
+          <strong>{currentTargetLabel}</strong>
+          <p>{t("text.currentCapabilityScopeDetail")}</p>
+        </div>
+        <div className="capability-scope-controls">
+          <label>
+            {t("form.target")}
+            <ApprovalDropdown
+              label={t("form.target")}
+              options={targetOptions}
+              value={form.targetId}
+              onChange={handleTargetChange}
+            />
+          </label>
+          <button
+            className="secondary-button"
+            disabled={!form.targetId || actionId === `refresh:${form.targetId}`}
+            onClick={onRefreshTarget}
+            type="button"
+          >
+            <RefreshCw size={14} />
+            {actionId === `refresh:${form.targetId}` ? t("action.loading") : t("action.refresh")}
+          </button>
+          {message ? <span className="capability-message">{message}</span> : null}
+        </div>
       </div>
 
       <div className="capability-layout">
         <div className="capability-catalog">
+          <div className="capability-catalog-heading">
+            <div>
+              <span className="section-kicker">{t("section.capabilityCatalog")}</span>
+              <h3>{currentTargetLabel}</h3>
+              <p>{t("text.capabilityCatalogHelp")}</p>
+            </div>
+            <div className="capability-catalog-actions">
+              <span>{visibleCapabilities.length}/{targetCapabilities.length}</span>
+              <button className="primary-button capability-grant-launcher" onClick={() => openGrantPanel()} type="button">
+                <ShieldCheck size={14} />
+                {t("action.grantChain")}
+              </button>
+            </div>
+          </div>
           <div className="table-toolbar">
             <label>
               <span>{t("form.capability")}</span>
@@ -258,7 +292,6 @@ export function CapabilityGovernanceView({
                 onChange={setCapabilityStatusFilter}
               />
             </label>
-            <span>{visibleCapabilities.length}/{targetCapabilities.length}</span>
           </div>
           <div className="table-wrap">
             <table className="capability-table">
@@ -266,9 +299,7 @@ export function CapabilityGovernanceView({
                 <tr>
                   <th>{t("table.capability")}</th>
                   <th>{t("table.target")}</th>
-                  <th>{t("table.action")}</th>
-                  <th>{t("table.risk")}</th>
-                  <th>{t("table.status")}</th>
+                  <th>{t("table.governance")}</th>
                   <th>{t("table.grants")}</th>
                   <th>{t("table.action")}</th>
                 </tr>
@@ -276,7 +307,7 @@ export function CapabilityGovernanceView({
               <tbody>
                 {visibleCapabilities.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={5}>
                       <EmptyRow
                         title={targetCapabilities.length === 0 ? t("empty.capabilities.title") : t("empty.filteredResults.title")}
                         detail={targetCapabilities.length === 0 ? t("empty.capabilities.detail") : t("empty.filteredResults.detail")}
@@ -301,9 +332,13 @@ export function CapabilityGovernanceView({
                         <span>{capabilitySummaryText(capability, t)}</span>
                       </td>
                       <td>{agentNames[capability.targetId] ?? capability.targetId}</td>
-                      <td><Badge tone={capability.action === "delete" || capability.action === "admin" ? "danger" : capability.action === "export" ? "warning" : "info"}>{translatedValue(t, capability.action)}</Badge></td>
-                      <td><Badge tone={riskTone(capability.riskLevel)}>{translatedValue(t, capability.riskLevel)}</Badge></td>
-                      <td><Badge tone={capabilityStatusTone(capability.discoveryStatus)}>{capabilityDiscoveryStatusLabel(capability.discoveryStatus, t)}</Badge></td>
+                      <td>
+                        <div className="capability-meta-stack">
+                          <Badge tone={capability.action === "delete" || capability.action === "admin" ? "danger" : capability.action === "export" ? "warning" : "info"}>{translatedValue(t, capability.action)}</Badge>
+                          <Badge tone={riskTone(capability.riskLevel)}>{translatedValue(t, capability.riskLevel)}</Badge>
+                          <Badge tone={capabilityStatusTone(capability.discoveryStatus)}>{capabilityDiscoveryStatusLabel(capability.discoveryStatus, t)}</Badge>
+                        </div>
+                      </td>
                       <td>
                         <strong>{entitlementIds.length}/{workspaceIds.length}/{instanceCount}</strong>
                         <span>{t("detail.tenantWorkspaceInstance")}</span>
@@ -356,6 +391,14 @@ export function CapabilityGovernanceView({
               </div>
               <button
                 className="secondary-button table-detail-action"
+                onClick={() => openGrantPanel(selectedCatalogCapability)}
+                type="button"
+              >
+                <ShieldCheck size={14} />
+                {t("action.grantChain")}
+              </button>
+              <button
+                className="secondary-button table-detail-action"
                 onClick={() => onQueryAccess({
                   capabilityId: selectedCatalogCapability.id,
                   sourceView: "capabilities",
@@ -372,72 +415,11 @@ export function CapabilityGovernanceView({
           ) : null}
         </div>
 
-        <form className="control-form capability-grant-form" onSubmit={onCreateGrantChain}>
-          <div className="form-row">
-            <label>
-              {t("form.businessTenant")}
-              <ApprovalDropdown
-                label={t("form.businessTenant")}
-                options={tenantOptions}
-                value={form.tenantId}
-                onChange={(value) => onChange({ ...form, tenantId: value })}
-              />
-            </label>
-            <label>
-              {t("form.businessWorkspace")}
-              <ApprovalDropdown
-                label={t("form.businessWorkspace")}
-                options={workspaceOptions}
-                value={form.workspaceId}
-                onChange={(value) => onChange({ ...form, workspaceId: value })}
-              />
-            </label>
-          </div>
-          <label>
-            {t("form.capability")}
-            <ApprovalDropdown
-              label={t("form.capability")}
-              options={capabilityOptions}
-              value={form.capabilityId}
-              onChange={handleCapabilityChange}
-            />
-          </label>
-          <div className="form-row">
-            <label>
-              {t("form.callerInstance")}
-              <ApprovalDropdown
-                label={t("form.callerInstance")}
-                options={callerOptions}
-                value={form.callerInstanceId}
-                onChange={(value) => onChange({ ...form, callerInstanceId: value })}
-              />
-            </label>
-            <label>
-              {t("form.accessSubject")}
-              <ApprovalDropdown
-                label={t("form.accessSubject")}
-                options={accessSubjectDropdownOptions}
-                value={selectedAccessSubject.id}
-                onChange={handleAccessSubjectChange}
-              />
-            </label>
-          </div>
-          <details className="capability-grant-advanced" open={selectedAccessSubject.id === customAccessSubjectOption.id}>
-            <summary>{t("text.technicalOverrides")}</summary>
-            <label>{t("form.subjectSelector")}<input placeholder={t("form.subjectSelectorPlaceholder")} value={form.subjectSelector} onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })} /></label>
-          </details>
-          <div className="capability-scope-strip">
-            <span>{selectedCapability ? translatedValue(t, selectedCapability.sensitivity) : t("text.sensitivity")}</span>
-            <span>{selectedCapability ? translatedValue(t, selectedCapability.riskLevel) : t("text.risk")}</span>
-            <span>{dataScopeText(selectedCapability?.dataScopes, t) || t("text.noDataScope")}</span>
-          </div>
-          <FormFooter
-            message=""
-            submitLabel={actionId === `grant:${form.capabilityId}` ? t("action.loading") : t("action.grantChain")}
-          />
-        </form>
-
         <div className="assignment-list">
+          <div className="assignment-list-heading">
+            <span className="section-kicker">{t("section.existingGrantChains")}</span>
+            <strong>{tenantEntitlements.length} {t("table.grants")}</strong>
+          </div>
           {tenantEntitlements.length === 0 ? (
             <EmptyRow
               title={t("empty.grantChains.title")}
@@ -469,6 +451,91 @@ export function CapabilityGovernanceView({
           })}
         </div>
       </div>
+      {grantPanelOpen ? (
+        <div className="capability-grant-overlay" onClick={() => setGrantPanelOpen(false)} role="presentation">
+          <aside
+            aria-labelledby="capability-grant-title"
+            className="capability-grant-sheet"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className="capability-grant-sheet-header">
+              <div>
+                <span className="section-kicker">{t("section.capabilityGrant")}</span>
+                <h3 id="capability-grant-title">{t("action.grantChain")}</h3>
+                <p>{t("text.capabilityGrantHelp")}</p>
+              </div>
+              <button aria-label={t("action.dismiss")} className="icon-button compact" onClick={() => setGrantPanelOpen(false)} type="button">
+                <X aria-hidden="true" size={15} />
+              </button>
+            </div>
+            <form className="control-form capability-grant-form" onSubmit={onCreateGrantChain}>
+              <div className="form-row">
+                <label>
+                  {t("form.businessTenant")}
+                  <ApprovalDropdown
+                    label={t("form.businessTenant")}
+                    options={tenantOptions}
+                    value={form.tenantId}
+                    onChange={(value) => onChange({ ...form, tenantId: value })}
+                  />
+                </label>
+                <label>
+                  {t("form.businessWorkspace")}
+                  <ApprovalDropdown
+                    label={t("form.businessWorkspace")}
+                    options={workspaceOptions}
+                    value={form.workspaceId}
+                    onChange={(value) => onChange({ ...form, workspaceId: value })}
+                  />
+                </label>
+              </div>
+              <label>
+                {t("form.capability")}
+                <ApprovalDropdown
+                  label={t("form.capability")}
+                  options={capabilityOptions}
+                  value={form.capabilityId}
+                  onChange={handleCapabilityChange}
+                />
+              </label>
+              <div className="form-row">
+                <label>
+                  {t("form.callerInstance")}
+                  <ApprovalDropdown
+                    label={t("form.callerInstance")}
+                    options={callerOptions}
+                    value={form.callerInstanceId}
+                    onChange={(value) => onChange({ ...form, callerInstanceId: value })}
+                  />
+                </label>
+                <label>
+                  {t("form.accessSubject")}
+                  <ApprovalDropdown
+                    label={t("form.accessSubject")}
+                    options={accessSubjectDropdownOptions}
+                    value={selectedAccessSubject.id}
+                    onChange={handleAccessSubjectChange}
+                  />
+                </label>
+              </div>
+              <details className="capability-grant-advanced" open={selectedAccessSubject.id === customAccessSubjectOption.id}>
+                <summary>{t("text.technicalOverrides")}</summary>
+                <label>{t("form.subjectSelector")}<input placeholder={t("form.subjectSelectorPlaceholder")} value={form.subjectSelector} onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })} /></label>
+              </details>
+              <div className="capability-scope-strip">
+                <span>{selectedCapability ? translatedValue(t, selectedCapability.sensitivity) : t("text.sensitivity")}</span>
+                <span>{selectedCapability ? translatedValue(t, selectedCapability.riskLevel) : t("text.risk")}</span>
+                <span>{dataScopeText(selectedCapability?.dataScopes, t) || t("text.noDataScope")}</span>
+              </div>
+              <FormFooter
+                message=""
+                submitLabel={actionId === `grant:${form.capabilityId}` ? t("action.loading") : t("action.grantChain")}
+              />
+            </form>
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

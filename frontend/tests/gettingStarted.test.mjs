@@ -25,6 +25,7 @@ function baseConsoleData(overrides = {}) {
     providers: [],
     routePolicies: [],
     routePoliciesLoadedFromApi: true,
+    setupLoadedFromApi: true,
     systemMetrics: [],
     tenantEntitlements: [],
     tenants: [],

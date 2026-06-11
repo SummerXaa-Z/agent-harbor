@@ -466,10 +466,10 @@ test("workspace navigation is reflected in the URL hash", () => {
 });
 
 test("go-live evidence route loads the current permission change preview", () => {
-  assert.match(app, /const shouldLoadAiAdminCatalog = activeNav === "ai-admin" \|\| activeNav === "evidence"/);
+  assert.match(app, /const shouldLoadAiAdminCatalog = activeNav === "ask" \|\| activeNav === "ai-admin" \|\| activeNav === "evidence"/);
   assert.match(app, /shouldLoadAiAdminCatalog \? undefined : normalizedScope\(scope\)/);
   assert.match(app, /const shouldLoadAiAdminWorkbenchPreview = activeNav === "ai-admin" \|\| activeNav === "evidence"/);
-  assert.match(app, /if \(!shouldLoadAiAdminWorkbenchPreview \|\| !data\?\.loadedFromApi\)/);
+  assert.match(app, /if \(!shouldLoadAiAdminWorkbenchPreview \|\| !data\?\.loadedFromApi \|\| aiAdminNewDraftMode\)/);
   assert.match(app, /previewPermissionPackageWorkbench\(aiAdminForm, adminKey, controller\.signal\)/);
   assert.match(app, /const goLiveAcceptanceForm = aiAdminServerDraft\?\.input \?\? aiAdminForm/);
   assert.match(app, /draft=\{aiAdminServerDraft\}/);

@@ -153,8 +153,8 @@ make demo
 ```
 
 1. Start the local demo stack with `make demo`.
-2. Open `http://127.0.0.1:5174/`. A fresh system lands on **Getting Started**; a configured system lands on **Permission Changes**.
-3. From **Permission Changes**, click **Run validation**.
+2. Open `http://127.0.0.1:5174/`. A fresh system lands on **Getting Started**; a configured system lands on **Access Query** so operators can ask why a caller is allowed or denied before starting a change.
+3. From **Access Query**, use **Start permission fix** to carry a denied decision into **Permission Changes**, or open **Permission Changes** directly to run validation.
 4. Confirm **Status Check** reaches ready and **Application Health** shows a healthy row.
 5. Export the production evidence JSON.
 6. Open **Review impact** or **Rehearse drift** when you want to inspect read-only impact or drift blockers.
@@ -162,8 +162,8 @@ make demo
 ### 本地运行
 
 1. 启动本地演示环境: `make demo`。
-2. 打开 `http://127.0.0.1:5174/`。全新系统会进入 **开始使用**，已配置系统会进入 **权限变更**。
-3. 在 **权限变更** 中点击 **Run validation / 执行运行验证**。
+2. 打开 `http://127.0.0.1:5174/`。全新系统会进入 **开始使用**，已配置系统会进入 **访问查询**，先回答调用方为什么能或不能访问，再决定是否发起变更。
+3. 在 **访问查询** 中用 **发起权限修复** 把拒绝判定带入 **权限变更**，也可以直接打开 **权限变更** 执行运行验证。
 4. 确认 **Status Check / 状态检查** 达到可上线，并确认 **Application Health / 落地状态** 出现正常应用行。
 5. 导出上线证据 JSON。
 6. 需要复核影响或演练漂移时，再打开 **Review impact / 查看影响** 或 **Rehearse drift / 演练漂移**。
@@ -212,7 +212,9 @@ For the first browser evaluation, run:
 make demo
 ```
 
-Then open `http://127.0.0.1:5174/`. If the live system is empty, the web console opens on **Getting Started** and shows the setup chain before any permission-change work. After tenant, Agent, capability, and grant-chain setup is complete, the same URL opens on **Permission Changes**, the production approval and readiness workspace for the approval-required **Support ticket triage** path. Each validation run uses fresh `ui-approval-*` identifiers, applies permissions through live APIs, sends runtime MCP calls with `X-AgentHarbor-Subject-Id`, and surfaces the application record, application impact review, tenant access profile, traces, applied audit event, go-live readiness, and bounded evidence export in the console.
+Then open `http://127.0.0.1:5174/`. If the live system is empty, the web console opens on **Getting Started** and shows the setup chain before any permission-change work. After tenant, Agent, capability, and grant-chain setup is complete, the same URL opens on **Access Query**: operators first ask whether a caller can access a target capability, review the evidence chain, and then use **Start permission fix** to prefill **Permission Changes** without copying technical IDs. **Permission Changes** remains the production approval and readiness workspace for the approval-required **Support ticket triage** path. Each validation run uses fresh `ui-approval-*` identifiers, applies permissions through live APIs, sends runtime MCP calls with `X-AgentHarbor-Subject-Id`, and surfaces the application record, application impact review, tenant access profile, traces, applied audit event, go-live readiness, and bounded evidence export in the console.
+
+打开 `http://127.0.0.1:5174/` 后，如果实时系统为空，Web 控制台会进入 **开始使用** 并先展示配置链路；当租户、Agent、能力和授权链完成后，同一个地址会进入 **访问查询**。管理员先查询某个调用方能否访问目标能力，查看判定链路，再通过 **发起权限修复** 把上下文预填到 **权限变更**，不需要复制技术 ID。**权限变更** 仍然负责审批、应用、状态检查和上线证据。
 
 The Permission Changes console also shows runtime checks for the API, MCP tool service, browser subject-header CORS, local private-upstream mode, and current data source before validation runs. Use the **Self-Check** workspace when you need the lower-level core permission loop check; it verifies API and MCP tool service readiness before enabling the run button and keeps **Reset session** non-destructive.
 

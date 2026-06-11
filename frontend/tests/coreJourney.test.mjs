@@ -120,6 +120,7 @@ test("evaluateCoreJourney requires tenant, capability, grant, runtime, and profi
     evidenceRuns: [],
     systemMetrics: [],
     loadedFromApi: true,
+    setupLoadedFromApi: true,
     grantsLoadedFromApi: true,
     capabilitiesLoadedFromApi: true,
     capabilityAssignmentsLoadedFromApi: true,

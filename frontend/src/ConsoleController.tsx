@@ -148,6 +148,7 @@ import { IconMore, IconOpen, MetricCard, Panel } from "./components/ConsolePrimi
 import {
   AccessView,
   AiAdminView,
+  AskView,
   CapabilitiesView,
   CockpitView,
   EvidenceView,
@@ -157,6 +158,7 @@ import {
   RoutesView,
   TracesView
 } from "./components/ConsoleViews";
+import { AskAccessPanel } from "./components/AskAccessView";
 import { CoreJourneyWorkbench } from "./components/CoreJourneyWorkbench";
 import { GettingStartedView } from "./components/GettingStartedView";
 import {
@@ -182,6 +184,7 @@ import { TechnicalId } from "./components/TechnicalId";
 import { TenantAccessProfileView } from "./components/TenantAccessProfileView";
 import { Badge } from "./components/ui";
 import { useAccessProfileController } from "./hooks/useAccessProfileController";
+import { useAskAccessController } from "./hooks/useAskAccessController";
 import { useCapabilityGovernanceController } from "./hooks/useCapabilityGovernanceController";
 import { useCoreJourneyController } from "./hooks/useCoreJourneyController";
 import { useManagementOperations } from "./hooks/useManagementOperations";
@@ -192,6 +195,7 @@ import type {
   AccessProfileSummary,
   AccessDecisionExplainRequest,
   AccessDecisionExplainResult,
+  AskHandoffContext,
   Agent,
   AgentStatus,
   AuditEvent,
@@ -202,6 +206,7 @@ import type {
   InstanceAssignment,
   JsonObject,
   ManagementScope,
+  PermissionChangeHandoffContext,
   RoutePolicy,
   Tenant,
   TenantAccessProfileData,
@@ -272,6 +277,8 @@ function navIconFor(key: NavKey) {
   switch (key) {
     case "getting-started":
       return Workflow;
+    case "ask":
+      return FileSearch;
     case "ai-admin":
       return ShieldCheck;
     case "registry":
@@ -368,6 +375,7 @@ export function ConsoleController() {
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [traceFilters, setTraceFilters] = useState<TraceFilters>(defaultTraceFilters);
   const [language, setLanguage] = useState<Language>(initialLanguage);
+  const [handoffContexts, setHandoffContexts] = useState<{ ask: AskHandoffContext | null; permissionChange: PermissionChangeHandoffContext | null; permissionNotice: PermissionChangeHandoffContext | null }>({ ask: null, permissionChange: null, permissionNotice: null });
   const [aiAdminForm, setAiAdminForm] = useState<PermissionPackageDraftInput>(defaultAiAdminForm);
   const [aiAdminMessage, setAiAdminMessage] = useState<LocalizedMessage | null>(null);
   const [aiAdminApplying, setAiAdminApplying] = useState(false);
@@ -426,6 +434,11 @@ export function ConsoleController() {
     userSelectedNavRef.current = true;
     setActiveNav(key);
   }
+  function openAskAccess(context: AskHandoffContext) {
+    setHandoffContexts((current) => ({ ...current, ask: context }));
+    userSelectedNavRef.current = true;
+    setActiveNav("ask");
+  }
   const management = useManagementOperations({
     adminKey,
     defaultScope: defaultManagementScope,
@@ -446,13 +459,43 @@ export function ConsoleController() {
   const accessProfileController = useAccessProfileController({
     activeNav,
     adminKey,
-    dataLoadedFromApi: Boolean(data?.loadedFromApi),
     defaultScope: defaultManagementScope,
     language,
     scope,
     setScope,
     t
   });
+  const askAccess = useAskAccessController({
+    adminKey, consoleData: data, handoffContext: handoffContexts.ask, language, liveDataAvailable: Boolean(data?.loadedFromApi),
+    onConsumeHandoff: () => setHandoffContexts((current) => ({ ...current, ask: null })),
+    onStartPermissionChange: (context) => { setHandoffContexts((current) => ({ ...current, permissionChange: context })); userSelectedNavRef.current = true; setActiveNav("ai-admin"); },
+    t, templates: aiAdminTemplates
+  });
+  useEffect(() => {
+    const context = handoffContexts.permissionChange;
+    if (!context) return;
+    setAiAdminNewDraftMode(true);
+    setAiAdminForm((current) => ({
+      ...current,
+      callerInstanceId: context.callerInstanceId ?? current.callerInstanceId,
+      requestText: context.intentText ?? current.requestText,
+      subjectSelector: context.subjectId ?? current.subjectSelector,
+      targetId: context.targetId ?? current.targetId,
+      templateId: context.templateId ?? current.templateId,
+      tenantId: context.tenantId,
+      workspaceId: context.workspaceId
+    }));
+    setAiAdminServerDraft(null);
+    setAiAdminWorkbenchPreview(null);
+    setAiAdminApplication(null);
+    setAiAdminApplyPreflight(null);
+    setAiAdminProductionReadiness(null);
+    setAiAdminApprovalRequests([]);
+    setAiAdminSelectedApprovalRequestId("");
+    setAiAdminAccessDecisionExplanation(null);
+    setAiAdminMessage(null);
+    setHandoffContexts((current) => ({ ...current, permissionChange: null, permissionNotice: context }));
+  }, [handoffContexts.permissionChange]);
   const coreJourney = useCoreJourneyController({
     adminKey,
     defaultAccessFilters: defaultAccessProfileFilters,
@@ -494,7 +537,7 @@ export function ConsoleController() {
     setConnectionMenuOpen(false);
   }, [activeNav]);
 
-  const shouldLoadAiAdminCatalog = activeNav === "ai-admin" || activeNav === "evidence";
+  const shouldLoadAiAdminCatalog = activeNav === "ask" || activeNav === "ai-admin" || activeNav === "evidence";
 
   useEffect(() => {
     if (shouldLoadAiAdminCatalog) {
@@ -539,7 +582,7 @@ export function ConsoleController() {
   const shouldLoadAiAdminWorkbenchPreview = activeNav === "ai-admin" || activeNav === "evidence";
 
   useEffect(() => {
-    if (!shouldLoadAiAdminWorkbenchPreview || !data?.loadedFromApi) {
+    if (!shouldLoadAiAdminWorkbenchPreview || !data?.loadedFromApi || aiAdminNewDraftMode) {
       setAiAdminServerDraft(null);
       setAiAdminWorkbenchPreview(null);
       return;
@@ -857,6 +900,7 @@ export function ConsoleController() {
     setAiAdminApprovalJourneyAccessProfile(null);
     setAiAdminApprovalJourneyApprovalRequest(null);
     setAiAdminMessage(null);
+    setHandoffContexts((current) => ({ ...current, permissionChange: null, permissionNotice: null }));
   }
 
   async function reviewAiAdminApplicationImpact(applicationOverride?: PermissionPackageApplication) {
@@ -1768,7 +1812,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   }, []);
 
   useEffect(() => {
-    if (!data || defaultNavResolvedRef.current || userSelectedNavRef.current) return;
+    if (!data?.setupLoadedFromApi || defaultNavResolvedRef.current || userSelectedNavRef.current) return;
     setActiveNav(resolveDefaultNavKey(data));
     defaultNavResolvedRef.current = true;
   }, [data]);
@@ -1881,6 +1925,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       <AgentTable
         agents={agents}
         channelLabels={channelLabels}
+        onQueryAccess={openAskAccess}
         onStatusChange={management.handleAgentStatusChange}
         pendingActionId={management.cleanupActionId}
         t={t}
@@ -1905,6 +1950,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onApprove={capabilityGovernance.handleApproveCapability}
         onChange={capabilityGovernance.setForm}
         onCreateGrantChain={capabilityGovernance.submitCapabilityGrantChain}
+        onQueryAccess={openAskAccess}
         onRefreshTarget={capabilityGovernance.handleRefreshTargetCapabilities}
         t={t}
         tenants={tenants}
@@ -1913,20 +1959,20 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       />
     </Panel>
   );
+  const askAccessPanel = (
+    <AskAccessPanel agents={agents} capabilities={capabilities} controller={askAccess} liveDataAvailable={Boolean(data?.loadedFromApi)} t={t} tenants={tenants} title={t("panel.askAccess")} />
+  );
   const accessProfilePanel = (
     <Panel className="span-12" icon={<LockKeyhole size={18} />} title={t("panel.accessProfile")} action={<IconOpen title={t("action.open")} />}>
       <TenantAccessProfileView
         agents={agents}
         capabilities={capabilities}
-        explanation={accessProfileController.decisionExplanation}
-        explanationLoading={accessProfileController.decisionExplainLoading}
-        explanationMessage={accessProfileController.decisionExplainMessage}
         filters={accessProfileController.filters}
         handoffContext={accessProfileController.handoffContext}
         loading={accessProfileController.loading}
         message={accessProfileController.message}
         onChange={accessProfileController.updateFilters}
-        onExplainAccessDecision={() => void accessProfileController.explainAccessDecision()}
+        onQueryAccess={openAskAccess}
         onRefresh={() => void accessProfileController.refresh()}
         onTenantChange={accessProfileController.changeTenant}
         profile={accessProfileController.profile}
@@ -2020,7 +2066,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           setAiAdminApplicationImpactMessage("");
         }}
         onStartNewPermissionChange={startNewAiAdminPermissionChange}
+        onDismissPermissionHandoff={() => setHandoffContexts((current) => ({ ...current, permissionNotice: null }))}
         onWithdrawApprovalRequest={(comment) => void withdrawAiAdminApprovalRequest(comment)}
+        permissionHandoffContext={handoffContexts.permissionNotice}
         reviewerQueueLoading={aiAdminReviewerQueueLoading}
         reviewerQueueMessage={aiAdminReviewerQueueMessage}
         selectedApprovalRequestId={aiAdminSelectedApprovalRequestId}
@@ -2100,6 +2148,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   );
   const viewContent = (() => {
     switch (activeView.key) {
+      case "ask":
+        return <AskView askAccessPanel={askAccessPanel} />;
       case "ai-admin":
         return <AiAdminView aiAdminPanel={aiAdminPanel} />;
       case "getting-started":

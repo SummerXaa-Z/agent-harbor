@@ -537,7 +537,8 @@ export async function fetchPermissionPackageApprovalRequests(
   adminKey?: string,
   signal?: AbortSignal,
 ): Promise<PermissionPackageApprovalRequest[]> {
-  return request<PermissionPackageApprovalRequest[]>(permissionPackageApprovalRequestsPath(filter), { adminKey, signal })
+  const rows = await request<unknown>(permissionPackageApprovalRequestsPath(filter), { adminKey, signal })
+  return Array.isArray(rows) ? rows as PermissionPackageApprovalRequest[] : []
 }
 
 export async function fetchPermissionPackageApplicationHealth(
@@ -791,6 +792,13 @@ export async function loadConsoleData(
     tracesResult.ok &&
     auditEventsResult.ok &&
     metricsResult.ok
+  const setupLoadedFromApi =
+    tenantsResult.ok &&
+    agentsResult.ok &&
+    capabilitiesResult.ok &&
+    entitlementResult.ok &&
+    workspaceAssignmentResult.ok &&
+    instanceAssignmentResult.ok
 
   return {
     tenants: tenantsResult.data,
@@ -808,6 +816,7 @@ export async function loadConsoleData(
     evidenceRuns: loadedFromApi ? [] : evidenceRuns,
     systemMetrics: metricsResult.data,
     loadedFromApi,
+    setupLoadedFromApi,
     grantsLoadedFromApi: grantsResult.ok,
     capabilitiesLoadedFromApi: capabilitiesResult.ok,
     capabilityAssignmentsLoadedFromApi:

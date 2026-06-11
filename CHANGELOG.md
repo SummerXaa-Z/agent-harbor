@@ -8,6 +8,12 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Web console now has an answer-first **Access Query** workspace for configured systems: operators ask whether a caller can access a target capability, see the evidence chain, and carry denied decisions into Permission Changes as a one-time prefilled fix.
+- Web 控制台新增配置完成后的答案优先 **访问查询** 工作区：管理员先查询调用方是否能访问目标能力，查看判定链路，并可把拒绝判定一次性带入权限变更形成预填修复。
+- Permission Changes now accepts Access Query handoff context without auto-submitting or auto-generating a draft, and shows a dismissible context notice before the operator continues approval and apply.
+- 权限变更现在可接收访问查询交接上下文，但不会自动提交或自动生成草案；操作员继续审批和应用前会看到可关闭的上下文提示。
+- Setup-aware routing now uses a narrow `setupLoadedFromApi` signal and loads Access Query from the unscoped catalog, so non-critical dashboard endpoint fallback does not keep configured systems stuck on Getting Started.
+- 配置感知路由现在使用更窄的 `setupLoadedFromApi` 信号，并让访问查询加载全局 catalog，避免非关键仪表盘端点回退时把已配置系统卡在开始使用。
 - Web console now includes a first-run **Getting Started** workspace with a six-step tenant-to-evidence checklist, a pure frontend setup-readiness model, journey-ordered navigation, and empty-state actions that point operators to the next setup dependency.
 - Web 控制台新增首次使用的 **开始使用** 工作区，提供租户到证据的六步检查清单、纯前端配置就绪判定、按旅程排序的导航，以及指向下一项依赖的空状态操作。
 - Web console controller state is now split into domain hooks for management operations, capability governance, tenant access profiles, and the core journey; architecture tests cap `ConsoleController.tsx` state growth and keep `AiAdminPermissionWorkbench.tsx` under a guarded size limit.
@@ -198,6 +204,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- Permission-package approval request list responses are normalized before controller merge, preventing malformed or compatibility fallback payloads from clearing the console during handoff or approval review.
+- 权限包审批请求列表响应会在进入控制器合并前归一化，避免异常响应或兼容回退 payload 在交接或审批复核时清空控制台。
 - Web console wording now separates Technical overrides, Filter settings, Trace details, and Technical details, adds expand/collapse trace controls to Runtime Audit, reshapes System Self-Check into structured configuration/runtime grids, and adds a concise in-product permission concept guide.
 - Web 控制台现在区分“技术覆盖、筛选条件、追踪详情、技术详情”，运行审计新增追踪详情统一展开/收起，系统自检改为结构化配置/运行摘要网格，并在权限变更中加入轻量概念速览。
 - README Permission Changes onboarding is now split into bilingual validation and local-run steps instead of long dense paragraphs.

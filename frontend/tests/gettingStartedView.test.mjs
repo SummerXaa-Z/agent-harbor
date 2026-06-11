@@ -63,7 +63,7 @@ test("console resolves first-run default navigation once after data loads", () =
   assert.match(controller, /function initialHashNavKey\(\): NavKey \| null/);
   assert.match(controller, /const defaultNavResolvedRef = useRef\(initialHashNavKey\(\) !== null\)/);
   assert.match(controller, /const userSelectedNavRef = useRef\(false\)/);
-  assert.match(controller, /if \(!data \|\| defaultNavResolvedRef\.current \|\| userSelectedNavRef\.current\) return/);
+  assert.match(controller, /if \(!data\?\.setupLoadedFromApi \|\| defaultNavResolvedRef\.current \|\| userSelectedNavRef\.current\) return/);
   assert.match(controller, /setActiveNav\(resolveDefaultNavKey\(data\)\)/);
   assert.match(controller, /defaultNavResolvedRef\.current = true/);
   assert.match(controller, /onClick=\{\(\) => selectActiveNav\(item\.key\)\}/);

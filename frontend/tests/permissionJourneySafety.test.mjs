@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
+const api = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
 const managementHook = readFileSync(new URL("../src/hooks/useManagementOperations.ts", import.meta.url), "utf8");
 
 function functionBlock(name, source = app) {
@@ -56,6 +57,14 @@ test("approval request creation blocks blank and duplicate submissions before th
   assert.match(block, /message\.permissionApprovalRequestTextRequired/);
   assert.match(block, /message\.permissionApprovalAlreadyPending/);
   assert.match(block, /createPermissionPackageApprovalRequest\(aiAdminForm, adminKey\)/);
+});
+
+test("approval request list responses are normalized before controller merge", () => {
+  const block = functionBlock("fetchPermissionPackageApprovalRequests", api);
+
+  assert.match(block, /request<unknown>/);
+  assert.match(block, /Array\.isArray\(rows\)/);
+  assert.match(block, /PermissionPackageApprovalRequest\[\]/);
 });
 
 test("approval resolution ignores the follow-up click from a submit double-click", () => {

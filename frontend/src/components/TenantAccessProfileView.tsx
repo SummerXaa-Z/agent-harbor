@@ -9,9 +9,6 @@ import {
   summarizeDataScopes
 } from "../accessProfile";
 import {
-  accessDecisionEvidenceTone,
-  accessDecisionOutcomeLabel,
-  accessDecisionOutcomeTone,
   accessTraceReasonLabel,
   agentNameMap,
   capabilityDisplayName,
@@ -22,11 +19,11 @@ import {
   type Translator
 } from "../consolePresenters";
 import type {
-  AccessDecisionExplainResult,
   AccessProfileFilters,
   AccessProfileHandoffContext,
   AccessProfileSummary,
   Agent,
+  AskHandoffContext,
   Capability,
   ManagementScope,
   TenantAccessProfileData,
@@ -52,15 +49,12 @@ const emptyAccessProfileSummary: AccessProfileSummary = {
 export function TenantAccessProfileView({
   agents,
   capabilities,
-  explanation,
-  explanationLoading,
-  explanationMessage,
   filters,
   handoffContext,
   loading,
   message,
   onChange,
-  onExplainAccessDecision,
+  onQueryAccess,
   onRefresh,
   onTenantChange,
   profile,
@@ -69,15 +63,12 @@ export function TenantAccessProfileView({
 }: {
   agents: Agent[];
   capabilities: Capability[];
-  explanation: AccessDecisionExplainResult | null;
-  explanationLoading: boolean;
-  explanationMessage: string;
   filters: AccessProfileFilters;
   handoffContext?: AccessProfileHandoffContext | null;
   loading: boolean;
   message: string;
   onChange: (filters: AccessProfileFilters) => void;
-  onExplainAccessDecision: () => void;
+  onQueryAccess: (context: AskHandoffContext) => void;
   onRefresh: () => void;
   onTenantChange: (tenantId: string) => void;
   profile: TenantAccessProfileData | null;
@@ -226,9 +217,21 @@ export function TenantAccessProfileView({
               <RefreshCw size={14} />
               {loading ? t("action.loading") : t("action.loadProfile")}
             </button>
-            <button className="secondary-button" disabled={explanationLoading} onClick={onExplainAccessDecision} type="button">
+            <button
+              className="secondary-button"
+              onClick={() => onQueryAccess({
+                callerInstanceId: filters.callerInstanceId,
+                capabilityId: filters.capabilityId,
+                sourceView: "access",
+                subjectId: filters.subjectId,
+                targetId: filters.targetId,
+                tenantId: scope.tenantId,
+                workspaceId: filters.workspaceId?.trim() || scope.workspaceId
+              })}
+              type="button"
+            >
               <FileSearch size={14} />
-              {explanationLoading ? t("action.loading") : t("action.explainAccessDecision")}
+              {t("action.openAccessQuery")}
             </button>
           </div>
         </div>
@@ -278,11 +281,16 @@ export function TenantAccessProfileView({
         </div>
       </form>
 
-      <AccessDecisionExplainPanel
-        dataScopeLabels={dataScopeLabels}
-        explanation={explanation}
-        loading={explanationLoading}
-        message={explanationMessage}
+      <AccessDecisionMovedPanel
+        onOpen={() => onQueryAccess({
+          callerInstanceId: filters.callerInstanceId,
+          capabilityId: filters.capabilityId,
+          sourceView: "access",
+          subjectId: filters.subjectId,
+          targetId: filters.targetId,
+          tenantId: scope.tenantId,
+          workspaceId: filters.workspaceId?.trim() || scope.workspaceId
+        })}
         t={t}
       />
 
@@ -397,69 +405,22 @@ function tenantLevelLabel(level: number, t: Translator) {
   return t(`text.tenantLevel.${level}`, `L${level}`);
 }
 
-function AccessDecisionExplainPanel({
-  dataScopeLabels,
-  explanation,
-  loading,
-  message,
-  t
-}: {
-  dataScopeLabels: Record<string, string>;
-  explanation: AccessDecisionExplainResult | null;
-  loading: boolean;
-  message: string;
-  t: Translator;
-}) {
-  const dataScopes = explanation?.dataScopes ?? explanation?.decision.dataScopes ?? [];
+function AccessDecisionMovedPanel({ onOpen, t }: { onOpen: () => void; t: Translator }) {
   return (
-    <section className="access-decision-explain">
+    <section className="access-decision-explain access-decision-moved">
       <header>
         <div>
           <strong>{t("section.accessDecisionExplain")}</strong>
-          {loading ? <span>{t("action.loading")}</span> : message ? <span>{message}</span> : null}
+          <span>{t("text.accessDecisionMovedDetail")}</span>
         </div>
       </header>
-      {!explanation ? (
-        <EmptyRow title={t("section.accessDecisionExplain")} detail={t("empty.accessDecisionExplain.detail")} />
-      ) : (
-        <>
-          <div className="access-decision-summary">
-            <Badge tone={accessDecisionOutcomeTone(explanation.outcome)}>
-              {accessDecisionOutcomeLabel(explanation.outcome, t)}
-            </Badge>
-            <div>
-              <strong>{explanation.summary}</strong>
-              <span>{explanation.decision.source} · {explanation.decision.reason}</span>
-            </div>
-          </div>
-          <div className="access-decision-evidence">
-            {explanation.evidence.map((row) => (
-              <article key={`${row.layer}:${row.id ?? row.status}`}>
-                <Badge tone={accessDecisionEvidenceTone(row.status)}>{row.status}</Badge>
-                <div>
-                  <strong>{row.layer}</strong>
-                  <span>{row.message}</span>
-                  {row.id ? <code>{row.id}</code> : null}
-                </div>
-              </article>
-            ))}
-          </div>
-          <div className="access-decision-footer">
-            <div>
-              <strong>{t("detail.dataScopes")}</strong>
-              <span>{summarizeDataScopes(dataScopes, t("text.noDataScope"), dataScopeLabels)}</span>
-            </div>
-            <div>
-              <strong>{t("text.nextActions")}</strong>
-              <ul>
-                {explanation.nextActions.map((action) => (
-                  <li key={action}>{action}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </>
-      )}
+      <div className="access-decision-moved-body">
+        <p>{t("text.accessDecisionMovedBody")}</p>
+        <button className="primary-button" onClick={onOpen} type="button">
+          <FileSearch size={14} />
+          {t("action.openAccessQuery")}
+        </button>
+      </div>
     </section>
   );
 }

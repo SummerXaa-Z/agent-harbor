@@ -22,6 +22,7 @@ import {
 } from "../consolePresenters";
 import type {
   Agent,
+  AskHandoffContext,
   Capability,
   InstanceAssignment,
   Tenant,
@@ -51,6 +52,7 @@ export function CapabilityGovernanceView({
   onApprove,
   onChange,
   onCreateGrantChain,
+  onQueryAccess,
   onRefreshTarget,
   t,
   tenants,
@@ -67,6 +69,7 @@ export function CapabilityGovernanceView({
   onApprove: (capability: Capability) => void;
   onChange: (form: CapabilityGrantForm) => void;
   onCreateGrantChain: (event: FormEvent<HTMLFormElement>) => void;
+  onQueryAccess: (context: AskHandoffContext) => void;
   onRefreshTarget: () => void;
   t: Translator;
   tenants: Tenant[];
@@ -351,6 +354,20 @@ export function CapabilityGovernanceView({
                 <span>{t("section.dataScope")}<strong>{dataScopeText(selectedCatalogCapability.dataScopes, t) || t("text.noDataScope")}</strong></span>
                 <span>{t("text.technicalDetails")}<strong>{selectedCatalogCapability.key}</strong></span>
               </div>
+              <button
+                className="secondary-button table-detail-action"
+                onClick={() => onQueryAccess({
+                  capabilityId: selectedCatalogCapability.id,
+                  sourceView: "capabilities",
+                  targetId: selectedCatalogCapability.targetId,
+                  tenantId: form.tenantId,
+                  workspaceId: form.workspaceId
+                })}
+                type="button"
+              >
+                <FileSearch size={14} />
+                {t("action.queryCapabilityAccess")}
+              </button>
             </aside>
           ) : null}
         </div>

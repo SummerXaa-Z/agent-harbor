@@ -20,6 +20,7 @@ import {
 import type {
   Agent,
   AgentStatus,
+  AskHandoffContext,
   ChannelContract,
   RoutePolicy
 } from "../types";
@@ -154,12 +155,14 @@ export function AgentTable({
   agents,
   channelLabels,
   onStatusChange,
+  onQueryAccess,
   pendingActionId,
   t
 }: {
   agents: Agent[];
   channelLabels: Record<string, string>;
   onStatusChange: (agent: Agent, status: AgentStatus) => void;
+  onQueryAccess: (context: AskHandoffContext) => void;
   pendingActionId: string;
   t: Translator;
 }) {
@@ -303,6 +306,20 @@ export function AgentTable({
             <span>{t("form.workspace")}<strong>{selectedAgent.workspaceId || t("text.notSpecified")}</strong></span>
             <span>{t("text.technicalDetails")}<TechnicalId copyLabel={t("action.copy")} value={selectedAgent.id} /></span>
           </div>
+          <button
+            className="secondary-button table-detail-action"
+            onClick={() => onQueryAccess({
+              callerInstanceId: selectedAgent.channelType === "local" ? selectedAgent.id : undefined,
+              sourceView: "registry",
+              targetId: selectedAgent.channelType !== "local" ? selectedAgent.id : undefined,
+              tenantId: selectedAgent.tenantId,
+              workspaceId: selectedAgent.workspaceId
+            })}
+            type="button"
+          >
+            <FileSearch size={14} />
+            {selectedAgent.channelType === "local" ? t("action.queryThisCallerAccess") : t("action.queryThisTargetAccess")}
+          </button>
         </aside>
       ) : null}
     </div>

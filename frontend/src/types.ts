@@ -378,6 +378,7 @@ export interface ConsoleData {
   evidenceRuns: EvidenceRun[]
   systemMetrics: SystemMetric[]
   loadedFromApi: boolean
+  setupLoadedFromApi: boolean
   grantsLoadedFromApi: boolean
   capabilitiesLoadedFromApi: boolean
   capabilityAssignmentsLoadedFromApi: boolean
@@ -408,6 +409,33 @@ export interface AccessProfileHandoffContext {
   targetName?: string
   capabilityId?: string
   capabilityName?: string
+}
+
+export interface PermissionChangeHandoffContext {
+  tenantId: string
+  tenantName?: string
+  workspaceId: string
+  workspaceName?: string
+  callerInstanceId?: string
+  callerName?: string
+  targetId?: string
+  targetName?: string
+  capabilityId?: string
+  capabilityName?: string
+  subjectId?: string
+  templateId?: string
+  intentText?: string
+  sourceView: 'ask'
+}
+
+export interface AskHandoffContext {
+  tenantId?: string
+  workspaceId?: string
+  callerInstanceId?: string
+  targetId?: string
+  capabilityId?: string
+  subjectId?: string
+  sourceView: 'registry' | 'capabilities' | 'access' | 'ai-admin'
 }
 
 export interface AccessProfileSummary {

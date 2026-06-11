@@ -208,6 +208,45 @@
   line-height: 1.45;
 }
 
+.permission-handoff-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: var(--brand-soft);
+  color: var(--brand-text);
+}
+
+.permission-handoff-notice svg {
+  color: var(--brand-strong);
+}
+
+.permission-handoff-notice div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.permission-handoff-notice strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.permission-handoff-notice span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .approval-context-bar {
   position: sticky;
   z-index: 18;
@@ -1320,6 +1359,15 @@ button.approval-mini-row {
 }
 
 @media (max-width: 720px) {
+  .permission-handoff-notice {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .permission-handoff-notice .secondary-button {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
   .approval-concept-grid {
     grid-template-columns: 1fr;
   }

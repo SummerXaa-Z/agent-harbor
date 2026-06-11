@@ -20,6 +20,14 @@ export function GettingStartedConsoleView({ gettingStartedPanel }: { gettingStar
   );
 }
 
+export function AskView({ askAccessPanel }: { askAccessPanel: ReactNode }) {
+  return (
+    <section className="content-grid">
+      {askAccessPanel}
+    </section>
+  );
+}
+
 export function RegistryView({
   agentRegistryPanel,
   contractMatrixPanel,

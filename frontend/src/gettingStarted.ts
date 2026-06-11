@@ -53,6 +53,6 @@ export function isSetupComplete(data: ConsoleData) {
   return gettingStartedSteps(data).slice(0, 4).every((step) => step.done);
 }
 
-export function resolveDefaultNavKey(data: ConsoleData): "ai-admin" | "getting-started" {
-  return isSetupComplete(data) ? "ai-admin" : "getting-started";
+export function resolveDefaultNavKey(data: ConsoleData): "ask" | "getting-started" {
+  return isSetupComplete(data) ? "ask" : "getting-started";
 }

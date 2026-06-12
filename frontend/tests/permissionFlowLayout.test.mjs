@@ -188,7 +188,7 @@ test("permission request stays navigable at tablet desktop widths", () => {
 test("permission request copy avoids repeated step labels", () => {
   assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.approval_approved": "审批已通过且匹配当前申请。"/);
   assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.apply_done": "权限已应用。"/);
-  assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.validation_ready": "运行证据已完整。"/);
+  assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.validation_ready": "运行记录已完整。"/);
   assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.acceptance_ready": "上线就绪检查已完成。"/);
   assert.match(i18n, /"permissionWorkbench\.detail\.approval_approved": "审批已满足。"/);
   assert.match(i18n, /"permissionWorkbench\.detail\.apply_done": "权限已生效。"/);
@@ -437,14 +437,14 @@ test("capability names use business labels in primary UI", () => {
   assert.doesNotMatch(workbench, /\{capability\.key\} · \{t\(`value\.\$\{capability\.action\}`/);
 });
 
-test("permission request evidence is secondary to the main operator task", () => {
+test("permission request acceptance details stay secondary to the main operator task", () => {
   const auditStart = workbench.indexOf('className="approval-evidence"');
   assert.notEqual(auditStart, -1);
   assert.ok(auditStart > workbench.indexOf('<aside className="approval-process-panel"'));
   assert.match(workbench.slice(auditStart), /section\.aiAdminReadiness/);
   assert.match(workbench.slice(auditStart), /section\.permissionProductionReadiness/);
   assert.match(i18n, /"section\.permissionAdvancedChecks": "验收明细"/);
-  assert.match(i18n, /"section\.aiAdminApprovalJourney": "运行验证证据"/);
+  assert.match(i18n, /"section\.aiAdminApprovalJourney": "运行验证记录"/);
 });
 
 test("management audit evidence uses business labels before technical ids", () => {

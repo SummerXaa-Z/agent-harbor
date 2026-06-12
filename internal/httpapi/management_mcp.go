@@ -423,12 +423,12 @@ func managementMCPTools() []managementMCPTool {
 		},
 		{
 			Name:        "preflight_permission_package",
-			Description: "Run a read-only permission package apply preflight with blockers, warnings, planned changes, approval readiness, and existing grant-chain evidence.",
+			Description: "Run a read-only permission package apply preflight with blockers, warnings, planned changes, approval readiness, and existing grant-chain records.",
 			InputSchema: permissionPackageApplySchema(),
 		},
 		{
 			Name:        "apply_permission_package",
-			Description: "Apply a ready permission package draft by approving allowed capabilities, creating tenant/workspace/caller assignments, and recording audit evidence. Approval-required drafts need approvalRequestId.",
+			Description: "Apply a ready permission package draft by approving allowed capabilities, creating tenant/workspace/caller assignments, and recording audit events. Approval-required drafts need approvalRequestId.",
 			InputSchema: permissionPackageApplySchema(),
 		},
 		{
@@ -448,7 +448,7 @@ func managementMCPTools() []managementMCPTool {
 		},
 		{
 			Name:        "reject_permission_package_approval_request",
-			Description: "Reject a pending permission package approval request and record reviewer evidence.",
+			Description: "Reject a pending permission package approval request and record reviewer audit details.",
 			InputSchema: approvalResolutionSchema(),
 		},
 		{
@@ -458,17 +458,17 @@ func managementMCPTools() []managementMCPTool {
 		},
 		{
 			Name:        "list_permission_package_applications",
-			Description: "List permission package application records so an admin agent can review template version, scope, created assignments, and data-scope evidence.",
+			Description: "List permission package application records so an admin agent can review template version, scope, created assignments, and data-scope records.",
 			InputSchema: permissionPackageApplicationListSchema(),
 		},
 		{
 			Name:        "check_permission_package_production_readiness",
-			Description: "Check the read-only production go/no-go gate for a tenant-scoped permission package using preflight, application, health, impact, access-profile, runtime, and audit evidence.",
+			Description: "Check the read-only production go/no-go gate for a tenant-scoped permission package using preflight, application, health, impact, access-profile, runtime, and audit records.",
 			InputSchema: permissionPackageProductionReadinessSchema(),
 		},
 		{
 			Name:        "export_permission_package_production_evidence",
-			Description: "Export a read-only JSON evidence report for a tenant-scoped permission package production readiness decision.",
+			Description: "Export a read-only JSON acceptance report for a tenant-scoped permission package production readiness decision.",
 			InputSchema: permissionPackageProductionReadinessSchema(),
 		},
 		{
@@ -483,7 +483,7 @@ func managementMCPTools() []managementMCPTool {
 		},
 		{
 			Name:        "get_tenant_access_profile",
-			Description: "Get tenant access-profile evidence after permission changes, including effective grants, assignments, data scopes, and recent traces.",
+			Description: "Get tenant access-profile records after permission changes, including effective grants, assignments, data scopes, and recent traces.",
 			InputSchema: objectSchema(map[string]any{
 				"tenantId":         stringSchema("Tenant to inspect."),
 				"workspaceId":      stringSchema("Optional workspace filter."),
@@ -932,7 +932,7 @@ func managementMCPAccessNextActions(decision domain.CapabilityAccessDecision) []
 	case strings.Contains(reason, "denies"):
 		return []string{"Review the deny effect on the matching entitlement or assignment before granting broader access."}
 	default:
-		return []string{"Inspect get_tenant_access_profile for this tenant/workspace/caller/capability and repair the first missing evidence layer."}
+		return []string{"Inspect get_tenant_access_profile for this tenant/workspace/caller/capability and repair the first missing decision layer."}
 	}
 }
 
@@ -1062,7 +1062,7 @@ func permissionPackageProductionReadinessSchema() map[string]any {
 		"templateId":        stringSchema("Permission package template id, for example sales-readonly."),
 		"targetId":          stringSchema("Target MCP agent id."),
 		"callerInstanceId":  stringSchema("Caller agent instance that will receive the package."),
-		"subjectId":         stringSchema("Optional production subject id used to filter runtime evidence."),
+		"subjectId":         stringSchema("Optional production subject id used to filter runtime records."),
 		"region":            stringSchema("Optional region data-scope value. Defaults from the latest application when available."),
 		"requestText":       stringSchema("Optional administrator request text. Defaults from the latest application when available."),
 		"subjectSelector":   stringSchema("Optional subject selector. Defaults from the latest application when available."),

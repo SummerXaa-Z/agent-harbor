@@ -14,19 +14,19 @@ test("consoleDataSourceLabel does not call live API data samples", () => {
 
 test("runtimeEvidenceMetric summarizes real runtime traces", () => {
   assert.deepEqual(runtimeEvidenceMetric(0, 0), {
-    label: "Runtime Evidence",
+    label: "Runtime Records",
     value: "0",
     detail: "no traces yet",
     tone: "neutral"
   });
   assert.deepEqual(runtimeEvidenceMetric(2, 1), {
-    label: "Runtime Evidence",
+    label: "Runtime Records",
     value: "3",
     detail: "2 allowed / 1 denied",
     tone: "info"
   });
   assert.deepEqual(runtimeEvidenceMetric(2, 0), {
-    label: "Runtime Evidence",
+    label: "Runtime Records",
     value: "2",
     detail: "2 allowed / 0 denied",
     tone: "success"

@@ -1953,7 +1953,7 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 		permissionPackageProductionAddNextAction(&result, "apply_permission_package", "Apply the approved permission package before production readiness.")
 	} else {
 		result.Summary.HasApplication = true
-		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_present", domain.PermissionPackagePreflightPassed, "Permission package application evidence is present.", result.LatestApplication.ID))
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_present", domain.PermissionPackagePreflightPassed, "Permission package application record is present.", result.LatestApplication.ID))
 		if permissionPackageProductionApplicationScopeMatches(query, *result.LatestApplication) {
 			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_scope_match", domain.PermissionPackagePreflightPassed, "Latest application matches the requested production scope.", result.LatestApplication.ID))
 		} else {
@@ -2006,7 +2006,7 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("access_profile_chain_present", domain.PermissionPackagePreflightPassed, "Tenant access profile contains an effective target, workspace, and caller grant chain.", accessEvidenceID))
 	} else {
 		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("access_profile_chain_present", domain.PermissionPackagePreflightBlocking, "Tenant access profile does not contain an effective grant chain for this caller and target.", ""))
-		permissionPackageProductionAddNextAction(&result, "verify_access_profile", "Verify tenant entitlement, workspace assignment, and caller assignment evidence.")
+		permissionPackageProductionAddNextAction(&result, "verify_access_profile", "Verify tenant entitlement, workspace assignment, and caller assignment records.")
 	}
 
 	traces := []domain.TraceEvent{}
@@ -2025,16 +2025,16 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 	result.RuntimeEvidence.DeniedTrace = permissionPackageProductionLatestTrace(traces, domain.TraceDecisionDenied, query.SubjectID)
 	if result.RuntimeEvidence.AllowedTrace != nil {
 		result.Summary.HasAllowedTrace = true
-		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_allowed_trace_present", domain.PermissionPackagePreflightPassed, "Runtime allowed evidence is present for this caller and target.", result.RuntimeEvidence.AllowedTrace.ID))
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_allowed_trace_present", domain.PermissionPackagePreflightPassed, "Runtime allowed record is present for this caller and target.", result.RuntimeEvidence.AllowedTrace.ID))
 	} else {
-		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_allowed_trace_present", domain.PermissionPackagePreflightBlocking, "Runtime allowed evidence is missing for this caller and target.", ""))
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_allowed_trace_present", domain.PermissionPackagePreflightBlocking, "Runtime allowed record is missing for this caller and target.", ""))
 		permissionPackageProductionAddNextAction(&result, "run_allowed_runtime_call", "Run an allowed MCP call with the production subject before go-live.")
 	}
 	if result.RuntimeEvidence.DeniedTrace != nil {
 		result.Summary.HasDeniedTrace = true
-		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_denied_trace_present", domain.PermissionPackagePreflightPassed, "Runtime denied evidence is present for this caller and target.", result.RuntimeEvidence.DeniedTrace.ID))
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_denied_trace_present", domain.PermissionPackagePreflightPassed, "Runtime denied record is present for this caller and target.", result.RuntimeEvidence.DeniedTrace.ID))
 	} else {
-		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_denied_trace_present", domain.PermissionPackagePreflightBlocking, "Runtime denied evidence is missing for this caller and target.", ""))
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_denied_trace_present", domain.PermissionPackagePreflightBlocking, "Runtime denied record is missing for this caller and target.", ""))
 		permissionPackageProductionAddNextAction(&result, "run_denied_runtime_call", "Run a denied MCP call that proves blocked tools stay blocked.")
 	}
 
@@ -2058,13 +2058,13 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("applied_audit_event_present", domain.PermissionPackagePreflightPassed, "Applied audit event is present for this permission package application.", result.AuditEvidence.AppliedEvent.ID))
 	} else {
 		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("applied_audit_event_present", domain.PermissionPackagePreflightBlocking, "Applied audit event is missing for this permission package application.", ""))
-		permissionPackageProductionAddNextAction(&result, "verify_applied_audit", "Verify permission package applied audit evidence before production readiness.")
+		permissionPackageProductionAddNextAction(&result, "verify_applied_audit", "Verify the permission package applied audit record before production readiness.")
 	}
 
 	result.Summary = permissionPackageProductionReadinessSummaryFor(result)
 	result.Status = permissionPackageProductionReadinessStatus(result.Summary)
 	if result.Status == "ready" {
-		permissionPackageProductionAddNextAction(&result, "export_production_evidence", "Production readiness evidence is complete.")
+		permissionPackageProductionAddNextAction(&result, "export_production_evidence", "Production readiness is complete.")
 	}
 	return result, nil
 }

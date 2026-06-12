@@ -10,6 +10,7 @@ import {
 } from "../src/i18n.ts";
 
 const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
+const i18nSource = readFileSync(new URL("../src/i18n.ts", import.meta.url), "utf8");
 
 test("normalizeLanguage supports English and Simplified Chinese", () => {
   assert.equal(normalizeLanguage("zh-CN"), "zh-CN");
@@ -22,6 +23,24 @@ test("resolveInitialLanguage prefers stored language over browser language", () 
   assert.equal(resolveInitialLanguage("en", ["zh-CN"]), "en");
   assert.equal(resolveInitialLanguage(undefined, ["zh-CN", "en-US"]), "zh-CN");
   assert.equal(resolveInitialLanguage(undefined, ["en-US", "zh-CN"]), "en");
+});
+
+test("Simplified Chinese product copy avoids forensic wording", () => {
+  assert.doesNotMatch(i18nSource, /\u8bc1\u636e/);
+});
+
+test("English product copy uses acceptance and records wording", () => {
+  const t = createTranslator("en");
+
+  assert.equal(t("action.exportProductionEvidence"), "Export acceptance report");
+  assert.equal(t("concept.evidence"), "Acceptance materials");
+  assert.equal(t("metric.runtimeEvidence"), "Runtime Records");
+  assert.equal(t("metric.traceEvidence"), "Trace Records");
+  assert.equal(t("navGroup.audit"), "Audit & Acceptance");
+  assert.equal(t("panel.evidenceRuns"), "Acceptance History");
+  assert.equal(t("section.aiAdminApprovalJourney"), "Runtime Validation Records");
+  assert.equal(t("text.cockpitKeyMessageEvidence"), "Clear go-live status");
+  assert.equal(t("message.productionEvidenceExported"), "Acceptance report exported.");
 });
 
 test("createTranslator returns core journey Chinese labels", () => {
@@ -37,7 +56,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("nav.evidence"), "上线状态");
   assert.equal(t("nav.registry"), "Agent 与工具");
   assert.equal(t("navGroup.primary"), "查与改");
-  assert.equal(t("navGroup.audit"), "审计与证据");
+  assert.equal(t("navGroup.audit"), "审计与验收");
   assert.equal(t("navGroup.configuration"), "资源清单");
   assert.equal(t("navDetail.ai-admin"), "新建、审批、应用并验收权限变更。");
   assert.equal(t("navDetail.access"), "按租户和工作区盘点生效权限。");
@@ -49,12 +68,12 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("panel.auditTraces"), "运行审计");
   assert.equal(t("empty.auditTraces.title"), "暂无运行记录");
   assert.equal(t("empty.auditTraces.detail"), "允许、拒绝和工具发现过滤记录会显示在这里。");
-  assert.equal(t("panel.evidenceRuns"), "历史证据");
-  assert.equal(t("empty.evidenceRuns.title"), "暂无历史证据");
+  assert.equal(t("panel.evidenceRuns"), "历史验收");
+  assert.equal(t("empty.evidenceRuns.title"), "暂无历史验收记录");
   assert.equal(t("section.goLiveAcceptance"), "上线验收");
   assert.equal(t("text.goLiveAcceptanceTaskTitle"), "确认这次权限变更是否可以上线");
-  assert.equal(t("text.goLiveAcceptanceNoReadinessDetail"), "先回到权限变更工作台执行运行验证或状态检查，系统会补齐运行、权限画像和审计证据。");
-  assert.equal(t("metric.runtimeEvidence"), "运行证据");
+  assert.equal(t("text.goLiveAcceptanceNoReadinessDetail"), "先回到权限变更工作台执行运行验证或状态检查，系统会补齐运行、权限画像和审计记录。");
+  assert.equal(t("metric.runtimeEvidence"), "运行记录");
   assert.equal(t("action.loadProfile"), "加载画像");
   assert.equal(t("panel.coreJourney"), "核心权限链路自检");
   assert.equal(t("action.runCoreJourney"), "执行自检");
@@ -66,13 +85,13 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("status.systemHealthReady"), "可执行");
   assert.equal(t("status.systemHealthNeedsCheck"), "需检查");
   assert.equal(t("text.cockpitKeyMessageTitle"), "让 Agent 的工具和数据访问可申请、可审批、可验证");
-  assert.equal(t("text.cockpitKeyMessageBody"), "AgentHarbor 以租户为边界，把权限包、审批、运行拦截和上线证据串成一条可交付的生产路径。");
+  assert.equal(t("text.cockpitKeyMessageBody"), "AgentHarbor 以租户为边界，把权限包、审批、运行拦截和上线验收串成一条可交付的生产路径。");
   assert.equal(t("text.cockpitKeyMessageBoundary"), "租户边界清楚");
   assert.equal(t("text.cockpitKeyMessageBoundaryDetail"), "三级租户、工作区和实例权限共同决定可访问数据。");
   assert.equal(t("text.cockpitKeyMessageOperations"), "权限变更可控");
   assert.equal(t("text.cockpitKeyMessageOperationsDetail"), "管理员新建权限变更，高风险能力先审批再落地。");
-  assert.equal(t("text.cockpitKeyMessageEvidence"), "上线证据完整");
-  assert.equal(t("text.cockpitKeyMessageEvidenceDetail"), "允许/拒绝调用、访问画像和审计事件共同支撑上线证据。");
+  assert.equal(t("text.cockpitKeyMessageEvidence"), "上线状态清楚");
+  assert.equal(t("text.cockpitKeyMessageEvidenceDetail"), "允许/拒绝调用、访问画像和审计事件共同支撑上线判断。");
   assert.equal(t("text.coreJourneyIntro"), "验证租户、工具发现、授权链、运行拦截和访问画像是否形成最小权限闭环。");
   assert.equal(t("text.coreJourneyCompletion"), "自检进度");
   assert.equal(t("text.systemHealthReadyTitle"), "可以执行自检");
@@ -113,7 +132,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.notEqual(t("nav.ai-admin"), "申请权限");
   assert.equal(t("page.aiAdmin"), "权限变更与状态检查");
   assert.equal(t("panel.aiAdminPermissionWorkbench"), "权限变更工作台");
-  assert.equal(t("section.aiAdminApprovalJourney"), "运行验证证据");
+  assert.equal(t("section.aiAdminApprovalJourney"), "运行验证记录");
   assert.equal(t("section.aiAdminReadiness"), "环境检查");
   assert.equal(t("section.aiAdminProductionConsole"), "状态检查");
   assert.equal(t("action.runApprovalJourney"), "执行运行验证");
@@ -124,7 +143,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("text.aiAdminGoLiveReadyTitle"), "已满足上线条件");
   assert.equal(t("text.aiAdminGoLiveRemainingBadge"), "还差 {count}");
   assert.equal(t("text.aiAdminGoLiveWaitingTitle"), "暂不能上线，还差 {count} 步");
-  assert.equal(t("text.aiAdminGoLiveWaitingDetail"), "按下一步补齐审批、应用、运行验证和审计证据。");
+  assert.equal(t("text.aiAdminGoLiveWaitingDetail"), "按下一步补齐审批、应用、运行验证和审计记录。");
   assert.equal(t("journey.aiAdmin.next.approvalRequest"), "先发起并批准审批请求。");
   assert.equal(t("text.aiAdminProductionConsoleHelp"), "按申请、审批、落地和运行验证汇总状态检查结果。");
   assert.equal(t("section.permissionRequestTask"), "权限变更");
@@ -187,8 +206,8 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("text.permissionApplyReadyTitle"), "可以应用权限");
   assert.equal(t("text.permissionApplyWaitingTitle"), "等待审批");
   assert.equal(t("status.currentStep"), "当前");
-  assert.equal(t("text.permissionRequestGoLiveHelp"), "应用后执行运行验证，系统验证允许/拒绝调用并生成交接证据。");
-  assert.equal(t("text.permissionRequestAdvancedSummary"), "主流程背后的辅助证据：环境、预检、审批队列、状态检查、权限判定、影响和运行证据。");
+  assert.equal(t("text.permissionRequestGoLiveHelp"), "应用后执行运行验证，系统验证允许/拒绝调用并生成交接材料。");
+  assert.equal(t("text.permissionRequestAdvancedSummary"), "主流程背后的辅助材料：环境、预检、审批队列、状态检查、权限判定、影响和运行记录。");
   assert.equal(t("text.permissionRequestLockedTitle"), "当前配置仅供复核");
   assert.equal(t("text.permissionRequestLockedActiveDetail"), "本次权限变更已经生效。如需修改范围或权限包，请新建权限变更。");
   assert.equal(t("text.permissionRequestLockedApprovalDetail"), "申请已进入审批冻结状态。如需修改范围或权限包，请撤回后重新发起。");
@@ -254,7 +273,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("section.accessProfileAdjustScope"), "调整查看范围");
   assert.equal(t("text.accessProfileTaskTitle"), "复核最终访问权限");
   assert.equal(t("text.accessProfileFiltersDetail"), "先选择租户、工作区、调用方、目标和能力，再查看最终权限。");
-  assert.equal(t("text.accessProfileAdjustScopeDetail"), "本次权限变更范围已固定在上方；只有需要查看其他证据范围时再调整筛选。");
+  assert.equal(t("text.accessProfileAdjustScopeDetail"), "本次权限变更范围已固定在上方；只有需要查看其他验收范围时再调整筛选。");
   assert.equal(t("text.accessProfileHandoffContext"), "权限变更交接上下文");
   assert.equal(t("text.accessProfileHandoffTitle"), "正在复核同一次权限变更");
   assert.equal(t("text.accessProfileHandoffDetail"), "同一次权限变更范围已固定在下方，包含租户、工作区、调用方、目标和能力。");
@@ -273,7 +292,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("action.reviewApplicationImpact"), "查看影响");
   assert.equal(t("action.refreshApplicationHealth"), "刷新状态");
   assert.equal(t("action.checkProductionReadiness"), "执行状态检查");
-  assert.equal(t("action.exportProductionEvidence"), "导出证据");
+  assert.equal(t("action.exportProductionEvidence"), "导出验收报告");
   assert.equal(t("action.openAcceptanceDetails"), "查看验收明细");
   assert.equal(t("action.openProcessDetails"), "查看处理流程");
   assert.equal(t("action.openAccessProfile"), "查看权限画像");
@@ -281,13 +300,13 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("action.confirmWithdrawPermissionRequest"), "确认撤回");
   assert.equal(t("action.rehearseApplicationDrift"), "演练漂移");
   assert.equal(t("text.permissionChangeCompleteTitle"), "本次权限变更已生效");
-  assert.equal(t("text.permissionChangeCompleteDetail"), "权限已应用，运行验证和上线证据已完成。");
+  assert.equal(t("text.permissionChangeCompleteDetail"), "权限已应用，运行验证和上线验收已完成。");
   assert.equal(t("text.permissionChangeCompletedAt"), "完成时间：{date}");
   assert.equal(t("message.permissionApplicationImpactLoaded"), "影响复核已加载。");
   assert.equal(t("message.permissionApplicationHealthLoaded"), "落地状态已加载。");
   assert.equal(t("message.permissionProductionReadinessLoaded"), "状态检查结果已加载。");
-  assert.equal(t("message.productionEvidenceExported"), "上线证据报告已导出。");
-  assert.equal(t("message.productionEvidenceRequiresLiveApi"), "导出上线证据需要实时 API。");
+  assert.equal(t("message.productionEvidenceExported"), "上线验收报告已导出。");
+  assert.equal(t("message.productionEvidenceRequiresLiveApi"), "导出上线验收报告需要实时 API。");
   assert.equal(t("message.permissionProductionReadinessRequiresLiveApi"), "状态检查需要实时 API。");
   assert.equal(t("message.permissionApplicationHealthRequiresLiveApi"), "落地状态巡检需要实时 API。");
   assert.equal(t("message.permissionApplicationDriftRehearsalLoaded"), "漂移演练已加载。");
@@ -335,9 +354,9 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("status.productionNeedsReview"), "需复核");
   assert.equal(t("status.productionBlocked"), "阻断");
   assert.equal(t("default.aiAdminApprovalJourneyRequestText"), "给客服分诊助手开通当前租户的客户查询和工单有限更新权限，禁止导出合同。");
-  assert.equal(t("productionCheck.runtime_allowed_trace_present"), "允许运行证据");
-  assert.equal(t("productionCheck.runtime_denied_trace_present"), "拒绝运行证据");
-  assert.equal(t("empty.permissionProductionReadiness.detail"), "应用权限并采集运行、审计和落地证据后执行状态检查。");
+  assert.equal(t("productionCheck.runtime_allowed_trace_present"), "允许运行记录");
+  assert.equal(t("productionCheck.runtime_denied_trace_present"), "拒绝运行记录");
+  assert.equal(t("empty.permissionProductionReadiness.detail"), "应用权限并采集运行、审计和落地记录后执行状态检查。");
   assert.equal(t("status.approvalPending"), "待审批");
   assert.equal(t("status.stepMissing"), "待完成");
   assert.equal(t("message.permissionApprovalAlreadyPending"), "当前申请已有待审批请求，请先查看或批准现有请求后再继续。");

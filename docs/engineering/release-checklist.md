@@ -2,9 +2,9 @@
 
 Use this checklist before merging larger behavior changes, cutting a tagged release, or declaring `main` ready for downstream integration.
 
-For the current v0.2.0 local validation evidence, see `docs/engineering/0.2.0-local-validation-evidence.md`.
+For the current v0.2.0 local validation record, see `docs/engineering/0.2.0-local-validation-evidence.md`.
 
-当前 v0.2.0 本地验收证据见 `docs/engineering/0.2.0-local-validation-evidence.md`。
+当前 v0.2.0 本地验收材料见 `docs/engineering/0.2.0-local-validation-evidence.md`。
 
 ## Required Local Checks
 
@@ -43,7 +43,7 @@ Run end-to-end scenarios when user-visible control-plane or data-plane behavior 
 ADMIN_KEY=local-admin-key make scenario-all
 ```
 
-For web console changes, run `make demo` and manually verify that the console opens directly on Permission Changes, the separate product-message card and old card-board UI are absent, the five-step approval and readiness path is visible, the current step is marked, advanced checks are collapsed by default, the main request form uses readable tenant/caller/target/access object choices, raw subject selectors stay in Advanced settings, and runtime checks are ready against the official SDK MCP demo service. Also verify the Self-Check workspace core permission loop can run against the local MCP service, and the non-destructive reset returns that self-check session to its default scope. Confirm the tenant access journey remains usable in both English and Simplified Chinese, including the language toggle, Tenant Permission Console, capability governance entry point, runtime evidence metrics, and trace evidence labels.
+For web console changes, run `make demo` and manually verify that the console opens directly on Permission Changes, the separate product-message card and old card-board UI are absent, the five-step approval and readiness path is visible, the current step is marked, advanced checks are collapsed by default, the main request form uses readable tenant/caller/target/access object choices, raw subject selectors stay in Advanced settings, and runtime checks are ready against the official SDK MCP demo service. Also verify the Self-Check workspace core permission loop can run against the local MCP service, and the non-destructive reset returns that self-check session to its default scope. Confirm the tenant access journey remains usable in both English and Simplified Chinese, including the language toggle, Tenant Permission Console, capability governance entry point, runtime records metrics, and trace records labels.
 
 For release-candidate validation of the browser-facing AI Admin path, run:
 
@@ -73,7 +73,7 @@ AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREA
 MCP_SERVER_MODE=real make scenario-permission-package-approval
 ```
 
-This scenario must prove draft, approval request, approval expiry metadata, approved apply, atomic one-time approval consumption, consumed-approval reuse rejection, runtime allow/deny, tenant access-profile, permission package application, and applied audit evidence.
+This scenario must prove draft, approval request, approval expiry metadata, approved apply, atomic one-time approval consumption, consumed-approval reuse rejection, runtime allow/deny, tenant access-profile, permission package application, and applied audit records.
 
 ## GitHub Checks
 

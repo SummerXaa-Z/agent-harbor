@@ -460,7 +460,7 @@ test("management audit evidence uses business labels before technical ids", () =
   assert.doesNotMatch(auditTable, /text\.technicalDetails/);
   assert.doesNotMatch(runtimeEvidenceViews, /<span>\{event\.resourceId\}<\/span>/);
   assert.match(i18n, /"auditAction\.permission_package\.applied": "应用权限包"/);
-  assert.match(i18n, /"auditActor\.local-dev": "本地管理员"/);
+  assert.match(i18n, /"auditActor\.local-dev": "本地开发管理员"/);
   assert.match(i18n, /"text\.auditDetails": "详情"/);
   assert.match(styles, /\.audit-technical summary\s*\{/);
   assert.match(styles, /\.badge\s*\{[^}]*text-transform:\s*none;/s);

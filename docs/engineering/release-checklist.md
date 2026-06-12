@@ -45,6 +45,17 @@ ADMIN_KEY=local-admin-key make scenario-all
 
 For web console changes, run `make demo` and manually verify that the console opens directly on Permission Changes, the separate product-message card and old card-board UI are absent, the five-step approval and readiness path is visible, the current step is marked, advanced checks are collapsed by default, the main request form uses readable tenant/caller/target/access object choices, raw subject selectors stay in Advanced settings, and runtime checks are ready against the official SDK MCP demo service. Also verify the Self-Check workspace core permission loop can run against the local MCP service, and the non-destructive reset returns that self-check session to its default scope. Confirm the tenant access journey remains usable in both English and Simplified Chinese, including the language toggle, Tenant Permission Console, capability governance entry point, runtime records metrics, and trace records labels.
 
+If the default demo ports are already in use, run the same browser check with isolated demo ports. `scripts/demo.sh` must automatically wire the frontend API base and local CORS from these port values:
+
+```bash
+AGENT_HARBOR_DEMO_API_PORT=19094 \
+AGENT_HARBOR_DEMO_FRONTEND_PORT=15184 \
+MOCK_MCP_PORT=18794 \
+  make demo
+```
+
+如果默认 demo 端口已被占用，使用上面的隔离端口执行同样的浏览器检查；`scripts/demo.sh` 应根据这些端口自动配置前端 API 地址和本地 CORS。
+
 For release-candidate validation of the browser-facing AI Admin path, run:
 
 ```bash

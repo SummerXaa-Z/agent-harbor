@@ -118,7 +118,7 @@ The scenario starts the dependency-free mock MCP server automatically and points
 
 ## Try the Permission Changes Console
 
-First-time users start on **Getting Started**, a six-step setup checklist that explains the chain from tenant to Agent, capability, grant, runtime records, and go-live evidence. Once the first four setup steps are complete, the console opens directly on **Permission Changes** for daily operations.
+First-time users start on **Getting Started**, a six-step setup checklist that explains the chain from tenant to Agent, capability, grant, runtime records, and go-live status. Once the first four setup steps are complete, the console opens directly on **Permission Changes** for daily operations.
 
 首次打开控制台时，如果系统尚未完成配置，会先进入 **开始使用**：一个六步检查清单，说明从租户、Agent、能力、授权、运行记录到上线验收的链路。前四步完成后，控制台会默认进入日常操作的 **权限变更**。
 
@@ -214,7 +214,7 @@ For the first browser evaluation, run:
 make demo
 ```
 
-Then open `http://127.0.0.1:5174/`. If the live system is empty, the web console opens on **Getting Started** and shows the setup chain before any permission-change work. After tenant, Agent, capability, and grant-chain setup is complete, the same URL opens on **Access Query**: operators first ask whether a caller can access a target capability, review the evidence chain, and then use **Start permission fix** to prefill **Permission Changes** without copying technical IDs. **Permission Changes** remains the production approval and readiness workspace for the approval-required **Support ticket triage** path. Each validation run uses fresh `ui-approval-*` identifiers, applies permissions through live APIs, sends runtime MCP calls with `X-AgentHarbor-Subject-Id`, and surfaces the application record, application impact review, tenant access profile, traces, applied audit event, go-live readiness, and bounded acceptance export in the console.
+Then open `http://127.0.0.1:5174/`. If the live system is empty, the web console opens on **Getting Started** and shows the setup chain before any permission-change work. After tenant, Agent, capability, and grant-chain setup is complete, the same URL opens on **Access Query**: operators first ask whether a caller can access a target capability, review the decision chain, and then use **Start permission fix** to prefill **Permission Changes** without copying technical IDs. **Permission Changes** remains the production approval and readiness workspace for the approval-required **Support ticket triage** path. Each validation run uses fresh `ui-approval-*` identifiers, applies permissions through live APIs, sends runtime MCP calls with `X-AgentHarbor-Subject-Id`, and surfaces the application record, application impact review, tenant access profile, traces, applied audit event, go-live readiness, and bounded acceptance export in the console.
 
 打开 `http://127.0.0.1:5174/` 后，如果实时系统为空，Web 控制台会进入 **开始使用** 并先展示配置链路；当租户、Agent、能力和授权链完成后，同一个地址会进入 **访问查询**。管理员先查询某个调用方能否访问目标能力，查看判定链路，再通过 **发起权限修复** 把上下文预填到 **权限变更**，不需要复制技术 ID。**权限变更** 仍然负责审批、应用、状态检查和上线验收。
 
@@ -227,6 +227,17 @@ The Permission Changes console also shows runtime checks for the API, MCP tool s
 - Web console at `http://127.0.0.1:5174`
 
 Use `Ctrl+C` in the demo terminal to stop all demo services.
+
+If those ports are already in use, set only the demo ports; the script wires the frontend API base and local browser CORS automatically:
+
+```bash
+AGENT_HARBOR_DEMO_API_PORT=19094 \
+AGENT_HARBOR_DEMO_FRONTEND_PORT=15184 \
+MOCK_MCP_PORT=18794 \
+  make demo
+```
+
+如果默认端口已被本机其他开发服务占用，只需要切换上面的三个端口；脚本会自动把前端连接地址和本地浏览器 CORS 配好。
 
 If you need to troubleshoot a single service, use the manual three-terminal path:
 

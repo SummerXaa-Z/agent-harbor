@@ -206,6 +206,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- Getting Started now uses a guided first-run layout with a prominent current step, nearby primary action, compact progress summary, and tighter checklist instead of a wide table-like workspace.
+- 开始使用页现在改为首次接入向导布局，突出当前下一步、就近展示主操作、压缩进度摘要和检查清单，不再像一张横向大表。
 - Permission-package approval request list responses are normalized before controller merge, preventing malformed or compatibility fallback payloads from clearing the console during handoff or approval review.
 - 权限包审批请求列表响应会在进入控制器合并前归一化，避免异常响应或兼容回退 payload 在交接或审批复核时清空控制台。
 - Web console wording now separates Technical overrides, Filter settings, Trace details, and Technical details, adds expand/collapse trace controls to Runtime Audit, reshapes System Self-Check into structured configuration/runtime grids, and adds a concise in-product permission concept guide.

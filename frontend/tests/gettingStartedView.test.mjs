@@ -23,10 +23,17 @@ test("getting started workspace is registered as a console view", () => {
   assert.match(controller, /setupDataAvailable=\{Boolean\(data\?\.setupLoadedFromApi\)\}/);
 });
 
-test("getting started view renders checklist, chain, actions, and sample notice", () => {
+test("getting started view renders a guided current-step workspace", () => {
   assert.match(gettingStartedView, /export function GettingStartedView/);
+  assert.match(gettingStartedView, /className="getting-started-layout"/);
+  assert.match(gettingStartedView, /className="getting-started-main"/);
+  assert.match(gettingStartedView, /className=\{`getting-started-focus status-\$\{focusStatus\}`\}/);
   assert.match(gettingStartedView, /className="getting-started-chain"/);
+  assert.match(gettingStartedView, /className=\{`getting-started-chain-node status-\$\{statusForStep\(steps\[index\], index\)\}`\}/);
+  assert.match(gettingStartedView, /className="getting-started-step-list"/);
   assert.match(gettingStartedView, /className=\{`getting-started-step status-\$\{status\}`\}/);
+  assert.match(gettingStartedView, /<progress/);
+  assert.match(gettingStartedView, /\{completedSteps\}\/\{steps\.length\}/);
   assert.match(gettingStartedView, /href=\{step\.targetHash\}/);
   assert.match(gettingStartedView, /setupDataAvailable: boolean/);
   assert.match(gettingStartedView, /gettingStarted\.sampleBadge/);
@@ -43,8 +50,17 @@ test("getting started copy is bilingual and token-styled", () => {
     "page.gettingStarted",
     "gettingStarted.title",
     "gettingStarted.lead",
+    "gettingStarted.focusLabel",
+    "gettingStarted.readyLabel",
+    "gettingStarted.summaryLabel",
+    "gettingStarted.progressLabel",
+    "gettingStarted.completedLabel",
+    "gettingStarted.dataSourceLabel",
+    "gettingStarted.liveDataSource",
+    "gettingStarted.sampleDataSource",
     "gettingStarted.sampleBadge",
     "gettingStarted.sampleNotice",
+    "gettingStarted.stepsLabel",
     "gettingStarted.step.connect-api.title",
     "gettingStarted.step.register-agents.title",
     "gettingStarted.step.discover-capabilities.title",
@@ -58,10 +74,16 @@ test("getting started copy is bilingual and token-styled", () => {
   }
 
   assert.match(styles, /\.getting-started\s*\{/);
+  assert.match(styles, /\.getting-started-layout\s*\{/);
+  assert.match(styles, /\.getting-started-main\s*\{/);
+  assert.match(styles, /\.getting-started-focus\s*\{/);
+  assert.match(styles, /\.getting-started-summary\s*\{/);
+  assert.match(styles, /\.getting-started-step-list\s*\{/);
   assert.match(styles, /\.getting-started-step\.status-current\s+\.getting-started-step-index\s*\{/);
   assert.match(styles, /\.getting-started-chain\s*\{/);
+  assert.match(styles, /\.getting-started-chain-node\.status-current\s*\{/);
   assert.match(styles, /\.getting-started-notice\s*>\s*span:not\(\.badge\)/);
-  assert.match(styles, /\.getting-started-step-copy\s*>\s*span\s*\{/);
+  assert.match(styles, /\.getting-started-step-copy\s*>\s*span/);
   assert.match(styles, /\.getting-started-notice\s*>\s*\.badge\s*\{[^}]*flex:\s*0 0 auto;/s);
   assert.doesNotMatch(styles, /\.getting-started-step-copy\s+span\s*\{/);
 });

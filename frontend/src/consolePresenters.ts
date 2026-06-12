@@ -142,6 +142,7 @@ export function permissionEntityDisplayName(value: string, t: Translator) {
     "Default Tenant": t("text.defaultTenantName"),
     "Default Workspace Team": t("demo.permissionRequestApprovalProject"),
     "Operations Console Caller": t("demo.permissionRequestApprovalCaller"),
+    "Policy Router": t("demo.policyRouterTarget"),
     "Permission Package Approval": t("demo.permissionRequestApproval"),
     "Permission Package Approval Root": t("demo.permissionRequestApprovalRoot"),
     "Permission Package Approval Team": t("demo.permissionRequestApprovalTeam"),
@@ -154,7 +155,8 @@ export function permissionEntityDisplayName(value: string, t: Translator) {
     "Permission Request Approval Project": t("demo.permissionRequestApprovalProject"),
     "Permission Request Approval Caller": t("demo.permissionRequestApprovalCaller"),
     "Permission Request Approval MCP Target": t("demo.permissionRequestApprovalTarget"),
-    "Security Reviewer": t("accessSubject.securityReviewer.name")
+    "Security Reviewer": t("accessSubject.securityReviewer.name"),
+    "Sandbox": t("demo.workspaceSandbox")
   };
   if (demoNames[normalized]) return demoNames[normalized];
   if (normalized.includes("Permission Package Approval")) {

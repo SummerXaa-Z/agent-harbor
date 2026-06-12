@@ -13,6 +13,7 @@ const operationalViews = readFileSync(new URL("../src/components/OperationalView
 const capabilityView = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
 const accessProfileView = readFileSync(new URL("../src/components/TenantAccessProfileView.tsx", import.meta.url), "utf8");
 const accessProfileHook = readFileSync(new URL("../src/hooks/useAccessProfileController.ts", import.meta.url), "utf8");
+const presenters = readFileSync(new URL("../src/consolePresenters.ts", import.meta.url), "utf8");
 
 test("answer-first access query is registered as a first-class console workspace", () => {
   assert.match(navigation, /\|\s+"ask"/);
@@ -55,10 +56,14 @@ test("ask access copy is bilingual", () => {
   const english = new Set(translationKeys("en"));
   const chinese = new Set(translationKeys("zh-CN"));
   for (const key of [
+    "ask.answerPendingTitle",
     "ask.answerTitle",
     "ask.chainTitle",
+    "ask.dataSourceTitle",
     "ask.emptyDetail",
     "ask.intent.openAccess",
+    "ask.liveMode",
+    "ask.questionTitle",
     "text.permissionHandoffDetail",
     "text.permissionHandoffTitle",
     "nav.ask",
@@ -68,6 +73,17 @@ test("ask access copy is bilingual", () => {
     assert.equal(english.has(key), true, `${key} missing in English`);
     assert.equal(chinese.has(key), true, `${key} missing in zh-CN`);
   }
+});
+
+test("ask access view keeps the primary path answer-first and business-readable", () => {
+  assert.match(view, /className="ask-workspace"/);
+  assert.match(view, /className="ask-context-column"/);
+  assert.match(view, /className="ask-answer-empty"/);
+  assert.match(view, /permissionEntityDisplayName\(tenant\.name, t\)/);
+  assert.match(view, /function agentOptions\(agents: Agent\[], t: Translator\)/);
+  assert.doesNotMatch(view, /EmptyRow/);
+  assert.match(presenters, /"Policy Router": t\("demo\.policyRouterTarget"\)/);
+  assert.match(presenters, /"Sandbox": t\("demo\.workspaceSandbox"\)/);
 });
 
 test("resource pages hand off access questions to the answer-first workspace", () => {

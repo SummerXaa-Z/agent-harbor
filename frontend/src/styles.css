@@ -1900,8 +1900,8 @@ td span {
 
 .ask-access {
   display: grid;
-  gap: var(--space-4);
-  padding: var(--space-4);
+  gap: var(--space-5);
+  padding: var(--space-5);
   background: var(--surface-raised);
 }
 
@@ -1910,7 +1910,7 @@ td span {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-1) 0 var(--space-2);
+  padding: var(--space-1) 0 0;
 }
 
 .ask-access-header > div {
@@ -1922,13 +1922,15 @@ td span {
 .ask-access-header span,
 .ask-query-field > span,
 .ask-subject-field > span,
-.ask-history > span,
+.ask-context-card > span,
 .ask-chain header span {
   color: var(--muted);
   font-size: var(--text-sm);
 }
 
 .ask-access-header > div > span,
+.ask-query-panel-heading > span,
+.ask-answer-heading > span,
 .ask-query-field > span,
 .ask-subject-field > span {
   color: var(--soft);
@@ -1952,11 +1954,35 @@ td span {
   line-height: 20px;
 }
 
+.ask-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.ask-primary-column,
+.ask-context-column {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
 .ask-query-panel,
-.ask-answer,
-.ask-history {
+.ask-answer {
   display: grid;
   gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--line-muted);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.ask-context-card {
+  display: grid;
+  gap: var(--space-2);
   min-width: 0;
   padding: var(--space-4);
   border: 1px solid var(--line-muted);
@@ -1965,23 +1991,38 @@ td span {
   box-shadow: var(--shadow-card);
 }
 
+.ask-query-panel-heading,
+.ask-answer-heading {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.ask-query-panel-heading strong,
+.ask-answer-heading strong {
+  color: var(--ink);
+  font-size: var(--text-lg);
+  line-height: 22px;
+}
+
 .ask-query-sentence {
   display: grid;
-  grid-template-columns: auto auto repeat(2, minmax(130px, 0.8fr)) minmax(160px, 1fr) auto minmax(150px, 1fr) minmax(160px, 1fr);
-  gap: var(--space-2);
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: var(--space-3);
   align-items: end;
+  padding: var(--space-4);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
 }
 
-.ask-query-sentence > svg {
+.ask-sentence-text {
+  display: inline-flex;
   align-self: center;
-  color: var(--brand);
-}
-
-.ask-query-sentence > strong,
-.ask-query-sentence > span {
-  align-self: center;
+  align-items: center;
+  min-height: var(--control-height);
   color: var(--ink);
   font-size: var(--text-base);
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -1995,7 +2036,12 @@ td span {
 .ask-query-field .approval-dropdown-trigger {
   width: 100%;
   min-width: 0;
-  background: var(--surface-subtle);
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+
+.ask-query-field .approval-dropdown {
+  width: 100%;
 }
 
 .ask-query-field .approval-dropdown-trigger span {
@@ -2006,7 +2052,7 @@ td span {
 
 .ask-query-footer {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto;
+  grid-template-columns: minmax(260px, 1fr) auto;
   gap: var(--space-3);
   align-items: end;
 }
@@ -2034,6 +2080,48 @@ td span {
   font-size: var(--text-sm);
 }
 
+.ask-answer-empty {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: 96px;
+  padding: var(--space-4);
+  border: 1px dashed var(--line-muted);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.ask-answer-empty > svg {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  padding: 8px;
+  border: 1px solid var(--line-muted);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--soft);
+}
+
+.ask-answer-empty > div {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.ask-answer-empty strong {
+  color: var(--ink);
+  font-size: var(--text-base);
+  line-height: 20px;
+}
+
+.ask-answer-empty span {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 18px;
+}
+
 .ask-answer-banner {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -2058,7 +2146,7 @@ td span {
 .ask-answer-banner strong,
 .ask-chain header strong,
 .ask-next-actions strong,
-.ask-history header strong {
+.ask-context-card header strong {
   color: var(--ink);
   font-size: var(--text-base);
 }
@@ -2076,10 +2164,26 @@ td span {
 }
 
 .ask-chain header,
-.ask-history header {
+.ask-context-card header {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  justify-content: space-between;
+}
+
+.ask-history header {
+  justify-content: flex-start;
+}
+
+.ask-context-card header svg {
+  color: var(--muted);
+}
+
+.ask-context-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 18px;
 }
 
 .ask-chain ol {
@@ -2146,16 +2250,16 @@ td span {
 }
 
 .ask-history-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: var(--space-2);
 }
 
 .ask-history-list button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
-  max-width: 360px;
+  width: 100%;
   min-height: var(--control-height-compact);
   padding: 0 var(--space-3);
   border: 1px solid var(--line-strong);
@@ -4179,9 +4283,11 @@ td code {
   .approval-evidence-grid,
   .approval-metrics,
   .approval-review-row,
+  .ask-workspace,
   .ask-query-sentence,
   .ask-query-footer,
   .ask-answer-banner,
+  .ask-answer-empty,
   .ask-chain ol,
   .go-live-acceptance-score,
   .form-row,
@@ -4205,16 +4311,14 @@ td code {
     grid-template-columns: 1fr;
   }
 
-  .ask-query-sentence > svg,
-  .ask-query-sentence > strong,
-  .ask-query-sentence > span {
+  .ask-sentence-text {
     grid-column: auto;
   }
 
   .ask-access,
   .ask-query-panel,
   .ask-answer,
-  .ask-history {
+  .ask-context-card {
     padding: var(--space-3);
   }
 

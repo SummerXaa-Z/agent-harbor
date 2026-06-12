@@ -734,25 +734,38 @@ button {
 }
 
 .go-live-acceptance {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
-  gap: 16px;
-  align-items: start;
   padding: 18px;
 }
 
 .go-live-acceptance-main {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 16px;
+  min-width: 0;
+}
+
+.go-live-acceptance-decision {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.go-live-acceptance-copy {
+  display: grid;
+  gap: 8px;
   min-width: 0;
 }
 
 .go-live-acceptance-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
 }
 
 .go-live-acceptance-heading span {
@@ -765,8 +778,8 @@ button {
   margin: 0;
   max-width: 780px;
   color: var(--ink);
-  font-size: 18px;
-  line-height: 1.55;
+  font-size: 17px;
+  line-height: 1.45;
 }
 
 .go-live-acceptance-warning,
@@ -789,17 +802,18 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+  max-width: 430px;
 }
 
 .go-live-acceptance-context {
   display: grid;
-  gap: 12px;
-  align-self: start;
+  gap: 10px;
   min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--line);
+  padding: 12px;
+  border: 1px solid var(--line-subtle);
   border-radius: var(--radius);
-  background: var(--surface-subtle);
+  background: var(--surface-raised);
 }
 
 .go-live-acceptance-context > strong {
@@ -809,13 +823,21 @@ button {
 
 .go-live-acceptance-context dl {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
   margin: 0;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--line-subtle);
 }
 
 .go-live-acceptance-context div {
   display: grid;
-  gap: 2px;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px 10px;
+  background: var(--surface);
 }
 
 .go-live-acceptance-context dt {
@@ -836,12 +858,9 @@ button {
 .go-live-acceptance-checks {
   display: grid;
   align-items: start;
-  grid-template-columns: minmax(0, 0.9fr) minmax(280px, 1.1fr);
-  gap: 14px;
+  grid-template-columns: minmax(280px, 0.55fr) minmax(0, 1fr);
+  gap: 16px;
   min-width: 0;
-  margin-top: 2px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line-subtle);
 }
 
 .go-live-acceptance-score {
@@ -877,6 +896,7 @@ button {
 
 .go-live-step-list {
   display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   width: 100%;
   margin: 0;
@@ -886,9 +906,13 @@ button {
 
 .go-live-step-list li {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr);
-  gap: 9px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
   min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface);
 }
 
 .go-live-step-dot {
@@ -4116,7 +4140,7 @@ td code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .go-live-acceptance,
+  .go-live-acceptance-decision,
   .go-live-acceptance-checks {
     grid-template-columns: 1fr;
   }
@@ -4346,7 +4370,9 @@ td code {
   .ask-answer-banner,
   .ask-answer-empty,
   .ask-chain ol,
+  .go-live-acceptance-context dl,
   .go-live-acceptance-score,
+  .go-live-step-list,
   .form-row,
   .trace-filters,
   .table-toolbar,
@@ -4408,6 +4434,7 @@ td code {
   .go-live-acceptance-actions {
     align-items: stretch;
     flex-direction: column;
+    max-width: none;
   }
 
   .approval-command button,

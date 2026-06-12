@@ -78,6 +78,20 @@ type managementMCPPermissionPackageApplicationArgs struct {
 	Limit            *int   `json:"limit"`
 }
 
+type managementMCPPermissionPackageProductionReadinessArgs struct {
+	TenantID          string `json:"tenantId"`
+	WorkspaceID       string `json:"workspaceId"`
+	TemplateID        string `json:"templateId"`
+	TargetID          string `json:"targetId"`
+	CallerInstanceID  string `json:"callerInstanceId"`
+	SubjectID         string `json:"subjectId"`
+	Region            string `json:"region"`
+	RequestText       string `json:"requestText"`
+	SubjectSelector   string `json:"subjectSelector"`
+	ApprovalRequestID string `json:"approvalRequestId"`
+	TraceLimit        *int   `json:"traceLimit"`
+}
+
 type managementMCPPermissionPackageApprovalRequestArgs struct {
 	TenantID         string                                 `json:"tenantId"`
 	WorkspaceID      string                                 `json:"workspaceId"`
@@ -275,6 +289,16 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 			return managementMCPCallResult{}, err
 		}
 		return managementMCPResult(rejected), nil
+	case "withdraw_permission_package_approval_request":
+		args, err := decodeManagementMCPArguments[managementMCPApprovalResolutionArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		withdrawn, err := s.withdrawManagementMCPPermissionPackageApprovalRequest(r, args)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(withdrawn), nil
 	case "list_permission_package_applications":
 		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageApplicationArgs](req.Params.Arguments)
 		if err != nil {
@@ -289,6 +313,34 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 			return managementMCPCallResult{}, err
 		}
 		return managementMCPResult(rows), nil
+	case "check_permission_package_production_readiness":
+		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageProductionReadinessArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		query, err := permissionPackageProductionReadinessQueryFromMCPArgs(args)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		readiness, err := s.permissionPackageProductionReadiness(r.Context(), query)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(readiness), nil
+	case "export_permission_package_production_evidence":
+		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageProductionReadinessArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		query, err := permissionPackageProductionReadinessQueryFromMCPArgs(args)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		report, err := s.permissionPackageProductionEvidenceReport(r.Context(), query)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(report), nil
 	case "explain_permission_package_draft":
 		args, err := decodeManagementMCPArguments[domain.PermissionPackageDraftRequest](req.Params.Arguments)
 		if err != nil {
@@ -400,9 +452,24 @@ func managementMCPTools() []managementMCPTool {
 			InputSchema: approvalResolutionSchema(),
 		},
 		{
+			Name:        "withdraw_permission_package_approval_request",
+			Description: "Withdraw a pending permission package approval request as its original requester before review or apply.",
+			InputSchema: approvalResolutionSchema(),
+		},
+		{
 			Name:        "list_permission_package_applications",
 			Description: "List permission package application records so an admin agent can review template version, scope, created assignments, and data-scope evidence.",
 			InputSchema: permissionPackageApplicationListSchema(),
+		},
+		{
+			Name:        "check_permission_package_production_readiness",
+			Description: "Check the read-only production go/no-go gate for a tenant-scoped permission package using preflight, application, health, impact, access-profile, runtime, and audit evidence.",
+			InputSchema: permissionPackageProductionReadinessSchema(),
+		},
+		{
+			Name:        "export_permission_package_production_evidence",
+			Description: "Export a read-only JSON evidence report for a tenant-scoped permission package production readiness decision.",
+			InputSchema: permissionPackageProductionReadinessSchema(),
 		},
 		{
 			Name:        "explain_permission_package_draft",
@@ -464,6 +531,43 @@ func permissionPackageApplicationFilterFromMCPArgs(args managementMCPPermissionP
 	}, nil
 }
 
+func permissionPackageProductionReadinessQueryFromMCPArgs(args managementMCPPermissionPackageProductionReadinessArgs) (permissionPackageProductionReadinessQuery, error) {
+	query := permissionPackageProductionReadinessQuery{
+		TenantID:          strings.TrimSpace(args.TenantID),
+		WorkspaceID:       strings.TrimSpace(args.WorkspaceID),
+		TemplateID:        strings.TrimSpace(args.TemplateID),
+		TargetID:          strings.TrimSpace(args.TargetID),
+		CallerInstanceID:  strings.TrimSpace(args.CallerInstanceID),
+		SubjectID:         strings.TrimSpace(args.SubjectID),
+		Region:            strings.TrimSpace(args.Region),
+		RequestText:       strings.TrimSpace(args.RequestText),
+		SubjectSelector:   strings.TrimSpace(args.SubjectSelector),
+		ApprovalRequestID: strings.TrimSpace(args.ApprovalRequestID),
+		TraceLimit:        defaultAccessProfileTraceLimit,
+	}
+	for _, required := range []struct {
+		name  string
+		value string
+	}{
+		{name: "tenantId", value: query.TenantID},
+		{name: "workspaceId", value: query.WorkspaceID},
+		{name: "templateId", value: query.TemplateID},
+		{name: "targetId", value: query.TargetID},
+		{name: "callerInstanceId", value: query.CallerInstanceID},
+	} {
+		if required.value == "" {
+			return permissionPackageProductionReadinessQuery{}, domain.BadRequest("VALIDATION_FAILED", required.name+" is required")
+		}
+	}
+	if args.TraceLimit != nil {
+		if *args.TraceLimit < 0 || *args.TraceLimit > maxAccessProfileTraceLimit {
+			return permissionPackageProductionReadinessQuery{}, domain.BadRequest("VALIDATION_FAILED", "traceLimit must be between 0 and 100")
+		}
+		query.TraceLimit = *args.TraceLimit
+	}
+	return query, nil
+}
+
 func permissionPackageApprovalRequestFilterFromMCPArgs(args managementMCPPermissionPackageApprovalRequestArgs) (store.PermissionPackageApprovalRequestFilter, error) {
 	limit := defaultAuditLimit
 	if args.Limit != nil {
@@ -473,7 +577,7 @@ func permissionPackageApprovalRequestFilterFromMCPArgs(args managementMCPPermiss
 		limit = *args.Limit
 	}
 	if args.Status != "" && !validPermissionPackageApprovalStatus(args.Status) {
-		return store.PermissionPackageApprovalRequestFilter{}, domain.BadRequest("VALIDATION_FAILED", "status must be pending, approved, or rejected")
+		return store.PermissionPackageApprovalRequestFilter{}, domain.BadRequest("VALIDATION_FAILED", "status must be pending, approved, rejected, or withdrawn")
 	}
 	return store.PermissionPackageApprovalRequestFilter{
 		ManagementScope: store.ManagementScope{
@@ -518,6 +622,28 @@ func (s *Server) resolveManagementMCPPermissionPackageApprovalRequest(r *http.Re
 		summary = "Permission package approval rejected"
 	}
 	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, saved.TenantID, saved.WorkspaceID, action, "permission_package_approval_request", saved.ID, summary, permissionPackageApprovalAuditMetadata(saved))); err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
+	}
+	return saved, nil
+}
+
+func (s *Server) withdrawManagementMCPPermissionPackageApprovalRequest(r *http.Request, args managementMCPApprovalResolutionArgs) (domain.PermissionPackageApprovalRequest, error) {
+	id := strings.TrimSpace(args.ID)
+	if id == "" {
+		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "id is required")
+	}
+	existing, ok, err := s.repo.GetPermissionPackageApprovalRequest(r.Context(), id)
+	if err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
+	}
+	if !ok {
+		return domain.PermissionPackageApprovalRequest{}, domain.NotFound("approval request not found")
+	}
+	saved, err := s.withdrawPermissionPackageApprovalRequestRecord(r.Context(), existing, managementActor(r), args.Comment, s.now())
+	if err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
+	}
+	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, saved.TenantID, saved.WorkspaceID, "permission_package.approval_withdrawn", "permission_package_approval_request", saved.ID, "Permission package approval withdrawn", permissionPackageApprovalAuditMetadata(saved))); err != nil {
 		return domain.PermissionPackageApprovalRequest{}, err
 	}
 	return saved, nil
@@ -632,7 +758,7 @@ func managementMCPPermissionPackageNextActions(draft domain.PermissionPackageDra
 		if len(draft.PolicyGate.NextActions) > 0 {
 			actions = append(actions, draft.PolicyGate.NextActions...)
 		} else {
-			actions = append(actions, "Request approval before applying this permission package.")
+			actions = append(actions, "Request approval before applying this permission request.")
 		}
 	}
 	if len(blockedRows) > 0 {
@@ -906,7 +1032,7 @@ func permissionPackageDraftProperties() map[string]any {
 		"callerInstanceId": stringSchema("Caller agent instance that will receive the package."),
 		"region":           stringSchema("Region data-scope value, for example us-east."),
 		"requestText":      stringSchema("Administrator natural-language request for audit context."),
-		"subjectSelector":  stringSchema("Optional subject selector, for example user:sales-*."),
+		"subjectSelector":  stringSchema("Required subject selector for the access object, for example user:sales-*. Empty and bare * are rejected."),
 		"targetId":         stringSchema("Target MCP agent id."),
 		"templateId":       stringSchema("Permission package template id, for example sales-readonly."),
 		"tenantId":         stringSchema("Tenant that receives the entitlement."),
@@ -915,7 +1041,7 @@ func permissionPackageDraftProperties() map[string]any {
 }
 
 func permissionPackageDraftRequiredFields() []string {
-	return []string{"callerInstanceId", "targetId", "templateId", "tenantId", "workspaceId"}
+	return []string{"callerInstanceId", "subjectSelector", "targetId", "templateId", "tenantId", "workspaceId"}
 }
 
 func permissionPackageApplicationListSchema() map[string]any {
@@ -929,6 +1055,22 @@ func permissionPackageApplicationListSchema() map[string]any {
 	}, []string{})
 }
 
+func permissionPackageProductionReadinessSchema() map[string]any {
+	return objectSchema(map[string]any{
+		"tenantId":          stringSchema("Tenant that receives the entitlement."),
+		"workspaceId":       stringSchema("Workspace that receives the assignment."),
+		"templateId":        stringSchema("Permission package template id, for example sales-readonly."),
+		"targetId":          stringSchema("Target MCP agent id."),
+		"callerInstanceId":  stringSchema("Caller agent instance that will receive the package."),
+		"subjectId":         stringSchema("Optional production subject id used to filter runtime evidence."),
+		"region":            stringSchema("Optional region data-scope value. Defaults from the latest application when available."),
+		"requestText":       stringSchema("Optional administrator request text. Defaults from the latest application when available."),
+		"subjectSelector":   stringSchema("Optional subject selector. Defaults from the latest application when available."),
+		"approvalRequestId": stringSchema("Optional approved request id for pre-apply readiness checks."),
+		"traceLimit":        map[string]any{"type": "integer", "minimum": 0, "maximum": maxAccessProfileTraceLimit, "description": "Recent trace count to include."},
+	}, []string{"tenantId", "workspaceId", "templateId", "targetId", "callerInstanceId"})
+}
+
 func permissionPackageApprovalRequestListSchema() map[string]any {
 	return objectSchema(map[string]any{
 		"tenantId":         stringSchema("Optional tenant scope. Tenant subtree is included when the tenant is registered."),
@@ -936,7 +1078,7 @@ func permissionPackageApprovalRequestListSchema() map[string]any {
 		"templateId":       stringSchema("Optional permission package template id."),
 		"targetId":         stringSchema("Optional target MCP agent id."),
 		"callerInstanceId": stringSchema("Optional caller agent instance id."),
-		"status":           map[string]any{"type": "string", "enum": []string{"pending", "approved", "rejected"}, "description": "Optional approval request status filter."},
+		"status":           map[string]any{"type": "string", "enum": []string{"pending", "approved", "rejected", "withdrawn"}, "description": "Optional approval request status filter."},
 		"reviewer":         stringSchema("Optional reviewer identity for reviewable approval queue filtering."),
 		"limit":            map[string]any{"type": "integer", "minimum": 1, "maximum": maxAuditLimit, "description": "Maximum approval requests to return."},
 	}, []string{})
@@ -946,7 +1088,7 @@ func approvalResolutionSchema() map[string]any {
 	return objectSchema(map[string]any{
 		"id":       stringSchema("Permission package approval request id."),
 		"reviewer": stringSchema("Optional reviewer identity. Defaults to the management actor."),
-		"comment":  stringSchema("Optional review comment for audit context."),
+		"comment":  stringSchema("Optional review or withdraw comment for audit context."),
 	}, []string{"id"})
 }
 

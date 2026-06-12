@@ -1,4 +1,7 @@
 import {
+  type AccessSubjectOption,
+} from './accessSubjects'
+import {
   evidenceRuns,
   routePolicies,
   sampleAgents,
@@ -7,6 +10,7 @@ import {
   sampleChannels,
   sampleInstanceAssignments,
   sampleProviders,
+  sampleTenants,
   sampleTenantAccessProfile,
   sampleTenantEntitlements,
   sampleTraces,
@@ -19,6 +23,8 @@ import {
   permissionPackageApplicationHealthPath,
   permissionPackageApplicationImpactPath,
   permissionPackageApprovalRequestsPath,
+  permissionPackageProductionEvidenceReportPath,
+  permissionPackageProductionReadinessPath,
   type PermissionPackageApplicationHealthPathFilter,
   type PermissionPackageApplicationImpactPathScope,
   type PermissionPackageApprovalRequestPathFilter,
@@ -33,7 +39,11 @@ import type {
   PermissionPackageApplicationImpact,
   PermissionPackageDraft,
   PermissionPackageDraftInput,
+  PermissionPackageProductionEvidenceReport,
+  PermissionPackageProductionReadiness,
+  PermissionPackageProductionReadinessFilter,
   PermissionPackageTemplate,
+  PermissionPackageWorkbenchPreview,
 } from './permissionPackages'
 import type {
   AccessGrant,
@@ -270,6 +280,10 @@ export async function fetchAgents(
   return request<Agent[]>(`/api/v1/agents${query}`, { adminKey, signal })
 }
 
+export async function fetchTenants(adminKey?: string, signal?: AbortSignal): Promise<Tenant[]> {
+  return request<Tenant[]>('/api/v1/tenants', { adminKey, signal })
+}
+
 export async function fetchAccessGrants(
   scope?: ManagementScope,
   adminKey?: string,
@@ -476,12 +490,31 @@ export async function fetchPermissionPackageTemplates(
   return request<PermissionPackageTemplate[]>('/api/v1/permission-packages/templates', { adminKey, signal })
 }
 
+export async function fetchPermissionPackageAccessSubjects(
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<AccessSubjectOption[]> {
+  return request<AccessSubjectOption[]>('/api/v1/permission-packages/access-subjects', { adminKey, signal })
+}
+
 export async function createPermissionPackageDraftFromApi(
   body: PermissionPackageDraftInput,
   adminKey?: string,
   signal?: AbortSignal,
 ): Promise<PermissionPackageDraft> {
   return request<PermissionPackageDraft>('/api/v1/permission-packages/drafts', { adminKey, body, signal })
+}
+
+export async function previewPermissionPackageWorkbench(
+  body: PermissionPackageApplyInput,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<PermissionPackageWorkbenchPreview> {
+  return request<PermissionPackageWorkbenchPreview>('/api/v1/permission-packages/workbench:preview', {
+    adminKey,
+    body,
+    signal,
+  })
 }
 
 export async function applyPermissionPackage(
@@ -527,6 +560,25 @@ export async function fetchPermissionPackageApplicationImpact(
   )
 }
 
+export async function fetchPermissionPackageProductionReadiness(
+  filter: PermissionPackageProductionReadinessFilter,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<PermissionPackageProductionReadiness> {
+  return request<PermissionPackageProductionReadiness>(permissionPackageProductionReadinessPath(filter), { adminKey, signal })
+}
+
+export async function fetchPermissionPackageProductionEvidenceReport(
+  filter: PermissionPackageProductionReadinessFilter,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<PermissionPackageProductionEvidenceReport> {
+  return request<PermissionPackageProductionEvidenceReport>(
+    permissionPackageProductionEvidenceReportPath(filter),
+    { adminKey, signal },
+  )
+}
+
 export async function createPermissionPackageApprovalRequest(
   body: PermissionPackageDraftInput,
   adminKey?: string,
@@ -548,6 +600,14 @@ export async function rejectPermissionPackageApprovalRequest(
   adminKey?: string,
 ): Promise<PermissionPackageApprovalRequest> {
   return request<PermissionPackageApprovalRequest>(`/api/v1/permission-packages/approval-requests/${encodeURIComponent(id)}/reject`, { adminKey, body })
+}
+
+export async function withdrawPermissionPackageApprovalRequest(
+  id: string,
+  body: { comment?: string } = {},
+  adminKey?: string,
+): Promise<PermissionPackageApprovalRequest> {
+  return request<PermissionPackageApprovalRequest>(`/api/v1/permission-packages/approval-requests/${encodeURIComponent(id)}/withdraw`, { adminKey, body })
 }
 
 export async function fetchTenantEntitlements(
@@ -689,6 +749,7 @@ export async function loadConsoleData(
 ): Promise<ConsoleData> {
   const [
     catalogResult,
+    tenantsResult,
     agentsResult,
     grantsResult,
     capabilitiesResult,
@@ -704,6 +765,7 @@ export async function loadConsoleData(
       providers: sampleProviders,
       channels: sampleChannels,
     }),
+    withFallback(() => fetchTenants(adminKey), sampleTenants),
     withFallback(() => fetchAgents(scope, adminKey), sampleAgents),
     withFallback(() => fetchAccessGrants(scope, adminKey), []),
     withFallback(() => fetchCapabilities(scope, adminKey), sampleCapabilities),
@@ -718,6 +780,7 @@ export async function loadConsoleData(
 
   const loadedFromApi =
     catalogResult.ok &&
+    tenantsResult.ok &&
     agentsResult.ok &&
     grantsResult.ok &&
     capabilitiesResult.ok &&
@@ -730,6 +793,7 @@ export async function loadConsoleData(
     metricsResult.ok
 
   return {
+    tenants: tenantsResult.data,
     providers: catalogResult.data.providers,
     channels: catalogResult.data.channels,
     agents: agentsResult.data,

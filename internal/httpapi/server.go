@@ -3,9 +3,11 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,13 +33,22 @@ import (
 )
 
 type callerContextKey struct{}
+type adminActorContextKey struct{}
+
+type AdminIdentity struct {
+	Actor string
+	Key   string
+}
 
 type Server struct {
-	repo                  store.Repository
-	now                   func() time.Time
-	adminKey              string
-	allowPrivateUpstreams bool
-	approvalReviewers     []domain.PermissionPackageApprovalReviewer
+	repo                      store.Repository
+	now                       func() time.Time
+	adminKey                  string
+	adminIdentities           []AdminIdentity
+	allowUnauthenticatedAdmin bool
+	allowPrivateUpstreams     bool
+	approvalReviewers         []domain.PermissionPackageApprovalReviewer
+	corsOrigins               []string
 }
 
 const (
@@ -74,6 +85,28 @@ func WithAdminKey(key string) Option {
 	}
 }
 
+func WithAdminIdentities(identities []AdminIdentity) Option {
+	return func(s *Server) {
+		s.adminIdentities = make([]AdminIdentity, 0, len(identities))
+		for _, identity := range identities {
+			normalized := AdminIdentity{
+				Actor: strings.TrimSpace(identity.Actor),
+				Key:   strings.TrimSpace(identity.Key),
+			}
+			if normalized.Actor == "" || normalized.Key == "" {
+				continue
+			}
+			s.adminIdentities = append(s.adminIdentities, normalized)
+		}
+	}
+}
+
+func WithUnauthenticatedAdminAllowed(allowed bool) Option {
+	return func(s *Server) {
+		s.allowUnauthenticatedAdmin = allowed
+	}
+}
+
 func WithPrivateUpstreamsAllowed(allowed bool) Option {
 	return func(s *Server) {
 		s.allowPrivateUpstreams = allowed
@@ -97,6 +130,19 @@ func WithPermissionPackageApprovalReviewers(reviewers []domain.PermissionPackage
 	}
 }
 
+func WithCORSOrigins(origins []string) Option {
+	return func(s *Server) {
+		s.corsOrigins = make([]string, 0, len(origins))
+		for _, origin := range origins {
+			normalized := strings.TrimSpace(origin)
+			if normalized == "" {
+				continue
+			}
+			s.corsOrigins = append(s.corsOrigins, normalized)
+		}
+	}
+}
+
 func New(repo store.Repository, options ...Option) *Server {
 	server := &Server{
 		repo: repo,
@@ -113,7 +159,7 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
-	r.Use(localDevCORS)
+	r.Use(localDevCORS(s.corsOrigins))
 
 	r.Get("/healthz", s.health)
 	r.Route("/api/v1", func(r chi.Router) {
@@ -147,6 +193,10 @@ func (s *Server) Router() http.Handler {
 			r.Get("/capabilities", s.listCapabilities)
 			r.Patch("/capabilities/{id}", s.updateCapability)
 			r.Get("/permission-packages/templates", s.listPermissionPackageTemplates)
+			r.Get("/permission-packages/access-subjects", s.listPermissionPackageAccessSubjects)
+			r.Post("/permission-packages/workbench:preview", s.previewPermissionPackageWorkbench)
+			r.Get("/permission-packages/production-readiness/report", s.getPermissionPackageProductionEvidenceReport)
+			r.Get("/permission-packages/production-readiness", s.getPermissionPackageProductionReadiness)
 			r.Get("/permission-packages/applications", s.listPermissionPackageApplications)
 			r.Get("/permission-packages/applications/health", s.listPermissionPackageApplicationHealth)
 			r.Get("/permission-packages/applications/{id}/impact", s.getPermissionPackageApplicationImpact)
@@ -154,6 +204,7 @@ func (s *Server) Router() http.Handler {
 			r.Post("/permission-packages/approval-requests", s.createPermissionPackageApprovalRequest)
 			r.Post("/permission-packages/approval-requests/{id}/approve", s.approvePermissionPackageApprovalRequest)
 			r.Post("/permission-packages/approval-requests/{id}/reject", s.rejectPermissionPackageApprovalRequest)
+			r.Post("/permission-packages/approval-requests/{id}/withdraw", s.withdrawPermissionPackageApprovalRequest)
 			r.Post("/permission-packages/drafts", s.createPermissionPackageDraft)
 			r.Post("/permission-packages:preflight", s.preflightPermissionPackage)
 			r.Post("/permission-packages:apply", s.applyPermissionPackage)
@@ -180,7 +231,7 @@ func (s *Server) Router() http.Handler {
 	return r
 }
 
-func localDevCORS(next http.Handler) http.Handler {
+func localDevCORS(extraOrigins []string) func(http.Handler) http.Handler {
 	allowedOrigins := map[string]struct{}{
 		"http://localhost:4174": {},
 		"http://localhost:5174": {},
@@ -189,35 +240,86 @@ func localDevCORS(next http.Handler) http.Handler {
 		"http://[::1]:4174":     {},
 		"http://[::1]:5174":     {},
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if _, ok := allowedOrigins[origin]; ok {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Key, X-Run-Id, X-AgentHarbor-Subject-Id")
-			w.Header().Set("Vary", "Origin")
-			if r.Method == http.MethodOptions {
-				w.WriteHeader(http.StatusNoContent)
-				return
+	for _, origin := range extraOrigins {
+		allowedOrigins[origin] = struct{}{}
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			if _, ok := allowedOrigins[origin]; ok {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Key, X-Run-Id, X-AgentHarbor-Subject-Id")
+				w.Header().Set("Vary", "Origin")
+				if r.Method == http.MethodOptions {
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
 			}
-		}
-		next.ServeHTTP(w, r)
-	})
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.adminKey == "" {
-			next.ServeHTTP(w, r)
+		if s.adminKey == "" && len(s.adminIdentities) == 0 {
+			if s.allowUnauthenticatedAdmin {
+				next.ServeHTTP(w, r)
+				return
+			}
+			writeError(w, domain.Unauthorized("admin authentication is required"))
 			return
 		}
 		provided := r.Header.Get("X-Admin-Key")
-		if len(provided) != len(s.adminKey) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.adminKey)) != 1 {
-			writeError(w, domain.Unauthorized("missing or invalid admin key"))
+		if actor, ok := s.adminActorForKey(provided); ok {
+			ctx := context.WithValue(r.Context(), adminActorContextKey{}, actor)
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
-		next.ServeHTTP(w, r)
+		writeError(w, domain.Unauthorized("missing or invalid admin key"))
 	})
+}
+
+func (s *Server) adminActorForKey(provided string) (string, bool) {
+	for _, identity := range s.adminIdentities {
+		if len(provided) == len(identity.Key) && subtle.ConstantTimeCompare([]byte(provided), []byte(identity.Key)) == 1 {
+			return identity.Actor, true
+		}
+	}
+	if s.adminKey != "" {
+		if len(provided) != len(s.adminKey) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.adminKey)) != 1 {
+			return "", false
+		}
+		return "admin-key", true
+	}
+	return "", false
+}
+
+func requestAuthenticatedAdminActor(r *http.Request) (string, bool) {
+	actor, ok := r.Context().Value(adminActorContextKey{}).(string)
+	actor = strings.TrimSpace(actor)
+	if !ok || actor == "" {
+		return "", false
+	}
+	return actor, true
+}
+
+func reviewerFromRequest(reviewer string, r *http.Request) (string, error) {
+	reviewer = strings.TrimSpace(reviewer)
+	if actor, ok := requestAuthenticatedAdminActor(r); ok {
+		if reviewer == "" {
+			return actor, nil
+		}
+		if reviewer != actor {
+			return "", domain.PermissionDenied("reviewer must match authenticated admin identity")
+		}
+		return reviewer, nil
+	}
+	if reviewer != "" {
+		return reviewer, nil
+	}
+	return managementActor(r), nil
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
@@ -1163,6 +1265,10 @@ func (s *Server) listPermissionPackageTemplates(w http.ResponseWriter, _ *http.R
 	writeJSON(w, http.StatusOK, permissionpack.Templates())
 }
 
+func (s *Server) listPermissionPackageAccessSubjects(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, permissionpack.AccessSubjects())
+}
+
 func (s *Server) listPermissionPackageApplications(w http.ResponseWriter, r *http.Request) {
 	limit, err := auditLimitFromRequest(r)
 	if err != nil {
@@ -1272,6 +1378,898 @@ func permissionPackageApplicationBlockerCodesContain(blockerCodes []string, want
 		}
 	}
 	return false
+}
+
+type permissionPackageProductionReadinessQuery struct {
+	TenantID          string
+	WorkspaceID       string
+	TemplateID        string
+	TargetID          string
+	CallerInstanceID  string
+	SubjectID         string
+	Region            string
+	RequestText       string
+	SubjectSelector   string
+	ApprovalRequestID string
+	TraceLimit        int
+}
+
+type permissionPackageWorkbenchPreviewResponse struct {
+	Draft               domain.PermissionPackageDraft                 `json:"draft"`
+	ApprovalRequest     *domain.PermissionPackageApprovalRequest      `json:"approvalRequest,omitempty"`
+	LatestApplication   *domain.PermissionPackageApplication          `json:"latestApplication,omitempty"`
+	ProductionReadiness *permissionPackageProductionReadinessResponse `json:"productionReadiness,omitempty"`
+	Summary             permissionPackageWorkbenchSummary             `json:"summary"`
+	GeneratedAt         time.Time                                     `json:"generatedAt"`
+}
+
+type permissionPackageWorkbenchSummary struct {
+	Status                 string                           `json:"status"`
+	PrimaryActionCode      string                           `json:"primaryActionCode"`
+	NextActionCode         string                           `json:"nextActionCode,omitempty"`
+	ApprovalRequired       bool                             `json:"approvalRequired"`
+	CanApply               bool                             `json:"canApply"`
+	Applied                bool                             `json:"applied"`
+	RuntimeEvidenceReady   bool                             `json:"runtimeEvidenceReady"`
+	ProductionReady        bool                             `json:"productionReady"`
+	AllowedCapabilityCount int                              `json:"allowedCapabilityCount"`
+	BlockedCapabilityCount int                              `json:"blockedCapabilityCount"`
+	PlannedObjectCount     int                              `json:"plannedObjectCount"`
+	ReadinessReadyCount    int                              `json:"readinessReadyCount"`
+	ReadinessTotalCount    int                              `json:"readinessTotalCount"`
+	BlockingCount          int                              `json:"blockingCount"`
+	WarningCount           int                              `json:"warningCount"`
+	Steps                  []permissionPackageWorkbenchStep `json:"steps"`
+}
+
+type permissionPackageWorkbenchStep struct {
+	Key        string `json:"key"`
+	Status     string `json:"status"`
+	DetailCode string `json:"detailCode"`
+	Count      int    `json:"count,omitempty"`
+	Total      int    `json:"total,omitempty"`
+}
+
+type permissionPackageProductionReadinessResponse struct {
+	Status            string                                          `json:"status"`
+	Summary           permissionPackageProductionReadinessSummary     `json:"summary"`
+	Checks            []permissionPackageProductionReadinessCheck     `json:"checks"`
+	LatestApplication *domain.PermissionPackageApplication            `json:"latestApplication,omitempty"`
+	Preflight         *domain.PermissionPackageApplyPreflightResponse `json:"preflight,omitempty"`
+	ApplicationHealth *permissionPackageApplicationHealthRow          `json:"applicationHealth,omitempty"`
+	ApplicationImpact *permissionPackageApplicationImpactResponse     `json:"applicationImpact,omitempty"`
+	AccessProfile     *tenantAccessProfileResponse                    `json:"accessProfile,omitempty"`
+	RuntimeEvidence   permissionPackageRuntimeEvidence                `json:"runtimeEvidence"`
+	AuditEvidence     permissionPackageAuditEvidence                  `json:"auditEvidence"`
+	NextActionCode    string                                          `json:"nextActionCode"`
+	NextActions       []string                                        `json:"nextActions"`
+	GeneratedAt       time.Time                                       `json:"generatedAt"`
+}
+
+type permissionPackageProductionReadinessSummary struct {
+	ReadyCount         int  `json:"readyCount"`
+	WarningCount       int  `json:"warningCount"`
+	BlockingCount      int  `json:"blockingCount"`
+	HasApplication     bool `json:"hasApplication"`
+	HasAllowedTrace    bool `json:"hasAllowedTrace"`
+	HasDeniedTrace     bool `json:"hasDeniedTrace"`
+	HasAppliedAudit    bool `json:"hasAppliedAudit"`
+	AccessProfileReady bool `json:"accessProfileReady"`
+}
+
+type permissionPackageProductionReadinessCheck struct {
+	Code       string                                    `json:"code"`
+	Severity   domain.PermissionPackagePreflightSeverity `json:"severity"`
+	Message    string                                    `json:"message"`
+	EvidenceID string                                    `json:"evidenceId,omitempty"`
+}
+
+type permissionPackageRuntimeEvidence struct {
+	AllowedTrace *domain.TraceEvent `json:"allowedTrace,omitempty"`
+	DeniedTrace  *domain.TraceEvent `json:"deniedTrace,omitempty"`
+}
+
+type permissionPackageAuditEvidence struct {
+	AppliedEvent *domain.AuditEvent `json:"appliedEvent,omitempty"`
+}
+
+const permissionPackageProductionEvidenceReportVersion = "production-readiness-report/v1"
+
+type permissionPackageProductionEvidenceReportResponse struct {
+	ReportVersion        string                                      `json:"reportVersion"`
+	GeneratedAt          time.Time                                   `json:"generatedAt"`
+	Scope                permissionPackageProductionEvidenceScope    `json:"scope"`
+	Status               string                                      `json:"status"`
+	Summary              permissionPackageProductionReadinessSummary `json:"summary"`
+	Checks               []permissionPackageProductionReadinessCheck `json:"checks"`
+	Evidence             permissionPackageProductionEvidenceRefs     `json:"evidence"`
+	NextActionCode       string                                      `json:"nextActionCode"`
+	NextActions          []string                                    `json:"nextActions"`
+	ReadinessGeneratedAt time.Time                                   `json:"readinessGeneratedAt"`
+}
+
+type permissionPackageProductionEvidenceScope struct {
+	TenantID         string `json:"tenantId"`
+	WorkspaceID      string `json:"workspaceId"`
+	TemplateID       string `json:"templateId"`
+	TargetID         string `json:"targetId"`
+	CallerInstanceID string `json:"callerInstanceId"`
+	SubjectID        string `json:"subjectId,omitempty"`
+	Region           string `json:"region,omitempty"`
+	SubjectSelector  string `json:"subjectSelector,omitempty"`
+}
+
+type permissionPackageProductionEvidenceRefs struct {
+	Application       permissionPackageProductionApplicationEvidence `json:"application"`
+	Runtime           permissionPackageProductionRuntimeEvidence     `json:"runtime"`
+	Audit             permissionPackageProductionAuditEvidence       `json:"audit"`
+	AccessProfile     permissionPackageProductionEvidenceState       `json:"accessProfile"`
+	ApplicationHealth permissionPackageProductionEvidenceState       `json:"applicationHealth"`
+	ApplicationImpact permissionPackageProductionEvidenceState       `json:"applicationImpact"`
+}
+
+type permissionPackageProductionApplicationEvidence struct {
+	Present               bool               `json:"present"`
+	ID                    string             `json:"id,omitempty"`
+	DraftID               string             `json:"draftId,omitempty"`
+	TemplateVersion       int                `json:"templateVersion,omitempty"`
+	AppliedAt             *time.Time         `json:"appliedAt,omitempty"`
+	AllowedCapabilityIDs  []string           `json:"allowedCapabilityIds,omitempty"`
+	AllowedCapabilityKeys []string           `json:"allowedCapabilityKeys,omitempty"`
+	DataScopes            []domain.DataScope `json:"dataScopes,omitempty"`
+}
+
+type permissionPackageProductionRuntimeEvidence struct {
+	AllowedTraceID string `json:"allowedTraceId,omitempty"`
+	DeniedTraceID  string `json:"deniedTraceId,omitempty"`
+}
+
+type permissionPackageProductionAuditEvidence struct {
+	AppliedEventID string `json:"appliedEventId,omitempty"`
+}
+
+type permissionPackageProductionEvidenceState struct {
+	Present bool   `json:"present"`
+	Status  string `json:"status,omitempty"`
+}
+
+func (s *Server) previewPermissionPackageWorkbench(w http.ResponseWriter, r *http.Request) {
+	var req domain.PermissionPackageApplyRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	result, err := s.permissionPackageWorkbenchPreview(r.Context(), req)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) getPermissionPackageProductionReadiness(w http.ResponseWriter, r *http.Request) {
+	query, err := permissionPackageProductionReadinessQueryFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	result, err := s.permissionPackageProductionReadiness(r.Context(), query)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) getPermissionPackageProductionEvidenceReport(w http.ResponseWriter, r *http.Request) {
+	query, err := permissionPackageProductionReadinessQueryFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	result, err := s.permissionPackageProductionEvidenceReport(r.Context(), query)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func permissionPackageProductionReadinessQueryFromRequest(r *http.Request) (permissionPackageProductionReadinessQuery, error) {
+	values := r.URL.Query()
+	query := permissionPackageProductionReadinessQuery{
+		TenantID:          strings.TrimSpace(values.Get("tenantId")),
+		WorkspaceID:       strings.TrimSpace(values.Get("workspaceId")),
+		TemplateID:        strings.TrimSpace(values.Get("templateId")),
+		TargetID:          strings.TrimSpace(values.Get("targetId")),
+		CallerInstanceID:  strings.TrimSpace(values.Get("callerInstanceId")),
+		SubjectID:         strings.TrimSpace(values.Get("subjectId")),
+		Region:            strings.TrimSpace(values.Get("region")),
+		RequestText:       strings.TrimSpace(values.Get("requestText")),
+		SubjectSelector:   strings.TrimSpace(values.Get("subjectSelector")),
+		ApprovalRequestID: strings.TrimSpace(values.Get("approvalRequestId")),
+		TraceLimit:        defaultAccessProfileTraceLimit,
+	}
+	for _, required := range []struct {
+		name  string
+		value string
+	}{
+		{name: "tenantId", value: query.TenantID},
+		{name: "workspaceId", value: query.WorkspaceID},
+		{name: "templateId", value: query.TemplateID},
+		{name: "targetId", value: query.TargetID},
+		{name: "callerInstanceId", value: query.CallerInstanceID},
+	} {
+		if required.value == "" {
+			return permissionPackageProductionReadinessQuery{}, domain.BadRequest("VALIDATION_FAILED", required.name+" is required")
+		}
+	}
+	if raw := strings.TrimSpace(values.Get("traceLimit")); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil || limit < 0 || limit > maxAccessProfileTraceLimit {
+			return permissionPackageProductionReadinessQuery{}, domain.BadRequest("VALIDATION_FAILED", "traceLimit must be between 0 and 100")
+		}
+		query.TraceLimit = limit
+	}
+	return query, nil
+}
+
+func (s *Server) permissionPackageWorkbenchPreview(ctx context.Context, req domain.PermissionPackageApplyRequest) (permissionPackageWorkbenchPreviewResponse, error) {
+	req.ApprovalRequestID = strings.TrimSpace(req.ApprovalRequestID)
+	draft, err := s.buildPermissionPackageDraft(ctx, req.PermissionPackageDraftRequest)
+	if err != nil {
+		return permissionPackageWorkbenchPreviewResponse{}, err
+	}
+	approval, err := s.permissionPackageWorkbenchApprovalRequest(ctx, req.ApprovalRequestID, draft)
+	if err != nil {
+		return permissionPackageWorkbenchPreviewResponse{}, err
+	}
+	if approval != nil && approval.Status == domain.PermissionPackageApprovalStatusApproved {
+		req.ApprovalRequestID = approval.ID
+	}
+
+	var readiness *permissionPackageProductionReadinessResponse
+	if permissionPackageWorkbenchShouldCheckReadiness(draft, approval) {
+		next, err := s.permissionPackageProductionReadiness(ctx, permissionPackageProductionReadinessQueryFromApplyRequest(req))
+		if err != nil {
+			return permissionPackageWorkbenchPreviewResponse{}, err
+		}
+		readiness = &next
+	}
+
+	return permissionPackageWorkbenchPreviewResponse{
+		Draft:               draft,
+		ApprovalRequest:     approval,
+		LatestApplication:   permissionPackageWorkbenchLatestApplication(readiness),
+		ProductionReadiness: readiness,
+		Summary:             permissionPackageWorkbenchSummaryFor(draft, approval, readiness),
+		GeneratedAt:         s.now(),
+	}, nil
+}
+
+func permissionPackageWorkbenchShouldCheckReadiness(draft domain.PermissionPackageDraft, approval *domain.PermissionPackageApprovalRequest) bool {
+	if !permissionPackageWorkbenchCanCheckReadiness(draft) {
+		return false
+	}
+	if approval == nil {
+		return true
+	}
+	return approval.Status == domain.PermissionPackageApprovalStatusApproved
+}
+
+func permissionPackageProductionReadinessQueryFromApplyRequest(req domain.PermissionPackageApplyRequest) permissionPackageProductionReadinessQuery {
+	input := trimPermissionPackageDraftRequest(req.PermissionPackageDraftRequest)
+	return permissionPackageProductionReadinessQuery{
+		TenantID:          input.TenantID,
+		WorkspaceID:       input.WorkspaceID,
+		TemplateID:        input.TemplateID,
+		TargetID:          input.TargetID,
+		CallerInstanceID:  input.CallerInstanceID,
+		Region:            input.Region,
+		RequestText:       input.RequestText,
+		SubjectSelector:   input.SubjectSelector,
+		ApprovalRequestID: strings.TrimSpace(req.ApprovalRequestID),
+		TraceLimit:        defaultAccessProfileTraceLimit,
+	}
+}
+
+func permissionPackageWorkbenchCanCheckReadiness(draft domain.PermissionPackageDraft) bool {
+	input := draft.Input
+	return input.TenantID != "" &&
+		input.WorkspaceID != "" &&
+		input.TemplateID != "" &&
+		input.TargetID != "" &&
+		input.CallerInstanceID != ""
+}
+
+func (s *Server) permissionPackageWorkbenchApprovalRequest(ctx context.Context, approvalRequestID string, draft domain.PermissionPackageDraft) (*domain.PermissionPackageApprovalRequest, error) {
+	if draft.PolicyGate.CanApplyDirectly || !draft.Readiness.CanApply {
+		return nil, nil
+	}
+	if approvalRequestID != "" {
+		approval, ok, err := s.repo.GetPermissionPackageApprovalRequest(ctx, approvalRequestID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, domain.NotFound("approval request not found")
+		}
+		if !permissionPackageApprovalRequestMatchesDraftSnapshot(approval, draft) {
+			return nil, domain.BadRequest("VALIDATION_FAILED", "approval request does not match current permission request")
+		}
+		return &approval, nil
+	}
+	rows, err := s.repo.ListPermissionPackageApprovalRequests(ctx, store.PermissionPackageApprovalRequestFilter{
+		ManagementScope:  store.ManagementScope{TenantID: draft.Input.TenantID, WorkspaceID: draft.Input.WorkspaceID},
+		TemplateID:       draft.Template.ID,
+		TargetID:         draft.Input.TargetID,
+		CallerInstanceID: draft.Input.CallerInstanceID,
+		Limit:            20,
+	})
+	if err != nil {
+		return nil, err
+	}
+	sortPermissionPackageApprovalRequests(rows)
+	var selected *domain.PermissionPackageApprovalRequest
+	for _, row := range rows {
+		if !permissionPackageApprovalRequestMatchesDraftSnapshot(row, draft) {
+			continue
+		}
+		if row.Status == domain.PermissionPackageApprovalStatusApproved &&
+			validatePermissionPackageApprovalForDraft(row, draft, s.now()) != nil {
+			continue
+		}
+		candidate := row
+		if selected == nil || permissionPackageApprovalPreviewRank(candidate) > permissionPackageApprovalPreviewRank(*selected) {
+			selected = &candidate
+		}
+	}
+	return selected, nil
+}
+
+func permissionPackageApprovalPreviewRank(request domain.PermissionPackageApprovalRequest) int {
+	switch request.Status {
+	case domain.PermissionPackageApprovalStatusApproved:
+		return 3
+	case domain.PermissionPackageApprovalStatusPending:
+		return 2
+	case domain.PermissionPackageApprovalStatusRejected:
+		return 1
+	case domain.PermissionPackageApprovalStatusWithdrawn:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func permissionPackageApprovalRequestMatchesDraftSnapshot(approval domain.PermissionPackageApprovalRequest, draft domain.PermissionPackageDraft) bool {
+	allowedCapabilityIDs, allowedCapabilityKeys := permissionPackageCapabilityIDsAndKeys(draft.AllowedCapabilities)
+	allowedCapabilityFingerprints := permissionPackageCapabilityFingerprints(draft.AllowedCapabilities)
+	return approval.DraftID == draft.ID &&
+		approval.TemplateID == draft.Template.ID &&
+		approval.TemplateVersion == draft.Template.Version &&
+		approval.PolicyVersion == draft.PolicyGate.PolicyVersion &&
+		approval.TenantID == draft.Input.TenantID &&
+		approval.WorkspaceID == draft.Input.WorkspaceID &&
+		approval.TargetID == draft.Input.TargetID &&
+		approval.CallerInstanceID == draft.Input.CallerInstanceID &&
+		approval.SubjectSelector == draft.Input.SubjectSelector &&
+		approval.RequestText == draft.Input.RequestText &&
+		approval.Region == draft.Input.Region &&
+		samePermissionPackageDataScopes(approval.DataScopes, draft.DataScopes) &&
+		sameStringSet(approval.AllowedCapabilityIDs, allowedCapabilityIDs) &&
+		sameStringSet(approval.AllowedCapabilityKeys, allowedCapabilityKeys) &&
+		sameStringSet(approval.AllowedCapabilityFingerprints, allowedCapabilityFingerprints)
+}
+
+func permissionPackageWorkbenchLatestApplication(readiness *permissionPackageProductionReadinessResponse) *domain.PermissionPackageApplication {
+	if readiness == nil {
+		return nil
+	}
+	return readiness.LatestApplication
+}
+
+func permissionPackageWorkbenchSummaryFor(draft domain.PermissionPackageDraft, approval *domain.PermissionPackageApprovalRequest, readiness *permissionPackageProductionReadinessResponse) permissionPackageWorkbenchSummary {
+	approvalRequired := !draft.PolicyGate.CanApplyDirectly
+	approvalResolvedWithoutApproval := approvalRequired && approval != nil &&
+		(approval.Status == domain.PermissionPackageApprovalStatusRejected || approval.Status == domain.PermissionPackageApprovalStatusWithdrawn)
+	applied := readiness != nil && readiness.LatestApplication != nil
+	approvalApproved := !approvalRequired || applied || approval != nil && approval.Status == domain.PermissionPackageApprovalStatusApproved
+	runtimeEvidenceReady := readiness != nil && readiness.Summary.HasAllowedTrace && readiness.Summary.HasDeniedTrace
+	productionReady := readiness != nil && readiness.Status == "ready"
+	canApply := draft.Readiness.CanApply && approvalApproved && !approvalResolvedWithoutApproval
+	summary := permissionPackageWorkbenchSummary{
+		ApprovalRequired:       approvalRequired,
+		CanApply:               canApply,
+		Applied:                applied,
+		RuntimeEvidenceReady:   runtimeEvidenceReady,
+		ProductionReady:        productionReady,
+		AllowedCapabilityCount: len(draft.AllowedCapabilities),
+		BlockedCapabilityCount: len(draft.BlockedCapabilities),
+	}
+	if readiness != nil {
+		summary.NextActionCode = readiness.NextActionCode
+		summary.ReadinessReadyCount = readiness.Summary.ReadyCount
+		summary.ReadinessTotalCount = len(readiness.Checks)
+		summary.BlockingCount = readiness.Summary.BlockingCount
+		summary.WarningCount = readiness.Summary.WarningCount
+		if readiness.Preflight != nil {
+			summary.PlannedObjectCount = readiness.Preflight.Summary.PlannedTenantEntitlementCount +
+				readiness.Preflight.Summary.PlannedWorkspaceAssignmentCount +
+				readiness.Preflight.Summary.PlannedInstanceAssignmentCount
+		}
+	}
+	if summary.PlannedObjectCount == 0 {
+		summary.PlannedObjectCount = len(draft.AllowedCapabilities) * 3
+	}
+	summary.Status, summary.PrimaryActionCode = permissionPackageWorkbenchStatusAndAction(draft, approval, applied, productionReady, canApply)
+	summary.Steps = permissionPackageWorkbenchSteps(draft, approval, applied, runtimeEvidenceReady, productionReady, canApply)
+	return summary
+}
+
+func permissionPackageWorkbenchStatusAndAction(draft domain.PermissionPackageDraft, approval *domain.PermissionPackageApprovalRequest, applied bool, productionReady bool, canApply bool) (string, string) {
+	approvalRequired := !draft.PolicyGate.CanApplyDirectly
+	if !draft.Readiness.CanApply {
+		return "needs_input", "complete_request"
+	}
+	if productionReady {
+		return "production_ready", "export_production_evidence"
+	}
+	if applied {
+		return "validating", "run_runtime_validation"
+	}
+	if approvalRequired {
+		if approval == nil ||
+			approval.Status == domain.PermissionPackageApprovalStatusRejected ||
+			approval.Status == domain.PermissionPackageApprovalStatusWithdrawn {
+			return "awaiting_approval", "create_approval_request"
+		}
+		if approval.Status == domain.PermissionPackageApprovalStatusPending {
+			return "awaiting_approval", "review_approval_request"
+		}
+	}
+	if !applied && canApply {
+		return "ready_to_apply", "apply_permission_package"
+	}
+	return "blocked", "complete_request"
+}
+
+func permissionPackageWorkbenchSteps(draft domain.PermissionPackageDraft, approval *domain.PermissionPackageApprovalRequest, applied bool, runtimeEvidenceReady bool, productionReady bool, canApply bool) []permissionPackageWorkbenchStep {
+	approvalRequired := !draft.PolicyGate.CanApplyDirectly
+	approvalComplete := !approvalRequired || applied || approval != nil && approval.Status == domain.PermissionPackageApprovalStatusApproved
+	requestStatus := "complete"
+	requestDetail := "request_ready"
+	if !draft.Readiness.CanApply {
+		requestStatus = "current"
+		requestDetail = "request_needs_input"
+	}
+	approvalStatus := "waiting"
+	approvalDetail := "approval_waiting"
+	if approvalComplete {
+		approvalStatus = "complete"
+		if approvalRequired {
+			approvalDetail = "approval_approved"
+		} else {
+			approvalDetail = "approval_not_required"
+		}
+	} else if draft.Readiness.CanApply {
+		approvalStatus = "current"
+		approvalDetail = "approval_required"
+		if approval != nil && approval.Status == domain.PermissionPackageApprovalStatusPending {
+			approvalDetail = "approval_pending"
+		}
+		if approval != nil && approval.Status == domain.PermissionPackageApprovalStatusRejected {
+			approvalStatus = "blocked"
+			approvalDetail = "approval_rejected"
+		}
+		if approval != nil && approval.Status == domain.PermissionPackageApprovalStatusWithdrawn {
+			approvalDetail = "approval_withdrawn"
+		}
+	}
+	applyStatus := "waiting"
+	applyDetail := "apply_waiting"
+	if applied {
+		applyStatus = "complete"
+		applyDetail = "apply_done"
+	} else if canApply {
+		applyStatus = "current"
+		applyDetail = "apply_ready"
+	}
+	validationStatus := "waiting"
+	validationDetail := "validation_waiting"
+	if runtimeEvidenceReady {
+		validationStatus = "complete"
+		validationDetail = "validation_ready"
+	} else if applied {
+		validationStatus = "current"
+		validationDetail = "validation_needed"
+	}
+	acceptanceStatus := "waiting"
+	acceptanceDetail := "acceptance_waiting"
+	if productionReady {
+		acceptanceStatus = "complete"
+		acceptanceDetail = "acceptance_ready"
+	} else if applied {
+		acceptanceStatus = "current"
+		acceptanceDetail = "acceptance_needed"
+	}
+	return []permissionPackageWorkbenchStep{
+		{Key: "request", Status: requestStatus, DetailCode: requestDetail},
+		{Key: "approval", Status: approvalStatus, DetailCode: approvalDetail},
+		{Key: "apply", Status: applyStatus, DetailCode: applyDetail},
+		{Key: "validation", Status: validationStatus, DetailCode: validationDetail},
+		{Key: "acceptance", Status: acceptanceStatus, DetailCode: acceptanceDetail},
+	}
+}
+
+func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query permissionPackageProductionReadinessQuery) (permissionPackageProductionReadinessResponse, error) {
+	result := permissionPackageProductionReadinessResponse{
+		Checks:      []permissionPackageProductionReadinessCheck{},
+		NextActions: []string{},
+		GeneratedAt: s.now(),
+	}
+	applications, err := s.repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
+		ManagementScope:  store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID},
+		TemplateID:       query.TemplateID,
+		TargetID:         query.TargetID,
+		CallerInstanceID: query.CallerInstanceID,
+		Limit:            1,
+	})
+	if err != nil {
+		return permissionPackageProductionReadinessResponse{}, err
+	}
+	if len(applications) > 0 {
+		latest := applications[0]
+		result.LatestApplication = &latest
+		query = permissionPackageProductionReadinessQueryWithApplicationDefaults(query, latest)
+	}
+
+	preflight, err := s.preflightPermissionPackageRequest(ctx, domain.PermissionPackageApplyRequest{
+		PermissionPackageDraftRequest: domain.PermissionPackageDraftRequest{
+			CallerInstanceID: query.CallerInstanceID,
+			Region:           query.Region,
+			RequestText:      query.RequestText,
+			SubjectSelector:  query.SubjectSelector,
+			TargetID:         query.TargetID,
+			TemplateID:       query.TemplateID,
+			TenantID:         query.TenantID,
+			WorkspaceID:      query.WorkspaceID,
+		},
+		ApprovalRequestID: query.ApprovalRequestID,
+	})
+	if err != nil {
+		return permissionPackageProductionReadinessResponse{}, err
+	}
+	result.Preflight = &preflight
+	if permissionPackageProductionPreflightReady(preflight, result.LatestApplication) {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("preflight_ready", domain.PermissionPackagePreflightPassed, "Permission package draft and safety preflight are acceptable for production readiness.", ""))
+	} else {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("preflight_ready", domain.PermissionPackagePreflightBlocking, "Permission package preflight still has blocking checks.", ""))
+		permissionPackageProductionAddNextAction(&result, "resolve_preflight_blockers", "Resolve apply preflight blockers before claiming production readiness.")
+	}
+
+	if result.LatestApplication == nil {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_present", domain.PermissionPackagePreflightBlocking, "No permission package application exists for this tenant, workspace, template, target, and caller.", ""))
+		permissionPackageProductionAddNextAction(&result, "apply_permission_package", "Apply the approved permission package before production readiness.")
+	} else {
+		result.Summary.HasApplication = true
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_present", domain.PermissionPackagePreflightPassed, "Permission package application evidence is present.", result.LatestApplication.ID))
+		if permissionPackageProductionApplicationScopeMatches(query, *result.LatestApplication) {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_scope_match", domain.PermissionPackagePreflightPassed, "Latest application matches the requested production scope.", result.LatestApplication.ID))
+		} else {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_scope_match", domain.PermissionPackagePreflightBlocking, "Latest application does not match the requested production scope.", result.LatestApplication.ID))
+			permissionPackageProductionAddNextAction(&result, "review_application_scope", "Inspect the latest permission package application scope before go-live.")
+		}
+		impact, err := s.permissionPackageApplicationImpact(ctx, *result.LatestApplication)
+		if err != nil {
+			return permissionPackageProductionReadinessResponse{}, err
+		}
+		result.ApplicationImpact = &impact
+		healthStatus := permissionPackageApplicationHealthStatus(impact)
+		health := permissionPackageApplicationHealthRow{
+			Application:        *result.LatestApplication,
+			Status:             healthStatus,
+			BlockerCodes:       append([]string{}, impact.RollbackReview.BlockerCodes...),
+			CreatedObjectCount: impact.Summary.CreatedObjectCount,
+			ActiveObjectCount:  impact.Summary.ActiveObjectCount,
+			MissingObjectCount: impact.Summary.MissingObjectCount,
+			RollbackReady:      impact.Summary.RollbackReady,
+		}
+		result.ApplicationHealth = &health
+		if healthStatus == "ready" {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_health_ready", domain.PermissionPackagePreflightPassed, "Latest permission package application is healthy.", result.LatestApplication.ID))
+		} else {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_health_ready", domain.PermissionPackagePreflightBlocking, "Latest permission package application is not healthy.", result.LatestApplication.ID))
+			permissionPackageProductionAddNextAction(&result, "review_application_health", "Review application health and drift blockers before production readiness.")
+		}
+		if impact.RollbackReview.Ready && impact.Summary.MissingObjectCount == 0 {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("impact_ready", domain.PermissionPackagePreflightPassed, "Application impact review shows active created grant objects.", result.LatestApplication.ID))
+		} else {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("impact_ready", domain.PermissionPackagePreflightBlocking, "Application impact review has missing or inactive created objects.", result.LatestApplication.ID))
+			permissionPackageProductionAddNextAction(&result, "resolve_impact_blockers", "Resolve impact review blockers before production readiness.")
+		}
+	}
+
+	profile, err := s.buildTenantAccessProfile(ctx, query.TenantID, accessProfileQuery{
+		WorkspaceID:      query.WorkspaceID,
+		TargetID:         query.TargetID,
+		CallerInstanceID: query.CallerInstanceID,
+		TraceLimit:       query.TraceLimit,
+	})
+	if err != nil {
+		return permissionPackageProductionReadinessResponse{}, err
+	}
+	result.AccessProfile = &profile
+	accessEvidenceID := permissionPackageProductionAccessProfileEvidenceID(profile, query, result.LatestApplication)
+	if accessEvidenceID != "" {
+		result.Summary.AccessProfileReady = true
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("access_profile_chain_present", domain.PermissionPackagePreflightPassed, "Tenant access profile contains an effective target, workspace, and caller grant chain.", accessEvidenceID))
+	} else {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("access_profile_chain_present", domain.PermissionPackagePreflightBlocking, "Tenant access profile does not contain an effective grant chain for this caller and target.", ""))
+		permissionPackageProductionAddNextAction(&result, "verify_access_profile", "Verify tenant entitlement, workspace assignment, and caller assignment evidence.")
+	}
+
+	traces := []domain.TraceEvent{}
+	if query.TraceLimit > 0 {
+		traces, err = s.repo.ListTraces(ctx, store.TraceFilter{
+			ManagementScope: store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID},
+			CallerID:        query.CallerInstanceID,
+			TargetID:        query.TargetID,
+			Limit:           query.TraceLimit,
+		})
+		if err != nil {
+			return permissionPackageProductionReadinessResponse{}, err
+		}
+	}
+	result.RuntimeEvidence.AllowedTrace = permissionPackageProductionLatestTrace(traces, domain.TraceDecisionAllowed, query.SubjectID)
+	result.RuntimeEvidence.DeniedTrace = permissionPackageProductionLatestTrace(traces, domain.TraceDecisionDenied, query.SubjectID)
+	if result.RuntimeEvidence.AllowedTrace != nil {
+		result.Summary.HasAllowedTrace = true
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_allowed_trace_present", domain.PermissionPackagePreflightPassed, "Runtime allowed evidence is present for this caller and target.", result.RuntimeEvidence.AllowedTrace.ID))
+	} else {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_allowed_trace_present", domain.PermissionPackagePreflightBlocking, "Runtime allowed evidence is missing for this caller and target.", ""))
+		permissionPackageProductionAddNextAction(&result, "run_allowed_runtime_call", "Run an allowed MCP call with the production subject before go-live.")
+	}
+	if result.RuntimeEvidence.DeniedTrace != nil {
+		result.Summary.HasDeniedTrace = true
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_denied_trace_present", domain.PermissionPackagePreflightPassed, "Runtime denied evidence is present for this caller and target.", result.RuntimeEvidence.DeniedTrace.ID))
+	} else {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_denied_trace_present", domain.PermissionPackagePreflightBlocking, "Runtime denied evidence is missing for this caller and target.", ""))
+		permissionPackageProductionAddNextAction(&result, "run_denied_runtime_call", "Run a denied MCP call that proves blocked tools stay blocked.")
+	}
+
+	if result.LatestApplication != nil {
+		events, err := s.repo.ListAuditEvents(ctx, store.AuditEventFilter{
+			ManagementScope: store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID},
+			Action:          "permission_package.applied",
+			ResourceID:      result.LatestApplication.ID,
+			Limit:           1,
+		})
+		if err != nil {
+			return permissionPackageProductionReadinessResponse{}, err
+		}
+		if len(events) > 0 {
+			appliedEvent := events[0]
+			result.AuditEvidence.AppliedEvent = &appliedEvent
+		}
+	}
+	if result.AuditEvidence.AppliedEvent != nil {
+		result.Summary.HasAppliedAudit = true
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("applied_audit_event_present", domain.PermissionPackagePreflightPassed, "Applied audit event is present for this permission package application.", result.AuditEvidence.AppliedEvent.ID))
+	} else {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("applied_audit_event_present", domain.PermissionPackagePreflightBlocking, "Applied audit event is missing for this permission package application.", ""))
+		permissionPackageProductionAddNextAction(&result, "verify_applied_audit", "Verify permission package applied audit evidence before production readiness.")
+	}
+
+	result.Summary = permissionPackageProductionReadinessSummaryFor(result)
+	result.Status = permissionPackageProductionReadinessStatus(result.Summary)
+	if result.Status == "ready" {
+		permissionPackageProductionAddNextAction(&result, "export_production_evidence", "Production readiness evidence is complete.")
+	}
+	return result, nil
+}
+
+func (s *Server) permissionPackageProductionEvidenceReport(ctx context.Context, query permissionPackageProductionReadinessQuery) (permissionPackageProductionEvidenceReportResponse, error) {
+	readiness, err := s.permissionPackageProductionReadiness(ctx, query)
+	if err != nil {
+		return permissionPackageProductionEvidenceReportResponse{}, err
+	}
+	return permissionPackageProductionEvidenceReportFromReadiness(query, readiness), nil
+}
+
+func permissionPackageProductionEvidenceReportFromReadiness(query permissionPackageProductionReadinessQuery, readiness permissionPackageProductionReadinessResponse) permissionPackageProductionEvidenceReportResponse {
+	scope := permissionPackageProductionEvidenceScope{
+		TenantID:         query.TenantID,
+		WorkspaceID:      query.WorkspaceID,
+		TemplateID:       query.TemplateID,
+		TargetID:         query.TargetID,
+		CallerInstanceID: query.CallerInstanceID,
+		SubjectID:        query.SubjectID,
+		Region:           query.Region,
+		SubjectSelector:  query.SubjectSelector,
+	}
+	evidence := permissionPackageProductionEvidenceRefs{
+		AccessProfile:     permissionPackageProductionEvidenceState{Present: readiness.Summary.AccessProfileReady},
+		ApplicationHealth: permissionPackageProductionEvidenceState{Present: readiness.ApplicationHealth != nil},
+		ApplicationImpact: permissionPackageProductionEvidenceState{Present: readiness.ApplicationImpact != nil},
+	}
+	if readiness.ApplicationHealth != nil {
+		evidence.ApplicationHealth.Status = readiness.ApplicationHealth.Status
+	}
+	if readiness.ApplicationImpact != nil && readiness.ApplicationImpact.Summary.RollbackReady {
+		evidence.ApplicationImpact.Status = "ready"
+	} else if readiness.ApplicationImpact != nil {
+		evidence.ApplicationImpact.Status = "blocked"
+	}
+	if readiness.LatestApplication != nil {
+		application := readiness.LatestApplication
+		scope.Region = stringOrDefault(scope.Region, application.Region)
+		scope.SubjectSelector = stringOrDefault(scope.SubjectSelector, application.SubjectSelector)
+		appliedAt := application.AppliedAt
+		evidence.Application = permissionPackageProductionApplicationEvidence{
+			Present:               true,
+			ID:                    application.ID,
+			DraftID:               application.DraftID,
+			TemplateVersion:       application.TemplateVersion,
+			AppliedAt:             &appliedAt,
+			AllowedCapabilityIDs:  append([]string(nil), application.AllowedCapabilityIDs...),
+			AllowedCapabilityKeys: append([]string(nil), application.AllowedCapabilityKeys...),
+			DataScopes:            domain.CloneDataScopes(application.DataScopes),
+		}
+	}
+	if readiness.RuntimeEvidence.AllowedTrace != nil {
+		evidence.Runtime.AllowedTraceID = readiness.RuntimeEvidence.AllowedTrace.ID
+	}
+	if readiness.RuntimeEvidence.DeniedTrace != nil {
+		evidence.Runtime.DeniedTraceID = readiness.RuntimeEvidence.DeniedTrace.ID
+	}
+	if readiness.AuditEvidence.AppliedEvent != nil {
+		evidence.Audit.AppliedEventID = readiness.AuditEvidence.AppliedEvent.ID
+	}
+	return permissionPackageProductionEvidenceReportResponse{
+		ReportVersion:        permissionPackageProductionEvidenceReportVersion,
+		GeneratedAt:          readiness.GeneratedAt,
+		Scope:                scope,
+		Status:               readiness.Status,
+		Summary:              readiness.Summary,
+		Checks:               append([]permissionPackageProductionReadinessCheck(nil), readiness.Checks...),
+		Evidence:             evidence,
+		NextActionCode:       readiness.NextActionCode,
+		NextActions:          append([]string(nil), readiness.NextActions...),
+		ReadinessGeneratedAt: readiness.GeneratedAt,
+	}
+}
+
+func stringOrDefault(value string, fallback string) string {
+	if strings.TrimSpace(value) != "" {
+		return value
+	}
+	return fallback
+}
+
+func permissionPackageProductionReadinessQueryWithApplicationDefaults(query permissionPackageProductionReadinessQuery, application domain.PermissionPackageApplication) permissionPackageProductionReadinessQuery {
+	if query.Region == "" {
+		query.Region = application.Region
+	}
+	if query.RequestText == "" {
+		query.RequestText = application.RequestText
+	}
+	if query.SubjectSelector == "" {
+		query.SubjectSelector = application.SubjectSelector
+	}
+	return query
+}
+
+func permissionPackageProductionPreflightReady(preflight domain.PermissionPackageApplyPreflightResponse, latestApplication *domain.PermissionPackageApplication) bool {
+	if preflight.Summary.CanApply {
+		return true
+	}
+	if latestApplication == nil {
+		return false
+	}
+	for _, check := range preflight.Checks {
+		if check.Severity != domain.PermissionPackagePreflightBlocking {
+			continue
+		}
+		if check.Code == "approval_request_missing" || check.Code == "approval_request_invalid" {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func permissionPackageProductionApplicationScopeMatches(query permissionPackageProductionReadinessQuery, application domain.PermissionPackageApplication) bool {
+	return application.TenantID == query.TenantID &&
+		application.WorkspaceID == query.WorkspaceID &&
+		application.TemplateID == query.TemplateID &&
+		application.TargetID == query.TargetID &&
+		application.CallerInstanceID == query.CallerInstanceID
+}
+
+func permissionPackageProductionAccessProfileEvidenceID(profile tenantAccessProfileResponse, query permissionPackageProductionReadinessQuery, application *domain.PermissionPackageApplication) string {
+	allowedCapabilityIDs := map[string]struct{}{}
+	if application != nil {
+		for _, capabilityID := range application.AllowedCapabilityIDs {
+			allowedCapabilityIDs[capabilityID] = struct{}{}
+		}
+	}
+	for _, grant := range profile.Grants {
+		if grant.ScopeStatus != accessProfileScopeValid || grant.Target == nil || grant.Target.ID != query.TargetID || grant.Capability == nil {
+			continue
+		}
+		if len(allowedCapabilityIDs) > 0 {
+			if _, ok := allowedCapabilityIDs[grant.Capability.ID]; !ok {
+				continue
+			}
+		}
+		for _, workspace := range grant.WorkspaceAssignments {
+			if workspace.ScopeStatus != accessProfileScopeValid || workspace.WorkspaceAssignment.WorkspaceID != query.WorkspaceID {
+				continue
+			}
+			for _, instance := range workspace.InstanceAssignments {
+				if instance.ScopeStatus == accessProfileScopeValid && instance.InstanceAssignment.CallerInstanceID == query.CallerInstanceID {
+					return instance.InstanceAssignment.ID
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func permissionPackageProductionLatestTrace(traces []domain.TraceEvent, decision domain.TraceDecision, subjectID string) *domain.TraceEvent {
+	for index := len(traces) - 1; index >= 0; index-- {
+		trace := traces[index]
+		if trace.Decision != decision {
+			continue
+		}
+		if subjectID != "" && trace.SubjectID != subjectID {
+			continue
+		}
+		return &trace
+	}
+	return nil
+}
+
+func permissionPackageProductionReadinessCheckFor(code string, severity domain.PermissionPackagePreflightSeverity, message string, evidenceID string) permissionPackageProductionReadinessCheck {
+	return permissionPackageProductionReadinessCheck{
+		Code:       code,
+		Severity:   severity,
+		Message:    message,
+		EvidenceID: evidenceID,
+	}
+}
+
+func permissionPackageProductionAddNextAction(result *permissionPackageProductionReadinessResponse, code string, message string) {
+	if result.NextActionCode == "" {
+		result.NextActionCode = code
+	}
+	result.NextActions = appendUniqueString(result.NextActions, message)
+}
+
+func permissionPackageProductionReadinessSummaryFor(result permissionPackageProductionReadinessResponse) permissionPackageProductionReadinessSummary {
+	summary := result.Summary
+	for _, check := range result.Checks {
+		switch check.Severity {
+		case domain.PermissionPackagePreflightPassed:
+			summary.ReadyCount++
+		case domain.PermissionPackagePreflightWarning:
+			summary.WarningCount++
+		case domain.PermissionPackagePreflightBlocking:
+			summary.BlockingCount++
+		}
+	}
+	return summary
+}
+
+func permissionPackageProductionReadinessStatus(summary permissionPackageProductionReadinessSummary) string {
+	if summary.BlockingCount > 0 {
+		return "blocked"
+	}
+	if summary.WarningCount > 0 {
+		return "needs_review"
+	}
+	return "ready"
 }
 
 type permissionPackageApplicationImpactResponse struct {
@@ -1670,7 +2668,7 @@ func (s *Server) listPermissionPackageApprovalRequests(w http.ResponseWriter, r 
 	}
 	status := domain.PermissionPackageApprovalStatus(strings.TrimSpace(r.URL.Query().Get("status")))
 	if status != "" && !validPermissionPackageApprovalStatus(status) {
-		writeError(w, domain.BadRequest("VALIDATION_FAILED", "status must be pending, approved, or rejected"))
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "status must be pending, approved, rejected, or withdrawn"))
 		return
 	}
 	reviewer := strings.TrimSpace(r.URL.Query().Get("reviewer"))
@@ -1747,7 +2745,7 @@ func (s *Server) preflightPermissionPackageRequest(ctx context.Context, req doma
 		result.Checks = append(result.Checks, permissionPackagePreflightCheck("draft_ready", domain.PermissionPackagePreflightPassed, "Permission package draft is ready to evaluate.", "", ""))
 	} else {
 		result.Checks = append(result.Checks, permissionPackagePreflightCheck("draft_not_ready", domain.PermissionPackagePreflightBlocking, "Permission package draft is not ready to apply.", "", ""))
-		result.NextActions = appendUniqueString(result.NextActions, "Fix draft readiness blockers before applying this permission package.")
+		result.NextActions = appendUniqueString(result.NextActions, "Fix draft readiness blockers before applying this permission request.")
 	}
 
 	requiresApproval := !draft.PolicyGate.CanApplyDirectly
@@ -1756,7 +2754,7 @@ func (s *Server) preflightPermissionPackageRequest(ctx context.Context, req doma
 		result.Checks = append(result.Checks, permissionPackagePreflightCheck("policy_gate", domain.PermissionPackagePreflightInfo, "Policy gate requires an approved permission package approval request.", "", ""))
 		if req.ApprovalRequestID == "" {
 			result.Checks = append(result.Checks, permissionPackagePreflightCheck("approval_request_missing", domain.PermissionPackagePreflightBlocking, "Permission package requires approval before apply.", "", ""))
-			result.NextActions = appendUniqueString(result.NextActions, "Create and approve a permission package approval request, then preflight again with approvalRequestId.")
+			result.NextActions = appendUniqueString(result.NextActions, "Create and approve an approval request for this permission request, then preflight again with approvalRequestId.")
 		} else {
 			approval, ok, err := s.repo.GetPermissionPackageApprovalRequest(ctx, req.ApprovalRequestID)
 			if err != nil {
@@ -1799,7 +2797,7 @@ func (s *Server) preflightPermissionPackageRequest(ctx context.Context, req doma
 		for _, existing := range existingGrants {
 			result.ExistingGrants = append(result.ExistingGrants, existing)
 			result.Checks = append(result.Checks, permissionPackagePreflightCheck("existing_grant_chain", domain.PermissionPackagePreflightWarning, "An enabled grant chain already exists for this tenant, workspace, caller, and capability.", capability.ID, capability.Key))
-			result.NextActions = appendUniqueString(result.NextActions, "Review existing grant chains before applying another permission package for the same caller and capability.")
+			result.NextActions = appendUniqueString(result.NextActions, "Review existing grant chains before applying another permission request for the same caller and capability.")
 		}
 	}
 	if dataScopeConflictCount == 0 {
@@ -1809,7 +2807,7 @@ func (s *Server) preflightPermissionPackageRequest(ctx context.Context, req doma
 
 	result.Summary = permissionPackagePreflightSummary(result, requiresApproval, approvalReady)
 	if result.Summary.CanApply {
-		result.NextActions = appendUniqueString(result.NextActions, "Apply this permission package when the reviewer is ready.")
+		result.NextActions = appendUniqueString(result.NextActions, "Apply this permission request when the reviewer is ready.")
 	}
 	return result, nil
 }
@@ -1840,6 +2838,41 @@ func (s *Server) rejectPermissionPackageApprovalRequest(w http.ResponseWriter, r
 	s.resolvePermissionPackageApprovalRequest(w, r, domain.PermissionPackageApprovalStatusRejected)
 }
 
+func (s *Server) withdrawPermissionPackageApprovalRequest(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+	if id == "" {
+		writeError(w, domain.NotFound("approval request not found"))
+		return
+	}
+	var req domain.PermissionPackageApprovalResolutionRequest
+	if r.ContentLength != 0 {
+		if err := decodeJSON(r, &req); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
+	existing, ok, err := s.repo.GetPermissionPackageApprovalRequest(r.Context(), id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("approval request not found"))
+		return
+	}
+	requester := managementActor(r)
+	saved, err := s.withdrawPermissionPackageApprovalRequestRecord(r.Context(), existing, requester, req.Comment, s.now())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, saved.TenantID, saved.WorkspaceID, "permission_package.approval_withdrawn", "permission_package_approval_request", saved.ID, "Permission package approval withdrawn", permissionPackageApprovalAuditMetadata(saved))); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, saved)
+}
+
 func (s *Server) resolvePermissionPackageApprovalRequest(w http.ResponseWriter, r *http.Request, status domain.PermissionPackageApprovalStatus) {
 	id := strings.TrimSpace(chi.URLParam(r, "id"))
 	if id == "" {
@@ -1862,9 +2895,10 @@ func (s *Server) resolvePermissionPackageApprovalRequest(w http.ResponseWriter, 
 		writeError(w, domain.NotFound("approval request not found"))
 		return
 	}
-	reviewer := strings.TrimSpace(req.Reviewer)
-	if reviewer == "" {
-		reviewer = managementActor(r)
+	reviewer, err := reviewerFromRequest(req.Reviewer, r)
+	if err != nil {
+		writeError(w, err)
+		return
 	}
 	now := s.now()
 	if err := s.validatePermissionPackageApprovalReviewer(r.Context(), reviewer, existing); err != nil {
@@ -2449,6 +3483,10 @@ func (s *Server) createInstanceAssignment(w http.ResponseWriter, r *http.Request
 	req.SubjectSelector = strings.TrimSpace(req.SubjectSelector)
 	if req.WorkspaceAssignmentID == "" || req.CallerInstanceID == "" {
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "workspaceAssignmentId and callerInstanceId are required"))
+		return
+	}
+	if domain.IsUnboundedSubjectSelector(req.SubjectSelector) {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "subjectSelector is required and cannot be *"))
 		return
 	}
 	effect, err := normalizePolicyEffect(req.Effect, domain.PolicyEffectAllow)
@@ -3056,6 +4094,9 @@ func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Reques
 			writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
 			return true
 		}
+		if routeType == "mcp" {
+			setMCPUpstreamHeaders(req.Header)
+		}
 		if mutateRequest != nil {
 			if err := mutateRequest(req); err != nil {
 				writeProxyError(w, recordAllowedTrace, startedAt, 0, err)
@@ -3158,6 +4199,15 @@ func copyUpstreamRequestHeaders(dst http.Header, src http.Header) {
 	}
 }
 
+const mcpStreamableHTTPAccept = "application/json, text/event-stream"
+
+func setMCPUpstreamHeaders(header http.Header) {
+	header.Set("Accept", mcpStreamableHTTPAccept)
+	if header.Get("Content-Type") == "" {
+		header.Set("Content-Type", "application/json")
+	}
+}
+
 func readProxyBody(body io.Reader) ([]byte, error) {
 	limited := io.LimitReader(body, maxProxyBodyBytes+1)
 	payload, err := io.ReadAll(limited)
@@ -3242,6 +4292,7 @@ func (s *Server) callMCPUpstream(r *http.Request, target domain.Agent, body []by
 	if err := copyCredentialHeaders(req.Header, target.ChannelConfig, target.Credentials); err != nil {
 		return nil, 0, "", proxyTraceResult{}, err
 	}
+	setMCPUpstreamHeaders(req.Header)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		classified := classifyUpstreamError(ctx, err)
@@ -4202,6 +5253,9 @@ func (s *Server) resolvePermissionPackageApprovalRequestRecord(ctx context.Conte
 	if existing.Status != domain.PermissionPackageApprovalStatusPending {
 		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "approval request is already resolved")
 	}
+	if strings.TrimSpace(existing.RequestedBy) != "" && strings.TrimSpace(reviewer) == strings.TrimSpace(existing.RequestedBy) {
+		return domain.PermissionPackageApprovalRequest{}, domain.PermissionDenied("reviewer cannot resolve their own permission package approval request")
+	}
 	updated := existing
 	updated.Status = status
 	updated.ReviewedBy = strings.TrimSpace(reviewer)
@@ -4218,30 +5272,62 @@ func (s *Server) resolvePermissionPackageApprovalRequestRecord(ctx context.Conte
 	return saved, nil
 }
 
+func (s *Server) withdrawPermissionPackageApprovalRequestRecord(ctx context.Context, existing domain.PermissionPackageApprovalRequest, requester string, comment string, now time.Time) (domain.PermissionPackageApprovalRequest, error) {
+	if existing.Status != domain.PermissionPackageApprovalStatusPending {
+		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "approval request is already resolved")
+	}
+	if !existing.ConsumedAt.IsZero() || strings.TrimSpace(existing.ConsumedByApplicationID) != "" {
+		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "approval request is already consumed")
+	}
+	if !existing.ExpiresAt.IsZero() && !now.Before(existing.ExpiresAt) {
+		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "approval request has expired")
+	}
+	requester = strings.TrimSpace(requester)
+	if strings.TrimSpace(existing.RequestedBy) != "" && requester != strings.TrimSpace(existing.RequestedBy) {
+		return domain.PermissionPackageApprovalRequest{}, domain.PermissionDenied("only the original requester can withdraw this approval request")
+	}
+	updated := existing
+	updated.Status = domain.PermissionPackageApprovalStatusWithdrawn
+	updated.ReviewedBy = requester
+	updated.ReviewComment = strings.TrimSpace(comment)
+	updated.UpdatedAt = now
+	updated.ResolvedAt = now
+	saved, ok, err := s.repo.UpdatePermissionPackageApprovalRequest(ctx, updated)
+	if err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
+	}
+	if !ok {
+		return domain.PermissionPackageApprovalRequest{}, domain.NotFound("approval request not found")
+	}
+	return saved, nil
+}
+
 func permissionPackageApprovalRequestFromDraft(draft domain.PermissionPackageDraft, requestedBy string, now time.Time) domain.PermissionPackageApprovalRequest {
 	allowedCapabilityIDs, allowedCapabilityKeys := permissionPackageCapabilityIDsAndKeys(draft.AllowedCapabilities)
+	allowedCapabilityFingerprints := permissionPackageCapabilityFingerprints(draft.AllowedCapabilities)
 	return domain.PermissionPackageApprovalRequest{
-		ID:                    security.NewID("ppar"),
-		DraftID:               draft.ID,
-		TemplateID:            draft.Template.ID,
-		TemplateVersion:       draft.Template.Version,
-		PolicyVersion:         draft.PolicyGate.PolicyVersion,
-		TenantID:              draft.Input.TenantID,
-		WorkspaceID:           draft.Input.WorkspaceID,
-		TargetID:              draft.Input.TargetID,
-		CallerInstanceID:      draft.Input.CallerInstanceID,
-		SubjectSelector:       draft.Input.SubjectSelector,
-		RequestText:           draft.Input.RequestText,
-		Region:                draft.Input.Region,
-		DataScopes:            append([]domain.DataScope(nil), draft.DataScopes...),
-		AllowedCapabilityIDs:  allowedCapabilityIDs,
-		AllowedCapabilityKeys: allowedCapabilityKeys,
-		PolicyGate:            draft.PolicyGate,
-		Status:                domain.PermissionPackageApprovalStatusPending,
-		RequestedBy:           requestedBy,
-		CreatedAt:             now,
-		UpdatedAt:             now,
-		ExpiresAt:             now.Add(defaultPermissionPackageApprovalTTL),
+		ID:                            security.NewID("ppar"),
+		DraftID:                       draft.ID,
+		TemplateID:                    draft.Template.ID,
+		TemplateVersion:               draft.Template.Version,
+		PolicyVersion:                 draft.PolicyGate.PolicyVersion,
+		TenantID:                      draft.Input.TenantID,
+		WorkspaceID:                   draft.Input.WorkspaceID,
+		TargetID:                      draft.Input.TargetID,
+		CallerInstanceID:              draft.Input.CallerInstanceID,
+		SubjectSelector:               draft.Input.SubjectSelector,
+		RequestText:                   draft.Input.RequestText,
+		Region:                        draft.Input.Region,
+		DataScopes:                    append([]domain.DataScope(nil), draft.DataScopes...),
+		AllowedCapabilityIDs:          allowedCapabilityIDs,
+		AllowedCapabilityKeys:         allowedCapabilityKeys,
+		AllowedCapabilityFingerprints: allowedCapabilityFingerprints,
+		PolicyGate:                    draft.PolicyGate,
+		Status:                        domain.PermissionPackageApprovalStatusPending,
+		RequestedBy:                   requestedBy,
+		CreatedAt:                     now,
+		UpdatedAt:                     now,
+		ExpiresAt:                     now.Add(defaultPermissionPackageApprovalTTL),
 	}
 }
 
@@ -4256,6 +5342,7 @@ func validatePermissionPackageApprovalForDraft(approval domain.PermissionPackage
 		return domain.BadRequest("VALIDATION_FAILED", "permission package approval request has expired")
 	}
 	allowedCapabilityIDs, allowedCapabilityKeys := permissionPackageCapabilityIDsAndKeys(draft.AllowedCapabilities)
+	allowedCapabilityFingerprints := permissionPackageCapabilityFingerprints(draft.AllowedCapabilities)
 	if approval.DraftID != draft.ID ||
 		approval.TemplateID != draft.Template.ID ||
 		approval.TemplateVersion != draft.Template.Version ||
@@ -4269,7 +5356,8 @@ func validatePermissionPackageApprovalForDraft(approval domain.PermissionPackage
 		approval.Region != draft.Input.Region ||
 		!samePermissionPackageDataScopes(approval.DataScopes, draft.DataScopes) ||
 		!sameStringSet(approval.AllowedCapabilityIDs, allowedCapabilityIDs) ||
-		!sameStringSet(approval.AllowedCapabilityKeys, allowedCapabilityKeys) {
+		!sameStringSet(approval.AllowedCapabilityKeys, allowedCapabilityKeys) ||
+		!sameStringSet(approval.AllowedCapabilityFingerprints, allowedCapabilityFingerprints) {
 		return domain.BadRequest("VALIDATION_FAILED", "approved permission package approval request does not match current draft")
 	}
 	return nil
@@ -4297,6 +5385,71 @@ func permissionPackageCapabilityIDsAndKeys(capabilities []domain.Capability) ([]
 		keys = append(keys, capability.Key)
 	}
 	return ids, keys
+}
+
+type permissionPackageCapabilityFingerprintPayload struct {
+	ID              string                           `json:"id"`
+	TargetID        string                           `json:"targetId"`
+	Type            domain.CapabilityType            `json:"type"`
+	Key             string                           `json:"key"`
+	Action          domain.CapabilityAction          `json:"action"`
+	NativeScopes    []string                         `json:"nativeScopes,omitempty"`
+	DataDomains     []string                         `json:"dataDomains,omitempty"`
+	DataScopes      []domain.DataScope               `json:"dataScopes,omitempty"`
+	Sensitivity     domain.CapabilitySensitivity     `json:"sensitivity"`
+	RiskLevel       domain.CapabilityRisk            `json:"riskLevel"`
+	EnforcementMode domain.CapabilityEnforcementMode `json:"enforcementMode"`
+	DiscoveryStatus domain.CapabilityDiscoveryStatus `json:"discoveryStatus"`
+	Version         int                              `json:"version"`
+}
+
+func permissionPackageCapabilityFingerprints(capabilities []domain.Capability) []string {
+	fingerprints := make([]string, 0, len(capabilities))
+	for _, capability := range capabilities {
+		fingerprints = append(fingerprints, permissionPackageCapabilityFingerprint(capability))
+	}
+	sort.Strings(fingerprints)
+	return fingerprints
+}
+
+func permissionPackageCapabilityFingerprint(capability domain.Capability) string {
+	payload := permissionPackageCapabilityFingerprintPayload{
+		ID:              capability.ID,
+		TargetID:        capability.TargetID,
+		Type:            capability.Type,
+		Key:             capability.Key,
+		Action:          capability.Action,
+		NativeScopes:    sortedStringCopy(capability.NativeScopes),
+		DataDomains:     sortedStringCopy(capability.DataDomains),
+		DataScopes:      sortedDataScopes(capability.DataScopes),
+		Sensitivity:     capability.Sensitivity,
+		RiskLevel:       capability.RiskLevel,
+		EnforcementMode: capability.EnforcementMode,
+		DiscoveryStatus: capability.DiscoveryStatus,
+		Version:         capability.Version,
+	}
+	data, _ := json.Marshal(payload)
+	sum := sha256.Sum256(data)
+	return capability.ID + ":" + hex.EncodeToString(sum[:])
+}
+
+func sortedStringCopy(values []string) []string {
+	out := append([]string(nil), values...)
+	sort.Strings(out)
+	return out
+}
+
+func sortedDataScopes(values []domain.DataScope) []domain.DataScope {
+	out := append([]domain.DataScope(nil), values...)
+	sort.Slice(out, func(i, j int) bool {
+		return dataScopeSortKey(out[i]) < dataScopeSortKey(out[j])
+	})
+	return out
+}
+
+func dataScopeSortKey(scope domain.DataScope) string {
+	data, _ := json.Marshal(scope)
+	return string(data)
 }
 
 func samePermissionPackageDataScopes(left []domain.DataScope, right []domain.DataScope) bool {
@@ -4366,6 +5519,9 @@ func (s *Server) managementAuditEvent(r *http.Request, tenantID string, workspac
 }
 
 func managementActor(r *http.Request) string {
+	if actor, ok := requestAuthenticatedAdminActor(r); ok {
+		return actor
+	}
 	if strings.TrimSpace(r.Header.Get("X-Admin-Key")) != "" {
 		return "admin-key"
 	}
@@ -4413,13 +5569,13 @@ func (s *Server) discoverMCPCapabilities(ctx context.Context, target domain.Agen
 		return nil, domain.UpstreamError("capability discovery request could not be prepared")
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
 	if err := copyConfiguredHeaders(req.Header, target.ChannelConfig); err != nil {
 		return nil, err
 	}
 	if err := copyCredentialHeaders(req.Header, target.ChannelConfig, target.Credentials); err != nil {
 		return nil, err
 	}
+	setMCPUpstreamHeaders(req.Header)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, classifyUpstreamError(ctx, err)
@@ -4605,7 +5761,10 @@ func validCapabilityRisk(risk domain.CapabilityRisk) bool {
 
 func validPermissionPackageApprovalStatus(status domain.PermissionPackageApprovalStatus) bool {
 	switch status {
-	case domain.PermissionPackageApprovalStatusPending, domain.PermissionPackageApprovalStatusApproved, domain.PermissionPackageApprovalStatusRejected:
+	case domain.PermissionPackageApprovalStatusPending,
+		domain.PermissionPackageApprovalStatusApproved,
+		domain.PermissionPackageApprovalStatusRejected,
+		domain.PermissionPackageApprovalStatusWithdrawn:
 		return true
 	default:
 		return false

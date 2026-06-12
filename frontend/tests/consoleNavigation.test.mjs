@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  defaultNavKey,
+  navHashFor,
+  navKeyFromHash,
+  navGroups,
   navItems,
   viewForNav
 } from "../src/consoleNavigation.ts";
@@ -11,19 +15,48 @@ test("every primary navigation item resolves to a distinct workspace", () => {
   const viewKeys = views.map((view) => view.key);
 
   assert.deepEqual(viewKeys, [
-    "cockpit",
     "ai-admin",
-    "registry",
-    "routes",
-    "policies",
-    "capabilities",
     "access",
+    "evidence",
     "traces",
-    "evidence"
+    "cockpit",
+    "registry",
+    "capabilities",
+    "policies",
+    "routes",
   ]);
   assert.equal(new Set(views.map((view) => view.primaryPanelKey)).size, views.length);
 });
 
-test("unknown navigation keys fall back to cockpit", () => {
-  assert.equal(viewForNav("unknown").key, "cockpit");
+test("navigation is grouped by user task", () => {
+  assert.deepEqual(navGroups.map((group) => group.key), ["primary", "audit", "configuration"]);
+  assert.deepEqual(navItems.map((item) => item.groupKey), [
+    "primary",
+    "primary",
+    "primary",
+    "audit",
+    "audit",
+    "configuration",
+    "configuration",
+    "configuration",
+    "configuration"
+  ]);
+  assert.ok(navItems.every((item) => item.detailKey.startsWith("navDetail.")));
+});
+
+test("default navigation opens the permission package production journey", () => {
+  assert.equal(defaultNavKey, "ai-admin");
+  assert.equal(navItems[0].key, defaultNavKey);
+  assert.equal(viewForNav("unknown").key, defaultNavKey);
+});
+
+test("go-live evidence navigation points to the acceptance workflow", () => {
+  assert.equal(viewForNav("evidence").primaryPanelKey, "goLiveAcceptance");
+});
+
+test("navigation hash preserves the current workspace across reloads", () => {
+  assert.equal(navHashFor("evidence"), "#evidence");
+  assert.equal(navKeyFromHash("#evidence"), "evidence");
+  assert.equal(navKeyFromHash("evidence"), "evidence");
+  assert.equal(navKeyFromHash("#unknown"), null);
 });

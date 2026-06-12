@@ -8,6 +8,7 @@ TENANT_ID="${TENANT_ID:-default}"
 RUN_ID="${RUN_ID:-data-permission-$(date +%Y%m%d%H%M%S)}"
 MCP_ENDPOINT="${MCP_ENDPOINT:-}"
 ALLOWED_TOOL="${ALLOWED_TOOL:-search_customer}"
+SUBJECT_ID="${SUBJECT_ID:-user:data-permission}"
 
 HTTP_STATUS=""
 HTTP_BODY=""
@@ -25,6 +26,7 @@ request() {
   local body="${3:-}"
   local bearer="${4:-}"
   local run_id="${5:-}"
+  local subject_id="${6:-}"
   local tmp
   tmp="$(mktemp)"
 
@@ -45,6 +47,9 @@ request() {
   fi
   if [[ -n "$run_id" ]]; then
     args+=(-H "X-Run-Id: $run_id")
+  fi
+  if [[ -n "$subject_id" ]]; then
+    args+=(-H "X-AgentHarbor-Subject-Id: $subject_id")
   fi
   if [[ -n "$body" ]]; then
     args+=(-d "$body")
@@ -174,6 +179,7 @@ elif kind == "instance-assignment":
     body = {
         "workspaceAssignmentId": workspace_assignment_id,
         "callerInstanceId": caller_id,
+        "subjectSelector": "user:*",
         "effect": "allow",
         "status": "enabled",
     }
@@ -292,7 +298,7 @@ WORKSPACE_ASSIGNMENT_ID="$(json_get data.id)"
 request POST "/api/v1/instance-assignments" "$(json_body instance-assignment "$WORKSPACE_ASSIGNMENT_ID" "$CALLER_ID")"
 expect_status 201 "create instance assignment"
 
-request POST "/api/v1/mcp/agents/$TARGET_ID/rpc" "$(json_body tools-call "$ALLOWED_TOOL")" "$AGENT_KEY" "$RUN_ID-allowed"
+request POST "/api/v1/mcp/agents/$TARGET_ID/rpc" "$(json_body tools-call "$ALLOWED_TOOL")" "$AGENT_KEY" "$RUN_ID-allowed" "$SUBJECT_ID"
 expect_2xx "allow scoped tools/call"
 echo "scoped tool call allowed"
 

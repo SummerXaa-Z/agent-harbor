@@ -9,7 +9,11 @@ export type NavKey =
   | "traces"
   | "evidence"
 
+export type NavGroupKey = "primary" | "audit" | "configuration"
+
 export interface NavItem {
+  detailKey: string
+  groupKey: NavGroupKey
   key: NavKey
   label: string
 }
@@ -20,16 +24,25 @@ export interface ConsoleView {
   titleKey: string
 }
 
+export const defaultNavKey: NavKey = "ai-admin"
+const navHashPrefix = "#"
+
+export const navGroups: Array<{ key: NavGroupKey; labelKey: string }> = [
+  { key: "primary", labelKey: "navGroup.primary" },
+  { key: "audit", labelKey: "navGroup.audit" },
+  { key: "configuration", labelKey: "navGroup.configuration" },
+]
+
 export const navItems: NavItem[] = [
-  { key: "cockpit", label: "Cockpit" },
-  { key: "ai-admin", label: "AI Admin" },
-  { key: "registry", label: "Registry" },
-  { key: "routes", label: "Routes" },
-  { key: "policies", label: "Policies" },
-  { key: "capabilities", label: "Capabilities" },
-  { key: "access", label: "Access" },
-  { key: "traces", label: "Traces" },
-  { key: "evidence", label: "Evidence" },
+  { detailKey: "navDetail.ai-admin", groupKey: "primary", key: "ai-admin", label: "Permission Changes" },
+  { detailKey: "navDetail.access", groupKey: "primary", key: "access", label: "Access Profile" },
+  { detailKey: "navDetail.evidence", groupKey: "primary", key: "evidence", label: "Go-Live Evidence" },
+  { detailKey: "navDetail.traces", groupKey: "audit", key: "traces", label: "Call Logs" },
+  { detailKey: "navDetail.cockpit", groupKey: "audit", key: "cockpit", label: "System Check" },
+  { detailKey: "navDetail.registry", groupKey: "configuration", key: "registry", label: "Agents & Tools" },
+  { detailKey: "navDetail.capabilities", groupKey: "configuration", key: "capabilities", label: "Tool Capabilities" },
+  { detailKey: "navDetail.policies", groupKey: "configuration", key: "policies", label: "Access Policies" },
+  { detailKey: "navDetail.routes", groupKey: "configuration", key: "routes", label: "Routing Rules" },
 ]
 
 const views: Record<NavKey, ConsoleView> = {
@@ -75,11 +88,24 @@ const views: Record<NavKey, ConsoleView> = {
   },
   evidence: {
     key: "evidence",
-    primaryPanelKey: "evidenceRuns",
+    primaryPanelKey: "goLiveAcceptance",
     titleKey: "page.evidence",
   },
 }
 
 export function viewForNav(key: string): ConsoleView {
-  return views[(key as NavKey) in views ? (key as NavKey) : "cockpit"]
+  return views[(key as NavKey) in views ? (key as NavKey) : defaultNavKey]
+}
+
+export function isNavKey(key: string): key is NavKey {
+  return key in views
+}
+
+export function navKeyFromHash(hash: string): NavKey | null {
+  const normalized = hash.trim().replace(/^#\/?/, "")
+  return isNavKey(normalized) ? normalized : null
+}
+
+export function navHashFor(key: NavKey): string {
+  return `${navHashPrefix}${key}`
 }

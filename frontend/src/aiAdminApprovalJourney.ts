@@ -68,6 +68,13 @@ export interface AiAdminApprovalJourneyEvaluation {
   deniedCapability?: Capability;
 }
 
+export interface AiAdminGoLiveReadinessSummary {
+  status: "ready" | "waiting";
+  remainingCount: number;
+  totalCount: number;
+  nextStep?: AiAdminApprovalJourneyStep;
+}
+
 export function createAiAdminApprovalJourneyConfig(
   seed: string = Date.now().toString(36),
 ): AiAdminApprovalJourneyConfig {
@@ -235,6 +242,18 @@ export function evaluateAiAdminApprovalJourney({
     target,
     totalCount: steps.length,
     writeCapability,
+  };
+}
+
+export function summarizeAiAdminGoLiveReadiness(
+  evaluation: AiAdminApprovalJourneyEvaluation,
+): AiAdminGoLiveReadinessSummary {
+  const incompleteSteps = evaluation.steps.filter((step) => step.status !== "complete");
+  return {
+    nextStep: incompleteSteps[0],
+    remainingCount: incompleteSteps.length,
+    status: incompleteSteps.length === 0 ? "ready" : "waiting",
+    totalCount: evaluation.totalCount,
   };
 }
 

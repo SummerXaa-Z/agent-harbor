@@ -7,11 +7,14 @@ import type {
   InstanceAssignment,
   TenantEntitlement,
   WorkspaceAssignment,
+  AuditEvent,
+  TenantAccessProfile,
+  TraceEvent,
 } from "./types";
 
 export type PermissionPackageDecision = "allow" | "deny";
 export type PermissionPackagePolicyDecision = "allow" | "approval_required";
-export type PermissionPackageApprovalStatus = "pending" | "approved" | "rejected";
+export type PermissionPackageApprovalStatus = "pending" | "approved" | "rejected" | "withdrawn";
 
 export interface PermissionPackageTemplate {
   id: string;
@@ -170,6 +173,196 @@ export interface PermissionPackageApplicationHealthRow {
   rollbackReady: boolean;
 }
 
+export type PermissionPackageProductionReadinessStatus = "ready" | "needs_review" | "blocked";
+
+export interface PermissionPackageProductionReadinessFilter {
+  approvalRequestId?: string;
+  callerInstanceId: string;
+  region?: string;
+  requestText?: string;
+  subjectId?: string;
+  subjectSelector?: string;
+  targetId: string;
+  templateId: string;
+  tenantId: string;
+  traceLimit?: number;
+  workspaceId: string;
+}
+
+export interface PermissionPackageProductionReadiness {
+  status: PermissionPackageProductionReadinessStatus;
+  summary: PermissionPackageProductionReadinessSummary;
+  checks: PermissionPackageProductionReadinessCheck[];
+  latestApplication?: PermissionPackageApplication;
+  preflight?: PermissionPackageApplyPreflight;
+  applicationHealth?: PermissionPackageApplicationHealthRow;
+  applicationImpact?: PermissionPackageApplicationImpact;
+  accessProfile?: TenantAccessProfile;
+  runtimeEvidence: PermissionPackageRuntimeEvidence;
+  auditEvidence: PermissionPackageAuditEvidence;
+  nextActionCode?: PermissionPackageProductionNextActionCode;
+  nextActions: string[];
+  generatedAt: string;
+}
+
+export type PermissionPackageProductionNextActionCode =
+  | "resolve_preflight_blockers"
+  | "apply_permission_package"
+  | "review_application_scope"
+  | "review_application_health"
+  | "resolve_impact_blockers"
+  | "verify_access_profile"
+  | "run_allowed_runtime_call"
+  | "run_denied_runtime_call"
+  | "verify_applied_audit"
+  | "export_production_evidence";
+
+export interface PermissionPackageProductionReadinessSummary {
+  readyCount: number;
+  warningCount: number;
+  blockingCount: number;
+  hasApplication: boolean;
+  hasAllowedTrace: boolean;
+  hasDeniedTrace: boolean;
+  hasAppliedAudit: boolean;
+  accessProfileReady: boolean;
+}
+
+export interface PermissionPackageProductionReadinessCheck {
+  code: string;
+  severity: PermissionPackageApplyPreflightSeverity;
+  message: string;
+  evidenceId?: string;
+}
+
+export interface PermissionPackageRuntimeEvidence {
+  allowedTrace?: TraceEvent;
+  deniedTrace?: TraceEvent;
+}
+
+export interface PermissionPackageAuditEvidence {
+  appliedEvent?: AuditEvent;
+}
+
+export interface PermissionPackageProductionEvidenceReport {
+  reportVersion: string;
+  generatedAt: string;
+  scope: PermissionPackageProductionEvidenceScope;
+  status: PermissionPackageProductionReadinessStatus;
+  summary: PermissionPackageProductionReadinessSummary;
+  checks: PermissionPackageProductionReadinessCheck[];
+  evidence: PermissionPackageProductionEvidenceRefs;
+  nextActionCode?: PermissionPackageProductionNextActionCode;
+  nextActions: string[];
+  readinessGeneratedAt: string;
+}
+
+export interface PermissionPackageProductionEvidenceScope {
+  tenantId: string;
+  workspaceId: string;
+  templateId: string;
+  targetId: string;
+  callerInstanceId: string;
+  subjectId?: string;
+  region?: string;
+  subjectSelector?: string;
+}
+
+export interface PermissionPackageProductionEvidenceRefs {
+  application: PermissionPackageProductionApplicationEvidence;
+  runtime: PermissionPackageProductionRuntimeEvidence;
+  audit: PermissionPackageProductionAuditEvidence;
+  accessProfile: PermissionPackageProductionEvidenceState;
+  applicationHealth: PermissionPackageProductionEvidenceState;
+  applicationImpact: PermissionPackageProductionEvidenceState;
+}
+
+export interface PermissionPackageProductionApplicationEvidence {
+  present: boolean;
+  id?: string;
+  draftId?: string;
+  templateVersion?: number;
+  appliedAt?: string;
+  allowedCapabilityIds?: string[];
+  allowedCapabilityKeys?: string[];
+  dataScopes?: DataScope[];
+}
+
+export interface PermissionPackageProductionRuntimeEvidence {
+  allowedTraceId?: string;
+  deniedTraceId?: string;
+}
+
+export interface PermissionPackageProductionAuditEvidence {
+  appliedEventId?: string;
+}
+
+export interface PermissionPackageProductionEvidenceState {
+  present: boolean;
+  status?: string;
+}
+
+export type PermissionPackageWorkbenchStatus =
+  | "needs_input"
+  | "awaiting_approval"
+  | "ready_to_apply"
+  | "validating"
+  | "production_ready"
+  | "blocked";
+
+export type PermissionPackageWorkbenchActionCode =
+  | "complete_request"
+  | "create_approval_request"
+  | "review_approval_request"
+  | "apply_permission_package"
+  | "run_runtime_validation"
+  | "export_production_evidence";
+
+export type PermissionPackageWorkbenchStepKey =
+  | "request"
+  | "approval"
+  | "apply"
+  | "validation"
+  | "acceptance";
+
+export type PermissionPackageWorkbenchStepStatus = "complete" | "current" | "waiting" | "blocked";
+
+export interface PermissionPackageWorkbenchPreview {
+  draft: PermissionPackageDraft;
+  approvalRequest?: PermissionPackageApprovalRequest;
+  latestApplication?: PermissionPackageApplication;
+  productionReadiness?: PermissionPackageProductionReadiness;
+  summary: PermissionPackageWorkbenchSummary;
+  generatedAt: string;
+}
+
+export interface PermissionPackageWorkbenchSummary {
+  status: PermissionPackageWorkbenchStatus;
+  primaryActionCode: PermissionPackageWorkbenchActionCode;
+  nextActionCode?: PermissionPackageProductionNextActionCode;
+  approvalRequired: boolean;
+  canApply: boolean;
+  applied: boolean;
+  runtimeEvidenceReady: boolean;
+  productionReady: boolean;
+  allowedCapabilityCount: number;
+  blockedCapabilityCount: number;
+  plannedObjectCount: number;
+  readinessReadyCount: number;
+  readinessTotalCount: number;
+  blockingCount: number;
+  warningCount: number;
+  steps: PermissionPackageWorkbenchStep[];
+}
+
+export interface PermissionPackageWorkbenchStep {
+  key: PermissionPackageWorkbenchStepKey;
+  status: PermissionPackageWorkbenchStepStatus;
+  detailCode: string;
+  count?: number;
+  total?: number;
+}
+
 export interface PermissionPackageImpactRehearsal {
   enabled: boolean;
   scenario?: string;
@@ -239,6 +432,7 @@ export interface PermissionPackageApprovalRequest {
   dataScopes?: DataScope[];
   allowedCapabilityIds: string[];
   allowedCapabilityKeys: string[];
+  allowedCapabilityFingerprints: string[];
   policyGate: PermissionPackagePolicyGate;
   status: PermissionPackageApprovalStatus;
   requestedBy?: string;
@@ -377,6 +571,17 @@ export const permissionPackageTemplates: PermissionPackageTemplate[] = [
   },
 ];
 
+export const defaultPermissionPackageDraftInput: PermissionPackageDraftInput = {
+  callerInstanceId: "",
+  region: "华东",
+  requestText: "给客服助手开通当前租户的工单查询和有限更新权限，禁止导出合同、删除工单和管理操作。",
+  subjectSelector: "user:support-*",
+  targetId: "",
+  templateId: "support-ticket-triage",
+  tenantId: "default",
+  workspaceId: "workspace-sandbox"
+};
+
 export function subjectIdExampleFromSelector(subjectSelector?: string): string | undefined {
   const selector = subjectSelector?.trim() ?? "";
   if (!selector) return undefined;
@@ -448,6 +653,9 @@ function buildReadiness(
   ]
     .filter(([, value]) => !value.trim())
     .map(([field]) => field);
+  if (!input.subjectSelector?.trim() || input.subjectSelector.trim() === "*") {
+    missingFields.push("subjectSelector");
+  }
   const warnings = allowedCapabilities.length === 0 ? ["No matching allowed capabilities for the selected target."] : [];
   return {
     canApply: missingFields.length === 0 && warnings.length === 0,
@@ -470,7 +678,7 @@ function buildPolicyGate(allowedCapabilities: Capability[]): PermissionPackagePo
   return {
     canApplyDirectly: false,
     decision: "approval_required",
-    nextActions: ["Request approval before applying this permission package."],
+    nextActions: ["Request approval before applying this permission request."],
     policyVersion: policyGateVersion,
     reasons,
   };

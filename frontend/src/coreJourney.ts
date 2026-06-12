@@ -29,6 +29,8 @@ export interface CoreJourneyConfig extends CoreJourneyForm {
   rootTenantId: string;
   childTenantId: string;
   grandchildTenantId: string;
+  subjectSelector: string;
+  subjectId: string;
 }
 
 export interface CoreJourneyStep {
@@ -68,6 +70,8 @@ export function createCoreJourneyConfig(
     rootTenantId: `tenant-root-${runId}`,
     childTenantId: `tenant-child-${runId}`,
     grandchildTenantId: `tenant-grandchild-${runId}`,
+    subjectSelector: `user:${runId}-*`,
+    subjectId: `user:${runId}-operator`,
   };
 }
 

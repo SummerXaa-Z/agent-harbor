@@ -37,7 +37,7 @@ test("permission request journey renders as one production workspace instead of 
   assert.match(styles, /\.approval-overview\s*\{[^}]*padding:\s*0;/s);
   assert.match(styles, /\.approval-task-strip\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(styles, /\.approval-flow-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(340px,\s*400px\);/s);
-  assert.match(styles, /\.approval-context-bar\s*\{[^}]*position:\s*sticky;/s);
+  assert.match(styles, /\.approval-context-bar\s*\{[^}]*position:\s*static;/s);
   assert.equal(styles.includes("counter-reset: approval-section"), false);
   assert.equal(styles.includes(".approval-section::before"), false);
 });
@@ -152,6 +152,7 @@ test("permission request top chrome avoids nested card and table treatment", () 
   assert.match(styles, /\.approval-command\s*\{[^}]*border:\s*0;/s);
   assert.match(styles, /\.approval-command\s*\{[^}]*background:\s*transparent;/s);
   assert.match(styles, /\.approval-context-bar\s*\{[^}]*gap:\s*8px;/s);
+  assert.match(styles, /\.approval-context-bar\s*\{[^}]*position:\s*static;/s);
   assert.match(styles, /\.approval-context-bar\s*\{[^}]*box-shadow:\s*none;/s);
   assert.match(styles, /\.approval-context-bar div\s*\{[^}]*border:\s*1px solid var\(--line-muted\);/s);
   assert.match(styles, /\.approval-task-strip\s*\{[^}]*gap:\s*8px;/s);

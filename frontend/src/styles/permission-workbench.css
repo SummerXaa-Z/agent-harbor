@@ -250,9 +250,7 @@
 }
 
 .approval-context-bar {
-  position: sticky;
-  z-index: 18;
-  top: 10px;
+  position: static;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;

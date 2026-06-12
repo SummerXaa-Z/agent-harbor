@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Split Permission Changes presenter helpers and capability chip rendering out of `AiAdminPermissionWorkbench`, reducing the largest console component while preserving the permission-change journey.
+- 权限变更页的展示辅助函数和能力标签渲染已从 `AiAdminPermissionWorkbench` 拆出，降低最大控制台组件复杂度，同时保持权限变更旅程不变。
 - Added a public-readiness audit for v0.2.0 public preview, covering fresh clone `make check`, `make release-check`, isolated-port `make demo`, browser first-run routing, and remaining non-blocking release follow-ups.
 - 新增 v0.2.0 公开预览可用性审计，覆盖干净克隆后的 `make check`、`make release-check`、隔离端口 `make demo`、浏览器首次进入路径和剩余非阻塞发布跟进项。
 - Split frontend vendor dependencies into dedicated Vite production chunks so the public preview build no longer ships as one oversized JavaScript entry asset.

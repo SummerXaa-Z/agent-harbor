@@ -142,7 +142,7 @@ import {
 } from "./permissionRequestJourney";
 import { AiAdminPermissionWorkbench } from "./components/AiAdminPermissionWorkbench";
 import { CapabilityGovernanceView } from "./components/CapabilityGovernanceView";
-import { IconMore, IconOpen, Panel } from "./components/ConsolePrimitives";
+import { ActionDisclosurePanel, IconMore, IconOpen, Panel } from "./components/ConsolePrimitives";
 import {
   AccessView,
   AiAdminView,
@@ -2076,7 +2076,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       />
   );
   const createAgentPanel = (
-    <Panel className="span-4" icon={<Boxes size={18} />} title={t("panel.createAgent")}>
+    <ActionDisclosurePanel className="span-4" icon={<Boxes size={18} />} title={t("panel.createAgent")}>
       <AgentCreateForm
         form={management.agentForm}
         message={management.agentMessage}
@@ -2084,10 +2084,10 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onSubmit={management.submitAgent}
         t={t}
       />
-    </Panel>
+    </ActionDisclosurePanel>
   );
   const createKeyPanel = (
-    <Panel className="span-4" icon={<KeyRound size={18} />} title={t("panel.createKey")}>
+    <ActionDisclosurePanel className="span-4" icon={<KeyRound size={18} />} title={t("panel.createKey")}>
       <KeyCreateForm
         agents={localCallers}
         createdKey={management.createdKey}
@@ -2097,10 +2097,10 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onSubmit={management.submitKey}
         t={t}
       />
-    </Panel>
+    </ActionDisclosurePanel>
   );
   const createPolicyPanel = (
-    <Panel className="span-4" icon={<Route size={18} />} title={t("panel.createPolicy")}>
+    <ActionDisclosurePanel className="span-4" icon={<Route size={18} />} id="policy-create-panel" title={t("panel.createPolicy")}>
       <PolicyCreateForm
         agents={agents}
         form={management.policyForm}
@@ -2109,10 +2109,10 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onSubmit={management.submitRoutePolicy}
         t={t}
       />
-    </Panel>
+    </ActionDisclosurePanel>
   );
   const rotateCredentialPanel = (
-    <Panel className="span-4" icon={<KeyRound size={18} />} title={t("panel.rotateCredential")}>
+    <ActionDisclosurePanel className="span-4" icon={<KeyRound size={18} />} title={t("panel.rotateCredential")}>
       <CredentialRotateForm
         agents={agents}
         form={management.rotateForm}
@@ -2121,7 +2121,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onSubmit={management.submitCredentialRotation}
         t={t}
       />
-    </Panel>
+    </ActionDisclosurePanel>
   );
   const coreJourneyPanel = (
     <Panel className="span-12" icon={<Workflow size={18} />} title={t("panel.coreJourney")}>

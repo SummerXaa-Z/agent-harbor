@@ -356,6 +356,8 @@ test("system self-check uses structured configuration and copyable runtime conte
   assert.match(row, /className="core-journey-step-detail" translate="no"/);
   assert.match(row, /className="core-journey-step-metric"/);
   assert.match(styles, /\.core-journey-health\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
+  assert.match(styles, /\.core-journey-health-summary strong\s*\{[^}]*font-size:\s*16px;/s);
+  assert.match(styles, /\.core-journey-score strong\s*\{[^}]*font-size:\s*18px;/s);
   assert.match(styles, /\.core-journey-advanced summary\s*\{/);
   assert.match(styles, /\.core-journey-advanced summary\s*\{[^}]*min-height:\s*46px;/s);
   assert.match(styles, /\.core-journey-advanced:not\(\[open\]\)\s*>\s*:not\(summary\)\s*\{[^}]*display:\s*none !important;/s);
@@ -367,6 +369,7 @@ test("system self-check uses structured configuration and copyable runtime conte
   assert.match(styles, /\.core-journey-preflight-row::before,\s*\.core-journey-step::before\s*\{[^}]*display:\s*none;[^}]*content:\s*none;/s);
   assert.match(styles, /\.core-journey-preflight-row strong,\s*\.core-journey-step strong\s*\{[^}]*font-size:\s*13px;/s);
   assert.match(styles, /\.core-journey-preflight-row \.badge,\s*\.core-journey-step \.badge\s*\{[^}]*font-size:\s*11px;/s);
+  assert.match(styles, /\.core-journey-preflight-row \.badge,\s*\.core-journey-step \.badge\s*\{[^}]*line-height:\s*1;/s);
   assert.match(styles, /\.core-journey-step\.status-complete::before\s*\{[^}]*background:\s*transparent;/s);
   assert.match(styles, /\.core-journey-step-metric\s*\{[^}]*font-size:\s*11px;/s);
   assert.match(styles, /\.core-journey-preflight-row span\s*\{[^}]*-webkit-line-clamp:\s*2;/s);

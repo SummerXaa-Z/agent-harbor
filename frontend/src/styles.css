@@ -832,6 +832,61 @@ button {
   letter-spacing: 0;
 }
 
+.action-disclosure-panel {
+  align-self: start;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.action-disclosure-panel summary {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.action-disclosure-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.action-disclosure-panel summary > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.action-disclosure-panel summary svg {
+  color: var(--ink-2);
+}
+
+.action-disclosure-panel summary strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-disclosure-panel[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.action-disclosure-panel[open] {
+  grid-column: span 12;
+  box-shadow: var(--shadow);
+}
+
+.action-disclosure-body {
+  padding: 14px;
+}
+
 .go-live-acceptance {
   padding: 18px;
 }
@@ -1290,6 +1345,24 @@ button {
 
 .table-wrap {
   overflow-x: auto;
+}
+
+.agent-registry {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.registry-empty-state {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  padding: var(--space-5);
+}
+
+.registry-empty-state .empty-row {
+  width: min(100%, 520px);
+  min-height: 0;
+  padding: 0;
 }
 
 .table-toolbar {
@@ -2750,9 +2823,9 @@ td code {
 .core-journey-health {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
+  gap: 14px;
   align-items: start;
-  padding: 16px;
+  padding: 14px;
 }
 
 .core-journey-health-summary {
@@ -2777,15 +2850,16 @@ td code {
 
 .core-journey-health-summary strong {
   color: var(--ink);
-  font-size: 20px;
-  line-height: 28px;
+  font-size: 16px;
+  line-height: 22px;
 }
 
 .core-journey-health-summary p {
   max-width: 760px;
   margin: 0;
   color: var(--muted);
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .core-journey-health-status {
@@ -2855,18 +2929,21 @@ td code {
   display: grid;
   justify-items: end;
   min-width: 96px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--line-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
 }
 
 .core-journey-score strong {
-  font-size: 22px;
+  font-size: 18px;
+  line-height: 22px;
 }
 
 .core-journey-score span {
   margin-top: 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .core-journey-config-grid {
@@ -3088,10 +3165,12 @@ td code {
 
 .core-journey-preflight-row .badge,
 .core-journey-step .badge {
+  align-self: center;
   min-width: 48px;
   height: 20px;
   padding: 0 7px;
   font-size: 11px;
+  line-height: 1;
 }
 
 .core-journey-preflight-row span,

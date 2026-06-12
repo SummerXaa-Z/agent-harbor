@@ -55,6 +55,34 @@ export function Panel({
   );
 }
 
+export function ActionDisclosurePanel({
+  title,
+  icon,
+  className = "span-4",
+  id,
+  children
+}: {
+  title: string;
+  icon: ReactNode;
+  className?: string;
+  id?: string;
+  children: ReactNode;
+}) {
+  return (
+    <details className={`action-disclosure-panel ${className}`} id={id}>
+      <summary>
+        <div>
+          {icon}
+          <strong>{title}</strong>
+        </div>
+      </summary>
+      <div className="action-disclosure-body">
+        {children}
+      </div>
+    </details>
+  );
+}
+
 export function IconMore({ title = "More" }: { title?: string }) {
   return (
     <button aria-label={title} className="icon-button compact" title={title} type="button">

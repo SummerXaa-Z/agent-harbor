@@ -197,16 +197,36 @@ test("agent tools workspace prioritizes the registry before mutation forms", () 
   assert.ok(registryView.indexOf("{createKeyPanel}") < registryView.indexOf("{rotateCredentialPanel}"));
 });
 
+test("management mutation forms are collapsed behind action entries", () => {
+  assert.match(consolePrimitives, /export function ActionDisclosurePanel/);
+  assert.match(consolePrimitives, /className=\{`action-disclosure-panel \$\{className\}`\}/);
+  assert.match(app, /<ActionDisclosurePanel className="span-4" icon=\{<Boxes size=\{18\} \/>\} title=\{t\("panel\.createAgent"\)\}>/);
+  assert.match(app, /<ActionDisclosurePanel className="span-4" icon=\{<KeyRound size=\{18\} \/>\} title=\{t\("panel\.createKey"\)\}>/);
+  assert.match(app, /<ActionDisclosurePanel className="span-4" icon=\{<Route size=\{18\} \/>\} id="policy-create-panel" title=\{t\("panel\.createPolicy"\)\}>/);
+  assert.match(app, /<ActionDisclosurePanel className="span-4" icon=\{<KeyRound size=\{18\} \/>\} title=\{t\("panel\.rotateCredential"\)\}>/);
+  assert.match(styles, /\.action-disclosure-panel\s*\{[^}]*align-self:\s*start;/s);
+  assert.match(styles, /\.action-disclosure-panel\[open\]\s*\{[^}]*grid-column:\s*span 12;/s);
+  assert.match(styles, /\.action-disclosure-body\s*\{[^}]*padding:\s*14px;/s);
+});
+
 test("agent registry provides search status filtering and a details entry", () => {
+  const agentTableStart = operationalViews.indexOf("export function AgentTable");
+  const contractMatrixStart = operationalViews.indexOf("export function ContractMatrix", agentTableStart);
+  const agentTable = operationalViews.slice(agentTableStart, contractMatrixStart);
+
   assert.match(operationalViews, /const \[agentQuery, setAgentQuery\] = useState\(""\)/);
   assert.match(operationalViews, /const \[agentStatusFilter, setAgentStatusFilter\] = useState<AgentStatus \| "">\(""\)/);
   assert.match(operationalViews, /const \[selectedAgentId, setSelectedAgentId\] = useState\(""\)/);
+  assert.match(operationalViews, /const hasAgents = agents\.length > 0/);
   assert.match(operationalViews, /const visibleAgents = agents\.filter/);
   assert.match(operationalViews, /className="table-toolbar"/);
+  assert.match(operationalViews, /className="registry-empty-state"/);
+  assert.doesNotMatch(agentTable, /<td colSpan=\{6\}>/);
   assert.match(operationalViews, /placeholder=\{t\("form\.searchAgents"\)\}/);
   assert.match(operationalViews, /className="table-detail-panel"/);
   assert.match(operationalViews, /setSelectedAgentId\(agent\.id\)/);
   assert.match(styles, /\.table-toolbar\s*\{/);
+  assert.match(styles, /\.registry-empty-state\s*\{/);
   assert.match(styles, /\.table-detail-panel\s*\{/);
 });
 

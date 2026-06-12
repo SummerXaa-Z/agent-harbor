@@ -142,6 +142,34 @@ export function GoLiveAcceptanceOverview({
             {t("action.openPermissionChange")}
           </button>
         </div>
+
+        <section className="go-live-acceptance-checks" aria-label={t("section.permissionRequestProcess")}>
+          <div className="go-live-acceptance-score">
+            <div>
+              <span>{t("metric.productionReadyChecks")}</span>
+              <strong>{readyCount}/{totalCount}</strong>
+            </div>
+            <div>
+              <span>{t("metric.productionWarnings")}</span>
+              <strong>{warningCount}</strong>
+            </div>
+            <div>
+              <span>{t("metric.productionBlockers")}</span>
+              <strong>{blockerCount}</strong>
+            </div>
+          </div>
+          <ol className="go-live-step-list">
+            {productionSummary.steps.map((step) => (
+              <li key={step.key}>
+                <span className={`go-live-step-dot tone-${productionConsoleStatusTone(step.status)}`} aria-hidden="true" />
+                <div>
+                  <strong>{t(step.labelKey)}</strong>
+                  <span>{step.detailKey ? t(step.detailKey) : step.detail}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
       </section>
 
       <aside className="go-live-acceptance-context" aria-label={t("text.goLiveAcceptanceContext")}>
@@ -165,34 +193,6 @@ export function GoLiveAcceptanceOverview({
           </div>
         </dl>
       </aside>
-
-      <section className="go-live-acceptance-checks" aria-label={t("section.permissionRequestProcess")}>
-        <div className="go-live-acceptance-score">
-          <div>
-            <span>{t("metric.productionReadyChecks")}</span>
-            <strong>{readyCount}/{totalCount}</strong>
-          </div>
-          <div>
-            <span>{t("metric.productionWarnings")}</span>
-            <strong>{warningCount}</strong>
-          </div>
-          <div>
-            <span>{t("metric.productionBlockers")}</span>
-            <strong>{blockerCount}</strong>
-          </div>
-        </div>
-        <ol className="go-live-step-list">
-          {productionSummary.steps.map((step) => (
-            <li key={step.key}>
-              <span className={`go-live-step-dot tone-${productionConsoleStatusTone(step.status)}`} aria-hidden="true" />
-              <div>
-                <strong>{t(step.labelKey)}</strong>
-                <span>{step.detailKey ? t(step.detailKey) : step.detail}</span>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
     </div>
   );
 }

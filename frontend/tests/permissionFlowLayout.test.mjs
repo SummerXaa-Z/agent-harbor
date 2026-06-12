@@ -464,12 +464,16 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   assert.match(goLiveAcceptanceOverview, /const acceptanceReady = productionReadiness\?\.status === "ready"/);
   assert.match(goLiveAcceptanceOverview, /acceptanceReady \? \([\s\S]*className="primary-button"[\s\S]*onClick=\{onExportProductionEvidence\}[\s\S]*className="secondary-button"[\s\S]*onClick=\{onRefreshProductionReadiness\}/);
   assert.match(goLiveAcceptanceOverview, /: \([\s\S]*className="primary-button"[\s\S]*onClick=\{onRefreshProductionReadiness\}[\s\S]*className="secondary-button"[\s\S]*onClick=\{onExportProductionEvidence\}/);
+  assert.match(goLiveAcceptanceOverview, /<section className="go-live-acceptance-main">[\s\S]*<section className="go-live-acceptance-checks"[\s\S]*<\/section>\s*<\/section>\s*<aside className="go-live-acceptance-context"/);
   assert.match(evidenceCase, /goLiveAcceptancePanel/);
   assert.ok(evidenceRender.indexOf("{goLiveAcceptancePanel}") < evidenceRender.indexOf("{evidenceRunsPanel}"));
   assert.match(i18n, /"section\.goLiveAcceptance": "上线验收"/);
   assert.match(i18n, /"text\.goLiveAcceptanceTaskTitle": "确认这次权限变更是否可以上线"/);
   assert.match(i18n, /"empty\.evidenceRuns\.detail": "历史自检运行会在这里保留；当前权限变更请以上方上线验收状态为准。"/);
   assert.match(styles, /\.go-live-acceptance\s*\{/);
+  assert.match(styles, /\.go-live-acceptance\s*\{[^}]*align-items:\s*start;/s);
+  assert.match(styles, /\.go-live-acceptance-context\s*\{[^}]*align-self:\s*start;/s);
+  assert.match(styles, /\.go-live-acceptance-checks\s*\{[^}]*border-top:\s*1px solid var\(--line-subtle\);/s);
 });
 
 test("workspace navigation is reflected in the URL hash", () => {

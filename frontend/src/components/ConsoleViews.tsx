@@ -30,40 +30,28 @@ export function AskView({ askAccessPanel }: { askAccessPanel: ReactNode }) {
 
 export function RegistryView({
   agentRegistryPanel,
-  contractMatrixPanel,
-  createAgentPanel,
-  createKeyPanel,
-  rotateCredentialPanel
+  contractMatrixPanel
 }: {
   agentRegistryPanel: ReactNode;
   contractMatrixPanel: ReactNode;
-  createAgentPanel: ReactNode;
-  createKeyPanel: ReactNode;
-  rotateCredentialPanel: ReactNode;
 }) {
   return (
     <section className="content-grid">
       {agentRegistryPanel}
-      {createAgentPanel}
-      {createKeyPanel}
-      {rotateCredentialPanel}
       {contractMatrixPanel}
     </section>
   );
 }
 
 export function RoutesView({
-  createPolicyPanel,
   routeGovernancePanel,
   tracePanel
 }: {
-  createPolicyPanel: ReactNode;
   routeGovernancePanel: ReactNode;
   tracePanel: ReactNode;
 }) {
   return (
     <section className="content-grid">
-      {createPolicyPanel}
       {routeGovernancePanel}
       {tracePanel}
     </section>
@@ -72,14 +60,12 @@ export function RoutesView({
 
 export function PoliciesView({
   capabilityGovernancePanel,
-  createPolicyPanel,
   managementAuditPanel,
   policies,
   routeGovernancePanel,
   t
 }: {
   capabilityGovernancePanel: ReactNode;
-  createPolicyPanel: ReactNode;
   managementAuditPanel: ReactNode;
   policies: RoutePolicy[];
   routeGovernancePanel: ReactNode;
@@ -88,7 +74,6 @@ export function PoliciesView({
   return (
     <section className="content-grid">
       <AccessPolicyWorkspace
-        createPolicyPanel={createPolicyPanel}
         managementAuditPanel={managementAuditPanel}
         policies={policies}
         routeGovernancePanel={routeGovernancePanel}

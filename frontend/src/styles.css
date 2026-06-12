@@ -832,8 +832,16 @@ button {
   letter-spacing: 0;
 }
 
-.action-modal-entry {
-  align-self: start;
+.panel-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.action-modal-inline {
+  display: inline-flex;
   min-width: 0;
 }
 
@@ -901,6 +909,33 @@ button {
   color: var(--brand);
   font-size: var(--text-sm);
   font-weight: 700;
+}
+
+.action-modal-trigger-compact {
+  width: auto;
+  min-height: 32px;
+  gap: 8px;
+  padding: 0 10px;
+  border-color: var(--brand-border);
+  box-shadow: none;
+}
+
+.action-modal-trigger-compact .action-modal-trigger-label strong {
+  font-size: var(--text-sm);
+}
+
+.action-modal-trigger-compact .action-modal-trigger-affordance {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: currentColor;
+  font-size: 0;
+}
+
+.action-modal-trigger-compact .action-modal-trigger-affordance svg {
+  width: 14px;
+  height: 14px;
 }
 
 .action-modal-backdrop {

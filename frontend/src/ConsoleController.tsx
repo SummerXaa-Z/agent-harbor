@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   Boxes,
   ClipboardCheck,
@@ -142,7 +142,7 @@ import {
 } from "./permissionRequestJourney";
 import { AiAdminPermissionWorkbench } from "./components/AiAdminPermissionWorkbench";
 import { CapabilityGovernanceView } from "./components/CapabilityGovernanceView";
-import { ActionModalPanel, IconMore, IconOpen, Panel } from "./components/ConsolePrimitives";
+import { ActionModalButton, IconMore, IconOpen, Panel } from "./components/ConsolePrimitives";
 import {
   AccessView,
   AiAdminView,
@@ -1896,8 +1896,26 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       />
     </Panel>
   );
-  const routeGovernancePanel = (className = "span-8") => (
-    <Panel className={className} icon={<Workflow size={18} />} title={t("panel.routeGovernance")} action={<IconMore title={t("action.more")} />}>
+  const createPolicyAction = (
+    <ActionModalButton
+      closeLabel={t("action.dismiss")}
+      icon={<Route size={16} />}
+      id="policy-create-panel"
+      openLabel={t("action.open")}
+      title={t("panel.createPolicy")}
+    >
+      <PolicyCreateForm
+        agents={agents}
+        form={management.policyForm}
+        message={management.policyMessage}
+        onChange={management.setPolicyForm}
+        onSubmit={management.submitRoutePolicy}
+        t={t}
+      />
+    </ActionModalButton>
+  );
+  const routeGovernancePanel = (className = "span-8", action: ReactNode = <IconMore title={t("action.more")} />) => (
+    <Panel className={className} icon={<Workflow size={18} />} title={t("panel.routeGovernance")} action={action}>
       <PolicyTable
         agents={agents}
         canDisable={Boolean(data?.routePoliciesLoadedFromApi)}
@@ -1918,8 +1936,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       <SignalBoard metrics={metrics} t={t} />
     </Panel>
   );
-  const agentRegistryPanel = (className = "span-8") => (
-    <Panel className={className} icon={<Boxes size={18} />} title={t("panel.agentRegistry")} action={<IconMore title={t("action.more")} />}>
+  const agentRegistryPanel = (className = "span-8", action: ReactNode = <IconMore title={t("action.more")} />) => (
+    <Panel className={className} icon={<Boxes size={18} />} title={t("panel.agentRegistry")} action={action}>
       <AgentTable
         agents={agents}
         channelLabels={channelLabels}
@@ -2075,11 +2093,10 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         t={t}
       />
   );
-  const createAgentPanel = (
-    <ActionModalPanel
-      className="span-4"
+  const createAgentAction = (
+    <ActionModalButton
       closeLabel={t("action.dismiss")}
-      icon={<Boxes size={18} />}
+      icon={<Boxes size={16} />}
       openLabel={t("action.open")}
       title={t("panel.createAgent")}
     >
@@ -2090,13 +2107,12 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onSubmit={management.submitAgent}
         t={t}
       />
-    </ActionModalPanel>
+    </ActionModalButton>
   );
-  const createKeyPanel = (
-    <ActionModalPanel
-      className="span-4"
+  const createKeyAction = (
+    <ActionModalButton
       closeLabel={t("action.dismiss")}
-      icon={<KeyRound size={18} />}
+      icon={<KeyRound size={16} />}
       openLabel={t("action.open")}
       title={t("panel.createKey")}
     >
@@ -2109,32 +2125,12 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onSubmit={management.submitKey}
         t={t}
       />
-    </ActionModalPanel>
+    </ActionModalButton>
   );
-  const createPolicyPanel = (
-    <ActionModalPanel
-      className="span-4"
+  const rotateCredentialAction = (
+    <ActionModalButton
       closeLabel={t("action.dismiss")}
-      icon={<Route size={18} />}
-      id="policy-create-panel"
-      openLabel={t("action.open")}
-      title={t("panel.createPolicy")}
-    >
-      <PolicyCreateForm
-        agents={agents}
-        form={management.policyForm}
-        message={management.policyMessage}
-        onChange={management.setPolicyForm}
-        onSubmit={management.submitRoutePolicy}
-        t={t}
-      />
-    </ActionModalPanel>
-  );
-  const rotateCredentialPanel = (
-    <ActionModalPanel
-      className="span-4"
-      closeLabel={t("action.dismiss")}
-      icon={<KeyRound size={18} />}
+      icon={<KeyRound size={16} />}
       openLabel={t("action.open")}
       title={t("panel.rotateCredential")}
     >
@@ -2146,7 +2142,14 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onSubmit={management.submitCredentialRotation}
         t={t}
       />
-    </ActionModalPanel>
+    </ActionModalButton>
+  );
+  const agentRegistryActions = (
+    <div className="panel-action-group">
+      {createAgentAction}
+      {createKeyAction}
+      {rotateCredentialAction}
+    </div>
   );
   const coreJourneyPanel = (
     <Panel className="span-12" icon={<Workflow size={18} />} title={t("panel.coreJourney")}>
@@ -2190,18 +2193,14 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       case "registry":
         return (
           <RegistryView
-            agentRegistryPanel={agentRegistryPanel("span-12")}
+            agentRegistryPanel={agentRegistryPanel("span-12", agentRegistryActions)}
             contractMatrixPanel={contractMatrixPanel("span-4")}
-            createAgentPanel={createAgentPanel}
-            createKeyPanel={createKeyPanel}
-            rotateCredentialPanel={rotateCredentialPanel}
           />
         );
       case "routes":
         return (
           <RoutesView
-            createPolicyPanel={createPolicyPanel}
-            routeGovernancePanel={routeGovernancePanel("span-8")}
+            routeGovernancePanel={routeGovernancePanel("span-12", createPolicyAction)}
             tracePanel={tracePanel("span-12")}
           />
         );
@@ -2209,10 +2208,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         return (
           <PoliciesView
             capabilityGovernancePanel={capabilityGovernancePanel("span-12")}
-            createPolicyPanel={createPolicyPanel}
             managementAuditPanel={managementAuditPanel("span-12")}
             policies={policies}
-            routeGovernancePanel={routeGovernancePanel("span-8")}
+            routeGovernancePanel={routeGovernancePanel("span-12", createPolicyAction)}
             t={t}
           />
         );

@@ -55,12 +55,11 @@ export function Panel({
   );
 }
 
-export function ActionModalPanel({
+export function ActionModalButton({
   title,
   icon,
   openLabel,
   closeLabel,
-  className = "span-4",
   id,
   children
 }: {
@@ -68,7 +67,40 @@ export function ActionModalPanel({
   icon: ReactNode;
   openLabel: string;
   closeLabel: string;
-  className?: string;
+  id?: string;
+  children: ReactNode;
+}) {
+  return (
+    <ActionModalLauncher
+      className="action-modal-inline"
+      closeLabel={closeLabel}
+      icon={icon}
+      id={id}
+      openLabel={openLabel}
+      title={title}
+      triggerClassName="action-modal-trigger action-modal-trigger-compact"
+    >
+      {children}
+    </ActionModalLauncher>
+  );
+}
+
+function ActionModalLauncher({
+  title,
+  icon,
+  openLabel,
+  closeLabel,
+  className,
+  triggerClassName,
+  id,
+  children
+}: {
+  title: string;
+  icon: ReactNode;
+  openLabel: string;
+  closeLabel: string;
+  className: string;
+  triggerClassName: string;
   id?: string;
   children: ReactNode;
 }) {
@@ -99,13 +131,13 @@ export function ActionModalPanel({
   }, [open]);
 
   return (
-    <div className={`action-modal-entry ${className}`} id={id}>
+    <div className={className} id={id}>
       <button
         aria-label={`${title} ${openLabel}`}
         aria-controls={dialogId}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="action-modal-trigger"
+        className={triggerClassName}
         type="button"
         onClick={() => setOpen(true)}
       >

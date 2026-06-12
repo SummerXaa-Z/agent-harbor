@@ -101,13 +101,11 @@ export function PolicyTable({
 }
 
 export function AccessPolicyWorkspace({
-  createPolicyPanel,
   managementAuditPanel,
   policies,
   routeGovernancePanel,
   t
 }: {
-  createPolicyPanel: ReactNode;
   managementAuditPanel: ReactNode;
   policies: RoutePolicy[];
   routeGovernancePanel: ReactNode;
@@ -136,7 +134,6 @@ export function AccessPolicyWorkspace({
           </button>
         </section>
       ) : null}
-      {createPolicyPanel}
       {routeGovernancePanel}
       <section className="policy-audit-disclosure span-12">
         <button

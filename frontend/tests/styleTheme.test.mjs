@@ -185,35 +185,42 @@ test("workspace telemetry is scoped to system check instead of repeating on ever
   assert.doesNotMatch(app, /isCapabilitiesView \? "compact" : ""/);
 });
 
-test("agent tools workspace prioritizes the registry before mutation forms", () => {
+test("agent tools workspace keeps mutation actions in the registry header", () => {
   const registryStart = consoleViews.indexOf("export function RegistryView");
   const routesStart = consoleViews.indexOf("export function RoutesView", registryStart);
   const registryView = consoleViews.slice(registryStart, routesStart);
 
   assert.notEqual(registryStart, -1);
   assert.notEqual(routesStart, -1);
-  assert.ok(registryView.indexOf("{agentRegistryPanel}") < registryView.indexOf("{createAgentPanel}"));
-  assert.ok(registryView.indexOf("{createAgentPanel}") < registryView.indexOf("{createKeyPanel}"));
-  assert.ok(registryView.indexOf("{createKeyPanel}") < registryView.indexOf("{rotateCredentialPanel}"));
+  assert.match(app, /const agentRegistryActions = \(\s*<div className="panel-action-group">/);
+  assert.match(app, /agentRegistryPanel=\{agentRegistryPanel\("span-12", agentRegistryActions\)\}/);
+  assert.doesNotMatch(registryView, /createAgentPanel|createKeyPanel|rotateCredentialPanel/);
 });
 
-test("management mutation forms open in independent action modals", () => {
-  assert.match(consolePrimitives, /export function ActionModalPanel/);
+test("management mutation forms open from panel header modals", () => {
+  assert.match(consolePrimitives, /export function ActionModalButton/);
+  assert.doesNotMatch(consolePrimitives, /export function ActionModalPanel/);
   assert.match(consolePrimitives, /aria-haspopup="dialog"/);
   assert.match(consolePrimitives, /aria-label=\{`\$\{title\} \$\{openLabel\}`\}/);
   assert.match(consolePrimitives, /aria-modal="true"/);
   assert.match(consolePrimitives, /role="dialog"/);
   assert.match(consolePrimitives, /event\.key === "Escape"/);
   assert.match(consolePrimitives, /document\.body\.style\.overflow = "hidden"/);
-  assert.match(consolePrimitives, /className="action-modal-trigger"/);
-  assert.match(app, /<ActionModalPanel[\s\S]*title=\{t\("panel\.createAgent"\)\}/);
-  assert.match(app, /<ActionModalPanel[\s\S]*title=\{t\("panel\.createKey"\)\}/);
-  assert.match(app, /<ActionModalPanel[\s\S]*id="policy-create-panel"[\s\S]*title=\{t\("panel\.createPolicy"\)\}/);
-  assert.match(app, /<ActionModalPanel[\s\S]*title=\{t\("panel\.rotateCredential"\)\}/);
+  assert.match(consolePrimitives, /triggerClassName="action-modal-trigger action-modal-trigger-compact"/);
+  assert.match(app, /<ActionModalButton[\s\S]*title=\{t\("panel\.createAgent"\)\}/);
+  assert.match(app, /<ActionModalButton[\s\S]*title=\{t\("panel\.createKey"\)\}/);
+  assert.match(app, /<ActionModalButton[\s\S]*id="policy-create-panel"[\s\S]*title=\{t\("panel\.createPolicy"\)\}/);
+  assert.match(app, /<ActionModalButton[\s\S]*title=\{t\("panel\.rotateCredential"\)\}/);
+  assert.match(app, /routeGovernancePanel=\{routeGovernancePanel\("span-12", createPolicyAction\)\}/);
+  assert.match(app, /routeGovernancePanel=\{routeGovernancePanel\("span-12", createPolicyAction\)\}[\s\S]*t=\{t\}/);
   assert.match(operationalViews, /querySelector<HTMLButtonElement>\("#policy-create-panel \.action-modal-trigger"\)/);
+  assert.match(styles, /\.panel-action-group\s*\{/);
   assert.match(styles, /\.action-modal-trigger\s*\{[\s\S]*cursor:\s*pointer;/);
+  assert.match(styles, /\.action-modal-trigger-compact\s*\{[\s\S]*width:\s*auto;/);
   assert.match(styles, /\.action-modal-backdrop\s*\{[\s\S]*position:\s*fixed;[\s\S]*overscroll-behavior:\s*contain;/);
   assert.match(styles, /\.action-modal-panel\s*\{[\s\S]*width:\s*min\(720px,\s*calc\(100vw - 48px\)\);/);
+  assert.doesNotMatch(consoleViews, /createPolicyPanel=\{createPolicyPanel\}/);
+  assert.doesNotMatch(styles, /\.action-modal-entry/);
   assert.doesNotMatch(styles, /\.action-disclosure-panel/);
 });
 

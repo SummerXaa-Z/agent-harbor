@@ -10,6 +10,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 - Added a public-readiness audit for v0.2.0 public preview, covering fresh clone `make check`, `make release-check`, isolated-port `make demo`, browser first-run routing, and remaining non-blocking release follow-ups.
 - 新增 v0.2.0 公开预览可用性审计，覆盖干净克隆后的 `make check`、`make release-check`、隔离端口 `make demo`、浏览器首次进入路径和剩余非阻塞发布跟进项。
+- Split frontend vendor dependencies into dedicated Vite production chunks so the public preview build no longer ships as one oversized JavaScript entry asset.
+- 前端第三方依赖现在拆入独立 Vite 生产 chunk，公开预览构建不再以单个过大的 JavaScript 入口资产交付。
 - `make demo` now automatically wires the web console API base and local CORS origin from non-default demo ports, so evaluators can avoid port conflicts without setting hidden frontend variables.
 - `make demo` 现在会根据非默认 demo 端口自动配置 Web 控制台 API 地址和本地 CORS 来源，评估者遇到端口冲突时不再需要额外设置隐藏前端变量。
 - Web console now has production-oriented login control: `/api/v1/auth/session`, `/api/v1/auth/login`, and `/api/v1/auth/logout` issue an HttpOnly `agent_harbor_session` cookie from configured admin keys or named admin identities, and the console blocks management views until the session is authenticated.

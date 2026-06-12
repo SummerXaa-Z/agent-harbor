@@ -96,10 +96,13 @@ After applying the fixes, the audit branch was verified with:
 | `make release-check` | Pass | Uncached Go tests, production hardening, frontend tests/build, script syntax, and GitHub YAML checks passed. |
 | Isolated-port browser smoke | Pass | With only `AGENT_HARBOR_DEMO_API_PORT=19095`, `AGENT_HARBOR_DEMO_FRONTEND_PORT=15185`, and `MOCK_MCP_PORT=18795`, the console landed on `#getting-started` and loaded live data. |
 
+## Post-Audit Follow-Up Status
+
+- The frontend production build chunk-size warning has been addressed after the audit. Vite now splits stable vendor dependencies into dedicated `react-vendor` and `icons-vendor` production chunks. The latest local build emitted `index` at `427.09 kB`, `react-vendor` at `189.63 kB`, and `icons-vendor` at `9.18 kB`, with no chunk-size warning.
+- Dependabot PRs #72 and #73 were merged after this audit and `main` release gates passed after those merges.
+
 ## Remaining Non-Blocking Follow-Ups
 
-- The frontend production build still emits the existing Vite chunk-size warning. This does not block the public preview gate, but it should become a performance follow-up before broader adoption.
-- Dependabot PRs #72 and #73 remain open with green checks from June 8, 2026. They should be rebased and handled separately from this release-readiness audit.
 - Historical engineering review documents still mention older wording for traceability. Product UI, README product path, product docs, and release checklist do not contain the Chinese word `证据`.
 
 ## Release Recommendation

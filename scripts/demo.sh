@@ -32,6 +32,12 @@ API_URL_HOST="$API_HOST"
 if [[ "$API_URL_HOST" == *:* && "$API_URL_HOST" != \[* ]]; then
   API_URL_HOST="[${API_URL_HOST}]"
 fi
+API_BASE_URL="http://${API_URL_HOST}:${API_PORT}"
+FRONTEND_URL_HOST="$FRONTEND_HOST"
+if [[ "$FRONTEND_URL_HOST" == *:* && "$FRONTEND_URL_HOST" != \[* ]]; then
+  FRONTEND_URL_HOST="[${FRONTEND_URL_HOST}]"
+fi
+FRONTEND_ORIGIN="http://${FRONTEND_URL_HOST}:${FRONTEND_PORT}"
 
 cleanup() {
   local pid
@@ -123,12 +129,16 @@ assert_port_free "frontend" "$FRONTEND_PORT"
 cd "$ROOT_DIR"
 
 echo "Starting AgentHarbor demo..."
-echo "API:       http://${API_URL_HOST}:${API_PORT}"
+echo "API:       ${API_BASE_URL}"
 echo "MCP:       http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/mcp (${MCP_SERVER_MODE})"
-echo "console:   http://${FRONTEND_HOST}:${FRONTEND_PORT}"
+echo "console:   ${FRONTEND_ORIGIN}"
 echo
 
-AGENT_HARBOR_ADDR="$API_ADDR" AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true go run ./cmd/agent-harbor &
+AGENT_HARBOR_ADDR="$API_ADDR" \
+  AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true \
+  AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true \
+  AGENT_HARBOR_CORS_ORIGINS="${AGENT_HARBOR_CORS_ORIGINS:-$FRONTEND_ORIGIN}" \
+  go run ./cmd/agent-harbor &
 PIDS+=("$!")
 
 case "$MCP_SERVER_MODE" in
@@ -147,10 +157,10 @@ case "$MCP_SERVER_MODE" in
     ;;
 esac
 
-pnpm --dir frontend dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort &
+VITE_API_BASE="${VITE_API_BASE:-$API_BASE_URL}" pnpm --dir frontend dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort &
 PIDS+=("$!")
 
-echo "Demo is starting. Open http://${FRONTEND_HOST}:${FRONTEND_PORT}"
+echo "Demo is starting. Open ${FRONTEND_ORIGIN}"
 echo "Press Ctrl+C to stop all demo services."
 
 supervise

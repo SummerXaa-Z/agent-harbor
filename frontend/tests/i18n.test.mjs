@@ -134,7 +134,7 @@ test("createTranslator returns Chinese labels for operator controls", () => {
   assert.equal(t("status.policyAllow"), "允许");
   assert.equal(t("empty.routePolicies.title"), "暂无路由策略");
   assert.equal(t("auditAction.permission_package.applied"), "应用权限包");
-  assert.equal(t("auditActor.local-dev"), "本地管理员");
+  assert.equal(t("auditActor.local-dev"), "本地开发管理员");
 });
 
 test("createTranslator returns Chinese labels for AI admin permission packages", () => {

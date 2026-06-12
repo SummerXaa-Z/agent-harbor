@@ -8,6 +8,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Added a public-readiness audit for v0.2.0 public preview, covering fresh clone `make check`, `make release-check`, isolated-port `make demo`, browser first-run routing, and remaining non-blocking release follow-ups.
+- 新增 v0.2.0 公开预览可用性审计，覆盖干净克隆后的 `make check`、`make release-check`、隔离端口 `make demo`、浏览器首次进入路径和剩余非阻塞发布跟进项。
+- `make demo` now automatically wires the web console API base and local CORS origin from non-default demo ports, so evaluators can avoid port conflicts without setting hidden frontend variables.
+- `make demo` 现在会根据非默认 demo 端口自动配置 Web 控制台 API 地址和本地 CORS 来源，评估者遇到端口冲突时不再需要额外设置隐藏前端变量。
 - Web console now has production-oriented login control: `/api/v1/auth/session`, `/api/v1/auth/login`, and `/api/v1/auth/logout` issue an HttpOnly `agent_harbor_session` cookie from configured admin keys or named admin identities, and the console blocks management views until the session is authenticated.
 - Web 控制台新增面向生产的登录控制：`/api/v1/auth/session`、`/api/v1/auth/login` 和 `/api/v1/auth/logout` 会基于已配置管理员密钥或具名管理员身份签发 HttpOnly `agent_harbor_session` Cookie，控制台会在会话通过后才加载管理视图。
 - Management API fetches now include browser credentials, the console login state is isolated in a `useConsoleAuth` hook, and the global Connection menu demotes `X-Admin-Key` to an advanced override instead of the primary operator login path.

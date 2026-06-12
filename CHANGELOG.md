@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Moved Permission Changes approval-decision confirmation state into a focused hook, reducing the workbench component while keeping approval, rejection, and withdraw behavior unchanged.
+- 权限变更页的审批确认状态已下沉到独立 hook，减少工作台组件复杂度，同时保持审批、拒绝和撤回行为不变。
 - Split Permission Changes presenter helpers and capability chip rendering out of `AiAdminPermissionWorkbench`, reducing the largest console component while preserving the permission-change journey.
 - 权限变更页的展示辅助函数和能力标签渲染已从 `AiAdminPermissionWorkbench` 拆出，降低最大控制台组件复杂度，同时保持权限变更旅程不变。
 - Added a public-readiness audit for v0.2.0 public preview, covering fresh clone `make check`, `make release-check`, isolated-port `make demo`, browser first-run routing, and remaining non-blocking release follow-ups.

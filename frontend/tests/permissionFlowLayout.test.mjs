@@ -8,6 +8,8 @@ const baseStyles = readFileSync(new URL("../src/styles.css", import.meta.url), "
 const workbenchStyles = readFileSync(new URL("../src/styles/permission-workbench.css", import.meta.url), "utf8");
 const styles = `${baseStyles}\n${workbenchStyles}`;
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
+const permissionWorkbenchPresenters = readFileSync(new URL("../src/permissionWorkbenchPresenters.ts", import.meta.url), "utf8");
+const permissionWorkbenchParts = readFileSync(new URL("../src/components/PermissionWorkbenchParts.tsx", import.meta.url), "utf8");
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const accessProfileView = readFileSync(new URL("../src/components/TenantAccessProfileView.tsx", import.meta.url), "utf8");
@@ -91,13 +93,15 @@ test("permission request uses one authoritative journey status", () => {
 });
 
 test("permission request process steps navigate to their operator sections", () => {
-  assert.match(workbench, /function permissionRequestStepSectionId/);
-  assert.match(workbench, /function permissionRequestStepTarget/);
+  assert.match(permissionWorkbenchPresenters, /export function permissionRequestStepSectionId/);
+  assert.match(permissionWorkbenchPresenters, /export function permissionRequestStepTarget/);
+  assert.doesNotMatch(workbench, /function permissionRequestStepSectionId/);
+  assert.doesNotMatch(workbench, /function permissionRequestStepTarget/);
   assert.match(workbench, /function scrollToPermissionRequestStep/);
   assert.match(workbench, /document\.getElementById\(permissionRequestStepSectionId\(step\)\)\?\.scrollIntoView/);
-  assert.match(workbench, /if \(step === "request"\) return "scope"/);
-  assert.match(workbench, /if \(step === "validation"\) return "validation"/);
-  assert.match(workbench, /if \(step === "acceptance"\) return "acceptance"/);
+  assert.match(permissionWorkbenchPresenters, /if \(step === "request"\) return "scope"/);
+  assert.match(permissionWorkbenchPresenters, /if \(step === "validation"\) return "validation"/);
+  assert.match(permissionWorkbenchPresenters, /if \(step === "acceptance"\) return "acceptance"/);
   assert.match(workbench, /id=\{permissionRequestStepSectionId\("scope"\)\}/);
   assert.match(workbench, /id=\{permissionRequestStepSectionId\("template"\)\}/);
   assert.match(workbench, /id=\{permissionRequestStepSectionId\("approval"\)\}/);
@@ -120,12 +124,14 @@ test("permission request process navigation hides request capability counts", ()
 });
 
 test("permission request process steps prefer completed evidence over stale preview copy", () => {
-  assert.match(workbench, /function permissionWorkbenchStepDisplayDetailCode/);
-  assert.match(workbench, /function permissionWorkbenchStepDisplayStatus/);
   assert.match(workbench, /permissionWorkbenchStepDisplayDetailCode\(step,\s*\{[\s\S]*goLiveReady[\s\S]*runtimeValidationReady[\s\S]*\}\)/);
   assert.match(workbench, /permissionWorkbenchStepDisplayStatus\(step,\s*\{[\s\S]*approvalComplete[\s\S]*applicationReady[\s\S]*goLiveReady[\s\S]*runtimeValidationReady[\s\S]*\}\)/);
-  assert.match(workbench, /if \(args\.goLiveReady\) \{[\s\S]*if \(step\.key === "approval"\) return args\.approvalRequired \? "approval_approved" : "approval_not_required";[\s\S]*if \(step\.key === "apply"\) return "apply_done";[\s\S]*if \(step\.key === "validation"\) return "validation_ready";[\s\S]*if \(step\.key === "acceptance"\) return "acceptance_ready";[\s\S]*\}/);
-  assert.match(workbench, /if \(args\.goLiveReady\) return "complete";/);
+  assert.match(permissionWorkbenchPresenters, /export function permissionWorkbenchStepDisplayDetailCode/);
+  assert.match(permissionWorkbenchPresenters, /export function permissionWorkbenchStepDisplayStatus/);
+  assert.doesNotMatch(workbench, /function permissionWorkbenchStepDisplayDetailCode/);
+  assert.doesNotMatch(workbench, /function permissionWorkbenchStepDisplayStatus/);
+  assert.match(permissionWorkbenchPresenters, /if \(args\.goLiveReady\) \{[\s\S]*if \(step\.key === "approval"\) return args\.approvalRequired \? "approval_approved" : "approval_not_required";[\s\S]*if \(step\.key === "apply"\) return "apply_done";[\s\S]*if \(step\.key === "validation"\) return "validation_ready";[\s\S]*if \(step\.key === "acceptance"\) return "acceptance_ready";[\s\S]*\}/);
+  assert.match(permissionWorkbenchPresenters, /if \(args\.goLiveReady\) return "complete";/);
 });
 
 test("permission request first viewport prioritizes one task flow", () => {
@@ -390,7 +396,7 @@ test("capability names use business labels in primary UI", () => {
   assert.match(presenters, /"Default Business Unit": t\("demo\.permissionRequestApprovalTeam"\)/);
   assert.match(presenters, /"Default Workspace Team": t\("demo\.permissionRequestApprovalProject"\)/);
   assert.match(presenters, /"Security Reviewer": t\("accessSubject\.securityReviewer\.name"\)/);
-  assert.match(workbench, /"Security Reviewer": t\("accessSubject\.securityReviewer\.name"\)/);
+  assert.match(permissionWorkbenchPresenters, /"Security Reviewer": t\("accessSubject\.securityReviewer\.name"\)/);
   assert.match(presenters, /export function dataScopeText\(scopes\?: DataScope\[\], t\?: Translator\)/);
   assert.match(i18n, /"capability\.search_customer\.name": "查询客户"/);
   assert.match(i18n, /"capability\.update_ticket\.name": "更新工单"/);
@@ -405,8 +411,8 @@ test("capability names use business labels in primary UI", () => {
   assert.match(app, /import \{[\s\S]*capabilityDisplayName,[\s\S]*\} from "\.\/consolePresenters"/);
   assert.match(capabilityGovernanceHook, /message\.capabilityApproved", \{ name: capabilityDisplayName\(capability, t\) \}/);
   assert.match(app, /key === "capability"[\s\S]*capabilityKeyDisplayName\(value, t\)/);
-  assert.match(workbench, /capabilityDisplayName\(capability, t\)\} · \{t\(`value\.\$\{capability\.action\}`/);
-  assert.match(workbench, /key === "capability"[\s\S]*capabilityKeyDisplayName\(value, t\)/);
+  assert.match(permissionWorkbenchParts, /capabilityDisplayName\(capability, t\)\} · \{t\(`value\.\$\{capability\.action\}`/);
+  assert.match(permissionWorkbenchPresenters, /key === "capability"[\s\S]*capabilityKeyDisplayName\(value, t\)/);
   assert.match(accessProfileView, /const capabilityNameById = useMemo/);
   assert.match(accessProfileView, /capabilityNameById\.get\(trace\.capabilityId\) \?\? trace\.capabilityId/);
   assert.match(accessProfileView, /const capabilityName = grant\.capability[\s\S]*capabilityDisplayName\(grant\.capability, t\)/);
@@ -428,8 +434,8 @@ test("capability names use business labels in primary UI", () => {
   assert.match(app, /tenants=\{tenants\}/);
   assert.match(app, /normalizedTenantId === defaultManagementScope\.tenantId[\s\S]*text\.defaultTenantName/);
   assert.match(app, /normalizedWorkspaceId === defaultManagementScope\.workspaceId[\s\S]*text\.defaultWorkspaceName/);
-  assert.match(workbench, /normalizedTenantId === "default"[\s\S]*text\.defaultTenantName/);
-  assert.match(workbench, /normalizedWorkspaceId === defaultWorkspaceId[\s\S]*text\.defaultWorkspaceName/);
+  assert.match(permissionWorkbenchPresenters, /normalizedTenantId === "default"[\s\S]*text\.defaultTenantName/);
+  assert.match(permissionWorkbenchPresenters, /normalizedWorkspaceId === defaultWorkspaceId[\s\S]*text\.defaultWorkspaceName/);
   assert.match(capabilityGovernanceView, /tenants: Tenant\[\]/);
   assert.match(capabilityGovernanceView, /tenantNames\.get\(entitlement\.tenantId\) \?\? entitlement\.tenantId/);
   assert.doesNotMatch(capabilityGovernanceView, /\{entitlement\.tenantId\} · \{policyEffectLabel/);
@@ -657,7 +663,8 @@ test("permission request go-live step presents one guided primary action", () =>
 });
 
 test("permission request advanced messages suppress successful load noise", () => {
-  assert.match(workbench, /function shouldShowAdvancedStatusMessage/);
+  assert.match(permissionWorkbenchPresenters, /export function shouldShowAdvancedStatusMessage/);
+  assert.doesNotMatch(workbench, /function shouldShowAdvancedStatusMessage/);
   assert.match(workbench, /approvalReadinessMessage && shouldShowAdvancedStatusMessage\(approvalReadinessMessageTone\)/);
   assert.match(workbench, /applyPreflightMessage && shouldShowAdvancedStatusMessage\(applyPreflightMessageTone\)/);
   assert.match(workbench, /productionReadinessMessage && shouldShowAdvancedStatusMessage\(productionReadinessMessageTone\)/);
@@ -682,7 +689,8 @@ test("permission request hides raw workspace identifiers from the primary path",
 });
 
 test("permission reviewer queue uses business labels before technical identifiers", () => {
-  assert.match(workbench, /function permissionApprovalRequestBusinessLabel/);
+  assert.match(permissionWorkbenchPresenters, /export function permissionApprovalRequestBusinessLabel/);
+  assert.doesNotMatch(workbench, /function permissionApprovalRequestBusinessLabel/);
   assert.match(workbench, /import \{ TechnicalId \} from "\.\/TechnicalId"/);
   assert.match(technicalId, /export function TechnicalId/);
   assert.match(workbench, /className="approval-review-row-main"/);
@@ -771,7 +779,8 @@ test("permission request core selectors avoid forced ellipsis at review widths",
 });
 
 test("permission request dropdowns use deduplicated business labels", () => {
-  assert.match(workbench, /function uniquePermissionEntityOptions/);
+  assert.match(permissionWorkbenchPresenters, /export function uniquePermissionEntityOptions/);
+  assert.doesNotMatch(workbench, /function uniquePermissionEntityOptions/);
   assert.match(workbench, /const tenantOptions = uniquePermissionEntityOptions/);
   assert.match(workbench, /const callerOptions = uniquePermissionEntityOptions/);
   assert.match(workbench, /const targetOptions = uniquePermissionEntityOptions/);

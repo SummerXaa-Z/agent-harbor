@@ -432,6 +432,10 @@ type PermissionPackageAccessSubject struct {
 	LabelKey        string `json:"labelKey"`
 	DetailKey       string `json:"detailKey"`
 	SubjectSelector string `json:"subjectSelector"`
+	TenantID        string `json:"tenantId,omitempty"`
+	WorkspaceID     string `json:"workspaceId,omitempty"`
+	Email           string `json:"email,omitempty"`
+	Status          string `json:"status,omitempty"`
 }
 
 type PermissionPackageDraftRequest struct {

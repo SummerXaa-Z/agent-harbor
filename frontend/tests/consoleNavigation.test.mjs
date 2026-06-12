@@ -30,6 +30,7 @@ function consoleData(overrides = {}) {
     providers: [],
     routePolicies: [],
     routePoliciesLoadedFromApi: true,
+    setupLoadedFromApi: true,
     systemMetrics: [],
     tenantEntitlements: [],
     tenants: [],
@@ -86,38 +87,42 @@ test("every primary navigation item resolves to a distinct workspace", () => {
 
   assert.deepEqual(viewKeys, [
     "getting-started",
-    "registry",
-    "capabilities",
-    "policies",
-    "routes",
+    "ask",
     "ai-admin",
     "access",
     "traces",
     "evidence",
     "cockpit",
+    "tenants",
+    "registry",
+    "capabilities",
+    "policies",
+    "routes",
   ]);
   assert.equal(new Set(views.map((view) => view.primaryPanelKey)).size, views.length);
 });
 
 test("navigation is grouped by user task", () => {
-  assert.deepEqual(navGroups.map((group) => group.key), ["onboarding", "configuration", "primary", "audit"]);
+  assert.deepEqual(navGroups.map((group) => group.key), ["onboarding", "primary", "audit", "configuration"]);
   assert.deepEqual(navItems.map((item) => item.groupKey), [
     "onboarding",
-    "configuration",
-    "configuration",
-    "configuration",
-    "configuration",
+    "primary",
     "primary",
     "primary",
     "audit",
     "audit",
-    "audit"
+    "audit",
+    "configuration",
+    "configuration",
+    "configuration",
+    "configuration",
+    "configuration"
   ]);
   assert.ok(navItems.every((item) => item.detailKey.startsWith("navDetail.")));
 });
 
-test("default navigation opens the permission package production journey", () => {
-  assert.equal(defaultNavKey, "ai-admin");
+test("default navigation opens answer-first access query", () => {
+  assert.equal(defaultNavKey, "getting-started");
   assert.equal(viewForNav("unknown").key, defaultNavKey);
 });
 
@@ -125,10 +130,16 @@ test("go-live evidence navigation points to the acceptance workflow", () => {
   assert.equal(viewForNav("evidence").primaryPanelKey, "goLiveAcceptance");
 });
 
+test("resource management is the single entry for Agent and MCP lifecycle", () => {
+  assert.equal(viewForNav("registry").primaryPanelKey, "resourceLifecycle");
+});
+
 test("navigation hash preserves the current workspace across reloads", () => {
   assert.equal(navHashFor("evidence"), "#evidence");
+  assert.equal(navHashFor("tenants"), "#tenants");
   assert.equal(navHashFor("getting-started"), "#getting-started");
   assert.equal(navKeyFromHash("#evidence"), "evidence");
+  assert.equal(navKeyFromHash("#tenants"), "tenants");
   assert.equal(navKeyFromHash("#getting-started"), "getting-started");
   assert.equal(navKeyFromHash("evidence"), "evidence");
   assert.equal(navKeyFromHash("#unknown"), null);
@@ -142,5 +153,5 @@ test("default navigation is resolved from setup readiness", () => {
     capabilities: [capability],
     tenantEntitlements: [entitlement],
     tenants: [tenant]
-  })), "ai-admin");
+  })), "ask");
 });

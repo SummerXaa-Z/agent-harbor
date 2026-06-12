@@ -101,6 +101,34 @@ func TestNewAllowsExplicitUnauthenticatedAdminForDevelopment(t *testing.T) {
 	}
 }
 
+func TestNewExposesConsoleLoginWithConfiguredAdminKey(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "test-admin")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "session-secret")
+
+	app, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("new app: %v", err)
+	}
+	defer app.Close()
+
+	payload, err := json.Marshal(map[string]string{"adminKey": "test-admin"})
+	if err != nil {
+		t.Fatalf("marshal login body: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	app.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("configured admin key should login, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if cookies := rec.Result().Cookies(); len(cookies) != 1 || cookies[0].Name != "agent_harbor_session" || !cookies[0].HttpOnly {
+		t.Fatalf("login should set HttpOnly console session cookie, got %#v", cookies)
+	}
+}
+
 func TestNewAllowsConfiguredCORSOriginsFromEnv(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_CORS_ORIGINS", "http://127.0.0.1:15174")
 

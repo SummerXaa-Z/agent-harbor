@@ -20,42 +20,41 @@ export function GettingStartedConsoleView({ gettingStartedPanel }: { gettingStar
   );
 }
 
+export function AskView({ askAccessPanel }: { askAccessPanel: ReactNode }) {
+  return (
+    <section className="content-grid">
+      {askAccessPanel}
+    </section>
+  );
+}
+
 export function RegistryView({
   agentRegistryPanel,
   contractMatrixPanel,
-  createAgentPanel,
-  createKeyPanel,
-  rotateCredentialPanel
+  resourceLifecyclePanel
 }: {
   agentRegistryPanel: ReactNode;
   contractMatrixPanel: ReactNode;
-  createAgentPanel: ReactNode;
-  createKeyPanel: ReactNode;
-  rotateCredentialPanel: ReactNode;
+  resourceLifecyclePanel: ReactNode;
 }) {
   return (
     <section className="content-grid">
+      {resourceLifecyclePanel}
       {agentRegistryPanel}
-      {createAgentPanel}
-      {createKeyPanel}
-      {rotateCredentialPanel}
       {contractMatrixPanel}
     </section>
   );
 }
 
 export function RoutesView({
-  createPolicyPanel,
   routeGovernancePanel,
   tracePanel
 }: {
-  createPolicyPanel: ReactNode;
   routeGovernancePanel: ReactNode;
   tracePanel: ReactNode;
 }) {
   return (
     <section className="content-grid">
-      {createPolicyPanel}
       {routeGovernancePanel}
       {tracePanel}
     </section>
@@ -64,14 +63,12 @@ export function RoutesView({
 
 export function PoliciesView({
   capabilityGovernancePanel,
-  createPolicyPanel,
   managementAuditPanel,
   policies,
   routeGovernancePanel,
   t
 }: {
   capabilityGovernancePanel: ReactNode;
-  createPolicyPanel: ReactNode;
   managementAuditPanel: ReactNode;
   policies: RoutePolicy[];
   routeGovernancePanel: ReactNode;
@@ -80,7 +77,6 @@ export function PoliciesView({
   return (
     <section className="content-grid">
       <AccessPolicyWorkspace
-        createPolicyPanel={createPolicyPanel}
         managementAuditPanel={managementAuditPanel}
         policies={policies}
         routeGovernancePanel={routeGovernancePanel}
@@ -101,6 +97,10 @@ export function CapabilitiesView({ capabilityGovernancePanel }: { capabilityGove
 
 export function AccessView({ accessProfilePanel }: { accessProfilePanel: ReactNode }) {
   return <section className="content-grid">{accessProfilePanel}</section>;
+}
+
+export function TenantsView({ tenantOrganizationPanel }: { tenantOrganizationPanel: ReactNode }) {
+  return <>{tenantOrganizationPanel}</>;
 }
 
 export function TracesView({

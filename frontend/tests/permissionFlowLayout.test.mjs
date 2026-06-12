@@ -37,7 +37,7 @@ test("permission request journey renders as one production workspace instead of 
   assert.match(styles, /\.approval-overview\s*\{[^}]*padding:\s*0;/s);
   assert.match(styles, /\.approval-task-strip\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(styles, /\.approval-flow-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(340px,\s*400px\);/s);
-  assert.match(styles, /\.approval-context-bar\s*\{[^}]*position:\s*sticky;/s);
+  assert.match(styles, /\.approval-context-bar\s*\{[^}]*position:\s*static;/s);
   assert.equal(styles.includes("counter-reset: approval-section"), false);
   assert.equal(styles.includes(".approval-section::before"), false);
 });
@@ -145,6 +145,21 @@ test("permission request first viewport prioritizes one task flow", () => {
   assert.match(styles, /\.approval-process-panel\s*\{[^}]*position:\s*sticky;/s);
 });
 
+test("permission request top chrome avoids nested card and table treatment", () => {
+  assert.match(workbench, /className=\{`approval-studio status-\$\{productionSummary\.status\}`\}/);
+  assert.match(styles, /\.approval-studio\s*\{[^}]*border:\s*0;/s);
+  assert.match(styles, /\.approval-studio\s*\{[^}]*background:\s*transparent;/s);
+  assert.match(styles, /\.approval-command\s*\{[^}]*border:\s*0;/s);
+  assert.match(styles, /\.approval-command\s*\{[^}]*background:\s*transparent;/s);
+  assert.match(styles, /\.approval-context-bar\s*\{[^}]*gap:\s*8px;/s);
+  assert.match(styles, /\.approval-context-bar\s*\{[^}]*position:\s*static;/s);
+  assert.match(styles, /\.approval-context-bar\s*\{[^}]*box-shadow:\s*none;/s);
+  assert.match(styles, /\.approval-context-bar div\s*\{[^}]*border:\s*1px solid var\(--line-muted\);/s);
+  assert.match(styles, /\.approval-task-strip\s*\{[^}]*gap:\s*8px;/s);
+  assert.match(styles, /\.approval-task-strip\s*\{[^}]*border:\s*0;/s);
+  assert.match(styles, /\.approval-task-strip article\s*\{[^}]*border:\s*1px solid var\(--line-muted\);/s);
+});
+
 test("permission request embeds a concise concept guide without blocking the task flow", () => {
   assert.match(workbench, /<details className="approval-concept-guide">/);
   assert.match(workbench, /<summary>\{t\("section\.permissionConceptGuide"\)\}<\/summary>/);
@@ -173,7 +188,7 @@ test("permission request stays navigable at tablet desktop widths", () => {
 test("permission request copy avoids repeated step labels", () => {
   assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.approval_approved": "审批已通过且匹配当前申请。"/);
   assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.apply_done": "权限已应用。"/);
-  assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.validation_ready": "运行证据已完整。"/);
+  assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.validation_ready": "运行记录已完整。"/);
   assert.doesNotMatch(i18n, /"permissionWorkbench\.detail\.acceptance_ready": "上线就绪检查已完成。"/);
   assert.match(i18n, /"permissionWorkbench\.detail\.approval_approved": "审批已满足。"/);
   assert.match(i18n, /"permissionWorkbench\.detail\.apply_done": "权限已生效。"/);
@@ -330,14 +345,34 @@ test("system self-check uses structured configuration and copyable runtime conte
 
   assert.match(panel, /className="core-journey-config"/);
   assert.match(panel, /className="core-journey-config-grid"/);
+  assert.match(panel, /className="core-journey-health"/);
+  assert.match(panel, /className="core-journey-health-summary"/);
+  assert.match(panel, /className="core-journey-task"/);
+  assert.match(panel, /className="core-journey-advanced"/);
   assert.match(panel, /className="core-journey-runtime-summary"/);
   assert.match(panel, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("detail\.runId"\)\} value=\{config\.runId\} \/>/);
   assert.match(panel, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.tenantId"\)\} value=\{config\.childTenantId\} \/>/);
   assert.doesNotMatch(panel, /<div className="core-journey-meta">/);
   assert.match(row, /className="core-journey-step-detail" translate="no"/);
   assert.match(row, /className="core-journey-step-metric"/);
+  assert.match(styles, /\.core-journey-health\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
+  assert.match(styles, /\.core-journey-health-summary strong\s*\{[^}]*font-size:\s*16px;/s);
+  assert.match(styles, /\.core-journey-score strong\s*\{[^}]*font-size:\s*18px;/s);
+  assert.match(styles, /\.core-journey-advanced summary\s*\{/);
+  assert.match(styles, /\.core-journey-advanced summary\s*\{[^}]*min-height:\s*46px;/s);
+  assert.match(styles, /\.core-journey-advanced:not\(\[open\]\)\s*>\s*:not\(summary\)\s*\{[^}]*display:\s*none !important;/s);
   assert.match(styles, /\.core-journey-config-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(styles, /\.core-journey-runtime-summary\s*\{/);
+  assert.match(styles, /\.core-journey-runtime-summary:not\(\[open\]\)\s*>\s*:not\(summary\)\s*\{[^}]*display:\s*none !important;/s);
+  assert.match(styles, /\.core-journey-preflight-grid,\s*\.core-journey-steps\s*\{[^}]*gap:\s*8px;[^}]*background:\s*transparent;/s);
+  assert.match(styles, /\.core-journey-preflight-row,\s*\.core-journey-step\s*\{[^}]*border:\s*1px solid var\(--line-subtle\);[^}]*border-radius:\s*var\(--radius-control\);/s);
+  assert.match(styles, /\.core-journey-preflight-row::before,\s*\.core-journey-step::before\s*\{[^}]*display:\s*none;[^}]*content:\s*none;/s);
+  assert.match(styles, /\.core-journey-preflight-row strong,\s*\.core-journey-step strong\s*\{[^}]*font-size:\s*13px;/s);
+  assert.match(styles, /\.core-journey-preflight-row \.badge,\s*\.core-journey-step \.badge\s*\{[^}]*font-size:\s*11px;/s);
+  assert.match(styles, /\.core-journey-preflight-row \.badge,\s*\.core-journey-step \.badge\s*\{[^}]*line-height:\s*1;/s);
+  assert.match(styles, /\.core-journey-step\.status-complete::before\s*\{[^}]*background:\s*transparent;/s);
+  assert.match(styles, /\.core-journey-step-metric\s*\{[^}]*font-size:\s*11px;/s);
+  assert.match(styles, /\.core-journey-preflight-row span\s*\{[^}]*-webkit-line-clamp:\s*2;/s);
   assert.match(styles, /\.core-journey-step-detail\s*\{/);
 });
 
@@ -402,14 +437,14 @@ test("capability names use business labels in primary UI", () => {
   assert.doesNotMatch(workbench, /\{capability\.key\} · \{t\(`value\.\$\{capability\.action\}`/);
 });
 
-test("permission request evidence is secondary to the main operator task", () => {
+test("permission request acceptance details stay secondary to the main operator task", () => {
   const auditStart = workbench.indexOf('className="approval-evidence"');
   assert.notEqual(auditStart, -1);
   assert.ok(auditStart > workbench.indexOf('<aside className="approval-process-panel"'));
   assert.match(workbench.slice(auditStart), /section\.aiAdminReadiness/);
   assert.match(workbench.slice(auditStart), /section\.permissionProductionReadiness/);
   assert.match(i18n, /"section\.permissionAdvancedChecks": "验收明细"/);
-  assert.match(i18n, /"section\.aiAdminApprovalJourney": "运行验证证据"/);
+  assert.match(i18n, /"section\.aiAdminApprovalJourney": "运行验证记录"/);
 });
 
 test("management audit evidence uses business labels before technical ids", () => {
@@ -449,12 +484,16 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   assert.match(goLiveAcceptanceOverview, /const acceptanceReady = productionReadiness\?\.status === "ready"/);
   assert.match(goLiveAcceptanceOverview, /acceptanceReady \? \([\s\S]*className="primary-button"[\s\S]*onClick=\{onExportProductionEvidence\}[\s\S]*className="secondary-button"[\s\S]*onClick=\{onRefreshProductionReadiness\}/);
   assert.match(goLiveAcceptanceOverview, /: \([\s\S]*className="primary-button"[\s\S]*onClick=\{onRefreshProductionReadiness\}[\s\S]*className="secondary-button"[\s\S]*onClick=\{onExportProductionEvidence\}/);
+  assert.match(goLiveAcceptanceOverview, /<section className="go-live-acceptance-main">[\s\S]*<div className="go-live-acceptance-decision">[\s\S]*<section className="go-live-acceptance-checks"[\s\S]*<aside className="go-live-acceptance-context"/);
   assert.match(evidenceCase, /goLiveAcceptancePanel/);
   assert.ok(evidenceRender.indexOf("{goLiveAcceptancePanel}") < evidenceRender.indexOf("{evidenceRunsPanel}"));
   assert.match(i18n, /"section\.goLiveAcceptance": "上线验收"/);
   assert.match(i18n, /"text\.goLiveAcceptanceTaskTitle": "确认这次权限变更是否可以上线"/);
   assert.match(i18n, /"empty\.evidenceRuns\.detail": "历史自检运行会在这里保留；当前权限变更请以上方上线验收状态为准。"/);
   assert.match(styles, /\.go-live-acceptance\s*\{/);
+  assert.match(styles, /\.go-live-acceptance-decision\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
+  assert.match(styles, /\.go-live-acceptance-context dl\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
+  assert.match(styles, /\.go-live-step-list\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\);/s);
 });
 
 test("workspace navigation is reflected in the URL hash", () => {
@@ -466,10 +505,10 @@ test("workspace navigation is reflected in the URL hash", () => {
 });
 
 test("go-live evidence route loads the current permission change preview", () => {
-  assert.match(app, /const shouldLoadAiAdminCatalog = activeNav === "ai-admin" \|\| activeNav === "evidence"/);
+  assert.match(app, /const shouldLoadAiAdminCatalog =\s*consoleAccessReady && \(activeNav === "ask" \|\| activeNav === "ai-admin" \|\| activeNav === "evidence" \|\| activeNav === "tenants"\)/);
   assert.match(app, /shouldLoadAiAdminCatalog \? undefined : normalizedScope\(scope\)/);
-  assert.match(app, /const shouldLoadAiAdminWorkbenchPreview = activeNav === "ai-admin" \|\| activeNav === "evidence"/);
-  assert.match(app, /if \(!shouldLoadAiAdminWorkbenchPreview \|\| !data\?\.loadedFromApi\)/);
+  assert.match(app, /const shouldLoadAiAdminWorkbenchPreview = consoleAccessReady && \(activeNav === "ai-admin" \|\| activeNav === "evidence"\)/);
+  assert.match(app, /if \(!shouldLoadAiAdminWorkbenchPreview \|\| !data\?\.loadedFromApi \|\| aiAdminNewDraftMode\)/);
   assert.match(app, /previewPermissionPackageWorkbench\(aiAdminForm, adminKey, controller\.signal\)/);
   assert.match(app, /const goLiveAcceptanceForm = aiAdminServerDraft\?\.input \?\? aiAdminForm/);
   assert.match(app, /draft=\{aiAdminServerDraft\}/);

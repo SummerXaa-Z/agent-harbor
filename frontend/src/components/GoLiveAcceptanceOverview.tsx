@@ -106,92 +106,96 @@ export function GoLiveAcceptanceOverview({
   return (
     <div className="go-live-acceptance">
       <section className="go-live-acceptance-main">
-        <div className="go-live-acceptance-heading">
-          <span>{t("text.goLiveAcceptanceTaskTitle")}</span>
-          <Badge tone={statusTone}>{statusLabel}</Badge>
+        <div className="go-live-acceptance-decision">
+          <div className="go-live-acceptance-copy">
+            <div className="go-live-acceptance-heading">
+              <span>{t("text.goLiveAcceptanceTaskTitle")}</span>
+              <Badge tone={statusTone}>{statusLabel}</Badge>
+            </div>
+            <p>{nextAction}</p>
+            {!liveDataAvailable ? <p className="go-live-acceptance-warning">{t("message.fallbackDataModeDetail")}</p> : null}
+            {statusMessage ? <p className="go-live-acceptance-message">{statusMessage}</p> : null}
+          </div>
+          <div className="go-live-acceptance-actions">
+            {acceptanceReady ? (
+              <>
+                <button className="primary-button" disabled={!liveDataAvailable || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
+                  <Download size={14} />
+                  {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
+                </button>
+                <button className="secondary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
+                  <RefreshCw size={14} />
+                  {productionReadinessLoading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="primary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
+                  <RefreshCw size={14} />
+                  {productionReadinessLoading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
+                </button>
+                <button className="secondary-button" disabled={!liveDataAvailable || !productionReadiness || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
+                  <Download size={14} />
+                  {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
+                </button>
+              </>
+            )}
+            <button className="secondary-button" onClick={onOpenPermissionChange} type="button">
+              <ShieldCheck size={14} />
+              {t("action.openPermissionChange")}
+            </button>
+          </div>
         </div>
-        <p>{nextAction}</p>
-        {!liveDataAvailable ? <p className="go-live-acceptance-warning">{t("message.fallbackDataModeDetail")}</p> : null}
-        {statusMessage ? <p className="go-live-acceptance-message">{statusMessage}</p> : null}
-        <div className="go-live-acceptance-actions">
-          {acceptanceReady ? (
-            <>
-              <button className="primary-button" disabled={!liveDataAvailable || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
-                <Download size={14} />
-                {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
-              </button>
-              <button className="secondary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
-                <RefreshCw size={14} />
-                {productionReadinessLoading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="primary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
-                <RefreshCw size={14} />
-                {productionReadinessLoading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
-              </button>
-              <button className="secondary-button" disabled={!liveDataAvailable || !productionReadiness || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
-                <Download size={14} />
-                {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
-              </button>
-            </>
-          )}
-          <button className="secondary-button" onClick={onOpenPermissionChange} type="button">
-            <ShieldCheck size={14} />
-            {t("action.openPermissionChange")}
-          </button>
-        </div>
-      </section>
 
-      <aside className="go-live-acceptance-context" aria-label={t("text.goLiveAcceptanceContext")}>
-        <strong>{t("text.goLiveAcceptanceContext")}</strong>
-        <dl>
-          <div>
-            <dt>{t("form.businessTenant")}</dt>
-            <dd>{tenantPath.primary}</dd>
+        <section className="go-live-acceptance-checks" aria-label={t("section.permissionRequestProcess")}>
+          <div className="go-live-acceptance-score">
+            <div>
+              <span>{t("metric.productionReadyChecks")}</span>
+              <strong>{readyCount}/{totalCount}</strong>
+            </div>
+            <div>
+              <span>{t("metric.productionWarnings")}</span>
+              <strong>{warningCount}</strong>
+            </div>
+            <div>
+              <span>{t("metric.productionBlockers")}</span>
+              <strong>{blockerCount}</strong>
+            </div>
           </div>
-          <div>
-            <dt>{t("form.businessWorkspace")}</dt>
-            <dd>{workspaceName}</dd>
-          </div>
-          <div>
-            <dt>{t("form.businessCaller")}</dt>
-            <dd>{callerName} → {targetName}</dd>
-          </div>
-          <div>
-            <dt>{t("form.permissionPackage")}</dt>
-            <dd>{templateName}</dd>
-          </div>
-        </dl>
-      </aside>
+          <ol className="go-live-step-list">
+            {productionSummary.steps.map((step) => (
+              <li key={step.key}>
+                <span className={`go-live-step-dot tone-${productionConsoleStatusTone(step.status)}`} aria-hidden="true" />
+                <div>
+                  <strong>{t(step.labelKey)}</strong>
+                  <span>{step.detailKey ? t(step.detailKey) : step.detail}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
 
-      <section className="go-live-acceptance-checks" aria-label={t("section.permissionRequestProcess")}>
-        <div className="go-live-acceptance-score">
-          <div>
-            <span>{t("metric.productionReadyChecks")}</span>
-            <strong>{readyCount}/{totalCount}</strong>
-          </div>
-          <div>
-            <span>{t("metric.productionWarnings")}</span>
-            <strong>{warningCount}</strong>
-          </div>
-          <div>
-            <span>{t("metric.productionBlockers")}</span>
-            <strong>{blockerCount}</strong>
-          </div>
-        </div>
-        <ol className="go-live-step-list">
-          {productionSummary.steps.map((step) => (
-            <li key={step.key}>
-              <span className={`go-live-step-dot tone-${productionConsoleStatusTone(step.status)}`} aria-hidden="true" />
-              <div>
-                <strong>{t(step.labelKey)}</strong>
-                <span>{step.detailKey ? t(step.detailKey) : step.detail}</span>
-              </div>
-            </li>
-          ))}
-        </ol>
+        <aside className="go-live-acceptance-context" aria-label={t("text.goLiveAcceptanceContext")}>
+          <strong>{t("text.goLiveAcceptanceContext")}</strong>
+          <dl>
+            <div>
+              <dt>{t("form.businessTenant")}</dt>
+              <dd>{tenantPath.primary}</dd>
+            </div>
+            <div>
+              <dt>{t("form.businessWorkspace")}</dt>
+              <dd>{workspaceName}</dd>
+            </div>
+            <div>
+              <dt>{t("form.businessCaller")}</dt>
+              <dd>{callerName} → {targetName}</dd>
+            </div>
+            <div>
+              <dt>{t("form.permissionPackage")}</dt>
+              <dd>{templateName}</dd>
+            </div>
+          </dl>
+        </aside>
       </section>
     </div>
   );
@@ -274,13 +278,16 @@ function permissionProductionReadinessNextAction(action: string, t: Translator) 
     "Apply the approved permission package before production readiness.": "productionNext.applyApproved",
     "Inspect the latest permission package application scope before go-live.": "productionNext.inspectScope",
     "Production readiness evidence is complete.": "productionNext.complete",
+    "Production readiness is complete.": "productionNext.complete",
     "Resolve apply preflight blockers before claiming production readiness.": "productionNext.resolvePreflight",
     "Resolve impact review blockers before production readiness.": "productionNext.resolveImpact",
     "Review application health and drift blockers before production readiness.": "productionNext.reviewHealth",
     "Run a denied MCP call that proves blocked tools stay blocked.": "productionNext.runDenied",
     "Run an allowed MCP call with the production subject before go-live.": "productionNext.runAllowed",
     "Verify permission package applied audit evidence before production readiness.": "productionNext.verifyAudit",
-    "Verify tenant entitlement, workspace assignment, and caller assignment evidence.": "productionNext.verifyGrantChain"
+    "Verify the permission package applied audit record before production readiness.": "productionNext.verifyAudit",
+    "Verify tenant entitlement, workspace assignment, and caller assignment evidence.": "productionNext.verifyGrantChain",
+    "Verify tenant entitlement, workspace assignment, and caller assignment records.": "productionNext.verifyGrantChain"
   };
   const key = known[action];
   return key ? t(key) : action;

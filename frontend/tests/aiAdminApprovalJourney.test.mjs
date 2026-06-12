@@ -152,6 +152,7 @@ test("evaluateAiAdminApprovalJourney completes with approval, runtime, profile, 
     providers: [],
     routePolicies: [],
     routePoliciesLoadedFromApi: true,
+    setupLoadedFromApi: true,
     systemMetrics: [],
     tenantEntitlements: [],
     traces: [

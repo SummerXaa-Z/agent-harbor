@@ -6,6 +6,10 @@ export interface AccessSubjectOption {
   labelKey: string;
   detailKey: string;
   subjectSelector: string;
+  email?: string;
+  status?: string;
+  tenantId?: string;
+  workspaceId?: string;
 }
 
 export const customAccessSubjectOption: AccessSubjectOption = {
@@ -50,7 +54,40 @@ export const accessSubjectOptions: AccessSubjectOption[] = [
     id: "member:support-001",
     kind: "member",
     labelKey: "accessSubject.support001.name",
-    subjectSelector: "user:support-001"
+    subjectSelector: "user:support-001",
+    workspaceId: "ws-permission-package-approval",
+    email: "support001@example.com",
+    status: "active"
+  },
+  {
+    detailKey: "accessSubject.support002.detail",
+    id: "member:support-002",
+    kind: "member",
+    labelKey: "accessSubject.support002.name",
+    subjectSelector: "user:support-002",
+    workspaceId: "ws-permission-package-approval",
+    email: "support002@example.com",
+    status: "active"
+  },
+  {
+    detailKey: "accessSubject.supportLead001.detail",
+    id: "member:support-lead-001",
+    kind: "member",
+    labelKey: "accessSubject.supportLead001.name",
+    subjectSelector: "user:support-lead-001",
+    workspaceId: "ws-permission-package-approval",
+    email: "support-lead001@example.com",
+    status: "active"
+  },
+  {
+    detailKey: "accessSubject.securityReviewer001.detail",
+    id: "member:security-reviewer-001",
+    kind: "member",
+    labelKey: "accessSubject.securityReviewer001.name",
+    subjectSelector: "user:security-reviewer-001",
+    workspaceId: "ws-permission-package-approval",
+    email: "security-reviewer001@example.com",
+    status: "active"
   }
 ];
 
@@ -90,4 +127,16 @@ export function normalizeAccessSubjectOptions(options: AccessSubjectOption[] | u
     && ["role", "department", "member"].includes(option.kind)
   );
   return normalized.length > 0 ? normalized : accessSubjectOptions;
+}
+
+export function accessSubjectsForWorkspace(
+  options: AccessSubjectOption[] | undefined,
+  workspaceId: string
+): AccessSubjectOption[] {
+  const normalized = normalizeAccessSubjectOptions(options);
+  const scopedWorkspaceId = workspaceId.trim();
+  if (!scopedWorkspaceId) return normalized;
+
+  const scoped = normalized.filter((option) => !option.workspaceId || option.workspaceId === scopedWorkspaceId);
+  return scoped.length > 0 ? scoped : normalized;
 }

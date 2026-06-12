@@ -1,7 +1,9 @@
 export type NavKey =
   | "getting-started"
+  | "ask"
   | "cockpit"
   | "ai-admin"
+  | "tenants"
   | "registry"
   | "routes"
   | "policies"
@@ -25,27 +27,29 @@ export interface ConsoleView {
   titleKey: string
 }
 
-export const defaultNavKey: NavKey = "ai-admin"
+export const defaultNavKey: NavKey = "getting-started"
 const navHashPrefix = "#"
 
 export const navGroups: Array<{ key: NavGroupKey; labelKey: string }> = [
   { key: "onboarding", labelKey: "navGroup.onboarding" },
-  { key: "configuration", labelKey: "navGroup.configuration" },
   { key: "primary", labelKey: "navGroup.primary" },
   { key: "audit", labelKey: "navGroup.audit" },
+  { key: "configuration", labelKey: "navGroup.configuration" },
 ]
 
 export const navItems: NavItem[] = [
   { detailKey: "navDetail.getting-started", groupKey: "onboarding", key: "getting-started", label: "Getting Started" },
-  { detailKey: "navDetail.registry", groupKey: "configuration", key: "registry", label: "Agents & Tools" },
-  { detailKey: "navDetail.capabilities", groupKey: "configuration", key: "capabilities", label: "Tool Capabilities" },
-  { detailKey: "navDetail.policies", groupKey: "configuration", key: "policies", label: "Access Policies" },
-  { detailKey: "navDetail.routes", groupKey: "configuration", key: "routes", label: "Routing Rules" },
+  { detailKey: "navDetail.ask", groupKey: "primary", key: "ask", label: "Access Query" },
   { detailKey: "navDetail.ai-admin", groupKey: "primary", key: "ai-admin", label: "Permission Changes" },
   { detailKey: "navDetail.access", groupKey: "primary", key: "access", label: "Access Profile" },
   { detailKey: "navDetail.traces", groupKey: "audit", key: "traces", label: "Call Logs" },
-  { detailKey: "navDetail.evidence", groupKey: "audit", key: "evidence", label: "Go-Live Evidence" },
+  { detailKey: "navDetail.evidence", groupKey: "audit", key: "evidence", label: "Go-Live Status" },
   { detailKey: "navDetail.cockpit", groupKey: "audit", key: "cockpit", label: "System Check" },
+  { detailKey: "navDetail.tenants", groupKey: "configuration", key: "tenants", label: "Tenants & Organization" },
+  { detailKey: "navDetail.registry", groupKey: "configuration", key: "registry", label: "Resource Management" },
+  { detailKey: "navDetail.capabilities", groupKey: "configuration", key: "capabilities", label: "Tool Capabilities" },
+  { detailKey: "navDetail.policies", groupKey: "configuration", key: "policies", label: "Access Policies" },
+  { detailKey: "navDetail.routes", groupKey: "configuration", key: "routes", label: "Routing Rules" },
 ]
 
 const views: Record<NavKey, ConsoleView> = {
@@ -53,6 +57,11 @@ const views: Record<NavKey, ConsoleView> = {
     key: "getting-started",
     primaryPanelKey: "gettingStarted",
     titleKey: "page.gettingStarted",
+  },
+  ask: {
+    key: "ask",
+    primaryPanelKey: "askAccess",
+    titleKey: "page.ask",
   },
   cockpit: {
     key: "cockpit",
@@ -64,9 +73,14 @@ const views: Record<NavKey, ConsoleView> = {
     primaryPanelKey: "aiAdminPermissionWorkbench",
     titleKey: "page.aiAdmin",
   },
+  tenants: {
+    key: "tenants",
+    primaryPanelKey: "tenantOrganization",
+    titleKey: "page.tenants",
+  },
   registry: {
     key: "registry",
-    primaryPanelKey: "agentRegistry",
+    primaryPanelKey: "resourceLifecycle",
     titleKey: "page.registry",
   },
   routes: {

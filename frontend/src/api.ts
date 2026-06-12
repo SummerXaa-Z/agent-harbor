@@ -58,6 +58,7 @@ import type {
   CatalogData,
   ChannelContract,
   ConsoleData,
+  ConsoleSession,
   CreateAccessGrantRequest,
   CreateAgentKeyRequest,
   CreateAgentKeyResponse,
@@ -150,6 +151,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   const response = await fetch(endpoint(path), {
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    credentials: 'include',
     headers,
     method: options.method ?? (options.body === undefined ? 'GET' : 'POST'),
     signal: options.signal,
@@ -214,6 +216,21 @@ export async function checkMockMcpHealth(
   signal?: AbortSignal,
 ): Promise<HealthCheckResult> {
   return checkJsonHealth(url, signal)
+}
+
+export async function fetchConsoleSession(signal?: AbortSignal): Promise<ConsoleSession> {
+  return request<ConsoleSession>('/api/v1/auth/session', { signal })
+}
+
+export async function loginConsole(adminKey: string, signal?: AbortSignal): Promise<ConsoleSession> {
+  return request<ConsoleSession>('/api/v1/auth/login', {
+    body: { adminKey },
+    signal,
+  })
+}
+
+export async function logoutConsole(signal?: AbortSignal): Promise<ConsoleSession> {
+  return request<ConsoleSession>('/api/v1/auth/logout', { method: 'POST', signal })
 }
 
 export async function checkSubjectHeaderCors(signal?: AbortSignal): Promise<HealthCheckResult> {
@@ -537,7 +554,8 @@ export async function fetchPermissionPackageApprovalRequests(
   adminKey?: string,
   signal?: AbortSignal,
 ): Promise<PermissionPackageApprovalRequest[]> {
-  return request<PermissionPackageApprovalRequest[]>(permissionPackageApprovalRequestsPath(filter), { adminKey, signal })
+  const rows = await request<unknown>(permissionPackageApprovalRequestsPath(filter), { adminKey, signal })
+  return Array.isArray(rows) ? rows as PermissionPackageApprovalRequest[] : []
 }
 
 export async function fetchPermissionPackageApplicationHealth(
@@ -791,6 +809,13 @@ export async function loadConsoleData(
     tracesResult.ok &&
     auditEventsResult.ok &&
     metricsResult.ok
+  const setupLoadedFromApi =
+    tenantsResult.ok &&
+    agentsResult.ok &&
+    capabilitiesResult.ok &&
+    entitlementResult.ok &&
+    workspaceAssignmentResult.ok &&
+    instanceAssignmentResult.ok
 
   return {
     tenants: tenantsResult.data,
@@ -808,6 +833,7 @@ export async function loadConsoleData(
     evidenceRuns: loadedFromApi ? [] : evidenceRuns,
     systemMetrics: metricsResult.data,
     loadedFromApi,
+    setupLoadedFromApi,
     grantsLoadedFromApi: grantsResult.ok,
     capabilitiesLoadedFromApi: capabilitiesResult.ok,
     capabilityAssignmentsLoadedFromApi:

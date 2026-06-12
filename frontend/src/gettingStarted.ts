@@ -15,34 +15,36 @@ export interface GettingStartedStep {
 }
 
 export function gettingStartedSteps(data: ConsoleData): GettingStartedStep[] {
+  const setupDataAvailable = data.setupLoadedFromApi
+
   return [
     {
-      done: data.loadedFromApi,
+      done: setupDataAvailable,
       key: "connect-api",
       targetHash: "#getting-started"
     },
     {
-      done: data.tenants.length > 0 && data.agents.some((agent) => agent.status === "active"),
+      done: setupDataAvailable && data.tenants.length > 0 && data.agents.some((agent) => agent.status === "active"),
       key: "register-agents",
-      targetHash: "#registry"
+      targetHash: "#tenants"
     },
     {
-      done: data.capabilities.length > 0,
+      done: setupDataAvailable && data.capabilities.length > 0,
       key: "discover-capabilities",
       targetHash: "#capabilities"
     },
     {
-      done: data.tenantEntitlements.length > 0,
+      done: setupDataAvailable && data.tenantEntitlements.length > 0,
       key: "create-grant-chain",
       targetHash: "#ai-admin"
     },
     {
-      done: data.traces.length > 0,
+      done: data.loadedFromApi && data.traces.length > 0,
       key: "run-decision",
       targetHash: "#traces"
     },
     {
-      done: data.evidenceRuns.length > 0,
+      done: data.loadedFromApi && data.evidenceRuns.length > 0,
       key: "review-evidence",
       targetHash: "#evidence"
     }
@@ -53,6 +55,6 @@ export function isSetupComplete(data: ConsoleData) {
   return gettingStartedSteps(data).slice(0, 4).every((step) => step.done);
 }
 
-export function resolveDefaultNavKey(data: ConsoleData): "ai-admin" | "getting-started" {
-  return isSetupComplete(data) ? "ai-admin" : "getting-started";
+export function resolveDefaultNavKey(data: ConsoleData): "ask" | "getting-started" {
+  return isSetupComplete(data) ? "ask" : "getting-started";
 }

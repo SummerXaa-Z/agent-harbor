@@ -25,6 +25,20 @@ test("permission package access subjects load from the management API", () => {
   assert.match(apiSource, /\/api\/v1\/permission-packages\/access-subjects/);
 });
 
+test("management API requests include console session cookies", () => {
+  assert.match(apiSource, /credentials:\s*['"]include['"]/);
+});
+
+test("console auth API exposes session login and logout endpoints", () => {
+  assert.match(apiSource, /function fetchConsoleSession\(/);
+  assert.match(apiSource, /\/api\/v1\/auth\/session/);
+  assert.match(apiSource, /function loginConsole\(/);
+  assert.match(apiSource, /\/api\/v1\/auth\/login/);
+  assert.match(apiSource, /body:\s*\{\s*adminKey\s*\}/);
+  assert.match(apiSource, /function logoutConsole\(/);
+  assert.match(apiSource, /\/api\/v1\/auth\/logout/);
+});
+
 test("permissionPackageApprovalRequestsPath includes reviewer routing query", () => {
   const path = permissionPackageApprovalRequestsPath({
     limit: 20,

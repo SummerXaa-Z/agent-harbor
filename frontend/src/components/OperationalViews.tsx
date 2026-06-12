@@ -20,6 +20,7 @@ import {
 import type {
   Agent,
   AgentStatus,
+  AskHandoffContext,
   ChannelContract,
   RoutePolicy
 } from "../types";
@@ -100,13 +101,11 @@ export function PolicyTable({
 }
 
 export function AccessPolicyWorkspace({
-  createPolicyPanel,
   managementAuditPanel,
   policies,
   routeGovernancePanel,
   t
 }: {
-  createPolicyPanel: ReactNode;
   managementAuditPanel: ReactNode;
   policies: RoutePolicy[];
   routeGovernancePanel: ReactNode;
@@ -115,7 +114,9 @@ export function AccessPolicyWorkspace({
   const [auditCollapsed, setAuditCollapsed] = useState(true);
 
   function focusPolicyForm() {
-    document.getElementById("policy-create-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const trigger = document.querySelector<HTMLButtonElement>("#policy-create-panel .action-modal-trigger");
+    trigger?.scrollIntoView({ behavior: "smooth", block: "center" });
+    trigger?.click();
   }
 
   return (
@@ -133,7 +134,6 @@ export function AccessPolicyWorkspace({
           </button>
         </section>
       ) : null}
-      {createPolicyPanel}
       {routeGovernancePanel}
       <section className="policy-audit-disclosure span-12">
         <button
@@ -154,12 +154,14 @@ export function AgentTable({
   agents,
   channelLabels,
   onStatusChange,
+  onQueryAccess,
   pendingActionId,
   t
 }: {
   agents: Agent[];
   channelLabels: Record<string, string>;
   onStatusChange: (agent: Agent, status: AgentStatus) => void;
+  onQueryAccess: (context: AskHandoffContext) => void;
   pendingActionId: string;
   t: Translator;
 }) {
@@ -180,114 +182,116 @@ export function AgentTable({
     return (!agentStatusFilter || agent.status === agentStatusFilter) && (!normalizedAgentQuery || searchable.includes(normalizedAgentQuery));
   });
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
+  const hasAgents = agents.length > 0;
 
   return (
-    <div>
-      <div className="table-toolbar">
-        <label>
-          <span>{t("form.agent")}</span>
-          <input
-            placeholder={t("form.searchAgents")}
-            value={agentQuery}
-            onChange={(event) => setAgentQuery(event.target.value)}
+    <div className="agent-registry">
+      {hasAgents ? (
+        <div className="table-toolbar">
+          <label>
+            <span>{t("form.agent")}</span>
+            <input
+              placeholder={t("form.searchAgents")}
+              value={agentQuery}
+              onChange={(event) => setAgentQuery(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>{t("table.status")}</span>
+            <select
+              value={agentStatusFilter}
+              onChange={(event) => setAgentStatusFilter(event.target.value as AgentStatus | "")}
+            >
+              <option value="">{t("form.anyStatus")}</option>
+              <option value="active">{t("status.agentActive")}</option>
+              <option value="draft">{t("status.agentDraft")}</option>
+              <option value="disabled">{t("status.agentDisabled")}</option>
+            </select>
+          </label>
+          <span>{tx(t, "text.visibleRowCount", { count: visibleAgents.length, total: agents.length })}</span>
+        </div>
+      ) : null}
+      {visibleAgents.length === 0 ? (
+        <div className="registry-empty-state">
+          <EmptyRow
+            title={hasAgents ? t("empty.filteredResults.title") : t("empty.registry.title")}
+            detail={hasAgents ? t("empty.filteredResults.detail") : t("empty.registry.detail")}
+            actionLabel={hasAgents ? undefined : t("empty.registry.action")}
+            actionHash={hasAgents ? undefined : "#getting-started"}
           />
-        </label>
-        <label>
-          <span>{t("table.status")}</span>
-          <select
-            value={agentStatusFilter}
-            onChange={(event) => setAgentStatusFilter(event.target.value as AgentStatus | "")}
-          >
-            <option value="">{t("form.anyStatus")}</option>
-            <option value="active">{t("status.agentActive")}</option>
-            <option value="draft">{t("status.agentDraft")}</option>
-            <option value="disabled">{t("status.agentDisabled")}</option>
-          </select>
-        </label>
-        <span>{tx(t, "text.visibleRowCount", { count: visibleAgents.length, total: agents.length })}</span>
-      </div>
-      <div className="table-wrap">
-        <table className="agent-table">
-          <thead>
-            <tr>
-              <th>{t("table.name")}</th>
-              <th>{t("table.channel")}</th>
-              <th>{t("table.endpoint")}</th>
-              <th>{t("table.status")}</th>
-              <th>{t("table.owner")}</th>
-              <th>{t("table.action")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleAgents.length === 0 ? (
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="agent-table">
+            <thead>
               <tr>
-                <td colSpan={6}>
-                  <EmptyRow
-                    title={agents.length === 0 ? t("empty.registry.title") : t("empty.filteredResults.title")}
-                    detail={agents.length === 0 ? t("empty.registry.detail") : t("empty.filteredResults.detail")}
-                    actionLabel={agents.length === 0 ? t("empty.registry.action") : undefined}
-                    actionHash={agents.length === 0 ? "#getting-started" : undefined}
-                  />
-                </td>
+                <th>{t("table.name")}</th>
+                <th>{t("table.channel")}</th>
+                <th>{t("table.endpoint")}</th>
+                <th>{t("table.status")}</th>
+                <th>{t("table.owner")}</th>
+                <th>{t("table.action")}</th>
               </tr>
-            ) : null}
-            {visibleAgents.map((agent) => (
-              <tr className={agent.status === "disabled" ? "row-disabled" : undefined} key={agent.id}>
-                <td>
-                  <strong>{permissionEntityDisplayName(agent.name, t)}</strong>
-                  {agent.description ? <span>{agent.description}</span> : <TechnicalId copyLabel={t("action.copy")} value={agent.id} />}
-                </td>
-                <td>{channelLabel(agent.channelType, channelLabels, t)}</td>
-                <td className="truncate">{configText(agent, "endpoint") || t("status.localRuntime")}</td>
-                <td><Badge tone={agent.status === "active" ? "success" : agent.status === "draft" ? "warning" : "neutral"}>{agentStatusLabel(agent.status, t)}</Badge></td>
-                <td>{agent.ownerId || t("text.ownerPlatform")}</td>
-                <td>
-                  <div className="table-action-group">
-                    <button
-                      className="table-action"
-                      onClick={() => setSelectedAgentId(agent.id)}
-                      type="button"
-                    >
-                      <FileSearch size={13} />
-                      {t("action.viewDetails")}
-                    </button>
-                    {agent.status !== "disabled" ? (
-                      <details className="row-action-menu">
-                        <summary className="table-action">
-                          <MoreHorizontal size={13} />
-                          {t("action.more")}
-                        </summary>
-                        <div className="row-action-menu-list">
-                          <button
-                            className="table-action"
-                            disabled={pendingActionId === agent.id}
-                            onClick={() => onStatusChange(agent, agent.status === "active" ? "draft" : "active")}
-                            type="button"
-                          >
-                            {agent.status === "active" ? <CircleDot size={13} /> : <CheckCircle2 size={13} />}
-                            {pendingActionId === agent.id ? t("action.updating") : agent.status === "active" ? t("action.draft") : t("action.activate")}
-                          </button>
-                          <button
-                            className="table-action is-danger"
-                            disabled={pendingActionId === agent.id}
-                            onClick={() => onStatusChange(agent, "disabled")}
-                            type="button"
-                          >
-                            <LockKeyhole size={13} />
-                            {t("action.disable")}
-                          </button>
-                        </div>
-                      </details>
-                    ) : (
-                      <span className="muted-action">{t("status.agentDisabled")}</span>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {visibleAgents.map((agent) => (
+                <tr className={agent.status === "disabled" ? "row-disabled" : undefined} key={agent.id}>
+                  <td>
+                    <strong>{permissionEntityDisplayName(agent.name, t)}</strong>
+                    {agent.description ? <span>{agent.description}</span> : <TechnicalId copyLabel={t("action.copy")} value={agent.id} />}
+                  </td>
+                  <td>{channelLabel(agent.channelType, channelLabels, t)}</td>
+                  <td className="truncate">{configText(agent, "endpoint") || t("status.localRuntime")}</td>
+                  <td><Badge tone={agent.status === "active" ? "success" : agent.status === "draft" ? "warning" : "neutral"}>{agentStatusLabel(agent.status, t)}</Badge></td>
+                  <td>{agent.ownerId || t("text.ownerPlatform")}</td>
+                  <td>
+                    <div className="table-action-group">
+                      <button
+                        className="table-action"
+                        onClick={() => setSelectedAgentId(agent.id)}
+                        type="button"
+                      >
+                        <FileSearch size={13} />
+                        {t("action.viewDetails")}
+                      </button>
+                      {agent.status !== "disabled" ? (
+                        <details className="row-action-menu">
+                          <summary className="table-action">
+                            <MoreHorizontal size={13} />
+                            {t("action.more")}
+                          </summary>
+                          <div className="row-action-menu-list">
+                            <button
+                              className="table-action"
+                              disabled={pendingActionId === agent.id}
+                              onClick={() => onStatusChange(agent, agent.status === "active" ? "draft" : "active")}
+                              type="button"
+                            >
+                              {agent.status === "active" ? <CircleDot size={13} /> : <CheckCircle2 size={13} />}
+                              {pendingActionId === agent.id ? t("action.updating") : agent.status === "active" ? t("action.draft") : t("action.activate")}
+                            </button>
+                            <button
+                              className="table-action is-danger"
+                              disabled={pendingActionId === agent.id}
+                              onClick={() => onStatusChange(agent, "disabled")}
+                              type="button"
+                            >
+                              <LockKeyhole size={13} />
+                              {t("action.disable")}
+                            </button>
+                          </div>
+                        </details>
+                      ) : (
+                        <span className="muted-action">{t("status.agentDisabled")}</span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {selectedAgent ? (
         <aside className="table-detail-panel">
           <div>
@@ -303,6 +307,20 @@ export function AgentTable({
             <span>{t("form.workspace")}<strong>{selectedAgent.workspaceId || t("text.notSpecified")}</strong></span>
             <span>{t("text.technicalDetails")}<TechnicalId copyLabel={t("action.copy")} value={selectedAgent.id} /></span>
           </div>
+          <button
+            className="secondary-button table-detail-action"
+            onClick={() => onQueryAccess({
+              callerInstanceId: selectedAgent.channelType === "local" ? selectedAgent.id : undefined,
+              sourceView: "registry",
+              targetId: selectedAgent.channelType !== "local" ? selectedAgent.id : undefined,
+              tenantId: selectedAgent.tenantId,
+              workspaceId: selectedAgent.workspaceId
+            })}
+            type="button"
+          >
+            <FileSearch size={14} />
+            {selectedAgent.channelType === "local" ? t("action.queryThisCallerAccess") : t("action.queryThisTargetAccess")}
+          </button>
         </aside>
       ) : null}
     </div>

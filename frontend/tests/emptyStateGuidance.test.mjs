@@ -20,7 +20,7 @@ test("empty row supports optional guidance actions without replacing the empty s
 
 test("setup-dependent empty states point to the next useful workspace", () => {
   assert.match(operationalViews, /empty\.registry\.action/);
-  assert.match(operationalViews, /actionHash=\{agents\.length === 0 \? "#getting-started" : undefined\}/);
+  assert.match(operationalViews, /actionHash=\{hasAgents \? undefined : "#getting-started"\}/);
 
   assert.match(capabilityGovernance, /empty\.capabilities\.actionRegisterAgents/);
   assert.match(capabilityGovernance, /empty\.capabilities\.actionRefresh/);

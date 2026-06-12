@@ -25,6 +25,7 @@ function baseConsoleData(overrides = {}) {
     providers: [],
     routePolicies: [],
     routePoliciesLoadedFromApi: true,
+    setupLoadedFromApi: true,
     systemMetrics: [],
     tenantEntitlements: [],
     tenants: [],
@@ -112,7 +113,7 @@ test("getting started progress reports an empty live system as not configured", 
 
   assert.deepEqual(steps.map((step) => [step.key, step.done, step.targetHash]), [
     ["connect-api", true, "#getting-started"],
-    ["register-agents", false, "#registry"],
+    ["register-agents", false, "#tenants"],
     ["discover-capabilities", false, "#capabilities"],
     ["create-grant-chain", false, "#ai-admin"],
     ["run-decision", false, "#traces"],
@@ -140,12 +141,13 @@ test("getting started progress follows the dependency chain for partial setup", 
   assert.equal(isSetupComplete(data), false);
 });
 
-test("sample data keeps API connection incomplete while showing sample progress", () => {
+test("sample data does not count as completed setup progress", () => {
   const data = baseConsoleData({
     agents: [activeAgent],
     capabilities: [capability],
     evidenceRuns: [evidenceRun],
     loadedFromApi: false,
+    setupLoadedFromApi: false,
     tenantEntitlements: [tenantEntitlement],
     tenants: [tenant],
     traces: [trace]
@@ -154,13 +156,35 @@ test("sample data keeps API connection incomplete while showing sample progress"
 
   assert.deepEqual(steps.map((step) => [step.key, step.done]), [
     ["connect-api", false],
+    ["register-agents", false],
+    ["discover-capabilities", false],
+    ["create-grant-chain", false],
+    ["run-decision", false],
+    ["review-evidence", false]
+  ]);
+  assert.equal(isSetupComplete(data), false);
+});
+
+test("setup readiness is not blocked by runtime data fallback", () => {
+  const data = baseConsoleData({
+    agents: [activeAgent],
+    capabilities: [capability],
+    loadedFromApi: false,
+    setupLoadedFromApi: true,
+    tenantEntitlements: [tenantEntitlement],
+    tenants: [tenant]
+  });
+  const steps = gettingStartedSteps(data);
+
+  assert.deepEqual(steps.map((step) => [step.key, step.done]), [
+    ["connect-api", true],
     ["register-agents", true],
     ["discover-capabilities", true],
     ["create-grant-chain", true],
-    ["run-decision", true],
-    ["review-evidence", true]
+    ["run-decision", false],
+    ["review-evidence", false]
   ]);
-  assert.equal(isSetupComplete(data), false);
+  assert.equal(isSetupComplete(data), true);
 });
 
 test("configured live systems are setup-complete before runtime and evidence are present", () => {

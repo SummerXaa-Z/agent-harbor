@@ -66,72 +66,31 @@ export function CoreJourneyWorkbench({
   t: Translator;
 }) {
   const canRun = coreJourneyPreflightCanRun(preflight);
+  const healthTone: Tone = canRun ? "success" : "warning";
+  const healthStatusLabel = canRun ? t("status.systemHealthReady") : t("status.systemHealthNeedsCheck");
+  const healthTitle = canRun ? t("text.systemHealthReadyTitle") : t("text.systemHealthNeedsCheckTitle");
+  const healthDetail = canRun ? t("text.systemHealthReadyDetail") : t("text.systemHealthNeedsCheckDetail");
   const runtimeEvidenceSummary = result
     ? `tools/list ${result.toolListStatus} · ${form.deniedTool} ${result.deniedStatus} · ${form.allowedTool} ${result.allowedStatus}`
     : t("text.selfCheckRuntimePending");
   return (
     <div className="core-journey">
-      <p className="core-journey-intro">{t("text.coreJourneyIntro")}</p>
-      <section className="core-journey-config">
-        <header>
+      <section className="core-journey-health">
+        <div className="core-journey-health-summary">
+          <span>{t("section.systemHealthStatus")}</span>
           <div>
-            <strong>{t("section.selfCheckConfig")}</strong>
-            <span>{t("text.selfCheckConfigDetail")}</span>
+            <strong>{healthTitle}</strong>
+            <Badge tone={healthTone}>{healthStatusLabel}</Badge>
           </div>
+          <p>{healthDetail}</p>
+          {message ? <strong className="core-journey-message">{message}</strong> : null}
+        </div>
+        <div className="core-journey-health-status">
           <div className="core-journey-score">
             <strong>{evaluation.completeCount}/{evaluation.totalCount}</strong>
             <span>{t("text.coreJourneyCompletion")}</span>
           </div>
-        </header>
-        <div className="core-journey-config-grid">
-          <label>
-            {t("form.workspace")}
-            <input
-              disabled={running}
-              value={form.workspaceId}
-              onChange={(event) => onChange({ ...form, workspaceId: event.target.value })}
-            />
-          </label>
-          <label>
-            {t("form.endpoint")}
-            <input
-              disabled={running}
-              value={form.mcpEndpoint}
-              onChange={(event) => onChange({ ...form, mcpEndpoint: event.target.value })}
-            />
-          </label>
-          <label>
-            {t("form.allowedTool")}
-            <input
-              disabled={running}
-              value={form.allowedTool}
-              onChange={(event) => onChange({ ...form, allowedTool: event.target.value })}
-            />
-          </label>
-          <label>
-            {t("form.deniedTool")}
-            <input
-              disabled={running}
-              value={form.deniedTool}
-              onChange={(event) => onChange({ ...form, deniedTool: event.target.value })}
-            />
-          </label>
-        </div>
-        <div className="core-journey-config-actions">
-          <button className="primary-button" disabled={running || preflightChecking || !canRun} onClick={onRun} type="button">
-            <Workflow size={14} />
-            {running ? t("action.runningJourney") : t("action.runCoreJourney")}
-          </button>
-        </div>
-      </section>
-
-      <div className="core-journey-preflight">
-        <div className="core-journey-preflight-header">
-          <div>
-            <strong>{t("section.preflight")}</strong>
-            {preflightMessage ? <span>{preflightMessage}</span> : null}
-          </div>
-          <div className="core-journey-preflight-actions">
+          <div className="core-journey-health-actions">
             <button className="secondary-button" disabled={running || preflightChecking} onClick={onRefreshPreflight} type="button">
               <RefreshCw size={14} />
               {preflightChecking ? t("action.checkingPreflight") : t("action.checkPreflight")}
@@ -141,43 +100,113 @@ export function CoreJourneyWorkbench({
               {t("action.resetCoreJourney")}
             </button>
           </div>
+          <button className="primary-button" disabled={running || preflightChecking || !canRun} onClick={onRun} type="button">
+            <Workflow size={14} />
+            {running ? t("action.runningJourney") : t("action.runCoreJourney")}
+          </button>
         </div>
-        <div className="core-journey-preflight-grid">
-          {coreJourneyPreflightRows(preflight).map((row) => (
-            <article className={`core-journey-preflight-row status-${row.status}`} key={row.key}>
-              <Badge tone={preflightTone(row.status)}>{preflightStatusLabel(row.status, t)}</Badge>
-              <div>
-                <strong>{t(row.titleKey)}</strong>
-                <span>{t(row.detailKey)}</span>
-              </div>
-            </article>
+      </section>
+
+      <section className="core-journey-task">
+        <header>
+          <div>
+            <strong>{t("section.selfCheckTask")}</strong>
+            <span>{t("text.coreJourneyIntro")}</span>
+            {preflightMessage ? <span>{preflightMessage}</span> : null}
+          </div>
+        </header>
+        <section className="core-journey-preflight" aria-label={t("section.preflight")}>
+          <div className="core-journey-preflight-grid">
+            {coreJourneyPreflightRows(preflight).map((row) => (
+              <article className={`core-journey-preflight-row status-${row.status}`} key={row.key}>
+                <Badge tone={preflightTone(row.status)}>{preflightStatusLabel(row.status, t)}</Badge>
+                <div>
+                  <strong>{t(row.titleKey)}</strong>
+                  <span>{t(row.detailKey)}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <div className="core-journey-steps">
+          {evaluation.steps.map((step) => (
+            <CoreJourneyStepRow key={step.key} step={step} t={t} />
           ))}
         </div>
-      </div>
+      </section>
 
-      <div className="core-journey-runtime-summary" aria-label={t("section.selfCheckRuntime")}>
-        <TechnicalId copyLabel={t("action.copy")} label={t("detail.runId")} value={config.runId} />
-        <TechnicalId copyLabel={t("action.copy")} label={t("form.tenantId")} value={config.childTenantId} />
-        <span className="core-journey-runtime-field">
-          <span>{t("form.allowedTool")}</span>
-          <code translate="no">{form.allowedTool}</code>
-        </span>
-        <span className="core-journey-runtime-field">
-          <span>{t("form.deniedTool")}</span>
-          <code translate="no">{form.deniedTool}</code>
-        </span>
-        <span className="core-journey-runtime-field is-wide">
-          <span>{t("section.selfCheckRuntime")}</span>
-          <strong>{runtimeEvidenceSummary}</strong>
-        </span>
-        {message ? <strong className="core-journey-message">{message}</strong> : null}
-      </div>
+      <details className="core-journey-advanced">
+        <summary>
+          <div>
+            <strong>{t("section.selfCheckAdvanced")}</strong>
+            <span>{t("text.selfCheckAdvancedDetail")}</span>
+          </div>
+        </summary>
+        <section className="core-journey-config">
+          <header>
+            <div>
+              <strong>{t("section.selfCheckConfig")}</strong>
+              <span>{t("text.selfCheckConfigDetail")}</span>
+            </div>
+          </header>
+          <div className="core-journey-config-grid">
+            <label>
+              {t("form.workspace")}
+              <input
+                disabled={running}
+                value={form.workspaceId}
+                onChange={(event) => onChange({ ...form, workspaceId: event.target.value })}
+              />
+            </label>
+            <label>
+              {t("form.endpoint")}
+              <input
+                disabled={running}
+                value={form.mcpEndpoint}
+                onChange={(event) => onChange({ ...form, mcpEndpoint: event.target.value })}
+              />
+            </label>
+            <label>
+              {t("form.allowedTool")}
+              <input
+                disabled={running}
+                value={form.allowedTool}
+                onChange={(event) => onChange({ ...form, allowedTool: event.target.value })}
+              />
+            </label>
+            <label>
+              {t("form.deniedTool")}
+              <input
+                disabled={running}
+                value={form.deniedTool}
+                onChange={(event) => onChange({ ...form, deniedTool: event.target.value })}
+              />
+            </label>
+          </div>
+        </section>
+      </details>
 
-      <div className="core-journey-steps">
-        {evaluation.steps.map((step) => (
-          <CoreJourneyStepRow key={step.key} step={step} t={t} />
-        ))}
-      </div>
+      <details className="core-journey-runtime-summary" aria-label={t("section.selfCheckRuntimeDetail")}>
+        <summary>
+          <div>
+            <strong>{t("section.selfCheckRuntimeDetail")}</strong>
+            <span>{runtimeEvidenceSummary}</span>
+          </div>
+        </summary>
+        <div className="core-journey-runtime-grid">
+          <TechnicalId copyLabel={t("action.copy")} label={t("detail.runId")} value={config.runId} />
+          <TechnicalId copyLabel={t("action.copy")} label={t("form.tenantId")} value={config.childTenantId} />
+          <span className="core-journey-runtime-field">
+            <span>{t("form.allowedTool")}</span>
+            <code translate="no">{form.allowedTool}</code>
+          </span>
+          <span className="core-journey-runtime-field">
+            <span>{t("form.deniedTool")}</span>
+            <code translate="no">{form.deniedTool}</code>
+          </span>
+        </div>
+      </details>
 
       <div className="core-journey-actions">
         <button className="secondary-button" onClick={() => onOpen("access")} type="button">

@@ -7,7 +7,8 @@ import {
   RefreshCw,
   TriangleAlert,
   Undo2,
-  Workflow
+  Workflow,
+  X
 } from "lucide-react";
 
 import {
@@ -62,6 +63,7 @@ import type {
   Agent,
   AuditEvent,
   Capability,
+  PermissionChangeHandoffContext,
   Tenant
 } from "../types";
 import { ApprovalDropdown, type ApprovalDropdownOption } from "./ApprovalDropdown";
@@ -144,7 +146,9 @@ interface AiAdminPermissionWorkbenchProps {
   onRunApprovalJourney: () => void;
   onSelectApprovalRequest: (requestId: string) => void;
   onStartNewPermissionChange: () => void;
+  onDismissPermissionHandoff: () => void;
   onWithdrawApprovalRequest: (comment?: string) => void;
+  permissionHandoffContext: PermissionChangeHandoffContext | null;
   reviewerQueueLoading: boolean;
   reviewerQueueMessage: string;
   selectedApprovalRequestId: string;
@@ -215,7 +219,9 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     onRunApprovalJourney,
     onSelectApprovalRequest,
     onStartNewPermissionChange,
+    onDismissPermissionHandoff,
     onWithdrawApprovalRequest,
+    permissionHandoffContext,
     reviewerQueueLoading,
     reviewerQueueMessage,
     selectedApprovalRequestId,
@@ -227,6 +233,20 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const callers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const selectedCaller = agents.find((agent) => agent.id === form.callerInstanceId);
   const selectedTarget = mcpTargets.find((agent) => agent.id === form.targetId);
+  const permissionHandoffTitle = permissionHandoffContext?.sourceView === "tenants"
+    ? t("text.permissionTenantHandoffTitle")
+    : t("text.permissionHandoffTitle");
+  const permissionHandoffDetail = permissionHandoffContext
+    ? permissionHandoffContext.sourceView === "tenants"
+      ? tx(t, "text.permissionTenantHandoffDetail", {
+        tenant: permissionHandoffContext.tenantName ?? permissionHandoffContext.tenantId,
+        workspace: permissionHandoffContext.workspaceName ?? permissionHandoffContext.workspaceId
+      })
+      : tx(t, "text.permissionHandoffDetail", {
+        caller: permissionHandoffContext.callerName ?? permissionHandoffContext.callerInstanceId ?? "-",
+        target: permissionHandoffContext.targetName ?? permissionHandoffContext.targetId ?? "-"
+      })
+    : "";
   const tenantPath = permissionTenantPathLabel(form.tenantId, tenants, t);
   const workspaceName = permissionWorkspaceDisplayName(form.workspaceId, agents, t);
   const callerName = selectedCaller ? permissionEntityDisplayName(selectedCaller.name, t) : t("form.selectCaller");
@@ -659,6 +679,20 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             <strong>{t("message.fallbackDataModeTitle")}</strong>
             <span>{t("message.fallbackDataModeDetail")}</span>
           </div>
+        </section>
+      ) : null}
+
+      {permissionHandoffContext ? (
+        <section className="permission-handoff-notice" role="status" aria-live="polite">
+          <FileSearch size={16} />
+          <div>
+            <strong>{permissionHandoffTitle}</strong>
+            <span>{permissionHandoffDetail}</span>
+          </div>
+          <button className="secondary-button" onClick={onDismissPermissionHandoff} type="button">
+            <X aria-hidden="true" size={14} />
+            {t("action.dismiss")}
+          </button>
         </section>
       ) : null}
 

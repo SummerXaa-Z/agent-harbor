@@ -1,19 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
+  Building2,
   Boxes,
   ClipboardCheck,
   DatabaseZap,
   FileSearch,
   Gauge,
   KeyRound,
+  LogOut,
   Layers3,
   LockKeyhole,
   Network,
   RefreshCw,
   Route,
-  ServerCog,
   ShieldCheck,
-  TriangleAlert,
   Workflow
 } from "lucide-react";
 import {
@@ -78,6 +78,9 @@ import {
   resolveInitialLanguage,
   type Language
 } from "./i18n";
+import {
+  buildResourceLifecycleSummary
+} from "./resourceLifecycle";
 import {
   defaultNavKey,
   navHashFor,
@@ -144,10 +147,11 @@ import {
 } from "./permissionRequestJourney";
 import { AiAdminPermissionWorkbench } from "./components/AiAdminPermissionWorkbench";
 import { CapabilityGovernanceView } from "./components/CapabilityGovernanceView";
-import { IconMore, IconOpen, MetricCard, Panel } from "./components/ConsolePrimitives";
+import { ActionModalButton, IconMore, IconOpen, Panel } from "./components/ConsolePrimitives";
 import {
   AccessView,
   AiAdminView,
+  AskView,
   CapabilitiesView,
   CockpitView,
   EvidenceView,
@@ -155,10 +159,14 @@ import {
   PoliciesView,
   RegistryView,
   RoutesView,
+  TenantsView,
   TracesView
 } from "./components/ConsoleViews";
+import { AskAccessPanel } from "./components/AskAccessView";
 import { CoreJourneyWorkbench } from "./components/CoreJourneyWorkbench";
 import { GettingStartedView } from "./components/GettingStartedView";
+import { ConsoleLoginView } from "./components/ConsoleLoginView";
+import { ResourceLifecycleView } from "./components/ResourceLifecycleView";
 import {
   AgentCreateForm,
   CredentialRotateForm,
@@ -180,9 +188,12 @@ import {
 } from "./components/RuntimeEvidenceViews";
 import { TechnicalId } from "./components/TechnicalId";
 import { TenantAccessProfileView } from "./components/TenantAccessProfileView";
+import { TenantOrganizationView, type TenantWorkspaceContext } from "./components/TenantOrganizationView";
 import { Badge } from "./components/ui";
 import { useAccessProfileController } from "./hooks/useAccessProfileController";
+import { useAskAccessController } from "./hooks/useAskAccessController";
 import { useCapabilityGovernanceController } from "./hooks/useCapabilityGovernanceController";
+import { useConsoleAuth } from "./hooks/useConsoleAuth";
 import { useCoreJourneyController } from "./hooks/useCoreJourneyController";
 import { useManagementOperations } from "./hooks/useManagementOperations";
 import { gettingStartedSteps, resolveDefaultNavKey } from "./gettingStarted";
@@ -192,6 +203,7 @@ import type {
   AccessProfileSummary,
   AccessDecisionExplainRequest,
   AccessDecisionExplainResult,
+  AskHandoffContext,
   Agent,
   AgentStatus,
   AuditEvent,
@@ -202,6 +214,7 @@ import type {
   InstanceAssignment,
   JsonObject,
   ManagementScope,
+  PermissionChangeHandoffContext,
   RoutePolicy,
   Tenant,
   TenantAccessProfileData,
@@ -272,8 +285,12 @@ function navIconFor(key: NavKey) {
   switch (key) {
     case "getting-started":
       return Workflow;
+    case "ask":
+      return FileSearch;
     case "ai-admin":
       return ShieldCheck;
+    case "tenants":
+      return Building2;
     case "registry":
       return Boxes;
     case "routes":
@@ -362,12 +379,14 @@ export function ConsoleController() {
   const [activeNav, setActiveNav] = useState<NavKey>(initialNavKey);
   const [connectionMenuOpen, setConnectionMenuOpen] = useState(false);
   const [adminKey, setAdminKey] = useState("");
+  const consoleAuth = useConsoleAuth();
   const [scope, setScope] = useState<ManagementScope>(defaultManagementScope);
   const [data, setData] = useState<ConsoleData | null>(null);
   const [loadError, setLoadError] = useState("");
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [traceFilters, setTraceFilters] = useState<TraceFilters>(defaultTraceFilters);
   const [language, setLanguage] = useState<Language>(initialLanguage);
+  const [handoffContexts, setHandoffContexts] = useState<{ ask: AskHandoffContext | null; permissionChange: PermissionChangeHandoffContext | null; permissionNotice: PermissionChangeHandoffContext | null }>({ ask: null, permissionChange: null, permissionNotice: null });
   const [aiAdminForm, setAiAdminForm] = useState<PermissionPackageDraftInput>(defaultAiAdminForm);
   const [aiAdminMessage, setAiAdminMessage] = useState<LocalizedMessage | null>(null);
   const [aiAdminApplying, setAiAdminApplying] = useState(false);
@@ -422,9 +441,21 @@ export function ConsoleController() {
   const [aiAdminApprovalReadinessMessage, setAiAdminApprovalReadinessMessage] = useState("");
   const t = useMemo(() => createTranslator(language), [language]);
   const renderedAiAdminMessage = localizedMessageText(aiAdminMessage, t, language);
+  const renderedConsoleLoginMessage = localizedMessageText(consoleAuth.loginMessage, t, language);
+  const consoleAccessReady = consoleAuth.accessReady;
   function selectActiveNav(key: NavKey) {
     userSelectedNavRef.current = true;
     setActiveNav(key);
+  }
+  function openAskAccess(context: AskHandoffContext) {
+    setHandoffContexts((current) => ({ ...current, ask: context }));
+    userSelectedNavRef.current = true;
+    setActiveNav("ask");
+  }
+  function openTenantPermissionChange(context: PermissionChangeHandoffContext) {
+    setHandoffContexts((current) => ({ ...current, permissionChange: context }));
+    userSelectedNavRef.current = true;
+    setActiveNav("ai-admin");
   }
   const management = useManagementOperations({
     adminKey,
@@ -446,18 +477,50 @@ export function ConsoleController() {
   const accessProfileController = useAccessProfileController({
     activeNav,
     adminKey,
-    dataLoadedFromApi: Boolean(data?.loadedFromApi),
     defaultScope: defaultManagementScope,
+    enabled: consoleAccessReady,
     language,
     scope,
     setScope,
     t
   });
+  const askAccess = useAskAccessController({
+    adminKey, consoleData: data, handoffContext: handoffContexts.ask, language, liveDataAvailable: Boolean(data?.loadedFromApi),
+    onConsumeHandoff: () => setHandoffContexts((current) => ({ ...current, ask: null })),
+    onStartPermissionChange: (context) => { setHandoffContexts((current) => ({ ...current, permissionChange: context })); userSelectedNavRef.current = true; setActiveNav("ai-admin"); },
+    t, templates: aiAdminTemplates
+  });
+  useEffect(() => {
+    const context = handoffContexts.permissionChange;
+    if (!context) return;
+    setAiAdminNewDraftMode(true);
+    setAiAdminForm((current) => ({
+      ...current,
+      callerInstanceId: context.callerInstanceId ?? current.callerInstanceId,
+      requestText: context.intentText ?? current.requestText,
+      subjectSelector: context.subjectId ?? current.subjectSelector,
+      targetId: context.targetId ?? current.targetId,
+      templateId: context.templateId ?? current.templateId,
+      tenantId: context.tenantId,
+      workspaceId: context.workspaceId
+    }));
+    setAiAdminServerDraft(null);
+    setAiAdminWorkbenchPreview(null);
+    setAiAdminApplication(null);
+    setAiAdminApplyPreflight(null);
+    setAiAdminProductionReadiness(null);
+    setAiAdminApprovalRequests([]);
+    setAiAdminSelectedApprovalRequestId("");
+    setAiAdminAccessDecisionExplanation(null);
+    setAiAdminMessage(null);
+    setHandoffContexts((current) => ({ ...current, permissionChange: null, permissionNotice: context }));
+  }, [handoffContexts.permissionChange]);
   const coreJourney = useCoreJourneyController({
     adminKey,
     defaultAccessFilters: defaultAccessProfileFilters,
     defaultScope: defaultManagementScope,
     defaultTraceFilters,
+    enabled: consoleAccessReady,
     language,
     setAccessFilters: accessProfileController.updateFilters,
     setAccessProfile: accessProfileController.setProfile,
@@ -470,8 +533,9 @@ export function ConsoleController() {
   });
 
   useEffect(() => {
+    if (!consoleAccessReady) return;
     void refresh();
-  }, []);
+  }, [consoleAccessReady]);
 
   useEffect(() => () => {
     if (approvalResolveCooldownTimerRef.current !== null) {
@@ -494,7 +558,8 @@ export function ConsoleController() {
     setConnectionMenuOpen(false);
   }, [activeNav]);
 
-  const shouldLoadAiAdminCatalog = activeNav === "ai-admin" || activeNav === "evidence";
+  const shouldLoadAiAdminCatalog =
+    consoleAccessReady && (activeNav === "ask" || activeNav === "ai-admin" || activeNav === "evidence" || activeNav === "tenants");
 
   useEffect(() => {
     if (shouldLoadAiAdminCatalog) {
@@ -536,10 +601,10 @@ export function ConsoleController() {
     });
   }, [data, scope]);
 
-  const shouldLoadAiAdminWorkbenchPreview = activeNav === "ai-admin" || activeNav === "evidence";
+  const shouldLoadAiAdminWorkbenchPreview = consoleAccessReady && (activeNav === "ai-admin" || activeNav === "evidence");
 
   useEffect(() => {
-    if (!shouldLoadAiAdminWorkbenchPreview || !data?.loadedFromApi) {
+    if (!shouldLoadAiAdminWorkbenchPreview || !data?.loadedFromApi || aiAdminNewDraftMode) {
       setAiAdminServerDraft(null);
       setAiAdminWorkbenchPreview(null);
       return;
@@ -598,7 +663,25 @@ export function ConsoleController() {
     return () => controller.abort();
   }, [shouldLoadAiAdminWorkbenchPreview, adminKey, aiAdminForm, aiAdminNewDraftMode, data?.loadedFromApi]);
 
+  function handleConsoleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void consoleAuth.login(() => {
+      setData(null);
+      setLoadError("");
+    });
+  }
+
+  function handleConsoleLogout() {
+    void consoleAuth.logout((nextSession) => {
+      if (nextSession.requiresLogin && !nextSession.authenticated) {
+        setData(null);
+        setLoadError("");
+      }
+    });
+  }
+
   async function refresh() {
+    if (!consoleAccessReady) return;
     try {
       setLoadError("");
       const next = await loadConsoleData(
@@ -617,6 +700,7 @@ export function ConsoleController() {
   }
 
   async function refreshAiAdminCatalog() {
+    if (!consoleAccessReady) return;
     try {
       setLoadError("");
       const [next, templates, accessSubjects] = await Promise.all([
@@ -824,6 +908,27 @@ export function ConsoleController() {
     setActiveNav("access");
   }
 
+  function openTenantAccessProfile(context: TenantWorkspaceContext) {
+    setScope((current) => ({
+      ...current,
+      tenantId: context.tenantId,
+      workspaceId: context.workspaceId
+    }));
+    accessProfileController.clearForPermissionChangeHandoff({
+      ...accessProfileController.filters,
+      traceLimit: accessProfileController.filters.traceLimit || "20",
+      workspaceId: context.workspaceId
+    }, {
+      tenantId: context.tenantId,
+      tenantName: context.tenantName,
+      tenantPath: context.tenantPath,
+      workspaceId: context.workspaceId,
+      workspaceName: context.workspaceName
+    });
+    userSelectedNavRef.current = true;
+    setActiveNav("access");
+  }
+
   function startNewAiAdminPermissionChange() {
     setAiAdminNewDraftMode(true);
     setAiAdminForm((current) => ({
@@ -857,6 +962,7 @@ export function ConsoleController() {
     setAiAdminApprovalJourneyAccessProfile(null);
     setAiAdminApprovalJourneyApprovalRequest(null);
     setAiAdminMessage(null);
+    setHandoffContexts((current) => ({ ...current, permissionChange: null, permissionNotice: null }));
   }
 
   async function reviewAiAdminApplicationImpact(applicationOverride?: PermissionPackageApplication) {
@@ -1699,6 +1805,19 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const evidenceRuns = data?.evidenceRuns ?? [];
   const metrics = data?.systemMetrics ?? [];
   const setupSteps = data ? gettingStartedSteps(data) : [];
+  const resourceLifecycleSummary = useMemo(
+    () =>
+      buildResourceLifecycleSummary({
+        agents,
+        capabilities,
+        instanceAssignments,
+        routePolicies: policies,
+        tenantEntitlements,
+        traces,
+        workspaceAssignments
+      }),
+    [agents, capabilities, instanceAssignments, policies, tenantEntitlements, traces, workspaceAssignments]
+  );
   const localCallers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const mcpTargets = agents.filter((agent) => agent.channelType === "mcp");
   const localAiAdminDraft = useMemo(
@@ -1768,7 +1887,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   }, []);
 
   useEffect(() => {
-    if (!data || defaultNavResolvedRef.current || userSelectedNavRef.current) return;
+    if (!data?.setupLoadedFromApi || defaultNavResolvedRef.current || userSelectedNavRef.current) return;
     setActiveNav(resolveDefaultNavKey(data));
     defaultNavResolvedRef.current = true;
   }, [data]);
@@ -1822,6 +1941,41 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     [aiAdminApplication, aiAdminApprovalRequest, aiAdminDraft, aiAdminProductionReadiness]
   );
   const goLiveAcceptanceForm = aiAdminServerDraft?.input ?? aiAdminForm;
+  const sessionActorLabel = consoleAuth.session?.actor
+    ? t(`auditActor.${consoleAuth.session.actor}`, consoleAuth.session.actor)
+    : t("auth.unknownActor");
+
+  if (consoleAuth.sessionLoading) {
+    return (
+      <section className="workspace-loading login-loading" role="status" aria-live="polite">
+        <div className="workspace-loading-copy">
+          <strong>{t("status.loadingConsole")}</strong>
+          <span>{t("auth.sessionLoading")}</span>
+        </div>
+        <div className="workspace-loading-skeleton" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+      </section>
+    );
+  }
+
+  if (!consoleAccessReady) {
+    return (
+      <ConsoleLoginView
+        adminKey={consoleAuth.loginKey}
+        language={language}
+        loading={consoleAuth.loginSubmitting}
+        message={renderedConsoleLoginMessage}
+        onAdminKeyChange={consoleAuth.setLoginKey}
+        onLanguageChange={setLanguage}
+        onSubmit={handleConsoleLogin}
+        t={t}
+      />
+    );
+  }
+
   const tracePanel = (className = "span-7") => (
     <Panel className={className} icon={<FileSearch size={18} />} title={t("panel.auditTraces")} action={<IconOpen title={t("action.open")} />}>
       <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} t={t} />
@@ -1854,8 +2008,26 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       />
     </Panel>
   );
-  const routeGovernancePanel = (className = "span-8") => (
-    <Panel className={className} icon={<Workflow size={18} />} title={t("panel.routeGovernance")} action={<IconMore title={t("action.more")} />}>
+  const createPolicyAction = (
+    <ActionModalButton
+      closeLabel={t("action.dismiss")}
+      icon={<Route size={16} />}
+      id="policy-create-panel"
+      openLabel={t("action.open")}
+      title={t("panel.createPolicy")}
+    >
+      <PolicyCreateForm
+        agents={agents}
+        form={management.policyForm}
+        message={management.policyMessage}
+        onChange={management.setPolicyForm}
+        onSubmit={management.submitRoutePolicy}
+        t={t}
+      />
+    </ActionModalButton>
+  );
+  const routeGovernancePanel = (className = "span-8", action: ReactNode = <IconMore title={t("action.more")} />) => (
+    <Panel className={className} icon={<Workflow size={18} />} title={t("panel.routeGovernance")} action={action}>
       <PolicyTable
         agents={agents}
         canDisable={Boolean(data?.routePoliciesLoadedFromApi)}
@@ -1876,11 +2048,17 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       <SignalBoard metrics={metrics} t={t} />
     </Panel>
   );
-  const agentRegistryPanel = (className = "span-8") => (
-    <Panel className={className} icon={<Boxes size={18} />} title={t("panel.agentRegistry")} action={<IconMore title={t("action.more")} />}>
+  const resourceLifecyclePanel = (
+    <Panel className="span-12" icon={<Network size={18} />} title={t("panel.resourceLifecycle")}>
+      <ResourceLifecycleView summary={resourceLifecycleSummary} t={t} />
+    </Panel>
+  );
+  const agentRegistryPanel = (className = "span-8", action: ReactNode = <IconMore title={t("action.more")} />) => (
+    <Panel className={className} icon={<Boxes size={18} />} title={t("panel.agentRegistry")} action={action}>
       <AgentTable
         agents={agents}
         channelLabels={channelLabels}
+        onQueryAccess={openAskAccess}
         onStatusChange={management.handleAgentStatusChange}
         pendingActionId={management.cleanupActionId}
         t={t}
@@ -1905,6 +2083,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onApprove={capabilityGovernance.handleApproveCapability}
         onChange={capabilityGovernance.setForm}
         onCreateGrantChain={capabilityGovernance.submitCapabilityGrantChain}
+        onQueryAccess={openAskAccess}
         onRefreshTarget={capabilityGovernance.handleRefreshTargetCapabilities}
         t={t}
         tenants={tenants}
@@ -1913,20 +2092,20 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       />
     </Panel>
   );
+  const askAccessPanel = (
+    <AskAccessPanel agents={agents} capabilities={capabilities} controller={askAccess} liveDataAvailable={Boolean(data?.loadedFromApi)} t={t} tenants={tenants} title={t("panel.askAccess")} />
+  );
   const accessProfilePanel = (
     <Panel className="span-12" icon={<LockKeyhole size={18} />} title={t("panel.accessProfile")} action={<IconOpen title={t("action.open")} />}>
       <TenantAccessProfileView
         agents={agents}
         capabilities={capabilities}
-        explanation={accessProfileController.decisionExplanation}
-        explanationLoading={accessProfileController.decisionExplainLoading}
-        explanationMessage={accessProfileController.decisionExplainMessage}
         filters={accessProfileController.filters}
         handoffContext={accessProfileController.handoffContext}
         loading={accessProfileController.loading}
         message={accessProfileController.message}
         onChange={accessProfileController.updateFilters}
-        onExplainAccessDecision={() => void accessProfileController.explainAccessDecision()}
+        onQueryAccess={openAskAccess}
         onRefresh={() => void accessProfileController.refresh()}
         onTenantChange={accessProfileController.changeTenant}
         profile={accessProfileController.profile}
@@ -1934,6 +2113,20 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         t={t}
       />
     </Panel>
+  );
+  const tenantOrganizationPanel = (
+    <TenantOrganizationView
+      accessSubjects={aiAdminAccessSubjects}
+      agents={agents}
+      capabilities={capabilities}
+      instanceAssignments={instanceAssignments}
+      onOpenAccessProfile={openTenantAccessProfile}
+      onStartPermissionChange={openTenantPermissionChange}
+      t={t}
+      tenantEntitlements={tenantEntitlements}
+      tenants={tenants}
+      workspaceAssignments={workspaceAssignments}
+    />
   );
   const aiAdminPanel = (
       <AiAdminPermissionWorkbench
@@ -2020,7 +2213,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           setAiAdminApplicationImpactMessage("");
         }}
         onStartNewPermissionChange={startNewAiAdminPermissionChange}
+        onDismissPermissionHandoff={() => setHandoffContexts((current) => ({ ...current, permissionNotice: null }))}
         onWithdrawApprovalRequest={(comment) => void withdrawAiAdminApprovalRequest(comment)}
+        permissionHandoffContext={handoffContexts.permissionNotice}
         reviewerQueueLoading={aiAdminReviewerQueueLoading}
         reviewerQueueMessage={aiAdminReviewerQueueMessage}
         selectedApprovalRequestId={aiAdminSelectedApprovalRequestId}
@@ -2029,8 +2224,13 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         t={t}
       />
   );
-  const createAgentPanel = (
-    <Panel className="span-4" icon={<Boxes size={18} />} title={t("panel.createAgent")}>
+  const createAgentAction = (
+    <ActionModalButton
+      closeLabel={t("action.dismiss")}
+      icon={<Boxes size={16} />}
+      openLabel={t("action.open")}
+      title={t("panel.createAgent")}
+    >
       <AgentCreateForm
         form={management.agentForm}
         message={management.agentMessage}
@@ -2038,10 +2238,15 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onSubmit={management.submitAgent}
         t={t}
       />
-    </Panel>
+    </ActionModalButton>
   );
-  const createKeyPanel = (
-    <Panel className="span-4" icon={<KeyRound size={18} />} title={t("panel.createKey")}>
+  const createKeyAction = (
+    <ActionModalButton
+      closeLabel={t("action.dismiss")}
+      icon={<KeyRound size={16} />}
+      openLabel={t("action.open")}
+      title={t("panel.createKey")}
+    >
       <KeyCreateForm
         agents={localCallers}
         createdKey={management.createdKey}
@@ -2051,22 +2256,15 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onSubmit={management.submitKey}
         t={t}
       />
-    </Panel>
+    </ActionModalButton>
   );
-  const createPolicyPanel = (
-    <Panel className="span-4" icon={<Route size={18} />} title={t("panel.createPolicy")}>
-      <PolicyCreateForm
-        agents={agents}
-        form={management.policyForm}
-        message={management.policyMessage}
-        onChange={management.setPolicyForm}
-        onSubmit={management.submitRoutePolicy}
-        t={t}
-      />
-    </Panel>
-  );
-  const rotateCredentialPanel = (
-    <Panel className="span-4" icon={<KeyRound size={18} />} title={t("panel.rotateCredential")}>
+  const rotateCredentialAction = (
+    <ActionModalButton
+      closeLabel={t("action.dismiss")}
+      icon={<KeyRound size={16} />}
+      openLabel={t("action.open")}
+      title={t("panel.rotateCredential")}
+    >
       <CredentialRotateForm
         agents={agents}
         form={management.rotateForm}
@@ -2075,7 +2273,18 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onSubmit={management.submitCredentialRotation}
         t={t}
       />
-    </Panel>
+    </ActionModalButton>
+  );
+  const agentRegistryActions = (
+    <div className="panel-action-group">
+      {createAgentAction}
+      {agents.length > 0 ? (
+        <>
+          {createKeyAction}
+          {rotateCredentialAction}
+        </>
+      ) : null}
+    </div>
   );
   const coreJourneyPanel = (
     <Panel className="span-12" icon={<Workflow size={18} />} title={t("panel.coreJourney")}>
@@ -2100,6 +2309,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   );
   const viewContent = (() => {
     switch (activeView.key) {
+      case "ask":
+        return <AskView askAccessPanel={askAccessPanel} />;
       case "ai-admin":
         return <AiAdminView aiAdminPanel={aiAdminPanel} />;
       case "getting-started":
@@ -2107,7 +2318,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           <GettingStartedConsoleView
             gettingStartedPanel={(
               <GettingStartedView
-                liveDataAvailable={Boolean(data?.loadedFromApi)}
+                setupDataAvailable={Boolean(data?.setupLoadedFromApi)}
                 steps={setupSteps}
                 t={t}
               />
@@ -2117,18 +2328,15 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       case "registry":
         return (
           <RegistryView
-            agentRegistryPanel={agentRegistryPanel("span-12")}
+            agentRegistryPanel={agentRegistryPanel("span-8", agentRegistryActions)}
             contractMatrixPanel={contractMatrixPanel("span-4")}
-            createAgentPanel={createAgentPanel}
-            createKeyPanel={createKeyPanel}
-            rotateCredentialPanel={rotateCredentialPanel}
+            resourceLifecyclePanel={resourceLifecyclePanel}
           />
         );
       case "routes":
         return (
           <RoutesView
-            createPolicyPanel={createPolicyPanel}
-            routeGovernancePanel={routeGovernancePanel("span-8")}
+            routeGovernancePanel={routeGovernancePanel("span-12", createPolicyAction)}
             tracePanel={tracePanel("span-12")}
           />
         );
@@ -2136,15 +2344,16 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         return (
           <PoliciesView
             capabilityGovernancePanel={capabilityGovernancePanel("span-12")}
-            createPolicyPanel={createPolicyPanel}
             managementAuditPanel={managementAuditPanel("span-12")}
             policies={policies}
-            routeGovernancePanel={routeGovernancePanel("span-8")}
+            routeGovernancePanel={routeGovernancePanel("span-12", createPolicyAction)}
             t={t}
           />
         );
       case "capabilities":
         return <CapabilitiesView capabilityGovernancePanel={capabilityGovernancePanel()} />;
+      case "tenants":
+        return <TenantsView tenantOrganizationPanel={tenantOrganizationPanel} />;
       case "access":
         return <AccessView accessProfilePanel={accessProfilePanel} />;
       case "traces":
@@ -2250,6 +2459,16 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
                 EN
               </button>
             </div>
+            <div className="session-chip" title={tx(t, "auth.sessionActorTitle", { actor: sessionActorLabel })}>
+              <LockKeyhole size={14} />
+              <span>{sessionActorLabel}</span>
+              {consoleAuth.session?.requiresLogin ? (
+                <button onClick={() => void handleConsoleLogout()} type="button">
+                  <LogOut size={14} />
+                  {t("action.signOut")}
+                </button>
+              ) : null}
+            </div>
             <details className="connection-menu" onToggle={(event) => setConnectionMenuOpen(event.currentTarget.open)} open={connectionMenuOpen}>
               <summary
                 aria-label={t("section.connectionSettings")}
@@ -2269,10 +2488,10 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
                   <span>{t("text.connectionSettingsDetail")}</span>
                 </div>
                 <label className="connection-field">
-                  <span>{t("control.adminKey")}</span>
+                  <span>{t("control.adminKeyOverride")}</span>
                   <input
                     onChange={(event) => setAdminKey(event.target.value)}
-                    placeholder={t("control.adminKey")}
+                    placeholder={t("control.adminKeyOverridePlaceholder")}
                     type="password"
                     value={adminKey}
                   />
@@ -2314,8 +2533,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         </header>
 
         {showWorkspaceTelemetry ? (
-          <>
-            <section className="status-strip" aria-label="Runtime status">
+          <section className="system-check-context" aria-label={pageTitle}>
+            <div className="system-check-context-main">
               <div>
                 <span>{t("status.api")}</span>
                 <strong>{data?.apiBase ?? "http://127.0.0.1:9090"}</strong>
@@ -2330,57 +2549,36 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
               </div>
               <div className="scope-control">
                 <span>{t("status.scope")}</span>
-                <div className="scope-inputs">
-                  <input
-                    aria-label={t("form.tenantId")}
-                    onBlur={() => void refresh()}
-                    onChange={(event) => setScope((current) => ({ ...current, tenantId: event.target.value }))}
-                    placeholder="tenantId"
-                    value={scope.tenantId}
-                  />
-                  <input
-                    aria-label={t("form.workspaceId")}
-                    onBlur={() => void refresh()}
-                    onChange={(event) => setScope((current) => ({ ...current, workspaceId: event.target.value }))}
-                    placeholder="workspaceId"
-                    value={scope.workspaceId}
-                  />
+                <div className="scope-values">
+                  <span title={scope.tenantId}>{scope.tenantId}</span>
+                  <span title={scope.workspaceId}>{scope.workspaceId}</span>
                 </div>
               </div>
-              {loadError ? <div className="strip-error">{loadError}</div> : null}
-            </section>
-
-            <section className="metric-grid" aria-label="Gateway metrics">
-              <MetricCard
-                icon={<ServerCog size={18} />}
-                label={t("metric.managedAgents")}
-                value={String(agents.length)}
-                detail={`${activeAgents} ${t("detail.active")}`}
-                tone="info"
-              />
-              <MetricCard
-                icon={<KeyRound size={18} />}
-                label={t("metric.activePolicies")}
-                value={String(activePolicies)}
-                detail={data?.routePoliciesLoadedFromApi ? t("detail.liveRoutePolicies") : t("detail.sampleFallback")}
-                tone="success"
-              />
-              <MetricCard
-                icon={<TriangleAlert size={18} />}
-                label={t("metric.deniedTraces")}
-                value={String(deniedTraces)}
-                detail={`${allowedTraces} ${t("detail.allowed")}`}
-                tone={deniedTraces > 0 ? "warning" : "success"}
-              />
-              <MetricCard
-                icon={<ClipboardCheck size={18} />}
-                label={t("metric.runtimeEvidence")}
-                value={runtimeEvidence.value}
-                detail={runtimeEvidence.value === "0" ? t("detail.noTraces") : `${allowedTraces} ${t("detail.allowed")} / ${deniedTraces} ${t("detail.denied")}`}
-                tone={runtimeEvidence.tone}
-              />
-            </section>
-          </>
+            </div>
+            <div className="system-check-signals" aria-label="Gateway metrics">
+              <span className="system-check-signal">
+                <span>{t("metric.managedAgents")}</span>
+                <strong>{agents.length}</strong>
+                <small>{activeAgents} {t("detail.active")}</small>
+              </span>
+              <span className="system-check-signal">
+                <span>{t("metric.activePolicies")}</span>
+                <strong>{activePolicies}</strong>
+                <small>{data?.routePoliciesLoadedFromApi ? t("detail.liveRoutePolicies") : t("detail.sampleFallback")}</small>
+              </span>
+              <span className={`system-check-signal tone-${deniedTraces > 0 ? "warning" : "success"}`}>
+                <span>{t("metric.deniedTraces")}</span>
+                <strong>{deniedTraces}</strong>
+                <small>{allowedTraces} {t("detail.allowed")}</small>
+              </span>
+              <span className={`system-check-signal tone-${runtimeEvidence.tone}`}>
+                <span>{t("metric.runtimeEvidence")}</span>
+                <strong>{runtimeEvidence.value}</strong>
+                <small>{runtimeEvidence.value === "0" ? t("detail.noTraces") : `${allowedTraces} ${t("detail.allowed")} / ${deniedTraces} ${t("detail.denied")}`}</small>
+              </span>
+            </div>
+            {loadError ? <div className="strip-error">{loadError}</div> : null}
+          </section>
         ) : null}
 
         {!data ? (

@@ -18,6 +18,8 @@ const operationalViews = readFileSync(new URL("../src/components/OperationalView
 const runtimeEvidenceViews = readFileSync(new URL("../src/components/RuntimeEvidenceViews.tsx", import.meta.url), "utf8");
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
+const tenantOrganizationView = readFileSync(new URL("../src/components/TenantOrganizationView.tsx", import.meta.url), "utf8");
+const resourceLifecycleView = readFileSync(new URL("../src/components/ResourceLifecycleView.tsx", import.meta.url), "utf8");
 const ui = readFileSync(new URL("../src/components/ui.tsx", import.meta.url), "utf8");
 const managementOperationsHookUrl = new URL("../src/hooks/useManagementOperations.ts", import.meta.url);
 const capabilityGovernanceHookUrl = new URL("../src/hooks/useCapabilityGovernanceController.ts", import.meta.url);
@@ -118,6 +120,8 @@ test("focus and button controls use the shared production interaction tokens", (
   assert.match(styles, /:where\(button,\s*input,\s*select,\s*textarea,\s*summary\):focus-visible\s*\{[^}]*box-shadow:\s*var\(--shadow-focus\);/s);
   assert.match(styles, /\.primary-button,\s*\n\.secondary-button\s*\{[^}]*min-height:\s*var\(--control-height\);/s);
   assert.match(styles, /\.primary-button,\s*\n\.secondary-button\s*\{[^}]*padding:\s*0 var\(--space-4\);/s);
+  assert.match(styles, /\.primary-button\s*\{[^}]*box-shadow:\s*var\(--shadow-primary\);/s);
+  assert.match(styles, /\.primary-button:hover:not\(:disabled\)\s*\{[^}]*background:\s*var\(--brand-strong\);/s);
   assert.match(styles, /\.table-action\s*\{[^}]*min-height:\s*var\(--control-height-compact\);/s);
   assert.match(styles, /\.table-action\s*\{[^}]*background:\s*var\(--surface\);/s);
   assert.match(styles, /\.approval-action-button\s*\{[^}]*min-height:\s*var\(--control-height-compact\);/s);
@@ -161,6 +165,8 @@ test("product shell removes demo controls and scopes connection settings", () =>
   assert.match(app, /className="connection-menu"/);
   assert.match(app, /className="connection-trigger"/);
   assert.match(app, /className="connection-scope-grid"/);
+  assert.match(app, /className="scope-values"/);
+  assert.equal(app.includes("className=\"scope-inputs\""), false);
   assert.match(app, /const \[connectionMenuOpen, setConnectionMenuOpen\] = useState\(false\)/);
   assert.match(app, /setConnectionMenuOpen\(false\)/);
   assert.match(app, /<details className="connection-menu"[\s\S]*open=\{connectionMenuOpen\}/);
@@ -168,36 +174,88 @@ test("product shell removes demo controls and scopes connection settings", () =>
   assert.match(app, /setConnectionMenuOpen\(\(open\) => !open\)/);
   assert.match(app, /onToggle=\{\(event\) => setConnectionMenuOpen\(event\.currentTarget\.open\)\}/);
   assert.match(styles, /\.connection-popover\s*\{[^}]*box-shadow:\s*var\(--shadow-pop\);/s);
+  assert.match(styles, /\.scope-values span\s*\{[^}]*background:\s*var\(--surface-raised\);/s);
   assert.match(styles, /\.connection-menu:not\(\[open\]\)\s+\.connection-popover\s*\{[^}]*display:\s*none;/s);
 });
 
 test("workspace telemetry is scoped to system check instead of repeating on every workspace", () => {
   assert.match(app, /const showWorkspaceTelemetry = activeView\.key === "cockpit";/);
+  assert.match(app, /className="system-check-context"/);
+  assert.match(app, /className="system-check-context-main"/);
+  assert.match(app, /className="system-check-signals"/);
+  assert.equal(app.includes("<MetricCard"), false);
+  assert.match(styles, /\.system-check-context\s*\{[^}]*background:\s*var\(--surface\);/s);
+  assert.match(styles, /\.system-check-signals\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
   assert.doesNotMatch(app, /isCapabilitiesView \? "compact" : ""/);
 });
 
-test("agent tools workspace prioritizes the registry before mutation forms", () => {
+test("agent tools workspace balances registry layout and hides inactive empty-state actions", () => {
   const registryStart = consoleViews.indexOf("export function RegistryView");
   const routesStart = consoleViews.indexOf("export function RoutesView", registryStart);
   const registryView = consoleViews.slice(registryStart, routesStart);
 
   assert.notEqual(registryStart, -1);
   assert.notEqual(routesStart, -1);
-  assert.ok(registryView.indexOf("{agentRegistryPanel}") < registryView.indexOf("{createAgentPanel}"));
-  assert.ok(registryView.indexOf("{createAgentPanel}") < registryView.indexOf("{createKeyPanel}"));
-  assert.ok(registryView.indexOf("{createKeyPanel}") < registryView.indexOf("{rotateCredentialPanel}"));
+  assert.match(app, /from "\.\/resourceLifecycle"/);
+  assert.match(app, /from "\.\/components\/ResourceLifecycleView"/);
+  assert.match(consoleViews, /resourceLifecyclePanel/);
+  assert.match(app, /resourceLifecyclePanel=\{resourceLifecyclePanel\}/);
+  assert.match(app, /const agentRegistryActions = \(\s*<div className="panel-action-group">/);
+  assert.match(app, /agents\.length > 0 \?/);
+  assert.match(app, /agentRegistryPanel=\{agentRegistryPanel\("span-8", agentRegistryActions\)\}/);
+  assert.match(app, /contractMatrixPanel=\{contractMatrixPanel\("span-4"\)\}/);
+  assert.match(styles, /\.content-grid\s*\{[^}]*align-items:\s*start;/s);
+  assert.match(styles, /\.resource-lifecycle\s*\{/);
+  assert.match(resourceLifecycleView, /summary\.items\.map/);
+  assert.doesNotMatch(resourceLifecycleView, /TechnicalId/);
+  assert.doesNotMatch(registryView, /createAgentPanel|createKeyPanel|rotateCredentialPanel/);
+});
+
+test("management mutation forms open from panel header modals", () => {
+  assert.match(consolePrimitives, /export function ActionModalButton/);
+  assert.doesNotMatch(consolePrimitives, /export function ActionModalPanel/);
+  assert.match(consolePrimitives, /aria-haspopup="dialog"/);
+  assert.match(consolePrimitives, /aria-label=\{`\$\{title\} \$\{openLabel\}`\}/);
+  assert.match(consolePrimitives, /aria-modal="true"/);
+  assert.match(consolePrimitives, /role="dialog"/);
+  assert.match(consolePrimitives, /event\.key === "Escape"/);
+  assert.match(consolePrimitives, /document\.body\.style\.overflow = "hidden"/);
+  assert.match(consolePrimitives, /triggerClassName="action-modal-trigger action-modal-trigger-compact"/);
+  assert.match(app, /<ActionModalButton[\s\S]*title=\{t\("panel\.createAgent"\)\}/);
+  assert.match(app, /<ActionModalButton[\s\S]*title=\{t\("panel\.createKey"\)\}/);
+  assert.match(app, /<ActionModalButton[\s\S]*id="policy-create-panel"[\s\S]*title=\{t\("panel\.createPolicy"\)\}/);
+  assert.match(app, /<ActionModalButton[\s\S]*title=\{t\("panel\.rotateCredential"\)\}/);
+  assert.match(app, /routeGovernancePanel=\{routeGovernancePanel\("span-12", createPolicyAction\)\}/);
+  assert.match(app, /routeGovernancePanel=\{routeGovernancePanel\("span-12", createPolicyAction\)\}[\s\S]*t=\{t\}/);
+  assert.match(operationalViews, /querySelector<HTMLButtonElement>\("#policy-create-panel \.action-modal-trigger"\)/);
+  assert.match(styles, /\.panel-action-group\s*\{/);
+  assert.match(styles, /\.action-modal-trigger\s*\{[\s\S]*cursor:\s*pointer;/);
+  assert.match(styles, /\.action-modal-trigger-compact\s*\{[\s\S]*width:\s*auto;/);
+  assert.match(styles, /\.action-modal-backdrop\s*\{[\s\S]*position:\s*fixed;[\s\S]*overscroll-behavior:\s*contain;/);
+  assert.match(styles, /\.action-modal-panel\s*\{[\s\S]*width:\s*min\(720px,\s*calc\(100vw - 48px\)\);/);
+  assert.doesNotMatch(consoleViews, /createPolicyPanel=\{createPolicyPanel\}/);
+  assert.doesNotMatch(styles, /\.action-modal-entry/);
+  assert.doesNotMatch(styles, /\.action-disclosure-panel/);
 });
 
 test("agent registry provides search status filtering and a details entry", () => {
+  const agentTableStart = operationalViews.indexOf("export function AgentTable");
+  const contractMatrixStart = operationalViews.indexOf("export function ContractMatrix", agentTableStart);
+  const agentTable = operationalViews.slice(agentTableStart, contractMatrixStart);
+
   assert.match(operationalViews, /const \[agentQuery, setAgentQuery\] = useState\(""\)/);
   assert.match(operationalViews, /const \[agentStatusFilter, setAgentStatusFilter\] = useState<AgentStatus \| "">\(""\)/);
   assert.match(operationalViews, /const \[selectedAgentId, setSelectedAgentId\] = useState\(""\)/);
+  assert.match(operationalViews, /const hasAgents = agents\.length > 0/);
   assert.match(operationalViews, /const visibleAgents = agents\.filter/);
   assert.match(operationalViews, /className="table-toolbar"/);
+  assert.match(operationalViews, /className="registry-empty-state"/);
+  assert.doesNotMatch(agentTable, /<td colSpan=\{6\}>/);
   assert.match(operationalViews, /placeholder=\{t\("form\.searchAgents"\)\}/);
   assert.match(operationalViews, /className="table-detail-panel"/);
   assert.match(operationalViews, /setSelectedAgentId\(agent\.id\)/);
   assert.match(styles, /\.table-toolbar\s*\{/);
+  assert.match(styles, /\.registry-empty-state\s*\{/);
   assert.match(styles, /\.table-detail-panel\s*\{/);
 });
 
@@ -228,6 +286,31 @@ test("sidebar navigation shows grouped task labels with descriptions", () => {
   assert.match(styles, /\.nav-list\s*\{[^}]*gap:\s*16px;/s);
   assert.match(styles, /\.nav-item\s*\{[^}]*grid-template-columns:\s*22px minmax\(0,\s*1fr\);/s);
   assert.match(styles, /\.nav-item small\s*\{[^}]*font-size:\s*11px;/s);
+});
+
+test("tenant organization workspace is a first-class resource entry", () => {
+  assert.match(app, /import \{ TenantOrganizationView, type TenantWorkspaceContext \} from "\.\/components\/TenantOrganizationView"/);
+  assert.match(app, /case "tenants":/);
+  assert.match(app, /<TenantsView tenantOrganizationPanel=\{tenantOrganizationPanel\} \/>/);
+  assert.match(app, /function openTenantPermissionChange\(context: PermissionChangeHandoffContext\)/);
+  assert.match(app, /function openTenantAccessProfile\(context: TenantWorkspaceContext\)/);
+  assert.match(app, /accessSubjects=\{aiAdminAccessSubjects\}/);
+  assert.match(consoleViews, /export function TenantsView/);
+  assert.match(tenantOrganizationView, /buildTenantOrganizationModel/);
+  assert.match(tenantOrganizationView, /className="tenant-organization content-grid"/);
+  assert.match(tenantOrganizationView, /className="primary-button"/);
+  assert.match(tenantOrganizationView, /tenant-permission-modal/);
+  assert.match(tenantOrganizationView, /role="dialog"/);
+  assert.match(tenantOrganizationView, /aria-haspopup="dialog"/);
+  assert.match(tenantOrganizationView, /className="tenant-access-directory"/);
+  assert.match(tenantOrganizationView, /accessSubjectsForWorkspace/);
+  assert.match(tenantOrganizationView, /ApprovalDropdown/);
+  assert.match(tenantOrganizationView, /sourceView: "tenants"/);
+  assert.match(styles, /\.tenant-organization\s*\{/);
+  assert.match(styles, /\.tenant-permission-modal\s*\{/);
+  assert.match(styles, /\.tenant-access-directory\s*\{/);
+  assert.match(styles, /\.tenant-org-actions\s*\{[^}]*background:\s*var\(--brand-soft\);/s);
+  assert.match(styles, /\.tenant-tree-row\.is-selected\s*\{[^}]*background:\s*var\(--brand-soft\);/s);
 });
 
 test("desktop sidebar keeps text labels at review viewport widths", () => {
@@ -277,10 +360,12 @@ test("mobile shell keeps navigation labels readable", () => {
   assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*\.connection-popover\s*\{[^}]*position:\s*fixed;/s);
 });
 
-test("capability workspace compresses metrics and prioritizes grant operations", () => {
+test("capability workspace compresses metrics and opens grant operations on demand", () => {
   assert.match(app, /<CapabilitiesView capabilityGovernancePanel=\{capabilityGovernancePanel\(\)\} \/>/);
   assert.match(consoleViews, /export function CapabilitiesView[\s\S]*<section className="content-grid">[\s\S]*\{capabilityGovernancePanel\}/);
-  assert.match(styles, /\.capability-layout\s*\{[^}]*grid-template-areas:\s*"grant catalog"[\s\S]*"assignments catalog";/s);
+  assert.match(styles, /\.capability-layout\s*\{[^}]*grid-template-areas:\s*"catalog assignments";/s);
+  assert.match(capabilityGovernanceView, /className="primary-button capability-grant-launcher"/);
+  assert.match(capabilityGovernanceView, /className="capability-grant-sheet"/);
 });
 
 test("capability catalog provides search status filtering and a details entry", () => {

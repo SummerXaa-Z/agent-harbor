@@ -134,9 +134,6 @@ export function AskAccessView({
           <h2>{t("ask.title")}</h2>
           <p>{t("ask.subtitle")}</p>
         </div>
-        <Badge tone={liveDataAvailable ? "success" : "warning"}>
-          {liveDataAvailable ? t("ask.liveMode") : t("ask.sampleMode")}
-        </Badge>
       </header>
 
       <div className="ask-workspace">

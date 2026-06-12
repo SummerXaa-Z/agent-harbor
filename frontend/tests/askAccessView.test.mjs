@@ -92,6 +92,15 @@ test("ask access view keeps the primary path answer-first and business-readable"
   assert.match(presenters, /"Sandbox": t\("demo\.workspaceSandbox"\)/);
 });
 
+test("ask access shows the data-source mode once in the context card", () => {
+  const liveModeReferences = view.match(/t\("ask\.liveMode"\)/g) ?? [];
+  const sampleModeReferences = view.match(/t\("ask\.sampleMode"\)/g) ?? [];
+
+  assert.equal(liveModeReferences.length, 1);
+  assert.equal(sampleModeReferences.length, 1);
+  assert.match(view, /<strong>\{t\("ask\.dataSourceTitle"\)\}<\/strong>[\s\S]*<Badge tone=\{liveDataAvailable \? "success" : "warning"\}>/);
+});
+
 test("ask access form controls use one coherent control treatment", () => {
   assert.match(view, /name="accessSubject"/);
   assert.match(view, /autoComplete="off"/);

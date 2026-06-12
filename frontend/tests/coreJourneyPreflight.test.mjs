@@ -15,7 +15,7 @@ test("defaultCoreJourneyPreflight starts as pending and cannot run", () => {
   );
 });
 
-test("coreJourneyPreflightCanRun requires API and mock MCP health", () => {
+test("coreJourneyPreflightCanRun requires API and MCP tool service health", () => {
   assert.equal(coreJourneyPreflightCanRun({ api: "ok", mockMcp: "ok", privateUpstreams: "warning" }), true);
   assert.equal(coreJourneyPreflightCanRun({ api: "error", mockMcp: "ok", privateUpstreams: "warning" }), false);
   assert.equal(coreJourneyPreflightCanRun({ api: "ok", mockMcp: "error", privateUpstreams: "warning" }), false);

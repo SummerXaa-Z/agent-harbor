@@ -60,6 +60,25 @@ func TestBuildDraftPolicyGateRequiresApprovalForRiskyAllowedCapability(t *testin
 	}
 }
 
+func TestBuildDraftRejectsUnboundedSubjectSelector(t *testing.T) {
+	for _, subjectSelector := range []string{"", " ", "*"} {
+		input := permissionPackageTestInput("support-ticket-triage")
+		input.SubjectSelector = subjectSelector
+		draft, err := BuildDraft(input, []domain.Capability{
+			permissionPackageTestCapability("cap-write", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential),
+		})
+		if err != nil {
+			t.Fatalf("build draft with subjectSelector %q: %v", subjectSelector, err)
+		}
+		if draft.Readiness.CanApply {
+			t.Fatalf("subjectSelector %q should not produce an applicable draft: %#v", subjectSelector, draft.Readiness)
+		}
+		if !containsString(draft.Readiness.MissingFields, "subjectSelector") {
+			t.Fatalf("subjectSelector %q should be reported as missing, got %#v", subjectSelector, draft.Readiness)
+		}
+	}
+}
+
 func permissionPackageTestInput(templateID string) domain.PermissionPackageDraftRequest {
 	return domain.PermissionPackageDraftRequest{
 		CallerInstanceID: "inst-sales",
@@ -71,6 +90,15 @@ func permissionPackageTestInput(templateID string) domain.PermissionPackageDraft
 		TenantID:         "tenant-east",
 		WorkspaceID:      "workspace-sales",
 	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func permissionPackageTestCapability(id string, action domain.CapabilityAction, risk domain.CapabilityRisk, sensitivity domain.CapabilitySensitivity) domain.Capability {

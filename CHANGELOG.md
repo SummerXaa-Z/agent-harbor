@@ -8,13 +8,167 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Added a public-readiness audit for v0.2.0 public preview, covering fresh clone `make check`, `make release-check`, isolated-port `make demo`, browser first-run routing, and remaining non-blocking release follow-ups.
+- 新增 v0.2.0 公开预览可用性审计，覆盖干净克隆后的 `make check`、`make release-check`、隔离端口 `make demo`、浏览器首次进入路径和剩余非阻塞发布跟进项。
+- `make demo` now automatically wires the web console API base and local CORS origin from non-default demo ports, so evaluators can avoid port conflicts without setting hidden frontend variables.
+- `make demo` 现在会根据非默认 demo 端口自动配置 Web 控制台 API 地址和本地 CORS 来源，评估者遇到端口冲突时不再需要额外设置隐藏前端变量。
+- Web console now has production-oriented login control: `/api/v1/auth/session`, `/api/v1/auth/login`, and `/api/v1/auth/logout` issue an HttpOnly `agent_harbor_session` cookie from configured admin keys or named admin identities, and the console blocks management views until the session is authenticated.
+- Web 控制台新增面向生产的登录控制：`/api/v1/auth/session`、`/api/v1/auth/login` 和 `/api/v1/auth/logout` 会基于已配置管理员密钥或具名管理员身份签发 HttpOnly `agent_harbor_session` Cookie，控制台会在会话通过后才加载管理视图。
+- Management API fetches now include browser credentials, the console login state is isolated in a `useConsoleAuth` hook, and the global Connection menu demotes `X-Admin-Key` to an advanced override instead of the primary operator login path.
+- 管理 API 请求现在会携带浏览器凭据，控制台登录状态下沉到 `useConsoleAuth` hook，全局连接设置把 `X-Admin-Key` 降级为高级覆盖，不再作为管理员主登录路径。
+- Web console **Resource Management** now unifies Agent, MCP tool service, credential, capability, permission, and runtime lifecycle status in one entry, with next-action buttons that route operators to capability discovery, permission changes, resource configuration, or runtime audit.
+- Web 控制台新增 **资源管理** 统一入口，将 Agent、MCP 工具服务、凭据、能力、权限和运行状态收束到一个生命周期视图，并通过下一步按钮引导管理员进入能力发现、权限变更、资源配置或运行审计。
+- Web console now has a first-class **Tenants & Organization** workspace: operators can review tenant hierarchy, workspace coverage, and permission ownership, then start a tenant-scoped permission change or open the tenant access profile without seeing raw tenant IDs in the main path.
+- Web 控制台新增一等入口 **租户与组织**：管理员可以查看租户层级、工作区覆盖和权限管理边界，并从租户范围直接发起权限变更或查看租户权限画像，主路径不再暴露原始租户 ID。
+- Tenants & Organization now collapses repeated local demo tenant batches to the latest batch for display, so repeated scenario runs do not fill the tenant tree with visually identical Headquarters / Customer Service entries.
+- 租户与组织现在会把本地多轮演示留下的重复租户批次折叠为最新一轮展示，避免多次实测后租户树铺满看起来相同的“集团总部 / 客户服务中心”。
+- Tenants & Organization now starts tenant-scoped permission changes through a modal confirmation form, showing the selected tenant, workspace, caller, MCP target, and access object before handing off to the full Permission Changes workflow.
+- 租户与组织现在通过弹窗确认表单发起租户范围内的权限变更，先展示所选租户、工作区、调用方、MCP 目标和访问对象，再交接到完整权限变更流程。
+- The tenant workspace now includes a readable access-object directory with roles, departments, and concrete member accounts, so operators can start from organization objects instead of technical subject selectors.
+- 租户工作区现在新增可读的访问对象目录，展示角色、部门和具体成员账号，管理员可以从组织对象出发，而不是面对技术主体选择器。
+- Primary console actions now use a stronger enterprise-blue button treatment with clearer hover states, so creation and workflow-start buttons stand out from neutral secondary actions.
+- 控制台主操作按钮现在使用更明确的企业蓝视觉层级和悬停状态，让创建类、流程启动类按钮与普通辅助操作区分更清楚。
+- Permission Changes top chrome now uses a lighter production-console layout: the outer nested card is removed, quick actions become a toolbar, and non-sticky tenant/status summaries render as separate lightweight blocks instead of table-like strips.
+- 权限变更页顶部现在改为更轻的生产控制台布局：移除外层嵌套卡片，快捷操作改为工具栏，租户和状态摘要改为非悬浮的独立轻量信息块，不再像表格条。
+- Access Query form controls now share a unified production treatment for dropdowns, text input, hover, and focus states, making the answer-first question panel feel like a single management-system workflow instead of mixed form fragments.
+- 访问查询表单控件现在统一了下拉框、文本输入、悬停和焦点状态，让答案优先的问题面板更像完整的 B 端管理流程，而不是多个临时表单片段拼接。
+- Access Query now uses a focused question-and-answer workspace with grouped tenant/access fields, a compact context rail, business-readable entity names, and "access object" wording instead of exposing operator-facing technical names in the primary path.
+- 访问查询页现在改为聚焦的问题与答案工作台，用分组表单承载租户上下文和访问关系，右侧收纳上下文信息，主路径优先显示业务可读实体名，并将“访问用户”调整为“访问对象”。
+- Capability Governance now opens as a catalog-first workspace: the page shows scope, capability inventory, and active grants by default, while grant-chain creation opens in an on-demand side panel instead of occupying the main page.
+- 能力治理页现在改为清单优先工作台：默认展示范围、能力清单和已有授权，创建授权链改为按需打开侧边面板，不再常驻占用主页面。
+- Web console now has an answer-first **Access Query** workspace for configured systems: operators ask whether a caller can access a target capability, see the evidence chain, and carry denied decisions into Permission Changes as a one-time prefilled fix.
+- Web 控制台新增配置完成后的答案优先 **访问查询** 工作区：管理员先查询调用方是否能访问目标能力，查看判定链路，并可把拒绝判定一次性带入权限变更形成预填修复。
+- Permission Changes now accepts Access Query handoff context without auto-submitting or auto-generating a draft, and shows a dismissible context notice before the operator continues approval and apply.
+- 权限变更现在可接收访问查询交接上下文，但不会自动提交或自动生成草案；操作员继续审批和应用前会看到可关闭的上下文提示。
+- Setup-aware routing now uses a narrow `setupLoadedFromApi` signal and loads Access Query from the unscoped catalog, so non-critical dashboard endpoint fallback does not keep configured systems stuck on Getting Started.
+- 配置感知路由现在使用更窄的 `setupLoadedFromApi` 信号，并让访问查询加载全局 catalog，避免非关键仪表盘端点回退时把已配置系统卡在开始使用。
+- Web console now includes a first-run **Getting Started** workspace with a six-step tenant-to-evidence checklist, a pure frontend setup-readiness model, journey-ordered navigation, and empty-state actions that point operators to the next setup dependency.
+- Web 控制台新增首次使用的 **开始使用** 工作区，提供租户到记录的六步检查清单、纯前端配置就绪判定、按旅程排序的导航，以及指向下一项依赖的空状态操作。
+- Web console controller state is now split into domain hooks for management operations, capability governance, tenant access profiles, and the core journey; architecture tests cap `ConsoleController.tsx` state growth and keep `AiAdminPermissionWorkbench.tsx` under a guarded size limit.
+- Web 控制台 Controller 状态已拆入管理操作、能力治理、租户访问画像和核心旅程等 domain hooks；架构测试现在会限制 `ConsoleController.tsx` 状态继续膨胀，并给 `AiAdminPermissionWorkbench.tsx` 设置文件规模守护。
+- Added a follow-up console UI review (`docs/engineering/ui-review-2026-06-11.md`) that verifies the 2026-06-10 fixes are live in the running console and reports the next findings: the 4820-line `App.tsx` view monolith, language-snapshot result messages, missing list search/filter at scale, overloaded "Advanced settings" wording, policy-page layout confusion, self-check page alignment, and onboarding concept load.
+- 新增控制台 UI 复查报告（`docs/engineering/ui-review-2026-06-11.md`），实测确认 2026-06-10 各项修复已在运行中的控制台生效，并提出下一轮 finding：`App.tsx` 4820 行视图单体、结果消息语言快照、列表页缺搜索过滤、"高级设置"一词多义、访问策略页版面混淆、系统自检页排版、上手概念负担。
+- Web console Agent Registry and Capability Governance now include keyword/status filtering plus low-noise details panels; Agent row state changes move under a compact More menu so the table keeps a production-console density.
+- Web 控制台 Agent 注册表和能力治理页现在提供关键词/状态筛选和低噪声详情面板；Agent 行状态变更收进紧凑的“更多”菜单，表格保持生产控制台的信息密度。
+- Access Policies now opens with a policy-creation task state when empty and keeps management audit collapsed until requested, so operators can focus on creating and reviewing access rules first.
+- 访问策略页在空状态下优先呈现创建策略任务，并默认收起管理审计，方便管理员先完成访问规则创建与复核。
+- Web console view composition now starts moving out of `App.tsx`: NavKey page shells live in `ConsoleViews`, operational tables and policy workspace live in `OperationalViews`, and the Self-Check workbench lives in `CoreJourneyWorkbench`.
+- Web 控制台视图编排已开始从 `App.tsx` 拆出：NavKey 页面壳进入 `ConsoleViews`，运营表格和访问策略工作区进入 `OperationalViews`，自检工作台进入 `CoreJourneyWorkbench`。
+- Web console form, runtime-evidence, and go-live acceptance views are now split into owned components, and the production entry shell delegates to `ConsoleController`; `App.tsx` is now a 5-line shell with regression tests preventing view, form, or state logic from returning to the entry file.
+- Web 控制台表单、运行记录和上线验收视图已拆入独立组件，生产入口外壳下沉到 `ConsoleController`；`App.tsx` 现在是 5 行入口文件，并有回归测试防止视图、表单或状态逻辑回流到入口文件。
+- Added approval-request withdrawal for permission changes: REST now exposes `POST /api/v1/permission-packages/approval-requests/{id}/withdraw`, Management MCP exposes `withdraw_permission_package_approval_request`, and withdrawn requests are audited as `permission_package.approval_withdrawn`.
+- 新增权限变更审批请求撤回能力：REST 提供 `POST /api/v1/permission-packages/approval-requests/{id}/withdraw`，Management MCP 提供 `withdraw_permission_package_approval_request`，撤回审计事件记录为 `permission_package.approval_withdrawn`。
+- Added a draft 0.3.0 requirements document (`docs/product/0.3.0-permission-platform-requirements.md`) covering permission package resource-type expansion, an end-user self-service consumption portal, model access with budget quotas, and grant lifecycle automation, with personas, slices, and acceptance criteria.
+- 新增 0.3.0 需求文档草案（`docs/product/0.3.0-permission-platform-requirements.md`），覆盖权限包资源类型扩展、普通用户自助消费门户、模型接入与预算配额、授权生命周期自动开关，并包含目标用户画像、分期切片和验收标准。
+- Added a hands-on user journey review (`docs/engineering/user-journey-review-2026-06-10.md`) that walks the full permission-change journey end to end and documents draft-overwrite on runtime validation, missing duplicate-submit protection, role-blind approval, missing journey completion state, and async pending-state gaps, with a prioritized fix list.
+- 新增用户操作旅程实走审查报告（`docs/engineering/user-journey-review-2026-06-10.md`），端到端真实走完权限变更旅程，记录运行验证覆盖用户草稿、重复提交无防护、审批无角色感知、旅程无完成态、异步操作缺进行中状态等问题，并给出优先级修复清单。
+- Added a P0 repair report (`docs/engineering/user-journey-p0-repair-report-2026-06-10.md`) documenting the j-1/j-2 fixes, browser evidence, release gates, and remaining withdraw boundary.
+- 新增 P0 修复报告（`docs/engineering/user-journey-p0-repair-report-2026-06-10.md`），记录 j-1/j-2 修复、浏览器记录、发布门禁和撤回能力边界。
+- Added a design-system level visual review (`docs/engineering/visual-design-system-review-2026-06-10.md`) with measured evidence (15 font weights, 22 text colors, 268 hard-coded color values, missing input focus ring) and a three-step token-first remediation plan.
+- 新增设计系统层视觉审查报告（`docs/engineering/visual-design-system-review-2026-06-10.md`），附实测记录（15 档字重、22 种文字色、268 处硬编码色值、输入框无焦点环），并给出 token 先行的三步改造方案。
+- Added a hands-on UX review of the web console (`docs/engineering/permission-console-ux-review-2026-06-10.md`) covering navigation, text truncation, duplicated context, status semantics, and visual hierarchy, with a prioritized action list for the next UI iteration.
+- 新增 Web 控制台 UX 实测审查报告（`docs/engineering/permission-console-ux-review-2026-06-10.md`），覆盖导航、文本截断、上下文重复、状态语义和视觉层级，并给出下一轮 UI 迭代的优先级行动清单。
+- `POST /api/v1/permission-packages/workbench:preview` now returns a read-only Permission Changes workbench projection with the draft, matching approval request, latest application, production readiness, primary action code, operator status, and ordered process steps.
+- `POST /api/v1/permission-packages/workbench:preview` 现在返回只读权限变更工作台投影，汇总草案、匹配审批请求、最新应用记录、上线就绪状态、主操作代码、操作员状态和有序处理步骤。
+- Web console Permission Changes has been rebuilt as an enterprise management workspace: neutral canvas, one enterprise-blue theme, step-by-step request sections, a sticky production summary, and advanced evidence collapsed by default.
+- Web 控制台权限变更页已重做为标准 B 端管理工作台：中性灰画布、单一企业蓝主题、分步骤申请区、固定上线摘要，以及默认折叠的高级检查记录。
+- Web console Permission Changes now starts with a single-task five-step permission change flow: choose object, choose permissions, submit approval, apply permissions, go-live readiness, and a collapsed advanced-checks area for evidence.
+- Web 控制台权限变更页现在改为单任务五步权限变更流程：选择对象、选择权限、提交审批、应用权限、上线就绪，以及默认折叠的高级检查记录区。
+- Permission package production readiness and acceptance reports now include a stable `nextActionCode` so the web console and admin agents can localize the next safe action without parsing English text.
+- 权限包上线就绪状态和上线验收报告现在返回稳定的 `nextActionCode`，Web 控制台和管理 Agent 可以本地化下一步安全动作，而不需要解析英文文本。
+- Permission Changes now shows readable tenant, workspace, caller, target service, access object, and permission template labels in the main journey; raw tenant/workspace/caller/target ids and subject selectors are folded into Advanced settings for audit and troubleshooting.
+- 权限变更主旅程现在默认展示可读的租户、工作区、调用方、目标服务、访问对象和权限模板；原始租户/工作区/调用方/目标 ID 以及主体选择器收进高级设置，用于审计和排障。
+- Web console now exposes an accessible initial loading state and semantic inline message tones for the Permission Changes workspace, so loading, success, warning, and error states are visually and programmatically distinct.
+- Web 控制台现在为权限变更工作区提供可访问的初始加载态和语义化行内消息状态，加载、成功、警告和错误在视觉与辅助技术上都可区分。
+- `GET /api/v1/permission-packages/access-subjects` now returns role, department, and member access-object candidates so the Permission Changes UI can choose a business object before translating it to a technical subject selector.
+- `GET /api/v1/permission-packages/access-subjects` 现在返回角色、部门和成员访问对象候选，权限变更界面可以先选择业务对象，再转换为技术主体选择器。
+- The web console color system is now centered on one restrained enterprise-blue brand token, with decorative cyan treatments removed and success/warning/danger kept as separate status colors.
+- Web 控制台色彩系统现在收敛为单一克制的企业蓝主题色，移除零散青蓝装饰色，同时保留成功/警告/危险作为独立状态色。
+- Web console Permission Changes now labels backend-unavailable fallback mode as a read-only sample preview, and safety tests assert mutation handlers require live API data before approval, apply, validation, or evidence network writes.
+- Web 控制台权限变更页现在把后端不可达时的兜底模式明确标记为“只读示例预览”，并用安全测试锁定审批、应用、验证和报告导出等写入入口必须先检查实时 API。
+- Web console Permission Changes now names the intermediate production gate "Status Check" while keeping "Go-Live Acceptance" for the final evidence handoff, so the main journey reads as configure, approve, apply, status check, and acceptance.
+- Web 控制台权限变更页现在将中间生产门禁命名为“状态检查”，将最终记录交接保留为“上线验收”，让主旅程清晰呈现为配置、审批、应用、状态检查和验收。
+- Web console Permission Changes now uses completed-state descriptions for finished approval, apply, runtime validation, and status-check steps instead of stale "waiting for next step" copy after the journey is already ready.
+- Web 控制台权限变更页现在对已完成的审批、应用、运行验证和状态检查步骤使用完成态描述，避免旅程已可上线后仍显示“等待下一步”的误导文案。
+- Permission Changes process navigation now prefers stronger completed local evidence over stale workbench preview step text, so a go-live-ready journey cannot show an approval step as still pending.
+- 权限变更流程导航现在会用更强的本地完成记录覆盖滞后的工作台预览文案，避免可上线旅程里审批步骤仍显示待处理。
+- Permission Changes process navigation now uses AI Admin wording for the first two steps: configure scope and approval review, instead of requester-oriented request labels.
+- 权限变更流程导航现在用 AI Admin 视角命名前两步：配置范围和审批处理，不再沿用偏申请人视角的申请文案。
+- Permission Changes process step buttons now expose localized screen-reader labels with step number, task name, and current validation record, instead of concatenated visible text.
+- 权限变更流程步骤按钮现在提供本地化读屏标签，包含步骤序号、任务名称和当前记录，避免辅助技术读出连在一起的可见文本。
+- Permission Changes reviewer queues now label folded request identifiers as trace details, keeping audit identifiers available without presenting them as the operator task.
+- 权限变更审批队列现在把折叠的请求标识命名为追溯详情，保留审计排障能力，但不把技术标识表现成当前操作任务。
+- Completed Permission Changes now rename the read-only reviewer queue to approval trace and refresh trace, and describe the rows as approval records instead of pending queue work.
+- 已完成的权限变更现在把只读审批队列改为审批追溯和刷新追溯，并把行说明为审批记录而不是待处理队列。
+- Go-Live Acceptance now suppresses generic status-check success logs and relies on the status badge, next action, and check list for the normal path, leaving the message area for actionable failures or warnings.
+- 上线验收页现在隐藏普通的状态检查成功加载日志，正常路径依赖状态标识、下一步和检查列表，消息区域只留给需要处理的失败或告警。
+- Go-Live Acceptance management audit rows now use a quiet "Details" disclosure for technical ids and preserve mixed-case business terms such as Agent instead of forcing badge text to lowercase.
+- 上线验收页的管理审计行现在用更安静的“详情”折叠技术 ID，并保留 Agent 等中英混排业务词大小写，不再把徽标文字强制小写。
+- Completed Permission Changes journeys now render reviewer queue rows as read-only evidence, so stale pending requests no longer show approve/reject actions after permissions are already active.
+- 已完成的权限变更旅程现在会把待审批队列显示为只读记录；权限已经生效后，历史待审批项不再展示批准/拒绝操作。
+- Completed Permission Changes journeys now render the applied state as a status indicator instead of a disabled primary action, so operators do not mistake completed work for a blocked button.
+- 已完成的权限变更旅程现在把“已应用”呈现为状态标识，而不是禁用的主按钮，避免操作员把已完成事项误认为被阻断的操作。
+- The global connection settings menu now closes when switching workspaces, keeping technical fields such as admin key, tenant id, and workspace id out of the main business journey unless explicitly reopened.
+- 全局连接设置菜单现在会在切换工作区时自动收起，管理员密钥、租户 ID、工作区 ID 等技术字段不会停留在主业务旅程中，除非用户主动重新打开。
+- Closed connection settings now explicitly hide the popover content in CSS, preventing admin key and scope fields from overlaying business pages when the details state is closed.
+- 连接设置关闭后现在会通过 CSS 明确隐藏弹层内容，避免管理员密钥和范围字段在业务页面上继续覆盖显示。
+- Go-Live Acceptance now promotes "Export evidence" to the primary action when status checks are ready, while keeping "Run status check" as a secondary re-check action.
+- 上线验收在状态检查已通过时会把“导出验收报告”提升为主操作，同时把“执行状态检查”保留为辅助复检操作。
+- Completed Permission Changes journeys now keep a single primary "Export evidence" action in the task header, while the completion card exposes secondary exits such as "Download acceptance report", access profile, and new change.
+- 已完成的权限变更旅程现在只在任务页头保留一个主按钮“导出验收报告”，完成卡里的“下载验收报告”、权限画像和新建变更都作为辅助出口呈现。
+- Permission Changes workbench preview no longer returns capability-count ratios on the request step, so completed request steps do not look partially incomplete in the process navigation.
+- 权限变更工作台预览不再在“填写申请”步骤返回能力数量比例，避免已完成的申请步骤在流程导航里看起来像“部分完成”。
+- Permission Changes process navigation now also suppresses request-step capability ratios on the frontend, so stale previews cannot show misleading `2/3` request progress.
+- 权限变更流程导航现在也会在前端屏蔽“填写申请”的能力数量比例，避免旧预览数据继续显示误导性的 `2/3` 进度。
+- Tenant Access Profile grant chains now keep grant, workspace-assignment, workspace, target, and capability technical ids in collapsed technical details instead of showing raw ids in the main evidence rows.
+- 租户访问画像的授权链现在把租户授权、工作区分配、工作区、目标和能力等技术 ID 收进折叠详情，主记录行不再直接展示原始 ID。
+- Tenant Access Profile instance and trace rows now show business caller, target, access-object, and localized decision-reason labels while moving caller ids, instance-assignment ids, and subject selectors into collapsed technical details.
+- 租户访问画像的实例授权和追踪记录行现在展示业务调用方、目标、访问对象和本地化判定原因，并把调用方 ID、实例分配 ID、主体选择器收进折叠技术详情。
+- Tenant Access Profile handoff now pins the completed permission-change scope, including capability, above the evidence controls and retitles the filter area as an optional viewing-scope adjustment.
+- 租户访问画像交接态现在会在验收控制区上方固定展示已完成权限变更范围，并补上能力维度；筛选区在交接态改为可选的查看范围调整。
+- Runtime Audit now shows business caller/target names, localized route and decision-reason labels, and keeps run id, route keys, and capability ids inside advanced technical details.
+- 运行审计现在展示业务调用方/目标、中文化路由和判定原因，并把运行批次、路由键和能力 ID 收进高级技术详情。
+- TechnicalId is now shared across dense console workspaces, preserving the same shortened, copyable identifier treatment outside the main business path.
+- TechnicalId 现在作为共享组件用于密集控制台视图，在主业务路径外保持一致的缩略和复制体验。
+- Capability Governance grant creation now uses business tenant, workspace, caller, and access-object pickers, with custom subject selectors kept in advanced settings.
+- 能力治理创建授权链现在使用业务租户、工作区、调用方和访问对象选择器，自定义主体选择器收进高级设置。
+- Runtime navigation wording now separates the "Runtime & Audit" group from the "Runtime Audit" workspace and uses a runtime-record empty state instead of legacy audit-trace copy.
+- 运行导航文案现在区分“运行与审计”分组和“运行审计”工作区，空态改为运行记录，不再沿用旧的审计追踪措辞。
+- Shared console empty states now use a structured icon, title, and detail layout with stable tokenized spacing instead of single-line gray placeholders.
+- 控制台通用空态现在使用统一图标、标题和说明结构，并采用稳定的 token 化间距，不再是单行灰色占位文案。
+- Dense table actions now distinguish neutral state changes from destructive disables, so ordinary Agent status changes no longer inherit danger styling.
+- 密集表格操作现在区分普通状态切换和破坏性禁用，Agent 的普通状态变更不再沿用危险按钮样式。
+- Permission readiness messages now use business labels for tenant, workspace, caller, and access object instead of technical ID/selector field names.
+- 权限就绪提示现在使用租户、工作区、调用方、访问对象等业务字段，不再暴露技术 ID 或 selector 字段名。
+- Agent and route-policy retry validation errors now go through i18n before they appear in operator-facing panels.
+- Agent 与路由策略的重试参数校验错误现在会先经过 i18n，再展示在操作面板中。
+- Completed or approval-frozen Permission Changes now render the request configuration as a read-only review state, preventing operators from editing tenant, caller, target, access-object, or template fields after the change is under approval or already active.
+- 已完成或进入审批冻结的权限变更现在会把申请配置呈现为只读复核态，避免操作员在审批中或已生效后继续编辑租户、调用方、目标、访问对象或权限包。
+- Locked Permission Changes now rename the request section to "Configuration Review" and switch helper copy to review language, so production-ready journeys no longer read like editable drafts.
+- 已锁定的权限变更现在会把申请区切换为“配置复核”并使用复核说明，避免生产可用旅程看起来仍像可编辑草稿。
+- Same-scope follow-up Permission Changes now stay on the current approval cycle instead of reusing historical application or production-readiness evidence while the new request is pending.
+- 同范围的后续权限变更现在会停留在当前审批周期；新请求待审批时，不再复用历史应用记录或上线就绪记录。
+- Active locked Permission Changes now expose a visible "New permission change" exit beside the read-only review notice, while approval-frozen requests still require the approval flow instead of bypassing withdrawal.
+- 已生效的锁定态权限变更现在会在只读复核提示旁提供可见的“新建权限变更”出口；审批冻结中的请求仍通过审批流程处理，避免绕过撤回。
+- Starting a new Permission Change now enters an isolated draft mode that ignores historical approval, application, and readiness evidence until the operator submits the new request.
+- 新建权限变更现在会进入独立草稿模式，在操作员提交新请求前不会重新吸附历史审批、落地和就绪记录。
+- Permission Changes now labels the header secondary action by stage: early drafts review the process, validation-ready journeys review acceptance details, and completed journeys open the access profile.
+- 权限变更页头辅助动作现在按阶段命名：早期草稿查看处理流程，进入验证后查看验收明细，完成后查看权限画像。
+- `make ai-admin-browser-journey` now starts the API with split requester and reviewer admin identities by default, and the approval scenario verifies that requester-key impersonation of the reviewer is rejected before the real reviewer approves.
+- `make ai-admin-browser-journey` 现在默认用分离的申请人与审批人管理身份启动 API，并在审批场景中先验证申请人 key 冒充审批人会被拒绝，再由真实审批人批准。
+- Web console Permission Changes now treats not-yet-requested and pending approvals as pending work instead of production blockers, puts the next safe action in the task header, and keeps the tenant access profile in the dedicated Access workspace.
+- Web 控制台权限变更页现在把未发起和待处理审批呈现为待处理事项而非生产阻断，在任务页头直接给出下一步安全动作，并将租户访问画像保留在独立的权限工作区。
+- Added an official MCP TypeScript SDK demo service under `scripts/real-mcp`, plus `make real-mcp`, so the local approval journey can run against a real Streamable HTTP MCP server.
+- 新增位于 `scripts/real-mcp` 的官方 MCP TypeScript SDK 演示服务和 `make real-mcp`，本地审批主旅程可以连接真实 Streamable HTTP MCP 服务验证。
+- The web console now defaults to Permission Changes as the production approval and readiness workspace, while the former Cockpit is renamed Self-Check for lower-level core permission loop validation.
+- Web 控制台现在默认进入权限变更与上线就绪工作台；原 Cockpit 降级并重命名为自检，用于底层核心权限链路验证。
 - Permission package templates now expose a stable version.
 - Permission package application records are persisted in memory and PostgreSQL and returned from `POST /api/v1/permission-packages:apply`.
 - `GET /api/v1/permission-packages/applications` lists permission package applications by tenant subtree, workspace, template, target, caller instance, and limit.
 - `GET /api/v1/permission-packages/applications/health` now returns read-only ready, drifted, and needs-review health summaries derived from each application's impact review.
-- `GET /api/v1/permission-packages/applications/health` 现在返回只读应用健康汇总，根据应用影响复盘派生健康、已漂移和需复核状态。
+- `GET /api/v1/permission-packages/applications/health` 现在返回只读落地状态汇总，根据影响复核派生正常、已漂移和需复核状态。
 - `GET /api/v1/permission-packages/applications/{id}/impact` now returns read-only application impact with created object status, capability manual-review rows, and rollback review steps.
-- `GET /api/v1/permission-packages/applications/{id}/impact` 现在返回只读应用影响复盘，包括已创建对象状态、能力人工评审项和回滚评审步骤。
+- `GET /api/v1/permission-packages/applications/{id}/impact` 现在返回只读影响复核，包括已创建对象状态、能力人工评审项和回滚评审步骤。
 - `GET /api/v1/permission-packages/applications/{id}/impact` now also returns a read-only remediation plan with ordered manual-review, drift-investigation, grant-disable, and final verification actions.
 - `GET /api/v1/permission-packages/applications/{id}/impact` 现在还返回只读处置计划，包括按顺序排列的人工评审、漂移调查、授权禁用和最终校验动作。
 - `GET /api/v1/permission-packages/applications/{id}/impact` now includes stable rollback and remediation `blockerCodes` for missing grant objects, inactive grant objects, and applications without recorded allowed capabilities.
@@ -22,48 +176,173 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - `GET /api/v1/permission-packages/applications/{id}/impact?rehearsal=grant_drift` now returns a response-only drift rehearsal with rehearsal metadata, simulated missing/inactive grant blockers, and read-only remediation actions without mutating permission state.
 - `GET /api/v1/permission-packages/applications/{id}/impact?rehearsal=grant_drift` 现在返回仅影响响应的漂移演练，包含演练元数据、模拟的缺失/未启用授权阻断和只读处置动作，不会写入权限状态。
 - `POST /api/v1/permission-packages:preflight` now returns read-only apply preflight with blockers, warnings, planned grant objects, approval readiness, data-scope fit, and existing grant-chain evidence before permission writes.
-- `POST /api/v1/permission-packages:preflight` 现在返回只读应用前预检，在写入权限前展示阻断项、风险提示、计划授权对象、审批就绪状态、数据范围匹配和已有授权链证据。
+- `POST /api/v1/permission-packages:preflight` 现在返回只读应用前预检，在写入权限前展示阻断项、风险提示、计划授权对象、审批就绪状态、数据范围匹配和已有授权链记录。
+- `GET /api/v1/permission-packages/production-readiness` now returns a read-only production go/no-go gate that combines preflight, latest application, health, impact, access-profile, runtime trace, and applied audit records.
+- `GET /api/v1/permission-packages/production-readiness` 现在返回只读上线门禁，汇总预检、最新应用、落地状态、影响复核、访问画像、运行追踪和应用审计记录。
+- `GET /api/v1/permission-packages/production-readiness/report` now exports a bounded read-only JSON acceptance report for the production readiness decision.
+- `GET /api/v1/permission-packages/production-readiness/report` 现在导出有边界的只读 JSON 验收报告，用于说明上线就绪状态。
 - Management MCP now exposes `list_permission_package_applications` for admin agents to review applied template versions, created assignment ids, capability ids, and data scopes.
 - Management MCP now exposes `preflight_permission_package` so admin agents can verify permission package safety before calling `apply_permission_package`.
 - Management MCP 现在提供 `preflight_permission_package`，管理 Agent 可以在调用 `apply_permission_package` 前验证权限包安全性。
+- Management MCP now exposes `check_permission_package_production_readiness` so admin agents can ask for the same production go/no-go result without calling each evidence endpoint separately.
+- Management MCP 现在提供 `check_permission_package_production_readiness`，管理 Agent 可以直接获取同一套上线就绪状态，而不必分别调用每个检查端点。
+- Management MCP now exposes `export_permission_package_production_evidence` so admin agents can produce the same bounded acceptance report for handoff.
+- Management MCP 现在提供 `export_permission_package_production_evidence`，管理 Agent 可以生成同一份有边界的验收报告用于交接。
 - Permission package drafts now include a deterministic `policyGate` that allows direct apply for low-risk packages and requires approval for write, export, admin, high-risk, critical-risk, confidential, or restricted allowed capabilities.
 - Permission package approval requests are now persisted in memory and PostgreSQL so approval-required drafts can be reviewed and applied with evidence.
 - `POST /api/v1/permission-packages/approval-requests`, `GET /api/v1/permission-packages/approval-requests`, approve, and reject endpoints now provide the approval-request loop for permission packages.
 - `POST /api/v1/permission-packages:apply` now accepts `approvalRequestId` and rejects pending, rejected, missing, or mismatched approval requests before writing permissions.
 - Permission package approval requests now expire after 24 hours and are consumed transactionally by the first successful package application, so expired, already-used, or concurrently reused approvals cannot write permissions.
 - Management MCP now exposes `create_permission_package_approval_request`, `list_permission_package_approval_requests`, `approve_permission_package_approval_request`, and `reject_permission_package_approval_request`.
-- Web console AI Admin now shows the latest permission package application evidence after a successful apply.
-- Web console AI Admin now includes a read-only application health panel with healthy, drifted, and review-needed rows plus one-click impact review in English and Simplified Chinese.
-- Web 控制台 AI Admin 现在提供只读应用健康面板，以中英双语展示健康、已漂移和需复核应用，并可一键进入影响复盘。
-- Web console AI Admin now includes a read-only application impact review panel under application evidence, with created/active/missing object counts, grant-object rows, capability manual-review rows, and rollback review steps in English and Simplified Chinese.
-- Web 控制台 AI Admin 现在在应用证据下提供只读应用影响复盘，以中英双语展示已创建/有效/缺失对象数量、授权对象行、能力人工评审行和回滚评审步骤。
-- Web console AI Admin now renders the read-only remediation plan for a permission package application in English and Simplified Chinese, without adding rollback execution controls.
-- Web 控制台 AI Admin 现在以中英双语展示权限包应用的只读处置计划，且不提供回滚执行控件。
-- Web console AI Admin now localizes rollback and remediation blockers from stable blocker codes instead of exposing raw backend text.
-- Web 控制台 AI Admin 现在通过稳定 blocker code 本地化回滚与处置阻塞原因，不再直接暴露后端原始文本。
-- Web console AI Admin now includes a read-only **Rehearse drift** action beside impact review so operators can preview drift blockers and then switch back to the real ready impact.
-- Web 控制台 AI Admin 现在在影响复盘旁提供只读 **演练漂移** 动作，操作员可预览漂移阻断并切回真实 ready 影响。
-- Web console AI Admin now includes an Apply Preflight panel and blocks live apply when preflight reports blockers.
-- Web 控制台 AI Admin 现在提供应用前预检面板，并在预检返回阻断项时阻止实时应用。
-- Web console AI Admin now shows policy-gate status and disables direct apply when a package requires approval.
-- Web console AI Admin now exposes the approval-required package path with create approval request, approve, reject, and approved apply controls in English and Simplified Chinese.
-- Web console AI Admin now includes a Reviewer queue for routed pending approval requests, with reviewer-scoped refresh plus approve/reject actions in English and Simplified Chinese.
-- Web 控制台 AI Admin 现在提供审查员队列，可按审查员刷新已路由的待处理审批，并以中英双语完成批准/驳回操作。
+- Web console Permission Changes now shows the latest permission package application record after a successful apply.
+- Web console Permission Changes now includes a read-only application health panel with healthy, drifted, and review-needed rows plus one-click impact review in English and Simplified Chinese.
+- Web 控制台权限变更页现在提供只读落地状态面板，以中英双语展示正常、已漂移和需复核应用，并可一键进入影响复核。
+- Web console Permission Changes now includes a read-only application impact review panel under application record, with created/active/missing object counts, grant-object rows, capability manual-review rows, and rollback review steps in English and Simplified Chinese.
+- Web 控制台权限变更页现在在应用记录下提供只读影响复核，以中英双语展示已创建/有效/缺失对象数量、授权对象行、能力人工评审行和回滚评审步骤。
+- Web console Permission Changes now renders the read-only remediation plan for a permission package application in English and Simplified Chinese, without adding rollback execution controls.
+- Web 控制台权限变更页现在以中英双语展示权限包应用的只读处置计划，且不提供回滚执行控件。
+- Web console Permission Changes now localizes rollback and remediation blockers from stable blocker codes instead of exposing raw backend text.
+- Web 控制台权限变更页现在通过稳定 blocker code 本地化回滚与处置阻塞原因，不再直接暴露后端原始文本。
+- Web console Permission Changes now includes a read-only **Rehearse drift** action beside impact review so operators can preview drift blockers and then switch back to the real ready impact.
+- Web 控制台权限变更页现在在影响复核旁提供只读 **演练漂移** 动作，操作员可预览漂移阻断并切回真实 ready 影响。
+- Web console Permission Changes now includes an Apply Preflight panel and blocks live apply when preflight reports blockers.
+- Web 控制台权限变更页现在提供应用前预检面板，并在预检返回阻断项时阻止实时应用。
+- Web console Permission Changes now includes a Production Readiness panel in English and Simplified Chinese, showing ready, review-needed, or blocked status with runtime and audit records.
+- Web 控制台权限变更页现在提供中英双语上线就绪状态面板，展示可上线、需复核或阻断状态，并列出运行和审计记录。
+- Web console Permission Changes can export the read-only production acceptance report as local JSON from the Production Readiness panel.
+- Web 控制台权限变更页现在可以在上线就绪状态面板中把只读上线验收报告导出为本地 JSON。
+- Web console Permission Changes now shows policy-gate status and disables direct apply when a package requires approval.
+- Web console Permission Changes now exposes the approval-required package path with create approval request, approve, reject, and approved apply controls in English and Simplified Chinese.
+- Web console Permission Changes now includes a Approval queue for routed pending approval requests, with approver-scoped refresh plus approve/reject actions in English and Simplified Chinese.
+- Web 控制台权限变更页现在提供待审批请求，可按审批人刷新已路由的待处理审批，并以中英双语完成批准/驳回操作。
 - Web console now includes a read-only effective permission explanation panel backed by `GET /api/v1/access-decisions:explain`, showing allow/deny outcome, evidence layers, data scopes, and next actions in English and Simplified Chinese.
-- Web 控制台现在提供只读有效权限解释面板，由 `GET /api/v1/access-decisions:explain` 驱动，以中英双语展示允许/拒绝结果、证据层、数据范围和下一步动作。
-- Web console AI Admin now includes a live approval journey workbench that creates a three-level tenant tree, discovers support tools, approves and applies a permission package, runs subject-scoped allow/deny MCP calls, and surfaces profile plus audit evidence.
-- Web console AI Admin now shows first-run readiness for API, Mock MCP, subject-header CORS, private-upstream mode, and live data source before running the approval journey.
-- Added `make scenario-permission-package-approval` to prove the approval-required permission package journey with local MCP discovery, apply preflight, approval, approved apply, runtime allow/deny, access-profile, application, and audit evidence.
-- 新增 `make scenario-permission-package-approval`，用于验证需要审批的权限包旅程，包括本地 MCP 发现、应用前预检、审批、已审批应用、运行时允许/拒绝、访问画像、应用记录和审计证据。
+- Web 控制台现在提供只读权限判定说明面板，由 `GET /api/v1/access-decisions:explain` 驱动，以中英双语展示允许/拒绝结果、判定层、数据范围和下一步动作。
+- Web console Permission Changes now includes a runtime validation flow that creates a three-level tenant tree, discovers support tools, approves and applies a permission package, runs subject-scoped allow/deny MCP calls, and surfaces profile plus audit records.
+- Web console Permission Changes now shows runtime checks for API, MCP tool service, subject-header CORS, private-upstream mode, and live data source before running validation.
+- Added `make scenario-permission-package-approval` to prove the approval-required permission package journey with local MCP discovery, apply preflight, approval, approved apply, runtime allow/deny, access-profile, application, audit, production readiness, and production acceptance report checks.
+- 新增 `make scenario-permission-package-approval`，用于验证需要审批的权限包旅程，包括本地 MCP 发现、应用前预检、审批、已审批应用、运行时允许/拒绝、访问画像、应用记录、审计、上线就绪状态和上线验收报告检查。
 - Added `make ai-admin-browser-journey` to start the local browser stack, verify subject-header CORS, and run the approval-required journey as a release-candidate gate.
+- `make ai-admin-browser-journey` now passes its isolated frontend origin into the API CORS allow-list, so release-candidate browser gates can run on non-default local ports while still verifying `X-AgentHarbor-Subject-Id`.
+- `make ai-admin-browser-journey` 现在会把隔离前端 origin 传入 API CORS 白名单，因此发布候选浏览器门禁可以在非默认本地端口运行，并继续验证 `X-AgentHarbor-Subject-Id`。
 - Added `make production-hardening` and a CI gate to verify admin-key enforcement, permission-package and management MCP protection, default private-upstream rejection, and public MCP endpoint registration before release-readiness claims.
-- Permission package approval queues can now be filtered by configured reviewer routing rules, and approve/reject operations enforce reviewer tenant-subtree and workspace scope when `AGENT_HARBOR_APPROVAL_REVIEWERS` is configured.
-- 权限包审批队列现在可按已配置审查员路由规则过滤；配置 `AGENT_HARBOR_APPROVAL_REVIEWERS` 后，批准/驳回会强制校验审查员的租户子树和工作区范围。
+- Permission package approval queues can now be filtered by configured approver routing rules, and approve/reject operations enforce reviewer tenant-subtree and workspace scope when `AGENT_HARBOR_APPROVAL_REVIEWERS` is configured.
+- 权限包审批队列现在可按已配置审批人路由规则过滤；配置 `AGENT_HARBOR_APPROVAL_REVIEWERS` 后，批准/驳回会强制校验审批人的租户子树和工作区范围。
+- Permission package approvals now snapshot per-capability configuration fingerprints and reject apply/preflight when a capability's effective permission configuration drifts after approval.
+- 权限包审批现在会快照每个能力的有效权限配置指纹；审批后能力配置发生漂移时，应用和预检都会拒绝旧审批。
 
 ### Changed
 
-- Reframed README, roadmap, and the v0.2.0 AI Admin journey note in English and Simplified Chinese around tenant-first access governance and AI-friendly permission operations instead of generic MCP gateway positioning.
-- 将 README、路线图和 v0.2.0 AI Admin 用户旅程说明改为中英双语，并把产品叙事收敛到租户优先访问治理与 AI 友好权限运营，而不是通用 MCP Gateway 定位。
+- Getting Started now uses a guided first-run layout with a prominent current step, nearby primary action, compact progress summary, and tighter checklist instead of a wide table-like workspace.
+- 开始使用页现在改为首次接入向导布局，突出当前下一步、就近展示主操作、压缩进度摘要和检查清单，不再像一张横向大表。
+- Getting Started and the audit navigation now use go-live status wording instead of go-live evidence wording for the operator-facing final step.
+- 开始使用页和审计导航现在将面向操作员的最后一步表述为上线状态，不再在主流程里使用上线验收。
+- Permission-package approval request list responses are normalized before controller merge, preventing malformed or compatibility fallback payloads from clearing the console during handoff or approval review.
+- 权限包审批请求列表响应会在进入控制器合并前归一化，避免异常响应或兼容回退 payload 在交接或审批复核时清空控制台。
+- Web console wording now separates Technical overrides, Filter settings, Trace details, and Technical details, adds expand/collapse trace controls to Runtime Audit, reshapes System Self-Check into structured configuration/runtime grids, and adds a concise in-product permission concept guide.
+- Web 控制台现在区分“技术覆盖、筛选条件、追踪详情、技术详情”，运行审计新增追踪详情统一展开/收起，系统自检改为结构化配置/运行摘要网格，并在权限变更中加入轻量概念速览。
+- README Permission Changes onboarding is now split into bilingual validation and local-run steps instead of long dense paragraphs.
+- README 权限变更上手说明现在拆成中英双语的验证内容和本地运行步骤，不再使用大段密集说明。
+- Web console Permission Changes now lets the original requester withdraw a pending approval request from the main approval flow, confirms the action, clears approval-dependent evidence, and returns the journey to a safe submit-again state.
+- Web 控制台权限变更页现在允许原申请人在主审批流程中撤回待审批请求，撤回前二次确认，撤回后清空依赖该审批的验收状态，并回到可重新提交的安全状态。
+- Web console Permission Changes now shows reviewer context before approval resolution, requires an explicit confirmation for approve/reject decisions, requires a rejection reason, and shares one busy guard across the main approval, apply, validation, and evidence actions.
+- Web 控制台权限变更页现在会在审批处理前展示审批人上下文，批准/拒绝必须先确认，拒绝必须填写理由，并在审批、应用、验证和报告动作之间共享统一进行中保护。
+- Web console Permission Changes now shows a concrete completion state after production readiness, with exits to export evidence, review the access profile, or start a new permission change; advanced-check success load messages are hidden while actionable warnings and errors remain visible.
+- Web 控制台权限变更页现在会在生产就绪后显示明确完成态，并提供导出验收报告、查看权限画像、开始新变更三个出口；高级检查区隐藏成功加载类噪声消息，同时保留需要处理的告警和错误。
+- Web console Permission Changes process steps are now clickable anchors for configuration, permissions, approval, apply, and readiness sections, so operators can navigate the full flow without manually hunting through the page.
+- Web 控制台权限变更页的处理流程步骤现在可点击定位到配置、权限、审批、应用和就绪区块，操作员不用手动在页面里查找下一步。
+- Web console Permission Changes now uses one authoritative journey status, a first-screen task strip for current status, permission package, and next action, plus business-readable reviewer queue rows with raw ids kept inside technical details.
+- Web 控制台权限变更页现在使用唯一权威的旅程状态，并用首屏任务条展示当前状态、权限包和下一步；审批队列优先展示业务可读信息，原始 ID 收进技术详情。
+- Web console Permission Changes now keeps the process panel visible at 1024px desktop widths, switches the context and task strips to a single-column mobile layout, and points the completed quick action to the access profile instead of rerunning validation.
+- Web 控制台权限变更页现在在 1024px 中窄桌面宽度仍保留处理流程栏，并在移动端将上下文条和任务条切成单列；完成态快捷操作会指向权限画像，而不是继续提示运行验证。
+- Tenant Access Profile now shows business tenant names in the tenant-scope list and folds raw tenant, workspace, and subject identifiers into advanced technical details after Permission Changes handoff.
+- 租户访问画像现在在租户范围列表优先展示业务租户名，并在权限变更交接后把原始租户、工作区和主体标识收进高级技术详情。
+- Permission Changes, Tenant Access Profile, and Capability Governance now show localized business capability names such as Search customers, Update tickets, and Export contracts in primary UI; Capability Governance grant-chain rows also prefer business tenant names over tenant ids.
+- 权限变更、租户访问画像和能力治理现在在主界面展示“查询客户、更新工单、导出合同”等业务能力名称；能力治理授权链主行也优先展示业务租户名，而不是租户 ID。
+- Permission Changes now treats applied or production-ready requests as approval-resolved in the main approval step, so stale pending queue items no longer make a completed journey look unapproved.
+- 权限变更页现在会把已应用或已上线的请求视为主审批步骤已闭环，旧的待审批队列项不再让完成态旅程看起来仍未审批。
+- Permission Changes now uses a neutral approval-step title in Simplified Chinese, separating the step state from the "submit for approval" action.
+- 权限变更页中文主流程现在使用中性的“审批处理”步骤标题，将步骤状态和“提交审批”按钮动作区分开。
+- Permission Changes now treats production-ready evidence as completed runtime validation in the final step, so completed journeys no longer ask operators to run validation again.
+- 权限变更页现在会把上线就绪记录视为运行验证已完成，完成态不再提示操作员再次执行运行验证。
+- Permission Changes now changes the disabled apply button to Applied after an application exists, making repeated apply unavailable and visually clear.
+- 权限变更页现在会在应用记录存在后把禁用的应用按钮显示为“已应用”，明确避免重复应用误导。
+- Capability Governance now localizes caller and target service names in selectors and table rows, so demo MCP targets no longer appear as raw English system names.
+- 能力治理页现在会在选择器和表格行中本地化调用方与目标服务名称，示例 MCP 目标不再以原始英文系统名出现在主界面。
+- Permission Changes now renders default tenant/workspace context as business labels and Capability Governance uses localized capability summaries and scope labels instead of raw fallback ids or English MCP descriptions.
+- 权限变更页现在会把默认租户/工作区上下文显示为业务名称，能力治理页也会使用本地化能力摘要和数据范围标签，不再把兜底 ID 或英文 MCP 描述顶到主界面。
+- Permission Changes now localizes the default security approver display name in the approval step, while keeping the underlying reviewer identity unchanged for API validation.
+- 权限变更页现在会在审批步骤本地化默认安全审批人展示名，同时保留底层审批人身份用于 API 校验。
+- Tenant Access Profile now shares the same business data-scope labels and default-tenant presenter as Permission Changes, so direct access-profile review no longer exposes `default`, `L0`, or raw region codes in the primary path.
+- 租户访问画像现在复用与权限变更一致的数据范围和默认租户展示逻辑，直接进入画像页时主路径不再暴露 `default`、`L0` 或原始区域码。
+- Go-live Evidence now localizes management audit actions, resource types, actors, and summaries while moving raw resource ids into expandable technical details.
+- 上线验收页现在会本地化管理审计的操作、资源类型、操作者和摘要，并把原始资源 ID 收进可展开的技术详情。
+- Go-live Evidence now opens with a go-live acceptance workflow that shows current permission-change context, readiness status, next actions, and progress before historical evidence tables.
+- 上线验收页现在先展示上线验收工作台，明确当前权限变更上下文、就绪状态、下一步动作和进度，再展示历史记录表。
+- Workspace navigation now writes the active workspace to the URL hash, so refreshing or reopening `#evidence` keeps operators in the same go-live acceptance context.
+- 工作区导航现在会把当前工作区写入 URL hash，刷新或重新打开 `#evidence` 时仍停留在同一个上线验收上下文。
+- Go-live Acceptance now loads the full Permission Changes catalog when opened directly from `#evidence`, reuses the generated permission draft as the context source, and avoids showing unknown caller/target placeholders to operators.
+- 上线验收现在支持直接打开 `#evidence` 时加载完整权限变更目录，并以已生成的权限草稿作为上下文来源，避免向操作员展示未知调用方/目标占位。
+- Permission Changes now presents one guided go-live primary action at a time: run validation before evidence exists, check readiness after runtime records exists, and export evidence only after the change is ready.
+- 权限变更现在一次只展示一个上线主动作：缺少运行记录时执行运行验证，运行记录已具备后检查上线就绪，真正可上线后才导出验收报告。
+- Permission Changes now renames the folded expert evidence area from Advanced Checks to Acceptance Details and clarifies that runtime validation evidence is supporting proof behind the main operator flow.
+- 权限变更现在把折叠的专家记录区从“高级检查项”改为“验收明细”，并明确运行验证记录是主操作流程背后的辅助证明。
+- Permission Changes now changes the header secondary action to navigate to Acceptance Details instead of running validation, keeping runtime validation inside the ordered go-live step.
+- 权限变更页头副操作现在改为跳转到“验收明细”，不再直接执行运行验证，确保运行验证只出现在有顺序的上线步骤中。
+- Permission Changes now explicitly hides collapsed technical detail contents so raw tenant, workspace, caller, and target ids cannot leak into the primary operator path while details are closed.
+- 权限变更现在显式隐藏已折叠技术详情内容，避免租户、工作区、调用方和目标原始 ID 在详情关闭时泄露到主操作路径。
+- Go-live acceptance now treats applied or production-ready evidence as approval-satisfied, preventing conflicting "approval not requested" progress copy after permissions are already active.
+- 上线验收现在会把已应用或已可上线的记录视为审批已满足，避免权限已生效后进度里仍出现“审批未发起”的冲突提示。
+- Web console visual design review follow-up: design tokens now govern component colors, shadows, focus rings, button sizing, technical-id display, System Self-Check telemetry, and Agent registry ordering.
+- Web 控制台视觉设计审查项已落地：设计 token 现在约束组件色值、阴影、焦点环、按钮尺寸、技术 ID 展示、系统自检指标展示范围和 Agent 注册表顺序。
+- Web console UX review follow-up: desktop navigation now keeps readable grouped labels at medium widths, Permission Changes uses one authoritative context bar with non-truncating core selectors, and Capability Governance prioritizes the grant operation area over KPI cards.
+- Web 控制台 UX 审查项已落地：桌面中窄屏导航保留分组文字标签，权限变更页收敛为唯一上下文条并保证核心选择器不强制截断，能力治理页把授权操作区提升到 KPI 卡之前。
+- Permission package drafts and instance assignments now reject empty or bare `*` subject selectors, so every permission change must bind to an explicit access object.
+- 权限包草案和实例授权现在会拒绝空值或裸 `*` 主体选择器，确保每次权限变更都绑定到明确的访问对象。
+- Approval resolution now enforces separation of duties and can bind reviewer identity to configured admin identities via `AGENT_HARBOR_ADMIN_IDENTITIES`; reviewers can no longer resolve their own approval requests.
+- 审批处理现在强制职责分离，并可通过 `AGENT_HARBOR_ADMIN_IDENTITIES` 将审批人绑定到已认证管理身份；审批人不能处理自己发起的审批请求。
+- Web console shell now removes non-functional global search/filter controls and placeholder Prod/Staging/Sandbox switching, keeping admin-key/data-source details inside a compact Connection menu.
+- Web 控制台产品外壳现在移除无实际功能的全局搜索/筛选控件和占位式 Prod/Staging/Sandbox 切换，并把管理密钥与数据源状态收进紧凑的“连接设置”菜单。
+- MCP upstream requests now advertise both `application/json` and `text/event-stream` so official Streamable HTTP MCP servers can satisfy capability discovery and proxied runtime calls.
+- MCP 上游请求现在同时声明 `application/json` 和 `text/event-stream`，官方 Streamable HTTP MCP 服务可以正常响应能力发现和代理运行调用。
+- Web console Permission Changes now consumes the new workbench preview and renders a simpler production workflow: top current status, left request form, right process handling, and advanced checks, instead of exposing backend evidence objects as peer cards.
+- Web 控制台权限变更页现在消费新的工作台预览，并呈现更简洁的生产流程：顶部当前状态、左侧申请信息、右侧处理流程和高级检查详情，不再把后端验收对象作为同级卡片铺开。
+- Capability Governance now uses the same in-app business picker pattern for MCP targets, capabilities, caller instances, and access objects, keeping raw subject selector expressions behind the advanced path.
+- 能力治理现在对 MCP 目标、能力、调用方实例和访问对象使用同一套产品内选择器，原始主体选择器表达式只保留在高级路径。
+- The web console shell now splits Tenant Access Profile, Capability Governance, shared presenters, and dropdown keyboard behavior out of `App.tsx`, reducing review risk for future product iterations.
+- Web 控制台外壳已将租户访问画像、能力治理、共享展示函数和下拉键盘行为从 `App.tsx` 拆出，降低后续产品迭代的审查风险。
+- Web console Permission Changes was redesigned from a status-card dashboard into a step-by-step task workspace inspired by enterprise management workspace: the main surface completes one permission change, while preflight, impact, health, approval queue, and audit records move into advanced checks.
+- Web 控制台权限变更页从状态卡片看板重做为分步骤任务工作台，参考 标准 B 端管理台：主界面只服务完成一单权限变更，预检、影响范围、落地状态、待审批请求和审计记录都进入高级检查项。
+- Web console Permission Changes now removes the separate product-message card and outer panel wrapper from the primary workspace, so the page opens directly into the permission-request task flow.
+- Web 控制台权限变更页现在移除了独立产品主张卡片和外层面板包装，进入页面后直接开始权限变更任务流程。
+- Web console Permission Changes now highlights the current step in the five-step flow with `aria-current="step"` and a localized current-step badge, so operators can scan where they are without reading raw identifiers.
+- Web 控制台权限变更页现在用 `aria-current="step"` 和本地化“当前”标记高亮五步流程里的当前位置，操作员无需阅读原始 ID 也能判断该做哪一步。
+- Renamed the web console's primary workspace and CTAs from package-centric wording to permission-change wording: operators now see **Permission Changes**, **New permission change**, **Submit for approval**, **Permission package template**, and **Request Configuration** so creating a change is not confused with creating a reusable template.
+- 将 Web 控制台主工作区和主要操作从“权限包”语义收束为“权限变更”语义：操作员现在看到 **权限变更**、**新建权限变更**、**提交审批**、**权限包模板** 和 **变更配置**，避免把新建变更误解为新建可复用模板。
+- Refined the Permission Changes web console into a quieter production-console UI: user-facing go-live summaries, runtime validation results, application health, and readiness summaries now hide raw ids and low-level evidence behind lightweight details controls, use less technical Chinese wording, and keep the approval journey readable on desktop and mobile.
+- 将权限变更 Web 控制台收束为更克制的生产控制台界面：上线摘要、运行验证结果、落地状态和上线就绪状态默认使用用户可读表达，原始 ID 与低层记录折叠到轻量详情入口，中文用词减少技术感，并保证桌面与移动端审批旅程都可扫读。
+- Reframed README, roadmap, and the v0.2.0 Permission Changes journey note in English and Simplified Chinese around tenant-first access governance and AI-friendly permission operations instead of generic MCP gateway positioning.
+- 将 README、路线图和 v0.2.0 权限包用户旅程说明改为中英双语，并把产品叙事收敛到租户优先访问治理与 AI 友好权限运营，而不是通用 MCP Gateway 定位。
+
+### Fixed
+
+- Getting Started no longer treats fallback sample tenants, Agents, capabilities, grants, traces, or evidence as completed setup progress; sample mode now shows one page-level read-only notice and keeps the real first step focused on connecting the backend API.
+- 开始使用页不再把回退示例租户、Agent、能力、授权、运行记录或记录算作已完成配置；示例模式现在只显示一条页面级只读提示，并把真实第一步聚焦在连接后端 API。
+- Permission Changes result messages now store translation keys and parameters instead of rendered strings, so approval, apply, and evidence-export feedback follows the active UI language after switching between English and Simplified Chinese.
+- 权限变更结果提示现在存储翻译 key 和参数，而不是已渲染字符串；在中英文之间切换界面语言后，审批、应用和导出验收报告反馈会跟随当前语言刷新。
+- Withdrawn permission approval requests no longer remain usable for apply/preflight; only pending, unconsumed, unexpired requests owned by the original requester can be withdrawn.
+- 已撤回的权限审批请求不再可用于应用或预检；只有原申请人名下仍待审批、未消费、未过期的请求才能撤回。
+- The Permission Changes to Access Profile handoff now carries readable tenant, workspace, caller, target, capability, and subject context, so the Access Profile workspace no longer falls back to raw tenant ids before profile data loads.
+- 权限变更跳转到权限画像时现在会带入可读的租户、工作区、调用方、目标、能力和主体上下文，画像数据加载前不再回退显示原始租户 ID。
+- Permission Changes runtime validation now uses an isolated validation draft, approval request, and access-profile evidence state, so running validation no longer overwrites the operator's edited request, tenant/workspace context, or access-profile filters.
+- 权限变更运行验证现在使用独立的验证草案、审批请求和访问画像验收状态，执行验证不再覆盖操作员正在编辑的申请、租户/工作区上下文或访问画像筛选。
+- Permission Changes now blocks blank approval requests, duplicate pending approval submissions, double-click submission races, and the follow-up approve/reject click that can be generated when the submit button changes state under the pointer.
+- 权限变更现在会拦截空申请、已有待审批申请的重复提交、双击提交并发，以及提交按钮状态切换时同一次双击可能误触发的批准/拒绝动作。
+- Localized web-console error fallbacks now use the active UI language instead of leaking English catch-block text into Simplified Chinese sessions.
+- Web 控制台错误兜底文案现在按当前界面语言展示，不再在中文会话中泄漏英文 catch 文案。
+- The main navigation now exposes `aria-current="page"`, custom dropdowns support keyboard movement and labelled combobox semantics, and the five-step permission-change flow has executable state tests.
+- 主导航现在暴露 `aria-current="page"`；自定义下拉支持键盘移动和带标签的 combobox 语义；五步权限变更流程也补上了可执行状态测试。
+- Removed stale demo-era CSS selectors for old permission package grids, approval checks, and access toolbars.
+- 移除了旧 Demo 时代遗留的权限包网格、审批检查和访问工具栏死样式选择器。
 
 ## [0.1.0] - 2026-06-03
 
@@ -76,9 +355,9 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Public roadmap for near-term and future product direction.
 - Developer-preview core journey scenario with a dependency-free mock MCP server.
 - Development-only `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` switch for local loopback/private upstream evaluation.
-- English and Simplified Chinese labels for the web console's core tenant access and runtime evidence journey.
+- English and Simplified Chinese labels for the web console's core tenant access and runtime records journey.
 - Distinct web console workspaces for each primary navigation item so Cockpit, Registry, Routes, Policies, Capabilities, Access, Traces, and Evidence no longer collapse into the same view.
-- Web console Core Journey Workbench that creates a fresh tenant tree, MCP target, scoped grant chain, allowed/denied runtime evidence, and tenant access profile through real APIs.
+- Web console Core Journey Workbench that creates a fresh tenant tree, MCP target, scoped grant chain, allowed/denied runtime records, and tenant access profile through real APIs.
 - `make mock-mcp` for keeping the dependency-free mock MCP server running during browser-based console evaluation.
 - `make demo` for one-command local first-run evaluation of the API, mock MCP server, and web console.
 - Core Journey Workbench preflight checks for API and Mock MCP readiness plus non-destructive demo session reset.
@@ -92,7 +371,7 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Renamed local smoke scripts to scenario naming.
 - Renamed PostgreSQL migration files to stable schema-area filenames.
 - Rewrote the frontend design reference as public console design guidance.
-- Updated console metrics so live runtime evidence is shown from real allowed/denied traces instead of sample evidence runs.
+- Updated console metrics so live runtime records is shown from real allowed/denied traces instead of sample evidence runs.
 - Added a visible web console language toggle that persists the operator's local preference.
 - Expanded Simplified Chinese coverage for operator forms, tables, buttons, states, validation hints, and empty states in the web console.
 

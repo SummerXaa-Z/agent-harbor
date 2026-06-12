@@ -3,6 +3,11 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:9090}"
 ADMIN_KEY="${ADMIN_KEY:-}"
+REQUESTER_ACTOR="${REQUESTER_ACTOR:-requester}"
+APPROVAL_REVIEWER="${APPROVAL_REVIEWER:-security-reviewer}"
+REQUESTER_ADMIN_KEY="${REQUESTER_ADMIN_KEY:-${ADMIN_KEY:-}}"
+REVIEWER_ADMIN_KEY="${REVIEWER_ADMIN_KEY:-${ADMIN_KEY:-}}"
+ADMIN_KEY="${ADMIN_KEY:-$REQUESTER_ADMIN_KEY}"
 RUN_ID="${RUN_ID:-permission-package-approval-$(date +%Y%m%d%H%M%S)}"
 ROOT_TENANT_ID="${ROOT_TENANT_ID:-tenant-root-${RUN_ID}}"
 CHILD_TENANT_ID="${CHILD_TENANT_ID:-tenant-child-${RUN_ID}}"
@@ -12,6 +17,7 @@ MOCK_MCP_HOST="${MOCK_MCP_HOST:-127.0.0.1}"
 MOCK_MCP_PORT="${MOCK_MCP_PORT:-8787}"
 MCP_ENDPOINT="${MCP_ENDPOINT:-http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/mcp}"
 START_MOCK_MCP="${START_MOCK_MCP:-true}"
+MCP_SERVER_MODE="${MCP_SERVER_MODE:-mock}"
 READ_TOOL="${READ_TOOL:-search_customer}"
 WRITE_TOOL="${WRITE_TOOL:-update_ticket}"
 DENIED_TOOL="${DENIED_TOOL:-export_contracts}"
@@ -53,6 +59,7 @@ request() {
   local bearer="${4:-}"
   local run_id="${5:-}"
   local subject_id="${6:-}"
+  local admin_key="${7:-$ADMIN_KEY}"
   local tmp
   tmp="$(mktemp)"
 
@@ -65,8 +72,8 @@ request() {
     -H "Content-Type: application/json"
   )
 
-  if [[ -n "$ADMIN_KEY" ]]; then
-    args+=(-H "X-Admin-Key: $ADMIN_KEY")
+  if [[ -n "$admin_key" ]]; then
+    args+=(-H "X-Admin-Key: $admin_key")
   fi
   if [[ -n "$bearer" ]]; then
     args+=(-H "Authorization: Bearer $bearer")
@@ -98,7 +105,7 @@ expect_status() {
     echo "$HTTP_BODY" >&2
     if [[ "$HTTP_BODY" == *"endpoint host is not allowed"* ]]; then
       echo >&2
-      echo "local MCP endpoints require: AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run" >&2
+      echo "local MCP endpoints require: AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run" >&2
     fi
     exit 1
   fi
@@ -195,6 +202,36 @@ PY
 permission_package_body() {
   local approval_request_id="${1:-}"
   json_body permission-package "$CALLER_ID" "$REGION" "$REQUEST_TEXT" "$SUBJECT_SELECTOR" "$TARGET_ID" "$TEMPLATE_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID" "$approval_request_id"
+}
+
+production_readiness_path() {
+  local approval_request_id="${1:-}"
+  python3 - "$approval_request_id" "$CALLER_ID" "$REGION" "$REQUEST_TEXT" "$SUBJECT_ID" "$SUBJECT_SELECTOR" "$TARGET_ID" "$TEMPLATE_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID" <<'PY'
+import sys
+from urllib.parse import urlencode
+
+approval_request_id, caller_id, region, request_text, subject_id, subject_selector, target_id, template_id, tenant_id, workspace_id = sys.argv[1:11]
+params = {
+    "callerInstanceId": caller_id,
+    "region": region,
+    "requestText": request_text,
+    "subjectId": subject_id,
+    "subjectSelector": subject_selector,
+    "targetId": target_id,
+    "templateId": template_id,
+    "tenantId": tenant_id,
+    "traceLimit": "20",
+    "workspaceId": workspace_id,
+}
+if approval_request_id:
+    params["approvalRequestId"] = approval_request_id
+print("/api/v1/permission-packages/production-readiness?" + urlencode(params))
+PY
+}
+
+production_evidence_report_path() {
+  local approval_request_id="${1:-}"
+  production_readiness_path "$approval_request_id" | sed 's#/production-readiness?#/production-readiness/report?#'
 }
 
 capability_id_for_key() {
@@ -327,18 +364,109 @@ print(f"permission package preflight verified: canApply={expected_can_apply} che
 PY
 }
 
+assert_production_readiness() {
+  local expected_status="$1"
+  local expected_check="$2"
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_status" "$expected_check" "$APPLICATION_ID" <<'PY'
+import json
+import os
+import sys
+
+readiness = json.loads(os.environ["RESPONSE_BODY"])["data"]
+expected_status, expected_check, application_id = sys.argv[1:4]
+if readiness.get("status") != expected_status:
+    raise SystemExit(f"production readiness status={readiness.get('status')!r} want {expected_status!r}: {readiness}")
+summary = readiness.get("summary") or {}
+checks = {check.get("code"): check for check in readiness.get("checks", [])}
+if expected_check not in checks:
+    raise SystemExit(f"production readiness missing check {expected_check!r}: {checks}")
+if expected_status == "ready":
+    if summary.get("blockingCount") != 0:
+        raise SystemExit(f"ready production readiness should have zero blockers: {summary}")
+    expected_flags = {
+        "hasApplication": True,
+        "hasAllowedTrace": True,
+        "hasDeniedTrace": True,
+        "hasAppliedAudit": True,
+        "accessProfileReady": True,
+    }
+    for key, value in expected_flags.items():
+        if summary.get(key) is not value:
+            raise SystemExit(f"production readiness summary[{key}]={summary.get(key)!r} want {value!r}: {summary}")
+    application = readiness.get("latestApplication") or {}
+    if application.get("id") != application_id:
+        raise SystemExit(f"production readiness application id mismatch: {application}")
+    runtime = readiness.get("runtimeEvidence") or {}
+    if not runtime.get("allowedTrace") or not runtime.get("deniedTrace"):
+        raise SystemExit(f"production readiness missing runtime evidence: {runtime}")
+    audit = readiness.get("auditEvidence") or {}
+    if not audit.get("appliedEvent"):
+        raise SystemExit(f"production readiness missing applied audit evidence: {audit}")
+else:
+    if summary.get("blockingCount", 0) < 1:
+        raise SystemExit(f"blocked production readiness should include blockers: {summary}")
+    check = checks[expected_check]
+    if check.get("severity") != "blocking":
+        raise SystemExit(f"expected check {expected_check!r} to block, got {check}")
+print(f"permission package production readiness verified: status={expected_status} check={expected_check}")
+PY
+}
+
+assert_production_evidence_report() {
+  local expected_status="$1"
+  local expected_check="$2"
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_status" "$expected_check" "$APPLICATION_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID" <<'PY'
+import json
+import os
+import sys
+
+report = json.loads(os.environ["RESPONSE_BODY"])["data"]
+expected_status, expected_check, application_id, tenant_id, workspace_id = sys.argv[1:6]
+if report.get("reportVersion") != "production-readiness-report/v1":
+    raise SystemExit(f"unexpected report version: {report}")
+if report.get("status") != expected_status:
+    raise SystemExit(f"production evidence report status={report.get('status')!r} want {expected_status!r}: {report}")
+scope = report.get("scope") or {}
+if scope.get("tenantId") != tenant_id or scope.get("workspaceId") != workspace_id:
+    raise SystemExit(f"unexpected production evidence scope: {scope}")
+checks = {check.get("code"): check for check in report.get("checks", [])}
+if expected_check not in checks:
+    raise SystemExit(f"production evidence report missing check {expected_check!r}: {checks}")
+evidence = report.get("evidence") or {}
+application = evidence.get("application") or {}
+runtime = evidence.get("runtime") or {}
+audit = evidence.get("audit") or {}
+if expected_status == "ready":
+    if application.get("id") != application_id or application.get("present") is not True:
+        raise SystemExit(f"ready production evidence report missing application evidence: {application}")
+    if not runtime.get("allowedTraceId") or not runtime.get("deniedTraceId"):
+        raise SystemExit(f"ready production evidence report missing runtime evidence: {runtime}")
+    if not audit.get("appliedEventId"):
+        raise SystemExit(f"ready production evidence report missing audit evidence: {audit}")
+    if (evidence.get("accessProfile") or {}).get("present") is not True:
+        raise SystemExit(f"ready production evidence report missing access profile evidence: {evidence}")
+else:
+    if application.get("present") is True:
+        raise SystemExit(f"blocked-before-apply report should not include application evidence: {application}")
+    if checks[expected_check].get("severity") != "blocking":
+        raise SystemExit(f"expected report check {expected_check!r} to block, got {checks[expected_check]}")
+print(f"permission package production evidence report verified: status={expected_status} check={expected_check}")
+PY
+}
+
 assert_listed_approval() {
   local expected_id="$1"
-  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_id" <<'PY'
+  local expected_status="${2:-pending}"
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_id" "$expected_status" <<'PY'
 import json
 import os
 import sys
 
 rows = json.loads(os.environ["RESPONSE_BODY"])["data"]
-expected_id = sys.argv[1]
+expected_id, expected_status = sys.argv[1:3]
 if not rows:
     raise SystemExit("expected one listed approval request")
-if rows[0]["id"] != expected_id or rows[0]["status"] != "pending":
+if rows[0]["id"] != expected_id or rows[0]["status"] != expected_status:
     raise SystemExit(f"unexpected listed approval request: {rows[:1]}")
 print("approval request list verified")
 PY
@@ -717,24 +845,39 @@ print("permission package approval audit evidence verified")
 PY
 }
 
-start_mock_mcp() {
+start_mcp_server() {
   if [[ "$START_MOCK_MCP" != "true" ]]; then
     return
   fi
   if curl -fsS "http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/healthz" >/dev/null 2>&1; then
-    echo "mock MCP server already running on ${MOCK_MCP_HOST}:${MOCK_MCP_PORT}"
+    echo "MCP server already running on ${MOCK_MCP_HOST}:${MOCK_MCP_PORT}"
     return
   fi
-  scripts/mock-mcp-server.py --host "$MOCK_MCP_HOST" --port "$MOCK_MCP_PORT" &
-  MOCK_MCP_PID="$!"
+  case "$MCP_SERVER_MODE" in
+    mock)
+      scripts/mock-mcp-server.py --host "$MOCK_MCP_HOST" --port "$MOCK_MCP_PORT" &
+      MOCK_MCP_PID="$!"
+      ;;
+    real)
+      need node
+      need pnpm
+      pnpm --dir scripts/real-mcp install --frozen-lockfile >/dev/null
+      (cd scripts/real-mcp && REAL_MCP_HOST="$MOCK_MCP_HOST" REAL_MCP_PORT="$MOCK_MCP_PORT" node server.mjs) &
+      MOCK_MCP_PID="$!"
+      ;;
+    *)
+      echo "MCP_SERVER_MODE must be mock or real" >&2
+      exit 1
+      ;;
+  esac
   for _ in $(seq 1 30); do
     if curl -fsS "http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/healthz" >/dev/null 2>&1; then
-      echo "started mock MCP server on ${MCP_ENDPOINT}"
+      echo "started ${MCP_SERVER_MODE} MCP server on ${MCP_ENDPOINT}"
       return
     fi
     sleep 0.2
   done
-  echo "mock MCP server did not become ready" >&2
+  echo "MCP server did not become ready" >&2
   exit 1
 }
 
@@ -744,6 +887,7 @@ need python3
 echo "AgentHarbor permission package approval scenario"
 echo "BASE_URL=$BASE_URL"
 echo "MCP_ENDPOINT=$MCP_ENDPOINT"
+echo "MCP_SERVER_MODE=$MCP_SERVER_MODE"
 echo "RUN_ID=$RUN_ID"
 echo "SUBJECT_ID=$SUBJECT_ID"
 if [[ -n "$ADMIN_KEY" ]]; then
@@ -751,8 +895,11 @@ if [[ -n "$ADMIN_KEY" ]]; then
 else
   echo "ADMIN_KEY=not set"
 fi
+if [[ -n "$REQUESTER_ADMIN_KEY" && -n "$REVIEWER_ADMIN_KEY" && "$REQUESTER_ADMIN_KEY" != "$REVIEWER_ADMIN_KEY" ]]; then
+  echo "ADMIN_IDENTITIES=split requester/reviewer"
+fi
 
-start_mock_mcp
+start_mcp_server
 
 request GET "/healthz"
 expect_status 200 "AgentHarbor health check"
@@ -798,6 +945,24 @@ expect_status 400 "reject approval-required package without approval"
 echo "direct apply without approval rejected"
 
 request POST "/api/v1/permission-packages/approval-requests" "$(permission_package_body)"
+expect_status 201 "create withdrawable approval request"
+assert_approval_request "pending"
+WITHDRAWN_APPROVAL_REQUEST_ID="$(json_get data.id)"
+
+request POST "/api/v1/permission-packages/approval-requests/$WITHDRAWN_APPROVAL_REQUEST_ID/withdraw" "$(json_body approval-resolution "$REQUESTER_ACTOR" "wrong scope for this request")"
+expect_status 200 "withdraw pending approval request"
+assert_approval_request "withdrawn" "$WITHDRAWN_APPROVAL_REQUEST_ID"
+
+request GET "/api/v1/permission-packages/approval-requests?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID&templateId=$TEMPLATE_ID&targetId=$TARGET_ID&callerInstanceId=$CALLER_ID&status=withdrawn&limit=1"
+expect_status 200 "list withdrawn approval request"
+assert_listed_approval "$WITHDRAWN_APPROVAL_REQUEST_ID" "withdrawn"
+
+request POST "/api/v1/permission-packages:apply" "$(permission_package_body "$WITHDRAWN_APPROVAL_REQUEST_ID")"
+expect_status 400 "reject withdrawn approval request"
+assert_body_contains "approved" "withdrawn approval apply"
+echo "withdrawn approval request cannot authorize apply"
+
+request POST "/api/v1/permission-packages/approval-requests" "$(permission_package_body)"
 expect_status 201 "create approval request"
 assert_approval_request "pending"
 APPROVAL_REQUEST_ID="$(json_get data.id)"
@@ -806,7 +971,14 @@ request GET "/api/v1/permission-packages/approval-requests?tenantId=$ROOT_TENANT
 expect_status 200 "list pending approval requests"
 assert_listed_approval "$APPROVAL_REQUEST_ID"
 
-request POST "/api/v1/permission-packages/approval-requests/$APPROVAL_REQUEST_ID/approve" "$(json_body approval-resolution "security-reviewer" "approved for local production journey scenario")"
+if [[ -n "$REQUESTER_ADMIN_KEY" && -n "$REVIEWER_ADMIN_KEY" && "$REQUESTER_ADMIN_KEY" != "$REVIEWER_ADMIN_KEY" ]]; then
+  request POST "/api/v1/permission-packages/approval-requests/$APPROVAL_REQUEST_ID/approve" "$(json_body approval-resolution "$APPROVAL_REVIEWER" "requester must not impersonate reviewer")" "" "" "" "$REQUESTER_ADMIN_KEY"
+  expect_status 403 "reject approval reviewer impersonation"
+  assert_body_contains "authenticated admin identity" "approval reviewer impersonation"
+  echo "approval reviewer impersonation rejected"
+fi
+
+request POST "/api/v1/permission-packages/approval-requests/$APPROVAL_REQUEST_ID/approve" "$(json_body approval-resolution "$APPROVAL_REVIEWER" "approved for local production journey scenario")" "" "" "" "$REVIEWER_ADMIN_KEY"
 expect_status 200 "approve approval request"
 assert_approval_request "approved" "$APPROVAL_REQUEST_ID"
 
@@ -817,6 +989,14 @@ assert_permission_package_preflight "true" "approval_request_ready"
 request GET "/api/v1/permission-packages/approval-requests?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID&templateId=$TEMPLATE_ID&targetId=$TARGET_ID&callerInstanceId=$CALLER_ID&status=approved&limit=1"
 expect_status 200 "list unconsumed approval request after preflight"
 assert_unconsumed_approval
+
+request GET "$(production_readiness_path "$APPROVAL_REQUEST_ID")"
+expect_status 200 "check production readiness before apply"
+assert_production_readiness "blocked" "application_present"
+
+request GET "$(production_evidence_report_path "$APPROVAL_REQUEST_ID")"
+expect_status 200 "export production evidence report before apply"
+assert_production_evidence_report "blocked" "application_present"
 
 request POST "/api/v1/permission-packages:apply" "$(permission_package_body "$APPROVAL_REQUEST_ID")"
 expect_status 201 "apply approved permission package"
@@ -879,5 +1059,13 @@ assert_application_impact
 request GET "/api/v1/audit/events?action=permission_package.applied&resourceId=$APPLICATION_ID&limit=1"
 expect_status 200 "list applied audit events"
 assert_applied_audit_event
+
+request GET "$(production_readiness_path)"
+expect_status 200 "check production readiness after evidence"
+assert_production_readiness "ready" "runtime_allowed_trace_present"
+
+request GET "$(production_evidence_report_path)"
+expect_status 200 "export production evidence report after evidence"
+assert_production_evidence_report "ready" "runtime_allowed_trace_present"
 
 echo "permission package approval scenario complete"

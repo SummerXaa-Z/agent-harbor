@@ -18,7 +18,7 @@ export function runtimeEvidenceMetric(allowedTraceCount: number, deniedTraceCoun
   const totalTraceCount = allowedTraceCount + deniedTraceCount
   if (totalTraceCount === 0) {
     return {
-      label: "Runtime Evidence",
+      label: "Runtime Records",
       value: "0",
       detail: "no traces yet",
       tone: "neutral",
@@ -26,7 +26,7 @@ export function runtimeEvidenceMetric(allowedTraceCount: number, deniedTraceCoun
   }
 
   return {
-    label: "Runtime Evidence",
+    label: "Runtime Records",
     value: String(totalTraceCount),
     detail: `${allowedTraceCount} allowed / ${deniedTraceCount} denied`,
     tone: deniedTraceCount > 0 ? "info" : "success",

@@ -61,6 +61,8 @@ test("ask access copy is bilingual", () => {
     "ask.chainTitle",
     "ask.dataSourceTitle",
     "ask.emptyDetail",
+    "ask.group.access",
+    "ask.group.context",
     "ask.intent.openAccess",
     "ask.liveMode",
     "ask.questionTitle",
@@ -78,10 +80,13 @@ test("ask access copy is bilingual", () => {
 test("ask access view keeps the primary path answer-first and business-readable", () => {
   assert.match(view, /className="ask-workspace"/);
   assert.match(view, /className="ask-context-column"/);
+  assert.match(view, /className="ask-query-groups"/);
+  assert.match(view, /className="ask-query-grid ask-query-grid-access"/);
   assert.match(view, /className="ask-answer-empty"/);
   assert.match(view, /permissionEntityDisplayName\(tenant\.name, t\)/);
   assert.match(view, /function agentOptions\(agents: Agent\[], t: Translator\)/);
   assert.doesNotMatch(view, /EmptyRow/);
+  assert.doesNotMatch(view, /ask-sentence-text/);
   assert.match(presenters, /"Policy Router": t\("demo\.policyRouterTarget"\)/);
   assert.match(presenters, /"Sandbox": t\("demo\.workspaceSandbox"\)/);
 });

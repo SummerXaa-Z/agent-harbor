@@ -146,42 +146,47 @@ export function AskAccessView({
               <span>{t("ask.questionLabel")}</span>
               <strong>{t("ask.questionTitle")}</strong>
             </div>
-            <div className="ask-query-sentence">
-              <span className="ask-sentence-text">{t("ask.questionPrefix")}</span>
-              <QueryField
-                label={t("ask.field.tenant")}
-                onChange={(tenantId) => onChange({ tenantId })}
-                options={withEmptyOption(tenantOptions, t("ask.emptyOption.tenant"))}
-                value={effectiveSelection.tenantId ?? ""}
-              />
-              <span className="ask-sentence-text">{t("ask.questionScopeJoin")}</span>
-              <QueryField
-                label={t("ask.field.workspace")}
-                onChange={(workspaceId) => onChange({ workspaceId })}
-                options={withEmptyOption(workspaceOptions, t("ask.emptyOption.workspace"))}
-                value={effectiveSelection.workspaceId ?? ""}
-              />
-              <span className="ask-sentence-text">{t("ask.questionCallerPrefix")}</span>
-              <QueryField
-                label={t("ask.field.caller")}
-                onChange={(callerInstanceId) => onChange({ callerInstanceId })}
-                options={withEmptyOption(callerOptions, t("ask.emptyOption.caller"))}
-                value={effectiveSelection.callerInstanceId ?? ""}
-              />
-              <span className="ask-sentence-text">{t("ask.questionCanAccess")}</span>
-              <QueryField
-                label={t("ask.field.target")}
-                onChange={(targetId) => onChange({ targetId })}
-                options={withEmptyOption(targetOptions, t("ask.emptyOption.target"))}
-                value={effectiveSelection.targetId ?? ""}
-              />
-              <span className="ask-sentence-text">{t("ask.questionCapabilityConnector")}</span>
-              <QueryField
-                label={t("ask.field.capability")}
-                onChange={(capabilityId) => onChange({ capabilityId })}
-                options={withEmptyOption(capabilityOptions, t("ask.emptyOption.capability"))}
-                value={effectiveSelection.capabilityId ?? ""}
-              />
+            <div className="ask-query-groups">
+              <section className="ask-query-group" aria-label={t("ask.group.context")}>
+                <span className="ask-query-group-title">{t("ask.group.context")}</span>
+                <div className="ask-query-grid ask-query-grid-context">
+                  <QueryField
+                    label={t("ask.field.tenant")}
+                    onChange={(tenantId) => onChange({ tenantId })}
+                    options={withEmptyOption(tenantOptions, t("ask.emptyOption.tenant"))}
+                    value={effectiveSelection.tenantId ?? ""}
+                  />
+                  <QueryField
+                    label={t("ask.field.workspace")}
+                    onChange={(workspaceId) => onChange({ workspaceId })}
+                    options={withEmptyOption(workspaceOptions, t("ask.emptyOption.workspace"))}
+                    value={effectiveSelection.workspaceId ?? ""}
+                  />
+                </div>
+              </section>
+              <section className="ask-query-group" aria-label={t("ask.group.access")}>
+                <span className="ask-query-group-title">{t("ask.group.access")}</span>
+                <div className="ask-query-grid ask-query-grid-access">
+                  <QueryField
+                    label={t("ask.field.caller")}
+                    onChange={(callerInstanceId) => onChange({ callerInstanceId })}
+                    options={withEmptyOption(callerOptions, t("ask.emptyOption.caller"))}
+                    value={effectiveSelection.callerInstanceId ?? ""}
+                  />
+                  <QueryField
+                    label={t("ask.field.target")}
+                    onChange={(targetId) => onChange({ targetId })}
+                    options={withEmptyOption(targetOptions, t("ask.emptyOption.target"))}
+                    value={effectiveSelection.targetId ?? ""}
+                  />
+                  <QueryField
+                    label={t("ask.field.capability")}
+                    onChange={(capabilityId) => onChange({ capabilityId })}
+                    options={withEmptyOption(capabilityOptions, t("ask.emptyOption.capability"))}
+                    value={effectiveSelection.capabilityId ?? ""}
+                  />
+                </div>
+              </section>
             </div>
             <div className="ask-query-footer">
               <label className="ask-subject-field">

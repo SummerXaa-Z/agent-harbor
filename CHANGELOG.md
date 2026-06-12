@@ -8,8 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
-- Access Query now uses a focused question-and-answer workspace with a compact context rail, business-readable entity names, and "access object" wording instead of exposing operator-facing technical names in the primary path.
-- 访问查询页现在改为聚焦的问题与答案工作台，右侧收纳上下文信息，主路径优先显示业务可读实体名，并将“访问用户”调整为“访问对象”。
+- Access Query now uses a focused question-and-answer workspace with grouped tenant/access fields, a compact context rail, business-readable entity names, and "access object" wording instead of exposing operator-facing technical names in the primary path.
+- 访问查询页现在改为聚焦的问题与答案工作台，用分组表单承载租户上下文和访问关系，右侧收纳上下文信息，主路径优先显示业务可读实体名，并将“访问用户”调整为“访问对象”。
 - Capability Governance now opens as a catalog-first workspace: the page shows scope, capability inventory, and active grants by default, while grant-chain creation opens in an on-demand side panel instead of occupying the main page.
 - 能力治理页现在改为清单优先工作台：默认展示范围、能力清单和已有授权，创建授权链改为按需打开侧边面板，不再常驻占用主页面。
 - Web console now has an answer-first **Access Query** workspace for configured systems: operators ask whether a caller can access a target capability, see the evidence chain, and carry denied decisions into Permission Changes as a one-time prefilled fix.

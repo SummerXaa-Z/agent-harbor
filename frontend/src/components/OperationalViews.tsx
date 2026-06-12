@@ -116,9 +116,9 @@ export function AccessPolicyWorkspace({
   const [auditCollapsed, setAuditCollapsed] = useState(true);
 
   function focusPolicyForm() {
-    const disclosure = document.getElementById("policy-create-panel") as HTMLDetailsElement | null;
-    if (disclosure) disclosure.open = true;
-    document.getElementById("policy-create-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const trigger = document.querySelector<HTMLButtonElement>("#policy-create-panel .action-modal-trigger");
+    trigger?.scrollIntoView({ behavior: "smooth", block: "center" });
+    trigger?.click();
   }
 
   return (

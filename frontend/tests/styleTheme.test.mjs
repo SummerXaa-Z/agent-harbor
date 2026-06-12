@@ -197,16 +197,24 @@ test("agent tools workspace prioritizes the registry before mutation forms", () 
   assert.ok(registryView.indexOf("{createKeyPanel}") < registryView.indexOf("{rotateCredentialPanel}"));
 });
 
-test("management mutation forms are collapsed behind action entries", () => {
-  assert.match(consolePrimitives, /export function ActionDisclosurePanel/);
-  assert.match(consolePrimitives, /className=\{`action-disclosure-panel \$\{className\}`\}/);
-  assert.match(app, /<ActionDisclosurePanel className="span-4" icon=\{<Boxes size=\{18\} \/>\} title=\{t\("panel\.createAgent"\)\}>/);
-  assert.match(app, /<ActionDisclosurePanel className="span-4" icon=\{<KeyRound size=\{18\} \/>\} title=\{t\("panel\.createKey"\)\}>/);
-  assert.match(app, /<ActionDisclosurePanel className="span-4" icon=\{<Route size=\{18\} \/>\} id="policy-create-panel" title=\{t\("panel\.createPolicy"\)\}>/);
-  assert.match(app, /<ActionDisclosurePanel className="span-4" icon=\{<KeyRound size=\{18\} \/>\} title=\{t\("panel\.rotateCredential"\)\}>/);
-  assert.match(styles, /\.action-disclosure-panel\s*\{[^}]*align-self:\s*start;/s);
-  assert.match(styles, /\.action-disclosure-panel\[open\]\s*\{[^}]*grid-column:\s*span 12;/s);
-  assert.match(styles, /\.action-disclosure-body\s*\{[^}]*padding:\s*14px;/s);
+test("management mutation forms open in independent action modals", () => {
+  assert.match(consolePrimitives, /export function ActionModalPanel/);
+  assert.match(consolePrimitives, /aria-haspopup="dialog"/);
+  assert.match(consolePrimitives, /aria-label=\{`\$\{title\} \$\{openLabel\}`\}/);
+  assert.match(consolePrimitives, /aria-modal="true"/);
+  assert.match(consolePrimitives, /role="dialog"/);
+  assert.match(consolePrimitives, /event\.key === "Escape"/);
+  assert.match(consolePrimitives, /document\.body\.style\.overflow = "hidden"/);
+  assert.match(consolePrimitives, /className="action-modal-trigger"/);
+  assert.match(app, /<ActionModalPanel[\s\S]*title=\{t\("panel\.createAgent"\)\}/);
+  assert.match(app, /<ActionModalPanel[\s\S]*title=\{t\("panel\.createKey"\)\}/);
+  assert.match(app, /<ActionModalPanel[\s\S]*id="policy-create-panel"[\s\S]*title=\{t\("panel\.createPolicy"\)\}/);
+  assert.match(app, /<ActionModalPanel[\s\S]*title=\{t\("panel\.rotateCredential"\)\}/);
+  assert.match(operationalViews, /querySelector<HTMLButtonElement>\("#policy-create-panel \.action-modal-trigger"\)/);
+  assert.match(styles, /\.action-modal-trigger\s*\{[\s\S]*cursor:\s*pointer;/);
+  assert.match(styles, /\.action-modal-backdrop\s*\{[\s\S]*position:\s*fixed;[\s\S]*overscroll-behavior:\s*contain;/);
+  assert.match(styles, /\.action-modal-panel\s*\{[\s\S]*width:\s*min\(720px,\s*calc\(100vw - 48px\)\);/);
+  assert.doesNotMatch(styles, /\.action-disclosure-panel/);
 });
 
 test("agent registry provides search status filtering and a details entry", () => {

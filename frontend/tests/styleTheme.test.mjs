@@ -185,7 +185,7 @@ test("workspace telemetry is scoped to system check instead of repeating on ever
   assert.doesNotMatch(app, /isCapabilitiesView \? "compact" : ""/);
 });
 
-test("agent tools workspace keeps mutation actions in the registry header", () => {
+test("agent tools workspace balances registry layout and hides inactive empty-state actions", () => {
   const registryStart = consoleViews.indexOf("export function RegistryView");
   const routesStart = consoleViews.indexOf("export function RoutesView", registryStart);
   const registryView = consoleViews.slice(registryStart, routesStart);
@@ -193,7 +193,10 @@ test("agent tools workspace keeps mutation actions in the registry header", () =
   assert.notEqual(registryStart, -1);
   assert.notEqual(routesStart, -1);
   assert.match(app, /const agentRegistryActions = \(\s*<div className="panel-action-group">/);
-  assert.match(app, /agentRegistryPanel=\{agentRegistryPanel\("span-12", agentRegistryActions\)\}/);
+  assert.match(app, /agents\.length > 0 \?/);
+  assert.match(app, /agentRegistryPanel=\{agentRegistryPanel\("span-8", agentRegistryActions\)\}/);
+  assert.match(app, /contractMatrixPanel=\{contractMatrixPanel\("span-4"\)\}/);
+  assert.match(styles, /\.content-grid\s*\{[^}]*align-items:\s*start;/s);
   assert.doesNotMatch(registryView, /createAgentPanel|createKeyPanel|rotateCredentialPanel/);
 });
 

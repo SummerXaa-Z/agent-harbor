@@ -2147,8 +2147,12 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const agentRegistryActions = (
     <div className="panel-action-group">
       {createAgentAction}
-      {createKeyAction}
-      {rotateCredentialAction}
+      {agents.length > 0 ? (
+        <>
+          {createKeyAction}
+          {rotateCredentialAction}
+        </>
+      ) : null}
     </div>
   );
   const coreJourneyPanel = (
@@ -2193,7 +2197,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       case "registry":
         return (
           <RegistryView
-            agentRegistryPanel={agentRegistryPanel("span-12", agentRegistryActions)}
+            agentRegistryPanel={agentRegistryPanel("span-8", agentRegistryActions)}
             contractMatrixPanel={contractMatrixPanel("span-4")}
           />
         );

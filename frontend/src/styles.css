@@ -3031,11 +3031,11 @@ td code {
 .core-journey-preflight-grid,
 .core-journey-steps {
   display: grid;
-  gap: 1px;
-  overflow: hidden;
-  border: 1px solid var(--line-subtle);
-  border-radius: var(--radius-control);
-  background: var(--line-subtle);
+  gap: 8px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .core-journey-preflight-grid {
@@ -3053,22 +3053,16 @@ td code {
   align-items: center;
   position: relative;
   min-height: 56px;
-  padding: 9px 16px 9px 18px;
-  border: 0;
-  border-radius: 0;
+  padding: 11px 14px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
   background: var(--surface);
 }
 
 .core-journey-preflight-row::before,
 .core-journey-step::before {
-  position: absolute;
-  top: 12px;
-  bottom: 12px;
-  left: 0;
-  width: 3px;
-  border-radius: 999px;
-  background: var(--line-strong);
-  content: "";
+  display: none;
+  content: none;
 }
 
 .core-journey-preflight-row {
@@ -3107,6 +3101,18 @@ td code {
   overflow: hidden;
   color: var(--muted);
   font-size: 12px;
+}
+
+.core-journey-preflight-row span {
+  display: -webkit-box;
+  line-height: 17px;
+  text-wrap: pretty;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.core-journey-step-detail {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3122,7 +3128,7 @@ td code {
 
 .core-journey-preflight-row.status-ok::before,
 .core-journey-step.status-complete::before {
-  background: var(--success);
+  background: transparent;
 }
 
 .core-journey-preflight-row.status-warning,
@@ -3132,7 +3138,7 @@ td code {
 
 .core-journey-preflight-row.status-warning::before,
 .core-journey-step.status-partial::before {
-  background: var(--warning);
+  background: transparent;
 }
 
 .core-journey-preflight-row.status-error {
@@ -3140,7 +3146,7 @@ td code {
 }
 
 .core-journey-preflight-row.status-error::before {
-  background: var(--danger);
+  background: transparent;
 }
 
 .core-journey-step.status-missing {

@@ -357,10 +357,14 @@ test("system self-check uses structured configuration and copyable runtime conte
   assert.match(row, /className="core-journey-step-metric"/);
   assert.match(styles, /\.core-journey-health\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
   assert.match(styles, /\.core-journey-advanced summary\s*\{/);
+  assert.match(styles, /\.core-journey-advanced summary\s*\{[^}]*min-height:\s*46px;/s);
   assert.match(styles, /\.core-journey-advanced:not\(\[open\]\)\s*>\s*:not\(summary\)\s*\{[^}]*display:\s*none !important;/s);
   assert.match(styles, /\.core-journey-config-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(styles, /\.core-journey-runtime-summary\s*\{/);
   assert.match(styles, /\.core-journey-runtime-summary:not\(\[open\]\)\s*>\s*:not\(summary\)\s*\{[^}]*display:\s*none !important;/s);
+  assert.match(styles, /\.core-journey-preflight-grid,\s*\.core-journey-steps\s*\{[^}]*gap:\s*1px;[^}]*background:\s*var\(--line-subtle\);/s);
+  assert.match(styles, /\.core-journey-preflight-row::before,\s*\.core-journey-step::before\s*\{[^}]*top:\s*12px;[^}]*bottom:\s*12px;/s);
+  assert.match(styles, /\.core-journey-step\.status-complete::before\s*\{[^}]*background:\s*var\(--success\);/s);
   assert.match(styles, /\.core-journey-step-detail\s*\{/);
 });
 

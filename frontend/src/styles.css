@@ -2804,8 +2804,8 @@ td code {
 
 .core-journey-task {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 10px;
+  padding: 16px;
 }
 
 .core-journey-task > header {
@@ -2911,7 +2911,7 @@ td code {
 }
 
 .core-journey-runtime-summary {
-  padding: 12px 14px;
+  padding: 0;
 }
 
 .core-journey-runtime-summary summary,
@@ -2920,7 +2920,9 @@ td code {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 46px;
   min-width: 0;
+  padding: 8px 14px;
   cursor: pointer;
   list-style: none;
 }
@@ -3005,11 +3007,11 @@ td code {
 }
 
 .core-journey-advanced {
-  padding: 12px 14px;
+  padding: 0;
 }
 
 .core-journey-advanced .core-journey-config {
-  margin-top: 12px;
+  margin: 0 12px 12px;
   padding: 12px;
   border: 1px solid var(--line-subtle);
   border-radius: var(--radius-control);
@@ -3029,7 +3031,11 @@ td code {
 .core-journey-preflight-grid,
 .core-journey-steps {
   display: grid;
-  gap: 8px;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--line-subtle);
 }
 
 .core-journey-preflight-grid {
@@ -3045,10 +3051,24 @@ td code {
   display: grid;
   gap: 10px;
   align-items: center;
-  padding: 10px;
-  border: 1px solid var(--line-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-muted);
+  position: relative;
+  min-height: 56px;
+  padding: 9px 12px 9px 15px;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+}
+
+.core-journey-preflight-row::before,
+.core-journey-step::before {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  content: "";
 }
 
 .core-journey-preflight-row {
@@ -3070,6 +3090,38 @@ td code {
   grid-template-columns: auto minmax(0, 1fr) minmax(52px, auto);
 }
 
+.core-journey-preflight-row.status-ok,
+.core-journey-step.status-complete {
+  box-shadow: none;
+}
+
+.core-journey-preflight-row.status-ok::before,
+.core-journey-step.status-complete::before {
+  background: var(--success);
+}
+
+.core-journey-preflight-row.status-warning,
+.core-journey-step.status-partial {
+  box-shadow: none;
+}
+
+.core-journey-preflight-row.status-warning::before,
+.core-journey-step.status-partial::before {
+  background: var(--warning);
+}
+
+.core-journey-preflight-row.status-error {
+  box-shadow: none;
+}
+
+.core-journey-preflight-row.status-error::before {
+  background: var(--danger);
+}
+
+.core-journey-step.status-missing {
+  box-shadow: none;
+}
+
 .core-journey-step-metric {
   justify-self: end;
   color: var(--ink-2);
@@ -3081,6 +3133,7 @@ td code {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  padding-top: 2px;
 }
 
 .trace-list {

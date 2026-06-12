@@ -72,7 +72,7 @@ make demo
 
 Then open `http://127.0.0.1:5174/`. The demo command starts the API in explicit unauthenticated development mode, the official MCP TypeScript SDK demo service, and the web console together for the first browser evaluation.
 
-The web console opens on **Permission Changes**, the primary approval and readiness workspace. Confirm the runtime checks are ready, then run the validation journey. The **Self-Check** workspace remains available for the lower-level `6/6` core permission loop validation.
+The web console opens on **Getting Started** when the live system is not configured yet, then defaults back to **Permission Changes** once tenant, Agent, capability, and grant-chain setup is complete. Confirm the runtime checks are ready, then run the validation journey. The **Self-Check** workspace remains available for the lower-level `6/6` core permission loop validation.
 
 Use the local release gate when you want to verify the repository rather than run the browser demo:
 
@@ -116,6 +116,10 @@ The scenario starts the dependency-free mock MCP server automatically and points
 
 ## Try the Permission Changes Console
 
+First-time users start on **Getting Started**, a six-step setup checklist that explains the chain from tenant to Agent, capability, grant, runtime evidence, and go-live evidence. Once the first four setup steps are complete, the console opens directly on **Permission Changes** for daily operations.
+
+首次打开控制台时，如果系统尚未完成配置，会先进入 **开始使用**：一个六步检查清单，说明从租户、Agent、能力、授权、运行证据到上线证据的链路。前四步完成后，控制台会默认进入日常操作的 **权限变更**。
+
 ### What this validates
 
 The console exercises the v0.2.0 permission-change journey end to end:
@@ -149,8 +153,8 @@ make demo
 ```
 
 1. Start the local demo stack with `make demo`.
-2. Open `http://127.0.0.1:5174/` and switch to **Permission Changes**.
-3. Click **Run validation**.
+2. Open `http://127.0.0.1:5174/`. A fresh system lands on **Getting Started**; a configured system lands on **Permission Changes**.
+3. From **Permission Changes**, click **Run validation**.
 4. Confirm **Status Check** reaches ready and **Application Health** shows a healthy row.
 5. Export the production evidence JSON.
 6. Open **Review impact** or **Rehearse drift** when you want to inspect read-only impact or drift blockers.
@@ -158,8 +162,8 @@ make demo
 ### 本地运行
 
 1. 启动本地演示环境: `make demo`。
-2. 打开 `http://127.0.0.1:5174/`，进入 **权限变更**。
-3. 点击 **Run validation / 执行运行验证**。
+2. 打开 `http://127.0.0.1:5174/`。全新系统会进入 **开始使用**，已配置系统会进入 **权限变更**。
+3. 在 **权限变更** 中点击 **Run validation / 执行运行验证**。
 4. 确认 **Status Check / 状态检查** 达到可上线，并确认 **Application Health / 落地状态** 出现正常应用行。
 5. 导出上线证据 JSON。
 6. 需要复核影响或演练漂移时，再打开 **Review impact / 查看影响** 或 **Rehearse drift / 演练漂移**。
@@ -208,7 +212,7 @@ For the first browser evaluation, run:
 make demo
 ```
 
-Then open `http://127.0.0.1:5174/`. The web console opens on **Permission Changes**, the production approval and readiness workspace for the approval-required **Support ticket triage** path. Each validation run uses fresh `ui-approval-*` identifiers, applies permissions through live APIs, sends runtime MCP calls with `X-AgentHarbor-Subject-Id`, and surfaces the application record, application impact review, tenant access profile, traces, applied audit event, go-live readiness, and bounded evidence export in the console.
+Then open `http://127.0.0.1:5174/`. If the live system is empty, the web console opens on **Getting Started** and shows the setup chain before any permission-change work. After tenant, Agent, capability, and grant-chain setup is complete, the same URL opens on **Permission Changes**, the production approval and readiness workspace for the approval-required **Support ticket triage** path. Each validation run uses fresh `ui-approval-*` identifiers, applies permissions through live APIs, sends runtime MCP calls with `X-AgentHarbor-Subject-Id`, and surfaces the application record, application impact review, tenant access profile, traces, applied audit event, go-live readiness, and bounded evidence export in the console.
 
 The Permission Changes console also shows runtime checks for the API, MCP tool service, browser subject-header CORS, local private-upstream mode, and current data source before validation runs. Use the **Self-Check** workspace when you need the lower-level core permission loop check; it verifies API and MCP tool service readiness before enabling the run button and keeps **Reset session** non-destructive.
 

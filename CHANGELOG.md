@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Web console now includes a first-run **Getting Started** workspace with a six-step tenant-to-evidence checklist, a pure frontend setup-readiness model, journey-ordered navigation, and empty-state actions that point operators to the next setup dependency.
+- Web 控制台新增首次使用的 **开始使用** 工作区，提供租户到证据的六步检查清单、纯前端配置就绪判定、按旅程排序的导航，以及指向下一项依赖的空状态操作。
 - Web console controller state is now split into domain hooks for management operations, capability governance, tenant access profiles, and the core journey; architecture tests cap `ConsoleController.tsx` state growth and keep `AiAdminPermissionWorkbench.tsx` under a guarded size limit.
 - Web 控制台 Controller 状态已拆入管理操作、能力治理、租户访问画像和核心旅程等 domain hooks；架构测试现在会限制 `ConsoleController.tsx` 状态继续膨胀，并给 `AiAdminPermissionWorkbench.tsx` 设置文件规模守护。
 - Added a follow-up console UI review (`docs/engineering/ui-review-2026-06-11.md`) that verifies the 2026-06-10 fixes are live in the running console and reports the next findings: the 4820-line `App.tsx` view monolith, language-snapshot result messages, missing list search/filter at scale, overloaded "Advanced settings" wording, policy-page layout confusion, self-check page alignment, and onboarding concept load.

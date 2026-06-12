@@ -328,7 +328,12 @@ export function TenantAccessProfileView({
                 <span>{countInvalidAccessProfileRows(profile)} {t("text.invalidRows")}</span>
               </header>
               {profileGrants.length === 0 ? (
-                <EmptyRow title={t("empty.grantChains.title")} detail={t("empty.grantChains.detail")} />
+                <EmptyRow
+                  title={t("empty.grantChains.title")}
+                  detail={t("empty.grantChains.detail")}
+                  actionLabel={t("empty.grantChains.action")}
+                  actionHash="#ai-admin"
+                />
               ) : null}
               {profileGrants.map((grant) => (
                 <AccessGrantRow dataScopeLabels={dataScopeLabels} grant={grant} key={grant.tenantEntitlement.id} t={t} />

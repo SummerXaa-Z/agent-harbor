@@ -151,12 +151,14 @@ import {
   CapabilitiesView,
   CockpitView,
   EvidenceView,
+  GettingStartedConsoleView,
   PoliciesView,
   RegistryView,
   RoutesView,
   TracesView
 } from "./components/ConsoleViews";
 import { CoreJourneyWorkbench } from "./components/CoreJourneyWorkbench";
+import { GettingStartedView } from "./components/GettingStartedView";
 import {
   AgentCreateForm,
   CredentialRotateForm,
@@ -183,6 +185,7 @@ import { useAccessProfileController } from "./hooks/useAccessProfileController";
 import { useCapabilityGovernanceController } from "./hooks/useCapabilityGovernanceController";
 import { useCoreJourneyController } from "./hooks/useCoreJourneyController";
 import { useManagementOperations } from "./hooks/useManagementOperations";
+import { gettingStartedSteps, resolveDefaultNavKey } from "./gettingStarted";
 import type {
   AccessProfileFilters,
   AccessProfileHandoffContext,
@@ -245,11 +248,15 @@ function initialLanguage(): Language {
   }
 }
 
-function initialNavKey(): NavKey {
+function initialHashNavKey(): NavKey | null {
   if (typeof window === "undefined") {
-    return defaultNavKey;
+    return null;
   }
-  return navKeyFromHash(window.location.hash) ?? defaultNavKey;
+  return navKeyFromHash(window.location.hash);
+}
+
+function initialNavKey(): NavKey {
+  return initialHashNavKey() ?? defaultNavKey;
 }
 
 const defaultTraceFilters: TraceFilters = { callerAgentId: "", decision: "", runId: "", targetAgentId: "" };
@@ -263,6 +270,8 @@ const defaultAccessProfileFilters: AccessProfileFilters = {
 };
 function navIconFor(key: NavKey) {
   switch (key) {
+    case "getting-started":
+      return Workflow;
     case "ai-admin":
       return ShieldCheck;
     case "registry":
@@ -348,6 +357,8 @@ export function ConsoleController() {
   const approvalCreateInFlightRef = useRef(false);
   const approvalResolveBlockedRef = useRef(false);
   const approvalResolveCooldownTimerRef = useRef<number | null>(null);
+  const defaultNavResolvedRef = useRef(initialHashNavKey() !== null);
+  const userSelectedNavRef = useRef(false);
   const [activeNav, setActiveNav] = useState<NavKey>(initialNavKey);
   const [connectionMenuOpen, setConnectionMenuOpen] = useState(false);
   const [adminKey, setAdminKey] = useState("");
@@ -411,6 +422,10 @@ export function ConsoleController() {
   const [aiAdminApprovalReadinessMessage, setAiAdminApprovalReadinessMessage] = useState("");
   const t = useMemo(() => createTranslator(language), [language]);
   const renderedAiAdminMessage = localizedMessageText(aiAdminMessage, t, language);
+  function selectActiveNav(key: NavKey) {
+    userSelectedNavRef.current = true;
+    setActiveNav(key);
+  }
   const management = useManagementOperations({
     adminKey,
     defaultScope: defaultManagementScope,
@@ -1683,6 +1698,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const instanceAssignments = data?.instanceAssignments ?? [];
   const evidenceRuns = data?.evidenceRuns ?? [];
   const metrics = data?.systemMetrics ?? [];
+  const setupSteps = data ? gettingStartedSteps(data) : [];
   const localCallers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const mcpTargets = agents.filter((agent) => agent.channelType === "mcp");
   const localAiAdminDraft = useMemo(
@@ -1742,11 +1758,20 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
 
   useEffect(() => {
     const handleHashChange = () => {
-      setActiveNav(navKeyFromHash(window.location.hash) ?? defaultNavKey);
+      const hashNav = navKeyFromHash(window.location.hash);
+      defaultNavResolvedRef.current = hashNav !== null;
+      userSelectedNavRef.current = hashNav !== null;
+      setActiveNav(hashNav ?? defaultNavKey);
     };
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
+
+  useEffect(() => {
+    if (!data || defaultNavResolvedRef.current || userSelectedNavRef.current) return;
+    setActiveNav(resolveDefaultNavKey(data));
+    defaultNavResolvedRef.current = true;
+  }, [data]);
 
   useEffect(() => {
     const nextHash = navHashFor(activeView.key);
@@ -2077,6 +2102,18 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     switch (activeView.key) {
       case "ai-admin":
         return <AiAdminView aiAdminPanel={aiAdminPanel} />;
+      case "getting-started":
+        return (
+          <GettingStartedConsoleView
+            gettingStartedPanel={(
+              <GettingStartedView
+                liveDataAvailable={Boolean(data?.loadedFromApi)}
+                steps={setupSteps}
+                t={t}
+              />
+            )}
+          />
+        );
       case "registry":
         return (
           <RegistryView
@@ -2170,7 +2207,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
                         aria-label={`${itemLabel} - ${itemDetail}`}
                         className={activeView.key === item.key ? "nav-item active" : "nav-item"}
                         key={item.key}
-                        onClick={() => setActiveNav(item.key)}
+                        onClick={() => selectActiveNav(item.key)}
                         title={`${itemLabel} - ${itemDetail}`}
                         type="button"
                       >

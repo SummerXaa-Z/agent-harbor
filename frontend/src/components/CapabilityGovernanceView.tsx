@@ -109,6 +109,15 @@ export function CapabilityGovernanceView({
   const selectedCapability = capabilities.find((capability) => capability.id === form.capabilityId);
   const selectedCatalogCapability = capabilities.find((capability) => capability.id === selectedCapabilityId) ?? null;
   const selectedAccessSubject = accessSubjectOptionForSelector(form.subjectSelector);
+  const capabilityEmptyActionLabel = targetCapabilities.length > 0
+    ? undefined
+    : mcpTargets.length === 0
+      ? t("empty.capabilities.actionRegisterAgents")
+      : form.targetId
+        ? t("empty.capabilities.actionRefresh")
+        : undefined;
+  const capabilityEmptyActionHash = targetCapabilities.length === 0 && mcpTargets.length === 0 ? "#registry" : undefined;
+  const capabilityEmptyAction = targetCapabilities.length === 0 && mcpTargets.length > 0 && form.targetId ? onRefreshTarget : undefined;
   const tenantOptions = [
     ...tenants.map((tenant) => ({ value: tenant.id, label: permissionEntityDisplayName(tenant.name, t) })),
     ...(form.tenantId && !tenants.some((tenant) => tenant.id === form.tenantId)
@@ -268,6 +277,9 @@ export function CapabilityGovernanceView({
                       <EmptyRow
                         title={targetCapabilities.length === 0 ? t("empty.capabilities.title") : t("empty.filteredResults.title")}
                         detail={targetCapabilities.length === 0 ? t("empty.capabilities.detail") : t("empty.filteredResults.detail")}
+                        actionLabel={capabilityEmptyActionLabel}
+                        actionHash={capabilityEmptyActionHash}
+                        onAction={capabilityEmptyAction}
                       />
                     </td>
                   </tr>
@@ -410,7 +422,12 @@ export function CapabilityGovernanceView({
 
         <div className="assignment-list">
           {tenantEntitlements.length === 0 ? (
-            <EmptyRow title={t("empty.grantChains.title")} detail={t("empty.grantChains.assignmentDetail")} />
+            <EmptyRow
+              title={t("empty.grantChains.title")}
+              detail={t("empty.grantChains.assignmentDetail")}
+              actionLabel={t("empty.grantChains.action")}
+              actionHash="#ai-admin"
+            />
           ) : null}
           {tenantEntitlements.map((entitlement) => {
             const capability = capabilities.find((item) => item.id === entitlement.capabilityId);

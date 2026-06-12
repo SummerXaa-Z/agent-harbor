@@ -4382,7 +4382,7 @@ td code {
   }
 
   .approval-studio {
-    padding: 12px;
+    padding: 0;
   }
 
   .approval-context-bar {
@@ -4503,8 +4503,8 @@ td code {
   }
 
   .approval-task-strip article {
-    border-right: 0;
-    border-bottom: 1px solid var(--line-subtle);
+    border-right: 1px solid var(--line-muted);
+    border-bottom: 0;
   }
 
   .approval-task-strip article:last-child {

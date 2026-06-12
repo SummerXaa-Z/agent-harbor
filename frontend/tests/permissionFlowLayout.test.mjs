@@ -145,6 +145,20 @@ test("permission request first viewport prioritizes one task flow", () => {
   assert.match(styles, /\.approval-process-panel\s*\{[^}]*position:\s*sticky;/s);
 });
 
+test("permission request top chrome avoids nested card and table treatment", () => {
+  assert.match(workbench, /className=\{`approval-studio status-\$\{productionSummary\.status\}`\}/);
+  assert.match(styles, /\.approval-studio\s*\{[^}]*border:\s*0;/s);
+  assert.match(styles, /\.approval-studio\s*\{[^}]*background:\s*transparent;/s);
+  assert.match(styles, /\.approval-command\s*\{[^}]*border:\s*0;/s);
+  assert.match(styles, /\.approval-command\s*\{[^}]*background:\s*transparent;/s);
+  assert.match(styles, /\.approval-context-bar\s*\{[^}]*gap:\s*8px;/s);
+  assert.match(styles, /\.approval-context-bar\s*\{[^}]*box-shadow:\s*none;/s);
+  assert.match(styles, /\.approval-context-bar div\s*\{[^}]*border:\s*1px solid var\(--line-muted\);/s);
+  assert.match(styles, /\.approval-task-strip\s*\{[^}]*gap:\s*8px;/s);
+  assert.match(styles, /\.approval-task-strip\s*\{[^}]*border:\s*0;/s);
+  assert.match(styles, /\.approval-task-strip article\s*\{[^}]*border:\s*1px solid var\(--line-muted\);/s);
+});
+
 test("permission request embeds a concise concept guide without blocking the task flow", () => {
   assert.match(workbench, /<details className="approval-concept-guide">/);
   assert.match(workbench, /<summary>\{t\("section\.permissionConceptGuide"\)\}<\/summary>/);

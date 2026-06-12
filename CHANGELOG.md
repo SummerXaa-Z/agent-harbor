@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Permission Changes top chrome now uses a lighter production-console layout: the outer nested card is removed, quick actions become a toolbar, and tenant/status summaries render as separate lightweight blocks instead of table-like strips.
+- 权限变更页顶部现在改为更轻的生产控制台布局：移除外层嵌套卡片，快捷操作改为工具栏，租户和状态摘要改为独立轻量信息块，不再像表格条。
 - Access Query form controls now share a unified production treatment for dropdowns, text input, hover, and focus states, making the answer-first question panel feel like a single management-system workflow instead of mixed form fragments.
 - 访问查询表单控件现在统一了下拉框、文本输入、悬停和焦点状态，让答案优先的问题面板更像完整的 B 端管理流程，而不是多个临时表单片段拼接。
 - Access Query now uses a focused question-and-answer workspace with grouped tenant/access fields, a compact context rail, business-readable entity names, and "access object" wording instead of exposing operator-facing technical names in the primary path.

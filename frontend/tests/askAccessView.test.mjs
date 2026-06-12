@@ -8,6 +8,7 @@ const controller = readFileSync(new URL("../src/ConsoleController.tsx", import.m
 const hook = readFileSync(new URL("../src/hooks/useAskAccessController.ts", import.meta.url), "utf8");
 const navigation = readFileSync(new URL("../src/consoleNavigation.ts", import.meta.url), "utf8");
 const view = readFileSync(new URL("../src/components/AskAccessView.tsx", import.meta.url), "utf8");
+const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
 const operationalViews = readFileSync(new URL("../src/components/OperationalViews.tsx", import.meta.url), "utf8");
 const capabilityView = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
@@ -89,6 +90,15 @@ test("ask access view keeps the primary path answer-first and business-readable"
   assert.doesNotMatch(view, /ask-sentence-text/);
   assert.match(presenters, /"Policy Router": t\("demo\.policyRouterTarget"\)/);
   assert.match(presenters, /"Sandbox": t\("demo\.workspaceSandbox"\)/);
+});
+
+test("ask access form controls use one coherent control treatment", () => {
+  assert.match(view, /name="accessSubject"/);
+  assert.match(view, /autoComplete="off"/);
+  assert.match(styles, /--ask-control-height:\s*40px/);
+  assert.match(styles, /\.ask-query-field \.approval-dropdown-trigger:focus-visible,\s*\.ask-subject-field input:focus-visible\s*\{/s);
+  assert.match(styles, /\.ask-query-field \.approval-dropdown-trigger:hover,\s*\.ask-subject-field input:hover:not\(:focus-visible\)\s*\{/s);
+  assert.match(styles, /\.ask-query-grid-access\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s);
 });
 
 test("resource pages hand off access questions to the answer-first workspace", () => {

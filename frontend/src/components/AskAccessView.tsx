@@ -192,8 +192,11 @@ export function AskAccessView({
               <label className="ask-subject-field">
                 <span>{t("ask.field.subject")}</span>
                 <input
+                  autoComplete="off"
+                  name="accessSubject"
                   onChange={(event) => onChange({ subjectId: event.target.value })}
                   placeholder={t("ask.subjectPlaceholder")}
+                  type="text"
                   value={effectiveSelection.subjectId ?? ""}
                 />
               </label>

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Access Query form controls now share a unified production treatment for dropdowns, text input, hover, and focus states, making the answer-first question panel feel like a single management-system workflow instead of mixed form fragments.
+- 访问查询表单控件现在统一了下拉框、文本输入、悬停和焦点状态，让答案优先的问题面板更像完整的 B 端管理流程，而不是多个临时表单片段拼接。
 - Access Query now uses a focused question-and-answer workspace with grouped tenant/access fields, a compact context rail, business-readable entity names, and "access object" wording instead of exposing operator-facing technical names in the primary path.
 - 访问查询页现在改为聚焦的问题与答案工作台，用分组表单承载租户上下文和访问关系，右侧收纳上下文信息，主路径优先显示业务可读实体名，并将“访问用户”调整为“访问对象”。
 - Capability Governance now opens as a catalog-first workspace: the page shows scope, capability inventory, and active grants by default, while grant-chain creation opens in an on-demand side panel instead of occupying the main page.

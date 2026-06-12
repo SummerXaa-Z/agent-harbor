@@ -3,6 +3,7 @@ export type NavKey =
   | "ask"
   | "cockpit"
   | "ai-admin"
+  | "tenants"
   | "registry"
   | "routes"
   | "policies"
@@ -44,7 +45,8 @@ export const navItems: NavItem[] = [
   { detailKey: "navDetail.traces", groupKey: "audit", key: "traces", label: "Call Logs" },
   { detailKey: "navDetail.evidence", groupKey: "audit", key: "evidence", label: "Go-Live Status" },
   { detailKey: "navDetail.cockpit", groupKey: "audit", key: "cockpit", label: "System Check" },
-  { detailKey: "navDetail.registry", groupKey: "configuration", key: "registry", label: "Agents & Tools" },
+  { detailKey: "navDetail.tenants", groupKey: "configuration", key: "tenants", label: "Tenants & Organization" },
+  { detailKey: "navDetail.registry", groupKey: "configuration", key: "registry", label: "Resource Management" },
   { detailKey: "navDetail.capabilities", groupKey: "configuration", key: "capabilities", label: "Tool Capabilities" },
   { detailKey: "navDetail.policies", groupKey: "configuration", key: "policies", label: "Access Policies" },
   { detailKey: "navDetail.routes", groupKey: "configuration", key: "routes", label: "Routing Rules" },
@@ -71,9 +73,14 @@ const views: Record<NavKey, ConsoleView> = {
     primaryPanelKey: "aiAdminPermissionWorkbench",
     titleKey: "page.aiAdmin",
   },
+  tenants: {
+    key: "tenants",
+    primaryPanelKey: "tenantOrganization",
+    titleKey: "page.tenants",
+  },
   registry: {
     key: "registry",
-    primaryPanelKey: "agentRegistry",
+    primaryPanelKey: "resourceLifecycle",
     titleKey: "page.registry",
   },
   routes: {

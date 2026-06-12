@@ -18,6 +18,8 @@ const operationalViews = readFileSync(new URL("../src/components/OperationalView
 const runtimeEvidenceViews = readFileSync(new URL("../src/components/RuntimeEvidenceViews.tsx", import.meta.url), "utf8");
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
+const tenantOrganizationView = readFileSync(new URL("../src/components/TenantOrganizationView.tsx", import.meta.url), "utf8");
+const resourceLifecycleView = readFileSync(new URL("../src/components/ResourceLifecycleView.tsx", import.meta.url), "utf8");
 const ui = readFileSync(new URL("../src/components/ui.tsx", import.meta.url), "utf8");
 const managementOperationsHookUrl = new URL("../src/hooks/useManagementOperations.ts", import.meta.url);
 const capabilityGovernanceHookUrl = new URL("../src/hooks/useCapabilityGovernanceController.ts", import.meta.url);
@@ -118,6 +120,8 @@ test("focus and button controls use the shared production interaction tokens", (
   assert.match(styles, /:where\(button,\s*input,\s*select,\s*textarea,\s*summary\):focus-visible\s*\{[^}]*box-shadow:\s*var\(--shadow-focus\);/s);
   assert.match(styles, /\.primary-button,\s*\n\.secondary-button\s*\{[^}]*min-height:\s*var\(--control-height\);/s);
   assert.match(styles, /\.primary-button,\s*\n\.secondary-button\s*\{[^}]*padding:\s*0 var\(--space-4\);/s);
+  assert.match(styles, /\.primary-button\s*\{[^}]*box-shadow:\s*var\(--shadow-primary\);/s);
+  assert.match(styles, /\.primary-button:hover:not\(:disabled\)\s*\{[^}]*background:\s*var\(--brand-strong\);/s);
   assert.match(styles, /\.table-action\s*\{[^}]*min-height:\s*var\(--control-height-compact\);/s);
   assert.match(styles, /\.table-action\s*\{[^}]*background:\s*var\(--surface\);/s);
   assert.match(styles, /\.approval-action-button\s*\{[^}]*min-height:\s*var\(--control-height-compact\);/s);
@@ -192,11 +196,18 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
 
   assert.notEqual(registryStart, -1);
   assert.notEqual(routesStart, -1);
+  assert.match(app, /from "\.\/resourceLifecycle"/);
+  assert.match(app, /from "\.\/components\/ResourceLifecycleView"/);
+  assert.match(consoleViews, /resourceLifecyclePanel/);
+  assert.match(app, /resourceLifecyclePanel=\{resourceLifecyclePanel\}/);
   assert.match(app, /const agentRegistryActions = \(\s*<div className="panel-action-group">/);
   assert.match(app, /agents\.length > 0 \?/);
   assert.match(app, /agentRegistryPanel=\{agentRegistryPanel\("span-8", agentRegistryActions\)\}/);
   assert.match(app, /contractMatrixPanel=\{contractMatrixPanel\("span-4"\)\}/);
   assert.match(styles, /\.content-grid\s*\{[^}]*align-items:\s*start;/s);
+  assert.match(styles, /\.resource-lifecycle\s*\{/);
+  assert.match(resourceLifecycleView, /summary\.items\.map/);
+  assert.doesNotMatch(resourceLifecycleView, /TechnicalId/);
   assert.doesNotMatch(registryView, /createAgentPanel|createKeyPanel|rotateCredentialPanel/);
 });
 
@@ -275,6 +286,31 @@ test("sidebar navigation shows grouped task labels with descriptions", () => {
   assert.match(styles, /\.nav-list\s*\{[^}]*gap:\s*16px;/s);
   assert.match(styles, /\.nav-item\s*\{[^}]*grid-template-columns:\s*22px minmax\(0,\s*1fr\);/s);
   assert.match(styles, /\.nav-item small\s*\{[^}]*font-size:\s*11px;/s);
+});
+
+test("tenant organization workspace is a first-class resource entry", () => {
+  assert.match(app, /import \{ TenantOrganizationView, type TenantWorkspaceContext \} from "\.\/components\/TenantOrganizationView"/);
+  assert.match(app, /case "tenants":/);
+  assert.match(app, /<TenantsView tenantOrganizationPanel=\{tenantOrganizationPanel\} \/>/);
+  assert.match(app, /function openTenantPermissionChange\(context: PermissionChangeHandoffContext\)/);
+  assert.match(app, /function openTenantAccessProfile\(context: TenantWorkspaceContext\)/);
+  assert.match(app, /accessSubjects=\{aiAdminAccessSubjects\}/);
+  assert.match(consoleViews, /export function TenantsView/);
+  assert.match(tenantOrganizationView, /buildTenantOrganizationModel/);
+  assert.match(tenantOrganizationView, /className="tenant-organization content-grid"/);
+  assert.match(tenantOrganizationView, /className="primary-button"/);
+  assert.match(tenantOrganizationView, /tenant-permission-modal/);
+  assert.match(tenantOrganizationView, /role="dialog"/);
+  assert.match(tenantOrganizationView, /aria-haspopup="dialog"/);
+  assert.match(tenantOrganizationView, /className="tenant-access-directory"/);
+  assert.match(tenantOrganizationView, /accessSubjectsForWorkspace/);
+  assert.match(tenantOrganizationView, /ApprovalDropdown/);
+  assert.match(tenantOrganizationView, /sourceView: "tenants"/);
+  assert.match(styles, /\.tenant-organization\s*\{/);
+  assert.match(styles, /\.tenant-permission-modal\s*\{/);
+  assert.match(styles, /\.tenant-access-directory\s*\{/);
+  assert.match(styles, /\.tenant-org-actions\s*\{[^}]*background:\s*var\(--brand-soft\);/s);
+  assert.match(styles, /\.tenant-tree-row\.is-selected\s*\{[^}]*background:\s*var\(--brand-soft\);/s);
 });
 
 test("desktop sidebar keeps text labels at review viewport widths", () => {

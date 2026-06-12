@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
+  Building2,
   Boxes,
   ClipboardCheck,
   DatabaseZap,
   FileSearch,
   Gauge,
   KeyRound,
+  LogOut,
   Layers3,
   LockKeyhole,
   Network,
@@ -76,6 +78,9 @@ import {
   resolveInitialLanguage,
   type Language
 } from "./i18n";
+import {
+  buildResourceLifecycleSummary
+} from "./resourceLifecycle";
 import {
   defaultNavKey,
   navHashFor,
@@ -154,11 +159,14 @@ import {
   PoliciesView,
   RegistryView,
   RoutesView,
+  TenantsView,
   TracesView
 } from "./components/ConsoleViews";
 import { AskAccessPanel } from "./components/AskAccessView";
 import { CoreJourneyWorkbench } from "./components/CoreJourneyWorkbench";
 import { GettingStartedView } from "./components/GettingStartedView";
+import { ConsoleLoginView } from "./components/ConsoleLoginView";
+import { ResourceLifecycleView } from "./components/ResourceLifecycleView";
 import {
   AgentCreateForm,
   CredentialRotateForm,
@@ -180,10 +188,12 @@ import {
 } from "./components/RuntimeEvidenceViews";
 import { TechnicalId } from "./components/TechnicalId";
 import { TenantAccessProfileView } from "./components/TenantAccessProfileView";
+import { TenantOrganizationView, type TenantWorkspaceContext } from "./components/TenantOrganizationView";
 import { Badge } from "./components/ui";
 import { useAccessProfileController } from "./hooks/useAccessProfileController";
 import { useAskAccessController } from "./hooks/useAskAccessController";
 import { useCapabilityGovernanceController } from "./hooks/useCapabilityGovernanceController";
+import { useConsoleAuth } from "./hooks/useConsoleAuth";
 import { useCoreJourneyController } from "./hooks/useCoreJourneyController";
 import { useManagementOperations } from "./hooks/useManagementOperations";
 import { gettingStartedSteps, resolveDefaultNavKey } from "./gettingStarted";
@@ -279,6 +289,8 @@ function navIconFor(key: NavKey) {
       return FileSearch;
     case "ai-admin":
       return ShieldCheck;
+    case "tenants":
+      return Building2;
     case "registry":
       return Boxes;
     case "routes":
@@ -367,6 +379,7 @@ export function ConsoleController() {
   const [activeNav, setActiveNav] = useState<NavKey>(initialNavKey);
   const [connectionMenuOpen, setConnectionMenuOpen] = useState(false);
   const [adminKey, setAdminKey] = useState("");
+  const consoleAuth = useConsoleAuth();
   const [scope, setScope] = useState<ManagementScope>(defaultManagementScope);
   const [data, setData] = useState<ConsoleData | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -428,6 +441,8 @@ export function ConsoleController() {
   const [aiAdminApprovalReadinessMessage, setAiAdminApprovalReadinessMessage] = useState("");
   const t = useMemo(() => createTranslator(language), [language]);
   const renderedAiAdminMessage = localizedMessageText(aiAdminMessage, t, language);
+  const renderedConsoleLoginMessage = localizedMessageText(consoleAuth.loginMessage, t, language);
+  const consoleAccessReady = consoleAuth.accessReady;
   function selectActiveNav(key: NavKey) {
     userSelectedNavRef.current = true;
     setActiveNav(key);
@@ -436,6 +451,11 @@ export function ConsoleController() {
     setHandoffContexts((current) => ({ ...current, ask: context }));
     userSelectedNavRef.current = true;
     setActiveNav("ask");
+  }
+  function openTenantPermissionChange(context: PermissionChangeHandoffContext) {
+    setHandoffContexts((current) => ({ ...current, permissionChange: context }));
+    userSelectedNavRef.current = true;
+    setActiveNav("ai-admin");
   }
   const management = useManagementOperations({
     adminKey,
@@ -458,6 +478,7 @@ export function ConsoleController() {
     activeNav,
     adminKey,
     defaultScope: defaultManagementScope,
+    enabled: consoleAccessReady,
     language,
     scope,
     setScope,
@@ -499,6 +520,7 @@ export function ConsoleController() {
     defaultAccessFilters: defaultAccessProfileFilters,
     defaultScope: defaultManagementScope,
     defaultTraceFilters,
+    enabled: consoleAccessReady,
     language,
     setAccessFilters: accessProfileController.updateFilters,
     setAccessProfile: accessProfileController.setProfile,
@@ -511,8 +533,9 @@ export function ConsoleController() {
   });
 
   useEffect(() => {
+    if (!consoleAccessReady) return;
     void refresh();
-  }, []);
+  }, [consoleAccessReady]);
 
   useEffect(() => () => {
     if (approvalResolveCooldownTimerRef.current !== null) {
@@ -535,7 +558,8 @@ export function ConsoleController() {
     setConnectionMenuOpen(false);
   }, [activeNav]);
 
-  const shouldLoadAiAdminCatalog = activeNav === "ask" || activeNav === "ai-admin" || activeNav === "evidence";
+  const shouldLoadAiAdminCatalog =
+    consoleAccessReady && (activeNav === "ask" || activeNav === "ai-admin" || activeNav === "evidence" || activeNav === "tenants");
 
   useEffect(() => {
     if (shouldLoadAiAdminCatalog) {
@@ -577,7 +601,7 @@ export function ConsoleController() {
     });
   }, [data, scope]);
 
-  const shouldLoadAiAdminWorkbenchPreview = activeNav === "ai-admin" || activeNav === "evidence";
+  const shouldLoadAiAdminWorkbenchPreview = consoleAccessReady && (activeNav === "ai-admin" || activeNav === "evidence");
 
   useEffect(() => {
     if (!shouldLoadAiAdminWorkbenchPreview || !data?.loadedFromApi || aiAdminNewDraftMode) {
@@ -639,7 +663,25 @@ export function ConsoleController() {
     return () => controller.abort();
   }, [shouldLoadAiAdminWorkbenchPreview, adminKey, aiAdminForm, aiAdminNewDraftMode, data?.loadedFromApi]);
 
+  function handleConsoleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void consoleAuth.login(() => {
+      setData(null);
+      setLoadError("");
+    });
+  }
+
+  function handleConsoleLogout() {
+    void consoleAuth.logout((nextSession) => {
+      if (nextSession.requiresLogin && !nextSession.authenticated) {
+        setData(null);
+        setLoadError("");
+      }
+    });
+  }
+
   async function refresh() {
+    if (!consoleAccessReady) return;
     try {
       setLoadError("");
       const next = await loadConsoleData(
@@ -658,6 +700,7 @@ export function ConsoleController() {
   }
 
   async function refreshAiAdminCatalog() {
+    if (!consoleAccessReady) return;
     try {
       setLoadError("");
       const [next, templates, accessSubjects] = await Promise.all([
@@ -862,6 +905,27 @@ export function ConsoleController() {
       workspaceId: aiAdminForm.workspaceId,
       workspaceName: permissionWorkspaceDisplayName(aiAdminForm.workspaceId, agents, t)
     });
+    setActiveNav("access");
+  }
+
+  function openTenantAccessProfile(context: TenantWorkspaceContext) {
+    setScope((current) => ({
+      ...current,
+      tenantId: context.tenantId,
+      workspaceId: context.workspaceId
+    }));
+    accessProfileController.clearForPermissionChangeHandoff({
+      ...accessProfileController.filters,
+      traceLimit: accessProfileController.filters.traceLimit || "20",
+      workspaceId: context.workspaceId
+    }, {
+      tenantId: context.tenantId,
+      tenantName: context.tenantName,
+      tenantPath: context.tenantPath,
+      workspaceId: context.workspaceId,
+      workspaceName: context.workspaceName
+    });
+    userSelectedNavRef.current = true;
     setActiveNav("access");
   }
 
@@ -1741,6 +1805,19 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const evidenceRuns = data?.evidenceRuns ?? [];
   const metrics = data?.systemMetrics ?? [];
   const setupSteps = data ? gettingStartedSteps(data) : [];
+  const resourceLifecycleSummary = useMemo(
+    () =>
+      buildResourceLifecycleSummary({
+        agents,
+        capabilities,
+        instanceAssignments,
+        routePolicies: policies,
+        tenantEntitlements,
+        traces,
+        workspaceAssignments
+      }),
+    [agents, capabilities, instanceAssignments, policies, tenantEntitlements, traces, workspaceAssignments]
+  );
   const localCallers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const mcpTargets = agents.filter((agent) => agent.channelType === "mcp");
   const localAiAdminDraft = useMemo(
@@ -1864,6 +1941,41 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     [aiAdminApplication, aiAdminApprovalRequest, aiAdminDraft, aiAdminProductionReadiness]
   );
   const goLiveAcceptanceForm = aiAdminServerDraft?.input ?? aiAdminForm;
+  const sessionActorLabel = consoleAuth.session?.actor
+    ? t(`auditActor.${consoleAuth.session.actor}`, consoleAuth.session.actor)
+    : t("auth.unknownActor");
+
+  if (consoleAuth.sessionLoading) {
+    return (
+      <section className="workspace-loading login-loading" role="status" aria-live="polite">
+        <div className="workspace-loading-copy">
+          <strong>{t("status.loadingConsole")}</strong>
+          <span>{t("auth.sessionLoading")}</span>
+        </div>
+        <div className="workspace-loading-skeleton" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+      </section>
+    );
+  }
+
+  if (!consoleAccessReady) {
+    return (
+      <ConsoleLoginView
+        adminKey={consoleAuth.loginKey}
+        language={language}
+        loading={consoleAuth.loginSubmitting}
+        message={renderedConsoleLoginMessage}
+        onAdminKeyChange={consoleAuth.setLoginKey}
+        onLanguageChange={setLanguage}
+        onSubmit={handleConsoleLogin}
+        t={t}
+      />
+    );
+  }
+
   const tracePanel = (className = "span-7") => (
     <Panel className={className} icon={<FileSearch size={18} />} title={t("panel.auditTraces")} action={<IconOpen title={t("action.open")} />}>
       <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} t={t} />
@@ -1936,6 +2048,11 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       <SignalBoard metrics={metrics} t={t} />
     </Panel>
   );
+  const resourceLifecyclePanel = (
+    <Panel className="span-12" icon={<Network size={18} />} title={t("panel.resourceLifecycle")}>
+      <ResourceLifecycleView summary={resourceLifecycleSummary} t={t} />
+    </Panel>
+  );
   const agentRegistryPanel = (className = "span-8", action: ReactNode = <IconMore title={t("action.more")} />) => (
     <Panel className={className} icon={<Boxes size={18} />} title={t("panel.agentRegistry")} action={action}>
       <AgentTable
@@ -1996,6 +2113,20 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         t={t}
       />
     </Panel>
+  );
+  const tenantOrganizationPanel = (
+    <TenantOrganizationView
+      accessSubjects={aiAdminAccessSubjects}
+      agents={agents}
+      capabilities={capabilities}
+      instanceAssignments={instanceAssignments}
+      onOpenAccessProfile={openTenantAccessProfile}
+      onStartPermissionChange={openTenantPermissionChange}
+      t={t}
+      tenantEntitlements={tenantEntitlements}
+      tenants={tenants}
+      workspaceAssignments={workspaceAssignments}
+    />
   );
   const aiAdminPanel = (
       <AiAdminPermissionWorkbench
@@ -2199,6 +2330,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           <RegistryView
             agentRegistryPanel={agentRegistryPanel("span-8", agentRegistryActions)}
             contractMatrixPanel={contractMatrixPanel("span-4")}
+            resourceLifecyclePanel={resourceLifecyclePanel}
           />
         );
       case "routes":
@@ -2220,6 +2352,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         );
       case "capabilities":
         return <CapabilitiesView capabilityGovernancePanel={capabilityGovernancePanel()} />;
+      case "tenants":
+        return <TenantsView tenantOrganizationPanel={tenantOrganizationPanel} />;
       case "access":
         return <AccessView accessProfilePanel={accessProfilePanel} />;
       case "traces":
@@ -2325,6 +2459,16 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
                 EN
               </button>
             </div>
+            <div className="session-chip" title={tx(t, "auth.sessionActorTitle", { actor: sessionActorLabel })}>
+              <LockKeyhole size={14} />
+              <span>{sessionActorLabel}</span>
+              {consoleAuth.session?.requiresLogin ? (
+                <button onClick={() => void handleConsoleLogout()} type="button">
+                  <LogOut size={14} />
+                  {t("action.signOut")}
+                </button>
+              ) : null}
+            </div>
             <details className="connection-menu" onToggle={(event) => setConnectionMenuOpen(event.currentTarget.open)} open={connectionMenuOpen}>
               <summary
                 aria-label={t("section.connectionSettings")}
@@ -2344,10 +2488,10 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
                   <span>{t("text.connectionSettingsDetail")}</span>
                 </div>
                 <label className="connection-field">
-                  <span>{t("control.adminKey")}</span>
+                  <span>{t("control.adminKeyOverride")}</span>
                   <input
                     onChange={(event) => setAdminKey(event.target.value)}
-                    placeholder={t("control.adminKey")}
+                    placeholder={t("control.adminKeyOverridePlaceholder")}
                     type="password"
                     value={adminKey}
                   />

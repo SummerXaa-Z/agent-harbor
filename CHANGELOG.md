@@ -8,6 +8,22 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Web console now has production-oriented login control: `/api/v1/auth/session`, `/api/v1/auth/login`, and `/api/v1/auth/logout` issue an HttpOnly `agent_harbor_session` cookie from configured admin keys or named admin identities, and the console blocks management views until the session is authenticated.
+- Web 控制台新增面向生产的登录控制：`/api/v1/auth/session`、`/api/v1/auth/login` 和 `/api/v1/auth/logout` 会基于已配置管理员密钥或具名管理员身份签发 HttpOnly `agent_harbor_session` Cookie，控制台会在会话通过后才加载管理视图。
+- Management API fetches now include browser credentials, the console login state is isolated in a `useConsoleAuth` hook, and the global Connection menu demotes `X-Admin-Key` to an advanced override instead of the primary operator login path.
+- 管理 API 请求现在会携带浏览器凭据，控制台登录状态下沉到 `useConsoleAuth` hook，全局连接设置把 `X-Admin-Key` 降级为高级覆盖，不再作为管理员主登录路径。
+- Web console **Resource Management** now unifies Agent, MCP tool service, credential, capability, permission, and runtime lifecycle status in one entry, with next-action buttons that route operators to capability discovery, permission changes, resource configuration, or runtime audit.
+- Web 控制台新增 **资源管理** 统一入口，将 Agent、MCP 工具服务、凭据、能力、权限和运行状态收束到一个生命周期视图，并通过下一步按钮引导管理员进入能力发现、权限变更、资源配置或运行审计。
+- Web console now has a first-class **Tenants & Organization** workspace: operators can review tenant hierarchy, workspace coverage, and permission ownership, then start a tenant-scoped permission change or open the tenant access profile without seeing raw tenant IDs in the main path.
+- Web 控制台新增一等入口 **租户与组织**：管理员可以查看租户层级、工作区覆盖和权限管理边界，并从租户范围直接发起权限变更或查看租户权限画像，主路径不再暴露原始租户 ID。
+- Tenants & Organization now collapses repeated local demo tenant batches to the latest batch for display, so repeated scenario runs do not fill the tenant tree with visually identical Headquarters / Customer Service entries.
+- 租户与组织现在会把本地多轮演示留下的重复租户批次折叠为最新一轮展示，避免多次实测后租户树铺满看起来相同的“集团总部 / 客户服务中心”。
+- Tenants & Organization now starts tenant-scoped permission changes through a modal confirmation form, showing the selected tenant, workspace, caller, MCP target, and access object before handing off to the full Permission Changes workflow.
+- 租户与组织现在通过弹窗确认表单发起租户范围内的权限变更，先展示所选租户、工作区、调用方、MCP 目标和访问对象，再交接到完整权限变更流程。
+- The tenant workspace now includes a readable access-object directory with roles, departments, and concrete member accounts, so operators can start from organization objects instead of technical subject selectors.
+- 租户工作区现在新增可读的访问对象目录，展示角色、部门和具体成员账号，管理员可以从组织对象出发，而不是面对技术主体选择器。
+- Primary console actions now use a stronger enterprise-blue button treatment with clearer hover states, so creation and workflow-start buttons stand out from neutral secondary actions.
+- 控制台主操作按钮现在使用更明确的企业蓝视觉层级和悬停状态，让创建类、流程启动类按钮与普通辅助操作区分更清楚。
 - Permission Changes top chrome now uses a lighter production-console layout: the outer nested card is removed, quick actions become a toolbar, and non-sticky tenant/status summaries render as separate lightweight blocks instead of table-like strips.
 - 权限变更页顶部现在改为更轻的生产控制台布局：移除外层嵌套卡片，快捷操作改为工具栏，租户和状态摘要改为非悬浮的独立轻量信息块，不再像表格条。
 - Access Query form controls now share a unified production treatment for dropdowns, text input, hover, and focus states, making the answer-first question panel feel like a single management-system workflow instead of mixed form fragments.

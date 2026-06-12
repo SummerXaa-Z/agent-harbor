@@ -24,6 +24,7 @@ interface UseAccessProfileControllerArgs {
   activeNav: NavKey;
   adminKey: string;
   defaultScope: ManagementScope;
+  enabled: boolean;
   language: Language;
   scope: ManagementScope;
   setScope: Dispatch<SetStateAction<ManagementScope>>;
@@ -34,6 +35,7 @@ export function useAccessProfileController({
   activeNav,
   adminKey,
   defaultScope,
+  enabled,
   language,
   scope,
   setScope,
@@ -46,10 +48,10 @@ export function useAccessProfileController({
   const [handoffContext, setHandoffContext] = useState<AccessProfileHandoffContext | null>(null);
 
   useEffect(() => {
-    if (activeNav === "access" && !profile && !loading) {
+    if (enabled && activeNav === "access" && !profile && !loading) {
       void refresh();
     }
-  }, [activeNav]);
+  }, [activeNav, enabled]);
 
   function updateFilters(nextFilters: AccessProfileFilters) {
     setFilters(nextFilters);
@@ -70,6 +72,7 @@ export function useAccessProfileController({
   }
 
   async function refresh() {
+    if (!enabled) return;
     const traceLimit = parseAccessProfileTraceLimit(filters.traceLimit);
     if (!traceLimit.ok) {
       setMessage(traceLimit.message);

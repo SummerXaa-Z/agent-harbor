@@ -233,11 +233,19 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const callers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const selectedCaller = agents.find((agent) => agent.id === form.callerInstanceId);
   const selectedTarget = mcpTargets.find((agent) => agent.id === form.targetId);
+  const permissionHandoffTitle = permissionHandoffContext?.sourceView === "tenants"
+    ? t("text.permissionTenantHandoffTitle")
+    : t("text.permissionHandoffTitle");
   const permissionHandoffDetail = permissionHandoffContext
-    ? tx(t, "text.permissionHandoffDetail", {
-      caller: permissionHandoffContext.callerName ?? permissionHandoffContext.callerInstanceId ?? "-",
-      target: permissionHandoffContext.targetName ?? permissionHandoffContext.targetId ?? "-"
-    })
+    ? permissionHandoffContext.sourceView === "tenants"
+      ? tx(t, "text.permissionTenantHandoffDetail", {
+        tenant: permissionHandoffContext.tenantName ?? permissionHandoffContext.tenantId,
+        workspace: permissionHandoffContext.workspaceName ?? permissionHandoffContext.workspaceId
+      })
+      : tx(t, "text.permissionHandoffDetail", {
+        caller: permissionHandoffContext.callerName ?? permissionHandoffContext.callerInstanceId ?? "-",
+        target: permissionHandoffContext.targetName ?? permissionHandoffContext.targetId ?? "-"
+      })
     : "";
   const tenantPath = permissionTenantPathLabel(form.tenantId, tenants, t);
   const workspaceName = permissionWorkspaceDisplayName(form.workspaceId, agents, t);
@@ -678,7 +686,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
         <section className="permission-handoff-notice" role="status" aria-live="polite">
           <FileSearch size={16} />
           <div>
-            <strong>{t("text.permissionHandoffTitle")}</strong>
+            <strong>{permissionHandoffTitle}</strong>
             <span>{permissionHandoffDetail}</span>
           </div>
           <button className="secondary-button" onClick={onDismissPermissionHandoff} type="button">

@@ -113,7 +113,7 @@ test("getting started progress reports an empty live system as not configured", 
 
   assert.deepEqual(steps.map((step) => [step.key, step.done, step.targetHash]), [
     ["connect-api", true, "#getting-started"],
-    ["register-agents", false, "#registry"],
+    ["register-agents", false, "#tenants"],
     ["discover-capabilities", false, "#capabilities"],
     ["create-grant-chain", false, "#ai-admin"],
     ["run-decision", false, "#traces"],

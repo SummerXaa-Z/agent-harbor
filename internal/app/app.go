@@ -67,6 +67,7 @@ func New(ctx context.Context) (*App, error) {
 			repo,
 			httpapi.WithAdminKey(os.Getenv("AGENT_HARBOR_ADMIN_KEY")),
 			httpapi.WithAdminIdentities(adminIdentities),
+			httpapi.WithSessionSecret(os.Getenv("AGENT_HARBOR_SESSION_SECRET")),
 			httpapi.WithUnauthenticatedAdminAllowed(allowUnauthenticatedAdmin),
 			httpapi.WithPrivateUpstreamsAllowed(allowPrivateUpstreams),
 			httpapi.WithPermissionPackageApprovalReviewers(approvalReviewers),

@@ -689,6 +689,21 @@ func TestLocalDevCORS(t *testing.T) {
 		t.Fatalf("subject header missing from CORS allow headers %q", got)
 	}
 
+	req = httptest.NewRequest(http.MethodOptions, "/api/v1/auth/session", nil)
+	req.Header.Set("Origin", "http://127.0.0.1:5176")
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("preflight status for non-default local console port = %d", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://127.0.0.1:5176" {
+		t.Fatalf("unexpected allowed origin for non-default local console port %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+		t.Fatalf("credentialed console session CORS missing, got %q", got)
+	}
+
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/contracts/channels", nil)
 	req.Header.Set("Origin", "https://example.invalid")
 	rec = httptest.NewRecorder()
@@ -758,6 +773,86 @@ func TestAdminKeyProtectsManagementEndpoints(t *testing.T) {
 	contracts := request(t, router, http.MethodGet, "/api/v1/contracts/channels", nil, "")
 	if contracts.Code != http.StatusOK {
 		t.Fatalf("contracts should remain public, got %d", contracts.Code)
+	}
+}
+
+func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	missing := request(t, router, http.MethodGet, "/api/v1/auth/session", nil, "")
+	if missing.Code != http.StatusOK {
+		t.Fatalf("session status should be public, got %d body=%s", missing.Code, missing.Body.String())
+	}
+	missingSession := decodeData[map[string]any](t, missing)
+	if missingSession["authenticated"] != false || missingSession["requiresLogin"] != true {
+		t.Fatalf("expected unauthenticated production session, got %#v", missingSession)
+	}
+
+	wrongLogin := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "wrong-admin"}, "")
+	if wrongLogin.Code != http.StatusUnauthorized || len(wrongLogin.Result().Cookies()) != 0 {
+		t.Fatalf("wrong login should be unauthorized without setting cookies, status=%d body=%s cookies=%#v", wrongLogin.Code, wrongLogin.Body.String(), wrongLogin.Result().Cookies())
+	}
+
+	login := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "test-admin"}, "")
+	if login.Code != http.StatusOK {
+		t.Fatalf("login should succeed, got %d body=%s", login.Code, login.Body.String())
+	}
+	session := decodeData[map[string]any](t, login)
+	if session["authenticated"] != true || session["actor"] != "admin-key" || session["requiresLogin"] != true {
+		t.Fatalf("unexpected login session: %#v", session)
+	}
+	cookies := login.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != "agent_harbor_session" || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode {
+		t.Fatalf("login should set one HttpOnly SameSite=Lax session cookie, got %#v", cookies)
+	}
+
+	created := decodeData[agentResponse](t, requestWithCookie(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Session Caller",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+	}, cookies[0]))
+	if created.ID == "" {
+		t.Fatalf("expected management request with session cookie to succeed: %#v", created)
+	}
+
+	me := decodeData[map[string]any](t, requestWithCookie(t, router, http.MethodGet, "/api/v1/auth/session", nil, cookies[0]))
+	if me["authenticated"] != true || me["actor"] != "admin-key" {
+		t.Fatalf("expected authenticated session status, got %#v", me)
+	}
+
+	logout := requestWithCookie(t, router, http.MethodPost, "/api/v1/auth/logout", nil, cookies[0])
+	if logout.Code != http.StatusOK {
+		t.Fatalf("logout should succeed, got %d body=%s", logout.Code, logout.Body.String())
+	}
+	clearedCookies := logout.Result().Cookies()
+	if len(clearedCookies) != 1 || clearedCookies[0].Name != "agent_harbor_session" || clearedCookies[0].MaxAge != -1 {
+		t.Fatalf("logout should clear the session cookie, got %#v", clearedCookies)
+	}
+}
+
+func TestConsoleAuthSessionSupportsNamedAdminIdentities(t *testing.T) {
+	router := newRouterWithRepoAndAdminIdentities(store.NewMemory(), []httpapi.AdminIdentity{
+		{Actor: "requester", Key: "requester-key"},
+		{Actor: "security", Key: "security-key"},
+	})
+
+	login := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "security-key"}, "")
+	if login.Code != http.StatusOK {
+		t.Fatalf("login should accept named identity key, got %d body=%s", login.Code, login.Body.String())
+	}
+	session := decodeData[map[string]any](t, login)
+	if session["actor"] != "security" {
+		t.Fatalf("expected named actor in session, got %#v", session)
+	}
+}
+
+func TestConsoleAuthSessionReportsDevelopmentMode(t *testing.T) {
+	router := newRouter()
+
+	session := decodeData[map[string]any](t, request(t, router, http.MethodGet, "/api/v1/auth/session", nil, ""))
+	if session["authenticated"] != true || session["actor"] != "local-dev" || session["requiresLogin"] != false {
+		t.Fatalf("dev unauthenticated mode should not require browser login, got %#v", session)
 	}
 }
 
@@ -3097,6 +3192,16 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	accessSubjects := decodeData[[]domain.PermissionPackageAccessSubject](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/access-subjects", nil, ""))
 	if len(accessSubjects) == 0 || accessSubjects[0].ID != "role:support-agent" || accessSubjects[0].SubjectSelector != "user:support-*" {
 		t.Fatalf("expected support-agent access subject first, got %#v", accessSubjects)
+	}
+	var registeredMember domain.PermissionPackageAccessSubject
+	for _, subject := range accessSubjects {
+		if subject.ID == "member:support-002" {
+			registeredMember = subject
+			break
+		}
+	}
+	if registeredMember.SubjectSelector != "user:support-002" || registeredMember.WorkspaceID != "ws-permission-package-approval" {
+		t.Fatalf("expected registered support member with workspace scope, got %#v", registeredMember)
 	}
 
 	input := map[string]any{
@@ -5852,6 +5957,16 @@ func requestWithRunIDAndSubject(t *testing.T, router http.Handler, method string
 func requestWithAdmin(t *testing.T, router http.Handler, method string, path string, body any, bearer string, adminKey string) *httptest.ResponseRecorder {
 	t.Helper()
 	return requestWithRunIDAndAdmin(t, router, method, path, body, bearer, "", adminKey)
+}
+
+func requestWithCookie(t *testing.T, router http.Handler, method string, path string, body any, cookie *http.Cookie) *httptest.ResponseRecorder {
+	t.Helper()
+	rec, req := buildRequest(t, method, path, body, "", "", "")
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	router.ServeHTTP(rec, req)
+	return rec
 }
 
 func requestWithRunIDAndAdmin(t *testing.T, router http.Handler, method string, path string, body any, bearer string, runID string, adminKey string) *httptest.ResponseRecorder {

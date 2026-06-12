@@ -54,6 +54,7 @@ interface UseCoreJourneyControllerArgs {
   defaultAccessFilters: AccessProfileFilters;
   defaultScope: ManagementScope;
   defaultTraceFilters: TraceFilters;
+  enabled: boolean;
   language: Language;
   setAccessFilters: (filters: AccessProfileFilters) => void;
   setAccessProfile: Dispatch<SetStateAction<TenantAccessProfileData | null>>;
@@ -70,6 +71,7 @@ export function useCoreJourneyController({
   defaultAccessFilters,
   defaultScope,
   defaultTraceFilters,
+  enabled,
   language,
   setAccessFilters,
   setAccessProfile,
@@ -90,10 +92,12 @@ export function useCoreJourneyController({
   const [preflightMessage, setPreflightMessage] = useState("");
 
   useEffect(() => {
+    if (!enabled) return;
     void refreshPreflight();
-  }, []);
+  }, [enabled]);
 
   async function refreshPreflight() {
+    if (!enabled) return;
     setPreflightChecking(true);
     setPreflightMessage(t("message.coreJourneyPreflightChecking"));
     setPreflight((current) => ({

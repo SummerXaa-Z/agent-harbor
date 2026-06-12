@@ -208,6 +208,13 @@ export interface ApiEnvelope<T> {
   message?: string
 }
 
+export interface ConsoleSession {
+  actor?: string
+  authenticated: boolean
+  expiresAt?: string
+  requiresLogin: boolean
+}
+
 export interface RoutePolicy {
   id: string
   tenantId: string
@@ -425,7 +432,7 @@ export interface PermissionChangeHandoffContext {
   subjectId?: string
   templateId?: string
   intentText?: string
-  sourceView: 'ask'
+  sourceView: 'ask' | 'tenants'
 }
 
 export interface AskHandoffContext {

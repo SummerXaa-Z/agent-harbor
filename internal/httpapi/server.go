@@ -49,6 +49,7 @@ type Server struct {
 	allowPrivateUpstreams     bool
 	approvalReviewers         []domain.PermissionPackageApprovalReviewer
 	corsOrigins               []string
+	sessionSecret             []byte
 }
 
 const (
@@ -60,6 +61,9 @@ const (
 	defaultAuditLimit                   = 100
 	maxAuditLimit                       = 500
 	defaultPermissionPackageApprovalTTL = 24 * time.Hour
+	defaultConsoleSessionTTL            = 12 * time.Hour
+	consoleSessionCookieName            = "agent_harbor_session"
+	developmentAdminActor               = "local-dev"
 )
 
 type proxyRetryPolicy struct {
@@ -97,6 +101,15 @@ func WithAdminIdentities(identities []AdminIdentity) Option {
 				continue
 			}
 			s.adminIdentities = append(s.adminIdentities, normalized)
+		}
+	}
+}
+
+func WithSessionSecret(secret string) Option {
+	return func(s *Server) {
+		secret = strings.TrimSpace(secret)
+		if secret != "" {
+			s.sessionSecret = []byte(secret)
 		}
 	}
 }
@@ -165,6 +178,9 @@ func (s *Server) Router() http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/contracts/providers", s.listProviderContracts)
 		r.Get("/contracts/channels", s.listChannelContracts)
+		r.Get("/auth/session", s.getAuthSession)
+		r.Post("/auth/login", s.login)
+		r.Post("/auth/logout", s.logout)
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAdmin)
 			r.Post("/tenants", s.createTenant)
@@ -233,12 +249,30 @@ func (s *Server) Router() http.Handler {
 
 func localDevCORS(extraOrigins []string) func(http.Handler) http.Handler {
 	allowedOrigins := map[string]struct{}{
+		"http://localhost:4173": {},
 		"http://localhost:4174": {},
+		"http://localhost:4175": {},
+		"http://localhost:4176": {},
+		"http://localhost:5173": {},
 		"http://localhost:5174": {},
+		"http://localhost:5175": {},
+		"http://localhost:5176": {},
+		"http://127.0.0.1:4173": {},
 		"http://127.0.0.1:4174": {},
+		"http://127.0.0.1:4175": {},
+		"http://127.0.0.1:4176": {},
+		"http://127.0.0.1:5173": {},
 		"http://127.0.0.1:5174": {},
+		"http://127.0.0.1:5175": {},
+		"http://127.0.0.1:5176": {},
+		"http://[::1]:4173":     {},
 		"http://[::1]:4174":     {},
+		"http://[::1]:4175":     {},
+		"http://[::1]:4176":     {},
+		"http://[::1]:5173":     {},
 		"http://[::1]:5174":     {},
+		"http://[::1]:5175":     {},
+		"http://[::1]:5176":     {},
 	}
 	for _, origin := range extraOrigins {
 		allowedOrigins[origin] = struct{}{}
@@ -248,6 +282,7 @@ func localDevCORS(extraOrigins []string) func(http.Handler) http.Handler {
 			origin := r.Header.Get("Origin")
 			if _, ok := allowedOrigins[origin]; ok {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Key, X-Run-Id, X-AgentHarbor-Subject-Id")
 				w.Header().Set("Vary", "Origin")
@@ -263,16 +298,22 @@ func localDevCORS(extraOrigins []string) func(http.Handler) http.Handler {
 
 func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if actor, _, ok := s.developmentSession(); ok {
+			ctx := context.WithValue(r.Context(), adminActorContextKey{}, actor)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
 		if s.adminKey == "" && len(s.adminIdentities) == 0 {
-			if s.allowUnauthenticatedAdmin {
-				next.ServeHTTP(w, r)
-				return
-			}
 			writeError(w, domain.Unauthorized("admin authentication is required"))
 			return
 		}
 		provided := r.Header.Get("X-Admin-Key")
 		if actor, ok := s.adminActorForKey(provided); ok {
+			ctx := context.WithValue(r.Context(), adminActorContextKey{}, actor)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+		if actor, _, ok := s.consoleSessionFromRequest(r); ok {
 			ctx := context.WithValue(r.Context(), adminActorContextKey{}, actor)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
@@ -308,6 +349,12 @@ func requestAuthenticatedAdminActor(r *http.Request) (string, bool) {
 func reviewerFromRequest(reviewer string, r *http.Request) (string, error) {
 	reviewer = strings.TrimSpace(reviewer)
 	if actor, ok := requestAuthenticatedAdminActor(r); ok {
+		if actor == developmentAdminActor {
+			if reviewer != "" {
+				return reviewer, nil
+			}
+			return actor, nil
+		}
 		if reviewer == "" {
 			return actor, nil
 		}
@@ -5525,7 +5572,7 @@ func managementActor(r *http.Request) string {
 	if strings.TrimSpace(r.Header.Get("X-Admin-Key")) != "" {
 		return "admin-key"
 	}
-	return "local-dev"
+	return developmentAdminActor
 }
 
 type mcpToolsListResponse struct {

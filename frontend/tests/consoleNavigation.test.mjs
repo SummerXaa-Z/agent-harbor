@@ -93,6 +93,7 @@ test("every primary navigation item resolves to a distinct workspace", () => {
     "traces",
     "evidence",
     "cockpit",
+    "tenants",
     "registry",
     "capabilities",
     "policies",
@@ -114,6 +115,7 @@ test("navigation is grouped by user task", () => {
     "configuration",
     "configuration",
     "configuration",
+    "configuration",
     "configuration"
   ]);
   assert.ok(navItems.every((item) => item.detailKey.startsWith("navDetail.")));
@@ -128,10 +130,16 @@ test("go-live evidence navigation points to the acceptance workflow", () => {
   assert.equal(viewForNav("evidence").primaryPanelKey, "goLiveAcceptance");
 });
 
+test("resource management is the single entry for Agent and MCP lifecycle", () => {
+  assert.equal(viewForNav("registry").primaryPanelKey, "resourceLifecycle");
+});
+
 test("navigation hash preserves the current workspace across reloads", () => {
   assert.equal(navHashFor("evidence"), "#evidence");
+  assert.equal(navHashFor("tenants"), "#tenants");
   assert.equal(navHashFor("getting-started"), "#getting-started");
   assert.equal(navKeyFromHash("#evidence"), "evidence");
+  assert.equal(navKeyFromHash("#tenants"), "tenants");
   assert.equal(navKeyFromHash("#getting-started"), "getting-started");
   assert.equal(navKeyFromHash("evidence"), "evidence");
   assert.equal(navKeyFromHash("#unknown"), null);

@@ -30,13 +30,16 @@ export function AskView({ askAccessPanel }: { askAccessPanel: ReactNode }) {
 
 export function RegistryView({
   agentRegistryPanel,
-  contractMatrixPanel
+  contractMatrixPanel,
+  resourceLifecyclePanel
 }: {
   agentRegistryPanel: ReactNode;
   contractMatrixPanel: ReactNode;
+  resourceLifecyclePanel: ReactNode;
 }) {
   return (
     <section className="content-grid">
+      {resourceLifecyclePanel}
       {agentRegistryPanel}
       {contractMatrixPanel}
     </section>
@@ -94,6 +97,10 @@ export function CapabilitiesView({ capabilityGovernancePanel }: { capabilityGove
 
 export function AccessView({ accessProfilePanel }: { accessProfilePanel: ReactNode }) {
   return <section className="content-grid">{accessProfilePanel}</section>;
+}
+
+export function TenantsView({ tenantOrganizationPanel }: { tenantOrganizationPanel: ReactNode }) {
+  return <>{tenantOrganizationPanel}</>;
 }
 
 export function TracesView({

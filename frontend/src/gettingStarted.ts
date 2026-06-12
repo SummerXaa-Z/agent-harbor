@@ -26,7 +26,7 @@ export function gettingStartedSteps(data: ConsoleData): GettingStartedStep[] {
     {
       done: setupDataAvailable && data.tenants.length > 0 && data.agents.some((agent) => agent.status === "active"),
       key: "register-agents",
-      targetHash: "#registry"
+      targetHash: "#tenants"
     },
     {
       done: setupDataAvailable && data.capabilities.length > 0,

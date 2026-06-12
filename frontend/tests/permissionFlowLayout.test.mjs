@@ -364,7 +364,10 @@ test("system self-check uses structured configuration and copyable runtime conte
   assert.match(styles, /\.core-journey-runtime-summary:not\(\[open\]\)\s*>\s*:not\(summary\)\s*\{[^}]*display:\s*none !important;/s);
   assert.match(styles, /\.core-journey-preflight-grid,\s*\.core-journey-steps\s*\{[^}]*gap:\s*1px;[^}]*background:\s*var\(--line-subtle\);/s);
   assert.match(styles, /\.core-journey-preflight-row::before,\s*\.core-journey-step::before\s*\{[^}]*top:\s*12px;[^}]*bottom:\s*12px;/s);
+  assert.match(styles, /\.core-journey-preflight-row strong,\s*\.core-journey-step strong\s*\{[^}]*font-size:\s*13px;/s);
+  assert.match(styles, /\.core-journey-preflight-row \.badge,\s*\.core-journey-step \.badge\s*\{[^}]*font-size:\s*11px;/s);
   assert.match(styles, /\.core-journey-step\.status-complete::before\s*\{[^}]*background:\s*var\(--success\);/s);
+  assert.match(styles, /\.core-journey-step-metric\s*\{[^}]*font-size:\s*11px;/s);
   assert.match(styles, /\.core-journey-step-detail\s*\{/);
 });
 

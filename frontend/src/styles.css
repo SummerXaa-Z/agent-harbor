@@ -2805,7 +2805,7 @@ td code {
 .core-journey-task {
   display: grid;
   gap: 10px;
-  padding: 16px;
+  padding: 16px 18px;
 }
 
 .core-journey-task > header {
@@ -2922,7 +2922,7 @@ td code {
   gap: 12px;
   min-height: 46px;
   min-width: 0;
-  padding: 8px 14px;
+  padding: 8px 16px;
   cursor: pointer;
   list-style: none;
 }
@@ -3053,7 +3053,7 @@ td code {
   align-items: center;
   position: relative;
   min-height: 56px;
-  padding: 9px 12px 9px 15px;
+  padding: 9px 16px 9px 18px;
   border: 0;
   border-radius: 0;
   background: var(--surface);
@@ -3073,6 +3073,31 @@ td code {
 
 .core-journey-preflight-row {
   grid-template-columns: auto minmax(0, 1fr);
+}
+
+.core-journey-preflight-row > div,
+.core-journey-step > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.core-journey-preflight-row strong,
+.core-journey-step strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-journey-preflight-row .badge,
+.core-journey-step .badge {
+  min-width: 48px;
+  height: 20px;
+  padding: 0 7px;
+  font-size: 11px;
 }
 
 .core-journey-preflight-row span,
@@ -3124,9 +3149,10 @@ td code {
 
 .core-journey-step-metric {
   justify-self: end;
+  padding-left: 8px;
   color: var(--ink-2);
   font-family: var(--mono-font);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .core-journey-actions {
@@ -3134,6 +3160,8 @@ td code {
   gap: 8px;
   justify-content: flex-end;
   padding-top: 2px;
+  padding-right: 12px;
+  padding-left: 12px;
 }
 
 .trace-list {

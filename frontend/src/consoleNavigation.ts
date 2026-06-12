@@ -42,7 +42,7 @@ export const navItems: NavItem[] = [
   { detailKey: "navDetail.ai-admin", groupKey: "primary", key: "ai-admin", label: "Permission Changes" },
   { detailKey: "navDetail.access", groupKey: "primary", key: "access", label: "Access Profile" },
   { detailKey: "navDetail.traces", groupKey: "audit", key: "traces", label: "Call Logs" },
-  { detailKey: "navDetail.evidence", groupKey: "audit", key: "evidence", label: "Go-Live Evidence" },
+  { detailKey: "navDetail.evidence", groupKey: "audit", key: "evidence", label: "Go-Live Status" },
   { detailKey: "navDetail.cockpit", groupKey: "audit", key: "cockpit", label: "System Check" },
   { detailKey: "navDetail.registry", groupKey: "configuration", key: "registry", label: "Agents & Tools" },
   { detailKey: "navDetail.capabilities", groupKey: "configuration", key: "capabilities", label: "Tool Capabilities" },

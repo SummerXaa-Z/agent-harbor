@@ -34,7 +34,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("nav.cockpit"), "系统自检");
   assert.equal(t("nav.access"), "权限画像");
   assert.equal(t("nav.traces"), "运行审计");
-  assert.equal(t("nav.evidence"), "上线证据");
+  assert.equal(t("nav.evidence"), "上线状态");
   assert.equal(t("nav.registry"), "Agent 与工具");
   assert.equal(t("navGroup.primary"), "查与改");
   assert.equal(t("navGroup.audit"), "审计与证据");

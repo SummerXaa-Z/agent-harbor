@@ -59,6 +59,12 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("panel.coreJourney"), "核心权限链路自检");
   assert.equal(t("action.runCoreJourney"), "执行自检");
   assert.equal(t("action.resetCoreJourney"), "重置会话");
+  assert.equal(t("section.systemHealthStatus"), "系统健康状态");
+  assert.equal(t("section.selfCheckTask"), "检查任务");
+  assert.equal(t("section.selfCheckAdvanced"), "高级配置");
+  assert.equal(t("section.selfCheckRuntimeDetail"), "运行明细");
+  assert.equal(t("status.systemHealthReady"), "可执行");
+  assert.equal(t("status.systemHealthNeedsCheck"), "需检查");
   assert.equal(t("text.cockpitKeyMessageTitle"), "让 Agent 的工具和数据访问可申请、可审批、可验证");
   assert.equal(t("text.cockpitKeyMessageBody"), "AgentHarbor 以租户为边界，把权限包、审批、运行拦截和上线证据串成一条可交付的生产路径。");
   assert.equal(t("text.cockpitKeyMessageBoundary"), "租户边界清楚");
@@ -69,6 +75,9 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("text.cockpitKeyMessageEvidenceDetail"), "允许/拒绝调用、访问画像和审计事件共同支撑上线证据。");
   assert.equal(t("text.coreJourneyIntro"), "验证租户、工具发现、授权链、运行拦截和访问画像是否形成最小权限闭环。");
   assert.equal(t("text.coreJourneyCompletion"), "自检进度");
+  assert.equal(t("text.systemHealthReadyTitle"), "可以执行自检");
+  assert.equal(t("text.systemHealthNeedsCheckTitle"), "需要先完成预检");
+  assert.equal(t("text.selfCheckAdvancedDetail"), "仅在切换工作区、端点或工具名称时调整这些配置。");
   assert.equal(t("preflight.api.title"), "API 服务");
   assert.equal(t("preflight.mockMcp.title"), "MCP 工具服务");
   assert.equal(t("journey.step.grantChain"), "租户/工作区/实例授权");

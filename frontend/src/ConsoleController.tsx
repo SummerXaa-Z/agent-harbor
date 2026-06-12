@@ -11,9 +11,7 @@ import {
   Network,
   RefreshCw,
   Route,
-  ServerCog,
   ShieldCheck,
-  TriangleAlert,
   Workflow
 } from "lucide-react";
 import {
@@ -144,7 +142,7 @@ import {
 } from "./permissionRequestJourney";
 import { AiAdminPermissionWorkbench } from "./components/AiAdminPermissionWorkbench";
 import { CapabilityGovernanceView } from "./components/CapabilityGovernanceView";
-import { IconMore, IconOpen, MetricCard, Panel } from "./components/ConsolePrimitives";
+import { IconMore, IconOpen, Panel } from "./components/ConsolePrimitives";
 import {
   AccessView,
   AiAdminView,
@@ -2364,8 +2362,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         </header>
 
         {showWorkspaceTelemetry ? (
-          <>
-            <section className="status-strip" aria-label="Runtime status">
+          <section className="system-check-context" aria-label={pageTitle}>
+            <div className="system-check-context-main">
               <div>
                 <span>{t("status.api")}</span>
                 <strong>{data?.apiBase ?? "http://127.0.0.1:9090"}</strong>
@@ -2380,57 +2378,36 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
               </div>
               <div className="scope-control">
                 <span>{t("status.scope")}</span>
-                <div className="scope-inputs">
-                  <input
-                    aria-label={t("form.tenantId")}
-                    onBlur={() => void refresh()}
-                    onChange={(event) => setScope((current) => ({ ...current, tenantId: event.target.value }))}
-                    placeholder="tenantId"
-                    value={scope.tenantId}
-                  />
-                  <input
-                    aria-label={t("form.workspaceId")}
-                    onBlur={() => void refresh()}
-                    onChange={(event) => setScope((current) => ({ ...current, workspaceId: event.target.value }))}
-                    placeholder="workspaceId"
-                    value={scope.workspaceId}
-                  />
+                <div className="scope-values">
+                  <span title={scope.tenantId}>{scope.tenantId}</span>
+                  <span title={scope.workspaceId}>{scope.workspaceId}</span>
                 </div>
               </div>
-              {loadError ? <div className="strip-error">{loadError}</div> : null}
-            </section>
-
-            <section className="metric-grid" aria-label="Gateway metrics">
-              <MetricCard
-                icon={<ServerCog size={18} />}
-                label={t("metric.managedAgents")}
-                value={String(agents.length)}
-                detail={`${activeAgents} ${t("detail.active")}`}
-                tone="info"
-              />
-              <MetricCard
-                icon={<KeyRound size={18} />}
-                label={t("metric.activePolicies")}
-                value={String(activePolicies)}
-                detail={data?.routePoliciesLoadedFromApi ? t("detail.liveRoutePolicies") : t("detail.sampleFallback")}
-                tone="success"
-              />
-              <MetricCard
-                icon={<TriangleAlert size={18} />}
-                label={t("metric.deniedTraces")}
-                value={String(deniedTraces)}
-                detail={`${allowedTraces} ${t("detail.allowed")}`}
-                tone={deniedTraces > 0 ? "warning" : "success"}
-              />
-              <MetricCard
-                icon={<ClipboardCheck size={18} />}
-                label={t("metric.runtimeEvidence")}
-                value={runtimeEvidence.value}
-                detail={runtimeEvidence.value === "0" ? t("detail.noTraces") : `${allowedTraces} ${t("detail.allowed")} / ${deniedTraces} ${t("detail.denied")}`}
-                tone={runtimeEvidence.tone}
-              />
-            </section>
-          </>
+            </div>
+            <div className="system-check-signals" aria-label="Gateway metrics">
+              <span className="system-check-signal">
+                <span>{t("metric.managedAgents")}</span>
+                <strong>{agents.length}</strong>
+                <small>{activeAgents} {t("detail.active")}</small>
+              </span>
+              <span className="system-check-signal">
+                <span>{t("metric.activePolicies")}</span>
+                <strong>{activePolicies}</strong>
+                <small>{data?.routePoliciesLoadedFromApi ? t("detail.liveRoutePolicies") : t("detail.sampleFallback")}</small>
+              </span>
+              <span className={`system-check-signal tone-${deniedTraces > 0 ? "warning" : "success"}`}>
+                <span>{t("metric.deniedTraces")}</span>
+                <strong>{deniedTraces}</strong>
+                <small>{allowedTraces} {t("detail.allowed")}</small>
+              </span>
+              <span className={`system-check-signal tone-${runtimeEvidence.tone}`}>
+                <span>{t("metric.runtimeEvidence")}</span>
+                <strong>{runtimeEvidence.value}</strong>
+                <small>{runtimeEvidence.value === "0" ? t("detail.noTraces") : `${allowedTraces} ${t("detail.allowed")} / ${deniedTraces} ${t("detail.denied")}`}</small>
+              </span>
+            </div>
+            {loadError ? <div className="strip-error">{loadError}</div> : null}
+          </section>
         ) : null}
 
         {!data ? (

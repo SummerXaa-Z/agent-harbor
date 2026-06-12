@@ -345,14 +345,22 @@ test("system self-check uses structured configuration and copyable runtime conte
 
   assert.match(panel, /className="core-journey-config"/);
   assert.match(panel, /className="core-journey-config-grid"/);
+  assert.match(panel, /className="core-journey-health"/);
+  assert.match(panel, /className="core-journey-health-summary"/);
+  assert.match(panel, /className="core-journey-task"/);
+  assert.match(panel, /className="core-journey-advanced"/);
   assert.match(panel, /className="core-journey-runtime-summary"/);
   assert.match(panel, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("detail\.runId"\)\} value=\{config\.runId\} \/>/);
   assert.match(panel, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.tenantId"\)\} value=\{config\.childTenantId\} \/>/);
   assert.doesNotMatch(panel, /<div className="core-journey-meta">/);
   assert.match(row, /className="core-journey-step-detail" translate="no"/);
   assert.match(row, /className="core-journey-step-metric"/);
+  assert.match(styles, /\.core-journey-health\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
+  assert.match(styles, /\.core-journey-advanced summary\s*\{/);
+  assert.match(styles, /\.core-journey-advanced:not\(\[open\]\)\s*>\s*:not\(summary\)\s*\{[^}]*display:\s*none !important;/s);
   assert.match(styles, /\.core-journey-config-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(styles, /\.core-journey-runtime-summary\s*\{/);
+  assert.match(styles, /\.core-journey-runtime-summary:not\(\[open\]\)\s*>\s*:not\(summary\)\s*\{[^}]*display:\s*none !important;/s);
   assert.match(styles, /\.core-journey-step-detail\s*\{/);
 });
 

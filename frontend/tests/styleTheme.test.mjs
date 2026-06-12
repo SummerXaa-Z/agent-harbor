@@ -161,6 +161,8 @@ test("product shell removes demo controls and scopes connection settings", () =>
   assert.match(app, /className="connection-menu"/);
   assert.match(app, /className="connection-trigger"/);
   assert.match(app, /className="connection-scope-grid"/);
+  assert.match(app, /className="scope-values"/);
+  assert.equal(app.includes("className=\"scope-inputs\""), false);
   assert.match(app, /const \[connectionMenuOpen, setConnectionMenuOpen\] = useState\(false\)/);
   assert.match(app, /setConnectionMenuOpen\(false\)/);
   assert.match(app, /<details className="connection-menu"[\s\S]*open=\{connectionMenuOpen\}/);
@@ -168,11 +170,18 @@ test("product shell removes demo controls and scopes connection settings", () =>
   assert.match(app, /setConnectionMenuOpen\(\(open\) => !open\)/);
   assert.match(app, /onToggle=\{\(event\) => setConnectionMenuOpen\(event\.currentTarget\.open\)\}/);
   assert.match(styles, /\.connection-popover\s*\{[^}]*box-shadow:\s*var\(--shadow-pop\);/s);
+  assert.match(styles, /\.scope-values span\s*\{[^}]*background:\s*var\(--surface-raised\);/s);
   assert.match(styles, /\.connection-menu:not\(\[open\]\)\s+\.connection-popover\s*\{[^}]*display:\s*none;/s);
 });
 
 test("workspace telemetry is scoped to system check instead of repeating on every workspace", () => {
   assert.match(app, /const showWorkspaceTelemetry = activeView\.key === "cockpit";/);
+  assert.match(app, /className="system-check-context"/);
+  assert.match(app, /className="system-check-context-main"/);
+  assert.match(app, /className="system-check-signals"/);
+  assert.equal(app.includes("<MetricCard"), false);
+  assert.match(styles, /\.system-check-context\s*\{[^}]*background:\s*var\(--surface\);/s);
+  assert.match(styles, /\.system-check-signals\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
   assert.doesNotMatch(app, /isCapabilitiesView \? "compact" : ""/);
 });
 

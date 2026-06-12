@@ -556,6 +556,101 @@ button {
   height: 30px;
 }
 
+.system-check-context {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.system-check-context-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(120px, 0.55fr) minmax(220px, 1.1fr);
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--line-subtle);
+}
+
+.system-check-context-main > div {
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--surface-raised);
+}
+
+.system-check-context-main > div > span,
+.system-check-signal span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.system-check-context-main strong {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.system-check-signals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.system-check-signal {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1px 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+}
+
+.system-check-signal span {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
+.system-check-signal strong {
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 22px;
+}
+
+.system-check-signal small {
+  align-self: end;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.system-check-signal.tone-success {
+  border-color: var(--success-border);
+}
+
+.system-check-signal.tone-warning {
+  border-color: var(--warning-border);
+}
+
+.system-check-signal.tone-danger {
+  border-color: var(--danger-border);
+}
+
 .status-strip {
   display: grid;
   grid-template-columns: 1.15fr 0.9fr 0.72fr 1.35fr auto;
@@ -604,23 +699,27 @@ button {
   gap: 6px;
 }
 
-.scope-inputs {
+.scope-values {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 
-.scope-inputs input {
-  width: 100%;
+.scope-values span {
+  display: block;
   min-width: 0;
   height: 28px;
-  padding: 0 8px;
-  border: 1px solid var(--line-strong);
+  padding: 5px 9px;
+  overflow: hidden;
+  border: 1px solid var(--line-subtle);
   border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--surface-raised);
+  color: var(--ink-2);
   font-size: 12px;
-  outline: 0;
+  font-weight: 600;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .metric-grid {
@@ -2629,7 +2728,7 @@ td code {
 
 .core-journey {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .core-journey-intro {
@@ -2639,12 +2738,97 @@ td code {
   line-height: 1.6;
 }
 
-.core-journey-config,
-.core-journey-preflight,
+.core-journey-health,
+.core-journey-task,
+.core-journey-advanced,
 .core-journey-runtime-summary {
   border: 1px solid var(--line-muted);
   border-radius: var(--radius);
   background: var(--surface);
+}
+
+.core-journey-health {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 16px;
+}
+
+.core-journey-health-summary {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.core-journey-health-summary > span {
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.core-journey-health-summary > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.core-journey-health-summary strong {
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 28px;
+}
+
+.core-journey-health-summary p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.core-journey-health-status {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+  min-width: 280px;
+}
+
+.core-journey-health-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.core-journey-task {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.core-journey-task > header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.core-journey-task > header div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.core-journey-task > header strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.core-journey-task > header span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .core-journey-config {
@@ -2671,6 +2855,10 @@ td code {
   display: grid;
   justify-items: end;
   min-width: 96px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
 }
 
 .core-journey-score strong {
@@ -2698,6 +2886,24 @@ td code {
   text-transform: uppercase;
 }
 
+.core-journey-config-grid input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  outline: 0;
+}
+
+.core-journey-config-grid input:focus-visible {
+  border-color: var(--brand);
+  box-shadow: var(--shadow-focus);
+}
+
 .core-journey-config-actions {
   display: flex;
   justify-content: flex-end;
@@ -2705,10 +2911,62 @@ td code {
 }
 
 .core-journey-runtime-summary {
+  padding: 12px 14px;
+}
+
+.core-journey-runtime-summary summary,
+.core-journey-advanced summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.core-journey-runtime-summary summary::-webkit-details-marker,
+.core-journey-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.core-journey-advanced:not([open]) > :not(summary) {
+  display: none !important;
+}
+
+.core-journey-runtime-summary:not([open]) > :not(summary) {
+  display: none !important;
+}
+
+.core-journey-runtime-summary summary > div,
+.core-journey-advanced summary > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.core-journey-runtime-summary summary strong,
+.core-journey-advanced summary strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.core-journey-runtime-summary summary span,
+.core-journey-advanced summary span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-journey-runtime-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px 12px;
-  padding: 12px 14px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-subtle);
 }
 
 .core-journey-runtime-summary .technical-id-field,
@@ -2746,8 +3004,20 @@ td code {
   grid-column: span 2;
 }
 
+.core-journey-advanced {
+  padding: 12px 14px;
+}
+
+.core-journey-advanced .core-journey-config {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
 .core-journey-preflight {
-  padding: 14px;
+  min-width: 0;
 }
 
 .core-journey-preflight-actions {
@@ -2760,10 +3030,13 @@ td code {
 .core-journey-steps {
   display: grid;
   gap: 8px;
-  margin-top: 12px;
 }
 
 .core-journey-preflight-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.core-journey-steps {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
@@ -4063,6 +4336,11 @@ td code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .system-check-context-main,
+  .system-check-signals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .getting-started-layout {
     grid-template-columns: 1fr;
   }
@@ -4083,7 +4361,7 @@ td code {
   }
 
   .core-journey-config-grid,
-  .core-journey-runtime-summary,
+  .core-journey-runtime-grid,
   .core-journey-preflight-grid,
   .core-journey-steps,
   .approval-header,
@@ -4347,10 +4625,13 @@ td code {
   }
 
   .status-strip,
+  .system-check-context-main,
+  .system-check-signals,
   .metric-grid,
   .signal-grid,
+  .core-journey-health,
   .core-journey-config-grid,
-  .core-journey-runtime-summary,
+  .core-journey-runtime-grid,
   .core-journey-preflight-grid,
   .core-journey-steps,
   .approval-header,
@@ -4406,8 +4687,8 @@ td code {
     flex-direction: column;
   }
 
-  .core-journey-preflight-header,
-  .core-journey-preflight-actions,
+  .core-journey-health-actions,
+  .core-journey-task > header,
   .approval-section header,
   .approval-process-block header,
   .approval-evidence section header {
@@ -4417,6 +4698,11 @@ td code {
 
   .approval-studio {
     padding: 0;
+  }
+
+  .core-journey-health-status {
+    justify-items: stretch;
+    min-width: 0;
   }
 
   .approval-header,

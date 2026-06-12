@@ -1,6 +1,9 @@
 export type NavKey =
+  | "getting-started"
+  | "ask"
   | "cockpit"
   | "ai-admin"
+  | "tenants"
   | "registry"
   | "routes"
   | "policies"
@@ -9,7 +12,11 @@ export type NavKey =
   | "traces"
   | "evidence"
 
+export type NavGroupKey = "onboarding" | "configuration" | "primary" | "audit"
+
 export interface NavItem {
+  detailKey: string
+  groupKey: NavGroupKey
   key: NavKey
   label: string
 }
@@ -20,19 +27,42 @@ export interface ConsoleView {
   titleKey: string
 }
 
+export const defaultNavKey: NavKey = "getting-started"
+const navHashPrefix = "#"
+
+export const navGroups: Array<{ key: NavGroupKey; labelKey: string }> = [
+  { key: "onboarding", labelKey: "navGroup.onboarding" },
+  { key: "primary", labelKey: "navGroup.primary" },
+  { key: "audit", labelKey: "navGroup.audit" },
+  { key: "configuration", labelKey: "navGroup.configuration" },
+]
+
 export const navItems: NavItem[] = [
-  { key: "cockpit", label: "Cockpit" },
-  { key: "ai-admin", label: "AI Admin" },
-  { key: "registry", label: "Registry" },
-  { key: "routes", label: "Routes" },
-  { key: "policies", label: "Policies" },
-  { key: "capabilities", label: "Capabilities" },
-  { key: "access", label: "Access" },
-  { key: "traces", label: "Traces" },
-  { key: "evidence", label: "Evidence" },
+  { detailKey: "navDetail.getting-started", groupKey: "onboarding", key: "getting-started", label: "Getting Started" },
+  { detailKey: "navDetail.ask", groupKey: "primary", key: "ask", label: "Access Query" },
+  { detailKey: "navDetail.ai-admin", groupKey: "primary", key: "ai-admin", label: "Permission Changes" },
+  { detailKey: "navDetail.access", groupKey: "primary", key: "access", label: "Access Profile" },
+  { detailKey: "navDetail.traces", groupKey: "audit", key: "traces", label: "Call Logs" },
+  { detailKey: "navDetail.evidence", groupKey: "audit", key: "evidence", label: "Go-Live Status" },
+  { detailKey: "navDetail.cockpit", groupKey: "audit", key: "cockpit", label: "System Check" },
+  { detailKey: "navDetail.tenants", groupKey: "configuration", key: "tenants", label: "Tenants & Organization" },
+  { detailKey: "navDetail.registry", groupKey: "configuration", key: "registry", label: "Resource Management" },
+  { detailKey: "navDetail.capabilities", groupKey: "configuration", key: "capabilities", label: "Tool Capabilities" },
+  { detailKey: "navDetail.policies", groupKey: "configuration", key: "policies", label: "Access Policies" },
+  { detailKey: "navDetail.routes", groupKey: "configuration", key: "routes", label: "Routing Rules" },
 ]
 
 const views: Record<NavKey, ConsoleView> = {
+  "getting-started": {
+    key: "getting-started",
+    primaryPanelKey: "gettingStarted",
+    titleKey: "page.gettingStarted",
+  },
+  ask: {
+    key: "ask",
+    primaryPanelKey: "askAccess",
+    titleKey: "page.ask",
+  },
   cockpit: {
     key: "cockpit",
     primaryPanelKey: "runtimeSignals",
@@ -43,9 +73,14 @@ const views: Record<NavKey, ConsoleView> = {
     primaryPanelKey: "aiAdminPermissionWorkbench",
     titleKey: "page.aiAdmin",
   },
+  tenants: {
+    key: "tenants",
+    primaryPanelKey: "tenantOrganization",
+    titleKey: "page.tenants",
+  },
   registry: {
     key: "registry",
-    primaryPanelKey: "agentRegistry",
+    primaryPanelKey: "resourceLifecycle",
     titleKey: "page.registry",
   },
   routes: {
@@ -75,11 +110,24 @@ const views: Record<NavKey, ConsoleView> = {
   },
   evidence: {
     key: "evidence",
-    primaryPanelKey: "evidenceRuns",
+    primaryPanelKey: "goLiveAcceptance",
     titleKey: "page.evidence",
   },
 }
 
 export function viewForNav(key: string): ConsoleView {
-  return views[(key as NavKey) in views ? (key as NavKey) : "cockpit"]
+  return views[(key as NavKey) in views ? (key as NavKey) : defaultNavKey]
+}
+
+export function isNavKey(key: string): key is NavKey {
+  return key in views
+}
+
+export function navKeyFromHash(hash: string): NavKey | null {
+  const normalized = hash.trim().replace(/^#\/?/, "")
+  return isNavKey(normalized) ? normalized : null
+}
+
+export function navHashFor(key: NavKey): string {
+  return `${navHashPrefix}${key}`
 }

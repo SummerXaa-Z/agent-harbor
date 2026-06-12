@@ -21,7 +21,7 @@ test("default AI Admin approval readiness blocks live journey until checks pass"
   );
 });
 
-test("AI Admin approval readiness requires API, mock MCP, and subject header checks", () => {
+test("AI Admin approval readiness requires API, MCP tool service, and subject header checks", () => {
   assert.equal(aiAdminApprovalReadinessCanRun({
     api: "ok",
     dataSource: "warning",

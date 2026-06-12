@@ -39,12 +39,17 @@ export function scopeStatusTone(status: AccessProfileScopeStatus): AccessProfile
   return status === 'invalid' ? 'danger' : 'success'
 }
 
-export function summarizeDataScopes(scopes?: DataScope[], emptyLabel = 'no data scope'): string {
+export function summarizeDataScopes(
+  scopes?: DataScope[],
+  emptyLabel = 'no data scope',
+  readableLabels: Record<string, string> = {},
+): string {
   if (!scopes || scopes.length === 0) return emptyLabel
   const labels = scopes
     .map((scope) =>
-      [scope.dataDomain, scope.dataset, scope.schema, scope.table, scope.field, scope.classification]
-        .filter(Boolean)
+      [scope.dataDomain, scope.dataset, scope.schema, scope.table, scope.field, scope.classification, scope.region]
+        .filter((value): value is string => Boolean(value))
+        .map((value) => readableDataScopeValue(value, readableLabels))
         .join('/'),
     )
     .filter(Boolean)
@@ -74,4 +79,8 @@ function traceLimitQueryValue(value: AccessProfileFilters['traceLimit']): string
 function trimmed(value?: string): string | undefined {
   const next = value?.trim()
   return next || undefined
+}
+
+function readableDataScopeValue(value: string, labels: Record<string, string>): string {
+  return labels[value] ?? value
 }

@@ -304,7 +304,7 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 				ReasonKey:     "permissionPolicy.actionApprovalRequired",
 				ReasonValues:  map[string]string{"capability": "update_ticket", "action": "write"},
 			}},
-			NextActions: []string{"Request approval before applying this permission package."},
+			NextActions: []string{"Request approval before applying this permission request."},
 		},
 		Status:      domain.PermissionPackageApprovalStatusPending,
 		RequestedBy: "admin-key",

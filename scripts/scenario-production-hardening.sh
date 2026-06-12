@@ -3,8 +3,10 @@ set -euo pipefail
 
 API_HOST="${AGENT_HARBOR_PRODUCTION_GATE_API_HOST:-127.0.0.1}"
 API_PORT="${AGENT_HARBOR_PRODUCTION_GATE_API_PORT:-9091}"
+UNAUTH_API_PORT="${AGENT_HARBOR_PRODUCTION_GATE_UNAUTH_API_PORT:-$((API_PORT + 1))}"
 API_ADDR="${AGENT_HARBOR_PRODUCTION_GATE_API_ADDR:-${API_HOST}:${API_PORT}}"
 BASE_URL="${AGENT_HARBOR_PRODUCTION_GATE_BASE_URL:-http://${API_HOST}:${API_PORT}}"
+UNAUTH_BASE_URL="${AGENT_HARBOR_PRODUCTION_GATE_UNAUTH_BASE_URL:-http://${API_HOST}:${UNAUTH_API_PORT}}"
 ADMIN_KEY="${ADMIN_KEY:-production-hardening-admin-key}"
 WRONG_ADMIN_KEY="${WRONG_ADMIN_KEY:-production-hardening-wrong-key}"
 RUN_ID="${RUN_ID:-production-hardening-$(date +%Y%m%d%H%M%S)}"
@@ -201,8 +203,12 @@ need go
 need python3
 
 if port_in_use "$API_PORT"; then
-  echo "API port $API_PORT is already in use" >&2
-  exit 1
+	echo "API port $API_PORT is already in use" >&2
+	exit 1
+fi
+if port_in_use "$UNAUTH_API_PORT"; then
+	echo "unauthenticated admin check API port $UNAUTH_API_PORT is already in use" >&2
+	exit 1
 fi
 
 mkdir -p "$LOG_DIR"
@@ -213,6 +219,35 @@ echo "BASE_URL=$BASE_URL"
 echo "RUN_ID=$RUN_ID"
 echo "ADMIN_KEY=provided"
 echo "AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false"
+
+AGENT_HARBOR_ADDR="${API_HOST}:${UNAUTH_API_PORT}" \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL= \
+AGENT_HARBOR_CREDENTIAL_KEY= \
+  go run ./cmd/agent-harbor > "$LOG_DIR/api-unauth.log" 2>&1 &
+UNAUTH_PID="$!"
+PIDS+=("$UNAUTH_PID")
+
+wait_http "Unauthenticated admin check API" "$UNAUTH_BASE_URL/healthz"
+
+tmp="$(mktemp)"
+if ! unauth_status="$(curl -sS -o "$tmp" -w "%{http_code}" -X POST "$UNAUTH_BASE_URL/api/v1/agents" -H "Content-Type: application/json" -d "$(json_body local-agent "$RUN_ID-unauth")")"; then
+	rm -f "$tmp"
+	echo "curl failed for unauthenticated admin default check" >&2
+	show_logs
+	exit 1
+fi
+unauth_body="$(<"$tmp")"
+rm -f "$tmp"
+if [[ "$unauth_status" != "401" || "$unauth_body" != *"admin authentication is required"* ]]; then
+	echo "expected fail-closed admin default status 401, got $unauth_status" >&2
+	echo "$unauth_body" >&2
+	show_logs
+	exit 1
+fi
+echo "management endpoint fails closed without configured admin authentication"
+kill "$UNAUTH_PID" >/dev/null 2>&1 || true
+wait "$UNAUTH_PID" >/dev/null 2>&1 || true
 
 AGENT_HARBOR_ADDR="$API_ADDR" \
 AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \

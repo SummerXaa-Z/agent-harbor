@@ -16,6 +16,8 @@ test("createCoreJourneyConfig generates a scoped tenant tree for a run", () => {
   assert.equal(config.rootTenantId, "tenant-root-ui-core-2026-06-03-12-00");
   assert.equal(config.childTenantId, "tenant-child-ui-core-2026-06-03-12-00");
   assert.equal(config.grandchildTenantId, "tenant-grandchild-ui-core-2026-06-03-12-00");
+  assert.equal(config.subjectSelector, "user:ui-core-2026-06-03-12-00-*");
+  assert.equal(config.subjectId, "user:ui-core-2026-06-03-12-00-operator");
 });
 
 test("evaluateCoreJourney requires tenant, capability, grant, runtime, and profile evidence", () => {
@@ -118,6 +120,7 @@ test("evaluateCoreJourney requires tenant, capability, grant, runtime, and profi
     evidenceRuns: [],
     systemMetrics: [],
     loadedFromApi: true,
+    setupLoadedFromApi: true,
     grantsLoadedFromApi: true,
     capabilitiesLoadedFromApi: true,
     capabilityAssignmentsLoadedFromApi: true,

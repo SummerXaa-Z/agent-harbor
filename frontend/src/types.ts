@@ -208,6 +208,13 @@ export interface ApiEnvelope<T> {
   message?: string
 }
 
+export interface ConsoleSession {
+  actor?: string
+  authenticated: boolean
+  expiresAt?: string
+  requiresLogin: boolean
+}
+
 export interface RoutePolicy {
   id: string
   tenantId: string
@@ -328,7 +335,7 @@ export interface InstanceAssignment {
 export interface CreateInstanceAssignmentRequest {
   workspaceAssignmentId: string
   callerInstanceId: string
-  subjectSelector?: string
+  subjectSelector: string
   effect?: RoutePolicyEffect
   dataScopes?: DataScope[]
   status?: RoutePolicyStatus
@@ -363,6 +370,7 @@ export interface CatalogData {
 }
 
 export interface ConsoleData {
+  tenants: Tenant[]
   providers: ProviderContract[]
   channels: ChannelContract[]
   agents: Agent[]
@@ -377,6 +385,7 @@ export interface ConsoleData {
   evidenceRuns: EvidenceRun[]
   systemMetrics: SystemMetric[]
   loadedFromApi: boolean
+  setupLoadedFromApi: boolean
   grantsLoadedFromApi: boolean
   capabilitiesLoadedFromApi: boolean
   capabilityAssignmentsLoadedFromApi: boolean
@@ -393,6 +402,47 @@ export interface AccessProfileFilters {
   callerInstanceId?: string
   subjectId?: string
   traceLimit?: number | string
+}
+
+export interface AccessProfileHandoffContext {
+  tenantId: string
+  tenantName: string
+  tenantPath?: string
+  workspaceId: string
+  workspaceName: string
+  callerInstanceId?: string
+  callerName?: string
+  targetId?: string
+  targetName?: string
+  capabilityId?: string
+  capabilityName?: string
+}
+
+export interface PermissionChangeHandoffContext {
+  tenantId: string
+  tenantName?: string
+  workspaceId: string
+  workspaceName?: string
+  callerInstanceId?: string
+  callerName?: string
+  targetId?: string
+  targetName?: string
+  capabilityId?: string
+  capabilityName?: string
+  subjectId?: string
+  templateId?: string
+  intentText?: string
+  sourceView: 'ask' | 'tenants'
+}
+
+export interface AskHandoffContext {
+  tenantId?: string
+  workspaceId?: string
+  callerInstanceId?: string
+  targetId?: string
+  capabilityId?: string
+  subjectId?: string
+  sourceView: 'registry' | 'capabilities' | 'access' | 'ai-admin'
 }
 
 export interface AccessProfileSummary {

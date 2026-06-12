@@ -24,7 +24,7 @@ SCENARIO_SCRIPTS := \
 	scripts/demo.sh \
 	scripts/scenario-tenant-access-profile.sh
 
-.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp demo core-journey scenario-permission-package-approval ai-admin-browser-journey production-hardening scenario-all
+.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo core-journey scenario-permission-package-approval ai-admin-browser-journey production-hardening scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -45,8 +45,9 @@ help:
 	@printf '  make github-config-lint    Parse-check GitHub YAML configuration\n'
 	@printf '  make test-postgres         Run store tests using AGENT_HARBOR_TEST_DATABASE_URL\n'
 	@printf '  make run                   Start the local API server\n'
-	@printf '  make mock-mcp              Start the local mock MCP server for console demos\n'
-	@printf '  make demo                  Start API, mock MCP, and web console for first-run evaluation\n'
+	@printf '  make mock-mcp              Start the dependency-free mock MCP server for low-level tests\n'
+	@printf '  make real-mcp              Start the local official SDK MCP demo server\n'
+	@printf '  make demo                  Start API, real MCP, and web console for first-run evaluation\n'
 	@printf '  make core-journey          Run the 10-minute local core journey scenario\n'
 	@printf '  make scenario-permission-package-approval Run the local approval-required permission package scenario\n'
 	@printf '  make ai-admin-browser-journey Run the browser-facing AI Admin approval journey release gate\n'
@@ -89,6 +90,9 @@ frontend-test: frontend-deps
 frontend-build: frontend-deps
 	pnpm --dir frontend build
 
+real-mcp-deps:
+	pnpm --dir scripts/real-mcp install --frozen-lockfile
+
 makefile-targets-test:
 	bash tests/makefile_targets_test.sh
 
@@ -111,7 +115,10 @@ run:
 mock-mcp:
 	scripts/mock-mcp-server.py --host "$${MOCK_MCP_HOST:-127.0.0.1}" --port "$${MOCK_MCP_PORT:-8787}"
 
-demo: frontend-deps scripts/demo.sh
+real-mcp: real-mcp-deps
+	pnpm --dir scripts/real-mcp start
+
+demo: frontend-deps real-mcp-deps scripts/demo.sh
 	scripts/demo.sh
 
 core-journey:

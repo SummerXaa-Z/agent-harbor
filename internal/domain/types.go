@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -289,6 +290,11 @@ type DataScope struct {
 	RowFilter      string `json:"rowFilter,omitempty"`
 }
 
+func IsUnboundedSubjectSelector(subjectSelector string) bool {
+	selector := strings.TrimSpace(subjectSelector)
+	return selector == "" || selector == "*"
+}
+
 type Capability struct {
 	ID              string                    `json:"id"`
 	TargetID        string                    `json:"targetId"`
@@ -401,9 +407,10 @@ const (
 type PermissionPackageApprovalStatus string
 
 const (
-	PermissionPackageApprovalStatusPending  PermissionPackageApprovalStatus = "pending"
-	PermissionPackageApprovalStatusApproved PermissionPackageApprovalStatus = "approved"
-	PermissionPackageApprovalStatusRejected PermissionPackageApprovalStatus = "rejected"
+	PermissionPackageApprovalStatusPending   PermissionPackageApprovalStatus = "pending"
+	PermissionPackageApprovalStatusApproved  PermissionPackageApprovalStatus = "approved"
+	PermissionPackageApprovalStatusRejected  PermissionPackageApprovalStatus = "rejected"
+	PermissionPackageApprovalStatusWithdrawn PermissionPackageApprovalStatus = "withdrawn"
 )
 
 type PermissionPackageTemplate struct {
@@ -417,6 +424,18 @@ type PermissionPackageTemplate struct {
 	BlockedSensitivities []CapabilitySensitivity          `json:"blockedSensitivities"`
 	DefaultDataDomain    string                           `json:"defaultDataDomain"`
 	Guardrails           []PermissionPackageSimulationRow `json:"guardrails"`
+}
+
+type PermissionPackageAccessSubject struct {
+	ID              string `json:"id"`
+	Kind            string `json:"kind"`
+	LabelKey        string `json:"labelKey"`
+	DetailKey       string `json:"detailKey"`
+	SubjectSelector string `json:"subjectSelector"`
+	TenantID        string `json:"tenantId,omitempty"`
+	WorkspaceID     string `json:"workspaceId,omitempty"`
+	Email           string `json:"email,omitempty"`
+	Status          string `json:"status,omitempty"`
 }
 
 type PermissionPackageDraftRequest struct {
@@ -544,32 +563,33 @@ type PermissionPackageApplyPreflightExistingGrant struct {
 }
 
 type PermissionPackageApprovalRequest struct {
-	ID                      string                          `json:"id"`
-	DraftID                 string                          `json:"draftId"`
-	TemplateID              string                          `json:"templateId"`
-	TemplateVersion         int                             `json:"templateVersion"`
-	PolicyVersion           int                             `json:"policyVersion"`
-	TenantID                string                          `json:"tenantId"`
-	WorkspaceID             string                          `json:"workspaceId"`
-	TargetID                string                          `json:"targetId"`
-	CallerInstanceID        string                          `json:"callerInstanceId"`
-	SubjectSelector         string                          `json:"subjectSelector,omitempty"`
-	RequestText             string                          `json:"requestText,omitempty"`
-	Region                  string                          `json:"region,omitempty"`
-	DataScopes              []DataScope                     `json:"dataScopes,omitempty"`
-	AllowedCapabilityIDs    []string                        `json:"allowedCapabilityIds"`
-	AllowedCapabilityKeys   []string                        `json:"allowedCapabilityKeys"`
-	PolicyGate              PermissionPackagePolicyGate     `json:"policyGate"`
-	Status                  PermissionPackageApprovalStatus `json:"status"`
-	RequestedBy             string                          `json:"requestedBy,omitempty"`
-	ReviewedBy              string                          `json:"reviewedBy,omitempty"`
-	ReviewComment           string                          `json:"reviewComment,omitempty"`
-	CreatedAt               time.Time                       `json:"createdAt"`
-	UpdatedAt               time.Time                       `json:"updatedAt"`
-	ResolvedAt              time.Time                       `json:"resolvedAt,omitempty,omitzero"`
-	ExpiresAt               time.Time                       `json:"expiresAt"`
-	ConsumedAt              time.Time                       `json:"consumedAt,omitempty,omitzero"`
-	ConsumedByApplicationID string                          `json:"consumedByApplicationId,omitempty"`
+	ID                            string                          `json:"id"`
+	DraftID                       string                          `json:"draftId"`
+	TemplateID                    string                          `json:"templateId"`
+	TemplateVersion               int                             `json:"templateVersion"`
+	PolicyVersion                 int                             `json:"policyVersion"`
+	TenantID                      string                          `json:"tenantId"`
+	WorkspaceID                   string                          `json:"workspaceId"`
+	TargetID                      string                          `json:"targetId"`
+	CallerInstanceID              string                          `json:"callerInstanceId"`
+	SubjectSelector               string                          `json:"subjectSelector,omitempty"`
+	RequestText                   string                          `json:"requestText,omitempty"`
+	Region                        string                          `json:"region,omitempty"`
+	DataScopes                    []DataScope                     `json:"dataScopes,omitempty"`
+	AllowedCapabilityIDs          []string                        `json:"allowedCapabilityIds"`
+	AllowedCapabilityKeys         []string                        `json:"allowedCapabilityKeys"`
+	AllowedCapabilityFingerprints []string                        `json:"allowedCapabilityFingerprints"`
+	PolicyGate                    PermissionPackagePolicyGate     `json:"policyGate"`
+	Status                        PermissionPackageApprovalStatus `json:"status"`
+	RequestedBy                   string                          `json:"requestedBy,omitempty"`
+	ReviewedBy                    string                          `json:"reviewedBy,omitempty"`
+	ReviewComment                 string                          `json:"reviewComment,omitempty"`
+	CreatedAt                     time.Time                       `json:"createdAt"`
+	UpdatedAt                     time.Time                       `json:"updatedAt"`
+	ResolvedAt                    time.Time                       `json:"resolvedAt,omitempty,omitzero"`
+	ExpiresAt                     time.Time                       `json:"expiresAt"`
+	ConsumedAt                    time.Time                       `json:"consumedAt,omitempty,omitzero"`
+	ConsumedByApplicationID       string                          `json:"consumedByApplicationId,omitempty"`
 }
 
 type PermissionPackageApprovalReviewer struct {

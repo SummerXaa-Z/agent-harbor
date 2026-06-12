@@ -12,7 +12,7 @@ This roadmap is intentionally high level. Detailed implementation work should st
 
 AgentHarbor supports MCP gateway capabilities, but its primary product surface is not generic MCP aggregation. The core journey is permission operations: describe a tenant-scoped access need, draft a package, simulate the effective access result, route approval when risk requires it, apply through the existing grant chain, and inspect evidence afterward.
 
-AgentHarbor 支持 MCP 网关能力，但主要产品界面不是通用 MCP 聚合。核心用户旅程是权限运营：描述一个租户范围的访问需求，生成权限包草案，模拟有效访问结果，在风险需要时进入审批路由，通过现有授权链落地，并在事后查看证据。
+AgentHarbor 支持 MCP 网关能力，但主要产品界面不是通用 MCP 聚合。核心用户旅程是权限运营：描述一个租户范围的访问需求，生成权限包草案，模拟有效访问结果，在风险需要时进入审批路由，通过现有授权链落地，并在事后查看记录。
 
 ## Near Term / 近期
 

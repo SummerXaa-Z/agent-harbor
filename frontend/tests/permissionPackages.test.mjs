@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  defaultPermissionPackageDraftInput,
   createPermissionPackageDraft,
   permissionPackageTemplates,
   subjectIdExampleFromSelector
@@ -47,6 +48,12 @@ const capabilities = [
     updatedAt: now
   }
 ];
+
+test("default permission package draft opens the approval-required support journey", () => {
+  assert.equal(defaultPermissionPackageDraftInput.templateId, "support-ticket-triage");
+  assert.equal(defaultPermissionPackageDraftInput.subjectSelector, "user:support-*");
+  assert.match(defaultPermissionPackageDraftInput.requestText, /客服|工单/);
+});
 
 test("sales read-only package drafts allowed reads, blocked exports, and simulation rows", () => {
   const draft = createPermissionPackageDraft(
@@ -95,6 +102,7 @@ test("draft cannot be applied when no allowed capability matches the selected ta
       callerInstanceId: "agt_sales_assistant",
       region: "华东",
       requestText: "开通销售只读。",
+      subjectSelector: "user:sales-*",
       targetId: "agt_unknown",
       templateId: "sales-readonly",
       tenantId: "tenant-east",
@@ -108,12 +116,34 @@ test("draft cannot be applied when no allowed capability matches the selected ta
   assert.match(draft.readiness.warnings.join(" "), /No matching allowed capabilities/);
 });
 
+test("draft cannot be applied without a bounded access subject", () => {
+  for (const subjectSelector of ["", " ", "*"]) {
+    const draft = createPermissionPackageDraft(
+      {
+        callerInstanceId: "agt_sales_assistant",
+        region: "华东",
+        requestText: "开通销售只读。",
+        subjectSelector,
+        targetId: "agt_crm_mcp",
+        templateId: "sales-readonly",
+        tenantId: "tenant-east",
+        workspaceId: "ws-sales"
+      },
+      { capabilities }
+    );
+
+    assert.equal(draft.readiness.canApply, false);
+    assert.deepEqual(draft.readiness.missingFields, ["subjectSelector"]);
+  }
+});
+
 test("support ticket triage package requires approval for risky allowed writes", () => {
   const draft = createPermissionPackageDraft(
     {
       callerInstanceId: "agt_support_assistant",
       region: "华东",
       requestText: "给客服助手开通工单更新权限。",
+      subjectSelector: "user:support-*",
       targetId: "agt_crm_mcp",
       templateId: "support-ticket-triage",
       tenantId: "tenant-east",

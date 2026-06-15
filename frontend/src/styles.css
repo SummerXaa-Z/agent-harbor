@@ -1101,6 +1101,81 @@ button {
   color: var(--brand);
 }
 
+.resource-lifecycle-command-center {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1.25fr);
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.resource-lifecycle-command-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.resource-lifecycle-command-copy strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.resource-lifecycle-command-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.resource-lifecycle-command-actions,
+.resource-lifecycle-secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.resource-lifecycle-command-actions {
+  grid-column: 2;
+}
+
+.resource-lifecycle-secondary-actions {
+  grid-column: 1 / -1;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line-subtle);
+}
+
+.resource-lifecycle-command-actions .action-modal-inline {
+  display: flex;
+}
+
+.action-modal-trigger-command {
+  width: auto;
+  min-height: 36px;
+  gap: 10px;
+  padding: 0 12px;
+  border-color: var(--brand-border);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.action-modal-trigger-command:hover {
+  border-color: var(--brand-border-strong);
+  background: var(--brand-soft);
+}
+
+.action-modal-trigger-command .action-modal-trigger-affordance {
+  min-height: 24px;
+  padding: 0 7px;
+  border-color: var(--brand-border);
+  background: var(--brand-soft);
+}
+
 .resource-lifecycle-list {
   display: grid;
   border: 1px solid var(--line-subtle);
@@ -5451,6 +5526,16 @@ td code {
   .tenant-org-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .resource-lifecycle-command-center {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-lifecycle-command-actions,
+  .resource-lifecycle-secondary-actions {
+    grid-column: 1;
+    justify-content: flex-start;
   }
 
   .tenant-org-actions > div:last-child {

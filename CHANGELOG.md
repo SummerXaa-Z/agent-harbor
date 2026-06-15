@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Resource Management now presents lifecycle operations directly in the resource workbench: create Agent, create key, rotate credential, create policy, review capabilities, start permission changes, and review runtime all start from the same entry.
+- 资源管理页现在把生命周期操作直接收束到资源工作台：创建 Agent、创建密钥、轮换凭据、创建策略、查看能力、发起权限变更和查看运行状态都从同一个入口开始。
 - Moved Permission Changes approval-decision confirmation state into a focused hook, reducing the workbench component while keeping approval, rejection, and withdraw behavior unchanged.
 - 权限变更页的审批确认状态已下沉到独立 hook，减少工作台组件复杂度，同时保持审批、拒绝和撤回行为不变。
 - Split Permission Changes presenter helpers and capability chip rendering out of `AiAdminPermissionWorkbench`, reducing the largest console component while preserving the permission-change journey.

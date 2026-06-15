@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Production deployment mode now runs a configuration preflight that blocks development-only admin bypass and private-upstream flags before startup.
+- 生产部署模式现在会执行配置预检，在启动前阻断开发专用的管理绕过和私有上游开关。
 - Frontend dependency security now pins Vite's transitive `esbuild` resolution to the patched `0.28.1` line through a pnpm override, with tests guarding against lockfile downgrade.
 - 前端依赖安全现在通过 pnpm override 将 Vite 传递依赖 `esbuild` 固定到已修复的 `0.28.1` 版本，并用测试防止 lockfile 回退。
 - Release readiness now includes `make web-console-production-journey`, a dependency-free smoke gate for the served production journey console path.

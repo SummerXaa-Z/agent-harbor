@@ -21,6 +21,8 @@
   - Add production-mode startup checks for unsafe flags and safe minimal config.
 - Modify `README.md`, `docs/engineering/release-checklist.md`, and `CHANGELOG.md`
   - Document `AGENT_HARBOR_DEPLOYMENT_MODE=production` and the release-gate behavior.
+- Modify `.env.example`
+  - Add `AGENT_HARBOR_DEPLOYMENT_MODE=development` to the local configuration template.
 - Modify this plan while executing
   - Check off each step after verification.
 
@@ -31,7 +33,7 @@
 **Files:**
 - Modify: `internal/app/app_test.go`
 
-- [ ] **Step 1: Add failing tests**
+- [x] **Step 1: Add failing tests**
 
 Append these tests to `internal/app/app_test.go`:
 
@@ -122,7 +124,7 @@ func hasDeploymentCheck(checks []deploymentConfigCheck, code, severity, status s
 }
 ```
 
-- [ ] **Step 2: Run app tests and confirm RED**
+- [x] **Step 2: Run app tests and confirm RED**
 
 Run:
 
@@ -139,7 +141,7 @@ Expected: FAIL because `deploymentConfigPreflightFromEnv`, `deploymentConfigChec
 **Files:**
 - Modify: `internal/app/app.go`
 
-- [ ] **Step 1: Add helper types and validation**
+- [x] **Step 1: Add helper types and validation**
 
 Add the following near the top-level app config helpers in `internal/app/app.go`:
 
@@ -249,7 +251,7 @@ func productionBlockingCheck(code string, failed bool, failedMessage string, pas
 }
 ```
 
-- [ ] **Step 2: Build the environment map and call preflight from `New`**
+- [x] **Step 2: Build the environment map and call preflight from `New`**
 
 Add:
 
@@ -280,7 +282,7 @@ if _, err := deploymentConfigPreflightFromEnv(deploymentEnvFromOS()); err != nil
 }
 ```
 
-- [ ] **Step 3: Run focused tests and fix compile issues**
+- [x] **Step 3: Run focused tests and fix compile issues**
 
 Run:
 
@@ -297,7 +299,7 @@ Expected: PASS.
 **Files:**
 - Modify: `scripts/scenario-production-hardening.sh`
 
-- [ ] **Step 1: Add production-mode startup assertions**
+- [x] **Step 1: Add production-mode startup assertions**
 
 After the unauthenticated admin fail-closed check and before starting the main API, add two short-lived startup checks:
 
@@ -337,7 +339,7 @@ wait "$PROD_SAFE_PID" >/dev/null 2>&1 || true
 echo "production deployment preflight accepts safe minimal config"
 ```
 
-- [ ] **Step 2: Run focused scenario verification**
+- [x] **Step 2: Run focused scenario verification**
 
 Run:
 
@@ -358,15 +360,15 @@ Expected: PASS and the output includes both production deployment preflight mess
 - Modify: `CHANGELOG.md`
 - Modify: this plan
 
-- [ ] **Step 1: Update README**
+- [x] **Step 1: Update README**
 
 Document `AGENT_HARBOR_DEPLOYMENT_MODE` in the runtime configuration table and clarify that production mode blocks development-only flags.
 
-- [ ] **Step 2: Update release checklist**
+- [x] **Step 2: Update release checklist**
 
 Add one sentence under the production safety baseline saying it also verifies production deployment preflight behavior.
 
-- [ ] **Step 3: Update CHANGELOG**
+- [x] **Step 3: Update CHANGELOG**
 
 Add under `## [Unreleased]`:
 
@@ -375,7 +377,7 @@ Add under `## [Unreleased]`:
 - 生产部署模式现在会执行配置预检，在启动前阻断开发专用的管理绕过和私有上游开关。
 ```
 
-- [ ] **Step 4: Run full gates**
+- [x] **Step 4: Run full gates**
 
 Run:
 
@@ -388,12 +390,12 @@ git diff --check
 
 Expected: all pass.
 
-- [ ] **Step 5: Commit and create PR**
+- [x] **Step 5: Commit and create PR**
 
 Run:
 
 ```bash
-git add CHANGELOG.md README.md docs/engineering/release-checklist.md docs/superpowers/plans/2026-06-15-deployment-config-preflight.md internal/app/app.go internal/app/app_test.go scripts/scenario-production-hardening.sh
+git add .env.example CHANGELOG.md README.md docs/engineering/release-checklist.md docs/superpowers/plans/2026-06-15-deployment-config-preflight.md internal/app/app.go internal/app/app_test.go scripts/scenario-production-hardening.sh
 git commit -m "chore: add deployment config preflight"
 git push -u origin codex/deployment-config-preflight
 gh pr create --base main --head codex/deployment-config-preflight --title "Add deployment config preflight" --body "<summary and verification>"

@@ -292,6 +292,7 @@ Use `.env.example` as the local configuration template.
 | Variable | Purpose |
 | --- | --- |
 | `AGENT_HARBOR_ADDR` | API listen address. Defaults to `:9090`. |
+| `AGENT_HARBOR_DEPLOYMENT_MODE` | Optional deployment mode. Set to `production` for deployment-style preflight checks that block development-only admin bypass and private-upstream flags before startup. 可选部署模式；设置为 `production` 后，启动前会执行部署预检并阻断开发专用的管理绕过和私有上游开关。 |
 | `AGENT_HARBOR_ADMIN_KEY` | Optional shared management API key. Management and audit endpoints require this key, a named admin identity, or the explicit development unauthenticated flag. |
 | `AGENT_HARBOR_ADMIN_IDENTITIES` | Optional named admin identities for production approvals. Use comma or semicolon separated `actor=key` entries, for example `requester=req-key;security=sec-key`. Matching keys set `requestedBy` and `reviewedBy` to the actor and prevent reviewer impersonation. 可选具名管理身份，使用 `actor=key`；匹配后审批发起人与审批人来自认证身份，而不是请求体自报。 |
 | `AGENT_HARBOR_SESSION_SECRET` | Optional signing secret for web-console HttpOnly sessions. Set a stable high-entropy value in deployment-style environments; if unset, sessions are derived from the configured admin credentials. Web 控制台 HttpOnly 会话签名密钥；部署式环境建议设置稳定高熵值，未设置时会从已配置管理员凭据派生。 |
@@ -304,7 +305,7 @@ Use `.env.example` as the local configuration template.
 | `AGENT_HARBOR_TEST_DATABASE_URL` | PostgreSQL connection string used by integration tests. |
 | `VITE_API_BASE` | Frontend API base URL. |
 
-Run `make production-hardening` before any deployment-style handoff. It proves that `AGENT_HARBOR_ADMIN_KEY` protection is enforced across management APIs, that management routes fail closed without configured admin authentication, and that `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` stays disabled unless explicitly set for local development scenarios.
+Run `make production-hardening` before any deployment-style handoff. It proves that `AGENT_HARBOR_ADMIN_KEY` protection is enforced across management APIs, that management routes fail closed without configured admin authentication, that `AGENT_HARBOR_DEPLOYMENT_MODE=production` rejects development-only flags before startup, and that `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` stays disabled unless explicitly set for local development scenarios.
 
 PostgreSQL example:
 

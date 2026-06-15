@@ -210,6 +210,14 @@ if port_in_use "$UNAUTH_API_PORT"; then
 	echo "unauthenticated admin check API port $UNAUTH_API_PORT is already in use" >&2
 	exit 1
 fi
+if port_in_use "$((UNAUTH_API_PORT + 1))"; then
+	echo "production unsafe config check API port $((UNAUTH_API_PORT + 1)) is already in use" >&2
+	exit 1
+fi
+if port_in_use "$((UNAUTH_API_PORT + 2))"; then
+	echo "production safe config check API port $((UNAUTH_API_PORT + 2)) is already in use" >&2
+	exit 1
+fi
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT_DIR"
@@ -248,6 +256,40 @@ fi
 echo "management endpoint fails closed without configured admin authentication"
 kill "$UNAUTH_PID" >/dev/null 2>&1 || true
 wait "$UNAUTH_PID" >/dev/null 2>&1 || true
+
+if AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 1))" \
+	AGENT_HARBOR_DEPLOYMENT_MODE=production \
+	AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \
+	AGENT_HARBOR_SESSION_SECRET=production-hardening-session-secret \
+	AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true \
+	AGENT_HARBOR_DATABASE_URL= \
+	AGENT_HARBOR_CREDENTIAL_KEY= \
+	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-unsafe.log" 2>&1; then
+	echo "expected production mode to reject AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true" >&2
+	show_logs
+	exit 1
+fi
+if ! grep -q "AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN" "$LOG_DIR/api-prod-unsafe.log"; then
+	echo "production unsafe flag failure did not mention AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN" >&2
+	show_logs
+	exit 1
+fi
+echo "production deployment preflight rejects unauthenticated admin flag"
+
+AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 2))" \
+AGENT_HARBOR_DEPLOYMENT_MODE=production \
+AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \
+AGENT_HARBOR_SESSION_SECRET=production-hardening-session-secret \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL= \
+AGENT_HARBOR_CREDENTIAL_KEY= \
+	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-safe.log" 2>&1 &
+PROD_SAFE_PID="$!"
+PIDS+=("$PROD_SAFE_PID")
+wait_http "Production config check API" "http://${API_HOST}:$((UNAUTH_API_PORT + 2))/healthz"
+kill "$PROD_SAFE_PID" >/dev/null 2>&1 || true
+wait "$PROD_SAFE_PID" >/dev/null 2>&1 || true
+echo "production deployment preflight accepts safe minimal config"
 
 AGENT_HARBOR_ADDR="$API_ADDR" \
 AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \

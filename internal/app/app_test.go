@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -197,4 +198,104 @@ func TestApprovalReviewersFromEnvRejectsMalformedRules(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected malformed approval reviewer env value to fail")
 	}
+}
+
+func TestDeploymentConfigPreflightBlocksUnsafeProductionFlags(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "test-admin")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
+	t.Setenv("AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN", "true")
+	t.Setenv("AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS", "true")
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatalf("expected unsafe production config to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN") || !strings.Contains(got, "AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS") {
+		t.Fatalf("expected production config error to name unsafe flags, got %q", got)
+	}
+}
+
+func TestDeploymentConfigPreflightBlocksTruthyProductionFlags(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "test-admin")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
+	t.Setenv("AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN", "1")
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatalf("expected truthy unsafe production config to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN") {
+		t.Fatalf("expected production config error to name truthy unsafe flag, got %q", got)
+	}
+}
+
+func TestDeploymentConfigPreflightRequiresProductionAdminAuthentication(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatalf("expected missing production admin authentication to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ADMIN_KEY") || !strings.Contains(got, "AGENT_HARBOR_ADMIN_IDENTITIES") {
+		t.Fatalf("expected production config error to name admin authentication, got %q", got)
+	}
+}
+
+func TestDeploymentConfigPreflightAllowsSafeProductionConfig(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "test-admin")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
+
+	app, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("safe production config should start: %v", err)
+	}
+	defer app.Close()
+}
+
+func TestDeploymentConfigPreflightWarnsForDerivedSessionSecret(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       "test-admin",
+	})
+	if err != nil {
+		t.Fatalf("preflight should warn, not fail: %v", err)
+	}
+	if !hasDeploymentCheck(checks, "session_secret_explicit", "warning", "warning") {
+		t.Fatalf("expected session secret warning, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightKeepsDevelopmentModeCompatible(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN", "true")
+
+	app, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("development mode should preserve explicit unauthenticated admin: %v", err)
+	}
+	defer app.Close()
+}
+
+func TestDeploymentModeRejectsInvalidValue(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "prod")
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatalf("expected invalid deployment mode to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_DEPLOYMENT_MODE") {
+		t.Fatalf("expected deployment mode error, got %q", got)
+	}
+}
+
+func hasDeploymentCheck(checks []deploymentConfigCheck, code, severity, status string) bool {
+	for _, check := range checks {
+		if check.Code == code && check.Severity == severity && check.Status == status {
+			return true
+		}
+	}
+	return false
 }

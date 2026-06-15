@@ -133,11 +133,13 @@ interface RequestOptions {
 }
 
 export class ApiRequestError extends Error {
+  readonly code?: string
   readonly status: number
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.name = 'ApiRequestError'
+    this.code = code
     this.status = status
   }
 }
@@ -165,7 +167,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
   if (!response.ok) {
     const message = isEnvelope<T>(payload) ? payload.message || payload.error : response.statusText
-    throw new ApiRequestError(response.status, message || `Request failed with status ${response.status}`)
+    throw new ApiRequestError(
+      response.status,
+      message || `Request failed with status ${response.status}`,
+      isEnvelope<T>(payload) ? payload.error : undefined,
+    )
   }
 
   if (isEnvelope<T>(payload)) {
@@ -475,7 +481,11 @@ export async function callMcpRpc(
 
   if (!response.ok && response.status !== 403) {
     const message = isEnvelope<unknown>(payload) ? payload.message || payload.error : response.statusText
-    throw new ApiRequestError(response.status, message || `Request failed with status ${response.status}`)
+    throw new ApiRequestError(
+      response.status,
+      message || `Request failed with status ${response.status}`,
+      isEnvelope<unknown>(payload) ? payload.error : undefined,
+    )
   }
 
   return {

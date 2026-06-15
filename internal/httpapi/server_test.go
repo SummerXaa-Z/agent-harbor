@@ -4158,7 +4158,9 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 		t.Fatalf("approval request should be consumed by application %s, got %#v", applied.Application.ID, consumedApproval)
 	}
 	reusedApply := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", approvedApplyInput, "")
-	if reusedApply.Code != http.StatusBadRequest || !strings.Contains(reusedApply.Body.String(), "already consumed") {
+	if reusedApply.Code != http.StatusBadRequest ||
+		!strings.Contains(reusedApply.Body.String(), "PERMISSION_PACKAGE_APPROVAL_ALREADY_CONSUMED") ||
+		!strings.Contains(reusedApply.Body.String(), "already consumed") {
 		t.Fatalf("consumed approval request should not authorize apply, status=%d body=%s", reusedApply.Code, reusedApply.Body.String())
 	}
 	updated, ok, err = repo.GetCapability(t.Context(), updateTicket.ID)

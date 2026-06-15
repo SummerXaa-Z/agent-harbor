@@ -171,6 +171,17 @@ test("permission journey messages store translation keys instead of rendered lan
   assert.doesNotMatch(app, /setAiAdminMessage\(tx\(t,/);
 });
 
+test("permission apply consumed approval retry shows recovery guidance", () => {
+  const block = functionBlock("applyAiAdminPermissionPackage");
+
+  assert.match(app, /function isConsumedApprovalRetryError\(error: unknown\)/);
+  assert.match(app, /PERMISSION_PACKAGE_APPROVAL_ALREADY_CONSUMED/);
+  assert.match(block, /if \(isConsumedApprovalRetryError\(error\)\)/);
+  assert.match(block, /refreshAiAdminApplicationHealth\(aiAdminForm, \{ requireLiveApi: false \}\)/);
+  assert.match(block, /refreshAiAdminProductionReadiness\(aiAdminForm, \{ requireLiveApi: false \}\)/);
+  assert.match(block, /message\.permissionApprovalAlreadyConsumedRecovery/);
+});
+
 test("permission journey mutation handlers require live API before network writes", () => {
   [
     ["runAiAdminApprovalJourney", "message.fallbackDataModeActionBlocked", "createTenant("],

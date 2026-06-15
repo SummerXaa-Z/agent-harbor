@@ -29,6 +29,12 @@ test("management API requests include console session cookies", () => {
   assert.match(apiSource, /credentials:\s*['"]include['"]/);
 });
 
+test("API request errors preserve backend error codes", () => {
+  assert.match(apiSource, /readonly code\?: string/);
+  assert.match(apiSource, /constructor\(status: number, message: string, code\?: string\)/);
+  assert.match(apiSource, /new ApiRequestError\(\s*response\.status,\s*message \|\| `Request failed with status \$\{response\.status\}`,\s*isEnvelope<[^>]+>\(payload\) \? payload\.error : undefined,\s*\)/s);
+});
+
 test("console auth API exposes session login and logout endpoints", () => {
   assert.match(apiSource, /function fetchConsoleSession\(/);
   assert.match(apiSource, /\/api\/v1\/auth\/session/);

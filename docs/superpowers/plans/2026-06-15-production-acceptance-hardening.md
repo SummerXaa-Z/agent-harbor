@@ -38,7 +38,7 @@
 - Modify: `frontend/pnpm-lock.yaml`
 - Modify: `frontend/tests/viteConfig.test.mjs`
 
-- [ ] **Step 1: Add failing dependency-security assertions**
+- [x] **Step 1: Add failing dependency-security assertions**
 
 Extend `frontend/tests/viteConfig.test.mjs`:
 
@@ -53,11 +53,11 @@ Add:
 test("vite esbuild transitive dependency is pinned to the patched line", () => {
   assert.equal(packageJson.pnpm?.overrides?.esbuild, "0.28.1");
   assert.doesNotMatch(lockfile, /esbuild@0\.27\.7/);
-  assert.match(lockfile, /esbuild@0\.28\.1/);
+  assert.match(lockfile, /esbuild:\s+0\.28\.1/);
 });
 ```
 
-- [ ] **Step 2: Run the focused test and confirm RED**
+- [x] **Step 2: Run the focused test and confirm RED**
 
 Run:
 
@@ -67,7 +67,7 @@ pnpm --dir frontend exec node --test tests/viteConfig.test.mjs
 
 Expected: FAIL because `packageJson.pnpm.overrides.esbuild` is missing and the lockfile still resolves `esbuild@0.27.7`.
 
-- [ ] **Step 3: Add the pnpm override**
+- [x] **Step 3: Add the pnpm override**
 
 Modify `frontend/package.json` so the root object includes:
 
@@ -81,7 +81,7 @@ Modify `frontend/package.json` so the root object includes:
 
 Keep existing dependency versions unchanged.
 
-- [ ] **Step 4: Refresh the lockfile**
+- [x] **Step 4: Refresh the lockfile**
 
 Run:
 
@@ -89,9 +89,9 @@ Run:
 pnpm --dir frontend install --lockfile-only
 ```
 
-Expected: `frontend/pnpm-lock.yaml` resolves `esbuild@0.28.1` and its platform packages to `0.28.1`.
+Expected: `frontend/pnpm-lock.yaml` resolves `esbuild: 0.28.1`.
 
-- [ ] **Step 5: Run focused dependency verification**
+- [x] **Step 5: Run focused dependency verification**
 
 Run:
 
@@ -100,7 +100,7 @@ pnpm --dir frontend why esbuild
 pnpm --dir frontend exec node --test tests/viteConfig.test.mjs
 ```
 
-Expected: `pnpm why esbuild` reports `esbuild@0.28.1`; focused test passes.
+Expected: focused test passes and `frontend/pnpm-lock.yaml` contains the `esbuild: 0.28.1` override while no longer containing `esbuild@0.27.7`. `pnpm why esbuild` produced no transitive tree after the override, so the lockfile regression test is the stable verification source.
 
 ---
 
@@ -111,7 +111,7 @@ Expected: `pnpm why esbuild` reports `esbuild@0.28.1`; focused test passes.
 - Modify: `Makefile`
 - Modify: `tests/makefile_targets_test.sh`
 
-- [ ] **Step 1: Add failing Makefile target assertions**
+- [x] **Step 1: Add failing Makefile target assertions**
 
 Modify `tests/makefile_targets_test.sh`:
 
@@ -121,7 +121,7 @@ assert_target_depends_on "web-console-production-journey" "real-mcp-deps"
 assert_target_depends_on "release-check" "web-console-production-journey"
 ```
 
-- [ ] **Step 2: Run Makefile target test and confirm RED**
+- [x] **Step 2: Run Makefile target test and confirm RED**
 
 Run:
 
@@ -131,7 +131,7 @@ bash tests/makefile_targets_test.sh
 
 Expected: FAIL because `web-console-production-journey` does not exist.
 
-- [ ] **Step 3: Create the smoke script**
+- [x] **Step 3: Create the smoke script**
 
 Create `scripts/scenario-web-console-production-journey.sh`:
 
@@ -291,7 +291,7 @@ pnpm --dir frontend exec node --test \
 echo "Web console production journey smoke complete"
 ```
 
-- [ ] **Step 4: Wire the Makefile target**
+- [x] **Step 4: Wire the Makefile target**
 
 Modify `Makefile`:
 
@@ -311,7 +311,7 @@ web-console-production-journey: frontend-deps real-mcp-deps
 	bash scripts/scenario-web-console-production-journey.sh
 ```
 
-- [ ] **Step 5: Run focused smoke verification**
+- [x] **Step 5: Run focused smoke verification**
 
 Run:
 
@@ -333,7 +333,7 @@ Expected: all pass and the smoke script prints `Web console production journey s
 - Modify: `CHANGELOG.md`
 - Modify: this plan
 
-- [ ] **Step 1: Update README**
+- [x] **Step 1: Update README**
 
 Document:
 
@@ -343,11 +343,11 @@ make web-console-production-journey
 
 Explain that this starts an isolated local API, real MCP demo, and web console, then verifies the production journey smoke signals without adding browser automation dependencies.
 
-- [ ] **Step 2: Update release checklist**
+- [x] **Step 2: Update release checklist**
 
 Add `make web-console-production-journey` next to `make production-hardening` and clarify that `make release-check` includes both.
 
-- [ ] **Step 3: Update CHANGELOG**
+- [x] **Step 3: Update CHANGELOG**
 
 Add under `## [Unreleased]`:
 
@@ -358,7 +358,7 @@ Add under `## [Unreleased]`:
 - 发布验收现在包含 `make web-console-production-journey`，用于对已启动的生产旅程控制台路径执行无新增依赖的 smoke gate。
 ```
 
-- [ ] **Step 4: Run docs and focused verification**
+- [x] **Step 4: Run docs and focused verification**
 
 Run:
 
@@ -377,7 +377,7 @@ Expected: all pass.
 **Files:**
 - Modify: this plan
 
-- [ ] **Step 1: Run full gates**
+- [x] **Step 1: Run full gates**
 
 Run:
 
@@ -390,7 +390,7 @@ make release-check
 
 Expected: all pass.
 
-- [ ] **Step 2: Check Dependabot alert state**
+- [x] **Step 2: Check Dependabot alert state**
 
 Run:
 
@@ -400,7 +400,7 @@ gh api repos/SummerXaa-Z/agent-harbor/dependabot/alerts --jq '.[] | select(.depe
 
 Expected: before merge, default-branch alerts may still show open; PR description should state the branch lockfile resolves `esbuild@0.28.1`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 Run:
 
@@ -409,7 +409,7 @@ git add CHANGELOG.md README.md docs/engineering/release-checklist.md docs/superp
 git commit -m "chore: harden production acceptance gates"
 ```
 
-- [ ] **Step 4: Push and create PR**
+- [x] **Step 4: Push and create PR**
 
 Run:
 

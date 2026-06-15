@@ -8,6 +8,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Frontend dependency security now pins Vite's transitive `esbuild` resolution to the patched `0.28.1` line through a pnpm override, with tests guarding against lockfile downgrade.
+- 前端依赖安全现在通过 pnpm override 将 Vite 传递依赖 `esbuild` 固定到已修复的 `0.28.1` 版本，并用测试防止 lockfile 回退。
+- Release readiness now includes `make web-console-production-journey`, a dependency-free smoke gate for the served production journey console path.
+- 发布验收现在包含 `make web-console-production-journey`，用于对已启动的生产旅程控制台路径执行无新增依赖的 smoke gate。
 - Web console now shows a compact production journey checkpoint across setup, resource management, access query, permission changes, and go-live status, so operators can see the current stage and next safe action without reading technical identifiers.
 - Web 控制台现在在开始使用、资源管理、访问查询、权限变更和上线状态中展示轻量生产旅程提示，管理员无需阅读技术标识即可确认当前阶段和下一步安全动作。
 - User-facing console copy now avoids "evidence/证据" wording in primary labels, using acceptance records, runtime records, audit records, handoff material, and go-live status language instead.

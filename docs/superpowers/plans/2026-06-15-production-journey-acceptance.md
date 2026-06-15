@@ -41,7 +41,7 @@
 - Create: `frontend/src/productionJourney.ts`
 - Create: `frontend/tests/productionJourney.test.mjs`
 
-- [ ] **Step 1: Write the failing model tests**
+- [x] **Step 1: Write the failing model tests**
 
 Create `frontend/tests/productionJourney.test.mjs`:
 
@@ -221,7 +221,7 @@ test("blocked permission changes stay on the permission change workspace", () =>
 });
 ```
 
-- [ ] **Step 2: Run the model tests and confirm RED**
+- [x] **Step 2: Run the model tests and confirm RED**
 
 Run:
 
@@ -231,12 +231,11 @@ pnpm --dir frontend exec node --test tests/productionJourney.test.mjs
 
 Expected: FAIL because `frontend/src/productionJourney.ts` does not exist.
 
-- [ ] **Step 3: Implement the pure model**
+- [x] **Step 3: Implement the pure model**
 
 Create `frontend/src/productionJourney.ts`:
 
 ```ts
-import { isSetupComplete } from "./gettingStarted";
 import type { NavKey } from "./consoleNavigation";
 import type { ConsoleData } from "./types";
 
@@ -289,7 +288,7 @@ export const productionJourneyStages: ProductionJourneyStage[] = [
 ];
 
 export function deriveProductionJourney(input: ProductionJourneyInput): ProductionJourney {
-  const setupComplete = isSetupComplete(input.data);
+  const setupComplete = isProductionSetupComplete(input.data);
   const hasLiveSetupData = input.data.setupLoadedFromApi;
   const hasAnyConfiguredResource =
     input.data.tenants.length > 0 ||
@@ -357,9 +356,19 @@ export function deriveProductionJourney(input: ProductionJourneyInput): Producti
     state: "configured"
   };
 }
+
+function isProductionSetupComplete(data: ConsoleData) {
+  return (
+    data.setupLoadedFromApi &&
+    data.tenants.length > 0 &&
+    data.agents.some((agent) => agent.status === "active") &&
+    data.capabilities.length > 0 &&
+    data.tenantEntitlements.length > 0
+  );
+}
 ```
 
-- [ ] **Step 4: Run the model tests and confirm GREEN**
+- [x] **Step 4: Run the model tests and confirm GREEN**
 
 Run:
 
@@ -379,7 +388,7 @@ Expected: PASS with 7 tests.
 - Modify: `frontend/src/styles.css`
 - Modify: `frontend/tests/styleTheme.test.mjs`
 
-- [ ] **Step 1: Add failing structure tests for the checkpoint**
+- [x] **Step 1: Add failing structure tests for the checkpoint**
 
 Extend `frontend/tests/styleTheme.test.mjs` with:
 
@@ -405,7 +414,7 @@ test("production journey checkpoint stays compact and model-driven", () => {
 });
 ```
 
-- [ ] **Step 2: Run structure tests and confirm RED**
+- [x] **Step 2: Run structure tests and confirm RED**
 
 Run:
 
@@ -415,7 +424,7 @@ pnpm --dir frontend exec node --test tests/styleTheme.test.mjs
 
 Expected: FAIL because the checkpoint component and styles do not exist.
 
-- [ ] **Step 3: Add checkpoint i18n copy**
+- [x] **Step 3: Add checkpoint i18n copy**
 
 Add EN keys in `frontend/src/i18n.ts`:
 
@@ -459,7 +468,7 @@ Add zh-CN keys:
 "productionJourney.next.resolveBlocker": "处理阻断项",
 ```
 
-- [ ] **Step 4: Implement the checkpoint component**
+- [x] **Step 4: Implement the checkpoint component**
 
 Create `frontend/src/components/ProductionJourneyCheckpoint.tsx`:
 
@@ -508,7 +517,7 @@ export function ProductionJourneyCheckpoint({
 }
 ```
 
-- [ ] **Step 5: Add compact styles**
+- [x] **Step 5: Add compact styles**
 
 Append to `frontend/src/styles.css` near other production-console structures:
 
@@ -607,7 +616,7 @@ Add to the existing responsive section:
 }
 ```
 
-- [ ] **Step 6: Run focused component tests**
+- [x] **Step 6: Run focused component tests**
 
 Run:
 
@@ -627,7 +636,7 @@ Expected: PASS.
 - Modify: `frontend/tests/styleTheme.test.mjs`
 - Modify: `frontend/tests/consoleNavigation.test.mjs`
 
-- [ ] **Step 1: Add failing integration guards**
+- [x] **Step 1: Add failing integration guards**
 
 Extend `frontend/tests/styleTheme.test.mjs`:
 
@@ -658,7 +667,7 @@ test("production journey acceptance keeps existing primary routes", () => {
 });
 ```
 
-- [ ] **Step 2: Run integration guards and confirm RED**
+- [x] **Step 2: Run integration guards and confirm RED**
 
 Run:
 
@@ -668,7 +677,7 @@ pnpm --dir frontend exec node --test tests/styleTheme.test.mjs tests/consoleNavi
 
 Expected: FAIL because the checkpoint is not wired.
 
-- [ ] **Step 3: Update ConsoleViews slots**
+- [x] **Step 3: Update ConsoleViews slots**
 
 In `frontend/src/components/ConsoleViews.tsx`, update view signatures:
 
@@ -703,7 +712,7 @@ export function AskView({ askAccessPanel, journeyCheckpoint }: { askAccessPanel:
 
 Apply the same `journeyCheckpoint?: ReactNode` prop to `RegistryView`, `AccessView`, and `EvidenceView`, rendering `{journeyCheckpoint}` as the first child inside each `content-grid`.
 
-- [ ] **Step 4: Derive and render the checkpoint in ConsoleController**
+- [x] **Step 4: Derive and render the checkpoint in ConsoleController**
 
 Add imports:
 
@@ -755,7 +764,7 @@ Pass `journeyCheckpoint={productionJourneyCheckpoint}` to:
 <EvidenceView ... journeyCheckpoint={productionJourneyCheckpoint} />
 ```
 
-- [ ] **Step 5: Run focused integration tests**
+- [x] **Step 5: Run focused integration tests**
 
 Run:
 
@@ -773,7 +782,7 @@ Expected: PASS.
 - Modify: `frontend/src/i18n.ts`
 - Modify: `frontend/tests/i18n.test.mjs` or create `frontend/tests/productionLanguage.test.mjs`
 
-- [ ] **Step 1: Add failing wording guard**
+- [x] **Step 1: Add failing wording guard**
 
 Create `frontend/tests/productionLanguage.test.mjs`:
 
@@ -805,7 +814,7 @@ test("visible production copy avoids evidence wording", () => {
 });
 ```
 
-- [ ] **Step 2: Run wording guard and confirm RED if visible wording remains**
+- [x] **Step 2: Run wording guard and confirm RED if visible wording remains**
 
 Run:
 
@@ -815,7 +824,7 @@ pnpm --dir frontend exec node --test tests/productionLanguage.test.mjs
 
 Expected: FAIL if any user-facing translation value still contains visible `evidence` or `证据`; otherwise PASS and proceed to Step 4.
 
-- [ ] **Step 3: Replace visible wording**
+- [x] **Step 3: Replace visible wording**
 
 In `frontend/src/i18n.ts`, replace visible values:
 
@@ -837,7 +846,7 @@ Do not rename these internal keys in this slice:
 
 Only change their displayed values if needed.
 
-- [ ] **Step 4: Run wording and i18n tests**
+- [x] **Step 4: Run wording and i18n tests**
 
 Run:
 
@@ -855,7 +864,7 @@ Expected: PASS.
 - Modify: `CHANGELOG.md`
 - Modify: `docs/superpowers/plans/2026-06-15-production-journey-acceptance.md`
 
-- [ ] **Step 1: Update CHANGELOG**
+- [x] **Step 1: Update CHANGELOG**
 
 Add under `## Unreleased`:
 
@@ -866,7 +875,7 @@ Add under `## Unreleased`:
 - 控制台用户可见文案不再使用 “evidence/证据” 作为主路径表达，统一改为验收记录、运行记录、审计记录、交接材料和上线状态等业务语言。
 ```
 
-- [ ] **Step 2: Run focused gates**
+- [x] **Step 2: Run focused gates**
 
 Run:
 
@@ -878,7 +887,7 @@ git diff --check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 3: Run full frontend and repository gates**
+- [x] **Step 3: Run full frontend and repository gates**
 
 Run:
 
@@ -891,7 +900,7 @@ make release-check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 4: Browser smoke**
+- [x] **Step 4: Browser smoke**
 
 Run a temporary isolated demo, then inspect in the browser:
 
@@ -907,7 +916,13 @@ Verify:
 
 Record whether screenshot capture succeeds; if it times out, record DOM/interaction evidence without claiming screenshot proof.
 
-- [ ] **Step 5: Commit and create PR**
+Result:
+- `http://127.0.0.1:5182/` opened on `#getting-started` with the production journey checkpoint visible.
+- `#registry`, `#ask`, `#ai-admin`, and `#evidence` each showed the same compact checkpoint with no horizontal overflow at the in-app browser viewport.
+- Chinese visible text on those pages did not include `证据`.
+- Screenshot capture succeeded on `#evidence` (`79258` bytes).
+
+- [x] **Step 5: Commit and create PR**
 
 Run:
 

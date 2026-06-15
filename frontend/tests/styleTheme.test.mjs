@@ -23,6 +23,8 @@ const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", 
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const tenantOrganizationView = readFileSync(new URL("../src/components/TenantOrganizationView.tsx", import.meta.url), "utf8");
 const resourceLifecycleView = readFileSync(new URL("../src/components/ResourceLifecycleView.tsx", import.meta.url), "utf8");
+const productionJourney = readExistingFile(new URL("../src/productionJourney.ts", import.meta.url));
+const productionJourneyCheckpoint = readExistingFile(new URL("../src/components/ProductionJourneyCheckpoint.tsx", import.meta.url));
 const ui = readFileSync(new URL("../src/components/ui.tsx", import.meta.url), "utf8");
 const managementOperationsHookUrl = new URL("../src/hooks/useManagementOperations.ts", import.meta.url);
 const capabilityGovernanceHookUrl = new URL("../src/hooks/useCapabilityGovernanceController.ts", import.meta.url);
@@ -233,6 +235,32 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(resourceLifecycleView, /summary\.items\.map/);
   assert.doesNotMatch(resourceLifecycleView, /TechnicalId/);
   assert.doesNotMatch(registryView, /createAgentPanel|createKeyPanel|rotateCredentialPanel/);
+});
+
+test("production journey checkpoint stays compact and model-driven", () => {
+  assert.match(productionJourney, /export function deriveProductionJourney/);
+  assert.match(productionJourney, /export const productionJourneyStages/);
+  assert.match(productionJourneyCheckpoint, /export function ProductionJourneyCheckpoint/);
+  assert.match(productionJourneyCheckpoint, /productionJourneyStages\.map/);
+  assert.match(productionJourneyCheckpoint, /className="production-journey-checkpoint"/);
+  assert.match(productionJourneyCheckpoint, /href=\{journey\.nextActionHash\}/);
+  assert.doesNotMatch(productionJourneyCheckpoint, /useState|useEffect|fetch\(/);
+  assert.match(styles, /\.production-journey-checkpoint\s*\{/);
+  assert.match(styles, /\.production-journey-checkpoint\s*\{[^}]*display:\s*grid;/s);
+  assert.doesNotMatch(styles, /\.production-journey-checkpoint\s*\{[^}]*box-shadow:/s);
+});
+
+test("production journey checkpoint is wired through primary journey views", () => {
+  assert.match(app, /from "\.\/productionJourney"/);
+  assert.match(app, /from "\.\/components\/ProductionJourneyCheckpoint"/);
+  assert.match(app, /deriveProductionJourney\(/);
+  assert.match(app, /const productionJourneyCheckpoint = \(/);
+  assert.match(consoleViews, /journeyCheckpoint/);
+  assert.match(consoleViews, /GettingStartedConsoleView[\s\S]*journeyCheckpoint/);
+  assert.match(consoleViews, /AskView[\s\S]*journeyCheckpoint/);
+  assert.match(consoleViews, /RegistryView[\s\S]*journeyCheckpoint/);
+  assert.match(consoleViews, /AiAdminView[\s\S]*journeyCheckpoint/);
+  assert.match(consoleViews, /EvidenceView[\s\S]*journeyCheckpoint/);
 });
 
 test("management mutation forms open from panel header modals", () => {

@@ -1164,6 +1164,82 @@ button {
   box-shadow: none;
 }
 
+.production-journey-checkpoint {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.9fr) minmax(0, 2fr) auto;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.production-journey-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.production-journey-copy strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.production-journey-steps {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.production-journey-steps li {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.production-journey-steps li span {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+}
+
+.production-journey-steps li.is-complete {
+  color: var(--success);
+}
+
+.production-journey-steps li.is-complete span {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+}
+
+.production-journey-steps li.is-current {
+  color: var(--brand);
+}
+
+.production-journey-steps li.is-current span {
+  border-color: var(--brand-border);
+  background: var(--brand-soft);
+}
+
+.production-journey-next {
+  justify-self: end;
+}
+
 .action-modal-trigger-command:hover {
   border-color: var(--brand-border-strong);
   background: var(--brand-soft);
@@ -5536,6 +5612,18 @@ td code {
   .resource-lifecycle-secondary-actions {
     grid-column: 1;
     justify-content: flex-start;
+  }
+
+  .production-journey-checkpoint {
+    grid-template-columns: 1fr;
+  }
+
+  .production-journey-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .production-journey-next {
+    justify-self: start;
   }
 
   .tenant-org-actions > div:last-child {

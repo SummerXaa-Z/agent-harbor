@@ -204,9 +204,9 @@ For release-candidate validation of the served web console production journey, r
 make web-console-production-journey
 ```
 
-This starts an isolated local API, the official SDK MCP demo service, and the web console, then verifies the production journey smoke signals and route-level console tests without adding browser automation dependencies.
+This starts an isolated local API, the official SDK MCP demo service, and the web console, then verifies the production journey smoke signals, connection diagnostics contract, system-info auth metadata, and route-level console tests without adding browser automation dependencies.
 
-如果要验证已启动 Web 控制台上的生产旅程路径，可以运行 `make web-console-production-journey`。它会启动隔离端口的本地 API、官方 SDK MCP 演示服务和 Web 控制台，并在不新增浏览器自动化依赖的前提下验证生产旅程 smoke 信号和路由级控制台测试。
+如果要验证已启动 Web 控制台上的生产旅程路径，可以运行 `make web-console-production-journey`。它会启动隔离端口的本地 API、官方 SDK MCP 演示服务和 Web 控制台，并在不新增浏览器自动化依赖的前提下验证生产旅程 smoke 信号、连接诊断合约、系统信息认证元数据和路由级控制台测试。
 
 For release-candidate validation of production defaults, run:
 

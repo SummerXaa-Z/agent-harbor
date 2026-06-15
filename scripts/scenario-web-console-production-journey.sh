@@ -135,10 +135,26 @@ wait_http "Web console" "$FRONTEND_ORIGIN/"
 root_html="$(curl -fsS "$FRONTEND_ORIGIN/")"
 assert_contains "web console root" 'id="root"' "$root_html"
 
+system_info="$(curl -fsS "$BASE_URL/api/v1/system/info")"
+python3 - "$system_info" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+data = payload.get("data", {})
+if data.get("authRequired") is not True:
+    raise SystemExit(f"expected authRequired=true for production journey smoke gate, got {data.get('authRequired')!r}")
+PY
+
 production_journey_source="$(curl -fsS "$FRONTEND_ORIGIN/src/productionJourney.ts")"
 checkpoint_source="$(curl -fsS "$FRONTEND_ORIGIN/src/components/ProductionJourneyCheckpoint.tsx")"
+connection_diagnostics_source="$(curl -fsS "$FRONTEND_ORIGIN/src/connectionDiagnostics.ts")"
+console_controller_source="$(curl -fsS "$FRONTEND_ORIGIN/src/ConsoleController.tsx")"
 assert_contains "production journey model" "productionJourneyStages" "$production_journey_source"
 assert_contains "production journey checkpoint" "production-journey-checkpoint" "$checkpoint_source"
+assert_contains "connection diagnostics model" "buildConnectionDiagnosticRows" "$connection_diagnostics_source"
+assert_contains "connection diagnostics UI action" "connection-diagnostics-action" "$console_controller_source"
+assert_contains "connection diagnostics UI list" "connection-diagnostics-list" "$console_controller_source"
 
 for hash in getting-started registry ask ai-admin evidence; do
   curl -fsS "$FRONTEND_ORIGIN/#$hash" >/dev/null
@@ -146,6 +162,7 @@ for hash in getting-started registry ask ai-admin evidence; do
 done
 
 pnpm --dir frontend exec node --test \
+  tests/connectionDiagnostics.test.mjs \
   tests/productionJourney.test.mjs \
   tests/productionLanguage.test.mjs \
   tests/consoleNavigation.test.mjs

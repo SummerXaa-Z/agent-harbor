@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Permission Changes now returns a stable consumed-approval error code and the console shows recovery guidance with a best-effort status refresh when an already-used approval is retried.
+- 权限变更现在会在重复使用已消费审批时返回稳定错误码，控制台会展示恢复指引并尽力刷新当前状态，避免管理员误以为需要重复提交。
 - Production deployment mode now runs a configuration preflight that blocks development-only admin bypass and private-upstream flags before startup.
 - 生产部署模式现在会执行配置预检，在启动前阻断开发专用的管理绕过和私有上游开关。
 - Frontend dependency security now pins Vite's transitive `esbuild` resolution to the patched `0.28.1` line through a pnpm override, with tests guarding against lockfile downgrade.

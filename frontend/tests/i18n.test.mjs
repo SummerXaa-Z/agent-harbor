@@ -41,6 +41,10 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("section.aiAdminApprovalJourney"), "Runtime Validation Records");
   assert.equal(t("text.cockpitKeyMessageEvidence"), "Clear go-live status");
   assert.equal(t("message.productionEvidenceExported"), "Acceptance report exported.");
+  assert.equal(
+    t("message.permissionApprovalAlreadyConsumedRecovery"),
+    "This approval has already been used. Refresh status checks or review the current permission change before retrying."
+  );
 });
 
 test("createTranslator returns core journey Chinese labels", () => {
@@ -387,6 +391,10 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("message.permissionApprovalRejectReasonRequired"), "请先填写拒绝理由，再拒绝请求。");
   assert.equal(t("message.permissionApprovalRequestTextRequired"), "请先填写管理员需求，再提交审批。");
   assert.equal(t("message.permissionApprovalWithdrawn"), "审批请求已撤回，可以修改后重新提交。");
+  assert.equal(
+    t("message.permissionApprovalAlreadyConsumedRecovery"),
+    "审批已被使用。请先刷新状态检查或查看当前权限变更，确认是否已应用；不要重复提交。"
+  );
   assert.equal(t("status.approvalWithdrawn"), "已撤回");
   assert.equal(t("permissionSimulation.guardrailFinance"), "销售只读权限包不包含财务字段访问。");
   assert.equal(t("permissionPolicy.riskApprovalRequired"), "{capability} 是 {risk} 风险能力，需要先审批。");

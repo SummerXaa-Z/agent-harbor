@@ -5383,7 +5383,7 @@ func validatePermissionPackageApprovalForDraft(approval domain.PermissionPackage
 		return domain.BadRequest("VALIDATION_FAILED", "permission package approval request must be approved before apply")
 	}
 	if !approval.ConsumedAt.IsZero() {
-		return domain.BadRequest("VALIDATION_FAILED", "permission package approval request is already consumed")
+		return permissionPackageApprovalAlreadyConsumedError()
 	}
 	if !approval.ExpiresAt.IsZero() && !now.Before(approval.ExpiresAt) {
 		return domain.BadRequest("VALIDATION_FAILED", "permission package approval request has expired")
@@ -5418,10 +5418,17 @@ func (s *Server) permissionPackageApprovalNotConsumableError(ctx context.Context
 	if !ok {
 		return domain.NotFound("approval request not found")
 	}
+	if !approval.ConsumedAt.IsZero() {
+		return permissionPackageApprovalAlreadyConsumedError()
+	}
 	if err := validatePermissionPackageApprovalForDraft(approval, draft, now); err != nil {
 		return err
 	}
 	return domain.BadRequest("VALIDATION_FAILED", "permission package approval request is no longer available")
+}
+
+func permissionPackageApprovalAlreadyConsumedError() domain.AppError {
+	return domain.BadRequest("PERMISSION_PACKAGE_APPROVAL_ALREADY_CONSUMED", "permission package approval request is already consumed")
 }
 
 func permissionPackageCapabilityIDsAndKeys(capabilities []domain.Capability) ([]string, []string) {

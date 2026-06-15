@@ -17,6 +17,7 @@ import {
   Workflow
 } from "lucide-react";
 import {
+  ApiRequestError,
   applyPermissionPackage,
   approvePermissionPackageApprovalRequest,
   callMcpRpc,
@@ -345,6 +346,10 @@ function localizedErrorMessageState(error: unknown, fallbackKey: string): Locali
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
+}
+
+function isConsumedApprovalRetryError(error: unknown) {
+  return error instanceof ApiRequestError && error.code === "PERMISSION_PACKAGE_APPROVAL_ALREADY_CONSUMED";
 }
 
 function localizedErrorMessage(t: Translator, language: Language, error: unknown, fallbackKey: string) {
@@ -1743,6 +1748,15 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       setAiAdminMessage({ key: "message.permissionPackageApplied", params: { count: appliedCount } });
       await loadAiAdminApprovalRequestsForDraft(aiAdminDraft).catch(() => undefined);
     } catch (error) {
+      if (isConsumedApprovalRetryError(error)) {
+        await Promise.allSettled([
+          refreshAiAdminApplicationHealth(aiAdminForm, { requireLiveApi: false }),
+          refreshAiAdminProductionReadiness(aiAdminForm, { requireLiveApi: false }),
+          loadAiAdminApprovalRequestsForDraft(aiAdminDraft)
+        ]);
+        setAiAdminMessage({ key: "message.permissionApprovalAlreadyConsumedRecovery" });
+        return;
+      }
       setAiAdminMessage(localizedErrorMessageState(error, "error.applyPermissionPackage"));
     } finally {
       setAiAdminApplying(false);

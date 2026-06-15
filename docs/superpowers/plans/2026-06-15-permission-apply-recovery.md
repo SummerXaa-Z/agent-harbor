@@ -42,7 +42,7 @@
 - Modify: `internal/httpapi/server_test.go`
 - Modify: `internal/httpapi/server.go`
 
-- [ ] **Step 1: Write the failing backend assertion**
+- [x] **Step 1: Write the failing backend assertion**
 
 In the existing consumed approval retry assertion in `internal/httpapi/server_test.go`, require the stable error code:
 
@@ -54,7 +54,7 @@ if reusedApply.Code != http.StatusBadRequest ||
 }
 ```
 
-- [ ] **Step 2: Run focused backend test and confirm RED**
+- [x] **Step 2: Run focused backend test and confirm RED**
 
 Run:
 
@@ -64,7 +64,7 @@ go test ./internal/httpapi -run 'TestPermissionPackage.*Approval|TestPermissionP
 
 Expected: FAIL because consumed approval retry currently returns `VALIDATION_FAILED`.
 
-- [ ] **Step 3: Implement the stable error code**
+- [x] **Step 3: Implement the stable error code**
 
 In `permissionPackageApprovalNotConsumableError`, return:
 
@@ -74,7 +74,7 @@ return domain.BadRequest("PERMISSION_PACKAGE_APPROVAL_ALREADY_CONSUMED", "permis
 
 for the consumed-approval path, while preserving existing validation behavior for not found, status mismatch, expiration, and draft mismatch.
 
-- [ ] **Step 4: Run focused backend test and confirm GREEN**
+- [x] **Step 4: Run focused backend test and confirm GREEN**
 
 Run:
 
@@ -91,7 +91,7 @@ Expected: PASS.
 **Files:**
 - Modify: `scripts/scenario-permission-package-approval.sh`
 
-- [ ] **Step 1: Add stable code assertion to consumed retry**
+- [x] **Step 1: Add stable code assertion to consumed retry**
 
 After the consumed approval retry request, assert both the code and the human message:
 
@@ -100,17 +100,19 @@ assert_body_contains "PERMISSION_PACKAGE_APPROVAL_ALREADY_CONSUMED" "consumed ap
 assert_body_contains "already consumed" "consumed approval retry"
 ```
 
-- [ ] **Step 2: Run the focused scenario if services are available**
+- [x] **Step 2: Run the focused scenario if services are available**
 
 Run:
 
 ```bash
-make permission-package-approval
+make scenario-permission-package-approval
 ```
 
 Expected: PASS when the local API and mock MCP scenario services start correctly.
 
 If local port contention prevents the scenario from starting, record the blocker and rely on `make check` / `make release-check` later because those gates include the scenario scripts in normal project flow.
+
+Execution note: initial `make permission-package-approval` attempt exposed a plan typo; the correct target is `make scenario-permission-package-approval`. The corrected target reached an already-running API on `127.0.0.1:9090` that returned `404` for approval withdrawal, indicating an old or mismatched local service. The scenario was then re-run against a current isolated API with `BASE_URL=http://127.0.0.1:19190 MOCK_MCP_PORT=18791 make scenario-permission-package-approval` and passed.
 
 ---
 
@@ -120,7 +122,7 @@ If local port contention prevents the scenario from starting, record the blocker
 - Modify: `frontend/src/api.ts`
 - Modify: `frontend/tests/api.test.mjs`
 
-- [ ] **Step 1: Write source-level test**
+- [x] **Step 1: Write source-level test**
 
 Append to `frontend/tests/api.test.mjs`:
 
@@ -132,7 +134,7 @@ test("API request errors preserve backend error codes", () => {
 });
 ```
 
-- [ ] **Step 2: Run frontend API test and confirm RED**
+- [x] **Step 2: Run frontend API test and confirm RED**
 
 Run:
 
@@ -142,7 +144,7 @@ pnpm --dir frontend exec node --test tests/api.test.mjs
 
 Expected: FAIL because `ApiRequestError` does not yet store `code`.
 
-- [ ] **Step 3: Implement code preservation**
+- [x] **Step 3: Implement code preservation**
 
 Update `ApiRequestError` in `frontend/src/api.ts`:
 
@@ -182,7 +184,7 @@ throw new ApiRequestError(
 )
 ```
 
-- [ ] **Step 4: Run frontend API test and confirm GREEN**
+- [x] **Step 4: Run frontend API test and confirm GREEN**
 
 Run:
 
@@ -202,7 +204,7 @@ Expected: PASS.
 - Modify: `frontend/tests/permissionJourneySafety.test.mjs`
 - Modify: `frontend/tests/i18n.test.mjs`
 
-- [ ] **Step 1: Write frontend safety tests**
+- [x] **Step 1: Write frontend safety tests**
 
 Add a test to `frontend/tests/permissionJourneySafety.test.mjs` that checks `applyAiAdminPermissionPackage` detects consumed approval retry before falling back to generic errors:
 
@@ -237,7 +239,7 @@ assert.equal(
 );
 ```
 
-- [ ] **Step 2: Run focused frontend tests and confirm RED**
+- [x] **Step 2: Run focused frontend tests and confirm RED**
 
 Run:
 
@@ -247,7 +249,7 @@ pnpm --dir frontend exec node --test tests/permissionJourneySafety.test.mjs test
 
 Expected: FAIL because the helper and copy do not exist yet.
 
-- [ ] **Step 3: Implement recovery helper and catch branch**
+- [x] **Step 3: Implement recovery helper and catch branch**
 
 In `frontend/src/ConsoleController.tsx`, add:
 
@@ -279,7 +281,7 @@ setAiAdminMessage(localizedErrorMessageState(error, "error.applyPermissionPackag
 
 Add i18n entries in both language maps.
 
-- [ ] **Step 4: Run focused frontend tests and confirm GREEN**
+- [x] **Step 4: Run focused frontend tests and confirm GREEN**
 
 Run:
 
@@ -297,11 +299,11 @@ Expected: PASS.
 - Modify: `CHANGELOG.md`
 - Modify: `docs/superpowers/plans/2026-06-15-permission-apply-recovery.md`
 
-- [ ] **Step 1: Update CHANGELOG**
+- [x] **Step 1: Update CHANGELOG**
 
 Add a 0.2.0 unreleased bullet in English and zh-CN describing the recoverable consumed-approval retry behavior.
 
-- [ ] **Step 2: Run focused checks**
+- [x] **Step 2: Run focused checks**
 
 Run:
 
@@ -312,7 +314,7 @@ pnpm --dir frontend exec node --test tests/api.test.mjs tests/permissionJourneyS
 
 Expected: PASS.
 
-- [ ] **Step 3: Run full frontend and release gates**
+- [x] **Step 3: Run full frontend and release gates**
 
 Run:
 

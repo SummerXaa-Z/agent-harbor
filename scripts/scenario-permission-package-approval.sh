@@ -1009,6 +1009,7 @@ assert_consumed_approval
 
 request POST "/api/v1/permission-packages:apply" "$(permission_package_body "$APPROVAL_REQUEST_ID")"
 expect_status 400 "reject consumed approval request"
+assert_body_contains "PERMISSION_PACKAGE_APPROVAL_ALREADY_CONSUMED" "consumed approval retry error code"
 assert_body_contains "already consumed" "consumed approval retry"
 echo "consumed approval request reuse rejected"
 

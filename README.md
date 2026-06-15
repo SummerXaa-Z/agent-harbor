@@ -230,7 +230,9 @@ Then open `http://127.0.0.1:5174/`. If the live system is empty, the web console
 
 打开 `http://127.0.0.1:5174/` 后，如果实时系统为空，Web 控制台会进入 **开始使用** 并先展示配置链路；当租户、Agent、能力和授权链完成后，同一个地址会进入 **访问查询**。管理员先查询某个调用方能否访问目标能力，查看判定链路，再通过 **发起权限修复** 把上下文预填到 **权限变更**，不需要复制技术 ID。**权限变更** 仍然负责审批、应用、状态检查和上线验收。
 
-The Permission Changes console also shows runtime checks for the API, MCP tool service, browser subject-header CORS, local private-upstream mode, and current data source before validation runs. Use the **Self-Check** workspace when you need the lower-level core permission loop check; it verifies API and MCP tool service readiness before enabling the run button and keeps **Reset session** non-destructive.
+The global **Connection Settings** popover includes **Run diagnostics** for the production path: it checks the browser session, API compatibility contract, live data source, and MCP tool-service health in one compact panel. The Permission Changes console also shows runtime checks for the API, MCP tool service, browser subject-header CORS, local private-upstream mode, and current data source before validation runs. Use the **Self-Check** workspace when you need the lower-level core permission loop check; it verifies API and MCP tool service readiness before enabling the run button and keeps **Reset session** non-destructive.
+
+全局 **连接设置** 弹层提供 **运行诊断**，用于一次性检查浏览器会话、API 兼容合约、实时数据源和 MCP 工具服务健康状态。权限变更控制台在运行验证前也会展示 API、MCP 工具服务、浏览器主体 Header CORS、本地私有上游模式和当前数据源检查。需要更底层的核心权限闭环检查时，可以使用 **系统自检** 工作区。
 
 `make demo` starts:
 
@@ -386,9 +388,9 @@ ADMIN_KEY=local-admin-key \
 - `GET /api/v1/contracts/providers`
 - `GET /api/v1/contracts/channels`
 
-The web console uses `GET /api/v1/system/info` after `/healthz` to verify API compatibility before running permission changes. If the endpoint is unavailable or required capabilities are missing, the console blocks runtime validation with an upgrade prompt instead of surfacing late-stage business errors.
+The web console uses `GET /api/v1/system/info` after `/healthz` to verify API compatibility before running permission changes. The same compatibility metadata also reports whether console authentication is required, so the Connection diagnostics panel can distinguish deployment-style login requirements from explicit local development bypass. If the endpoint is unavailable or required capabilities are missing, the console blocks runtime validation with an upgrade prompt instead of surfacing late-stage business errors.
 
-Web 控制台会在 `/healthz` 之后读取 `GET /api/v1/system/info`，先确认 API 兼容信息，再执行权限变更。如果端点不可用或缺少必要能力，控制台会在运行验证前提示升级 API，而不是让管理员在后续流程里遇到零散业务错误。
+Web 控制台会在 `/healthz` 之后读取 `GET /api/v1/system/info`，先确认 API 兼容信息，再执行权限变更。同一份兼容信息也会返回控制台是否要求登录，因此连接诊断可以区分部署式登录要求和显式本地开发绕过。如果端点不可用或缺少必要能力，控制台会在运行验证前提示升级 API，而不是让管理员在后续流程里遇到零散业务错误。
 
 ### Tenants and Access Profile
 

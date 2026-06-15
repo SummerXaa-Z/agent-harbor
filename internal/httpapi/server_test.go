@@ -33,6 +33,7 @@ type apiEnvelope struct {
 type systemInfoResponse struct {
 	Name         string   `json:"name"`
 	APIVersion   string   `json:"apiVersion"`
+	AuthRequired bool     `json:"authRequired"`
 	Capabilities []string `json:"capabilities"`
 }
 
@@ -675,6 +676,13 @@ func TestSystemInfoIncludesConsoleCompatibilityContract(t *testing.T) {
 	}
 	if strings.TrimSpace(info.APIVersion) == "" {
 		t.Fatalf("apiVersion should be present: %#v", info)
+	}
+	if !info.AuthRequired {
+		t.Fatalf("system info should report auth required when admin auth is configured: %#v", info)
+	}
+	devInfo := decodeData[systemInfoResponse](t, request(t, newRouter(), http.MethodGet, "/api/v1/system/info", nil, ""))
+	if devInfo.AuthRequired {
+		t.Fatalf("dev unauthenticated router should report authRequired=false: %#v", devInfo)
 	}
 	capabilities := make(map[string]bool, len(info.Capabilities))
 	for _, capability := range info.Capabilities {

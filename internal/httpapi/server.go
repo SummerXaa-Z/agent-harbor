@@ -389,6 +389,7 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 type systemInfoResponse struct {
 	Name         string   `json:"name"`
 	APIVersion   string   `json:"apiVersion"`
+	AuthRequired bool     `json:"authRequired"`
 	Capabilities []string `json:"capabilities"`
 }
 
@@ -396,6 +397,7 @@ func (s *Server) systemInfo(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, systemInfoResponse{
 		Name:         "AgentHarbor",
 		APIVersion:   systemAPIVersion,
+		AuthRequired: !s.developmentAdminBypassActive(),
 		Capabilities: append([]string(nil), systemCapabilities...),
 	})
 }

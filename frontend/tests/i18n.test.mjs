@@ -53,6 +53,11 @@ test("English product copy uses acceptance and records wording", () => {
     t("message.apiContractIncompatible"),
     "API is missing capabilities required by this console: {capabilities}. Upgrade the AgentHarbor API before continuing."
   );
+  assert.equal(t("connectionDiagnostics.action"), "Run diagnostics");
+  assert.equal(t("connectionDiagnostics.title"), "Connection diagnostics");
+  assert.equal(t("connectionDiagnostics.summaryOk"), "Ready for the production journey.");
+  assert.equal(t("connectionDiagnostics.session.title"), "Console session");
+  assert.equal(t("connectionDiagnostics.mcp.error"), "Tool service check failed: {detail}");
 });
 
 test("createTranslator returns core journey Chinese labels", () => {
@@ -271,6 +276,11 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("readiness.aiAdmin.api.title"), "控制台连接");
   assert.equal(t("message.apiContractUnavailable"), "无法读取 API 兼容信息。请先升级 AgentHarbor API，再继续使用当前控制台。");
   assert.equal(t("message.apiContractIncompatible"), "API 缺少当前控制台需要的能力：{capabilities}。请先升级 AgentHarbor API。");
+  assert.equal(t("connectionDiagnostics.action"), "运行诊断");
+  assert.equal(t("connectionDiagnostics.title"), "连接诊断");
+  assert.equal(t("connectionDiagnostics.summaryOk"), "可以继续生产主流程。");
+  assert.equal(t("connectionDiagnostics.session.title"), "控制台会话");
+  assert.equal(t("connectionDiagnostics.mcp.error"), "工具服务检查失败：{detail}");
   assert.equal(t("readiness.aiAdmin.mockMcp.title"), "工具服务连接");
   assert.equal(t("readiness.aiAdmin.subjectHeader.title"), "浏览器身份可用");
   assert.equal(t("readiness.aiAdmin.privateUpstreams.title"), "本地演示连接");

@@ -30,6 +30,7 @@ const managementOperationsHookUrl = new URL("../src/hooks/useManagementOperation
 const capabilityGovernanceHookUrl = new URL("../src/hooks/useCapabilityGovernanceController.ts", import.meta.url);
 const accessProfileHookUrl = new URL("../src/hooks/useAccessProfileController.ts", import.meta.url);
 const coreJourneyHookUrl = new URL("../src/hooks/useCoreJourneyController.ts", import.meta.url);
+const connectionDiagnosticsHookUrl = new URL("../src/hooks/useConnectionDiagnostics.ts", import.meta.url);
 
 function readExistingFile(url) {
   assert.equal(existsSync(url), true, `${url.pathname} should exist`);
@@ -186,6 +187,10 @@ test("product shell removes demo controls and scopes connection settings", () =>
   assert.match(app, /className="connection-menu"/);
   assert.match(app, /className="connection-trigger"/);
   assert.match(app, /className="connection-scope-grid"/);
+  assert.match(app, /useConnectionDiagnostics/);
+  assert.match(app, /connection-diagnostics-action/);
+  assert.match(app, /connection-diagnostics-list/);
+  assert.match(readExistingFile(connectionDiagnosticsHookUrl), /async function run\(\)/);
   assert.match(app, /className="scope-values"/);
   assert.equal(app.includes("className=\"scope-inputs\""), false);
   assert.match(app, /const \[connectionMenuOpen, setConnectionMenuOpen\] = useState\(false\)/);
@@ -195,6 +200,8 @@ test("product shell removes demo controls and scopes connection settings", () =>
   assert.match(app, /setConnectionMenuOpen\(\(open\) => !open\)/);
   assert.match(app, /onToggle=\{\(event\) => setConnectionMenuOpen\(event\.currentTarget\.open\)\}/);
   assert.match(styles, /\.connection-popover\s*\{[^}]*box-shadow:\s*var\(--shadow-pop\);/s);
+  assert.match(styles, /\.connection-diagnostics-action\s*\{[^}]*width:\s*100%;/s);
+  assert.match(styles, /\.connection-diagnostics-list\s*\{/);
   assert.match(styles, /\.scope-values span\s*\{[^}]*background:\s*var\(--surface-raised\);/s);
   assert.match(styles, /\.connection-menu:not\(\[open\]\)\s+\.connection-popover\s*\{[^}]*display:\s*none;/s);
 });

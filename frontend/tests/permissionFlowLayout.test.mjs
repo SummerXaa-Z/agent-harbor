@@ -10,6 +10,7 @@ const styles = `${baseStyles}\n${workbenchStyles}`;
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
 const permissionWorkbenchPresenters = readFileSync(new URL("../src/permissionWorkbenchPresenters.ts", import.meta.url), "utf8");
 const permissionWorkbenchParts = readFileSync(new URL("../src/components/PermissionWorkbenchParts.tsx", import.meta.url), "utf8");
+const permissionApprovalDecisionHook = readFileSync(new URL("../src/hooks/usePermissionApprovalDecision.ts", import.meta.url), "utf8");
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const accessProfileView = readFileSync(new URL("../src/components/TenantAccessProfileView.tsx", import.meta.url), "utf8");
@@ -538,7 +539,8 @@ test("permission request blocks main actions when sample fallback data is shown"
 });
 
 test("permission request approval decisions show reviewer context before resolving", () => {
-  assert.match(workbench, /useState/);
+  assert.match(permissionApprovalDecisionHook, /export function usePermissionApprovalDecision/);
+  assert.match(workbench, /usePermissionApprovalDecision\(\{/);
   assert.match(workbench, /pendingApprovalDecision/);
   assert.match(workbench, /permissionEntityDisplayName\(approvalReviewer\.trim\(\), t\)/);
   assert.match(workbench, /beginApprovalDecision\("approve"/);
@@ -557,9 +559,9 @@ test("permission request approval decisions show reviewer context before resolvi
 
 test("permission request rejection requires a reviewer reason", () => {
   assert.match(workbench, /form\.approvalRejectReason/);
-  assert.match(workbench, /pendingApprovalDecision\.comment\.trim\(\)/);
-  assert.match(workbench, /message\.permissionApprovalRejectReasonRequired/);
-  assert.match(workbench, /onRejectApprovalRequest\(pendingApprovalDecision\.requestId, comment\)/);
+  assert.match(permissionApprovalDecisionHook, /pendingApprovalDecision\.comment\.trim\(\)/);
+  assert.match(permissionApprovalDecisionHook, /message\.permissionApprovalRejectReasonRequired/);
+  assert.match(permissionApprovalDecisionHook, /onRejectApprovalRequest\(pendingApprovalDecision\.requestId, comment\)/);
   assert.match(workbench, /action\.confirmRejectPermissionRequest/);
   assert.match(workbench, /text\.approvalRejectReasonHelp/);
   assert.match(app, /async function rejectAiAdminApprovalRequest\(requestId\?: string, comment\?: string\)/);
@@ -569,7 +571,8 @@ test("permission request rejection requires a reviewer reason", () => {
 
 test("permission request can withdraw a pending approval request", () => {
   assert.match(workbench, /onWithdrawApprovalRequest: \(comment\?: string\) => void/);
-  assert.match(workbench, /type ApprovalDecisionAction = "approve" \| "reject" \| "withdraw"/);
+  assert.match(permissionApprovalDecisionHook, /export type ApprovalDecisionAction = "approve" \| "reject" \| "withdraw"/);
+  assert.match(permissionApprovalDecisionHook, /onWithdrawApprovalRequest\(comment\)/);
   assert.match(workbench, /beginApprovalDecision\("withdraw"/);
   assert.match(workbench, /action\.withdrawPermissionRequest/);
   assert.match(workbench, /action\.confirmWithdrawPermissionRequest/);

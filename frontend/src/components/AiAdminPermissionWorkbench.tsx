@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   CheckCircle2,
   ClipboardCheck,
@@ -35,6 +34,7 @@ import {
   type PermissionRequestWizardStep
 } from "../permissionRequestJourney";
 import { applyPermissionRequestAccessSubject } from "../permissionRequestForm";
+import { usePermissionApprovalDecision } from "../hooks/usePermissionApprovalDecision";
 import {
   accessDecisionOutcomeLabel,
   accessSubjectDropdownOption,
@@ -93,15 +93,6 @@ import { ApprovalDropdown } from "./ApprovalDropdown";
 import { CapabilityChipList } from "./PermissionWorkbenchParts";
 import { TechnicalId } from "./TechnicalId";
 import { Badge, EmptyRow } from "./ui";
-
-type ApprovalDecisionAction = "approve" | "reject" | "withdraw";
-
-interface PendingApprovalDecision {
-  action: ApprovalDecisionAction;
-  requestId?: string;
-  comment: string;
-  error: string;
-}
 
 interface AiAdminPermissionWorkbenchProps {
   accessSubjects: AccessSubjectOption[];
@@ -248,7 +239,14 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     tenants,
     t
   } = props;
-  const [pendingApprovalDecision, setPendingApprovalDecision] = useState<PendingApprovalDecision | null>(null);
+  const {
+    beginApprovalDecision, cancelApprovalDecision, confirmPendingApprovalDecision,
+    pendingApprovalDecision, updatePendingApprovalComment
+  } = usePermissionApprovalDecision({
+    onApproveApprovalRequest,
+    onRejectApprovalRequest,
+    onSelectApprovalRequest, onWithdrawApprovalRequest, t
+  });
   const callers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const selectedCaller = agents.find((agent) => agent.id === form.callerInstanceId);
   const selectedTarget = mcpTargets.find((agent) => agent.id === form.targetId);
@@ -363,19 +361,6 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const reviewerIdentity = approvalReviewer.trim()
     ? permissionEntityDisplayName(approvalReviewer.trim(), t)
     : t("text.approvalReviewerFallback");
-  const beginApprovalDecision = (action: ApprovalDecisionAction, requestId?: string) => {
-    if (requestId) onSelectApprovalRequest(requestId);
-    setPendingApprovalDecision({
-      action,
-      requestId,
-      comment: action === "approve" ? t("text.approvalApproveDefaultComment") : "",
-      error: ""
-    });
-  };
-  const cancelApprovalDecision = () => setPendingApprovalDecision(null);
-  const updatePendingApprovalComment = (comment: string) => {
-    setPendingApprovalDecision((current) => current ? { ...current, comment, error: "" } : current);
-  };
   function scrollToPermissionRequestStep(step: PermissionRequestStepTarget) {
     document.getElementById(permissionRequestStepSectionId(step))?.scrollIntoView({
       behavior: "smooth",
@@ -388,25 +373,6 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       block: "start"
     });
   }
-  const confirmPendingApprovalDecision = () => {
-    if (!pendingApprovalDecision) return;
-    const comment = pendingApprovalDecision.comment.trim();
-    if (pendingApprovalDecision.action === "reject" && !comment) {
-      setPendingApprovalDecision({
-        ...pendingApprovalDecision,
-        error: t("message.permissionApprovalRejectReasonRequired")
-      });
-      return;
-    }
-    if (pendingApprovalDecision.action === "approve") {
-      onApproveApprovalRequest(pendingApprovalDecision.requestId, comment || t("text.approvalApproveDefaultComment"));
-    } else if (pendingApprovalDecision.action === "withdraw") {
-      onWithdrawApprovalRequest(comment);
-    } else {
-      onRejectApprovalRequest(pendingApprovalDecision.requestId, comment);
-    }
-    setPendingApprovalDecision(null);
-  };
   const runProductionPrimaryAction = () => {
     if (journeyStatus.nextActionKey === "action.refreshReviewerQueue") {
       onRefreshReviewerQueue();

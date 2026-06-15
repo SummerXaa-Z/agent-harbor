@@ -11,6 +11,7 @@ const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
 const permissionWorkbenchPresenters = readExistingFile(new URL("../src/permissionWorkbenchPresenters.ts", import.meta.url));
 const permissionWorkbenchParts = readExistingFile(new URL("../src/components/PermissionWorkbenchParts.tsx", import.meta.url));
+const permissionApprovalDecisionHook = readExistingFile(new URL("../src/hooks/usePermissionApprovalDecision.ts", import.meta.url));
 const capabilityGovernanceView = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
 const consoleViews = readFileSync(new URL("../src/components/ConsoleViews.tsx", import.meta.url), "utf8");
 const consolePrimitives = readFileSync(new URL("../src/components/ConsolePrimitives.tsx", import.meta.url), "utf8");
@@ -95,16 +96,21 @@ test("console controller delegates non-ai-admin state domains to hooks", () => {
 
 test("ai admin workbench has a growth guard while controller hooks are split", () => {
   assert.ok(
-    workbench.split("\n").length <= 1450,
-    "AiAdminPermissionWorkbench should delegate pure presenters and small display parts before adding more UI"
+    workbench.split("\n").length <= 1300,
+    "AiAdminPermissionWorkbench should delegate approval decision state before adding more UI"
   );
   assert.match(app, /from "\.\/components\/AiAdminPermissionWorkbench"/);
+  assert.match(workbench, /from "\.\.\/hooks\/usePermissionApprovalDecision"/);
   assert.match(workbench, /from "\.\.\/permissionWorkbenchPresenters"/);
   assert.match(workbench, /from "\.\/PermissionWorkbenchParts"/);
+  assert.match(permissionApprovalDecisionHook, /export function usePermissionApprovalDecision/);
+  assert.match(permissionApprovalDecisionHook, /export type ApprovalDecisionAction = "approve" \| "reject" \| "withdraw"/);
   assert.match(permissionWorkbenchPresenters, /export function resolvePermissionJourneyStatus/);
   assert.match(permissionWorkbenchPresenters, /export function permissionWorkbenchStepDisplayDetailCode/);
   assert.match(permissionWorkbenchPresenters, /export function permissionWorkbenchStepDisplayStatus/);
   assert.match(permissionWorkbenchParts, /export function CapabilityChipList/);
+  assert.doesNotMatch(workbench, /import \{ useState \} from "react"/);
+  assert.doesNotMatch(workbench, /setPendingApprovalDecision/);
   assert.doesNotMatch(workbench, /function resolvePermissionJourneyStatus/);
   assert.doesNotMatch(workbench, /function permissionWorkbenchStepDisplayDetailCode/);
   assert.doesNotMatch(workbench, /function permissionWorkbenchStepDisplayStatus/);

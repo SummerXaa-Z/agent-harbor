@@ -80,6 +80,9 @@ import {
   type Language
 } from "./i18n";
 import {
+  healthCheckFailureDetail
+} from "./healthCheckPresentation";
+import {
   buildResourceLifecycleSummary
 } from "./resourceLifecycle";
 import {
@@ -1049,9 +1052,9 @@ export function ConsoleController() {
       subjectHeader: subjectHeaderHealth.status === "ok" ? "ok" : "error"
     };
     const detail = [
-      apiHealth.status === "ok" ? "" : `API ${apiHealth.message}`,
-      mockMcpHealth.status === "ok" ? "" : `MCP service ${mockMcpHealth.message}`,
-      subjectHeaderHealth.status === "ok" ? "" : `Subject header ${subjectHeaderHealth.message}`
+      apiHealth.status === "ok" ? "" : healthCheckFailureDetail(t, t("readiness.aiAdmin.api.title"), apiHealth),
+      mockMcpHealth.status === "ok" ? "" : healthCheckFailureDetail(t, t("readiness.aiAdmin.mockMcp.title"), mockMcpHealth),
+      subjectHeaderHealth.status === "ok" ? "" : healthCheckFailureDetail(t, t("readiness.aiAdmin.subjectHeader.title"), subjectHeaderHealth)
     ].filter(Boolean).join(" · ");
     return {
       detail,

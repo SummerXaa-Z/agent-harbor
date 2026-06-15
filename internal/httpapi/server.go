@@ -64,7 +64,19 @@ const (
 	defaultConsoleSessionTTL            = 12 * time.Hour
 	consoleSessionCookieName            = "agent_harbor_session"
 	developmentAdminActor               = "local-dev"
+	systemAPIVersion                    = "2026-06-15"
 )
+
+var systemCapabilities = []string{
+	"permission_package_approval_requests",
+	"permission_package_approval_withdraw",
+	"permission_package_apply_preflight",
+	"permission_package_applications",
+	"permission_package_application_health",
+	"permission_package_application_impact",
+	"permission_package_production_readiness",
+	"permission_package_consumed_approval_recovery",
+}
 
 type proxyRetryPolicy struct {
 	maxAttempts      int
@@ -176,6 +188,7 @@ func (s *Server) Router() http.Handler {
 
 	r.Get("/healthz", s.health)
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Get("/system/info", s.systemInfo)
 		r.Get("/contracts/providers", s.listProviderContracts)
 		r.Get("/contracts/channels", s.listChannelContracts)
 		r.Get("/auth/session", s.getAuthSession)
@@ -371,6 +384,20 @@ func reviewerFromRequest(reviewer string, r *http.Request) (string, error) {
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+type systemInfoResponse struct {
+	Name         string   `json:"name"`
+	APIVersion   string   `json:"apiVersion"`
+	Capabilities []string `json:"capabilities"`
+}
+
+func (s *Server) systemInfo(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, systemInfoResponse{
+		Name:         "AgentHarbor",
+		APIVersion:   systemAPIVersion,
+		Capabilities: append([]string(nil), systemCapabilities...),
+	})
 }
 
 func (s *Server) listProviderContracts(w http.ResponseWriter, _ *http.Request) {

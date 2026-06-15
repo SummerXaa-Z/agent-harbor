@@ -30,6 +30,12 @@ type apiEnvelope struct {
 	Message string          `json:"message"`
 }
 
+type systemInfoResponse struct {
+	Name         string   `json:"name"`
+	APIVersion   string   `json:"apiVersion"`
+	Capabilities []string `json:"capabilities"`
+}
+
 type agentResponse struct {
 	ID                string         `json:"id"`
 	TenantID          string         `json:"tenantId"`
@@ -653,6 +659,40 @@ func TestHealthAndContracts(t *testing.T) {
 	channels := decodeData[[]map[string]any](t, request(t, router, http.MethodGet, "/api/v1/contracts/channels", nil, ""))
 	if len(channels) < 3 {
 		t.Fatalf("expected channel catalog, got %#v", channels)
+	}
+}
+
+func TestSystemInfoIncludesConsoleCompatibilityContract(t *testing.T) {
+	router := httpapi.New(store.NewMemory(), httpapi.WithAdminKey("secret")).Router()
+
+	resp := request(t, router, http.MethodGet, "/api/v1/system/info", nil, "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("system info should be public, status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	info := decodeData[systemInfoResponse](t, resp)
+	if info.Name != "AgentHarbor" {
+		t.Fatalf("unexpected system name %q", info.Name)
+	}
+	if strings.TrimSpace(info.APIVersion) == "" {
+		t.Fatalf("apiVersion should be present: %#v", info)
+	}
+	capabilities := make(map[string]bool, len(info.Capabilities))
+	for _, capability := range info.Capabilities {
+		capabilities[capability] = true
+	}
+	for _, capability := range []string{
+		"permission_package_approval_requests",
+		"permission_package_approval_withdraw",
+		"permission_package_apply_preflight",
+		"permission_package_applications",
+		"permission_package_application_health",
+		"permission_package_application_impact",
+		"permission_package_production_readiness",
+		"permission_package_consumed_approval_recovery",
+	} {
+		if !capabilities[capability] {
+			t.Fatalf("system info missing required console capability %q: %#v", capability, info.Capabilities)
+		}
 	}
 }
 

@@ -45,6 +45,17 @@ test("console auth API exposes session login and logout endpoints", () => {
   assert.match(apiSource, /\/api\/v1\/auth\/logout/);
 });
 
+test("API health check verifies the system compatibility contract", () => {
+  assert.match(apiSource, /interface SystemInfo/);
+  assert.match(apiSource, /function fetchSystemInfo\(/);
+  assert.match(apiSource, /\/api\/v1\/system\/info/);
+  assert.match(apiSource, /requiredConsoleCapabilities/);
+  assert.match(apiSource, /permission_package_approval_withdraw/);
+  assert.match(apiSource, /permission_package_consumed_approval_recovery/);
+  assert.match(apiSource, /api_contract_unavailable/);
+  assert.match(apiSource, /api_contract_incompatible/);
+});
+
 test("permissionPackageApprovalRequestsPath includes reviewer routing query", () => {
   const path = permissionPackageApprovalRequestsPath({
     limit: 20,

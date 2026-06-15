@@ -45,6 +45,14 @@ test("English product copy uses acceptance and records wording", () => {
     t("message.permissionApprovalAlreadyConsumedRecovery"),
     "This approval has already been used. Refresh status checks or review the current permission change before retrying."
   );
+  assert.equal(
+    t("message.apiContractUnavailable"),
+    "API compatibility check is unavailable. Upgrade the AgentHarbor API before using this console."
+  );
+  assert.equal(
+    t("message.apiContractIncompatible"),
+    "API is missing capabilities required by this console: {capabilities}. Upgrade the AgentHarbor API before continuing."
+  );
 });
 
 test("createTranslator returns core journey Chinese labels", () => {
@@ -261,6 +269,8 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("productionConsole.runtimeReady"), "运行验证已通过");
   assert.equal(t("productionConsole.productionReady"), "已满足上线条件");
   assert.equal(t("readiness.aiAdmin.api.title"), "控制台连接");
+  assert.equal(t("message.apiContractUnavailable"), "无法读取 API 兼容信息。请先升级 AgentHarbor API，再继续使用当前控制台。");
+  assert.equal(t("message.apiContractIncompatible"), "API 缺少当前控制台需要的能力：{capabilities}。请先升级 AgentHarbor API。");
   assert.equal(t("readiness.aiAdmin.mockMcp.title"), "工具服务连接");
   assert.equal(t("readiness.aiAdmin.subjectHeader.title"), "浏览器身份可用");
   assert.equal(t("readiness.aiAdmin.privateUpstreams.title"), "本地演示连接");

@@ -16,6 +16,9 @@ import {
   updateCapability
 } from "../api";
 import {
+  healthCheckFailureDetail
+} from "../healthCheckPresentation";
+import {
   createCoreJourneyConfig,
   defaultCoreJourneyForm,
   type CoreJourneyConfig,
@@ -119,8 +122,8 @@ export function useCoreJourneyController({
       setPreflightMessage(t("message.coreJourneyPreflightReady"));
     } else {
       const detail = [
-        apiHealth.status === "ok" ? "" : `API ${apiHealth.message}`,
-        mockMcpHealth.status === "ok" ? "" : `MCP service ${mockMcpHealth.message}`
+        apiHealth.status === "ok" ? "" : healthCheckFailureDetail(t, t("preflight.api.title"), apiHealth),
+        mockMcpHealth.status === "ok" ? "" : healthCheckFailureDetail(t, t("preflight.mockMcp.title"), mockMcpHealth)
       ].filter(Boolean).join(" · ");
       setPreflightMessage(tx(t, "message.coreJourneyPreflightFailed", { detail: detail || "unknown" }));
     }

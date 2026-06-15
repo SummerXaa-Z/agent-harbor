@@ -382,8 +382,13 @@ ADMIN_KEY=local-admin-key \
 ### Health and Contracts
 
 - `GET /healthz`
+- `GET /api/v1/system/info`
 - `GET /api/v1/contracts/providers`
 - `GET /api/v1/contracts/channels`
+
+The web console uses `GET /api/v1/system/info` after `/healthz` to verify API compatibility before running permission changes. If the endpoint is unavailable or required capabilities are missing, the console blocks runtime validation with an upgrade prompt instead of surfacing late-stage business errors.
+
+Web 控制台会在 `/healthz` 之后读取 `GET /api/v1/system/info`，先确认 API 兼容信息，再执行权限变更。如果端点不可用或缺少必要能力，控制台会在运行验证前提示升级 API，而不是让管理员在后续流程里遇到零散业务错误。
 
 ### Tenants and Access Profile
 

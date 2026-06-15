@@ -721,6 +721,95 @@ button {
   line-height: 18px;
 }
 
+.connection-diagnostics-action {
+  width: 100%;
+  margin-top: 10px;
+  justify-content: center;
+}
+
+.connection-diagnostics-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 7px;
+  background: var(--surface-subtle);
+}
+
+.connection-diagnostics-panel.tone-ok {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+}
+
+.connection-diagnostics-panel.tone-error {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+}
+
+.connection-diagnostics-summary {
+  display: grid;
+  gap: 2px;
+}
+
+.connection-diagnostics-summary strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.connection-diagnostics-summary span,
+.connection-diagnostics-time {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.connection-diagnostics-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connection-diagnostics-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.connection-diagnostics-row .health-dot {
+  margin-top: 5px;
+}
+
+.connection-diagnostics-row.tone-warning .health-dot {
+  background: var(--warning);
+}
+
+.connection-diagnostics-row.tone-error .health-dot {
+  background: var(--danger);
+}
+
+.connection-diagnostics-row > div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.connection-diagnostics-row strong {
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.connection-diagnostics-row span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+
 .icon-button {
   display: inline-grid;
   width: 38px;

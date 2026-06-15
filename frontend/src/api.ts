@@ -101,6 +101,7 @@ export interface HealthCheckResult {
 export interface SystemInfo {
   name: string
   apiVersion: string
+  authRequired: boolean
   capabilities: string[]
 }
 

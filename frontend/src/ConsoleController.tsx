@@ -56,6 +56,7 @@ import {
 import {
   runtimeEvidenceMetric
 } from "./consoleMetrics";
+import type { ConnectionDiagnosticRow } from "./connectionDiagnostics";
 import {
   capabilityDisplayName,
   capabilityKeyDisplayName,
@@ -201,6 +202,7 @@ import { Badge } from "./components/ui";
 import { useAccessProfileController } from "./hooks/useAccessProfileController";
 import { useAskAccessController } from "./hooks/useAskAccessController";
 import { useCapabilityGovernanceController } from "./hooks/useCapabilityGovernanceController";
+import { useConnectionDiagnostics } from "./hooks/useConnectionDiagnostics";
 import { useConsoleAuth } from "./hooks/useConsoleAuth";
 import { useCoreJourneyController } from "./hooks/useCoreJourneyController";
 import { useManagementOperations } from "./hooks/useManagementOperations";
@@ -326,6 +328,16 @@ function tx(t: Translator, key: string, values: Record<string, string | number>)
   );
 }
 
+function connectionDiagnosticDetail(row: ConnectionDiagnosticRow, t: Translator) {
+  return row.detailParams ? tx(t, row.detailKey, row.detailParams) : t(row.detailKey);
+}
+
+function connectionDiagnosticSummaryLabel(status: "ok" | "warning" | "error", t: Translator) {
+  if (status === "ok") return t("connectionDiagnostics.summaryOk");
+  if (status === "warning") return t("connectionDiagnostics.summaryWarning");
+  return t("connectionDiagnostics.summaryError");
+}
+
 type LocalizedMessage =
   | {
       key: string;
@@ -440,6 +452,11 @@ export function ConsoleController() {
   );
   const [aiAdminApprovalJourneyRunning, setAiAdminApprovalJourneyRunning] = useState(false);
   const [aiAdminApprovalJourneyMessage, setAiAdminApprovalJourneyMessage] = useState("");
+  const connectionDiagnostics = useConnectionDiagnostics({
+    liveDataLoaded: Boolean(data?.loadedFromApi),
+    loadError,
+    mcpEndpoint: aiAdminApprovalJourneyConfig.mcpEndpoint
+  });
   const [aiAdminApprovalJourneyResult, setAiAdminApprovalJourneyResult] =
     useState<AiAdminApprovalJourneyResult | null>(null);
   const [aiAdminApprovalAuditEvent, setAiAdminApprovalAuditEvent] = useState<AuditEvent | null>(null);
@@ -689,6 +706,7 @@ export function ConsoleController() {
         setData(null);
         setLoadError("");
       }
+      connectionDiagnostics.reset();
     });
   }
 
@@ -1890,6 +1908,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     : data?.loadedFromApi
       ? t("dataSource.runtime")
       : t("dataSource.fallback");
+  const connectionDiagnosticsStatus = connectionDiagnostics.status;
   const activeView = viewForNav(activeNav);
   const activeNavItem = navItems.find((item) => item.key === activeView.key) ?? navItems[0];
   const activeNavLabel = t(`nav.${activeNavItem.key}`, activeNavItem.label);
@@ -2609,6 +2628,40 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
                     <span>{dataSourceLabel}</span>
                   </div>
                 </div>
+                <button
+                  className="connection-diagnostics-action primary-button"
+                  disabled={connectionDiagnostics.checking}
+                  onClick={() => void connectionDiagnostics.run()}
+                  type="button"
+                >
+                  {connectionDiagnostics.checking ? t("connectionDiagnostics.checking") : t("connectionDiagnostics.action")}
+                </button>
+                {connectionDiagnosticsStatus ? (
+                  <div className={`connection-diagnostics-panel tone-${connectionDiagnosticsStatus}`} role="status" aria-live="polite">
+                    <div className="connection-diagnostics-summary">
+                      <strong>{t("connectionDiagnostics.title")}</strong>
+                      <span>{connectionDiagnosticSummaryLabel(connectionDiagnosticsStatus, t)}</span>
+                    </div>
+                    <ul className="connection-diagnostics-list">
+                      {connectionDiagnostics.rows.map((row) => (
+                        <li className={`connection-diagnostics-row tone-${row.status}`} key={row.key}>
+                          <span className="health-dot" />
+                          <div>
+                            <strong>{t(row.titleKey)}</strong>
+                            <span>{connectionDiagnosticDetail(row, t)}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    {connectionDiagnostics.checkedAt ? (
+                      <span className="connection-diagnostics-time">
+                        {tx(t, "connectionDiagnostics.checkedAt", {
+                          time: connectionDiagnostics.checkedAt.toLocaleTimeString("zh-CN", { hour12: false })
+                        })}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </details>
             <button aria-label={t("action.refresh")} className="icon-button" onClick={refresh} title={t("action.refresh")} type="button">

@@ -21,6 +21,15 @@ assert_target_depends_on() {
   fi
 }
 
+assert_file_contains() {
+  local file="$1"
+  local needle="$2"
+  if ! grep -Fq "$needle" "$file"; then
+    echo "expected ${file} to contain ${needle}" >&2
+    exit 1
+  fi
+}
+
 assert_target_depends_on "frontend-test" "frontend-deps"
 assert_target_depends_on "frontend-build" "frontend-deps"
 assert_target_depends_on "demo" "frontend-deps"
@@ -29,3 +38,8 @@ assert_target_depends_on "release-check" "production-hardening"
 assert_target_depends_on "web-console-production-journey" "frontend-deps"
 assert_target_depends_on "web-console-production-journey" "real-mcp-deps"
 assert_target_depends_on "release-check" "web-console-production-journey"
+
+assert_file_contains "scripts/scenario-web-console-production-journey.sh" "authRequired"
+assert_file_contains "scripts/scenario-web-console-production-journey.sh" "connectionDiagnostics.ts"
+assert_file_contains "scripts/scenario-web-console-production-journey.sh" "connection-diagnostics-action"
+assert_file_contains "scripts/scenario-web-console-production-journey.sh" "tests/connectionDiagnostics.test.mjs"

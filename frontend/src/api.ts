@@ -89,11 +89,31 @@ import type {
 const DEFAULT_API_BASE = 'http://127.0.0.1:9090'
 
 export type HealthCheckStatus = 'ok' | 'error'
+export type HealthCheckCode = 'api_contract_unavailable' | 'api_contract_incompatible'
 
 export interface HealthCheckResult {
+  code?: HealthCheckCode
+  missingCapabilities?: string[]
   status: HealthCheckStatus
   message: string
 }
+
+export interface SystemInfo {
+  name: string
+  apiVersion: string
+  capabilities: string[]
+}
+
+export const requiredConsoleCapabilities = [
+  'permission_package_approval_requests',
+  'permission_package_approval_withdraw',
+  'permission_package_apply_preflight',
+  'permission_package_applications',
+  'permission_package_application_health',
+  'permission_package_application_impact',
+  'permission_package_production_readiness',
+  'permission_package_consumed_approval_recovery',
+]
 
 export const defaultMockMcpHealthUrl = 'http://127.0.0.1:8787/healthz'
 
@@ -214,7 +234,27 @@ export function isApiCompatibilityFallbackError(error: unknown): boolean {
 }
 
 export async function checkApiHealth(signal?: AbortSignal): Promise<HealthCheckResult> {
-  return checkJsonHealth(endpoint('/healthz'), signal)
+  const health = await checkJsonHealth(endpoint('/healthz'), signal)
+  if (health.status !== 'ok') return health
+  try {
+    const systemInfo = await fetchSystemInfo(signal)
+    const missingCapabilities = missingConsoleCapabilities(systemInfo)
+    if (missingCapabilities.length > 0) {
+      return {
+        code: 'api_contract_incompatible',
+        message: `missing capabilities: ${missingCapabilities.join(', ')}`,
+        missingCapabilities,
+        status: 'error',
+      }
+    }
+  } catch (error) {
+    return {
+      code: 'api_contract_unavailable',
+      message: error instanceof Error ? error.message : 'system info unavailable',
+      status: 'error',
+    }
+  }
+  return health
 }
 
 export async function checkMockMcpHealth(
@@ -237,6 +277,15 @@ export async function loginConsole(adminKey: string, signal?: AbortSignal): Prom
 
 export async function logoutConsole(signal?: AbortSignal): Promise<ConsoleSession> {
   return request<ConsoleSession>('/api/v1/auth/logout', { method: 'POST', signal })
+}
+
+export async function fetchSystemInfo(signal?: AbortSignal): Promise<SystemInfo> {
+  return request<SystemInfo>('/api/v1/system/info', { signal })
+}
+
+export function missingConsoleCapabilities(systemInfo: SystemInfo): string[] {
+  const available = new Set(Array.isArray(systemInfo.capabilities) ? systemInfo.capabilities : [])
+  return requiredConsoleCapabilities.filter((capability) => !available.has(capability))
 }
 
 export async function checkSubjectHeaderCors(signal?: AbortSignal): Promise<HealthCheckResult> {

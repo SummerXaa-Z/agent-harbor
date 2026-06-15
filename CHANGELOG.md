@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- The API now exposes public `GET /api/v1/system/info` compatibility metadata, and the console blocks permission validation early when the connected backend is missing required journey capabilities.
+- API 现在公开提供 `GET /api/v1/system/info` 兼容信息；当连接的后端缺少主旅程能力时，控制台会在权限验证前明确阻断并提示升级。
 - Permission Changes now returns a stable consumed-approval error code and the console shows recovery guidance with a best-effort status refresh when an already-used approval is retried.
 - 权限变更现在会在重复使用已消费审批时返回稳定错误码，控制台会展示恢复指引并尽力刷新当前状态，避免管理员误以为需要重复提交。
 - Production deployment mode now runs a configuration preflight that blocks development-only admin bypass and private-upstream flags before startup.

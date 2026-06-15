@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   ArrowRight,
   Boxes,
@@ -12,9 +13,13 @@ import type { ResourceLifecycleItem, ResourceLifecycleStatus, ResourceLifecycleS
 import { Badge, EmptyRow } from "./ui";
 
 export function ResourceLifecycleView({
+  primaryActions,
+  secondaryActions,
   summary,
   t
 }: {
+  primaryActions?: ReactNode;
+  secondaryActions?: ReactNode;
   summary: ResourceLifecycleSummary;
   t: Translator;
 }) {
@@ -59,6 +64,18 @@ export function ResourceLifecycleView({
           </span>
         ))}
       </div>
+
+      {primaryActions || secondaryActions ? (
+        <section className="resource-lifecycle-command-center" aria-label={t("resource.commandAria")}>
+          <div className="resource-lifecycle-command-copy">
+            <span className="section-kicker">{t("resource.commandKicker")}</span>
+            <strong>{t("resource.commandTitle")}</strong>
+            <p>{t("resource.commandDetail")}</p>
+          </div>
+          {primaryActions}
+          {secondaryActions}
+        </section>
+      ) : null}
 
       <section className="resource-lifecycle-list" aria-label={t("resource.listAria")}>
         <div className="resource-lifecycle-header" aria-hidden="true">

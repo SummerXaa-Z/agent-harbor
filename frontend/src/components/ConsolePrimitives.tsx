@@ -61,6 +61,7 @@ export function ActionModalButton({
   openLabel,
   closeLabel,
   id,
+  variant = "compact",
   children
 }: {
   title: string;
@@ -68,8 +69,13 @@ export function ActionModalButton({
   openLabel: string;
   closeLabel: string;
   id?: string;
+  variant?: "compact" | "command";
   children: ReactNode;
 }) {
+  const triggerClassName = variant === "command"
+    ? "action-modal-trigger action-modal-trigger-command"
+    : "action-modal-trigger action-modal-trigger-compact";
+
   return (
     <ActionModalLauncher
       className="action-modal-inline"
@@ -78,7 +84,7 @@ export function ActionModalButton({
       id={id}
       openLabel={openLabel}
       title={title}
-      triggerClassName="action-modal-trigger action-modal-trigger-compact"
+      triggerClassName={triggerClassName}
     >
       {children}
     </ActionModalLauncher>

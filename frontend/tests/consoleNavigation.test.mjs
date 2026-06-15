@@ -134,6 +134,14 @@ test("resource management is the single entry for Agent and MCP lifecycle", () =
   assert.equal(viewForNav("registry").primaryPanelKey, "resourceLifecycle");
 });
 
+test("production journey acceptance keeps existing primary routes", () => {
+  assert.equal(viewForNav("getting-started").primaryPanelKey, "gettingStarted");
+  assert.equal(viewForNav("ask").primaryPanelKey, "askAccess");
+  assert.equal(viewForNav("registry").primaryPanelKey, "resourceLifecycle");
+  assert.equal(viewForNav("ai-admin").primaryPanelKey, "aiAdminPermissionWorkbench");
+  assert.equal(viewForNav("evidence").primaryPanelKey, "goLiveAcceptance");
+});
+
 test("navigation hash preserves the current workspace across reloads", () => {
   assert.equal(navHashFor("evidence"), "#evidence");
   assert.equal(navHashFor("tenants"), "#tenants");

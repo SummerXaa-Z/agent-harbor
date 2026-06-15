@@ -8,6 +8,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Web console now shows a compact production journey checkpoint across setup, resource management, access query, permission changes, and go-live status, so operators can see the current stage and next safe action without reading technical identifiers.
+- Web 控制台现在在开始使用、资源管理、访问查询、权限变更和上线状态中展示轻量生产旅程提示，管理员无需阅读技术标识即可确认当前阶段和下一步安全动作。
+- User-facing console copy now avoids "evidence/证据" wording in primary labels, using acceptance records, runtime records, audit records, handoff material, and go-live status language instead.
+- 控制台用户可见文案不再使用 “evidence/证据” 作为主路径表达，统一改为验收记录、运行记录、审计记录、交接材料和上线状态等业务语言。
 - Resource Management now presents lifecycle operations directly in the resource workbench: create Agent, create key, rotate credential, create policy, review capabilities, start permission changes, and review runtime all start from the same entry.
 - 资源管理页现在把生命周期操作直接收束到资源工作台：创建 Agent、创建密钥、轮换凭据、创建策略、查看能力、发起权限变更和查看运行状态都从同一个入口开始。
 - Moved Permission Changes approval-decision confirmation state into a focused hook, reducing the workbench component while keeping approval, rejection, and withdraw behavior unchanged.

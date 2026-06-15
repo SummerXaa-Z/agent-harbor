@@ -4,25 +4,46 @@ import type { Translator } from "../consolePresenters";
 import type { RoutePolicy } from "../types";
 import { AccessPolicyWorkspace } from "./OperationalViews";
 
-export function AiAdminView({ aiAdminPanel }: { aiAdminPanel: ReactNode }) {
+export function AiAdminView({
+  aiAdminPanel,
+  journeyCheckpoint
+}: {
+  aiAdminPanel: ReactNode;
+  journeyCheckpoint?: ReactNode;
+}) {
   return (
     <section className="content-grid">
+      {journeyCheckpoint}
       {aiAdminPanel}
     </section>
   );
 }
 
-export function GettingStartedConsoleView({ gettingStartedPanel }: { gettingStartedPanel: ReactNode }) {
+export function GettingStartedConsoleView({
+  gettingStartedPanel,
+  journeyCheckpoint
+}: {
+  gettingStartedPanel: ReactNode;
+  journeyCheckpoint?: ReactNode;
+}) {
   return (
     <section className="content-grid">
+      {journeyCheckpoint}
       {gettingStartedPanel}
     </section>
   );
 }
 
-export function AskView({ askAccessPanel }: { askAccessPanel: ReactNode }) {
+export function AskView({
+  askAccessPanel,
+  journeyCheckpoint
+}: {
+  askAccessPanel: ReactNode;
+  journeyCheckpoint?: ReactNode;
+}) {
   return (
     <section className="content-grid">
+      {journeyCheckpoint}
       {askAccessPanel}
     </section>
   );
@@ -31,14 +52,17 @@ export function AskView({ askAccessPanel }: { askAccessPanel: ReactNode }) {
 export function RegistryView({
   agentRegistryPanel,
   contractMatrixPanel,
+  journeyCheckpoint,
   resourceLifecyclePanel
 }: {
   agentRegistryPanel: ReactNode;
   contractMatrixPanel: ReactNode;
+  journeyCheckpoint?: ReactNode;
   resourceLifecyclePanel: ReactNode;
 }) {
   return (
     <section className="content-grid">
+      {journeyCheckpoint}
       {resourceLifecyclePanel}
       {agentRegistryPanel}
       {contractMatrixPanel}
@@ -95,8 +119,19 @@ export function CapabilitiesView({ capabilityGovernancePanel }: { capabilityGove
   );
 }
 
-export function AccessView({ accessProfilePanel }: { accessProfilePanel: ReactNode }) {
-  return <section className="content-grid">{accessProfilePanel}</section>;
+export function AccessView({
+  accessProfilePanel,
+  journeyCheckpoint
+}: {
+  accessProfilePanel: ReactNode;
+  journeyCheckpoint?: ReactNode;
+}) {
+  return (
+    <section className="content-grid">
+      {journeyCheckpoint}
+      {accessProfilePanel}
+    </section>
+  );
 }
 
 export function TenantsView({ tenantOrganizationPanel }: { tenantOrganizationPanel: ReactNode }) {
@@ -121,16 +156,19 @@ export function TracesView({
 export function EvidenceView({
   evidenceRunsPanel,
   goLiveAcceptancePanel,
+  journeyCheckpoint,
   managementAuditPanel,
   runtimeSignalsPanel
 }: {
   evidenceRunsPanel: ReactNode;
   goLiveAcceptancePanel: ReactNode;
+  journeyCheckpoint?: ReactNode;
   managementAuditPanel: ReactNode;
   runtimeSignalsPanel: ReactNode;
 }) {
   return (
     <section className="content-grid">
+      {journeyCheckpoint}
       {goLiveAcceptancePanel}
       {evidenceRunsPanel}
       {managementAuditPanel}

@@ -82,6 +82,9 @@ import {
   buildResourceLifecycleSummary
 } from "./resourceLifecycle";
 import {
+  deriveProductionJourney
+} from "./productionJourney";
+import {
   defaultNavKey,
   navHashFor,
   navKeyFromHash,
@@ -148,6 +151,7 @@ import {
 import { AiAdminPermissionWorkbench } from "./components/AiAdminPermissionWorkbench";
 import { CapabilityGovernanceView } from "./components/CapabilityGovernanceView";
 import { ActionModalButton, IconMore, IconOpen, Panel } from "./components/ConsolePrimitives";
+import { ProductionJourneyCheckpoint } from "./components/ProductionJourneyCheckpoint";
 import {
   AccessView,
   AiAdminView,
@@ -1940,6 +1944,31 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       }),
     [aiAdminApplication, aiAdminApprovalRequest, aiAdminDraft, aiAdminProductionReadiness]
   );
+  const productionJourney = useMemo(
+    () =>
+      data
+        ? deriveProductionJourney({
+            accessOutcome: askAccess.result?.outcome ?? null,
+            activeNav,
+            data,
+            hasPermissionChangeContext: Boolean(handoffContexts.permissionNotice || handoffContexts.permissionChange),
+            permissionBlocked: aiAdminProductionReadiness?.status === "blocked" || aiAdminProductionConsoleSummary.status === "blocked",
+            permissionReady: aiAdminProductionReadiness?.status === "ready" || aiAdminProductionConsoleSummary.status === "ready"
+          })
+        : null,
+    [
+      activeNav,
+      aiAdminProductionConsoleSummary.status,
+      aiAdminProductionReadiness?.status,
+      askAccess.result?.outcome,
+      data,
+      handoffContexts.permissionChange,
+      handoffContexts.permissionNotice
+    ]
+  );
+  const productionJourneyCheckpoint = (
+    productionJourney ? <ProductionJourneyCheckpoint journey={productionJourney} t={t} /> : null
+  );
   const goLiveAcceptanceForm = aiAdminServerDraft?.input ?? aiAdminForm;
   const sessionActorLabel = consoleAuth.session?.actor
     ? t(`auditActor.${consoleAuth.session.actor}`, consoleAuth.session.actor)
@@ -2346,9 +2375,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const viewContent = (() => {
     switch (activeView.key) {
       case "ask":
-        return <AskView askAccessPanel={askAccessPanel} />;
+        return <AskView askAccessPanel={askAccessPanel} journeyCheckpoint={productionJourneyCheckpoint} />;
       case "ai-admin":
-        return <AiAdminView aiAdminPanel={aiAdminPanel} />;
+        return <AiAdminView aiAdminPanel={aiAdminPanel} journeyCheckpoint={productionJourneyCheckpoint} />;
       case "getting-started":
         return (
           <GettingStartedConsoleView
@@ -2359,6 +2388,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
                 t={t}
               />
             )}
+            journeyCheckpoint={productionJourneyCheckpoint}
           />
         );
       case "registry":
@@ -2366,6 +2396,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           <RegistryView
             agentRegistryPanel={agentRegistryPanel("span-8")}
             contractMatrixPanel={contractMatrixPanel("span-4")}
+            journeyCheckpoint={productionJourneyCheckpoint}
             resourceLifecyclePanel={resourceLifecyclePanel()}
           />
         );
@@ -2391,7 +2422,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       case "tenants":
         return <TenantsView tenantOrganizationPanel={tenantOrganizationPanel} />;
       case "access":
-        return <AccessView accessProfilePanel={accessProfilePanel} />;
+        return <AccessView accessProfilePanel={accessProfilePanel} journeyCheckpoint={productionJourneyCheckpoint} />;
       case "traces":
         return (
           <TracesView
@@ -2404,6 +2435,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           <EvidenceView
             evidenceRunsPanel={evidenceRunsPanel("span-5")}
             goLiveAcceptancePanel={goLiveAcceptancePanel}
+            journeyCheckpoint={productionJourneyCheckpoint}
             managementAuditPanel={managementAuditPanel("span-7")}
             runtimeSignalsPanel={runtimeSignalsPanel("span-12")}
           />

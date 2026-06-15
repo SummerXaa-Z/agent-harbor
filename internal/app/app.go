@@ -22,6 +22,13 @@ type App struct {
 	close  func()
 }
 
+type deploymentConfigCheck struct {
+	Code     string
+	Severity string
+	Status   string
+	Message  string
+}
+
 func New(ctx context.Context) (*App, error) {
 	repo := store.Repository(store.NewMemory())
 	closeFn := func() {}
@@ -62,6 +69,10 @@ func New(ctx context.Context) (*App, error) {
 		closeFn()
 		return nil, err
 	}
+	if _, err := deploymentConfigPreflightFromEnv(deploymentEnvFromOS()); err != nil {
+		closeFn()
+		return nil, err
+	}
 	return &App{
 		server: httpapi.New(
 			repo,
@@ -83,6 +94,124 @@ func (a *App) Router() http.Handler {
 
 func (a *App) Close() {
 	a.close()
+}
+
+func deploymentEnvFromOS() map[string]string {
+	keys := []string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE",
+		"AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN",
+		"AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS",
+		"AGENT_HARBOR_ADMIN_KEY",
+		"AGENT_HARBOR_ADMIN_IDENTITIES",
+		"AGENT_HARBOR_SESSION_SECRET",
+	}
+	env := make(map[string]string, len(keys))
+	for _, key := range keys {
+		env[key] = os.Getenv(key)
+	}
+	return env
+}
+
+func deploymentConfigPreflightFromEnv(env map[string]string) ([]deploymentConfigCheck, error) {
+	mode, err := deploymentModeFromEnv(env)
+	if err != nil {
+		return nil, err
+	}
+	checks := validateDeploymentConfig(mode, env)
+	var blockers []string
+	for _, check := range checks {
+		if check.Severity == "blocking" && check.Status == "failed" {
+			blockers = append(blockers, check.Message)
+		}
+	}
+	if len(blockers) > 0 {
+		return checks, fmt.Errorf("production deployment config failed: %s", strings.Join(blockers, "; "))
+	}
+	return checks, nil
+}
+
+func deploymentModeFromEnv(env map[string]string) (string, error) {
+	raw := strings.TrimSpace(env["AGENT_HARBOR_DEPLOYMENT_MODE"])
+	if raw == "" {
+		return "development", nil
+	}
+	switch raw {
+	case "development", "production":
+		return raw, nil
+	default:
+		return "", fmt.Errorf("AGENT_HARBOR_DEPLOYMENT_MODE must be development or production")
+	}
+}
+
+func validateDeploymentConfig(mode string, env map[string]string) []deploymentConfigCheck {
+	checks := []deploymentConfigCheck{
+		{
+			Code:     "deployment_mode",
+			Severity: "info",
+			Status:   "passed",
+			Message:  "deployment mode is " + mode,
+		},
+	}
+	if mode != "production" {
+		return checks
+	}
+
+	checks = append(checks,
+		productionBlockingCheck(
+			"unauthenticated_admin_disabled",
+			envBoolTrue(env["AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN"]),
+			"AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN must not be true in production",
+			"unauthenticated admin access is disabled",
+		),
+		productionBlockingCheck(
+			"private_upstreams_disabled",
+			envBoolTrue(env["AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS"]),
+			"AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS must not be true in production",
+			"private upstream access is disabled",
+		),
+		productionBlockingCheck(
+			"admin_authentication_configured",
+			strings.TrimSpace(env["AGENT_HARBOR_ADMIN_KEY"]) == "" && strings.TrimSpace(env["AGENT_HARBOR_ADMIN_IDENTITIES"]) == "",
+			"AGENT_HARBOR_ADMIN_KEY or AGENT_HARBOR_ADMIN_IDENTITIES is required in production",
+			"admin authentication is configured",
+		),
+	)
+
+	if strings.TrimSpace(env["AGENT_HARBOR_SESSION_SECRET"]) == "" {
+		checks = append(checks, deploymentConfigCheck{
+			Code:     "session_secret_explicit",
+			Severity: "warning",
+			Status:   "warning",
+			Message:  "AGENT_HARBOR_SESSION_SECRET should be set to a stable high-entropy value in production",
+		})
+	} else {
+		checks = append(checks, deploymentConfigCheck{
+			Code:     "session_secret_explicit",
+			Severity: "warning",
+			Status:   "passed",
+			Message:  "AGENT_HARBOR_SESSION_SECRET is explicitly configured",
+		})
+	}
+	return checks
+}
+
+func envBoolTrue(raw string) bool {
+	parsed, err := strconv.ParseBool(strings.TrimSpace(raw))
+	return err == nil && parsed
+}
+
+func productionBlockingCheck(code string, failed bool, failedMessage string, passedMessage string) deploymentConfigCheck {
+	check := deploymentConfigCheck{
+		Code:     code,
+		Severity: "blocking",
+		Status:   "passed",
+		Message:  passedMessage,
+	}
+	if failed {
+		check.Status = "failed"
+		check.Message = failedMessage
+	}
+	return check
 }
 
 func postgresCredentialKeyFromEnv() ([]byte, error) {

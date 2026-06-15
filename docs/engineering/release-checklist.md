@@ -23,12 +23,17 @@ This covers:
 - `go vet` via `make vet`
 - Go package build via `make build`
 - production safety baseline via `make production-hardening`
+- web console production journey smoke gate via `make web-console-production-journey`
 - frontend unit tests via `make frontend-test`
 - frontend production build via `make frontend-build`
 - scenario script syntax checks via `make scenario-scripts-lint`
 - GitHub YAML configuration parse checks via `make github-config-lint`
 
 The production safety baseline starts a local memory-backed API with `AGENT_HARBOR_ADMIN_KEY` set and private upstreams disabled. It must prove that health remains public, management APIs reject missing or wrong admin keys, management routes fail closed when no admin authentication is configured, permission-package and management MCP endpoints use the same admin-key protection, loopback/private MCP upstreams are rejected by default, and public HTTPS MCP targets remain registrable.
+
+The web console production journey gate starts an isolated local API, the official SDK MCP demo service, and the web console. It must prove the console is served, primary journey routes are reachable, and the production journey, language, and navigation regression tests pass without adding browser automation dependencies.
+
+Web 控制台生产旅程门禁会启动隔离端口的本地 API、官方 SDK MCP 演示服务和 Web 控制台；它必须验证控制台可以访问、主旅程路由可达，并在不新增浏览器自动化依赖的前提下通过生产旅程、语言和导航回归测试。
 
 Run PostgreSQL integration when the change touches persistence, migrations, audit behavior, credential storage, route policies, or CI database wiring:
 

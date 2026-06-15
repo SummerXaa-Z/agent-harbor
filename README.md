@@ -198,13 +198,25 @@ This starts the API with split requester and reviewer admin identities, the offi
 
 该门禁会用分离的申请人与审批人管理身份启动 API、官方 SDK MCP 演示服务和 Web 控制台；它会验证浏览器 CORS 允许 `X-AgentHarbor-Subject-Id`，验证申请人 key 冒充审批人会被拒绝，然后跑完整的需审批权限包场景。
 
+For release-candidate validation of the served web console production journey, run:
+
+```bash
+make web-console-production-journey
+```
+
+This starts an isolated local API, the official SDK MCP demo service, and the web console, then verifies the production journey smoke signals and route-level console tests without adding browser automation dependencies.
+
+如果要验证已启动 Web 控制台上的生产旅程路径，可以运行 `make web-console-production-journey`。它会启动隔离端口的本地 API、官方 SDK MCP 演示服务和 Web 控制台，并在不新增浏览器自动化依赖的前提下验证生产旅程 smoke 信号和路由级控制台测试。
+
 For release-candidate validation of production defaults, run:
 
 ```bash
 make production-hardening
 ```
 
-`make release-check` also includes this safety baseline.
+`make release-check` also includes the production safety baseline and the web console production journey smoke gate.
+
+`make release-check` 同时包含生产安全基线和 Web 控制台生产旅程 smoke gate。
 
 ## Web Console
 

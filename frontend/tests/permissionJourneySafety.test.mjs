@@ -6,6 +6,7 @@ const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url
 const api = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
 const managementHook = readFileSync(new URL("../src/hooks/useManagementOperations.ts", import.meta.url), "utf8");
 const managementMutationRefresh = readFileSync(new URL("../src/managementMutationRefresh.ts", import.meta.url), "utf8");
+const permissionWorkbenchPresenters = readFileSync(new URL("../src/permissionWorkbenchPresenters.ts", import.meta.url), "utf8");
 
 function functionBlock(name, source = app) {
   const start = source.indexOf(`async function ${name}(`);
@@ -205,7 +206,7 @@ test("permission journey mutation handlers require live API before network write
 });
 
 test("permission readiness messages use business field names on the main journey", () => {
-  const block = syncFunctionBlock("permissionReadinessMessages");
+  const block = syncFunctionBlock("permissionReadinessMessages", permissionWorkbenchPresenters);
 
   assert.match(block, /callerInstanceId:\s*t\("form\.caller"\)/);
   assert.match(block, /subjectSelector:\s*t\("form\.accessSubject"\)/);

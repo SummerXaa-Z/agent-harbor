@@ -60,15 +60,8 @@ import {
 import type { ConnectionDiagnosticRow } from "./connectionDiagnostics";
 import {
   capabilityDisplayName,
-  capabilityKeyDisplayName,
-  capabilityDiscoveryStatusLabel,
-  capabilityStatusTone,
-  dataScopeText,
   permissionEntityDisplayName,
   readableIdentifierLabel,
-  riskTone,
-  translatedValue,
-  type Tone,
   type Translator
 } from "./consolePresenters";
 import {
@@ -85,6 +78,10 @@ import {
   healthCheckFailureDetail
 } from "./healthCheckPresentation";
 import {
+  firstBlockingApplyPreflightCheck,
+  permissionApplyPreflightCheckMessage,
+  permissionPolicyReasonMessage,
+  permissionReadinessMessages,
   resourcePermissionIntent
 } from "./permissionWorkbenchPresenters";
 import {
@@ -109,30 +106,23 @@ import {
   type NavKey
 } from "./consoleNavigation";
 import {
-  evaluateCoreJourney,
-  type CoreJourneyEvaluation
+  evaluateCoreJourney
 } from "./coreJourney";
 import {
   createAiAdminApprovalJourneyConfig,
   evaluateAiAdminApprovalJourney,
   summarizeAiAdminGoLiveReadiness,
   type AiAdminApprovalJourneyConfig,
-  type AiAdminApprovalJourneyEvaluation,
   type AiAdminApprovalJourneyResult,
-  type AiAdminApprovalJourneyStep,
-  type AiAdminApprovalJourneyStepStatus
 } from "./aiAdminApprovalJourney";
 import {
   aiAdminApprovalReadinessCanRun,
   aiAdminApprovalReadinessRows,
   defaultAiAdminApprovalReadiness,
-  type AiAdminApprovalReadinessRow,
   type AiAdminApprovalReadinessState,
-  type AiAdminApprovalReadinessStatus
 } from "./aiAdminApprovalReadiness";
 import {
-  buildAiAdminProductionConsoleSummary,
-  type AiAdminProductionConsoleStatus
+  buildAiAdminProductionConsoleSummary
 } from "./aiAdminProductionConsole";
 import {
   mergePermissionApplyResultIntoConsoleData,
@@ -151,11 +141,8 @@ import {
   type PermissionPackageApplyResult,
   type PermissionPackageApplyInput,
   type PermissionPackageApplyPreflight,
-  type PermissionPackageApplyPreflightCheck,
   type PermissionPackageApplication,
   type PermissionPackageApplicationHealth,
-  type PermissionPackageApplicationHealthRow,
-  type PermissionPackageApplicationHealthStatus,
   type PermissionPackageApplicationImpact,
   type PermissionPackageApprovalRequest,
   type PermissionPackageDraft,
@@ -163,8 +150,6 @@ import {
   type PermissionPackageProductionEvidenceReport,
   type PermissionPackageProductionReadiness,
   type PermissionPackageProductionReadinessFilter,
-  type PermissionPackageRemediationAction,
-  type PermissionPackageSimulationRow,
   type PermissionPackageTemplate,
   type PermissionPackageWorkbenchPreview,
   type PermissionPackageWorkbenchStep
@@ -3122,51 +3107,6 @@ function uniquePermissionEntityOptions<T extends { id: string }>(
   return options;
 }
 
-function permissionDraftStatus(draft: PermissionPackageDraft): { labelKey: string; tone: Tone } {
-  if (!draft.readiness.canApply) {
-    return { labelKey: "status.needsReview", tone: "warning" };
-  }
-  if (!draft.policyGate.canApplyDirectly) {
-    return { labelKey: "status.approvalPending", tone: "warning" };
-  }
-  return { labelKey: "status.readyToApply", tone: "success" };
-}
-
-function permissionSimulationReason(row: PermissionPackageSimulationRow, t: Translator) {
-  if (!row.reasonKey) return row.reason;
-  const values = Object.entries(row.reasonValues ?? {}).reduce<Record<string, string>>((acc, [key, value]) => {
-    if (key === "action") {
-      acc[key] = translatedValue(t, value);
-    } else if (key === "packageId") {
-      acc.package = t(`permissionPackage.${value}.name`, value);
-    } else {
-      acc[key] = value;
-    }
-    return acc;
-  }, {});
-  return tx(t, row.reasonKey, values);
-}
-
-function permissionReadinessMessages(readiness: PermissionPackageDraft["readiness"], t: Translator) {
-  const fieldLabels: Record<string, string> = {
-    callerInstanceId: t("form.caller"),
-    subjectSelector: t("form.accessSubject"),
-    targetId: t("form.target"),
-    tenantId: t("form.tenant"),
-    workspaceId: t("form.workspace")
-  };
-  return [
-    ...readiness.missingFields.map((field) =>
-      tx(t, "message.permissionPackageMissingField", { field: fieldLabels[field] ?? field })
-    ),
-    ...readiness.warnings.map((warning) =>
-      warning === "No matching allowed capabilities for the selected target."
-        ? t("message.noMatchingAllowedCapabilities")
-        : warning
-    )
-  ];
-}
-
 function permissionPolicyGateMessages(policyGate: PermissionPackageDraft["policyGate"], t: Translator) {
   if (policyGate.canApplyDirectly) {
     return [t("text.policyGateDirectDetail")];
@@ -3174,107 +3114,6 @@ function permissionPolicyGateMessages(policyGate: PermissionPackageDraft["policy
   return policyGate.reasons.length > 0
     ? policyGate.reasons.map((reason) => permissionPolicyReasonMessage(reason, t))
     : [t("text.policyGateApprovalDetail")];
-}
-
-function permissionPolicyReasonMessage(
-  reason: PermissionPackageDraft["policyGate"]["reasons"][number],
-  t: Translator,
-) {
-  if (!reason.reasonKey) return reason.message;
-  const values = Object.entries(reason.reasonValues ?? {}).reduce<Record<string, string>>((acc, [key, value]) => {
-    if (key === "capability") {
-      acc[key] = capabilityKeyDisplayName(value, t);
-    } else if (key === "action" || key === "risk" || key === "sensitivity") {
-      acc[key] = translatedValue(t, value);
-    } else {
-      acc[key] = value;
-    }
-    return acc;
-  }, {});
-  return tx(t, reason.reasonKey, values);
-}
-
-function firstBlockingApplyPreflightCheck(preflight: PermissionPackageApplyPreflight): PermissionPackageApplyPreflightCheck | null {
-  return preflight.checks.find((check) => check.severity === "blocking") ?? preflight.checks[0] ?? null;
-}
-
-function permissionApplyPreflightCheckLabel(code: string, t: Translator) {
-  return t(`permissionPreflight.${code}`, code.replaceAll("_", " "));
-}
-
-function permissionApplyPreflightCheckMessage(check: PermissionPackageApplyPreflightCheck | null, t: Translator) {
-  if (!check) return t("message.permissionPackagePreflightNoDetail");
-  return t(`permissionPreflight.detail.${check.code}`, check.message || permissionApplyPreflightCheckLabel(check.code, t));
-}
-
-function permissionApplyPreflightNextAction(action: string, t: Translator) {
-  const keyByAction: Record<string, string> = {
-    "Apply this permission package when the reviewer is ready.": "permissionPreflight.next.applyWhenReady",
-    "Apply this permission request when the reviewer is ready.": "permissionPreflight.next.applyWhenReady",
-    "Create and approve a permission package approval request, then preflight again with approvalRequestId.": "permissionPreflight.next.createApproval",
-    "Create and approve an approval request for this permission request, then preflight again with approvalRequestId.": "permissionPreflight.next.createApproval",
-    "Fix draft readiness blockers before applying this permission package.": "permissionPreflight.next.fixDraft",
-    "Fix draft readiness blockers before applying this permission request.": "permissionPreflight.next.fixDraft",
-    "Narrow region or data scopes so the package stays inside every capability boundary.": "permissionPreflight.next.narrowScope",
-    "Refresh approval or create a new approval request for the current draft.": "permissionPreflight.next.refreshApproval",
-    "Review existing grant chains before applying another permission package for the same caller and capability.": "permissionPreflight.next.reviewExistingGrants",
-    "Review existing grant chains before applying another permission request for the same caller and capability.": "permissionPreflight.next.reviewExistingGrants",
-    "Use an approved approvalRequestId that matches the current draft.": "permissionPreflight.next.useApprovedRequest"
-  };
-  return keyByAction[action] ? t(keyByAction[action], action) : action;
-}
-
-function permissionApplyPreflightSeverityLabel(severity: PermissionPackageApplyPreflightCheck["severity"], t: Translator) {
-  if (severity === "blocking") return t("status.preflightBlocking");
-  if (severity === "warning") return t("status.preflightWarning");
-  if (severity === "passed") return t("status.preflightPassed");
-  return t("status.preflightInfo");
-}
-
-function permissionApplyPreflightTone(severity: PermissionPackageApplyPreflightCheck["severity"]): Tone {
-  if (severity === "blocking") return "danger";
-  if (severity === "warning") return "warning";
-  if (severity === "passed") return "success";
-  return "info";
-}
-
-function permissionApplyPreflightSeverityRank(severity: PermissionPackageApplyPreflightCheck["severity"]) {
-  if (severity === "blocking") return 4;
-  if (severity === "warning") return 3;
-  if (severity === "info") return 2;
-  return 1;
-}
-
-function permissionApprovalStatusLabel(status: PermissionPackageApprovalRequest["status"], t: Translator) {
-  if (status === "approved") return t("status.approvalApproved");
-  if (status === "rejected") return t("status.approvalRejected");
-  if (status === "withdrawn") return t("status.approvalWithdrawn");
-  return t("status.approvalPending");
-}
-
-function permissionApprovalStatusTone(status: PermissionPackageApprovalRequest["status"]): Tone {
-  if (status === "approved") return "success";
-  if (status === "rejected") return "danger";
-  if (status === "withdrawn") return "warning";
-  return "warning";
-}
-
-function permissionApplicationHealthLabel(status: PermissionPackageApplicationHealthStatus, t: Translator) {
-  if (status === "ready") return t("status.applicationHealthReady");
-  if (status === "drifted") return t("status.applicationHealthDrifted");
-  return t("status.applicationHealthNeedsReview");
-}
-
-function permissionApplicationHealthTone(status: PermissionPackageApplicationHealthStatus): Tone {
-  if (status === "ready") return "success";
-  if (status === "drifted") return "warning";
-  return "info";
-}
-
-function permissionApplicationHealthRowSummary(row: PermissionPackageApplicationHealthRow, t: Translator) {
-  if (row.status === "ready") return t("text.applicationHealthReadyDetail");
-  if (row.status === "drifted") return t("text.applicationHealthDriftedDetail");
-  return t("text.applicationHealthNeedsReviewDetail");
 }
 
 function productionEvidenceReportFilename(report: PermissionPackageProductionEvidenceReport) {
@@ -3305,67 +3144,6 @@ function downloadJson(value: unknown, filename: string) {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
-}
-
-function permissionPackageApprovalRouteLabel(request: PermissionPackageApprovalRequest) {
-  return `${request.tenantId} / ${request.workspaceId} / ${request.callerInstanceId}`;
-}
-
-function permissionImpactObjectLabel(type: string, t: Translator) {
-  if (type === "tenant_entitlement") return t("text.tenantEntitlement");
-  if (type === "workspace_assignment") return t("text.workspaceAssignment");
-  if (type === "instance_assignment") return t("text.instanceAssignment");
-  return type.replaceAll("_", " ");
-}
-
-function permissionRemediationTargetLabel(type: string, t: Translator) {
-  if (type === "capability") return t("text.capability");
-  if (type === "access_decision") return t("text.finalAccessVerification");
-  return permissionImpactObjectLabel(type, t);
-}
-
-function permissionRemediationActionTone(action: PermissionPackageRemediationAction["action"]): Tone {
-  if (action === "disable") return "warning";
-  if (action === "investigate") return "danger";
-  if (action === "verify") return "info";
-  return "neutral";
-}
-
-function permissionRollbackStepLabel(step: string, t: Translator) {
-  switch (step) {
-    case "Review capability discovery status manually; shared capabilities are not automatically downgraded by rollback.":
-      return t("rollbackStep.capabilityManualReview");
-    case "Disable recorded instance assignments before workspace assignments.":
-      return t("rollbackStep.disableInstanceAssignments");
-    case "Disable recorded workspace assignments before tenant entitlements.":
-      return t("rollbackStep.disableWorkspaceAssignments");
-    case "Disable recorded tenant entitlements and then verify effective access decisions.":
-      return t("rollbackStep.disableTenantEntitlements");
-    default:
-      return step;
-  }
-}
-
-function permissionImpactBlockerLabels(blockerCodes: string[], blockers: string[], t: Translator) {
-  if (blockerCodes.length > 0) {
-    return blockerCodes.map((code) => t(`blocker.${code}`, code));
-  }
-  return blockers;
-}
-
-function permissionImpactStatusLabel(status: string, t: Translator) {
-  if (status === "approved") return t("status.capabilityApproved");
-  if (status === "deprecated") return t("status.capabilityDeprecated");
-  if (status === "pending_review") return t("status.capabilityPendingReview");
-  if (status === "removed") return t("status.capabilityRemoved");
-  return translatedValue(t, status);
-}
-
-function permissionImpactStatusTone(status: string): Tone {
-  if (status === "enabled" || status === "approved") return "success";
-  if (status === "missing" || status === "removed") return "danger";
-  if (status === "disabled" || status === "deprecated" || status === "pending_review") return "warning";
-  return "neutral";
 }
 
 function mergePermissionPackageApprovalRequests(
@@ -3435,84 +3213,6 @@ function shallowEqualAiAdminForm(
     left.tenantId === right.tenantId &&
     left.workspaceId === right.workspaceId
   );
-}
-
-function aiAdminApprovalJourneyStatusTone(status: AiAdminApprovalJourneyStepStatus): Tone {
-  if (status === "complete") return "success";
-  if (status === "partial") return "warning";
-  return "neutral";
-}
-
-function aiAdminApprovalJourneyStatusLabel(status: AiAdminApprovalJourneyStepStatus, t: Translator) {
-  if (status === "complete") return t("status.stepComplete");
-  if (status === "partial") return t("status.stepPartial");
-  return t("status.stepMissing");
-}
-
-function productionConsoleStatusTone(status: AiAdminProductionConsoleStatus): Tone {
-  if (status === "ready") return "success";
-  if (status === "needs_review") return "warning";
-  if (status === "blocked") return "danger";
-  return "neutral";
-}
-
-function permissionWorkbenchActionKey(code: string | undefined, fallback: string) {
-  switch (code) {
-    case "complete_request":
-      return "action.completePermissionRequest";
-    case "create_approval_request":
-      return "action.createApprovalRequest";
-    case "review_approval_request":
-      return "action.reviewApprovalRequest";
-    case "apply_permission_package":
-      return "action.applyPermissionPackage";
-    case "run_runtime_validation":
-      return "action.runApprovalJourney";
-    case "export_production_evidence":
-      return "action.exportProductionEvidence";
-    default:
-      return fallback;
-  }
-}
-
-function permissionWorkbenchStatusLabelKey(status: string | undefined) {
-  if (!status) return "permissionWorkbench.status.pending";
-  return `permissionWorkbench.status.${status}`;
-}
-
-function permissionWorkbenchStatusDetailKey(status: string | undefined) {
-  if (!status) return "permissionWorkbench.statusDetail.pending";
-  return `permissionWorkbench.statusDetail.${status}`;
-}
-
-function permissionWorkbenchStatusTone(status: string | undefined, fallback: AiAdminProductionConsoleStatus): Tone {
-  if (status === "production_ready") return "success";
-  if (status === "blocked") return "danger";
-  if (status === "ready_to_apply" || status === "validating" || status === "awaiting_approval") return "warning";
-  if (status === "needs_input") return "neutral";
-  return productionConsoleStatusTone(fallback);
-}
-
-function permissionWorkbenchStepLabelKey(key: string) {
-  return `permissionWorkbench.step.${key}`;
-}
-
-function permissionWorkbenchStepDetailKey(detailCode: string) {
-  return `permissionWorkbench.detail.${detailCode}`;
-}
-
-function aiAdminApprovalReadinessStatusTone(status: AiAdminApprovalReadinessStatus): Tone {
-  if (status === "ok") return "success";
-  if (status === "warning") return "warning";
-  if (status === "error") return "danger";
-  return "neutral";
-}
-
-function aiAdminApprovalReadinessStatusLabel(status: AiAdminApprovalReadinessStatus, t: Translator) {
-  if (status === "ok") return t("status.preflightOk");
-  if (status === "warning") return t("status.preflightWarning");
-  if (status === "error") return t("status.preflightError");
-  return t("status.preflightPending");
 }
 
 function mcpToolsListPayload() {

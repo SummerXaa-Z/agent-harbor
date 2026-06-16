@@ -5,6 +5,8 @@ import { capabilityKeyDisplayName } from "./consolePresenters";
 import { createTranslator } from "./i18n";
 import type { PermissionRequestWizardStep } from "./permissionRequestJourney";
 import type {
+  PermissionPackageApplyPreflight,
+  PermissionPackageApplyPreflightCheck,
   PermissionPackageApplicationHealthRow,
   PermissionPackageApplicationHealthStatus,
   PermissionPackageApprovalRequest,
@@ -33,6 +35,19 @@ export function tx(t: Translator, key: string, values: Record<string, string | n
     (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
     t(key)
   );
+}
+
+function txKnown(t: Translator, key: string, values: Record<string, string | number>, fallbackKey: string) {
+  const template = t(key);
+  return Object.entries(values).reduce(
+    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
+    template === key ? t(fallbackKey) : template
+  );
+}
+
+function knownLabel(t: Translator, key: string, fallbackKey: string) {
+  const value = t(key);
+  return value === key ? t(fallbackKey) : value;
 }
 
 export function resourcePermissionIntent(targetName: string, t: Translator) {
@@ -329,7 +344,7 @@ export function permissionPolicyReasonMessage(
   reason: PermissionPackageDraft["policyGate"]["reasons"][number],
   t: Translator,
 ) {
-  if (!reason.reasonKey) return reason.message;
+  if (!reason.reasonKey) return t("permissionPolicy.unknownReason");
   const values = Object.entries(reason.reasonValues ?? {}).reduce<Record<string, string>>((acc, [key, value]) => {
     if (key === "capability") {
       acc[key] = capabilityKeyDisplayName(value, t);
@@ -340,7 +355,27 @@ export function permissionPolicyReasonMessage(
     }
     return acc;
   }, {});
-  return tx(t, reason.reasonKey, values);
+  return txKnown(t, reason.reasonKey, values, "permissionPolicy.unknownReason");
+}
+
+export function permissionReadinessMessages(readiness: PermissionPackageDraft["readiness"], t: Translator) {
+  const fieldLabels: Record<string, string> = {
+    callerInstanceId: t("form.caller"),
+    subjectSelector: t("form.accessSubject"),
+    targetId: t("form.target"),
+    tenantId: t("form.tenant"),
+    workspaceId: t("form.workspace")
+  };
+  return [
+    ...readiness.missingFields.map((field) =>
+      tx(t, "message.permissionPackageMissingField", { field: fieldLabels[field] ?? t("form.requiredFieldFallback") })
+    ),
+    ...readiness.warnings.map((warning) =>
+      warning === "No matching allowed capabilities for the selected target."
+        ? t("message.noMatchingAllowedCapabilities")
+        : t("message.permissionPackageReadinessWarning")
+    )
+  ];
 }
 
 export function translatedValue(t: Translator, value: string) {
@@ -409,11 +444,41 @@ export function productionReadinessStatusLabel(status: PermissionPackageProducti
 }
 
 export function permissionProductionReadinessCheckLabel(code: string, t: Translator) {
-  return t(`productionCheck.${code}`, code.replaceAll("_", " "));
+  return knownLabel(t, `productionCheck.${code}`, "productionCheck.unknown");
 }
 
 export function permissionProductionReadinessCheckMessage(check: PermissionPackageProductionReadinessCheck, t: Translator) {
-  return t(`productionCheck.detail.${check.code}`, check.message);
+  return knownLabel(t, `productionCheck.detail.${check.code}`, "productionCheck.detail.unknown");
+}
+
+export function firstBlockingApplyPreflightCheck(preflight: PermissionPackageApplyPreflight): PermissionPackageApplyPreflightCheck | null {
+  return preflight.checks.find((check) => check.severity === "blocking") ?? preflight.checks[0] ?? null;
+}
+
+export function permissionApplyPreflightCheckLabel(code: string, t: Translator) {
+  return knownLabel(t, `permissionPreflight.${code}`, "permissionPreflight.unknown");
+}
+
+export function permissionApplyPreflightCheckMessage(check: PermissionPackageApplyPreflightCheck | null, t: Translator) {
+  if (!check) return t("message.permissionPackagePreflightNoDetail");
+  return knownLabel(t, `permissionPreflight.detail.${check.code}`, "permissionPreflight.detail.unknown");
+}
+
+export function permissionApplyPreflightNextAction(action: string, t: Translator) {
+  const keyByAction: Record<string, string> = {
+    "Apply this permission package when the reviewer is ready.": "permissionPreflight.next.applyWhenReady",
+    "Apply this permission request when the reviewer is ready.": "permissionPreflight.next.applyWhenReady",
+    "Create and approve a permission package approval request, then preflight again with approvalRequestId.": "permissionPreflight.next.createApproval",
+    "Create and approve an approval request for this permission request, then preflight again with approvalRequestId.": "permissionPreflight.next.createApproval",
+    "Fix draft readiness blockers before applying this permission package.": "permissionPreflight.next.fixDraft",
+    "Fix draft readiness blockers before applying this permission request.": "permissionPreflight.next.fixDraft",
+    "Narrow region or data scopes so the package stays inside every capability boundary.": "permissionPreflight.next.narrowScope",
+    "Refresh approval or create a new approval request for the current draft.": "permissionPreflight.next.refreshApproval",
+    "Review existing grant chains before applying another permission package for the same caller and capability.": "permissionPreflight.next.reviewExistingGrants",
+    "Review existing grant chains before applying another permission request for the same caller and capability.": "permissionPreflight.next.reviewExistingGrants",
+    "Use an approved approvalRequestId that matches the current draft.": "permissionPreflight.next.useApprovedRequest"
+  };
+  return keyByAction[action] ? t(keyByAction[action]) : t("permissionPreflight.next.unknown");
 }
 
 export function permissionPackageApprovalRouteLabel(request: PermissionPackageApprovalRequest) {

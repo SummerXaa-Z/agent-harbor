@@ -1185,7 +1185,7 @@ pnpm --dir frontend test
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit frontend**
+- [x] **Step 10: Commit frontend**
 
 ```bash
 git add frontend/src frontend/tests
@@ -1203,7 +1203,7 @@ git commit -m "feat: add admin boundary management workspace"
 - Modify: `README.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] **Step 1: Create scenario script**
+- [x] **Step 1: Create scenario script**
 
 Create `scripts/scenario-admin-access-management.sh` with the same shell conventions used by existing scenario scripts: `set -euo pipefail`, `BASE_URL`, `RUN_ID`, `cleanup`, `wait_http`, `request`, `expect_status`, and Python JSON assertions. Do not source another scenario script; keep this scenario self-contained so `bash -n` and `make scenario-admin-access-management` can validate it independently.
 
@@ -1219,7 +1219,7 @@ The scenario must:
 8. Query `/api/v1/audit/events?resourceType=admin_identity` and assert three lifecycle actions.
 9. Assert returned list and audit JSON do not contain generated plaintext keys.
 
-- [ ] **Step 2: Add Makefile target**
+- [x] **Step 2: Add Makefile target**
 
 Add to `SCENARIO_SCRIPTS`:
 
@@ -1240,11 +1240,11 @@ Add to `release-check` after `scenario-admin-tenant-boundary`:
 scenario-admin-access-management
 ```
 
-- [ ] **Step 3: Update makefile target test**
+- [x] **Step 3: Update makefile target test**
 
 In `tests/makefile_targets_test.sh`, add the target to the expected release gate list.
 
-- [ ] **Step 4: Update README**
+- [x] **Step 4: Update README**
 
 Document:
 
@@ -1254,7 +1254,7 @@ Document:
 - Tenant admins cannot manage administrators.
 - Recovery path: keep at least one bootstrap platform administrator configured for production break-glass.
 
-- [ ] **Step 5: Update CHANGELOG**
+- [x] **Step 5: Update CHANGELOG**
 
 Add bilingual entries:
 
@@ -1263,7 +1263,7 @@ Add bilingual entries:
 - 控制台新增“管理员与边界”，平台管理员可以在产品内创建范围化管理员、轮换一次性密钥、禁用身份并审计生命周期变更，不再依赖修改部署配置完成日常管理。
 ```
 
-- [ ] **Step 6: Run focused gates**
+- [x] **Step 6: Run focused gates**
 
 ```bash
 bash tests/makefile_targets_test.sh
@@ -1273,7 +1273,7 @@ make scenario-admin-access-management
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit docs and scenario**
+- [x] **Step 7: Commit docs and scenario**
 
 ```bash
 git add scripts/scenario-admin-access-management.sh Makefile tests/makefile_targets_test.sh README.md CHANGELOG.md

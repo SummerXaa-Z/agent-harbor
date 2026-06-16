@@ -60,6 +60,14 @@ The data plane uses short-lived Agent Keys. Management APIs require configured a
 
 数据面使用短期 Agent Key。管理 API 默认要求配置管理员认证：可以使用 `AGENT_HARBOR_ADMIN_KEY` 作为共享本地管理员密钥，也可以使用 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置具名管理员和审批人。具名身份也可以绑定角色、租户和工作区边界，例如 `AGENT_HARBOR_ADMIN_IDENTITIES="platform=platform-key|role=platform_admin;east=east-key|role=tenant_admin|tenant=tenant-east|workspace=ws-support"`。租户管理员只能在被授权的租户子树和工作区内读取或变更 REST 管理 API、权限包操作和管理 MCP 端点。Web 控制台通过 `/api/v1/auth/login` 登录，并把管理员密钥换成 HttpOnly `agent_harbor_session` Cookie；直接 `X-Admin-Key` 仍保留给 API 客户端和本地高级覆盖。部署式环境应设置 `AGENT_HARBOR_SESSION_SECRET`，确保控制台会话使用稳定密钥签名。`AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true` 仅用于开发，不得用于生产部署。
 
+### Administrator Identity Management
+
+Bootstrap administrator identities from `AGENT_HARBOR_ADMIN_KEY` and `AGENT_HARBOR_ADMIN_IDENTITIES` are read-only in the product and should be kept as production break-glass access. Day-to-day administrators should be managed in the web console under **Administrators & Boundaries**: platform administrators can create managed identities, scope them to a role, tenant, and workspace, rotate their keys, disable them, and review lifecycle audit records. Managed administrator keys are shown once on create or rotate and are never returned by list or audit APIs. Tenant administrators cannot manage administrator identities; they can only operate inside their assigned tenant/workspace boundary. For production recovery, keep at least one bootstrap platform administrator configured outside the product.
+
+### 管理员身份管理
+
+通过 `AGENT_HARBOR_ADMIN_KEY` 和 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置的引导管理员在产品内是只读身份，应保留为生产 break-glass 入口。日常管理员建议在 Web 控制台的 **管理员与边界** 中管理：平台管理员可以创建托管身份，按角色、租户和工作区设定范围，轮换密钥，禁用身份，并查看生命周期审计记录。托管管理员密钥只会在创建或轮换时展示一次，列表和审计 API 不会再次返回明文。租户管理员不能管理管理员身份，只能在被分配的租户/工作区边界内操作。生产恢复路径上，应至少保留一个产品外配置的引导平台管理员。
+
 ## Quick Start
 
 Use the repository toolchain pins before running local commands:

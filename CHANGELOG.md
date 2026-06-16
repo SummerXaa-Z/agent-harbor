@@ -14,6 +14,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 全局连接菜单现在提供生产诊断操作，可在继续权限旅程前检查控制台会话、API 兼容性、实时数据源和 MCP 工具服务可用性。
 - The web console production journey smoke gate now verifies the connection diagnostics source contract and system-info auth metadata against the running local stack.
 - Web 控制台生产旅程 smoke gate 现在会在运行中的本地栈上验证连接诊断源码合约和系统信息认证元数据。
+- The Go-Live Check workspace now uses a dedicated production acceptance model to show one ready/blocked decision, blocking items, connection status, runtime validation, and handoff readiness before supporting history tables.
+- 上线检查工作区现在使用独立的上线判断模型，在历史记录表之前先展示一个可上线/已阻断判断、阻断项、连接状态、运行验证和交接状态。
 - Permission Changes now returns a stable consumed-approval error code and the console shows recovery guidance with a best-effort status refresh when an already-used approval is retried.
 - 权限变更现在会在重复使用已消费审批时返回稳定错误码，控制台会展示恢复指引并尽力刷新当前状态，避免管理员误以为需要重复提交。
 - Production deployment mode now runs a configuration preflight that blocks development-only admin bypass and private-upstream flags before startup.

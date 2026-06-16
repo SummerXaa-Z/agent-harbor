@@ -147,11 +147,15 @@ if data.get("authRequired") is not True:
 PY
 
 production_journey_source="$(curl -fsS "$FRONTEND_ORIGIN/src/productionJourney.ts")"
+production_acceptance_source="$(curl -fsS "$FRONTEND_ORIGIN/src/productionAcceptance.ts")"
 checkpoint_source="$(curl -fsS "$FRONTEND_ORIGIN/src/components/ProductionJourneyCheckpoint.tsx")"
+go_live_acceptance_source="$(curl -fsS "$FRONTEND_ORIGIN/src/components/GoLiveAcceptanceOverview.tsx")"
 connection_diagnostics_source="$(curl -fsS "$FRONTEND_ORIGIN/src/connectionDiagnostics.ts")"
 console_controller_source="$(curl -fsS "$FRONTEND_ORIGIN/src/ConsoleController.tsx")"
 assert_contains "production journey model" "productionJourneyStages" "$production_journey_source"
+assert_contains "production acceptance model" "buildProductionAcceptanceCenter" "$production_acceptance_source"
 assert_contains "production journey checkpoint" "production-journey-checkpoint" "$checkpoint_source"
+assert_contains "go-live acceptance model wiring" "buildProductionAcceptanceCenter" "$go_live_acceptance_source"
 assert_contains "connection diagnostics model" "buildConnectionDiagnosticRows" "$connection_diagnostics_source"
 assert_contains "connection diagnostics UI action" "connection-diagnostics-action" "$console_controller_source"
 assert_contains "connection diagnostics UI list" "connection-diagnostics-list" "$console_controller_source"
@@ -163,6 +167,7 @@ done
 
 pnpm --dir frontend exec node --test \
   tests/connectionDiagnostics.test.mjs \
+  tests/productionAcceptance.test.mjs \
   tests/productionJourney.test.mjs \
   tests/productionLanguage.test.mjs \
   tests/consoleNavigation.test.mjs

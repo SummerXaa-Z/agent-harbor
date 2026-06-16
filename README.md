@@ -120,7 +120,7 @@ The scenario starts the dependency-free mock MCP server automatically and points
 
 First-time users start on **Getting Started**, a six-step setup checklist that explains the chain from tenant to Agent, capability, grant, runtime records, and go-live status. Once the first four setup steps are complete, the console opens directly on **Permission Changes** for daily operations.
 
-首次打开控制台时，如果系统尚未完成配置，会先进入 **开始使用**：一个六步检查清单，说明从租户、Agent、能力、授权、运行记录到上线验收的链路。前四步完成后，控制台会默认进入日常操作的 **权限变更**。
+首次打开控制台时，如果系统尚未完成配置，会先进入 **开始使用**：一个六步检查清单，说明从租户、Agent、能力、授权、运行记录到上线检查的链路。前四步完成后，控制台会默认进入日常操作的 **权限变更**。
 
 ### What this validates
 
@@ -144,9 +144,9 @@ The UI is intentionally task-first. It asks who needs access, which permission p
 3. 基于 **客服工单处理包** 权限包模板发起变更。
 4. 创建、撤回、重新创建并批准匹配的审批请求。
 5. 执行只读应用前预检，携带 `approvalRequestId` 应用权限，并验证允许/拒绝 MCP 调用。
-6. 复核访问画像、落地状态、影响范围、追踪、审计、状态检查记录和上线验收报告。
+6. 复核访问画像、落地状态、影响范围、追踪、审计、状态检查记录和上线状态报告。
 
-界面默认服务一个任务: 谁需要访问、使用哪个权限包模板、是否需要审批、下一步做什么。技术 ID 和主体选择器收进 **技术覆盖**，上线验收收进 **验收明细**。状态检查和验收报告返回稳定的 `nextActionCode`，便于 UI 和管理 Agent 本地化下一步动作。
+界面默认服务一个任务: 谁需要访问、使用哪个权限包模板、是否需要审批、下一步做什么。技术 ID 和主体选择器收进 **技术覆盖**，上线检查收进 **验收明细**。状态检查和状态报告返回稳定的 `nextActionCode`，便于 UI 和管理 Agent 本地化下一步动作。
 
 ### Run it locally
 
@@ -167,7 +167,7 @@ make demo
 2. 打开 `http://127.0.0.1:5174/`。全新系统会进入 **开始使用**，已配置系统会进入 **访问查询**，先回答调用方为什么能或不能访问，再决定是否发起变更。
 3. 在 **访问查询** 中用 **发起权限修复** 把拒绝判定带入 **权限变更**，也可以直接打开 **权限变更** 执行运行验证。
 4. 确认 **Status Check / 状态检查** 达到可上线，并确认 **Application Health / 落地状态** 出现正常应用行。
-5. 导出上线验收 JSON。
+5. 导出上线状态 JSON。
 6. 需要复核影响或演练漂移时，再打开 **Review impact / 查看影响** 或 **Rehearse drift / 演练漂移**。
 
 Use the CLI scenario when you want the same path as a scriptable regression check:
@@ -204,9 +204,9 @@ For release-candidate validation of the served web console production journey, r
 make web-console-production-journey
 ```
 
-This starts an isolated local API, the official SDK MCP demo service, and the web console, then verifies the production journey smoke signals, connection diagnostics contract, system-info auth metadata, and route-level console tests without adding browser automation dependencies.
+This starts an isolated local API, the official SDK MCP demo service, and the web console, then verifies the production journey smoke signals, go-live check center contract, connection diagnostics contract, system-info auth metadata, and route-level console tests without adding browser automation dependencies.
 
-如果要验证已启动 Web 控制台上的生产旅程路径，可以运行 `make web-console-production-journey`。它会启动隔离端口的本地 API、官方 SDK MCP 演示服务和 Web 控制台，并在不新增浏览器自动化依赖的前提下验证生产旅程 smoke 信号、连接诊断合约、系统信息认证元数据和路由级控制台测试。
+如果要验证已启动 Web 控制台上的生产旅程路径，可以运行 `make web-console-production-journey`。它会启动隔离端口的本地 API、官方 SDK MCP 演示服务和 Web 控制台，并在不新增浏览器自动化依赖的前提下验证生产旅程 smoke 信号、上线检查中心合约、连接诊断合约、系统信息认证元数据和路由级控制台测试。
 
 For release-candidate validation of production defaults, run:
 
@@ -226,9 +226,9 @@ For the first browser evaluation, run:
 make demo
 ```
 
-Then open `http://127.0.0.1:5174/`. If the live system is empty, the web console opens on **Getting Started** and shows the setup chain before any permission-change work. After tenant, Agent, capability, and grant-chain setup is complete, the same URL opens on **Access Query**: operators first ask whether a caller can access a target capability, review the decision chain, and then use **Start permission fix** to prefill **Permission Changes** without copying technical IDs. **Permission Changes** remains the production approval and readiness workspace for the approval-required **Support ticket triage** path. Each validation run uses fresh `ui-approval-*` identifiers, applies permissions through live APIs, sends runtime MCP calls with `X-AgentHarbor-Subject-Id`, and surfaces the application record, application impact review, tenant access profile, traces, applied audit event, go-live readiness, and bounded acceptance export in the console.
+Then open `http://127.0.0.1:5174/`. If the live system is empty, the web console opens on **Getting Started** and shows the setup chain before any permission-change work. After tenant, Agent, capability, and grant-chain setup is complete, the same URL opens on **Access Query**: operators first ask whether a caller can access a target capability, review the decision chain, and then use **Start permission fix** to prefill **Permission Changes** without copying technical IDs. **Permission Changes** remains the production approval and readiness workspace for the approval-required **Support ticket triage** path. The **Go-Live Check** workspace turns connection diagnostics, the current permission change, runtime validation, and handoff status into one ready/blocked decision with explicit next actions. Each validation run uses fresh `ui-approval-*` identifiers, applies permissions through live APIs, sends runtime MCP calls with `X-AgentHarbor-Subject-Id`, and surfaces the application record, application impact review, tenant access profile, traces, applied audit event, go-live readiness, and bounded acceptance export in the console.
 
-打开 `http://127.0.0.1:5174/` 后，如果实时系统为空，Web 控制台会进入 **开始使用** 并先展示配置链路；当租户、Agent、能力和授权链完成后，同一个地址会进入 **访问查询**。管理员先查询某个调用方能否访问目标能力，查看判定链路，再通过 **发起权限修复** 把上下文预填到 **权限变更**，不需要复制技术 ID。**权限变更** 仍然负责审批、应用、状态检查和上线验收。
+打开 `http://127.0.0.1:5174/` 后，如果实时系统为空，Web 控制台会进入 **开始使用** 并先展示配置链路；当租户、Agent、能力和授权链完成后，同一个地址会进入 **访问查询**。管理员先查询某个调用方能否访问目标能力，查看判定链路，再通过 **发起权限修复** 把上下文预填到 **权限变更**，不需要复制技术 ID。**权限变更** 仍然负责审批、应用和状态检查；**上线检查** 会把连接诊断、当前权限变更、运行验证和交接状态收束成一个可上线/已阻断判断，并给出明确下一步。
 
 The global **Connection Settings** popover includes **Run diagnostics** for the production path: it checks the browser session, API compatibility contract, live data source, and MCP tool-service health in one compact panel. The Permission Changes console also shows runtime checks for the API, MCP tool service, browser subject-header CORS, local private-upstream mode, and current data source before validation runs. Use the **Self-Check** workspace when you need the lower-level core permission loop check; it verifies API and MCP tool service readiness before enabling the run button and keeps **Reset session** non-destructive.
 
@@ -285,7 +285,7 @@ The console also includes a **Permission Changes** workspace for the v0.2.0 perm
 
 AgentHarbor also exposes the same workflow as a management MCP endpoint at `POST /api/v1/management/mcp`. Admin agents can call `tools/list` and then use tools such as `draft_permission_package`, `preflight_permission_package`, `check_permission_package_production_readiness`, `export_permission_package_production_evidence`, `create_permission_package_approval_request`, `list_permission_package_approval_requests`, `approve_permission_package_approval_request`, `reject_permission_package_approval_request`, `withdraw_permission_package_approval_request`, `apply_permission_package`, `list_permission_package_applications`, `explain_permission_package_draft`, `explain_access_decision`, `get_tenant_access_profile`, `list_agents`, and `list_capabilities`. REST also exposes `POST /api/v1/permission-packages:preflight` for read-only apply preflight, `GET /api/v1/permission-packages/production-readiness?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&subjectId=` for the read-only production gate, `GET /api/v1/permission-packages/production-readiness/report?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&subjectId=` for the bounded production acceptance report, `GET /api/v1/permission-packages/applications/health?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&limit=` for read-only application health, and `GET /api/v1/permission-packages/applications/{id}/impact?tenantId=&workspaceId=` for read-only application impact review and remediation planning, plus `rehearsal=grant_drift` for response-only drift rehearsal. `list_permission_package_approval_requests` accepts an optional `reviewer` field so an admin agent can fetch only the requests that reviewer is allowed to handle; approve and reject validate the same reviewer route before status changes, while withdraw is limited to the original pending requester. This endpoint requires `X-Admin-Key` unless the API is explicitly started with `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true` for local development.
 
-AgentHarbor 也通过 `POST /api/v1/management/mcp` 暴露同一套管理工作流。管理 Agent 可以使用 `preflight_permission_package` 在应用前执行只读预检，使用 `check_permission_package_production_readiness` 获取上线就绪状态，也可以使用 `export_permission_package_production_evidence` 生成有边界的上线验收报告。REST 端点 `POST /api/v1/permission-packages:preflight` 用于只读应用前预检；`GET /api/v1/permission-packages/production-readiness?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&subjectId=` 用于只读上线就绪门禁；`GET /api/v1/permission-packages/production-readiness/report?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&subjectId=` 用于有边界的上线验收报告；`GET /api/v1/permission-packages/applications/health?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&limit=` 用于只读落地状态巡检；`GET /api/v1/permission-packages/applications/{id}/impact?tenantId=&workspaceId=` 用于只读影响复核和处置规划，也支持 `rehearsal=grant_drift` 做仅影响响应的漂移演练。除非本地开发显式设置 `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true`，否则这些端点与其他管理 API 一样需要 `X-Admin-Key`。
+AgentHarbor 也通过 `POST /api/v1/management/mcp` 暴露同一套管理工作流。管理 Agent 可以使用 `preflight_permission_package` 在应用前执行只读预检，使用 `check_permission_package_production_readiness` 获取上线就绪状态，也可以使用 `export_permission_package_production_evidence` 生成有边界的上线状态报告。REST 端点 `POST /api/v1/permission-packages:preflight` 用于只读应用前预检；`GET /api/v1/permission-packages/production-readiness?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&subjectId=` 用于只读上线就绪门禁；`GET /api/v1/permission-packages/production-readiness/report?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&subjectId=` 用于有边界的上线状态报告；`GET /api/v1/permission-packages/applications/health?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&limit=` 用于只读落地状态巡检；`GET /api/v1/permission-packages/applications/{id}/impact?tenantId=&workspaceId=` 用于只读影响复核和处置规划，也支持 `rehearsal=grant_drift` 做仅影响响应的漂移演练。除非本地开发显式设置 `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true`，否则这些端点与其他管理 API 一样需要 `X-Admin-Key`。
 
 ## Runtime Configuration
 

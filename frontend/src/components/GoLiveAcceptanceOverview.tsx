@@ -10,7 +10,13 @@ import {
   type Tone,
   type Translator
 } from "../consolePresenters";
-import type { AiAdminProductionConsoleStatus, AiAdminProductionConsoleSummary } from "../aiAdminProductionConsole";
+import type { AiAdminProductionConsoleSummary } from "../aiAdminProductionConsole";
+import type { ConnectionDiagnosticStatus } from "../connectionDiagnostics";
+import {
+  buildProductionAcceptanceCenter,
+  type ProductionAcceptanceAction,
+  type ProductionAcceptanceStatus
+} from "../productionAcceptance";
 import type {
   PermissionPackageDraft,
   PermissionPackageDraftInput,
@@ -28,11 +34,14 @@ const defaultWorkspaceId = "workspace-sandbox";
 
 export function GoLiveAcceptanceOverview({
   agents,
+  connectionDiagnosticsChecking,
+  connectionStatus,
   draft,
   form,
   liveDataAvailable,
   onExportProductionEvidence,
   onOpenPermissionChange,
+  onRunConnectionDiagnostics,
   onRefreshProductionReadiness,
   productionEvidenceExporting,
   productionReadiness,
@@ -44,11 +53,14 @@ export function GoLiveAcceptanceOverview({
   t
 }: {
   agents: Agent[];
+  connectionDiagnosticsChecking: boolean;
+  connectionStatus: ConnectionDiagnosticStatus | null;
   draft: PermissionPackageDraft | null;
   form: PermissionPackageDraftInput;
   liveDataAvailable: boolean;
   onExportProductionEvidence: () => void;
   onOpenPermissionChange: () => void;
+  onRunConnectionDiagnostics: () => void;
   onRefreshProductionReadiness: () => void;
   productionEvidenceExporting: boolean;
   productionReadiness: PermissionPackageProductionReadiness | null;
@@ -79,29 +91,44 @@ export function GoLiveAcceptanceOverview({
     : acceptanceInput.targetId
       ? t("text.selectedTargetFallback")
       : t("text.targetPendingSelection");
-  const readinessStatusLabel = productionReadinessStatusLabel(productionReadiness?.status, t);
-  const statusLabel = productionReadiness ? readinessStatusLabel : productionConsoleStatusLabel(productionSummary, t);
-  const statusTone = productionReadiness
-    ? productionReadinessStatusTone(productionReadiness.status)
-    : productionConsoleStatusTone(productionSummary.status);
-  const nextAction = productionReadiness?.nextActions[0]
+  const acceptanceCenter = buildProductionAcceptanceCenter({
+    connectionStatus,
+    liveDataAvailable,
+    productionReadiness,
+    productionSummary
+  });
+  const statusLabel = t(`productionAcceptance.status.${acceptanceCenter.status}`);
+  const statusTone = productionAcceptanceStatusTone(acceptanceCenter.status);
+  const nextAction = acceptanceCenter.blockers[0]
+    ? t(acceptanceCenter.blockers[0].labelKey, acceptanceCenter.blockers[0].detail)
+    : productionReadiness?.nextActions[0]
     ? permissionProductionReadinessNextAction(productionReadiness.nextActions[0], t)
     : productionReadiness?.status === "ready"
       ? t("text.productionReadinessReadyDetail")
       : productionReadiness
         ? t("text.productionReadinessPendingDetail")
         : t("text.goLiveAcceptanceNoReadinessDetail");
-  const readyCount = productionReadiness?.summary.readyCount
-    ?? productionSummary.steps.filter((step) => step.status === "ready").length;
-  const totalCount = productionReadiness?.checks.length ?? productionSummary.steps.length;
-  const blockerCount = productionReadiness?.summary.blockingCount
-    ?? productionSummary.steps.filter((step) => step.status === "blocked").length;
-  const warningCount = productionReadiness?.summary.warningCount
-    ?? productionSummary.steps.filter((step) => step.status === "needs_review" || step.status === "pending").length;
-  const acceptanceReady = productionReadiness?.status === "ready";
+  const readyCount = acceptanceCenter.readyCount;
+  const totalCount = acceptanceCenter.totalCount;
+  const blockerCount = acceptanceCenter.blockingCount;
+  const warningCount = acceptanceCenter.checkRows.filter((row) => row.status === "attention").length;
+  const acceptanceReady = acceptanceCenter.status === "ready";
   const statusMessage = productionReadinessMessage === t("message.permissionProductionReadinessLoaded")
     ? ""
     : productionReadinessMessage;
+  const primaryAction = renderProductionAcceptanceAction({
+    action: acceptanceCenter.primaryAction,
+    connectionDiagnosticsChecking,
+    liveDataAvailable,
+    onExportProductionEvidence,
+    onOpenPermissionChange,
+    onRefreshProductionReadiness,
+    onRunConnectionDiagnostics,
+    productionEvidenceExporting,
+    productionReadiness,
+    productionReadinessLoading,
+    t
+  });
 
   return (
     <div className="go-live-acceptance">
@@ -109,43 +136,50 @@ export function GoLiveAcceptanceOverview({
         <div className="go-live-acceptance-decision">
           <div className="go-live-acceptance-copy">
             <div className="go-live-acceptance-heading">
-              <span>{t("text.goLiveAcceptanceTaskTitle")}</span>
+              <span>{t("productionAcceptance.title")}</span>
               <Badge tone={statusTone}>{statusLabel}</Badge>
             </div>
+            <strong className="go-live-acceptance-headline">{t(acceptanceCenter.headlineKey)}</strong>
             <p>{nextAction}</p>
             {!liveDataAvailable ? <p className="go-live-acceptance-warning">{t("message.fallbackDataModeDetail")}</p> : null}
             {statusMessage ? <p className="go-live-acceptance-message">{statusMessage}</p> : null}
           </div>
           <div className="go-live-acceptance-actions">
+            {primaryAction}
             {acceptanceReady ? (
               <>
-                <button className="primary-button" disabled={!liveDataAvailable || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
-                  <Download size={14} />
-                  {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
-                </button>
-                <button className="secondary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
+                {acceptanceCenter.primaryAction !== "run_status_check" ? <button className="secondary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
                   <RefreshCw size={14} />
                   {productionReadinessLoading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
-                </button>
+                </button> : null}
               </>
             ) : (
               <>
-                <button className="primary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
-                  <RefreshCw size={14} />
-                  {productionReadinessLoading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
-                </button>
-                <button className="secondary-button" disabled={!liveDataAvailable || !productionReadiness || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
+                {acceptanceCenter.primaryAction !== "export_acceptance_report" ? <button className="secondary-button" disabled={!liveDataAvailable || !productionReadiness || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
                   <Download size={14} />
                   {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
-                </button>
+                </button> : null}
               </>
             )}
-            <button className="secondary-button" onClick={onOpenPermissionChange} type="button">
+            {acceptanceCenter.primaryAction !== "open_permission_change" ? <button className="secondary-button" onClick={onOpenPermissionChange} type="button">
               <ShieldCheck size={14} />
               {t("action.openPermissionChange")}
-            </button>
+            </button> : null}
           </div>
         </div>
+
+        <section className="go-live-acceptance-blockers" aria-label={t("productionAcceptance.blockers")}>
+          <strong>{acceptanceCenter.blockers.length > 0 ? t("productionAcceptance.blockers") : t("productionAcceptance.noBlockers")}</strong>
+          {acceptanceCenter.blockers.length > 0 ? (
+            <ul>
+              {acceptanceCenter.blockers.map((blocker) => (
+                <li key={blocker.key}>{t(blocker.labelKey, blocker.detail)}</li>
+              ))}
+            </ul>
+          ) : (
+            <span>{t("productionAcceptance.noBlockersDetail")}</span>
+          )}
+        </section>
 
         <section className="go-live-acceptance-checks" aria-label={t("section.permissionRequestProcess")}>
           <div className="go-live-acceptance-score">
@@ -163,12 +197,12 @@ export function GoLiveAcceptanceOverview({
             </div>
           </div>
           <ol className="go-live-step-list">
-            {productionSummary.steps.map((step) => (
-              <li key={step.key}>
-                <span className={`go-live-step-dot tone-${productionConsoleStatusTone(step.status)}`} aria-hidden="true" />
+            {acceptanceCenter.checkRows.map((row) => (
+              <li key={row.key}>
+                <span className={`go-live-step-dot tone-${productionAcceptanceStatusTone(row.status)}`} aria-hidden="true" />
                 <div>
-                  <strong>{t(step.labelKey)}</strong>
-                  <span>{step.detailKey ? t(step.detailKey) : step.detail}</span>
+                  <strong>{t(row.labelKey)}</strong>
+                  <span>{row.detailKey ? t(row.detailKey) : row.detail}</span>
                 </div>
               </li>
             ))}
@@ -198,6 +232,67 @@ export function GoLiveAcceptanceOverview({
         </aside>
       </section>
     </div>
+  );
+}
+
+function renderProductionAcceptanceAction({
+  action,
+  connectionDiagnosticsChecking,
+  liveDataAvailable,
+  onExportProductionEvidence,
+  onOpenPermissionChange,
+  onRefreshProductionReadiness,
+  onRunConnectionDiagnostics,
+  productionEvidenceExporting,
+  productionReadiness,
+  productionReadinessLoading,
+  t
+}: {
+  action: ProductionAcceptanceAction;
+  connectionDiagnosticsChecking: boolean;
+  liveDataAvailable: boolean;
+  onExportProductionEvidence: () => void;
+  onOpenPermissionChange: () => void;
+  onRefreshProductionReadiness: () => void;
+  onRunConnectionDiagnostics: () => void;
+  productionEvidenceExporting: boolean;
+  productionReadiness: PermissionPackageProductionReadiness | null;
+  productionReadinessLoading: boolean;
+  t: Translator;
+}) {
+  if (action === "run_diagnostics") {
+    return (
+      <button className="primary-button" disabled={connectionDiagnosticsChecking} onClick={onRunConnectionDiagnostics} type="button">
+        <RefreshCw size={14} />
+        {connectionDiagnosticsChecking ? t("connectionDiagnostics.checking") : t("connectionDiagnostics.action")}
+      </button>
+    );
+  }
+  if (action === "open_permission_change") {
+    return (
+      <button className="primary-button" onClick={onOpenPermissionChange} type="button">
+        <ShieldCheck size={14} />
+        {t("action.openPermissionChange")}
+      </button>
+    );
+  }
+  if (action === "export_acceptance_report") {
+    return (
+      <button className="primary-button" disabled={!liveDataAvailable || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
+        <Download size={14} />
+        {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
+      </button>
+    );
+  }
+  return (
+    <button className="primary-button" disabled={!liveDataAvailable || productionReadinessLoading} onClick={onRefreshProductionReadiness} type="button">
+      <RefreshCw size={14} />
+      {productionReadinessLoading
+        ? t("action.checkingProductionReadiness")
+        : productionReadiness
+          ? t("action.checkProductionReadiness")
+          : t("productionAcceptance.action.runStatus")}
+    </button>
   );
 }
 
@@ -259,20 +354,6 @@ function permissionPackageTemplateNameById(templateId: string, t: Translator) {
   return t(`permissionPackage.${templateId}.name`, templateId);
 }
 
-function productionReadinessStatusLabel(status: PermissionPackageProductionReadiness["status"] | undefined, t: Translator) {
-  if (status === "ready") return t("status.productionReady");
-  if (status === "needs_review") return t("status.productionNeedsReview");
-  if (status === "blocked") return t("status.productionBlocked");
-  return t("status.preflightPending");
-}
-
-function productionReadinessStatusTone(status: PermissionPackageProductionReadiness["status"] | undefined): Tone {
-  if (status === "ready") return "success";
-  if (status === "needs_review") return "warning";
-  if (status === "blocked") return "danger";
-  return "neutral";
-}
-
 function permissionProductionReadinessNextAction(action: string, t: Translator) {
   const known: Record<string, string> = {
     "Apply the approved permission package before production readiness.": "productionNext.applyApproved",
@@ -293,19 +374,11 @@ function permissionProductionReadinessNextAction(action: string, t: Translator) 
   return key ? t(key) : action;
 }
 
-function productionConsoleStatusTone(status: AiAdminProductionConsoleStatus): Tone {
+function productionAcceptanceStatusTone(status: ProductionAcceptanceStatus): Tone {
   if (status === "ready") return "success";
-  if (status === "needs_review") return "warning";
+  if (status === "attention") return "warning";
   if (status === "blocked") return "danger";
   return "neutral";
-}
-
-function productionConsoleStatusLabel(summary: AiAdminProductionConsoleSummary, t: Translator) {
-  if (summary.status === "ready") return t("status.productionReady");
-  if (summary.status === "needs_review") return t("status.productionNeedsReview");
-  if (summary.status === "blocked") return t("status.productionBlocked");
-  if (summary.primaryActionKey === "action.createApprovalRequest") return t("status.approvalPending");
-  return t("status.productionPending");
 }
 
 function tx(t: Translator, key: string, values: Record<string, string | number>) {

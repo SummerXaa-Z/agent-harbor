@@ -2056,11 +2056,14 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     <Panel className="span-12" icon={<ClipboardCheck size={18} />} title={t("section.goLiveAcceptance")}>
       <GoLiveAcceptanceOverview
         agents={agents}
+        connectionDiagnosticsChecking={connectionDiagnostics.checking}
+        connectionStatus={connectionDiagnosticsStatus}
         draft={aiAdminServerDraft}
         form={aiAdminForm}
         liveDataAvailable={Boolean(data?.loadedFromApi)}
         onExportProductionEvidence={() => void exportAiAdminProductionEvidence(goLiveAcceptanceForm)}
         onOpenPermissionChange={() => setActiveNav("ai-admin")}
+        onRunConnectionDiagnostics={() => void connectionDiagnostics.run()}
         onRefreshProductionReadiness={() => void refreshAiAdminProductionReadiness(goLiveAcceptanceForm)}
         productionEvidenceExporting={aiAdminProductionEvidenceExporting}
         productionReadiness={aiAdminProductionReadiness}

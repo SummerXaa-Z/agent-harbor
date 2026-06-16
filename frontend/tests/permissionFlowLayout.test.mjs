@@ -203,7 +203,7 @@ test("permission request copy avoids repeated step labels", () => {
   assert.match(i18n, /"permissionWorkbench\.detail\.acceptance_ready": "状态检查已通过。"/);
   assert.match(i18n, /"section\.permissionWizardApproval": "审批处理"/);
   assert.match(i18n, /"section\.permissionWizardGoLive": "状态检查"/);
-  assert.match(i18n, /"section\.goLiveAcceptance": "上线验收"/);
+  assert.match(i18n, /"section\.goLiveAcceptance": "上线检查"/);
   assert.doesNotMatch(i18n, /"section\.permissionWizardApproval": "提交审批"/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)\s*\{/);
   assert.match(styles, /\.approval-dropdown-trigger svg\s*\{[^}]*transition:\s*none;/s);
@@ -482,25 +482,27 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   assert.match(goLiveAcceptanceOverview, /export function GoLiveAcceptanceOverview/);
   assert.match(app, /const goLiveAcceptancePanel =/);
   assert.match(goLiveAcceptanceOverview, /className="go-live-acceptance"/);
-  assert.match(goLiveAcceptanceOverview, /productionReadinessStatusLabel\(productionReadiness\?\.status, t\)/);
+  assert.match(goLiveAcceptanceOverview, /buildProductionAcceptanceCenter\(/);
+  assert.match(goLiveAcceptanceOverview, /connectionStatus/);
+  assert.match(goLiveAcceptanceOverview, /onRunConnectionDiagnostics/);
   assert.match(goLiveAcceptanceOverview, /onRefreshProductionReadiness/);
   assert.match(goLiveAcceptanceOverview, /onExportProductionEvidence/);
   assert.match(goLiveAcceptanceOverview, /onOpenPermissionChange/);
   assert.match(goLiveAcceptanceOverview, /const statusMessage = productionReadinessMessage === t\("message\.permissionProductionReadinessLoaded"\)/);
   assert.match(goLiveAcceptanceOverview, /statusMessage \? <p className="go-live-acceptance-message">\{statusMessage\}<\/p> : null/);
-  assert.match(goLiveAcceptanceOverview, /const acceptanceReady = productionReadiness\?\.status === "ready"/);
-  assert.match(goLiveAcceptanceOverview, /acceptanceReady \? \([\s\S]*className="primary-button"[\s\S]*onClick=\{onExportProductionEvidence\}[\s\S]*className="secondary-button"[\s\S]*onClick=\{onRefreshProductionReadiness\}/);
-  assert.match(goLiveAcceptanceOverview, /: \([\s\S]*className="primary-button"[\s\S]*onClick=\{onRefreshProductionReadiness\}[\s\S]*className="secondary-button"[\s\S]*onClick=\{onExportProductionEvidence\}/);
-  assert.match(goLiveAcceptanceOverview, /<section className="go-live-acceptance-main">[\s\S]*<div className="go-live-acceptance-decision">[\s\S]*<section className="go-live-acceptance-checks"[\s\S]*<aside className="go-live-acceptance-context"/);
+  assert.match(goLiveAcceptanceOverview, /const acceptanceReady = acceptanceCenter\.status === "ready"/);
+  assert.match(goLiveAcceptanceOverview, /const primaryAction = renderProductionAcceptanceAction/);
+  assert.match(goLiveAcceptanceOverview, /<section className="go-live-acceptance-main">[\s\S]*<div className="go-live-acceptance-decision">[\s\S]*<section className="go-live-acceptance-blockers"[\s\S]*<section className="go-live-acceptance-checks"[\s\S]*<aside className="go-live-acceptance-context"/);
   assert.match(evidenceCase, /goLiveAcceptancePanel/);
   assert.ok(evidenceRender.indexOf("{goLiveAcceptancePanel}") < evidenceRender.indexOf("{evidenceRunsPanel}"));
-  assert.match(i18n, /"section\.goLiveAcceptance": "上线验收"/);
-  assert.match(i18n, /"text\.goLiveAcceptanceTaskTitle": "确认这次权限变更是否可以上线"/);
-  assert.match(i18n, /"empty\.evidenceRuns\.detail": "历史自检运行会在这里保留；当前权限变更请以上方上线验收状态为准。"/);
+  assert.match(i18n, /"section\.goLiveAcceptance": "上线检查"/);
+  assert.match(i18n, /"productionAcceptance\.title": "上线检查"/);
+  assert.match(i18n, /"empty\.evidenceRuns\.detail": "历史自检运行会在这里保留；当前权限变更请以上方上线检查状态为准。"/);
   assert.match(styles, /\.go-live-acceptance\s*\{/);
   assert.match(styles, /\.go-live-acceptance-decision\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
+  assert.match(styles, /\.go-live-acceptance-blockers\s*\{/);
   assert.match(styles, /\.go-live-acceptance-context dl\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
-  assert.match(styles, /\.go-live-step-list\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\);/s);
+  assert.match(styles, /\.go-live-step-list\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
 });
 
 test("workspace navigation is reflected in the URL hash", () => {

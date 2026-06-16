@@ -17,6 +17,13 @@ import type {
 } from "../components/ManagementForms";
 import type { Translator } from "../consolePresenters";
 import type { Language } from "../i18n";
+import {
+  managementMutationRefreshFailedMessageKey,
+  managementMutationSuccessMessageKey,
+  refreshAfterManagementMutation,
+  type ManagementMutationAction,
+  type ManagementMutationRefreshState
+} from "../managementMutationRefresh";
 import { parseRetryFields } from "../retryForm";
 import type {
   Agent,
@@ -53,7 +60,7 @@ const defaultPolicyForm: PolicyCreateFormState = {
   targetAgentId: ""
 };
 
-type ManagementMutationAction = "" | "create_agent" | "create_key" | "rotate_credential" | "create_policy";
+type ActiveManagementMutationAction = "" | ManagementMutationAction;
 
 interface UseManagementOperationsArgs {
   adminKey: string;
@@ -82,8 +89,9 @@ export function useManagementOperations({
   const [policyForm, setPolicyForm] = useState(defaultPolicyForm);
   const [policyMessage, setPolicyMessage] = useState("");
   const [cleanupActionId, setCleanupActionId] = useState("");
-  const managementMutationInFlightRef = useRef<ManagementMutationAction>("");
-  const [managementMutationAction, setManagementMutationAction] = useState<ManagementMutationAction>("");
+  const managementMutationInFlightRef = useRef<ActiveManagementMutationAction>("");
+  const [managementMutationAction, setManagementMutationAction] = useState<ActiveManagementMutationAction>("");
+  const [managementRefreshState, setManagementRefreshState] = useState<ManagementMutationRefreshState>({ status: "idle" });
 
   function beginManagementMutation(action: ManagementMutationAction) {
     if (managementMutationInFlightRef.current) return false;
@@ -96,6 +104,25 @@ export function useManagementOperations({
     if (managementMutationInFlightRef.current !== action) return;
     managementMutationInFlightRef.current = "";
     setManagementMutationAction("");
+  }
+
+  async function finishManagementMutation(
+    action: ManagementMutationAction,
+    setMessage: (message: string) => void
+  ) {
+    setManagementRefreshState({ action, status: "refreshing" });
+    const refreshResult = await refreshAfterManagementMutation({ action, onRefresh });
+    if (refreshResult.ok) {
+      setManagementRefreshState({ action, refreshedAt: refreshResult.refreshedAt, status: "fresh" });
+      setMessage(t(managementMutationSuccessMessageKey(action)));
+      return;
+    }
+    setManagementRefreshState({
+      action,
+      errorMessage: localizedErrorMessage(t, language, refreshResult.error, "error.refreshManagementData"),
+      status: "stale"
+    });
+    setMessage(t(managementMutationRefreshFailedMessageKey(action)));
   }
 
   async function submitAgent(event: FormEvent<HTMLFormElement>) {
@@ -148,8 +175,7 @@ export function useManagementOperations({
         adminKey
       );
       setAgentForm(defaultAgentForm);
-      setAgentMessage(t("message.agentCreated"));
-      await onRefresh();
+      await finishManagementMutation("create_agent", setAgentMessage);
     } catch (error) {
       setAgentMessage(localizedErrorMessage(t, language, error, "error.createAgent"));
     } finally {
@@ -209,8 +235,8 @@ export function useManagementOperations({
         adminKey
       );
       setCreatedKey(next);
-      setKeyMessage(t("message.keyCreated"));
       setKeyForm({ ...defaultKeyForm, agentId: keyForm.agentId });
+      await finishManagementMutation("create_key", setKeyMessage);
     } catch (error) {
       setKeyMessage(localizedErrorMessage(t, language, error, "error.createKey"));
     } finally {
@@ -238,8 +264,7 @@ export function useManagementOperations({
         adminKey
       );
       setRotateForm({ ...defaultRotateForm, agentId: rotateForm.agentId, credentialName });
-      setRotateMessage(t("message.credentialRotated"));
-      await onRefresh();
+      await finishManagementMutation("rotate_credential", setRotateMessage);
     } catch (error) {
       setRotateMessage(localizedErrorMessage(t, language, error, "error.rotateCredential"));
     } finally {
@@ -280,9 +305,8 @@ export function useManagementOperations({
         },
         adminKey
       );
-      setPolicyMessage(t("message.policyCreated"));
       setPolicyForm({ ...defaultPolicyForm, callerAgentId: policyForm.callerAgentId });
-      await onRefresh();
+      await finishManagementMutation("create_policy", setPolicyMessage);
     } catch (error) {
       setPolicyMessage(localizedErrorMessage(t, language, error, "error.createRoutePolicy"));
     } finally {
@@ -300,6 +324,7 @@ export function useManagementOperations({
     keyForm,
     keyMessage,
     managementMutationAction,
+    managementRefreshState,
     policyForm,
     policyMessage,
     rotateForm,

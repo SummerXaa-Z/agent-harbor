@@ -5,6 +5,7 @@ import test from "node:test";
 const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
 const managementHook = readFileSync(new URL("../src/hooks/useManagementOperations.ts", import.meta.url), "utf8");
+const managementMutationRefresh = readFileSync(new URL("../src/managementMutationRefresh.ts", import.meta.url), "utf8");
 
 function functionBlock(name, source = app) {
   const start = source.indexOf(`async function ${name}(`);
@@ -234,11 +235,14 @@ test("retry validation messages are localized before reaching operator panels", 
 test("management mutation forms block duplicate submit while requests are in flight", () => {
   assert.match(managementHook, /ApiRequestError/);
   assert.match(managementHook, /import \{ useRef, useState, type FormEvent \} from "react"/);
-  assert.match(managementHook, /type ManagementMutationAction = "" \| "create_agent" \| "create_key" \| "rotate_credential" \| "create_policy"/);
-  assert.match(managementHook, /const managementMutationInFlightRef = useRef<ManagementMutationAction>\(""\)/);
-  assert.match(managementHook, /const \[managementMutationAction, setManagementMutationAction\] = useState<ManagementMutationAction>\(""\)/);
+  assert.match(managementMutationRefresh, /export type ManagementMutationAction =[\s\S]*"create_agent"[\s\S]*"create_key"[\s\S]*"rotate_credential"[\s\S]*"create_policy"/);
+  assert.match(managementHook, /type ActiveManagementMutationAction = "" \| ManagementMutationAction/);
+  assert.match(managementHook, /const managementMutationInFlightRef = useRef<ActiveManagementMutationAction>\(""\)/);
+  assert.match(managementHook, /const \[managementMutationAction, setManagementMutationAction\] = useState<ActiveManagementMutationAction>\(""\)/);
   assert.match(managementHook, /function beginManagementMutation\(action: ManagementMutationAction\)/);
   assert.match(managementHook, /function endManagementMutation\(action: ManagementMutationAction\)/);
+  assert.match(managementHook, /finishManagementMutation\("create_key", setKeyMessage\)/);
+  assert.match(managementHook, /refreshAfterManagementMutation\(\{ action, onRefresh \}\)/);
   assert.match(managementHook, /DUPLICATE_RESOURCE_MUTATION/);
   assert.match(managementHook, /message\.duplicateResourceMutation/);
   assert.match(managementHook, /managementMutationAction,/);

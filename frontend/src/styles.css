@@ -1249,6 +1249,51 @@ button {
   border-top: 1px solid var(--line-subtle);
 }
 
+.resource-lifecycle-refresh-status {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.resource-lifecycle-refresh-status.is-stale {
+  border-color: var(--warning-border);
+  background: var(--warning-soft);
+}
+
+.resource-lifecycle-refresh-status span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.resource-lifecycle-refresh-status small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.resource-lifecycle-refresh-status strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.resource-lifecycle-refresh-status em {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .resource-lifecycle-command-actions .action-modal-inline {
   display: flex;
 }

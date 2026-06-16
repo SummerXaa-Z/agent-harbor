@@ -586,7 +586,7 @@ export function ConsoleController() {
     adminKey,
     defaultScope: defaultManagementScope,
     language,
-    onRefresh: refresh,
+    onRefresh: () => refresh({ throwOnError: true }),
     scope,
     t
   });
@@ -866,7 +866,7 @@ export function ConsoleController() {
     });
   }
 
-  async function refresh() {
+  async function refresh(options: { throwOnError?: boolean } = {}) {
     if (!consoleAccessReady) return;
     try {
       setLoadError("");
@@ -879,6 +879,7 @@ export function ConsoleController() {
       setLastRefresh(new Date());
     } catch (error) {
       setLoadError(localizedErrorMessage(t, language, error, "error.consoleDataUnavailable"));
+      if (options.throwOnError) throw error;
     }
     if (activeNav === "access") {
       await accessProfileController.refresh();
@@ -2339,8 +2340,11 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         <ResourceLifecycleView
           formatTenantName={(tenantId) => permissionTenantPathLabel(tenantId, tenants, t).primary}
           formatWorkspaceName={(workspaceId) => permissionWorkspaceDisplayName(workspaceId, agents, t)}
+          lastRefreshedAt={lastRefresh}
           onResourceAction={handleResourceLifecycleAction}
+          onRefresh={() => void refresh()}
           primaryActions={resourceLifecyclePrimaryActions}
+          refreshState={management.managementRefreshState}
           secondaryActions={resourceLifecycleSecondaryActions}
           summary={resourceLifecycleSummary}
           t={t}
@@ -2913,7 +2917,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
                 ) : null}
               </div>
             </details>
-            <button aria-label={t("action.refresh")} className="icon-button" onClick={refresh} title={t("action.refresh")} type="button">
+            <button aria-label={t("action.refresh")} className="icon-button" onClick={() => void refresh()} title={t("action.refresh")} type="button">
               <RefreshCw size={17} />
             </button>
           </div>

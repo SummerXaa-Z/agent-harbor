@@ -232,6 +232,10 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(app, /resourceLifecyclePanel=\{resourceLifecyclePanel\(\)\}/);
   assert.match(resourceLifecycleView, /primaryActions/);
   assert.match(resourceLifecycleView, /secondaryActions/);
+  assert.match(resourceLifecycleView, /refreshState/);
+  assert.match(resourceLifecycleView, /lastRefreshedAt/);
+  assert.match(resourceLifecycleView, /ResourceLifecycleRefreshStatus/);
+  assert.match(resourceLifecycleView, /resource-lifecycle-refresh-status/);
   assert.match(resourceLifecycleView, /useState/);
   assert.match(resourceLifecycleView, /selectedResourceId/);
   assert.match(resourceLifecycleView, /defaultSelectedItem/);
@@ -244,6 +248,9 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(app, /const resourceLifecycleSecondaryActions = \(\s*<div className="resource-lifecycle-secondary-actions">/);
   assert.match(app, /<ResourceLifecycleView[\s\S]*formatTenantName=\{\(tenantId\) => permissionTenantPathLabel\(tenantId, tenants, t\)\.primary\}[\s\S]*formatWorkspaceName=\{\(workspaceId\) => permissionWorkspaceDisplayName\(workspaceId, agents, t\)\}/);
   assert.match(app, /<ResourceLifecycleView[\s\S]*primaryActions=\{resourceLifecyclePrimaryActions\}[\s\S]*secondaryActions=\{resourceLifecycleSecondaryActions\}/);
+  assert.match(app, /<ResourceLifecycleView[\s\S]*refreshState=\{management\.managementRefreshState\}/);
+  assert.match(app, /<ResourceLifecycleView[\s\S]*onRefresh=\{\(\) => void refresh\(\)\}/);
+  assert.match(styles, /\.resource-lifecycle-refresh-status\s*\{/);
   assert.match(consolePrimitives, /tone = "secondary"/);
   assert.match(consolePrimitives, /tone\?: "primary" \| "secondary"/);
   assert.match(app, /createAgentAction\("command", "primary"\)/);
@@ -344,6 +351,7 @@ test("management mutation forms open from resource command modals", () => {
   assert.match(app, /submitting=\{management\.managementMutationAction === "create_key"\}/);
   assert.match(app, /submitting=\{management\.managementMutationAction === "rotate_credential"\}/);
   assert.match(app, /submitting=\{management\.managementMutationAction === "create_policy"\}/);
+  assert.match(app, /onRefresh: \(\) => refresh\(\{ throwOnError: true \}\)/);
   assert.match(managementForms, /ResourceActionContextStrip/);
   assert.match(managementForms, /className="resource-action-context"/);
   assert.match(managementForms, /t\("resource\.actionContext\.title"\)/);

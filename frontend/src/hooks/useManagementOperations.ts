@@ -18,6 +18,10 @@ import type {
 import type { Translator } from "../consolePresenters";
 import type { Language } from "../i18n";
 import {
+  mergeManagementAgentIntoConsoleData,
+  mergeManagementRoutePolicyIntoConsoleData
+} from "../managementLocalData";
+import {
   managementMutationRefreshFailedMessageKey,
   managementMutationSuccessMessageKey,
   refreshAfterManagementMutation,
@@ -28,6 +32,7 @@ import { parseRetryFields } from "../retryForm";
 import type {
   Agent,
   AgentStatus,
+  ConsoleData,
   CreateAgentKeyResponse,
   JsonObject,
   ManagementScope,
@@ -66,6 +71,7 @@ interface UseManagementOperationsArgs {
   adminKey: string;
   defaultScope: ManagementScope;
   language: Language;
+  onDataPatch?: (updater: (current: ConsoleData) => ConsoleData) => void;
   onRefresh: () => Promise<void>;
   scope: ManagementScope;
   t: Translator;
@@ -75,6 +81,7 @@ export function useManagementOperations({
   adminKey,
   defaultScope,
   language,
+  onDataPatch,
   onRefresh,
   scope,
   t
@@ -113,6 +120,10 @@ export function useManagementOperations({
   function updateKeyForm(next: KeyCreateFormState) {
     setCreatedKey(null);
     setKeyForm(next);
+  }
+
+  function patchConsoleData(updater: (current: ConsoleData) => ConsoleData) {
+    onDataPatch?.(updater);
   }
 
   async function finishManagementMutation(
@@ -171,7 +182,7 @@ export function useManagementOperations({
         credentials = { [credentialName]: credentialValue };
       }
       const requestScope = normalizedScope(scope, defaultScope);
-      await createAgent(
+      const created = await createAgent(
         {
           channelConfig: Object.keys(channelConfig).length > 0 ? channelConfig : undefined,
           channelType: agentForm.channelType.trim() || "local",
@@ -184,6 +195,7 @@ export function useManagementOperations({
         },
         adminKey
       );
+      patchConsoleData((current) => mergeManagementAgentIntoConsoleData(current, created));
       setAgentForm(defaultAgentForm);
       await finishManagementMutation("create_agent", setAgentMessage);
     } catch (error) {
@@ -198,11 +210,10 @@ export function useManagementOperations({
     setCleanupActionId(agent.id);
     try {
       const successMessage = tx(t, "message.statusChanged", { name: agent.name, status: agentStatusLabel(status, t) });
-      if (status === "disabled") {
-        await disableAgent(agent.id, adminKey);
-      } else {
-        await updateAgent(agent.id, { status }, adminKey);
-      }
+      const updated = status === "disabled"
+        ? await disableAgent(agent.id, adminKey)
+        : await updateAgent(agent.id, { status }, adminKey);
+      patchConsoleData((current) => mergeManagementAgentIntoConsoleData(current, updated));
       await finishManagementMutation("update_agent_status", setAgentMessage, successMessage);
     } catch (error) {
       setAgentMessage(localizedErrorMessage(t, language, error, "error.updateAgentStatus"));
@@ -215,7 +226,8 @@ export function useManagementOperations({
     setPolicyMessage("");
     setCleanupActionId(policy.id);
     try {
-      await disableRoutePolicy(policy.id, adminKey);
+      const disabled = await disableRoutePolicy(policy.id, adminKey);
+      patchConsoleData((current) => mergeManagementRoutePolicyIntoConsoleData(current, disabled));
       await finishManagementMutation("disable_policy", setPolicyMessage, t("message.policyDisabled"));
     } catch (error) {
       setPolicyMessage(localizedErrorMessage(t, language, error, "error.disableRoutePolicy"));
@@ -267,11 +279,12 @@ export function useManagementOperations({
         setRotateMessage(t("message.validationCredentialRequired"));
         return;
       }
-      await rotateAgentCredentials(
+      const updated = await rotateAgentCredentials(
         rotateForm.agentId,
         { credentials: { [credentialName]: rotateForm.credentialValue } },
         adminKey
       );
+      patchConsoleData((current) => mergeManagementAgentIntoConsoleData(current, updated));
       setRotateForm({ ...defaultRotateForm, agentId: rotateForm.agentId, credentialName });
       await finishManagementMutation("rotate_credential", setRotateMessage);
     } catch (error) {
@@ -299,7 +312,7 @@ export function useManagementOperations({
         setPolicyMessage(retryFieldValidationMessage(retry.message, t));
         return;
       }
-      await createRoutePolicy(
+      const created = await createRoutePolicy(
         {
           callerAgentId: policyForm.callerAgentId,
           effect: policyForm.effect as "allow" | "deny",
@@ -314,6 +327,7 @@ export function useManagementOperations({
         },
         adminKey
       );
+      patchConsoleData((current) => mergeManagementRoutePolicyIntoConsoleData(current, created));
       setPolicyForm({ ...defaultPolicyForm, callerAgentId: policyForm.callerAgentId });
       await finishManagementMutation("create_policy", setPolicyMessage);
     } catch (error) {

@@ -166,6 +166,11 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("resource.detail.needsApproval"), "需要创建权限变更并完成授权。");
   assert.equal(t("resource.detail.needsRuntime"), "需要一次真实调用来确认运行结果。");
   assert.equal(t("resource.permissionIntent"), "为 {target} 创建授权。");
+  assert.equal(t("resource.contextTitle"), "当前资源");
+  assert.equal(t("resource.contextDetail"), "先确认资源上下文，再执行下一步操作。");
+  assert.equal(t("resource.contextScope"), "范围");
+  assert.equal(t("resource.contextHealth"), "状态");
+  assert.equal(t("resource.contextNext"), "推荐下一步");
   assert.equal(t("text.permissionHandoffRegistryTitle"), "已从资源管理带入");
   assert.equal(t("resource.nextAction.capabilities"), "发现能力");
   assert.equal(t("empty.evidenceRuns.title"), "暂无历史验收记录");

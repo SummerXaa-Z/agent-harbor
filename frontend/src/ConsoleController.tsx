@@ -2317,6 +2317,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     return (
       <Panel className="span-12" icon={<Network size={18} />} title={t("panel.resourceLifecycle")}>
         <ResourceLifecycleView
+          formatTenantName={(tenantId) => permissionTenantPathLabel(tenantId, tenants, t).primary}
+          formatWorkspaceName={(workspaceId) => permissionWorkspaceDisplayName(workspaceId, agents, t)}
           onResourceAction={handleResourceLifecycleAction}
           primaryActions={resourceLifecyclePrimaryActions}
           secondaryActions={resourceLifecycleSecondaryActions}

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ArrowRight,
   Boxes,
@@ -13,18 +13,25 @@ import type { ResourceLifecycleItem, ResourceLifecycleStatus, ResourceLifecycleS
 import { Badge, EmptyRow } from "./ui";
 
 export function ResourceLifecycleView({
+  formatTenantName = (tenantId) => tenantId,
+  formatWorkspaceName = (workspaceId) => workspaceId,
   onResourceAction,
   primaryActions,
   secondaryActions,
   summary,
   t
 }: {
+  formatTenantName?: (tenantId: string) => string;
+  formatWorkspaceName?: (workspaceId: string) => string;
   onResourceAction?: (item: ResourceLifecycleItem) => void;
   primaryActions?: ReactNode;
   secondaryActions?: ReactNode;
   summary: ResourceLifecycleSummary;
   t: Translator;
 }) {
+  const [selectedResourceId, setSelectedResourceId] = useState("");
+  const defaultSelectedItem = summary.items.find((item) => item.status !== "ready") ?? summary.items[0];
+  const selectedItem = summary.items.find((item) => item.id === selectedResourceId) ?? defaultSelectedItem;
   const metrics = [
     { label: t("resource.metric.total"), value: summary.totalResources },
     { label: t("resource.metric.active"), value: summary.activeResources },
@@ -79,6 +86,16 @@ export function ResourceLifecycleView({
         </section>
       ) : null}
 
+      {selectedItem ? (
+        <ResourceLifecycleContextPanel
+          formatTenantName={formatTenantName}
+          formatWorkspaceName={formatWorkspaceName}
+          item={selectedItem}
+          onResourceAction={onResourceAction}
+          t={t}
+        />
+      ) : null}
+
       <section className="resource-lifecycle-list" aria-label={t("resource.listAria")}>
         <div className="resource-lifecycle-header" aria-hidden="true">
           <span>{t("resource.column.resource")}</span>
@@ -101,6 +118,8 @@ export function ResourceLifecycleView({
               item={item}
               key={item.id}
               onResourceAction={onResourceAction}
+              onSelectResource={setSelectedResourceId}
+              selected={item.id === selectedItem?.id}
               t={t}
             />
           ))
@@ -110,11 +129,15 @@ export function ResourceLifecycleView({
   );
 }
 
-function ResourceLifecycleRow({
+function ResourceLifecycleContextPanel({
+  formatTenantName,
+  formatWorkspaceName,
   item,
   onResourceAction,
   t
 }: {
+  formatTenantName: (tenantId: string) => string;
+  formatWorkspaceName: (workspaceId: string) => string;
   item: ResourceLifecycleItem;
   onResourceAction?: (item: ResourceLifecycleItem) => void;
   t: Translator;
@@ -123,11 +146,90 @@ function ResourceLifecycleRow({
   const actionClassName = `${requiresAction ? "primary-button" : "secondary-button"} resource-lifecycle-action`;
 
   return (
-    <div className="resource-lifecycle-row">
-      <div className="resource-lifecycle-name">
+    <section className="resource-lifecycle-context-panel" aria-label={t("resource.contextTitle")}>
+      <div className="resource-lifecycle-context-main">
+        <span className="section-kicker">{t("resource.contextTitle")}</span>
         <strong>{permissionEntityDisplayName(item.name, t)}</strong>
-        <span>{t(item.kindKey)}</span>
-        <span>{t(item.detailKey)}</span>
+        <p>{t("resource.contextDetail")}</p>
+      </div>
+      <div className="resource-lifecycle-context-grid">
+        <span>
+          <small>{t("resource.contextScope")}</small>
+          <strong>{formatTenantName(item.tenantId)}</strong>
+          <em>{formatWorkspaceName(item.workspaceId)}</em>
+        </span>
+        <span>
+          <small>{t("resource.contextHealth")}</small>
+          <Badge tone={statusTone(item.status)}>{t(item.statusKey)}</Badge>
+          <em>{t(item.detailKey)}</em>
+        </span>
+        <span>
+          <small>{t("resource.column.capabilities")}</small>
+          <strong>{item.approvedCapabilityCount}/{item.capabilityCount}</strong>
+          <em>{t("resource.stage.discover")}</em>
+        </span>
+        <span>
+          <small>{t("resource.column.permission")}</small>
+          <strong>{item.grantCount}</strong>
+          <em>{t("resource.stage.authorize")}</em>
+        </span>
+        <span>
+          <small>{t("resource.column.runtime")}</small>
+          <strong>{item.runtimeDecisionCount}</strong>
+          <em>{t("resource.stage.validate")}</em>
+        </span>
+      </div>
+      <div className="resource-lifecycle-context-next">
+        <span>{t("resource.contextNext")}</span>
+        {onResourceAction ? (
+          <button
+            className={actionClassName}
+            type="button"
+            onClick={() => onResourceAction(item)}
+          >
+            {t(item.nextActionKey)}
+            <ArrowRight size={14} />
+          </button>
+        ) : (
+          <a className={actionClassName} href={item.nextActionHash}>
+            {t(item.nextActionKey)}
+            <ArrowRight size={14} />
+          </a>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ResourceLifecycleRow({
+  item,
+  onResourceAction,
+  onSelectResource,
+  selected,
+  t
+}: {
+  item: ResourceLifecycleItem;
+  onResourceAction?: (item: ResourceLifecycleItem) => void;
+  onSelectResource: (resourceId: string) => void;
+  selected: boolean;
+  t: Translator;
+}) {
+  const requiresAction = item.status !== "ready";
+  const actionClassName = `${requiresAction ? "primary-button" : "secondary-button"} resource-lifecycle-action`;
+
+  return (
+    <div className={`resource-lifecycle-row${selected ? " is-selected" : ""}`}>
+      <div className="resource-lifecycle-name">
+        <button
+          aria-pressed={selected}
+          className="resource-lifecycle-resource-button"
+          type="button"
+          onClick={() => onSelectResource(item.id)}
+        >
+          <strong>{permissionEntityDisplayName(item.name, t)}</strong>
+          <span>{t(item.kindKey)}</span>
+          <span>{t(item.detailKey)}</span>
+        </button>
       </div>
       <Badge tone={statusTone(item.status)}>{t(item.statusKey)}</Badge>
       <span>{item.approvedCapabilityCount}/{item.capabilityCount}</span>

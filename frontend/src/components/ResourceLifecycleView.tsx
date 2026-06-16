@@ -5,26 +5,34 @@ import {
   CheckCircle2,
   DatabaseZap,
   KeyRound,
+  RefreshCw,
   ShieldCheck
 } from "lucide-react";
 
 import { permissionEntityDisplayName, type Tone, type Translator } from "../consolePresenters";
+import type { ManagementMutationRefreshState } from "../managementMutationRefresh";
 import type { ResourceLifecycleItem, ResourceLifecycleStatus, ResourceLifecycleSummary } from "../resourceLifecycle";
 import { Badge, EmptyRow } from "./ui";
 
 export function ResourceLifecycleView({
   formatTenantName = (tenantId) => tenantId,
   formatWorkspaceName = (workspaceId) => workspaceId,
+  lastRefreshedAt,
   onResourceAction,
+  onRefresh,
   primaryActions,
+  refreshState = { status: "idle" },
   secondaryActions,
   summary,
   t
 }: {
   formatTenantName?: (tenantId: string) => string;
   formatWorkspaceName?: (workspaceId: string) => string;
+  lastRefreshedAt?: Date;
   onResourceAction?: (item: ResourceLifecycleItem) => void;
+  onRefresh?: () => void;
   primaryActions?: ReactNode;
+  refreshState?: ManagementMutationRefreshState;
   secondaryActions?: ReactNode;
   summary: ResourceLifecycleSummary;
   t: Translator;
@@ -83,6 +91,12 @@ export function ResourceLifecycleView({
           </div>
           {primaryActions}
           {secondaryActions}
+          <ResourceLifecycleRefreshStatus
+            lastRefreshedAt={lastRefreshedAt}
+            onRefresh={onRefresh}
+            refreshState={refreshState}
+            t={t}
+          />
         </section>
       ) : null}
 
@@ -125,6 +139,48 @@ export function ResourceLifecycleView({
           ))
         )}
       </section>
+    </div>
+  );
+}
+
+function ResourceLifecycleRefreshStatus({
+  lastRefreshedAt,
+  onRefresh,
+  refreshState,
+  t
+}: {
+  lastRefreshedAt?: Date;
+  onRefresh?: () => void;
+  refreshState: ManagementMutationRefreshState;
+  t: Translator;
+}) {
+  const stale = refreshState.status === "stale";
+  const refreshing = refreshState.status === "refreshing";
+  const refreshedAt = refreshState.status === "fresh" ? new Date(refreshState.refreshedAt) : lastRefreshedAt;
+  const detail = stale
+    ? refreshState.errorMessage || t("resource.refreshStatus.staleDetail")
+    : refreshedAt
+      ? tx(t, "resource.refreshStatus.detail", { time: formatRefreshTime(refreshedAt) })
+      : t("resource.refreshStatus.idleDetail");
+  const title = refreshing
+    ? t("resource.refreshStatus.refreshing")
+    : stale
+      ? t("resource.refreshStatus.stale")
+      : t("resource.refreshStatus.fresh");
+
+  return (
+    <div className={`resource-lifecycle-refresh-status is-${refreshState.status}`} role={stale ? "alert" : "status"}>
+      <span>
+        <small>{t("resource.refreshStatus.title")}</small>
+        <strong>{title}</strong>
+        <em>{detail}</em>
+      </span>
+      {onRefresh ? (
+        <button className="secondary-button" disabled={refreshing} onClick={onRefresh} type="button">
+          <RefreshCw size={14} />
+          {refreshing ? t("action.loading") : t("action.refresh")}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -260,4 +316,15 @@ function statusTone(status: ResourceLifecycleStatus): Tone {
   if (status === "needs_runtime") return "info";
   if (status === "needs_credentials") return "warning";
   return "danger";
+}
+
+function formatRefreshTime(value: Date) {
+  return value.toLocaleTimeString("zh-CN", { hour12: false });
+}
+
+function tx(t: Translator, key: string, values: Record<string, string | number>) {
+  return Object.entries(values).reduce(
+    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
+    t(key)
+  );
 }

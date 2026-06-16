@@ -417,7 +417,7 @@ make release-check
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit, push, and open PR**
+- [x] **Step 4: Commit, push, and open PR**
 
 Run:
 

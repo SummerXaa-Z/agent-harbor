@@ -331,8 +331,28 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
+		if !s.hasConfiguredAdminAuthentication(r.Context()) {
+			writeError(w, domain.Unauthorized("admin authentication is required"))
+			return
+		}
 		writeError(w, domain.Unauthorized("missing or invalid admin key"))
 	})
+}
+
+func (s *Server) hasConfiguredAdminAuthentication(ctx context.Context) bool {
+	if s.adminKey != "" || len(s.adminIdentities) > 0 {
+		return true
+	}
+	rows, err := s.repo.ListAdminIdentities(ctx)
+	if err != nil {
+		return true
+	}
+	for _, row := range rows {
+		if row.Status == domain.AdminIdentityStatusActive {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) adminPrincipalForKey(ctx context.Context, provided string) (adminPrincipal, bool) {

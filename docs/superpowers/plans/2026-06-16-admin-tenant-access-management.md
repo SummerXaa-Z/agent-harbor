@@ -44,7 +44,7 @@
 **Files:**
 - Modify: `internal/httpapi/server_test.go`
 
-- [ ] **Step 1: Add REST lifecycle test skeleton**
+- [x] **Step 1: Add REST lifecycle test skeleton**
 
 Add these response structs next to existing test response structs:
 
@@ -75,7 +75,7 @@ type rotateAdminIdentityKeyResponse struct {
 }
 ```
 
-- [ ] **Step 2: Add platform lifecycle test**
+- [x] **Step 2: Add platform lifecycle test**
 
 Add `TestManagedAdminIdentityLifecycleAndScopedLogin` after scoped admin tests:
 
@@ -154,7 +154,7 @@ func TestManagedAdminIdentityLifecycleAndScopedLogin(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Add forbidden scoped-admin management test**
+- [x] **Step 3: Add forbidden scoped-admin management test**
 
 Add:
 
@@ -184,7 +184,7 @@ func TestScopedAdminCannotManageAdminIdentities(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: Add guard tests for bootstrap and last platform admin**
+- [x] **Step 4: Add guard tests for bootstrap and last platform admin**
 
 Add:
 
@@ -216,7 +216,7 @@ func TestAdminIdentityLifecycleRejectsBootstrapAndLastPlatformMutation(t *testin
 }
 ```
 
-- [ ] **Step 5: Add helper for JSON secret scans**
+- [x] **Step 5: Add helper for JSON secret scans**
 
 Add near test helpers:
 
@@ -231,7 +231,7 @@ func mustJSON(t *testing.T, value any) []byte {
 }
 ```
 
-- [ ] **Step 6: Run red tests**
+- [x] **Step 6: Run red tests**
 
 Run:
 
@@ -241,7 +241,7 @@ go test ./internal/httpapi -run 'TestManagedAdminIdentityLifecycleAndScopedLogin
 
 Expected: FAIL because `/api/v1/admin-identities` routes and managed identity store methods do not exist.
 
-- [ ] **Step 7: Commit red tests**
+- [x] **Step 7: Commit red tests**
 
 ```bash
 git add internal/httpapi/server_test.go
@@ -260,7 +260,7 @@ git commit -m "test: cover managed admin identity lifecycle"
 - Modify: `internal/store/postgres_test.go`
 - Create: `internal/db/migrations/013_admin_identities.sql`
 
-- [ ] **Step 1: Add domain types**
+- [x] **Step 1: Add domain types**
 
 Append after `AuditEvent` in `internal/domain/types.go`:
 
@@ -327,7 +327,7 @@ type RotateAdminIdentityKeyResponse struct {
 }
 ```
 
-- [ ] **Step 2: Extend repository interface**
+- [x] **Step 2: Extend repository interface**
 
 Add these methods to `store.Repository` in `internal/store/memory.go` after audit methods:
 
@@ -348,7 +348,7 @@ Add the builder:
 type AdminIdentityAuditBuilder func(domain.AdminIdentity) domain.AuditEvent
 ```
 
-- [ ] **Step 3: Add memory fields**
+- [x] **Step 3: Add memory fields**
 
 Add to `Memory`:
 
@@ -364,7 +364,7 @@ adminIdentities:      make(map[string]domain.AdminIdentity),
 adminIdentityActorID: make(map[string]string),
 ```
 
-- [ ] **Step 4: Implement memory methods**
+- [x] **Step 4: Implement memory methods**
 
 Add after audit methods:
 
@@ -478,7 +478,7 @@ func (m *Memory) TouchAdminIdentityLastUsed(_ context.Context, id string, now ti
 }
 ```
 
-- [ ] **Step 5: Add PostgreSQL migration**
+- [x] **Step 5: Add PostgreSQL migration**
 
 Create `internal/db/migrations/013_admin_identities.sql`:
 
@@ -509,7 +509,7 @@ create index if not exists admin_identities_key_hash_idx on admin_identities(key
 create index if not exists admin_identities_scope_idx on admin_identities(tenant_id, workspace_id, role);
 ```
 
-- [ ] **Step 6: Implement PostgreSQL methods**
+- [x] **Step 6: Implement PostgreSQL methods**
 
 Add methods matching memory signatures. Use `nullTime()` for optional timestamps and `scanAdminIdentity(row scanner)`.
 
@@ -528,7 +528,7 @@ _, err := exec.Exec(ctx, `
 	identity.CreatedBy, identity.UpdatedBy, identity.DisabledBy)
 ```
 
-- [ ] **Step 7: Add focused store tests**
+- [x] **Step 7: Add focused store tests**
 
 Add `TestMemoryAdminIdentityLifecycle` and `TestPostgresAdminIdentityLifecycle` with the same assertions:
 
@@ -553,7 +553,7 @@ identity := domain.AdminIdentity{
 
 Assert create, list, get by actor, find by key hash, rotate, old hash not found, touch last used, disable, disabled hash not found, and three audit events.
 
-- [ ] **Step 8: Run store tests**
+- [x] **Step 8: Run store tests**
 
 ```bash
 go test ./internal/store -run 'TestMemoryAdminIdentityLifecycle|TestPostgresAdminIdentityLifecycle' -count=1
@@ -561,7 +561,7 @@ go test ./internal/store -run 'TestMemoryAdminIdentityLifecycle|TestPostgresAdmi
 
 Expected: memory passes; PostgreSQL test runs only when `AGENT_HARBOR_TEST_DATABASE_URL` is configured, matching existing test conventions.
 
-- [ ] **Step 9: Commit store layer**
+- [x] **Step 9: Commit store layer**
 
 ```bash
 git add internal/domain/types.go internal/store/memory.go internal/store/memory_test.go internal/store/postgres.go internal/store/postgres_test.go internal/db/migrations/013_admin_identities.sql
@@ -577,7 +577,7 @@ git commit -m "feat: persist managed admin identities"
 - Modify: `internal/httpapi/server.go`
 - Modify: `internal/httpapi/auth.go`
 
-- [ ] **Step 1: Add admin key generator helper**
+- [x] **Step 1: Add admin key generator helper**
 
 In `internal/security/key.go`, add:
 
@@ -592,7 +592,7 @@ func NewAdminKey() (plaintext string, prefix string) {
 }
 ```
 
-- [ ] **Step 2: Add platform guard and bootstrap projection**
+- [x] **Step 2: Add platform guard and bootstrap projection**
 
 Create `internal/httpapi/admin_identities.go` with:
 
@@ -644,7 +644,7 @@ func (s *Server) bootstrapAdminIdentities() []domain.AdminIdentity {
 }
 ```
 
-- [ ] **Step 3: Add validation helpers**
+- [x] **Step 3: Add validation helpers**
 
 Add:
 
@@ -676,7 +676,7 @@ func normalizeManagedAdminIdentityRequest(req domain.CreateAdminIdentityRequest)
 }
 ```
 
-- [ ] **Step 4: Add REST handlers**
+- [x] **Step 4: Add REST handlers**
 
 Add handlers:
 
@@ -715,7 +715,7 @@ func (s *Server) listAdminIdentities(w http.ResponseWriter, r *http.Request) {
 6. Call `s.ensureAnotherPlatformAdmin(ctx, identity)` before disabling or rotating a platform admin.
 7. Write audit with `adminIdentityAuditMetadata(identity)`.
 
-- [ ] **Step 5: Add last-platform-admin guard**
+- [x] **Step 5: Add last-platform-admin guard**
 
 Add:
 
@@ -742,7 +742,7 @@ func (s *Server) activePlatformAdminCount(ctx context.Context) (int, error) {
 
 When disabling an active managed platform admin, reject if count is less than or equal to 1.
 
-- [ ] **Step 6: Register REST routes**
+- [x] **Step 6: Register REST routes**
 
 In `Router()` inside the `requireAdmin` group:
 
@@ -753,7 +753,7 @@ r.Post("/admin-identities/{id}/key:rotate", s.rotateAdminIdentityKey)
 r.Post("/admin-identities/{id}:disable", s.disableAdminIdentity)
 ```
 
-- [ ] **Step 7: Extend authentication lookup**
+- [x] **Step 7: Extend authentication lookup**
 
 In `adminPrincipalForKey`, before configured identities:
 
@@ -789,7 +789,7 @@ func adminPrincipalFromManagedIdentity(identity domain.AdminIdentity) adminPrinc
 }
 ```
 
-- [ ] **Step 8: Run backend tests**
+- [x] **Step 8: Run backend tests**
 
 ```bash
 go test ./internal/httpapi -run 'TestManagedAdminIdentityLifecycleAndScopedLogin|TestScopedAdminCannotManageAdminIdentities|TestAdminIdentityLifecycleRejectsBootstrapAndLastPlatformMutation|TestConsoleAuthSessionReportsScopedAdminIdentity' -count=1
@@ -797,7 +797,7 @@ go test ./internal/httpapi -run 'TestManagedAdminIdentityLifecycleAndScopedLogin
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit REST/auth**
+- [x] **Step 9: Commit REST/auth**
 
 ```bash
 git add internal/security/key.go internal/httpapi/admin_identities.go internal/httpapi/server.go internal/httpapi/auth.go internal/httpapi/server_test.go
@@ -812,7 +812,7 @@ git commit -m "feat: add managed admin identity API"
 - Modify: `internal/httpapi/management_mcp.go`
 - Modify: `internal/httpapi/server_test.go`
 
-- [ ] **Step 1: Add MCP argument types**
+- [x] **Step 1: Add MCP argument types**
 
 Add:
 
@@ -830,7 +830,7 @@ type managementMCPAdminIdentityIDArgs struct {
 }
 ```
 
-- [ ] **Step 2: Add MCP tools/list entries**
+- [x] **Step 2: Add MCP tools/list entries**
 
 Append to `managementMCPTools()`:
 
@@ -863,7 +863,7 @@ Append to `managementMCPTools()`:
 },
 ```
 
-- [ ] **Step 3: Route MCP calls through REST-equivalent helpers**
+- [x] **Step 3: Route MCP calls through REST-equivalent helpers**
 
 In `callManagementMCPTool`, add cases that call service helpers shared with REST handlers, not copied authorization logic:
 
@@ -890,7 +890,7 @@ case "create_admin_identity":
 
 Repeat for rotate and disable using helper functions.
 
-- [ ] **Step 4: Add MCP tests**
+- [x] **Step 4: Add MCP tests**
 
 Add `TestManagementMCPAdminIdentityTools`:
 
@@ -929,7 +929,7 @@ func TestManagementMCPAdminIdentityTools(t *testing.T) {
 }
 ```
 
-- [ ] **Step 5: Run MCP tests**
+- [x] **Step 5: Run MCP tests**
 
 ```bash
 go test ./internal/httpapi -run 'TestManagementMCPAdminIdentityTools' -count=1
@@ -937,7 +937,7 @@ go test ./internal/httpapi -run 'TestManagementMCPAdminIdentityTools' -count=1
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit MCP tools**
+- [x] **Step 6: Commit MCP tools**
 
 ```bash
 git add internal/httpapi/management_mcp.go internal/httpapi/server_test.go
@@ -1287,7 +1287,7 @@ git commit -m "test: gate managed admin identity lifecycle"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-06-16-admin-tenant-access-management.md`
 
-- [ ] **Step 1: Run focused backend tests**
+- [x] **Step 1: Run focused backend tests**
 
 ```bash
 go test ./internal/store ./internal/httpapi -run 'AdminIdentity|ManagedAdmin|ManagementMCPAdminIdentity|ConsoleAuthSession' -count=1
@@ -1295,7 +1295,7 @@ go test ./internal/store ./internal/httpapi -run 'AdminIdentity|ManagedAdmin|Man
 
 Expected: PASS.
 
-- [ ] **Step 2: Run frontend tests and build**
+- [x] **Step 2: Run frontend tests and build**
 
 ```bash
 pnpm --dir frontend test
@@ -1304,7 +1304,7 @@ pnpm --dir frontend build
 
 Expected: PASS.
 
-- [ ] **Step 3: Run repository gates**
+- [x] **Step 3: Run repository gates**
 
 ```bash
 make check
@@ -1313,7 +1313,7 @@ make release-check
 
 Expected: PASS.
 
-- [ ] **Step 4: Browser smoke**
+- [x] **Step 4: Browser smoke**
 
 Start local demo stack and open the console:
 
@@ -1328,11 +1328,17 @@ Verify:
 - A tenant administrator sees a forbidden or read-only state for administrator management.
 - One-time key panel is prominent and disappears when cleared.
 
-- [ ] **Step 5: Check plan boxes**
+Observed on the authenticated local stack:
+
+- Platform administrator login with `platform-key` opened **管理员与边界** and the create modal.
+- Created `smoke-tenant-admin`, confirmed the one-time key panel was shown once, and confirmed it disappeared after clearing.
+- Tenant administrator login with the generated one-time key loaded the console without the global loading shell, hid create actions, and showed the localized platform-administrator-required state.
+
+- [x] **Step 5: Check plan boxes**
 
 Update this plan so completed steps are marked `[x]`.
 
-- [ ] **Step 6: Final commit if plan checkboxes changed**
+- [x] **Step 6: Final commit if plan checkboxes changed**
 
 ```bash
 git add docs/superpowers/plans/2026-06-16-admin-tenant-access-management.md

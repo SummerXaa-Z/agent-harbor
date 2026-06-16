@@ -2526,6 +2526,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         );
     }
   })();
+  const viewCanRenderWithoutConsoleData = activeView.key === "admin-access";
 
   return (
     <div className="app-shell">
@@ -2764,7 +2765,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           </section>
         ) : null}
 
-        {!data ? (
+        {!data && !viewCanRenderWithoutConsoleData ? (
           <section className="workspace-loading" role="status" aria-live="polite">
             <div className="workspace-loading-copy">
               <strong>{t("status.loadingConsole")}</strong>

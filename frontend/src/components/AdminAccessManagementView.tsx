@@ -43,6 +43,7 @@ export function AdminAccessManagementView({ controller, t }: AdminAccessManageme
   const selected = controller.selected;
   const createDisabled =
     controller.creating ||
+    controller.forbidden ||
     !form.actor.trim() ||
     ((form.role === "tenant_admin" || form.role === "security_reviewer") && !form.tenantId?.trim());
 
@@ -69,10 +70,12 @@ export function AdminAccessManagementView({ controller, t }: AdminAccessManageme
             <RefreshCw size={14} />
             {controller.loading ? t("action.loading") : t("action.refresh")}
           </button>
-          <button className="primary-button" onClick={controller.openCreate} type="button">
-            <Plus size={14} />
-            {t("adminAccess.create")}
-          </button>
+          {!controller.forbidden ? (
+            <button className="primary-button" onClick={controller.openCreate} type="button">
+              <Plus size={14} />
+              {t("adminAccess.create")}
+            </button>
+          ) : null}
         </div>
       )}
       className="span-12 admin-access-panel"
@@ -136,10 +139,10 @@ export function AdminAccessManagementView({ controller, t }: AdminAccessManageme
                 <tr>
                   <td colSpan={8}>
                     <EmptyRow
-                      actionLabel={t("adminAccess.create")}
-                      detail={t("adminAccess.emptyDetail")}
-                      onAction={controller.openCreate}
-                      title={t("adminAccess.emptyTitle")}
+                      actionLabel={controller.forbidden ? undefined : t("adminAccess.create")}
+                      detail={controller.forbidden ? t("adminAccess.forbiddenDetail") : t("adminAccess.emptyDetail")}
+                      onAction={controller.forbidden ? undefined : controller.openCreate}
+                      title={controller.forbidden ? t("adminAccess.forbiddenTitle") : t("adminAccess.emptyTitle")}
                     />
                   </td>
                 </tr>

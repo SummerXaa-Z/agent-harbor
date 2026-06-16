@@ -70,6 +70,8 @@ test("administrator boundary workspace has complete bilingual copy", () => {
     "adminAccess.subtitle",
     "adminAccess.oneTimeKey",
     "adminAccess.oneTimeKeyDetail",
+    "adminAccess.forbiddenDetail",
+    "adminAccess.forbiddenTitle",
     "adminAccess.role.platform_admin",
     "adminAccess.role.tenant_admin",
     "adminAccess.role.security_reviewer",
@@ -80,7 +82,8 @@ test("administrator boundary workspace has complete bilingual copy", () => {
     "message.adminAccessCreated",
     "message.adminAccessRotated",
     "message.adminAccessDisabled",
-    "error.adminAccessOperation"
+    "error.adminAccessOperation",
+    "error.adminAccessPlatformRequired"
   ];
 
   for (const language of ["en", "zh-CN"]) {
@@ -107,7 +110,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("nav.access"), "权限画像");
   assert.equal(t("nav.traces"), "运行审计");
   assert.equal(t("nav.evidence"), "上线检查");
-  assert.equal(t("nav.admin-access"), "管理员");
+  assert.equal(t("nav.admin-access"), "管理员与边界");
   assert.equal(t("nav.registry"), "资源管理");
   assert.equal(t("nav.tenants"), "租户与组织");
   assert.equal(t("navGroup.primary"), "查与改");

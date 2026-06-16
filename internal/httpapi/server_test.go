@@ -743,6 +743,41 @@ func TestAdminEndpointsRequireConfiguredAuthenticationByDefault(t *testing.T) {
 	}
 }
 
+func TestManagedAdminIdentityAuthenticatesWithoutBootstrapConfig(t *testing.T) {
+	repo := store.NewMemory()
+	now := time.Now().UTC()
+	_, err := repo.CreateAdminIdentityWithAudit(context.Background(), domain.AdminIdentity{
+		ID:          "adm_stored",
+		Actor:       "stored-admin",
+		DisplayName: "Stored Admin",
+		Role:        domain.AdminIdentityRolePlatformAdmin,
+		KeyHash:     security.HashSecret("stored-key"),
+		KeyPrefix:   "ahadm_stored",
+		Status:      domain.AdminIdentityStatusActive,
+		Source:      domain.AdminIdentitySourceManaged,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}, func(created domain.AdminIdentity) domain.AuditEvent {
+		return domain.AuditEvent{
+			ID:           "audit_stored_admin",
+			Action:       "admin_identity.created",
+			ResourceType: "admin_identity",
+			ResourceID:   created.ID,
+			Actor:        "test",
+			CreatedAt:    now,
+		}
+	})
+	if err != nil {
+		t.Fatalf("seed managed admin identity: %v", err)
+	}
+
+	router := httpapi.New(repo).Router()
+	agents := requestWithAdmin(t, router, http.MethodGet, "/api/v1/agents", nil, "", "stored-key")
+	if agents.Code != http.StatusOK {
+		t.Fatalf("stored managed admin should authenticate without bootstrap config, got %d body=%s", agents.Code, agents.Body.String())
+	}
+}
+
 func TestLocalDevCORS(t *testing.T) {
 	router := newRouter()
 

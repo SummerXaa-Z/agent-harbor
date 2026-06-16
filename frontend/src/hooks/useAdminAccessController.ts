@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  ApiRequestError,
   createAdminIdentity,
   disableAdminIdentity,
   fetchAdminIdentities,
@@ -18,6 +19,7 @@ export interface AdminAccessMessage {
 
 interface AdminAccessState {
   creating: boolean;
+  forbidden: boolean;
   identities: AdminIdentity[];
   loading: boolean;
   message: AdminAccessMessage | null;
@@ -28,6 +30,7 @@ interface AdminAccessState {
 
 const initialState: AdminAccessState = {
   creating: false,
+  forbidden: false,
   identities: [],
   loading: false,
   message: null,
@@ -51,6 +54,7 @@ export function useAdminAccessController({
       const identities = await fetchAdminIdentities(adminKey, signal);
       setState((current) => ({
         ...current,
+        forbidden: false,
         identities,
         message: current.message?.key.startsWith("error.adminAccessLoad") ? null : current.message
       }));
@@ -58,6 +62,8 @@ export function useAdminAccessController({
       if (isAbortError(error)) return;
       setState((current) => ({
         ...current,
+        forbidden: isForbiddenAdminAccessError(error),
+        identities: isForbiddenAdminAccessError(error) ? [] : current.identities,
         message: localizedAdminAccessError(error, "error.adminAccessLoad")
       }));
     } finally {
@@ -73,6 +79,10 @@ export function useAdminAccessController({
   }, [enabled, loadAdminIdentities]);
 
   function openCreate() {
+    if (state.forbidden) {
+      setState((current) => ({ ...current, message: { key: "error.adminAccessPlatformRequired" } }));
+      return;
+    }
     setState((current) => ({ ...current, modal: "create", selected: null }));
   }
 
@@ -184,6 +194,9 @@ function mergeIdentity(rows: AdminIdentity[], identity: AdminIdentity) {
 }
 
 function localizedAdminAccessError(error: unknown, fallbackKey: string): AdminAccessMessage {
+  if (isForbiddenAdminAccessError(error)) {
+    return { key: "error.adminAccessPlatformRequired" };
+  }
   if (error instanceof Error && error.message.trim()) {
     return { key: "error.adminAccessOperation", params: { detail: error.message } };
   }
@@ -192,4 +205,8 @@ function localizedAdminAccessError(error: unknown, fallbackKey: string): AdminAc
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
+}
+
+function isForbiddenAdminAccessError(error: unknown) {
+  return error instanceof ApiRequestError && error.status === 403;
 }

@@ -2,7 +2,9 @@ export type ManagementMutationAction =
   | "create_agent"
   | "create_key"
   | "rotate_credential"
-  | "create_policy";
+  | "create_policy"
+  | "update_agent_status"
+  | "disable_policy";
 
 export type ManagementMutationRefreshState =
   | { status: "idle" }
@@ -36,6 +38,8 @@ export function managementMutationSuccessMessageKey(action: ManagementMutationAc
     create_agent: "message.agentCreated",
     create_key: "message.keyCreated",
     create_policy: "message.policyCreated",
+    disable_policy: "message.policyDisabled",
+    update_agent_status: "message.statusChanged",
     rotate_credential: "message.credentialRotated"
   };
   return keys[action];
@@ -46,8 +50,9 @@ export function managementMutationRefreshFailedMessageKey(action: ManagementMuta
     create_agent: "message.agentCreatedRefreshFailed",
     create_key: "message.keyCreatedRefreshFailed",
     create_policy: "message.policyCreatedRefreshFailed",
+    disable_policy: "message.policyDisabledRefreshFailed",
+    update_agent_status: "message.agentStatusChangedRefreshFailed",
     rotate_credential: "message.credentialRotatedRefreshFailed"
   };
   return keys[action];
 }
-

@@ -92,6 +92,31 @@ type auditEventResponse struct {
 	CreatedAt    string         `json:"createdAt"`
 }
 
+type adminIdentityResponse struct {
+	ID          string         `json:"id"`
+	Actor       string         `json:"actor"`
+	DisplayName string         `json:"displayName"`
+	Role        string         `json:"role"`
+	TenantID    string         `json:"tenantId"`
+	WorkspaceID string         `json:"workspaceId"`
+	Status      string         `json:"status"`
+	Source      string         `json:"source"`
+	KeyPrefix   string         `json:"keyPrefix"`
+	CreatedBy   string         `json:"createdBy"`
+	UpdatedBy   string         `json:"updatedBy"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+}
+
+type createAdminIdentityResponse struct {
+	Identity adminIdentityResponse `json:"identity"`
+	Key      string                `json:"key"`
+}
+
+type rotateAdminIdentityKeyResponse struct {
+	Identity adminIdentityResponse `json:"identity"`
+	Key      string                `json:"key"`
+}
+
 type grantResponse struct {
 	ID        string `json:"id"`
 	CallerID  string `json:"callerAgentId"`
@@ -915,6 +940,129 @@ func TestConsoleAuthSessionReportsScopedAdminIdentity(t *testing.T) {
 	me := decodeData[map[string]any](t, requestWithCookie(t, router, http.MethodGet, "/api/v1/auth/session", nil, cookies[0]))
 	if me["actor"] != "east-admin" || me["role"] != "tenant_admin" || me["tenantId"] != "tenant-east" || me["workspaceId"] != "ws-support" {
 		t.Fatalf("session endpoint should return scoped principal, got %#v", me)
+	}
+}
+
+func TestManagedAdminIdentityLifecycleAndScopedLogin(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+	})
+
+	create := decodeData[createAdminIdentityResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities", map[string]any{
+		"actor":       "east-admin",
+		"displayName": "East Administrator",
+		"role":        "tenant_admin",
+		"tenantId":    "tenant-east",
+		"workspaceId": "ws-support",
+	}, "", "platform-key"))
+	if create.Identity.Actor != "east-admin" || create.Identity.Source != "managed" || create.Identity.Status != "active" {
+		t.Fatalf("unexpected created managed admin: %#v", create)
+	}
+	if create.Key == "" || !strings.Contains(create.Key, create.Identity.KeyPrefix) {
+		t.Fatalf("expected one-time key with visible prefix, got response=%#v", create)
+	}
+
+	list := decodeData[[]adminIdentityResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/admin-identities", nil, "", "platform-key"))
+	if len(list) != 2 {
+		t.Fatalf("expected bootstrap plus managed identity, got %#v", list)
+	}
+	for _, row := range list {
+		if bytes.Contains(mustJSON(t, row), []byte(create.Key)) {
+			t.Fatalf("list response must not expose one-time admin key: %#v", row)
+		}
+	}
+
+	login := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": create.Key}, "")
+	if login.Code != http.StatusOK {
+		t.Fatalf("managed admin key should log in, got %d body=%s", login.Code, login.Body.String())
+	}
+	session := decodeData[map[string]any](t, login)
+	if session["actor"] != "east-admin" || session["role"] != "tenant_admin" || session["tenantId"] != "tenant-east" || session["workspaceId"] != "ws-support" {
+		t.Fatalf("unexpected managed session: %#v", session)
+	}
+
+	rotate := decodeData[rotateAdminIdentityKeyResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities/"+create.Identity.ID+"/key:rotate", nil, "", "platform-key"))
+	if rotate.Key == "" || rotate.Key == create.Key || rotate.Identity.KeyPrefix == create.Identity.KeyPrefix {
+		t.Fatalf("expected rotated key and prefix, got %#v", rotate)
+	}
+	oldLogin := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": create.Key}, "")
+	if oldLogin.Code != http.StatusUnauthorized {
+		t.Fatalf("old key must be invalid after rotation, got %d body=%s", oldLogin.Code, oldLogin.Body.String())
+	}
+	newLogin := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": rotate.Key}, "")
+	if newLogin.Code != http.StatusOK {
+		t.Fatalf("rotated key should log in, got %d body=%s", newLogin.Code, newLogin.Body.String())
+	}
+
+	disabled := decodeData[adminIdentityResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities/"+create.Identity.ID+":disable", nil, "", "platform-key"))
+	if disabled.Status != "disabled" {
+		t.Fatalf("expected disabled managed admin, got %#v", disabled)
+	}
+	disabledLogin := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": rotate.Key}, "")
+	if disabledLogin.Code != http.StatusUnauthorized {
+		t.Fatalf("disabled admin key must be invalid, got %d body=%s", disabledLogin.Code, disabledLogin.Body.String())
+	}
+
+	events := decodeData[[]auditEventResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/audit/events?resourceType=admin_identity", nil, "", "platform-key"))
+	if got := auditActions(events); !reflect.DeepEqual(got, []string{"admin_identity.created", "admin_identity.key_rotated", "admin_identity.disabled"}) {
+		t.Fatalf("unexpected admin identity audit actions: %#v", got)
+	}
+	for _, event := range events {
+		raw := mustJSON(t, event)
+		if bytes.Contains(raw, []byte(create.Key)) || bytes.Contains(raw, []byte(rotate.Key)) || bytes.Contains(raw, []byte("keyHash")) {
+			t.Fatalf("audit event must not expose admin key material: %s", raw)
+		}
+	}
+}
+
+func TestScopedAdminCannotManageAdminIdentities(t *testing.T) {
+	router := newRouterWithRepoAndAdminIdentities(store.NewMemory(), []httpapi.AdminIdentity{
+		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+		{Actor: "east-admin", Key: "east-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+
+	for _, tc := range []struct {
+		name   string
+		method string
+		path   string
+		body   any
+	}{
+		{name: "list", method: http.MethodGet, path: "/api/v1/admin-identities"},
+		{name: "create", method: http.MethodPost, path: "/api/v1/admin-identities", body: map[string]any{"actor": "bad", "role": "tenant_admin", "tenantId": "tenant-east"}},
+		{name: "rotate", method: http.MethodPost, path: "/api/v1/admin-identities/adm_missing/key:rotate"},
+		{name: "disable", method: http.MethodPost, path: "/api/v1/admin-identities/adm_missing:disable"},
+	} {
+		resp := requestWithAdmin(t, router, tc.method, tc.path, tc.body, "", "east-key")
+		if resp.Code != http.StatusForbidden {
+			t.Fatalf("%s should be forbidden for scoped admin, got %d body=%s", tc.name, resp.Code, resp.Body.String())
+		}
+	}
+}
+
+func TestAdminIdentityLifecycleRejectsBootstrapAndSelfDisable(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+	})
+
+	list := decodeData[[]adminIdentityResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/admin-identities", nil, "", "platform-key"))
+	if len(list) != 1 || list[0].Source != "bootstrap" {
+		t.Fatalf("expected one bootstrap identity, got %#v", list)
+	}
+	rotateBootstrap := requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities/"+list[0].ID+"/key:rotate", nil, "", "platform-key")
+	if rotateBootstrap.Code != http.StatusBadRequest {
+		t.Fatalf("bootstrap identity rotation should be rejected, got %d body=%s", rotateBootstrap.Code, rotateBootstrap.Body.String())
+	}
+
+	created := decodeData[createAdminIdentityResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities", map[string]any{
+		"actor":       "managed-platform",
+		"displayName": "Managed Platform",
+		"role":        "platform_admin",
+	}, "", "platform-key"))
+	disableManagedPlatform := requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities/"+created.Identity.ID+":disable", nil, "", created.Key)
+	if disableManagedPlatform.Code != http.StatusForbidden {
+		t.Fatalf("self-disable should be rejected, got %d body=%s", disableManagedPlatform.Code, disableManagedPlatform.Body.String())
 	}
 }
 
@@ -6103,6 +6251,15 @@ func auditActions(events []auditEventResponse) []string {
 		actions = append(actions, event.Action)
 	}
 	return actions
+}
+
+func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal test value: %v", err)
+	}
+	return raw
 }
 
 func decodeMCPResult(t *testing.T, resp *httptest.ResponseRecorder) mcpEnvelopeResponse {

@@ -85,7 +85,8 @@ import {
   healthCheckFailureDetail
 } from "./healthCheckPresentation";
 import {
-  buildResourceLifecycleSummary
+  buildResourceLifecycleSummary,
+  type ResourceLifecycleItem
 } from "./resourceLifecycle";
 import {
   deriveProductionJourney
@@ -321,6 +322,22 @@ const defaultAccessProfileFilters: AccessProfileFilters = {
   traceLimit: "20",
   workspaceId: ""
 };
+type ResourceActionModal = "" | "rotate_credential" | "create_policy" | "create_key";
+
+interface ResourceActionRequest {
+  modal: ResourceActionModal;
+  openToken: number;
+}
+
+const defaultResourceActionRequest: ResourceActionRequest = { modal: "", openToken: 0 };
+
+function resourceActionRequestReducer(
+  current: ResourceActionRequest,
+  modal: ResourceActionModal
+): ResourceActionRequest {
+  return { modal, openToken: current.openToken + 1 };
+}
+
 function navIconFor(key: NavKey) {
   switch (key) {
     case "getting-started":
@@ -460,6 +477,12 @@ export function ConsoleController() {
   const [traceFilters, setTraceFilters] = useState<TraceFilters>(defaultTraceFilters);
   const [language, setLanguage] = useState<Language>(initialLanguage);
   const [handoffContexts, setHandoffContexts] = useState<{ ask: AskHandoffContext | null; permissionChange: PermissionChangeHandoffContext | null; permissionNotice: PermissionChangeHandoffContext | null }>({ ask: null, permissionChange: null, permissionNotice: null });
+  const [resourceActionRequest, dispatchResourceActionRequest] = useReducer(
+    resourceActionRequestReducer,
+    defaultResourceActionRequest
+  );
+  const resourceActionModal = resourceActionRequest.modal;
+  const resourceActionOpenToken = resourceActionRequest.openToken;
   const [tenantOrganizationState, setTenantOrganizationState] = useReducer(
     tenantOrganizationConsoleStateReducer,
     defaultTenantOrganizationConsoleState
@@ -546,6 +569,9 @@ export function ConsoleController() {
     userSelectedNavRef.current = true;
     setActiveNav("ai-admin");
   }
+  function openResourceActionModal(modal: ResourceActionModal) {
+    dispatchResourceActionRequest(modal);
+  }
   const management = useManagementOperations({
     adminKey,
     defaultScope: defaultManagementScope,
@@ -567,6 +593,65 @@ export function ConsoleController() {
     setData,
     t
   });
+  function handleResourceLifecycleAction(item: ResourceLifecycleItem) {
+    if (item.nextActionKind === "rotate_credential") {
+      management.setRotateForm({
+        ...management.rotateForm,
+        agentId: item.id
+      });
+      openResourceActionModal("rotate_credential");
+      return;
+    }
+    if (item.nextActionKind === "review_capabilities") {
+      capabilityGovernance.setForm({
+        ...capabilityGovernance.form,
+        targetId: item.id
+      });
+      userSelectedNavRef.current = true;
+      setActiveNav("capabilities");
+      return;
+    }
+    if (item.nextActionKind === "start_permission_change") {
+      const resourceAgent = agents.find((agent) => agent.id === item.id);
+      const sameScopeCaller = localCallers.find(
+        (agent) => agent.tenantId === item.tenantId && agent.workspaceId === item.workspaceId
+      );
+      const sameScopeTarget = mcpTargets.find(
+        (agent) => agent.tenantId === item.tenantId && agent.workspaceId === item.workspaceId
+      );
+      const caller = item.kind === "caller" ? resourceAgent : sameScopeCaller ?? localCallers[0];
+      const target = item.kind === "caller" ? sameScopeTarget ?? mcpTargets[0] : resourceAgent;
+      const targetName = target ? permissionEntityDisplayName(target.name, t) : item.name;
+      openTenantPermissionChange({
+        callerInstanceId: caller?.id,
+        callerName: caller ? permissionEntityDisplayName(caller.name, t) : undefined,
+        intentText: tx(t, "resource.permissionIntent", { target: targetName }),
+        sourceView: "registry",
+        targetId: target?.id ?? item.id,
+        targetName,
+        tenantId: item.tenantId,
+        tenantName: permissionTenantPathLabel(item.tenantId, tenants, t).primary,
+        workspaceId: item.workspaceId,
+        workspaceName: permissionWorkspaceDisplayName(item.workspaceId, agents, t)
+      });
+      return;
+    }
+    if (item.nextActionKind === "review_runtime") {
+      setTraceFilters((current) => ({
+        ...current,
+        callerAgentId: item.kind === "caller" ? item.id : current.callerAgentId,
+        targetAgentId: item.kind === "caller" ? current.targetAgentId : item.id
+      }));
+      userSelectedNavRef.current = true;
+      setActiveNav("traces");
+      return;
+    }
+    const nextNav = navKeyFromHash(item.nextActionHash);
+    if (nextNav) {
+      userSelectedNavRef.current = true;
+      setActiveNav(nextNav);
+    }
+  }
   const accessProfileController = useAccessProfileController({
     activeNav,
     adminKey,
@@ -2201,6 +2286,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         icon={<Route size={16} />}
         id="policy-create-panel"
         openLabel={t("action.open")}
+        openToken={resourceActionModal === "create_policy" ? resourceActionOpenToken : undefined}
         tone={tone}
         title={t("panel.createPolicy")}
         variant={variant}
@@ -2242,6 +2328,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     return (
       <Panel className="span-12" icon={<Network size={18} />} title={t("panel.resourceLifecycle")}>
         <ResourceLifecycleView
+          onResourceAction={handleResourceLifecycleAction}
           primaryActions={resourceLifecyclePrimaryActions}
           secondaryActions={resourceLifecycleSecondaryActions}
           summary={resourceLifecycleSummary}
@@ -2455,6 +2542,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         closeLabel={t("action.dismiss")}
         icon={<KeyRound size={16} />}
         openLabel={t("action.open")}
+        openToken={resourceActionModal === "create_key" ? resourceActionOpenToken : undefined}
         tone={tone}
         title={t("panel.createKey")}
         variant={variant}
@@ -2477,6 +2565,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         closeLabel={t("action.dismiss")}
         icon={<KeyRound size={16} />}
         openLabel={t("action.open")}
+        openToken={resourceActionModal === "rotate_credential" ? resourceActionOpenToken : undefined}
         tone={tone}
         title={t("panel.rotateCredential")}
         variant={variant}

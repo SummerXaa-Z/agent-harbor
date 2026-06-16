@@ -41,6 +41,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 控制台用户可见文案不再使用 “evidence/证据” 作为主路径表达，统一改为验收记录、运行记录、审计记录、交接材料和上线状态等业务语言。
 - Resource Management now presents lifecycle operations directly in the resource workbench: create Agent, create key, rotate credential, create policy, review capabilities, start permission changes, and review runtime all start from the same entry.
 - 资源管理页现在把生命周期操作直接收束到资源工作台：创建 Agent、创建密钥、轮换凭据、创建策略、查看能力、发起权限变更和查看运行状态都从同一个入口开始。
+- Resource Management row actions now keep resource context while opening credential actions in place and routing capability, permission, and runtime follow-ups with focused handoff state.
+- 资源管理的行级操作现在会保留资源上下文：凭据操作就地打开，能力、权限和运行后续动作带着上下文进入对应工作区。
 - Resource Management now owns Agent, credential, and policy creation as the single lifecycle mutation entry; Routes and Access Policies stay focused on review/governance and route empty states back to Resource Management.
 - 资源管理现在统一承接 Agent、凭据和策略创建；路由规则和访问策略页面专注审查与治理，空状态会引导回资源管理。
 - Moved Permission Changes approval-decision confirmation state into a focused hook, reducing the workbench component while keeping approval, rejection, and withdraw behavior unchanged.

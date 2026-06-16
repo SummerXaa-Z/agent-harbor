@@ -435,7 +435,7 @@ export interface PermissionChangeHandoffContext {
   subjectId?: string
   templateId?: string
   intentText?: string
-  sourceView: 'ask' | 'tenants'
+  sourceView: 'ask' | 'tenants' | 'registry'
 }
 
 export interface AskHandoffContext {

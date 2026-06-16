@@ -250,9 +250,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const callers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const selectedCaller = agents.find((agent) => agent.id === form.callerInstanceId);
   const selectedTarget = mcpTargets.find((agent) => agent.id === form.targetId);
-  const permissionHandoffTitle = permissionHandoffContext?.sourceView === "tenants"
-    ? t("text.permissionTenantHandoffTitle")
-    : t("text.permissionHandoffTitle");
+  const permissionHandoffTitle = permissionHandoffContext?.sourceView === "tenants" ? t("text.permissionTenantHandoffTitle") : permissionHandoffContext?.sourceView === "registry" ? t("text.permissionHandoffRegistryTitle") : t("text.permissionHandoffTitle");
   const permissionHandoffDetail = permissionHandoffContext
     ? permissionHandoffContext.sourceView === "tenants"
       ? tx(t, "text.permissionTenantHandoffDetail", {

@@ -61,6 +61,7 @@ export function ActionModalButton({
   openLabel,
   closeLabel,
   id,
+  openToken,
   tone = "secondary",
   variant = "compact",
   children
@@ -70,6 +71,7 @@ export function ActionModalButton({
   openLabel: string;
   closeLabel: string;
   id?: string;
+  openToken?: number;
   tone?: "primary" | "secondary";
   variant?: "compact" | "command";
   children: ReactNode;
@@ -85,6 +87,7 @@ export function ActionModalButton({
       icon={icon}
       id={id}
       openLabel={openLabel}
+      openToken={openToken}
       title={title}
       triggerClassName={triggerClassName}
     >
@@ -101,6 +104,7 @@ function ActionModalLauncher({
   className,
   triggerClassName,
   id,
+  openToken,
   children
 }: {
   title: string;
@@ -110,12 +114,18 @@ function ActionModalLauncher({
   className: string;
   triggerClassName: string;
   id?: string;
+  openToken?: number;
   children: ReactNode;
 }) {
   const generatedId = useId();
   const dialogId = `${id ?? "action-modal"}-${generatedId}`;
   const [open, setOpen] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (openToken === undefined) return;
+    setOpen(true);
+  }, [openToken]);
 
   useEffect(() => {
     if (!open) return;

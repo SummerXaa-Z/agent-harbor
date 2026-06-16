@@ -251,7 +251,16 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(styles, /\.action-modal-body \.control-form\s*\{/);
   assert.doesNotMatch(styles, /\.action-modal-trigger-command\s*\{[^}]*box-shadow:\s*var\(--shadow-card\);/s);
   assert.match(resourceLifecycleView, /summary\.items\.map/);
+  assert.match(resourceLifecycleView, /onResourceAction/);
+  assert.match(resourceLifecycleView, /type="button"[\s\S]*onClick=\{\(\) => onResourceAction\(item\)\}/);
+  assert.match(resourceLifecycleView, /t\(item\.detailKey\)/);
+  assert.doesNotMatch(resourceLifecycleView, /ManagementForms/);
   assert.doesNotMatch(resourceLifecycleView, /TechnicalId/);
+  assert.match(consolePrimitives, /openToken\?: number/);
+  assert.match(consolePrimitives, /useEffect\(\(\) => \{[\s\S]*if \(openToken === undefined\) return;[\s\S]*setOpen\(true\)/);
+  assert.match(app, /resourceActionModal/);
+  assert.match(app, /handleResourceLifecycleAction/);
+  assert.match(app, /openToken=\{resourceActionModal === "rotate_credential" \? resourceActionOpenToken : undefined\}/);
   assert.doesNotMatch(registryView, /createAgentPanel|createKeyPanel|rotateCredentialPanel/);
   assert.doesNotMatch(app, /RoutesView[\s\S]*routeGovernancePanel=\{routeGovernancePanel\("span-12", createPolicyAction\(\)\)\}/);
   assert.doesNotMatch(app, /PoliciesView[\s\S]*routeGovernancePanel=\{routeGovernancePanel\("span-12", createPolicyAction\(\)\)\}/);

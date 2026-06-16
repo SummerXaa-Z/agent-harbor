@@ -18,7 +18,7 @@ The next increment changes structure, not behavior. `ConsoleController.tsx` will
 
 ## Architecture
 
-Create `frontend/src/resourceLifecycleActionPlanner.ts` as a pure module. It accepts a `ResourceLifecycleItem`, resource collections, and translation helpers, then returns a discriminated `ResourceLifecycleActionPlan`.
+Create `frontend/src/resourceLifecycleActionPlanner.ts` as a pure module. It accepts a `ResourceLifecycleItem`, resource collections, and formatting callbacks, then returns a discriminated `ResourceLifecycleActionPlan`.
 
 Controller responsibilities stay limited to side effects:
 

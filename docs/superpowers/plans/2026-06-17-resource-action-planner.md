@@ -15,6 +15,7 @@
 - Create: `frontend/src/resourceLifecycleActionPlanner.ts` — pure action-planning module.
 - Create: `frontend/tests/resourceLifecycleActionPlanner.test.mjs` — behavior tests for action plans.
 - Modify: `frontend/src/ConsoleController.tsx` — replace inline row-action branching with plan execution.
+- Modify: `frontend/src/permissionWorkbenchPresenters.ts` — expose permission-intent formatting for controller injection.
 - Modify: `frontend/tests/styleTheme.test.mjs` — guard that resource action decision logic is no longer embedded in the controller.
 
 ---
@@ -24,7 +25,7 @@
 **Files:**
 - Create: `frontend/tests/resourceLifecycleActionPlanner.test.mjs`
 
-- [ ] **Step 1: Write failing planner tests**
+- [x] **Step 1: Write failing planner tests**
 
 Create `frontend/tests/resourceLifecycleActionPlanner.test.mjs`:
 
@@ -32,10 +33,8 @@ Create `frontend/tests/resourceLifecycleActionPlanner.test.mjs`:
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createTranslator } from "../src/i18n.ts";
 import { planResourceLifecycleAction } from "../src/resourceLifecycleActionPlanner.ts";
 
-const t = createTranslator("zh-CN");
 const tenants = [
   { id: "tenant-a", level: 1, name: "客户服务中心", status: "active", createdAt: "", updatedAt: "" }
 ];
@@ -43,15 +42,20 @@ const callerA = agent("caller-a", "tenant-a", "ws-a", "客服助手", "local");
 const callerB = agent("caller-b", "tenant-b", "ws-b", "其他助手", "local");
 const targetA = agent("target-a", "tenant-a", "ws-a", "工单工具服务", "mcp");
 const targetB = agent("target-b", "tenant-b", "ws-b", "其他工具服务", "mcp");
+const formatters = {
+  formatEntityName: (name) => name,
+  formatPermissionIntent: (targetName) => `为 ${targetName} 创建授权。`,
+  formatTenantName: (tenantId) => tenants.find((tenant) => tenant.id === tenantId)?.name ?? tenantId,
+  formatWorkspaceName: (workspaceId) => workspaceId
+};
 
 test("credential blockers open the rotate credential modal", () => {
   const plan = planResourceLifecycleAction({
     agents: [callerA, targetA],
+    ...formatters,
     item: item(targetA, "rotate_credential"),
     localCallers: [callerA],
-    mcpTargets: [targetA],
-    t,
-    tenants
+    mcpTargets: [targetA]
   });
 
   assert.deepEqual(plan, { agentId: "target-a", kind: "open_modal", modal: "rotate_credential" });
@@ -60,11 +64,10 @@ test("credential blockers open the rotate credential modal", () => {
 test("capability blockers navigate with the target preselected", () => {
   const plan = planResourceLifecycleAction({
     agents: [callerA, targetA],
+    ...formatters,
     item: item(targetA, "review_capabilities"),
     localCallers: [callerA],
-    mcpTargets: [targetA],
-    t,
-    tenants
+    mcpTargets: [targetA]
   });
 
   assert.deepEqual(plan, { kind: "capability_prefill", navKey: "capabilities", targetId: "target-a" });
@@ -73,11 +76,10 @@ test("capability blockers navigate with the target preselected", () => {
 test("permission blockers for a target choose the same-scope caller", () => {
   const plan = planResourceLifecycleAction({
     agents: [callerB, callerA, targetA],
+    ...formatters,
     item: item(targetA, "start_permission_change"),
     localCallers: [callerB, callerA],
-    mcpTargets: [targetA],
-    t,
-    tenants
+    mcpTargets: [targetA]
   });
 
   assert.equal(plan.kind, "permission_handoff");
@@ -90,11 +92,10 @@ test("permission blockers for a target choose the same-scope caller", () => {
 test("permission blockers for a caller choose the same-scope target", () => {
   const plan = planResourceLifecycleAction({
     agents: [callerA, targetB, targetA],
+    ...formatters,
     item: { ...item(callerA, "start_permission_change"), kind: "caller", kindKey: "resource.kind.caller" },
     localCallers: [callerA],
-    mcpTargets: [targetB, targetA],
-    t,
-    tenants
+    mcpTargets: [targetB, targetA]
   });
 
   assert.equal(plan.kind, "permission_handoff");
@@ -105,19 +106,17 @@ test("permission blockers for a caller choose the same-scope target", () => {
 test("runtime plans filter caller rows by caller and target rows by target", () => {
   const callerPlan = planResourceLifecycleAction({
     agents: [callerA, targetA],
+    ...formatters,
     item: { ...item(callerA, "review_runtime"), kind: "caller", kindKey: "resource.kind.caller" },
     localCallers: [callerA],
-    mcpTargets: [targetA],
-    t,
-    tenants
+    mcpTargets: [targetA]
   });
   const targetPlan = planResourceLifecycleAction({
     agents: [callerA, targetA],
+    ...formatters,
     item: item(targetA, "review_runtime"),
     localCallers: [callerA],
-    mcpTargets: [targetA],
-    t,
-    tenants
+    mcpTargets: [targetA]
   });
 
   assert.deepEqual(callerPlan, { kind: "runtime_filters", navKey: "traces", traceFilters: { callerAgentId: "caller-a" } });
@@ -127,11 +126,10 @@ test("runtime plans filter caller rows by caller and target rows by target", () 
 test("disabled resources navigate back to resource management", () => {
   const plan = planResourceLifecycleAction({
     agents: [callerA, targetA],
+    ...formatters,
     item: item(targetA, "review_resource"),
     localCallers: [callerA],
-    mcpTargets: [targetA],
-    t,
-    tenants
+    mcpTargets: [targetA]
   });
 
   assert.deepEqual(plan, { kind: "navigate", navKey: "registry" });
@@ -175,7 +173,7 @@ function item(agentRow, nextActionKind) {
 }
 ```
 
-- [ ] **Step 2: Run test and confirm RED**
+- [x] **Step 2: Run test and confirm RED**
 
 Run:
 
@@ -193,21 +191,14 @@ Expected: FAIL because `resourceLifecycleActionPlanner.ts` does not exist.
 - Create: `frontend/src/resourceLifecycleActionPlanner.ts`
 - Modify: `frontend/src/ConsoleController.tsx`
 
-- [ ] **Step 1: Add planner implementation**
+- [x] **Step 1: Add planner implementation**
 
 Create `frontend/src/resourceLifecycleActionPlanner.ts`:
 
 ```ts
-import {
-  permissionEntityDisplayName,
-  permissionTenantPathLabel,
-  permissionWorkspaceDisplayName,
-  tx,
-  type Translator
-} from "./permissionWorkbenchPresenters";
 import type { NavKey } from "./consoleNavigation";
 import type { ResourceLifecycleItem } from "./resourceLifecycle";
-import type { Agent, PermissionChangeHandoffContext, Tenant, TraceFilters } from "./types";
+import type { Agent, PermissionChangeHandoffContext, TraceFilters } from "./types";
 
 export type ResourceLifecycleModal = "rotate_credential" | "create_policy" | "create_key";
 
@@ -220,20 +211,24 @@ export type ResourceLifecycleActionPlan =
 
 export interface ResourceLifecycleActionPlanInput {
   agents: Agent[];
+  formatEntityName: (name: string) => string;
+  formatPermissionIntent: (targetName: string) => string;
+  formatTenantName: (tenantId: string) => string;
+  formatWorkspaceName: (workspaceId: string) => string;
   item: ResourceLifecycleItem;
   localCallers: Agent[];
   mcpTargets: Agent[];
-  t: Translator;
-  tenants: Tenant[];
 }
 
 export function planResourceLifecycleAction({
   agents,
+  formatEntityName,
+  formatPermissionIntent,
+  formatTenantName,
+  formatWorkspaceName,
   item,
   localCallers,
-  mcpTargets,
-  t,
-  tenants
+  mcpTargets
 }: ResourceLifecycleActionPlanInput): ResourceLifecycleActionPlan {
   if (item.nextActionKind === "rotate_credential") {
     return { agentId: item.id, kind: "open_modal", modal: "rotate_credential" };
@@ -243,7 +238,16 @@ export function planResourceLifecycleAction({
   }
   if (item.nextActionKind === "start_permission_change") {
     return {
-      context: permissionHandoffContext({ agents, item, localCallers, mcpTargets, t, tenants }),
+      context: permissionHandoffContext({
+        agents,
+        formatEntityName,
+        formatPermissionIntent,
+        formatTenantName,
+        formatWorkspaceName,
+        item,
+        localCallers,
+        mcpTargets
+      }),
       kind: "permission_handoff"
     };
   }
@@ -259,30 +263,32 @@ export function planResourceLifecycleAction({
 
 function permissionHandoffContext({
   agents,
+  formatEntityName,
+  formatPermissionIntent,
+  formatTenantName,
+  formatWorkspaceName,
   item,
   localCallers,
-  mcpTargets,
-  t,
-  tenants
+  mcpTargets
 }: ResourceLifecycleActionPlanInput): PermissionChangeHandoffContext {
   const resourceAgent = agents.find((agent) => agent.id === item.id);
   const sameScopeCaller = localCallers.find((agent) => sameScope(agent, item));
   const sameScopeTarget = mcpTargets.find((agent) => sameScope(agent, item));
   const caller = item.kind === "caller" ? resourceAgent : sameScopeCaller ?? localCallers[0];
   const target = item.kind === "caller" ? sameScopeTarget ?? mcpTargets[0] : resourceAgent;
-  const targetName = target ? permissionEntityDisplayName(target.name, t) : item.name;
+  const targetName = target ? formatEntityName(target.name) : item.name;
 
   return {
     callerInstanceId: caller?.id,
-    callerName: caller ? permissionEntityDisplayName(caller.name, t) : undefined,
-    intentText: tx(t, "resource.permissionIntent", { target: targetName }),
+    callerName: caller ? formatEntityName(caller.name) : undefined,
+    intentText: formatPermissionIntent(targetName),
     sourceView: "registry",
     targetId: target?.id ?? item.id,
     targetName,
     tenantId: item.tenantId,
-    tenantName: permissionTenantPathLabel(item.tenantId, tenants, t).primary,
+    tenantName: formatTenantName(item.tenantId),
     workspaceId: item.workspaceId,
-    workspaceName: permissionWorkspaceDisplayName(item.workspaceId, agents, t)
+    workspaceName: formatWorkspaceName(item.workspaceId)
   };
 }
 
@@ -291,7 +297,7 @@ function sameScope(agent: Agent, item: ResourceLifecycleItem) {
 }
 ```
 
-- [ ] **Step 2: Replace inline controller decision logic**
+- [x] **Step 2: Replace inline controller decision logic**
 
 In `frontend/src/ConsoleController.tsx` import the planner:
 
@@ -312,7 +318,16 @@ Replace `handleResourceLifecycleAction` with:
 
 ```ts
 function handleResourceLifecycleAction(item: ResourceLifecycleItem) {
-  const plan = planResourceLifecycleAction({ agents, item, localCallers, mcpTargets, t, tenants });
+  const plan = planResourceLifecycleAction({
+    agents,
+    formatEntityName: (name) => permissionEntityDisplayName(name, t),
+    formatPermissionIntent: (targetName) => resourcePermissionIntent(targetName, t),
+    formatTenantName: (tenantId) => permissionTenantPathLabel(tenantId, tenants, t).primary,
+    formatWorkspaceName: (workspaceId) => permissionWorkspaceDisplayName(workspaceId, agents, t),
+    item,
+    localCallers,
+    mcpTargets
+  });
   if (plan.kind === "open_modal") {
     management.setRotateForm({
       ...management.rotateForm,
@@ -345,7 +360,7 @@ function handleResourceLifecycleAction(item: ResourceLifecycleItem) {
 }
 ```
 
-- [ ] **Step 3: Run planner test and confirm GREEN**
+- [x] **Step 3: Run planner test and confirm GREEN**
 
 Run:
 
@@ -362,7 +377,7 @@ Expected: PASS.
 **Files:**
 - Modify: `frontend/tests/styleTheme.test.mjs`
 
-- [ ] **Step 1: Add controller anti-regression guard**
+- [x] **Step 1: Add controller anti-regression guard**
 
 In `styleTheme.test.mjs`, add:
 
@@ -378,7 +393,7 @@ assert.match(resourceLifecycleActionPlanner, /export function planResourceLifecy
 assert.doesNotMatch(app, /sameScopeCaller|sameScopeTarget|resource\\.permissionIntent/);
 ```
 
-- [ ] **Step 2: Run focused tests**
+- [x] **Step 2: Run focused tests**
 
 Run:
 
@@ -388,7 +403,7 @@ pnpm --dir frontend exec node --test tests/resourceLifecycleActionPlanner.test.m
 
 Expected: PASS.
 
-- [ ] **Step 3: Run release gates**
+- [x] **Step 3: Run release gates**
 
 Run:
 
@@ -397,6 +412,7 @@ pnpm --dir frontend test
 pnpm --dir frontend build
 git diff --check
 make check
+make release-check
 ```
 
 Expected: PASS.

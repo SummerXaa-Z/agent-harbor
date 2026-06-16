@@ -35,6 +35,10 @@ export function tx(t: Translator, key: string, values: Record<string, string | n
   );
 }
 
+export function resourcePermissionIntent(targetName: string, t: Translator) {
+  return tx(t, "resource.permissionIntent", { target: targetName });
+}
+
 export function accessSubjectDropdownOption(option: AccessSubjectOption, t: Translator) {
   return {
     label: `${t(accessSubjectKindLabelKey(option.kind))} · ${t(option.labelKey)}`,

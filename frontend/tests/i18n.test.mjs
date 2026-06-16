@@ -406,6 +406,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("action.createApprovalRequest"), "提交审批");
   assert.equal(t("empty.permissionApplyPreflight.detail"), "应用权限前先运行预检。");
   assert.equal(t("message.permissionPackageApprovalRequired"), "该申请需要先审批：{detail}。");
+  assert.equal(t("message.permissionPackageReadinessWarning"), "应用前请先复核这次权限变更。");
   assert.equal(t("section.permissionApprovalRequest"), "审批请求");
   assert.equal(t("section.permissionApprovalTrace"), "审批追溯");
   assert.equal(t("section.permissionReviewerQueue"), "待审批请求");
@@ -450,6 +451,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("action.withdrawPermissionRequest"), "撤回请求");
   assert.equal(t("action.confirmWithdrawPermissionRequest"), "确认撤回");
   assert.equal(t("action.rehearseApplicationDrift"), "演练漂移");
+  assert.equal(t("form.requiredFieldFallback"), "必填项");
   assert.equal(t("text.permissionChangeCompleteTitle"), "本次权限变更已生效");
   assert.equal(t("text.permissionChangeCompleteDetail"), "权限已应用，运行验证和上线检查已完成。");
   assert.equal(t("text.permissionChangeCompletedAt"), "完成时间：{date}");
@@ -476,6 +478,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("blocker.missing_created_objects"), "部分已记录授权对象缺失；回滚前需要先调查漂移。");
   assert.equal(t("blocker.inactive_created_objects"), "部分已记录授权对象未启用；需要复核是否已经发生手工变更或部分处置。");
   assert.equal(t("blocker.no_allowed_capabilities"), "该应用没有记录允许能力；不能按自动顺序规划回滚。");
+  assert.equal(t("blocker.unknown"), "该影响项需要人工复核后再确认上线。");
   assert.equal(t("text.remediationPlan"), "处置计划");
   assert.equal(t("text.readOnlyPlan"), "只读计划");
   assert.equal(t("text.rehearsalMode"), "只读演练");
@@ -496,6 +499,10 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("value.verify_effective_access"), "手动处置后重新解释有效权限，确认访问已按预期收敛。");
   assert.equal(t("value.manual_review"), "人工评审");
   assert.equal(t("value.investigate"), "调查");
+  assert.equal(t("permissionPolicy.unknownReason"), "这次权限变更需要先完成策略复核。");
+  assert.equal(t("permissionPreflight.unknown"), "预检项");
+  assert.equal(t("permissionPreflight.detail.unknown"), "应用前请先复核这项预检结果。");
+  assert.equal(t("permissionPreflight.next.unknown"), "请复核预检结果后选择下一步安全动作。");
   assert.equal(t("status.directApplyAllowed"), "可直接应用");
   assert.equal(t("status.approvalRequired"), "需要审批");
   assert.equal(t("status.applicationHealthReady"), "健康");
@@ -507,6 +514,8 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("default.aiAdminApprovalJourneyRequestText"), "给客服分诊助手开通当前租户的客户查询和工单有限更新权限，禁止导出合同。");
   assert.equal(t("productionCheck.runtime_allowed_trace_present"), "允许运行记录");
   assert.equal(t("productionCheck.runtime_denied_trace_present"), "拒绝运行记录");
+  assert.equal(t("productionCheck.unknown"), "状态检查项");
+  assert.equal(t("productionCheck.detail.unknown"), "确认上线前请先复核这项状态检查。");
   assert.equal(t("empty.permissionProductionReadiness.detail"), "应用权限并采集运行、审计和落地记录后执行状态检查。");
   assert.equal(t("status.approvalPending"), "待审批");
   assert.equal(t("status.stepMissing"), "待完成");

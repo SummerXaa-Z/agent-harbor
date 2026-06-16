@@ -428,7 +428,7 @@ test("capability names use business labels in primary UI", () => {
   assert.doesNotMatch(i18n, /"text\.defaultWorkspaceName": "沙箱工作区"/);
   assert.match(app, /import \{[\s\S]*capabilityDisplayName,[\s\S]*\} from "\.\/consolePresenters"/);
   assert.match(capabilityGovernanceHook, /message\.capabilityApproved", \{ name: capabilityDisplayName\(capability, t\) \}/);
-  assert.match(app, /key === "capability"[\s\S]*capabilityKeyDisplayName\(value, t\)/);
+  assert.match(app, /permissionPolicyReasonMessage,[\s\S]*from "\.\/permissionWorkbenchPresenters"/);
   assert.match(permissionWorkbenchParts, /capabilityDisplayName\(capability, t\)\} · \{t\(`value\.\$\{capability\.action\}`/);
   assert.match(permissionWorkbenchPresenters, /key === "capability"[\s\S]*capabilityKeyDisplayName\(value, t\)/);
   assert.match(accessProfileView, /const capabilityNameById = useMemo/);

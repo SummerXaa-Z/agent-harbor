@@ -49,6 +49,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 上线检查现在会归一未知后端下一步提示的兜底文案，避免旧版 “evidence/证据” 表达重新出现在可见生产状态提示中。
 - Access Query now renders backend decision summaries, chain messages, and recommended next actions through localized production copy instead of showing raw English API guidance in the primary answer.
 - 访问查询现在会把后端判定摘要、链路说明和建议下一步转换为本地化生产文案，不再在主答案路径直接展示英文 API 提示。
+- Permission Changes now localizes unknown status-check, apply-preflight, policy, and readiness fallback guidance instead of displaying raw backend strings in the primary operator path.
+- 权限变更现在会把未知的状态检查、应用前预检、策略门禁和就绪告警统一转换为本地化复核提示，不再在主操作路径直接展示后端原始文案。
+- Permission Changes presenter logic now owns readiness/preflight copy fallbacks, and obsolete duplicated presentation helpers were removed from `ConsoleController`.
+- 权限变更的展示层现在统一承接就绪/预检文案兜底，并从 `ConsoleController` 删除了过期的重复展示辅助函数。
 - Resource Management now presents lifecycle operations directly in the resource workbench: create Agent, create key, rotate credential, create policy, review capabilities, start permission changes, and review runtime all start from the same entry.
 - 资源管理页现在把生命周期操作直接收束到资源工作台：创建 Agent、创建密钥、轮换凭据、创建策略、查看能力、发起权限变更和查看运行状态都从同一个入口开始。
 - Resource Management row actions now keep resource context while opening credential actions in place and routing capability, permission, and runtime follow-ups with focused handoff state.

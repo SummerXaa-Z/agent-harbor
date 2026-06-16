@@ -213,7 +213,7 @@ Expected: all pass.
 
 Update every checkbox in this plan to `[x]`.
 
-- [ ] **Step 5: Commit, push, and open PR**
+- [x] **Step 5: Commit, push, and open PR**
 
 Run:
 

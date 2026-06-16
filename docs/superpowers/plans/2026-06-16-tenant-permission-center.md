@@ -1301,7 +1301,7 @@ git commit -m "feat: surface tenant permission center"
 - Modify: `CHANGELOG.md`
 - Modify: `docs/superpowers/plans/2026-06-16-tenant-permission-center.md`
 
-- [ ] **Step 1: Create scenario script**
+- [x] **Step 1: Create scenario script**
 
 Create `scripts/scenario-tenant-permission-center.sh`:
 
@@ -1415,7 +1415,7 @@ echo "tenant permission center scenario complete"
 
 This scenario follows the existing release-script convention and requires `curl` and `jq`, matching the other JSON-validating scenario scripts in `scripts/`.
 
-- [ ] **Step 2: Wire Makefile target**
+- [x] **Step 2: Wire Makefile target**
 
 Add:
 
@@ -1427,11 +1427,11 @@ scenario-tenant-permission-center: build
 
 Add `scenario-tenant-permission-center` to `release-check` after `scenario-admin-access-management`.
 
-- [ ] **Step 3: Update makefile target test**
+- [x] **Step 3: Update makefile target test**
 
 In `tests/makefile_targets_test.sh`, add `scripts/scenario-tenant-permission-center.sh` to the `bash -n` list and assert the Makefile target exists using the local pattern already used for other scenarios.
 
-- [ ] **Step 4: Update README and CHANGELOG**
+- [x] **Step 4: Update README and CHANGELOG**
 
 In `README.md`, add a short bilingual paragraph near the tenant/admin sections:
 

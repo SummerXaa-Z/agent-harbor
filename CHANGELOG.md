@@ -8,6 +8,7 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Added a tenant permission center projection and console summary for tenant-scoped administrators, permissions, capabilities, data scopes, and next actions.
 - Web console now includes Administrators & Boundaries, where platform administrators can create scoped managed administrators, rotate one-time keys, disable identities, and audit lifecycle changes without editing deployment configuration.
 - 控制台新增“管理员与边界”，平台管理员可以在产品内创建范围化管理员、轮换一次性密钥、禁用身份并审计生命周期变更，不再依赖修改部署配置完成日常管理。
 - Release readiness now includes `make scenario-admin-access-management`, proving managed administrator creation, scoped login, tenant-boundary enforcement, key rotation, disablement, and audit redaction in one production lifecycle gate.

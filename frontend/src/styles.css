@@ -2083,8 +2083,14 @@ button {
   margin: 0;
   max-width: 780px;
   color: var(--ink);
-  font-size: 17px;
+  font-size: var(--text-base);
   line-height: 1.45;
+}
+
+.go-live-acceptance-headline {
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.35;
 }
 
 .go-live-acceptance-warning,
@@ -2109,6 +2115,52 @@ button {
   gap: 8px;
   justify-content: flex-end;
   max-width: 430px;
+}
+
+.go-live-acceptance-blockers {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+}
+
+.go-live-acceptance-blockers > strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.go-live-acceptance-blockers ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.go-live-acceptance-blockers li,
+.go-live-acceptance-blockers span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.go-live-acceptance-blockers li {
+  position: relative;
+  padding-left: 14px;
+}
+
+.go-live-acceptance-blockers li::before {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--danger);
+  content: "";
 }
 
 .go-live-acceptance-context {
@@ -2201,7 +2253,7 @@ button {
 
 .go-live-step-list {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   width: 100%;
   margin: 0;

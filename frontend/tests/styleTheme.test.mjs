@@ -25,6 +25,7 @@ const tenantOrganizationView = readFileSync(new URL("../src/components/TenantOrg
 const resourceLifecycleView = readFileSync(new URL("../src/components/ResourceLifecycleView.tsx", import.meta.url), "utf8");
 const productionJourney = readExistingFile(new URL("../src/productionJourney.ts", import.meta.url));
 const productionJourneyCheckpoint = readExistingFile(new URL("../src/components/ProductionJourneyCheckpoint.tsx", import.meta.url));
+const productionAcceptance = readExistingFile(new URL("../src/productionAcceptance.ts", import.meta.url));
 const ui = readFileSync(new URL("../src/components/ui.tsx", import.meta.url), "utf8");
 const managementOperationsHookUrl = new URL("../src/hooks/useManagementOperations.ts", import.meta.url);
 const capabilityGovernanceHookUrl = new URL("../src/hooks/useCapabilityGovernanceController.ts", import.meta.url);
@@ -515,6 +516,9 @@ test("go-live acceptance overview is split from the app shell", () => {
   assert.doesNotMatch(app, /function GoLiveAcceptanceOverview/);
   assert.doesNotMatch(app, /function productionReadinessStatusLabel/);
   assert.doesNotMatch(app, /function permissionProductionReadinessNextAction/);
+  assert.match(goLiveAcceptanceOverview, /from "\.\.\/productionAcceptance"/);
+  assert.match(productionAcceptance, /export function buildProductionAcceptanceCenter/);
+  assert.match(productionAcceptance, /export type ProductionAcceptanceStatus/);
   assert.match(goLiveAcceptanceOverview, /export function GoLiveAcceptanceOverview/);
   assert.match(goLiveAcceptanceOverview, /className="go-live-acceptance"/);
 });

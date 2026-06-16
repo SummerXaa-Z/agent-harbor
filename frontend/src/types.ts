@@ -211,6 +211,7 @@ export interface ApiEnvelope<T> {
 export interface ConsoleSession {
   actor?: string
   authenticated: boolean
+  csrfToken?: string
   expiresAt?: string
   role?: string
   requiresLogin: boolean

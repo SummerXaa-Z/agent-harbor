@@ -158,6 +158,20 @@ interface RequestOptions {
   signal?: AbortSignal
 }
 
+let consoleCsrfToken = ''
+
+function setConsoleCsrfToken(token?: string) {
+  consoleCsrfToken = token?.trim() || ''
+}
+
+function requestMethod(options: RequestOptions): NonNullable<RequestOptions['method']> {
+  return options.method ?? (options.body === undefined ? 'GET' : 'POST')
+}
+
+function shouldSendConsoleCsrf(method: string) {
+  return method === 'POST' || method === 'PATCH' || method === 'DELETE'
+}
+
 export class ApiRequestError extends Error {
   readonly code?: string
   readonly status: number
@@ -171,17 +185,19 @@ export class ApiRequestError extends Error {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const method = requestMethod(options)
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (options.adminKey?.trim()) headers['X-Admin-Key'] = options.adminKey.trim()
   if (options.bearerToken?.trim()) headers.Authorization = `Bearer ${options.bearerToken.trim()}`
   if (options.runId?.trim()) headers['X-Run-Id'] = options.runId.trim()
+  if (consoleCsrfToken && shouldSendConsoleCsrf(method)) headers['X-AgentHarbor-CSRF'] = consoleCsrfToken
   if (options.body !== undefined) headers['Content-Type'] = 'application/json'
 
   const response = await fetch(endpoint(path), {
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     credentials: 'include',
     headers,
-    method: options.method ?? (options.body === undefined ? 'GET' : 'POST'),
+    method,
     signal: options.signal,
   })
 
@@ -271,18 +287,24 @@ export async function checkMockMcpHealth(
 }
 
 export async function fetchConsoleSession(signal?: AbortSignal): Promise<ConsoleSession> {
-  return request<ConsoleSession>('/api/v1/auth/session', { signal })
+  const session = await request<ConsoleSession>('/api/v1/auth/session', { signal })
+  setConsoleCsrfToken(session.csrfToken)
+  return session
 }
 
 export async function loginConsole(adminKey: string, signal?: AbortSignal): Promise<ConsoleSession> {
-  return request<ConsoleSession>('/api/v1/auth/login', {
+  const session = await request<ConsoleSession>('/api/v1/auth/login', {
     body: { adminKey },
     signal,
   })
+  setConsoleCsrfToken(session.csrfToken)
+  return session
 }
 
 export async function logoutConsole(signal?: AbortSignal): Promise<ConsoleSession> {
-  return request<ConsoleSession>('/api/v1/auth/logout', { method: 'POST', signal })
+  const session = await request<ConsoleSession>('/api/v1/auth/logout', { method: 'POST', signal })
+  setConsoleCsrfToken(session.csrfToken)
+  return session
 }
 
 export async function fetchSystemInfo(signal?: AbortSignal): Promise<SystemInfo> {

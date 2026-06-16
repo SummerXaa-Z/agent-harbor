@@ -861,6 +861,9 @@ func TestLocalDevCORS(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "X-AgentHarbor-Subject-Id") {
 		t.Fatalf("subject header missing from CORS allow headers %q", got)
 	}
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "X-AgentHarbor-CSRF") {
+		t.Fatalf("csrf header missing from CORS allow headers %q", got)
+	}
 
 	req = httptest.NewRequest(http.MethodOptions, "/api/v1/auth/session", nil)
 	req.Header.Set("Origin", "http://127.0.0.1:5176")
@@ -974,17 +977,41 @@ func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	if session["authenticated"] != true || session["actor"] != "admin-key" || session["requiresLogin"] != true {
 		t.Fatalf("unexpected login session: %#v", session)
 	}
+	csrfToken, ok := session["csrfToken"].(string)
+	if !ok || csrfToken == "" {
+		t.Fatalf("login session should include csrf token, got %#v", session)
+	}
 	cookies := login.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].Name != "agent_harbor_session" || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode {
 		t.Fatalf("login should set one HttpOnly SameSite=Lax session cookie, got %#v", cookies)
 	}
 
-	created := decodeData[agentResponse](t, requestWithCookie(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+	blocked := requestWithCookie(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Missing CSRF Caller",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+	}, cookies[0])
+	if blocked.Code != http.StatusForbidden || !strings.Contains(blocked.Body.String(), "csrf") {
+		t.Fatalf("session cookie mutation without csrf should be forbidden, got %d body=%s", blocked.Code, blocked.Body.String())
+	}
+
+	invalidCSRF := requestWithCookieAndCSRF(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Invalid CSRF Caller",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+	}, cookies[0], "invalid")
+	if invalidCSRF.Code != http.StatusForbidden || !strings.Contains(invalidCSRF.Body.String(), "csrf") {
+		t.Fatalf("session cookie mutation with invalid csrf should be forbidden, got %d body=%s", invalidCSRF.Code, invalidCSRF.Body.String())
+	}
+
+	created := decodeData[agentResponse](t, requestWithCookieAndCSRF(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
 		"name":        "Session Caller",
 		"workspaceId": "ws-1",
 		"channelType": "local",
 		"status":      "active",
-	}, cookies[0]))
+	}, cookies[0], csrfToken))
 	if created.ID == "" {
 		t.Fatalf("expected management request with session cookie to succeed: %#v", created)
 	}
@@ -993,8 +1020,11 @@ func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	if me["authenticated"] != true || me["actor"] != "admin-key" {
 		t.Fatalf("expected authenticated session status, got %#v", me)
 	}
+	if me["csrfToken"] == "" {
+		t.Fatalf("session endpoint should refresh csrf token, got %#v", me)
+	}
 
-	logout := requestWithCookie(t, router, http.MethodPost, "/api/v1/auth/logout", nil, cookies[0])
+	logout := requestWithCookieAndCSRF(t, router, http.MethodPost, "/api/v1/auth/logout", nil, cookies[0], csrfToken)
 	if logout.Code != http.StatusOK {
 		t.Fatalf("logout should succeed, got %d body=%s", logout.Code, logout.Body.String())
 	}
@@ -6884,6 +6914,19 @@ func requestWithCookie(t *testing.T, router http.Handler, method string, path st
 	rec, req := buildRequest(t, method, path, body, "", "", "")
 	if cookie != nil {
 		req.AddCookie(cookie)
+	}
+	router.ServeHTTP(rec, req)
+	return rec
+}
+
+func requestWithCookieAndCSRF(t *testing.T, router http.Handler, method string, path string, body any, cookie *http.Cookie, csrfToken string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec, req := buildRequest(t, method, path, body, "", "", "")
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	if csrfToken != "" {
+		req.Header.Set("X-AgentHarbor-CSRF", csrfToken)
 	}
 	router.ServeHTTP(rec, req)
 	return rec

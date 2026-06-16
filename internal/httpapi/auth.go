@@ -31,13 +31,22 @@ type consoleSessionResponse struct {
 	TenantID      string `json:"tenantId,omitempty"`
 	WorkspaceID   string `json:"workspaceId,omitempty"`
 	Authenticated bool   `json:"authenticated"`
+	CSRFToken     string `json:"csrfToken,omitempty"`
 	ExpiresAt     string `json:"expiresAt,omitempty"`
 	RequiresLogin bool   `json:"requiresLogin"`
 }
 
+const consoleSessionCSRFHeader = "X-AgentHarbor-CSRF"
+
 func (s *Server) getAuthSession(w http.ResponseWriter, r *http.Request) {
 	principal, expiresAt, ok := s.consoleSessionFromRequest(r)
-	writeJSON(w, http.StatusOK, s.consoleSessionResponse(principal, expiresAt, ok))
+	response := s.consoleSessionResponse(principal, expiresAt, ok)
+	if ok {
+		if sessionToken, tokenOK := consoleSessionTokenFromRequest(r); tokenOK {
+			response.CSRFToken = s.consoleSessionCSRFToken(sessionToken)
+		}
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -63,10 +72,20 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, s.consoleSessionCookie(token, expiresAt, false, r))
-	writeJSON(w, http.StatusOK, s.consoleSessionResponse(principal, expiresAt, true))
+	response := s.consoleSessionResponse(principal, expiresAt, true)
+	response.CSRFToken = s.consoleSessionCSRFToken(token)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	if sessionToken, ok := consoleSessionTokenFromRequest(r); ok {
+		if _, _, valid := s.verifyConsoleSession(r.Context(), sessionToken); valid {
+			if err := s.validateConsoleSessionCSRF(r, sessionToken); err != nil {
+				writeError(w, err)
+				return
+			}
+		}
+	}
 	http.SetCookie(w, s.consoleSessionCookie("", time.Unix(0, 0).UTC(), true, r))
 	principal, expiresAt, ok := s.developmentSession()
 	writeJSON(w, http.StatusOK, s.consoleSessionResponse(principal, expiresAt, ok))
@@ -76,11 +95,23 @@ func (s *Server) consoleSessionFromRequest(r *http.Request) (adminPrincipal, tim
 	if principal, expiresAt, ok := s.developmentSession(); ok {
 		return principal, expiresAt, true
 	}
-	cookie, err := r.Cookie(consoleSessionCookieName)
-	if err != nil {
+	sessionToken, ok := consoleSessionTokenFromRequest(r)
+	if !ok {
 		return adminPrincipal{}, time.Time{}, false
 	}
-	return s.verifyConsoleSession(r.Context(), cookie.Value)
+	return s.verifyConsoleSession(r.Context(), sessionToken)
+}
+
+func consoleSessionTokenFromRequest(r *http.Request) (string, bool) {
+	cookie, err := r.Cookie(consoleSessionCookieName)
+	if err != nil {
+		return "", false
+	}
+	token := strings.TrimSpace(cookie.Value)
+	if token == "" {
+		return "", false
+	}
+	return token, true
 }
 
 func (s *Server) developmentSession() (adminPrincipal, time.Time, bool) {
@@ -183,6 +214,34 @@ func (s *Server) consoleSessionSignature(encodedPayload string) string {
 	mac := hmac.New(sha256.New, s.consoleSessionSecret())
 	_, _ = mac.Write([]byte(encodedPayload))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (s *Server) consoleSessionCSRFToken(sessionToken string) string {
+	mac := hmac.New(sha256.New, s.consoleSessionSecret())
+	_, _ = mac.Write([]byte("csrf:v1:"))
+	_, _ = mac.Write([]byte(sessionToken))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (s *Server) validateConsoleSessionCSRF(r *http.Request, sessionToken string) error {
+	if !requiresCSRFProtection(r.Method) {
+		return nil
+	}
+	expected := s.consoleSessionCSRFToken(sessionToken)
+	provided := strings.TrimSpace(r.Header.Get(consoleSessionCSRFHeader))
+	if provided == "" || !hmac.Equal([]byte(expected), []byte(provided)) {
+		return domain.PermissionDenied("console session csrf token is required")
+	}
+	return nil
+}
+
+func requiresCSRFProtection(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Server) consoleSessionSecret() []byte {

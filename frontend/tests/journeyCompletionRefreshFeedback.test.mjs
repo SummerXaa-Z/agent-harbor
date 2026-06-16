@@ -55,7 +55,7 @@ test("core journey commits runtime result before follow-up refresh", () => {
   assert.ok(resultIndex >= 0, "runtime result should be committed");
   assert.ok(refreshIndex > resultIndex, "follow-up refresh should run after runtime result is committed");
   assert.match(block, /journeyCompletionRefreshFailedMessageKey\("core_journey"\)/);
-  assert.match(block, /setMessage\(\s*refreshResult\.ok/);
+  assert.match(block, /setMessage\(\s*\{\s*key: refreshResult\.ok \? "message\.coreJourneyComplete" : journeyCompletionRefreshFailedMessageKey\("core_journey"\)\s*\}/);
   assert.ok(
     block.indexOf("const [nextData, nextProfile] = await Promise.all") > refreshIndex,
     "Core journey follow-up refresh calls should be contained inside completion refresh helper"

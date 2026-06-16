@@ -9,6 +9,12 @@ import {
 } from "../askJourney";
 import type { Translator } from "../consolePresenters";
 import type { Language } from "../i18n";
+import {
+  localizedErrorMessageState,
+  localizedMessageText,
+  tx,
+  type LocalizedMessage
+} from "../localizedMessages";
 import type {
   AccessDecisionExplainRequest,
   AccessDecisionExplainResult,
@@ -51,7 +57,8 @@ export function useAskAccessController({
   const [result, setResult] = useState<AccessDecisionExplainResult | null>(null);
   const [history, setHistory] = useState<AskAccessHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [messageState, setMessage] = useState<LocalizedMessage | null>(null);
+  const message = localizedMessageText(messageState, t, language);
 
   const effectiveSelection = useMemo(
     () => applySelectionDefaults(selection, consoleData),
@@ -74,7 +81,7 @@ export function useAskAccessController({
       workspaceId: handoffContext.workspaceId ?? current.workspaceId
     }));
     setResult(null);
-    setMessage("");
+    setMessage(null);
     onConsumeHandoff();
   }, [handoffContext]);
 
@@ -87,24 +94,24 @@ export function useAskAccessController({
       return merged;
     });
     setResult(null);
-    setMessage("");
+    setMessage(null);
   }
 
   async function explain(selectionOverride?: AskAccessSelection) {
     if (!consoleData) return;
     if (!liveDataAvailable) {
-      setMessage(t("message.accessDecisionExplainRequiresLiveApi"));
+      setMessage({ key: "message.accessDecisionExplainRequiresLiveApi" });
       return;
     }
     const nextSelection = selectionOverride ?? effectiveSelection;
     const build = buildExplainRequest(nextSelection);
     if (!build.complete || !build.request) {
-      setMessage(t("message.accessDecisionExplainMissingFields"));
+      setMessage({ key: "message.accessDecisionExplainMissingFields" });
       return;
     }
     const request = build.request;
     setLoading(true);
-    setMessage("");
+    setMessage(null);
     try {
       const next = await fetchAccessDecisionExplanation(request, adminKey);
       setResult(next);
@@ -116,9 +123,9 @@ export function useAskAccessController({
         },
         ...current.filter((entry) => historyId(entry.request) !== historyId(request))
       ].slice(0, 5));
-      setMessage(t("message.accessDecisionExplainLoaded"));
+      setMessage({ key: "message.accessDecisionExplainLoaded" });
     } catch (error) {
-      setMessage(localizedErrorMessage(t, language, error, "error.explainAccessDecision"));
+      setMessage(localizedErrorMessageState(error, "error.explainAccessDecision"));
     } finally {
       setLoading(false);
     }
@@ -127,7 +134,7 @@ export function useAskAccessController({
   function selectHistory(entry: AskAccessHistoryEntry) {
     setSelection(entry.request);
     setResult(entry.result);
-    setMessage("");
+    setMessage(null);
   }
 
   async function runExampleQuery() {
@@ -139,7 +146,7 @@ export function useAskAccessController({
     if (!consoleData) return;
     const request = result?.request ?? requestBuild.request;
     if (!request) {
-      setMessage(t("message.accessDecisionExplainMissingFields"));
+      setMessage({ key: "message.accessDecisionExplainMissingFields" });
       return;
     }
     onStartPermissionChange(buildPermissionChangeHandoff(request, consoleData, {
@@ -207,20 +214,4 @@ function historyId(request: AccessDecisionExplainRequest) {
     request.capabilityId,
     request.subjectId ?? ""
   ].join("|");
-}
-
-function localizedErrorMessage(t: Translator, language: Language, error: unknown, fallbackKey: string) {
-  const fallback = t(fallbackKey);
-  if (!(error instanceof Error) || !error.message.trim()) return fallback;
-  if (language === "en" || /[\u4e00-\u9fa5]/.test(error.message)) {
-    return error.message;
-  }
-  return fallback;
-}
-
-function tx(t: Translator, key: string, values: Record<string, string | number>) {
-  return Object.entries(values).reduce(
-    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
-    t(key)
-  );
 }

@@ -53,6 +53,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 权限变更现在会把未知的状态检查、应用前预检、策略门禁和就绪告警统一转换为本地化复核提示，不再在主操作路径直接展示后端原始文案。
 - Permission Changes presenter logic now owns readiness/preflight copy fallbacks, and obsolete duplicated presentation helpers were removed from `ConsoleController`.
 - 权限变更的展示层现在统一承接就绪/预检文案兜底，并从 `ConsoleController` 删除了过期的重复展示辅助函数。
+- Console operator messages now store translation descriptors instead of rendered language snapshots across Access Query, Tenant Access Profile, Capability Governance, Core Journey, and Resource Management.
+- 控制台操作反馈现在在访问查询、租户访问画像、能力治理、核心自检和资源管理中存储翻译描述符，而不是已渲染的语言快照。
+- Browser console fallbacks now avoid echoing raw backend error text in administrator and management operation messages on the primary operator path.
+- 浏览器控制台现在会避免在管理员与资源管理操作提示中直接回显后端原始错误文本，降低中文主路径出现英文接口错误的风险。
 - Resource Management now presents lifecycle operations directly in the resource workbench: create Agent, create key, rotate credential, create policy, review capabilities, start permission changes, and review runtime all start from the same entry.
 - 资源管理页现在把生命周期操作直接收束到资源工作台：创建 Agent、创建密钥、轮换凭据、创建策略、查看能力、发起权限变更和查看运行状态都从同一个入口开始。
 - Resource Management row actions now keep resource context while opening credential actions in place and routing capability, permission, and runtime follow-ups with focused handoff state.

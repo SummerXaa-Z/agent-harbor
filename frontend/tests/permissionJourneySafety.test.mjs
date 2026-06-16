@@ -4,6 +4,12 @@ import test from "node:test";
 
 const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
+const accessProfileHook = readFileSync(new URL("../src/hooks/useAccessProfileController.ts", import.meta.url), "utf8");
+const adminAccessHook = readFileSync(new URL("../src/hooks/useAdminAccessController.ts", import.meta.url), "utf8");
+const askAccessHook = readFileSync(new URL("../src/hooks/useAskAccessController.ts", import.meta.url), "utf8");
+const capabilityGovernanceHook = readFileSync(new URL("../src/hooks/useCapabilityGovernanceController.ts", import.meta.url), "utf8");
+const coreJourneyHook = readFileSync(new URL("../src/hooks/useCoreJourneyController.ts", import.meta.url), "utf8");
+const localizedMessages = readFileSync(new URL("../src/localizedMessages.ts", import.meta.url), "utf8");
 const managementHook = readFileSync(new URL("../src/hooks/useManagementOperations.ts", import.meta.url), "utf8");
 const managementMutationRefresh = readFileSync(new URL("../src/managementMutationRefresh.ts", import.meta.url), "utf8");
 const permissionWorkbenchPresenters = readFileSync(new URL("../src/permissionWorkbenchPresenters.ts", import.meta.url), "utf8");
@@ -162,8 +168,9 @@ test("permission journey messages store translation keys instead of rendered lan
   const applyBlock = functionBlock("applyAiAdminPermissionPackage");
   const exportBlock = functionBlock("exportAiAdminProductionEvidence");
 
-  assert.match(app, /type LocalizedMessage =/);
-  assert.match(app, /function localizedMessageText\(message: LocalizedMessage \| null, t: Translator, language: Language\)/);
+  assert.match(localizedMessages, /export type LocalizedMessage =/);
+  assert.match(localizedMessages, /export function localizedMessageText\(message: LocalizedMessage \| null, t: Translator, language: Language\)/);
+  assert.match(app, /localizedMessageText,[\s\S]*from "\.\/localizedMessages"/);
   assert.match(app, /const \[aiAdminMessage, setAiAdminMessage\] = useState<LocalizedMessage \| null>\(null\)/);
   assert.match(app, /const renderedAiAdminMessage = localizedMessageText\(aiAdminMessage, t, language\)/);
   assert.match(app, /message=\{renderedAiAdminMessage\}/);
@@ -171,6 +178,28 @@ test("permission journey messages store translation keys instead of rendered lan
   assert.match(applyBlock, /setAiAdminMessage\(\{[\s\S]*key: refreshResult\.ok \? "message\.permissionPackageApplied" : permissionApplyRefreshFailedMessageKey\(\),[\s\S]*params: \{ count: appliedCount \}[\s\S]*\}\)/);
   assert.match(exportBlock, /setAiAdminMessage\(\{ key: "message\.productionEvidenceExported" \}\)/);
   assert.doesNotMatch(app, /setAiAdminMessage\(tx\(t,/);
+});
+
+test("operator hook messages keep translation descriptors instead of language snapshots", () => {
+  [
+    accessProfileHook,
+    askAccessHook,
+    capabilityGovernanceHook,
+    coreJourneyHook,
+    managementHook
+  ].forEach((source) => {
+    assert.match(source, /useState<LocalizedMessage \| null>\(null\)/);
+    assert.match(source, /localizedMessageText\(/);
+    assert.doesNotMatch(source, /set[A-Za-z]*Message\(t\(/);
+    assert.doesNotMatch(source, /set[A-Za-z]*Message\(tx\(t,/);
+  });
+
+  assert.match(accessProfileHook, /setMessage\(\{ key: "message\.validationTraceLimit" \}\)/);
+  assert.doesNotMatch(accessProfileHook, /setMessage\(traceLimit\.message\)/);
+  assert.match(managementHook, /function localizedManagementErrorMessageState/);
+  assert.match(managementHook, /return localizedErrorMessageState\(error, fallbackKey\)/);
+  assert.match(adminAccessHook, /return \{ key: fallbackKey \}/);
+  assert.doesNotMatch(adminAccessHook, /error\.adminAccessOperation[\s\S]*detail: error\.message/);
 });
 
 test("permission apply consumed approval retry shows recovery guidance", () => {
@@ -225,6 +254,7 @@ test("retry validation messages are localized before reaching operator panels", 
 
   assert.match(helperBlock, /message\.validationRetryAttempts/);
   assert.match(helperBlock, /message\.validationRetryBackoff/);
+  assert.match(helperBlock, /message\.validationRetryInvalid/);
   assert.match(agentBlock, /setAgentMessage\(retryFieldValidationMessage\(retry\.message, t\)\)/);
   assert.match(routeBlock, /setPolicyMessage\(retryFieldValidationMessage\(retry\.message, t\)\)/);
   assert.doesNotMatch(agentBlock, /setAgentMessage\(retry\.message\)/);

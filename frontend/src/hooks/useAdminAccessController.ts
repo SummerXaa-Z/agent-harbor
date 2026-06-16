@@ -236,9 +236,6 @@ function localizedAdminAccessError(error: unknown, fallbackKey: string): AdminAc
   if (isForbiddenAdminAccessError(error)) {
     return { key: "error.adminAccessPlatformRequired" };
   }
-  if (error instanceof Error && error.message.trim()) {
-    return { key: "error.adminAccessOperation", params: { detail: error.message } };
-  }
   return { key: fallbackKey };
 }
 

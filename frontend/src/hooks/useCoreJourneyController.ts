@@ -32,6 +32,13 @@ import {
 import type { Translator } from "../consolePresenters";
 import type { Language } from "../i18n";
 import {
+  localizedErrorMessage,
+  localizedErrorMessageState,
+  localizedMessageText,
+  tx,
+  type LocalizedMessage
+} from "../localizedMessages";
+import {
   journeyCompletionRefreshFailedMessageKey,
   refreshAfterJourneyCompletion
 } from "../journeyCompletionRefresh";
@@ -91,12 +98,14 @@ export function useCoreJourneyController({
 }: UseCoreJourneyControllerArgs) {
   const [form, setForm] = useState<CoreJourneyForm>(defaultCoreJourneyForm);
   const [config, setConfig] = useState<CoreJourneyConfig>(() => createCoreJourneyConfig());
-  const [message, setMessage] = useState("");
+  const [messageState, setMessage] = useState<LocalizedMessage | null>(null);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<CoreJourneyRunResult | null>(null);
   const [preflight, setPreflight] = useState<CoreJourneyPreflightState>(defaultCoreJourneyPreflight);
   const [preflightChecking, setPreflightChecking] = useState(false);
-  const [preflightMessage, setPreflightMessage] = useState("");
+  const [preflightMessageState, setPreflightMessage] = useState<LocalizedMessage | null>(null);
+  const message = localizedMessageText(messageState, t, language);
+  const preflightMessage = localizedMessageText(preflightMessageState, t, language);
 
   useEffect(() => {
     if (!enabled) return;
@@ -106,7 +115,7 @@ export function useCoreJourneyController({
   async function refreshPreflight() {
     if (!enabled) return;
     setPreflightChecking(true);
-    setPreflightMessage(t("message.coreJourneyPreflightChecking"));
+    setPreflightMessage({ key: "message.coreJourneyPreflightChecking" });
     setPreflight((current) => ({
       ...current,
       api: "pending",
@@ -123,13 +132,15 @@ export function useCoreJourneyController({
     };
     setPreflight(nextPreflight);
     if (coreJourneyPreflightCanRun(nextPreflight)) {
-      setPreflightMessage(t("message.coreJourneyPreflightReady"));
+      setPreflightMessage({ key: "message.coreJourneyPreflightReady" });
     } else {
       const detail = [
         apiHealth.status === "ok" ? "" : healthCheckFailureDetail(t, t("preflight.api.title"), apiHealth),
         mockMcpHealth.status === "ok" ? "" : healthCheckFailureDetail(t, t("preflight.mockMcp.title"), mockMcpHealth)
       ].filter(Boolean).join(" · ");
-      setPreflightMessage(tx(t, "message.coreJourneyPreflightFailed", { detail: detail || "unknown" }));
+      setPreflightMessage({
+        render: (t) => tx(t, "message.coreJourneyPreflightFailed", { detail: detail || t("text.unknownDetail") })
+      });
     }
     setPreflightChecking(false);
   }
@@ -138,7 +149,7 @@ export function useCoreJourneyController({
     const nextConfig = createCoreJourneyConfig(form);
     setConfig(nextConfig);
     setResult(null);
-    setMessage(t("message.coreJourneyReset"));
+    setMessage({ key: "message.coreJourneyReset" });
     setTraceFilters(defaultTraceFilters);
     setAccessFilters(defaultAccessFilters);
     setAccessProfile(null);
@@ -157,7 +168,7 @@ export function useCoreJourneyController({
   async function run() {
     const nextConfig = createCoreJourneyConfig(form);
     if (!coreJourneyPreflightCanRun(preflight)) {
-      setMessage(t("message.coreJourneyPreflightBlocked"));
+      setMessage({ key: "message.coreJourneyPreflightBlocked" });
       await refreshPreflight();
       return;
     }
@@ -171,7 +182,7 @@ export function useCoreJourneyController({
     setConfig(nextConfig);
     setResult(null);
     setRunning(true);
-    setMessage(t("message.coreJourneyRunning"));
+    setMessage({ key: "message.coreJourneyRunning" });
     try {
       await createTenant(
         {
@@ -356,12 +367,10 @@ export function useCoreJourneyController({
         setLastRefresh(new Date());
       }
       setMessage(
-        refreshResult.ok
-          ? t("message.coreJourneyComplete")
-          : t(journeyCompletionRefreshFailedMessageKey("core_journey"))
+        { key: refreshResult.ok ? "message.coreJourneyComplete" : journeyCompletionRefreshFailedMessageKey("core_journey") }
       );
     } catch (error) {
-      setMessage(localizedErrorMessage(t, language, error, "error.coreJourneyFailed"));
+      setMessage(localizedErrorMessageState(error, "error.coreJourneyFailed"));
     } finally {
       setRunning(false);
     }
@@ -381,22 +390,6 @@ export function useCoreJourneyController({
     running,
     setForm
   };
-}
-
-function tx(t: Translator, key: string, values: Record<string, string | number>) {
-  return Object.entries(values).reduce(
-    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
-    t(key)
-  );
-}
-
-function localizedErrorMessage(t: Translator, language: Language, error: unknown, fallbackKey: string) {
-  const fallback = t(fallbackKey);
-  if (!(error instanceof Error) || !error.message.trim()) return fallback;
-  if (language === "en" || /[\u4e00-\u9fa5]/.test(error.message)) {
-    return error.message;
-  }
-  return fallback;
 }
 
 function normalizedScope(scope: ManagementScope, defaultScope: ManagementScope): ManagementScope {

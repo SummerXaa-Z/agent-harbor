@@ -18,6 +18,13 @@ import type {
 import type { Translator } from "../consolePresenters";
 import type { Language } from "../i18n";
 import {
+  localizedErrorMessage,
+  localizedErrorMessageState,
+  localizedMessageText,
+  tx,
+  type LocalizedMessage
+} from "../localizedMessages";
+import {
   mergeManagementAgentIntoConsoleData,
   mergeManagementRoutePolicyIntoConsoleData
 } from "../managementLocalData";
@@ -87,18 +94,22 @@ export function useManagementOperations({
   t
 }: UseManagementOperationsArgs) {
   const [agentForm, setAgentForm] = useState(defaultAgentForm);
-  const [agentMessage, setAgentMessage] = useState("");
+  const [agentMessageState, setAgentMessage] = useState<LocalizedMessage | null>(null);
   const [keyForm, setKeyForm] = useState(defaultKeyForm);
-  const [keyMessage, setKeyMessage] = useState("");
+  const [keyMessageState, setKeyMessage] = useState<LocalizedMessage | null>(null);
   const [createdKey, setCreatedKey] = useState<CreateAgentKeyResponse | null>(null);
   const [rotateForm, setRotateForm] = useState(defaultRotateForm);
-  const [rotateMessage, setRotateMessage] = useState("");
+  const [rotateMessageState, setRotateMessage] = useState<LocalizedMessage | null>(null);
   const [policyForm, setPolicyForm] = useState(defaultPolicyForm);
-  const [policyMessage, setPolicyMessage] = useState("");
+  const [policyMessageState, setPolicyMessage] = useState<LocalizedMessage | null>(null);
   const [cleanupActionId, setCleanupActionId] = useState("");
   const managementMutationInFlightRef = useRef<ActiveManagementMutationAction>("");
   const [managementMutationAction, setManagementMutationAction] = useState<ActiveManagementMutationAction>("");
   const [managementRefreshState, setManagementRefreshState] = useState<ManagementMutationRefreshState>({ status: "idle" });
+  const agentMessage = localizedMessageText(agentMessageState, t, language);
+  const keyMessage = localizedMessageText(keyMessageState, t, language);
+  const rotateMessage = localizedMessageText(rotateMessageState, t, language);
+  const policyMessage = localizedMessageText(policyMessageState, t, language);
 
   function beginManagementMutation(action: ManagementMutationAction) {
     if (managementMutationInFlightRef.current) return false;
@@ -128,14 +139,14 @@ export function useManagementOperations({
 
   async function finishManagementMutation(
     action: ManagementMutationAction,
-    setMessage: (message: string) => void,
-    successMessage?: string
+    setMessage: (message: LocalizedMessage | null) => void,
+    successMessage?: LocalizedMessage
   ) {
     setManagementRefreshState({ action, status: "refreshing" });
     const refreshResult = await refreshAfterManagementMutation({ action, onRefresh });
     if (refreshResult.ok) {
       setManagementRefreshState({ action, refreshedAt: refreshResult.refreshedAt, status: "fresh" });
-      setMessage(successMessage ?? t(managementMutationSuccessMessageKey(action)));
+      setMessage(successMessage ?? { key: managementMutationSuccessMessageKey(action) });
       return;
     }
     setManagementRefreshState({
@@ -143,13 +154,13 @@ export function useManagementOperations({
       errorMessage: localizedErrorMessage(t, language, refreshResult.error, "error.refreshManagementData"),
       status: "stale"
     });
-    setMessage(t(managementMutationRefreshFailedMessageKey(action)));
+    setMessage({ key: managementMutationRefreshFailedMessageKey(action) });
   }
 
   async function submitAgent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!beginManagementMutation("create_agent")) return;
-    setAgentMessage("");
+    setAgentMessage(null);
     try {
       const channelConfig: JsonObject = {};
       const endpoint = agentForm.endpoint.trim();
@@ -175,7 +186,7 @@ export function useManagementOperations({
       let credentials: Record<string, string> | undefined;
       if (hasCredentialInput) {
         if (!credentialHeader || !credentialName || !credentialValue.trim()) {
-          setAgentMessage(t("message.validationCredentialGroup"));
+          setAgentMessage({ key: "message.validationCredentialGroup" });
           return;
         }
         channelConfig.credentialHeaders = { [credentialHeader]: credentialName };
@@ -199,38 +210,38 @@ export function useManagementOperations({
       setAgentForm(defaultAgentForm);
       await finishManagementMutation("create_agent", setAgentMessage);
     } catch (error) {
-      setAgentMessage(localizedErrorMessage(t, language, error, "error.createAgent"));
+      setAgentMessage(localizedManagementErrorMessageState(error, "error.createAgent"));
     } finally {
       endManagementMutation("create_agent");
     }
   }
 
   async function handleAgentStatusChange(agent: Agent, status: AgentStatus) {
-    setAgentMessage("");
+    setAgentMessage(null);
     setCleanupActionId(agent.id);
     try {
-      const successMessage = tx(t, "message.statusChanged", { name: agent.name, status: agentStatusLabel(status, t) });
+      const successMessage = statusChangedMessage(agent.name, status);
       const updated = status === "disabled"
         ? await disableAgent(agent.id, adminKey)
         : await updateAgent(agent.id, { status }, adminKey);
       patchConsoleData((current) => mergeManagementAgentIntoConsoleData(current, updated));
       await finishManagementMutation("update_agent_status", setAgentMessage, successMessage);
     } catch (error) {
-      setAgentMessage(localizedErrorMessage(t, language, error, "error.updateAgentStatus"));
+      setAgentMessage(localizedManagementErrorMessageState(error, "error.updateAgentStatus"));
     } finally {
       setCleanupActionId("");
     }
   }
 
   async function handleDisablePolicy(policy: RoutePolicy) {
-    setPolicyMessage("");
+    setPolicyMessage(null);
     setCleanupActionId(policy.id);
     try {
       const disabled = await disableRoutePolicy(policy.id, adminKey);
       patchConsoleData((current) => mergeManagementRoutePolicyIntoConsoleData(current, disabled));
-      await finishManagementMutation("disable_policy", setPolicyMessage, t("message.policyDisabled"));
+      await finishManagementMutation("disable_policy", setPolicyMessage, { key: "message.policyDisabled" });
     } catch (error) {
-      setPolicyMessage(localizedErrorMessage(t, language, error, "error.disableRoutePolicy"));
+      setPolicyMessage(localizedManagementErrorMessageState(error, "error.disableRoutePolicy"));
     } finally {
       setCleanupActionId("");
     }
@@ -240,11 +251,11 @@ export function useManagementOperations({
     event.preventDefault();
     setCreatedKey(null);
     if (!beginManagementMutation("create_key")) return;
-    setKeyMessage("");
+    setKeyMessage(null);
     try {
       const ttl = Number(keyForm.expiresInSeconds);
       if (!Number.isInteger(ttl) || ttl < 1 || ttl > 3600) {
-        setKeyMessage(t("message.validationTtl"));
+        setKeyMessage({ key: "message.validationTtl" });
         return;
       }
       const next = await createAgentKey(
@@ -259,7 +270,7 @@ export function useManagementOperations({
       setKeyForm({ ...defaultKeyForm, agentId: keyForm.agentId });
       await finishManagementMutation("create_key", setKeyMessage);
     } catch (error) {
-      setKeyMessage(localizedErrorMessage(t, language, error, "error.createKey"));
+      setKeyMessage(localizedManagementErrorMessageState(error, "error.createKey"));
     } finally {
       endManagementMutation("create_key");
     }
@@ -268,15 +279,15 @@ export function useManagementOperations({
   async function submitCredentialRotation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!beginManagementMutation("rotate_credential")) return;
-    setRotateMessage("");
+    setRotateMessage(null);
     try {
       const credentialName = rotateForm.credentialName.trim();
       if (!rotateForm.agentId) {
-        setRotateMessage(t("message.validationRotateAgent"));
+        setRotateMessage({ key: "message.validationRotateAgent" });
         return;
       }
       if (!credentialName || !rotateForm.credentialValue.trim()) {
-        setRotateMessage(t("message.validationCredentialRequired"));
+        setRotateMessage({ key: "message.validationCredentialRequired" });
         return;
       }
       const updated = await rotateAgentCredentials(
@@ -288,7 +299,7 @@ export function useManagementOperations({
       setRotateForm({ ...defaultRotateForm, agentId: rotateForm.agentId, credentialName });
       await finishManagementMutation("rotate_credential", setRotateMessage);
     } catch (error) {
-      setRotateMessage(localizedErrorMessage(t, language, error, "error.rotateCredential"));
+      setRotateMessage(localizedManagementErrorMessageState(error, "error.rotateCredential"));
     } finally {
       endManagementMutation("rotate_credential");
     }
@@ -297,11 +308,11 @@ export function useManagementOperations({
   async function submitRoutePolicy(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!beginManagementMutation("create_policy")) return;
-    setPolicyMessage("");
+    setPolicyMessage(null);
     try {
       const priority = Number(policyForm.priority);
       if (!Number.isInteger(priority) || priority < 0) {
-        setPolicyMessage(t("message.validationPriority"));
+        setPolicyMessage({ key: "message.validationPriority" });
         return;
       }
       const retry = parseRetryFields({
@@ -331,7 +342,7 @@ export function useManagementOperations({
       setPolicyForm({ ...defaultPolicyForm, callerAgentId: policyForm.callerAgentId });
       await finishManagementMutation("create_policy", setPolicyMessage);
     } catch (error) {
-      setPolicyMessage(localizedErrorMessage(t, language, error, "error.createRoutePolicy"));
+      setPolicyMessage(localizedManagementErrorMessageState(error, "error.createRoutePolicy"));
     } finally {
       endManagementMutation("create_policy");
     }
@@ -364,33 +375,21 @@ export function useManagementOperations({
   };
 }
 
-function tx(t: Translator, key: string, values: Record<string, string | number>) {
-  return Object.entries(values).reduce(
-    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
-    t(key)
-  );
-}
-
-function localizedErrorMessage(t: Translator, language: Language, error: unknown, fallbackKey: string) {
-  const fallback = t(fallbackKey);
+function localizedManagementErrorMessageState(error: unknown, fallbackKey: string): LocalizedMessage {
   if (error instanceof ApiRequestError && error.code === "DUPLICATE_RESOURCE_MUTATION") {
-    return t("message.duplicateResourceMutation");
+    return { key: "message.duplicateResourceMutation" };
   }
-  if (!(error instanceof Error) || !error.message.trim()) return fallback;
-  if (language === "en" || /[\u4e00-\u9fa5]/.test(error.message)) {
-    return error.message;
-  }
-  return fallback;
+  return localizedErrorMessageState(error, fallbackKey);
 }
 
-function retryFieldValidationMessage(message: string, t: Translator) {
+function retryFieldValidationMessage(message: string, t: Translator): LocalizedMessage {
   if (message === "Retry attempts must be an integer between 1 and 4.") {
-    return t("message.validationRetryAttempts");
+    return { key: "message.validationRetryAttempts" };
   }
   if (message === "Retry backoff must be an integer between 0 and 1000 ms.") {
-    return t("message.validationRetryBackoff");
+    return { key: "message.validationRetryBackoff" };
   }
-  return message;
+  return { key: "message.validationRetryInvalid" };
 }
 
 function normalizedScope(scope: ManagementScope, defaultScope: ManagementScope): ManagementScope {
@@ -404,4 +403,10 @@ function agentStatusLabel(status: AgentStatus, t: Translator) {
   if (status === "active") return t("status.agentActive");
   if (status === "disabled") return t("status.agentDisabled");
   return t("status.agentDraft");
+}
+
+function statusChangedMessage(name: string, status: AgentStatus): LocalizedMessage {
+  return {
+    render: (t) => tx(t, "message.statusChanged", { name, status: agentStatusLabel(status, t) })
+  };
 }

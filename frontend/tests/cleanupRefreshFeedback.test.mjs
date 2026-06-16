@@ -23,7 +23,7 @@ test("resource cleanup actions are part of typed post-mutation refresh feedback"
 test("agent status changes separate mutation success from follow-up refresh failure", () => {
   const block = functionBlock("handleAgentStatusChange");
 
-  assert.match(block, /const successMessage = tx\(t, "message\.statusChanged"/);
+  assert.match(block, /const successMessage = statusChangedMessage\(agent\.name, status\)/);
   assert.match(block, /finishManagementMutation\("update_agent_status", setAgentMessage, successMessage\)/);
   assert.doesNotMatch(block, /setAgentMessage\(successMessage\);\s+await onRefresh\(\)/);
   assert.doesNotMatch(block, /setAgentMessage\(tx\(t, "message\.statusChanged"[\s\S]*await onRefresh\(\)/);
@@ -32,7 +32,7 @@ test("agent status changes separate mutation success from follow-up refresh fail
 test("policy disable separates mutation success from follow-up refresh failure", () => {
   const block = functionBlock("handleDisablePolicy");
 
-  assert.match(block, /finishManagementMutation\("disable_policy", setPolicyMessage, t\("message\.policyDisabled"\)\)/);
+  assert.match(block, /finishManagementMutation\("disable_policy", setPolicyMessage, \{ key: "message\.policyDisabled" \}\)/);
   assert.doesNotMatch(block, /setPolicyMessage\(t\("message\.policyDisabled"\)\);\s+await onRefresh\(\)/);
 });
 

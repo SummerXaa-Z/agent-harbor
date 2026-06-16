@@ -75,6 +75,13 @@ import {
   type Language
 } from "./i18n";
 import {
+  localizedErrorMessage,
+  localizedErrorMessageState,
+  localizedMessageText,
+  tx,
+  type LocalizedMessage
+} from "./localizedMessages";
+import {
   healthCheckFailureDetail
 } from "./healthCheckPresentation";
 import {
@@ -374,13 +381,6 @@ function navIconFor(key: NavKey) {
   }
 }
 
-function tx(t: Translator, key: string, values: Record<string, string | number>) {
-  return Object.entries(values).reduce(
-    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
-    t(key)
-  );
-}
-
 function sessionRoleLabel(session: ConsoleSession | null, t: Translator) {
   const role = session?.role?.trim() || "platform_admin";
   return t(`auth.role.${role}`, role);
@@ -408,42 +408,12 @@ function connectionDiagnosticSummaryLabel(status: "ok" | "warning" | "error", t:
   return t("connectionDiagnostics.summaryError");
 }
 
-type LocalizedMessage =
-  | {
-      key: string;
-      params?: Record<string, string | number>;
-    }
-  | {
-      render: (t: Translator, language: Language) => string;
-    };
-
-function localizedMessageText(message: LocalizedMessage | null, t: Translator, language: Language) {
-  if (!message) return "";
-  if ("render" in message) return message.render(t, language);
-  return message.params ? tx(t, message.key, message.params) : t(message.key);
-}
-
-function localizedErrorMessageState(error: unknown, fallbackKey: string): LocalizedMessage {
-  return {
-    render: (t, language) => localizedErrorMessage(t, language, error, fallbackKey)
-  };
-}
-
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
 }
 
 function isConsumedApprovalRetryError(error: unknown) {
   return error instanceof ApiRequestError && error.code === "PERMISSION_PACKAGE_APPROVAL_ALREADY_CONSUMED";
-}
-
-function localizedErrorMessage(t: Translator, language: Language, error: unknown, fallbackKey: string) {
-  const fallback = t(fallbackKey);
-  if (!(error instanceof Error) || !error.message.trim()) return fallback;
-  if (language === "en" || /[\u4e00-\u9fa5]/.test(error.message)) {
-    return error.message;
-  }
-  return fallback;
 }
 
 function mockMcpHealthUrlFromEndpoint(endpointValue: string) {

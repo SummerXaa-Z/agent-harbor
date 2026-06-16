@@ -4,6 +4,11 @@ import { parseAccessProfileTraceLimit } from "../accessProfile";
 import type { Translator } from "../consolePresenters";
 import type { NavKey } from "../consoleNavigation";
 import type { Language } from "../i18n";
+import {
+  localizedErrorMessageState,
+  localizedMessageText,
+  type LocalizedMessage
+} from "../localizedMessages";
 import type {
   AccessProfileFilters,
   AccessProfileHandoffContext,
@@ -43,9 +48,10 @@ export function useAccessProfileController({
 }: UseAccessProfileControllerArgs) {
   const [filters, setFilters] = useState<AccessProfileFilters>(defaultAccessProfileFilters);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [messageState, setMessage] = useState<LocalizedMessage | null>(null);
   const [profile, setProfile] = useState<TenantAccessProfileData | null>(null);
   const [handoffContext, setHandoffContext] = useState<AccessProfileHandoffContext | null>(null);
+  const message = localizedMessageText(messageState, t, language);
 
   useEffect(() => {
     if (enabled && activeNav === "access" && !profile && !loading) {
@@ -68,28 +74,28 @@ export function useAccessProfileController({
     setFilters(nextFilters);
     setHandoffContext(nextContext);
     setProfile(null);
-    setMessage("");
+    setMessage(null);
   }
 
   async function refresh() {
     if (!enabled) return;
     const traceLimit = parseAccessProfileTraceLimit(filters.traceLimit);
     if (!traceLimit.ok) {
-      setMessage(traceLimit.message);
+      setMessage({ key: "message.validationTraceLimit" });
       return;
     }
     const requestScope = normalizedScope(scope, defaultScope);
     setLoading(true);
-    setMessage("");
+    setMessage(null);
     try {
       const next = await loadTenantAccessProfile(requestScope.tenantId, adminKey, {
         ...filters,
         traceLimit: traceLimit.value
       });
       setProfile(next);
-      setMessage(next.loadedFromApi ? t("status.profileRefreshed") : t("status.profileFallback"));
+      setMessage({ key: next.loadedFromApi ? "status.profileRefreshed" : "status.profileFallback" });
     } catch (error) {
-      setMessage(localizedErrorMessage(t, language, error, "error.loadTenantAccessProfile"));
+      setMessage(localizedErrorMessageState(error, "error.loadTenantAccessProfile"));
     } finally {
       setLoading(false);
     }
@@ -110,15 +116,6 @@ export function useAccessProfileController({
     setProfile,
     updateFilters
   };
-}
-
-function localizedErrorMessage(t: Translator, language: Language, error: unknown, fallbackKey: string) {
-  const fallback = t(fallbackKey);
-  if (!(error instanceof Error) || !error.message.trim()) return fallback;
-  if (language === "en" || /[\u4e00-\u9fa5]/.test(error.message)) {
-    return error.message;
-  }
-  return fallback;
 }
 
 function normalizedScope(scope: ManagementScope, defaultScope: ManagementScope): ManagementScope {

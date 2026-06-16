@@ -17,6 +17,12 @@ import {
   type Translator
 } from "../consolePresenters";
 import type { Language } from "../i18n";
+import {
+  localizedErrorMessageState,
+  localizedMessageText,
+  tx,
+  type LocalizedMessage
+} from "../localizedMessages";
 import type {
   Agent,
   Capability,
@@ -54,8 +60,9 @@ export function useCapabilityGovernanceController({
     tenantId: defaultScope.tenantId,
     workspaceId: defaultScope.workspaceId
   }));
-  const [message, setMessage] = useState("");
+  const [messageState, setMessage] = useState<LocalizedMessage | null>(null);
   const [actionId, setActionId] = useState("");
+  const message = localizedMessageText(messageState, t, language);
 
   useEffect(() => {
     if (!data) return;
@@ -85,10 +92,10 @@ export function useCapabilityGovernanceController({
   async function handleRefreshTargetCapabilities() {
     const targetId = form.targetId.trim();
     if (!targetId) {
-      setMessage(t("message.validationMcpTargetRequired"));
+      setMessage({ key: "message.validationMcpTargetRequired" });
       return;
     }
-    setMessage("");
+    setMessage(null);
     setActionId(`refresh:${targetId}`);
     try {
       const refreshed = await refreshTargetCapabilities(targetId, adminKey);
@@ -101,20 +108,20 @@ export function useCapabilityGovernanceController({
             }
           : current
       );
-      setMessage(tx(t, "message.refreshedCapabilities", { count: refreshed.length }));
+      setMessage({ key: "message.refreshedCapabilities", params: { count: refreshed.length } });
     } catch (error) {
       if (shouldUseLocalCapabilityFallback(error, data)) {
-        setMessage(t("message.capabilityFallback"));
+        setMessage({ key: "message.capabilityFallback" });
         return;
       }
-      setMessage(localizedErrorMessage(t, language, error, "error.refreshCapabilities"));
+      setMessage(localizedErrorMessageState(error, "error.refreshCapabilities"));
     } finally {
       setActionId("");
     }
   }
 
   async function handleApproveCapability(capability: Capability) {
-    setMessage("");
+    setMessage(null);
     setActionId(capability.id);
     try {
       const updated = await updateCapability(capability.id, { discoveryStatus: "approved" }, adminKey);
@@ -127,7 +134,9 @@ export function useCapabilityGovernanceController({
             }
           : current
       );
-      setMessage(tx(t, "message.capabilityApproved", { name: capabilityDisplayName(capability, t) }));
+      setMessage({
+        render: (t) => tx(t, "message.capabilityApproved", { name: capabilityDisplayName(capability, t) })
+      });
     } catch (error) {
       if (shouldUseLocalCapabilityFallback(error, data)) {
         setData((current) =>
@@ -142,10 +151,12 @@ export function useCapabilityGovernanceController({
               }
             : current
         );
-        setMessage(tx(t, "message.capabilityApprovedFallback", { name: capabilityDisplayName(capability, t) }));
+        setMessage({
+          render: (t) => tx(t, "message.capabilityApprovedFallback", { name: capabilityDisplayName(capability, t) })
+        });
         return;
       }
-      setMessage(localizedErrorMessage(t, language, error, "error.approveCapability"));
+      setMessage(localizedErrorMessageState(error, "error.approveCapability"));
     } finally {
       setActionId("");
     }
@@ -153,22 +164,22 @@ export function useCapabilityGovernanceController({
 
   async function submitCapabilityGrantChain(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
+    setMessage(null);
     const capability = data?.capabilities.find((item) => item.id === form.capabilityId);
     const tenantId = form.tenantId.trim();
     const workspaceId = form.workspaceId.trim();
     const callerInstanceId = form.callerInstanceId.trim();
     if (!capability) {
-      setMessage(t("message.validationCapabilityRequired"));
+      setMessage({ key: "message.validationCapabilityRequired" });
       return;
     }
     if (!tenantId || !workspaceId || !callerInstanceId) {
-      setMessage(t("message.validationTenantWorkspaceCaller"));
+      setMessage({ key: "message.validationTenantWorkspaceCaller" });
       return;
     }
     const subjectSelector = form.subjectSelector.trim();
     if (!subjectSelector || subjectSelector === "*") {
-      setMessage(t("message.validationSubjectSelectorRequired"));
+      setMessage({ key: "message.validationSubjectSelectorRequired" });
       return;
     }
     const dataScopes = capability.dataScopes ?? [];
@@ -216,20 +227,20 @@ export function useCapabilityGovernanceController({
             })
           : current
       );
-      setMessage(t("message.grantChainCreated"));
+      setMessage({ key: "message.grantChainCreated" });
       const refreshResult = await refreshAfterCapabilityGrantMutation({ onRefresh });
       if (!refreshResult.ok) {
-        setMessage(t(capabilityGrantRefreshFailedMessageKey()));
+        setMessage({ key: capabilityGrantRefreshFailedMessageKey() });
       }
     } catch (error) {
       if (shouldUseLocalCapabilityFallback(error, data) && data) {
         setData((current) =>
           current ? appendLocalCapabilityGrantChain(current, capability, form, dataScopes, defaultScope) : current
         );
-        setMessage(t("message.grantChainCreatedFallback"));
+        setMessage({ key: "message.grantChainCreatedFallback" });
         return;
       }
-      setMessage(localizedErrorMessage(t, language, error, "error.createGrantChain"));
+      setMessage(localizedErrorMessageState(error, "error.createGrantChain"));
     } finally {
       setActionId("");
     }
@@ -244,22 +255,6 @@ export function useCapabilityGovernanceController({
     setForm,
     submitCapabilityGrantChain
   };
-}
-
-function tx(t: Translator, key: string, values: Record<string, string | number>) {
-  return Object.entries(values).reduce(
-    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
-    t(key)
-  );
-}
-
-function localizedErrorMessage(t: Translator, language: Language, error: unknown, fallbackKey: string) {
-  const fallback = t(fallbackKey);
-  if (!(error instanceof Error) || !error.message.trim()) return fallback;
-  if (language === "en" || /[\u4e00-\u9fa5]/.test(error.message)) {
-    return error.message;
-  }
-  return fallback;
 }
 
 function shallowEqualCapabilityForm(left: CapabilityGrantForm, right: CapabilityGrantForm) {

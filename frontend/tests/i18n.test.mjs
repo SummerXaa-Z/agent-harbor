@@ -121,6 +121,21 @@ test("tenant permission center copy is bilingual", () => {
   }
 });
 
+test("resource action context copy is bilingual", () => {
+  const keys = [
+    "resource.actionContext.resource",
+    "resource.actionContext.scope",
+    "resource.actionContext.title"
+  ];
+
+  for (const language of ["en", "zh-CN"]) {
+    const t = createTranslator(language);
+    for (const key of keys) {
+      assert.notEqual(t(key), key, `${language} missing ${key}`);
+    }
+  }
+});
+
 test("createTranslator returns core journey Chinese labels", () => {
   const t = createTranslator("zh-CN");
 
@@ -171,6 +186,9 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("resource.contextScope"), "范围");
   assert.equal(t("resource.contextHealth"), "状态");
   assert.equal(t("resource.contextNext"), "推荐下一步");
+  assert.equal(t("resource.actionContext.title"), "操作上下文");
+  assert.equal(t("resource.actionContext.resource"), "资源");
+  assert.equal(t("resource.actionContext.scope"), "操作范围");
   assert.equal(t("text.permissionHandoffRegistryTitle"), "已从资源管理带入");
   assert.equal(t("resource.nextAction.capabilities"), "发现能力");
   assert.equal(t("empty.evidenceRuns.title"), "暂无历史验收记录");

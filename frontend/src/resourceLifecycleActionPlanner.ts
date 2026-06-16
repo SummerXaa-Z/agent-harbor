@@ -4,8 +4,22 @@ import type { Agent, PermissionChangeHandoffContext, TraceFilters } from "./type
 
 export type ResourceLifecycleModal = "rotate_credential" | "create_policy" | "create_key";
 
+export interface ResourceLifecycleActionContext {
+  resourceKindKey: string;
+  resourceName: string;
+  tenantName: string;
+  workspaceName: string;
+}
+
 export type ResourceLifecycleActionPlan =
-  | { agentId: string; kind: "open_modal"; modal: ResourceLifecycleModal }
+  | {
+      agentId?: string;
+      callerAgentId?: string;
+      context: ResourceLifecycleActionContext;
+      kind: "open_modal";
+      modal: ResourceLifecycleModal;
+      targetAgentId?: string;
+    }
   | { kind: "capability_prefill"; navKey: "capabilities"; targetId: string }
   | { context: PermissionChangeHandoffContext; kind: "permission_handoff" }
   | { kind: "runtime_filters"; navKey: "traces"; traceFilters: TraceFilters }
@@ -32,8 +46,34 @@ export function planResourceLifecycleAction({
   localCallers,
   mcpTargets
 }: ResourceLifecycleActionPlanInput): ResourceLifecycleActionPlan {
+  const context = resourceActionContext({
+    formatEntityName,
+    formatTenantName,
+    formatWorkspaceName,
+    item
+  });
+  const sameScopeCaller = localCallers.find((agent) => sameScope(agent, item));
+  const sameScopeTarget = mcpTargets.find((agent) => sameScope(agent, item));
+
   if (item.nextActionKind === "rotate_credential") {
-    return { agentId: item.id, kind: "open_modal", modal: "rotate_credential" };
+    return { agentId: item.id, context, kind: "open_modal", modal: "rotate_credential" };
+  }
+  if (item.nextActionKind === "create_key") {
+    return {
+      agentId: item.kind === "caller" ? item.id : sameScopeCaller?.id,
+      context,
+      kind: "open_modal",
+      modal: "create_key"
+    };
+  }
+  if (item.nextActionKind === "create_policy") {
+    return {
+      callerAgentId: item.kind === "caller" ? item.id : sameScopeCaller?.id,
+      context,
+      kind: "open_modal",
+      modal: "create_policy",
+      targetAgentId: item.kind === "caller" ? sameScopeTarget?.id : item.id
+    };
   }
   if (item.nextActionKind === "review_capabilities") {
     return { kind: "capability_prefill", navKey: "capabilities", targetId: item.id };
@@ -61,6 +101,25 @@ export function planResourceLifecycleAction({
     };
   }
   return { kind: "navigate", navKey: "registry" };
+}
+
+function resourceActionContext({
+  formatEntityName,
+  formatTenantName,
+  formatWorkspaceName,
+  item
+}: {
+  formatEntityName: (name: string) => string;
+  formatTenantName: (tenantId: string) => string;
+  formatWorkspaceName: (workspaceId: string) => string;
+  item: ResourceLifecycleItem;
+}): ResourceLifecycleActionContext {
+  return {
+    resourceKindKey: item.kindKey,
+    resourceName: formatEntityName(item.name),
+    tenantName: formatTenantName(item.tenantId),
+    workspaceName: formatWorkspaceName(item.workspaceId)
+  };
 }
 
 function permissionHandoffContext({

@@ -45,6 +45,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 资源管理的行级操作现在会保留资源上下文：凭据操作就地打开，能力、权限和运行后续动作带着上下文进入对应工作区。
 - Resource Management now keeps a selected resource context panel visible, showing tenant/workspace scope, lifecycle health, capability, permission, runtime counts, and the recommended next action before operators jump across workspaces.
 - 资源管理现在常驻展示选中资源上下文，包含租户/工作区范围、生命周期状态、能力、授权、运行计数和推荐下一步，管理员跨工作区处理前不会丢失当前资源背景。
+- Resource Management action forms now preserve selected resource context and prefill safe Agent, credential, and policy fields when launched from a lifecycle row.
+- 资源管理的操作表单现在会保留选中资源上下文；从生命周期行打开时，会自动带入可安全推断的 Agent、凭据和策略字段。
 - Resource Management now owns Agent, credential, and policy creation as the single lifecycle mutation entry; Routes and Access Policies stay focused on review/governance and route empty states back to Resource Management.
 - 资源管理现在统一承接 Agent、凭据和策略创建；路由规则和访问策略页面专注审查与治理，空状态会引导回资源管理。
 - Moved Permission Changes approval-decision confirmation state into a focused hook, reducing the workbench component while keeping approval, rejection, and withdraw behavior unchanged.

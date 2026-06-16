@@ -6,6 +6,11 @@ import type {
   ExplainRequestBuildResult
 } from "../askJourney";
 import {
+  accessDecisionSummaryLabel,
+  accessEvidenceMessageLabel,
+  accessNextActionLabel
+} from "../askJourney";
+import {
   capabilityDisplayName,
   permissionEntityDisplayName,
   readableIdentifierLabel,
@@ -231,7 +236,7 @@ export function AskAccessView({
                   </Badge>
                   <div>
                     <strong>{result.outcome === "allowed" ? t("ask.allowedTitle") : t("ask.deniedTitle")}</strong>
-                    <p>{result.summary}</p>
+                    <p>{accessDecisionSummaryLabel(result, t)}</p>
                   </div>
                   {result.outcome === "denied" ? (
                     <button className="primary-button" onClick={onStartPermissionChange} type="button">
@@ -252,7 +257,7 @@ export function AskAccessView({
                         <Badge tone={row.tone}>{t(`status.${row.status}`, row.status)}</Badge>
                         <div>
                           <strong>{t(row.layerKey, readableIdentifierLabel(row.layer))}</strong>
-                          <span>{row.message}</span>
+                          <span>{accessEvidenceMessageLabel(row, t)}</span>
                         </div>
                       </li>
                     ))}
@@ -263,7 +268,7 @@ export function AskAccessView({
                   <div className="ask-next-actions">
                     <strong>{t("ask.nextActions")}</strong>
                     <ul>
-                      {result.nextActions.map((action) => <li key={action}>{action}</li>)}
+                      {result.nextActions.map((action) => <li key={action}>{accessNextActionLabel(action, t)}</li>)}
                     </ul>
                   </div>
                 ) : null}

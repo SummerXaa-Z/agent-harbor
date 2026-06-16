@@ -61,6 +61,7 @@ export function ActionModalButton({
   openLabel,
   closeLabel,
   id,
+  tone = "secondary",
   variant = "compact",
   children
 }: {
@@ -69,11 +70,12 @@ export function ActionModalButton({
   openLabel: string;
   closeLabel: string;
   id?: string;
+  tone?: "primary" | "secondary";
   variant?: "compact" | "command";
   children: ReactNode;
 }) {
   const triggerClassName = variant === "command"
-    ? "action-modal-trigger action-modal-trigger-command"
+    ? `action-modal-trigger action-modal-trigger-command is-${tone}`
     : "action-modal-trigger action-modal-trigger-compact";
 
   return (

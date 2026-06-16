@@ -234,15 +234,29 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(app, /const resourceLifecyclePrimaryActions = \(\s*<div className="resource-lifecycle-command-actions">/);
   assert.match(app, /const resourceLifecycleSecondaryActions = \(\s*<div className="resource-lifecycle-secondary-actions">/);
   assert.match(app, /<ResourceLifecycleView[\s\S]*primaryActions=\{resourceLifecyclePrimaryActions\}[\s\S]*secondaryActions=\{resourceLifecycleSecondaryActions\}/);
+  assert.match(consolePrimitives, /tone = "secondary"/);
+  assert.match(consolePrimitives, /tone\?: "primary" \| "secondary"/);
+  assert.match(app, /createAgentAction\("command", "primary"\)/);
+  assert.match(app, /createKeyAction\("command", "secondary"\)/);
+  assert.match(app, /rotateCredentialAction\("command", "secondary"\)/);
+  assert.match(app, /createPolicyAction\("command", "secondary"\)/);
   assert.match(app, /agentRegistryPanel=\{agentRegistryPanel\("span-8"\)\}/);
   assert.doesNotMatch(app, /const agentRegistryActions =/);
   assert.match(app, /contractMatrixPanel=\{contractMatrixPanel\("span-4"\)\}/);
   assert.match(styles, /\.content-grid\s*\{[^}]*align-items:\s*start;/s);
   assert.match(styles, /\.resource-lifecycle\s*\{/);
   assert.match(styles, /\.resource-lifecycle-command-center\s*\{/);
+  assert.match(styles, /\.action-modal-trigger-command\.is-primary\s*\{/);
+  assert.match(styles, /\.action-modal-trigger-command\.is-secondary\s*\{/);
+  assert.match(styles, /\.action-modal-body \.control-form\s*\{/);
+  assert.doesNotMatch(styles, /\.action-modal-trigger-command\s*\{[^}]*box-shadow:\s*var\(--shadow-card\);/s);
   assert.match(resourceLifecycleView, /summary\.items\.map/);
   assert.doesNotMatch(resourceLifecycleView, /TechnicalId/);
   assert.doesNotMatch(registryView, /createAgentPanel|createKeyPanel|rotateCredentialPanel/);
+  assert.doesNotMatch(app, /RoutesView[\s\S]*routeGovernancePanel=\{routeGovernancePanel\("span-12", createPolicyAction\(\)\)\}/);
+  assert.doesNotMatch(app, /PoliciesView[\s\S]*routeGovernancePanel=\{routeGovernancePanel\("span-12", createPolicyAction\(\)\)\}/);
+  assert.match(operationalViews, /href="#registry"/);
+  assert.doesNotMatch(operationalViews, /querySelector<HTMLButtonElement>\("#policy-create-panel/);
 });
 
 test("production journey checkpoint stays compact and model-driven", () => {
@@ -271,7 +285,7 @@ test("production journey checkpoint is wired through primary journey views", () 
   assert.match(consoleViews, /EvidenceView[\s\S]*journeyCheckpoint/);
 });
 
-test("management mutation forms open from panel header modals", () => {
+test("management mutation forms open from resource command modals", () => {
   assert.match(consolePrimitives, /export function ActionModalButton/);
   assert.doesNotMatch(consolePrimitives, /export function ActionModalPanel/);
   assert.match(consolePrimitives, /aria-haspopup="dialog"/);
@@ -288,18 +302,19 @@ test("management mutation forms open from panel header modals", () => {
   assert.match(app, /<ActionModalButton[\s\S]*title=\{t\("panel\.createKey"\)\}/);
   assert.match(app, /<ActionModalButton[\s\S]*id="policy-create-panel"[\s\S]*title=\{t\("panel\.createPolicy"\)\}/);
   assert.match(app, /<ActionModalButton[\s\S]*title=\{t\("panel\.rotateCredential"\)\}/);
-  assert.match(app, /createAgentAction\("command"\)/);
-  assert.match(app, /createKeyAction\("command"\)/);
-  assert.match(app, /rotateCredentialAction\("command"\)/);
-  assert.match(app, /createPolicyAction\("command"\)/);
-  assert.match(app, /routeGovernancePanel=\{routeGovernancePanel\("span-12", createPolicyAction\(\)\)\}/);
-  assert.match(app, /routeGovernancePanel=\{routeGovernancePanel\("span-12", createPolicyAction\(\)\)\}[\s\S]*t=\{t\}/);
-  assert.match(operationalViews, /querySelector<HTMLButtonElement>\("#policy-create-panel \.action-modal-trigger"\)/);
+  assert.match(app, /createAgentAction\("command", "primary"\)/);
+  assert.match(app, /createKeyAction\("command", "secondary"\)/);
+  assert.match(app, /rotateCredentialAction\("command", "secondary"\)/);
+  assert.match(app, /createPolicyAction\("command", "secondary"\)/);
+  assert.match(app, /routeGovernancePanel=\{routeGovernancePanel\("span-12"\)\}/);
+  assert.match(app, /routeGovernancePanel=\{routeGovernancePanel\("span-12"\)\}[\s\S]*t=\{t\}/);
+  assert.match(operationalViews, /href="#registry"/);
+  assert.doesNotMatch(operationalViews, /querySelector<HTMLButtonElement>\("#policy-create-panel \.action-modal-trigger"\)/);
   assert.match(styles, /\.panel-action-group\s*\{/);
   assert.match(styles, /\.action-modal-trigger\s*\{[\s\S]*cursor:\s*pointer;/);
   assert.match(styles, /\.action-modal-trigger-compact\s*\{[\s\S]*width:\s*auto;/);
   assert.match(styles, /\.action-modal-backdrop\s*\{[\s\S]*position:\s*fixed;[\s\S]*overscroll-behavior:\s*contain;/);
-  assert.match(styles, /\.action-modal-panel\s*\{[\s\S]*width:\s*min\(720px,\s*calc\(100vw - 48px\)\);/);
+  assert.match(styles, /\.action-modal-panel\s*\{[\s\S]*width:\s*min\(680px,\s*calc\(100vw - 48px\)\);/);
   assert.doesNotMatch(consoleViews, /createPolicyPanel=\{createPolicyPanel\}/);
   assert.doesNotMatch(styles, /\.action-modal-entry/);
   assert.doesNotMatch(styles, /\.action-disclosure-panel/);
@@ -461,7 +476,7 @@ test("capability catalog provides search status filtering and a details entry", 
   assert.match(styles, /\.capability-detail-panel\s*\{/);
 });
 
-test("access policy page keeps policy creation primary when no policies exist", () => {
+test("access policy page routes creation back to resource management", () => {
   const policiesStart = consoleViews.indexOf("export function PoliciesView");
   const capabilitiesStart = consoleViews.indexOf("export function CapabilitiesView", policiesStart);
   const policiesView = consoleViews.slice(policiesStart, capabilitiesStart);
@@ -469,7 +484,8 @@ test("access policy page keeps policy creation primary when no policies exist", 
   assert.match(operationalViews, /function AccessPolicyWorkspace/);
   assert.match(policiesView, /<AccessPolicyWorkspace/);
   assert.match(operationalViews, /className="policy-empty-action"/);
-  assert.match(operationalViews, /t\("action\.createFirstPolicy"\)/);
+  assert.match(operationalViews, /href="#registry"/);
+  assert.match(operationalViews, /t\("action\.openResourceManagement"\)/);
   assert.match(operationalViews, /auditCollapsed/);
   assert.doesNotMatch(app, /\{managementAuditPanel\("span-5"\)\}/);
   assert.match(styles, /\.policy-workspace\s*\{/);

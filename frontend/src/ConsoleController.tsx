@@ -2194,13 +2194,14 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       />
     </Panel>
   );
-  function createPolicyAction(variant: "compact" | "command" = "compact") {
+  function createPolicyAction(variant: "compact" | "command" = "compact", tone: "primary" | "secondary" = "secondary") {
     return (
       <ActionModalButton
         closeLabel={t("action.dismiss")}
         icon={<Route size={16} />}
         id="policy-create-panel"
         openLabel={t("action.open")}
+        tone={tone}
         title={t("panel.createPolicy")}
         variant={variant}
       >
@@ -2428,12 +2429,13 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         t={t}
       />
   );
-  function createAgentAction(variant: "compact" | "command" = "compact") {
+  function createAgentAction(variant: "compact" | "command" = "compact", tone: "primary" | "secondary" = "secondary") {
     return (
       <ActionModalButton
         closeLabel={t("action.dismiss")}
         icon={<Boxes size={16} />}
         openLabel={t("action.open")}
+        tone={tone}
         title={t("panel.createAgent")}
         variant={variant}
       >
@@ -2447,12 +2449,13 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       </ActionModalButton>
     );
   }
-  function createKeyAction(variant: "compact" | "command" = "compact") {
+  function createKeyAction(variant: "compact" | "command" = "compact", tone: "primary" | "secondary" = "secondary") {
     return (
       <ActionModalButton
         closeLabel={t("action.dismiss")}
         icon={<KeyRound size={16} />}
         openLabel={t("action.open")}
+        tone={tone}
         title={t("panel.createKey")}
         variant={variant}
       >
@@ -2468,12 +2471,13 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       </ActionModalButton>
     );
   }
-  function rotateCredentialAction(variant: "compact" | "command" = "compact") {
+  function rotateCredentialAction(variant: "compact" | "command" = "compact", tone: "primary" | "secondary" = "secondary") {
     return (
       <ActionModalButton
         closeLabel={t("action.dismiss")}
         icon={<KeyRound size={16} />}
         openLabel={t("action.open")}
+        tone={tone}
         title={t("panel.rotateCredential")}
         variant={variant}
       >
@@ -2490,12 +2494,12 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   }
   const resourceLifecyclePrimaryActions = (
     <div className="resource-lifecycle-command-actions">
-      {createAgentAction("command")}
+      {createAgentAction("command", "primary")}
       {agents.length > 0 ? (
         <>
-          {createKeyAction("command")}
-          {rotateCredentialAction("command")}
-          {createPolicyAction("command")}
+          {createKeyAction("command", "secondary")}
+          {rotateCredentialAction("command", "secondary")}
+          {createPolicyAction("command", "secondary")}
         </>
       ) : null}
     </div>
@@ -2568,7 +2572,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       case "routes":
         return (
           <RoutesView
-            routeGovernancePanel={routeGovernancePanel("span-12", createPolicyAction())}
+            routeGovernancePanel={routeGovernancePanel("span-12")}
             tracePanel={tracePanel("span-12")}
           />
         );
@@ -2578,7 +2582,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
             capabilityGovernancePanel={capabilityGovernancePanel("span-12")}
             managementAuditPanel={managementAuditPanel("span-12")}
             policies={policies}
-            routeGovernancePanel={routeGovernancePanel("span-12", createPolicyAction())}
+            routeGovernancePanel={routeGovernancePanel("span-12")}
             t={t}
           />
         );

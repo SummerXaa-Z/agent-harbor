@@ -140,6 +140,7 @@ func (s *Server) buildTenantPermissionCenter(ctx context.Context, tenant domain.
 	if err != nil {
 		return tenantPermissionCenterResponse{}, err
 	}
+	visibleEntitlements := tenantPermissionCenterVisibleEntitlements(entitlements, assignments, workspaceID)
 	applications, err := s.repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{ManagementScope: store.ManagementScope{TenantID: tenant.ID, WorkspaceID: workspaceID}})
 	if err != nil {
 		return tenantPermissionCenterResponse{}, err
@@ -148,7 +149,7 @@ func (s *Server) buildTenantPermissionCenter(ctx context.Context, tenant domain.
 	if err != nil {
 		return tenantPermissionCenterResponse{}, err
 	}
-	capabilities, err := s.tenantPermissionCenterCapabilities(ctx, entitlements, assignments)
+	capabilities, err := s.tenantPermissionCenterCapabilities(ctx, visibleEntitlements, assignments)
 	if err != nil {
 		return tenantPermissionCenterResponse{}, err
 	}
@@ -158,12 +159,30 @@ func (s *Server) buildTenantPermissionCenter(ctx context.Context, tenant domain.
 		OperatorBoundary: tenantPermissionCenterOperatorBoundaryFromPrincipal(principal),
 		Administrators:   admins,
 		Workspaces:       tenantPermissionCenterWorkspaces(agents, assignments),
-		PermissionPacks:  s.tenantPermissionCenterPackages(applications, entitlements),
+		PermissionPacks:  s.tenantPermissionCenterPackages(applications, visibleEntitlements),
 		Capabilities:     capabilities,
 		GeneratedAt:      s.now(),
 	}
 	response.NextActions = tenantPermissionCenterNextActions(response)
 	return response, nil
+}
+
+func tenantPermissionCenterVisibleEntitlements(entitlements []domain.TenantEntitlement, assignments []domain.WorkspaceAssignment, workspaceID string) []domain.TenantEntitlement {
+	if strings.TrimSpace(workspaceID) == "" {
+		return entitlements
+	}
+	visibleEntitlementIDs := map[string]struct{}{}
+	for _, assignment := range assignments {
+		visibleEntitlementIDs[assignment.TenantEntitlementID] = struct{}{}
+	}
+	rows := make([]domain.TenantEntitlement, 0, len(entitlements))
+	for _, entitlement := range entitlements {
+		if _, ok := visibleEntitlementIDs[entitlement.ID]; !ok {
+			continue
+		}
+		rows = append(rows, entitlement)
+	}
+	return rows
 }
 
 func tenantPermissionCenterOperatorBoundaryFromPrincipal(principal adminPrincipal) tenantPermissionCenterOperatorBoundary {

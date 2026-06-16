@@ -1359,6 +1359,31 @@ func TestTenantPermissionCenterHonorsScopedAdminBoundary(t *testing.T) {
 	}
 }
 
+func TestTenantPermissionCenterFiltersCapabilitiesToScopedWorkspace(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-child-center", WorkspaceID: "ws-support-center"},
+	})
+	tenantID, _, _, _, supportCapability := seedTenantPermissionCenterFixture(t, repo)
+	now := time.Now().UTC()
+	financeTarget := createDirectAgent(t, repo, "Finance Export Service", tenantID, "ws-finance-center", "mcp", domain.AgentStatusActive, nil)
+	financeCapability := createDirectCapabilityWithAction(t, repo, financeTarget.ID, "export_invoices", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	financeEntitlement := createDirectTenantEntitlement(t, repo, tenantID, financeTarget.ID, financeCapability.ID, []domain.DataScope{{DataDomain: "finance", Dataset: "invoices", Region: "eu-west"}}, now)
+	createDirectWorkspaceAssignment(t, repo, financeEntitlement.ID, tenantID, "ws-finance-center", []domain.DataScope{{DataDomain: "finance", Dataset: "invoices", Region: "eu-west"}}, now)
+
+	center := decodeData[tenantPermissionCenterResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/tenants/"+tenantID+"/permission-center", nil, "", "support-key"))
+	if len(center.Capabilities) != 1 {
+		t.Fatalf("scoped workspace should see exactly one capability, got %#v", center.Capabilities)
+	}
+	if center.Capabilities[0].CapabilityID != supportCapability.ID {
+		t.Fatalf("scoped workspace leaked another capability: %#v", center.Capabilities)
+	}
+	raw := mustJSON(t, center)
+	if bytes.Contains(raw, []byte(financeCapability.ID)) || bytes.Contains(raw, []byte("finance")) || bytes.Contains(raw, []byte("ws-finance-center")) {
+		t.Fatalf("scoped workspace should not expose finance capability or data scope: %s", raw)
+	}
+}
+
 func TestTenantPermissionCenterRequiresRegisteredTenant(t *testing.T) {
 	router := newRouterWithRepoAndAdminIdentities(store.NewMemory(), []httpapi.AdminIdentity{
 		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},

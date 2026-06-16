@@ -592,6 +592,7 @@ export function ConsoleController() {
     adminKey,
     defaultScope: defaultManagementScope,
     language,
+    onDataPatch: (updater) => setData((current) => current ? updater(current) : current),
     onRefresh: () => refresh({ throwOnError: true }),
     scope,
     t

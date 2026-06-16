@@ -55,6 +55,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 资源管理的操作表单现在会在 Agent、密钥、凭据和策略变更执行期间阻止重复提交。
 - Resource Management now separates successful resource mutations from follow-up refresh failures, keeps one-time keys visible, and shows a compact resource-status freshness line with manual refresh.
 - 资源管理现在会区分资源变更成功和后续刷新失败，保留一次性密钥展示，并在页面上显示紧凑的资源状态新鲜度与手动刷新入口。
+- Resource Management now immediately reflects returned Agent and route-policy changes in the local workbench before follow-up refresh, so successful creates, status changes, credential rotations, and policy disables stay visible even if the refresh is stale.
+- 资源管理现在会在后续刷新前先把 API 返回的 Agent 和路由策略变更写入本地工作台；创建、状态变更、凭据轮换和策略禁用成功后，即使刷新过期也能在界面中看到结果。
 - Resource Management now applies the same refresh-failure separation to Agent status changes and policy disablement, so completed cleanup operations are not reported as failed when only the follow-up refresh failed.
 - 资源管理现在把同样的刷新失败分离机制应用到 Agent 状态变更和策略禁用，避免清理操作已经完成却因后续刷新失败被误报为失败。
 - Capability Governance now keeps newly created tenant/workspace/caller grant chains visible even if the follow-up console refresh fails, and reports the stale grant list separately from the completed write.

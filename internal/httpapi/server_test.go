@@ -1040,6 +1040,95 @@ func TestScopedAdminCannotManageAdminIdentities(t *testing.T) {
 	}
 }
 
+func TestManagementMCPAdminIdentityTools(t *testing.T) {
+	router := newRouterWithRepoAndAdminIdentities(store.NewMemory(), []httpapi.AdminIdentity{
+		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+		{Actor: "east-admin", Key: "east-key", Role: "tenant_admin", TenantID: "tenant-east"},
+	})
+
+	tools := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "tools",
+		"method":  "tools/list",
+	}, "", "platform-key"))
+	for _, name := range []string{"list_admin_identities", "create_admin_identity", "rotate_admin_identity_key", "disable_admin_identity"} {
+		if !mcpToolNamesContain(tools.Result.Tools, name) {
+			t.Fatalf("admin identity tool %q missing from tools/list: %#v", name, tools.Result.Tools)
+		}
+	}
+
+	create := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "create-admin",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "create_admin_identity",
+			"arguments": map[string]any{"actor": "mcp-east", "role": "tenant_admin", "tenantId": "tenant-east"},
+		},
+	}, "", "platform-key"))
+	var created createAdminIdentityResponse
+	if err := json.Unmarshal(create.Result.StructuredContent, &created); err != nil {
+		t.Fatalf("decode create_admin_identity result: %v", err)
+	}
+	if created.Identity.Actor != "mcp-east" || !strings.HasPrefix(created.Key, "ahadm_") {
+		t.Fatalf("unexpected create_admin_identity result: %#v", created)
+	}
+
+	rotate := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "rotate-admin",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "rotate_admin_identity_key",
+			"arguments": map[string]any{"id": created.Identity.ID},
+		},
+	}, "", "platform-key"))
+	var rotated rotateAdminIdentityKeyResponse
+	if err := json.Unmarshal(rotate.Result.StructuredContent, &rotated); err != nil {
+		t.Fatalf("decode rotate_admin_identity_key result: %v", err)
+	}
+	if rotated.Key == "" || rotated.Key == created.Key || rotated.Identity.KeyPrefix == created.Identity.KeyPrefix {
+		t.Fatalf("unexpected rotate_admin_identity_key result: %#v", rotated)
+	}
+
+	disable := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "disable-admin",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "disable_admin_identity",
+			"arguments": map[string]any{"id": created.Identity.ID},
+		},
+	}, "", "platform-key"))
+	var disabled adminIdentityResponse
+	if err := json.Unmarshal(disable.Result.StructuredContent, &disabled); err != nil {
+		t.Fatalf("decode disable_admin_identity result: %v", err)
+	}
+	if disabled.Status != "disabled" {
+		t.Fatalf("unexpected disable_admin_identity result: %#v", disabled)
+	}
+
+	forbidden := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "forbidden",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "list_admin_identities",
+			"arguments": map[string]any{},
+		},
+	}, "", "east-key")
+	if forbidden.Code != http.StatusOK {
+		t.Fatalf("expected MCP HTTP 200 for tool error, got %d body=%s", forbidden.Code, forbidden.Body.String())
+	}
+	var forbiddenPayload mcpEnvelopeResponse
+	if err := json.Unmarshal(forbidden.Body.Bytes(), &forbiddenPayload); err != nil {
+		t.Fatalf("decode forbidden MCP response: %v body=%s", err, forbidden.Body.String())
+	}
+	if forbiddenPayload.Error == nil || !strings.Contains(forbiddenPayload.Error.Message, "platform administrator is required") {
+		t.Fatalf("scoped admin MCP call should be rejected, got %#v body=%s", forbiddenPayload, forbidden.Body.String())
+	}
+}
+
 func TestAdminIdentityLifecycleRejectsBootstrapAndSelfDisable(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{

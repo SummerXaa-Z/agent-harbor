@@ -25,14 +25,21 @@ func (s *Server) requirePlatformAdmin(r *http.Request) (adminPrincipal, error) {
 }
 
 func (s *Server) listAdminIdentities(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.requirePlatformAdmin(r); err != nil {
-		writeError(w, err)
-		return
-	}
-	managed, err := s.repo.ListAdminIdentities(r.Context())
+	rows, err := s.adminIdentityRowsForPlatform(r)
 	if err != nil {
 		writeError(w, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
+func (s *Server) adminIdentityRowsForPlatform(r *http.Request) ([]domain.AdminIdentity, error) {
+	if _, err := s.requirePlatformAdmin(r); err != nil {
+		return nil, err
+	}
+	managed, err := s.repo.ListAdminIdentities(r.Context())
+	if err != nil {
+		return nil, err
 	}
 	rows := append(s.bootstrapAdminIdentities(), managed...)
 	sort.Slice(rows, func(i, j int) bool {
@@ -41,7 +48,7 @@ func (s *Server) listAdminIdentities(w http.ResponseWriter, r *http.Request) {
 		}
 		return rows[i].Actor < rows[j].Actor
 	})
-	writeJSON(w, http.StatusOK, rows)
+	return rows, nil
 }
 
 func (s *Server) createAdminIdentity(w http.ResponseWriter, r *http.Request) {

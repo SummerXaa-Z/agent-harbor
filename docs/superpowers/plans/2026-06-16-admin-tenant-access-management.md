@@ -1345,7 +1345,7 @@ git add docs/superpowers/plans/2026-06-16-admin-tenant-access-management.md
 git commit -m "docs: mark admin access management plan complete"
 ```
 
-- [ ] **Step 7: Push and open PR**
+- [x] **Step 7: Push and open PR**
 
 ```bash
 git push -u origin codex/admin-tenant-access-management
@@ -1359,3 +1359,5 @@ PR body must include:
 - Verification results.
 - Browser smoke notes.
 - Explicit non-goals: no SSO, no password login, no delegated tenant-admin identity management.
+
+Created PR: https://github.com/SummerXaa-Z/agent-harbor/pull/92

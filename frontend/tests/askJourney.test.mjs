@@ -2,10 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  accessDecisionSummaryLabel,
+  accessEvidenceMessageLabel,
+  accessNextActionLabel,
   buildExplainRequest,
   buildPermissionChangeHandoff,
   evidenceChainRows
 } from "../src/askJourney.ts";
+import {
+  createTranslator
+} from "../src/i18n.ts";
 import { permissionPackageTemplates } from "../src/permissionPackages.ts";
 
 const now = "2026-06-11T10:00:00Z";
@@ -145,6 +151,50 @@ test("evidenceChainRows marks the first denied evidence layer as the broken ring
       ["ask.evidenceLayer.workspace_assignment", "danger", true],
       ["ask.evidenceLayer.instance_assignment", "neutral", false]
     ]
+  );
+});
+
+test("access query presentation localizes backend decision guidance at render time", () => {
+  const t = createTranslator("zh-CN");
+  const result = {
+    dataScopes: [],
+    decision: {
+      allowed: false,
+      capabilityId: "cap-search",
+      reason: "tenant has no entitlement for capability",
+      source: "tenant_entitlement"
+    },
+    evidence: [
+      { layer: "tenant_entitlement", message: "Tenant entitlement is missing or blocking this capability.", status: "missing" },
+      { id: "workspace-1", layer: "workspace_assignment", message: "Workspace assignment matched.", status: "matched" }
+    ],
+    nextActions: [
+      "Use the permission package flow with draft_permission_package and apply_permission_package to create the tenant entitlement, workspace assignment, and caller assignment together."
+    ],
+    outcome: "denied",
+    request: {
+      capabilityId: "cap-search",
+      callerInstanceId: "agt-support",
+      targetId: "agt-ticket-mcp",
+      tenantId: "tenant-root",
+      workspaceId: "ws-support"
+    },
+    summary: "Denied: tenant has no entitlement for capability."
+  };
+  const rows = evidenceChainRows(result);
+
+  assert.equal(accessDecisionSummaryLabel(result, t), "当前不能访问：租户尚未获得该能力授权。");
+  assert.equal(accessEvidenceMessageLabel(rows[0], t), "租户授权缺失，或正在阻断这个工具能力。");
+  assert.equal(accessEvidenceMessageLabel(rows[1], t), "工作区分配已匹配。");
+  assert.equal(accessNextActionLabel(result.nextActions[0], t), "发起权限包变更，一次性创建租户、工作区和调用方授权。");
+});
+
+test("access query presentation sanitizes unknown technical guidance", () => {
+  const t = createTranslator("en");
+
+  assert.equal(
+    accessNextActionLabel("Inspect get_tenant_access_profile and then call list_capabilities.", t),
+    "Inspect tenant access profile and then call capability list."
   );
 });
 

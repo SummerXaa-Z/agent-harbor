@@ -41,6 +41,14 @@ test("ask access view exposes denied-to-fix handoff without automatic submission
   assert.doesNotMatch(hook, /applyPermissionPackage|createPermissionPackageDraftFromApi|createPermissionPackageApprovalRequest/);
 });
 
+test("ask access view translates backend decision text at render time", () => {
+  assert.match(view, /accessDecisionSummaryLabel\(result, t\)/);
+  assert.match(view, /accessEvidenceMessageLabel\(row, t\)/);
+  assert.match(view, /accessNextActionLabel\(action, t\)/);
+  assert.doesNotMatch(view, /<p>\{result\.summary\}<\/p>/);
+  assert.doesNotMatch(view, /<li key=\{action\}>\{action\}<\/li>/);
+});
+
 test("permission change handoff is consumed once and only pre-fills the editable workbench", () => {
   assert.match(controller, /permissionChange:\s*PermissionChangeHandoffContext \| null/);
   assert.match(controller, /permissionNotice:\s*PermissionChangeHandoffContext \| null/);

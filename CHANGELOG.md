@@ -47,6 +47,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 控制台用户可见文案不再使用 “evidence/证据” 作为主路径表达，统一改为验收记录、运行记录、审计记录、交接材料和上线状态等业务语言。
 - Go-Live Check now sanitizes unknown backend next-action fallback text, so legacy "evidence/证据" wording cannot leak back into the visible production status message.
 - 上线检查现在会归一未知后端下一步提示的兜底文案，避免旧版 “evidence/证据” 表达重新出现在可见生产状态提示中。
+- Access Query now renders backend decision summaries, chain messages, and recommended next actions through localized production copy instead of showing raw English API guidance in the primary answer.
+- 访问查询现在会把后端判定摘要、链路说明和建议下一步转换为本地化生产文案，不再在主答案路径直接展示英文 API 提示。
 - Resource Management now presents lifecycle operations directly in the resource workbench: create Agent, create key, rotate credential, create policy, review capabilities, start permission changes, and review runtime all start from the same entry.
 - 资源管理页现在把生命周期操作直接收束到资源工作台：创建 Agent、创建密钥、轮换凭据、创建策略、查看能力、发起权限变更和查看运行状态都从同一个入口开始。
 - Resource Management row actions now keep resource context while opening credential actions in place and routing capability, permission, and runtime follow-ups with focused handoff state.

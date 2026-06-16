@@ -117,13 +117,14 @@ export function useManagementOperations({
 
   async function finishManagementMutation(
     action: ManagementMutationAction,
-    setMessage: (message: string) => void
+    setMessage: (message: string) => void,
+    successMessage?: string
   ) {
     setManagementRefreshState({ action, status: "refreshing" });
     const refreshResult = await refreshAfterManagementMutation({ action, onRefresh });
     if (refreshResult.ok) {
       setManagementRefreshState({ action, refreshedAt: refreshResult.refreshedAt, status: "fresh" });
-      setMessage(t(managementMutationSuccessMessageKey(action)));
+      setMessage(successMessage ?? t(managementMutationSuccessMessageKey(action)));
       return;
     }
     setManagementRefreshState({
@@ -196,13 +197,13 @@ export function useManagementOperations({
     setAgentMessage("");
     setCleanupActionId(agent.id);
     try {
+      const successMessage = tx(t, "message.statusChanged", { name: agent.name, status: agentStatusLabel(status, t) });
       if (status === "disabled") {
         await disableAgent(agent.id, adminKey);
       } else {
         await updateAgent(agent.id, { status }, adminKey);
       }
-      setAgentMessage(tx(t, "message.statusChanged", { name: agent.name, status: agentStatusLabel(status, t) }));
-      await onRefresh();
+      await finishManagementMutation("update_agent_status", setAgentMessage, successMessage);
     } catch (error) {
       setAgentMessage(localizedErrorMessage(t, language, error, "error.updateAgentStatus"));
     } finally {
@@ -215,8 +216,7 @@ export function useManagementOperations({
     setCleanupActionId(policy.id);
     try {
       await disableRoutePolicy(policy.id, adminKey);
-      setPolicyMessage(t("message.policyDisabled"));
-      await onRefresh();
+      await finishManagementMutation("disable_policy", setPolicyMessage, t("message.policyDisabled"));
     } catch (error) {
       setPolicyMessage(localizedErrorMessage(t, language, error, "error.disableRoutePolicy"));
     } finally {

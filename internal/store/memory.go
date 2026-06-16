@@ -69,6 +69,14 @@ type Repository interface {
 	ListTraces(context.Context, TraceFilter) ([]domain.TraceEvent, error)
 	AppendAuditEvent(context.Context, domain.AuditEvent) (domain.AuditEvent, error)
 	ListAuditEvents(context.Context, AuditEventFilter) ([]domain.AuditEvent, error)
+	ListAdminIdentities(context.Context) ([]domain.AdminIdentity, error)
+	GetAdminIdentity(context.Context, string) (domain.AdminIdentity, bool, error)
+	GetAdminIdentityByActor(context.Context, string) (domain.AdminIdentity, bool, error)
+	FindAdminIdentityByKeyHash(context.Context, string) (domain.AdminIdentity, bool, error)
+	CreateAdminIdentityWithAudit(context.Context, domain.AdminIdentity, AdminIdentityAuditBuilder) (domain.AdminIdentity, error)
+	RotateAdminIdentityKeyWithAudit(context.Context, string, string, string, time.Time, string, AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error)
+	DisableAdminIdentityWithAudit(context.Context, string, time.Time, string, AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error)
+	TouchAdminIdentityLastUsed(context.Context, string, time.Time) error
 }
 
 type AgentAuditBuilder func(domain.Agent) domain.AuditEvent
@@ -76,6 +84,7 @@ type AgentKeyAuditBuilder func(domain.AgentKey) domain.AuditEvent
 type AccessGrantAuditBuilder func(domain.AccessGrant) domain.AuditEvent
 type RoutePolicyAuditBuilder func(domain.RoutePolicy) domain.AuditEvent
 type TenantAuditBuilder func(domain.Tenant) domain.AuditEvent
+type AdminIdentityAuditBuilder func(domain.AdminIdentity) domain.AuditEvent
 
 var ErrPermissionPackageApprovalNotConsumable = errors.New("permission package approval request is not consumable")
 
@@ -196,6 +205,8 @@ type Memory struct {
 	policies             map[string]domain.RoutePolicy
 	traces               []domain.TraceEvent
 	audits               []domain.AuditEvent
+	adminIdentities      map[string]domain.AdminIdentity
+	adminIdentityActorID map[string]string
 }
 
 func NewMemory() *Memory {
@@ -211,6 +222,8 @@ func NewMemory() *Memory {
 		packageApplications:  make(map[string]domain.PermissionPackageApplication),
 		packageApprovals:     make(map[string]domain.PermissionPackageApprovalRequest),
 		policies:             make(map[string]domain.RoutePolicy),
+		adminIdentities:      make(map[string]domain.AdminIdentity),
+		adminIdentityActorID: make(map[string]string),
 	}
 }
 
@@ -1145,6 +1158,119 @@ func (m *Memory) ListAuditEvents(_ context.Context, filter AuditEventFilter) ([]
 		rows = rows[:filter.Limit]
 	}
 	return rows, nil
+}
+
+func (m *Memory) ListAdminIdentities(_ context.Context) ([]domain.AdminIdentity, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rows := make([]domain.AdminIdentity, 0, len(m.adminIdentities))
+	for _, identity := range m.adminIdentities {
+		rows = append(rows, identity)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
+	return rows, nil
+}
+
+func (m *Memory) GetAdminIdentity(_ context.Context, id string) (domain.AdminIdentity, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	identity, ok := m.adminIdentities[strings.TrimSpace(id)]
+	return identity, ok, nil
+}
+
+func (m *Memory) GetAdminIdentityByActor(_ context.Context, actor string) (domain.AdminIdentity, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	id, ok := m.adminIdentityActorID[strings.TrimSpace(actor)]
+	if !ok {
+		return domain.AdminIdentity{}, false, nil
+	}
+	identity, ok := m.adminIdentities[id]
+	return identity, ok, nil
+}
+
+func (m *Memory) FindAdminIdentityByKeyHash(_ context.Context, hash string) (domain.AdminIdentity, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	hash = strings.TrimSpace(hash)
+	for _, identity := range m.adminIdentities {
+		if identity.Status == domain.AdminIdentityStatusActive && identity.KeyHash == hash {
+			return identity, true, nil
+		}
+	}
+	return domain.AdminIdentity{}, false, nil
+}
+
+func (m *Memory) CreateAdminIdentityWithAudit(_ context.Context, identity domain.AdminIdentity, build AdminIdentityAuditBuilder) (domain.AdminIdentity, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	identity.ID = strings.TrimSpace(identity.ID)
+	identity.Actor = strings.TrimSpace(identity.Actor)
+	if identity.ID == "" || identity.Actor == "" {
+		return domain.AdminIdentity{}, errors.New("admin identity id and actor are required")
+	}
+	if _, exists := m.adminIdentities[identity.ID]; exists {
+		return domain.AdminIdentity{}, errors.New("admin identity already exists")
+	}
+	if _, exists := m.adminIdentityActorID[identity.Actor]; exists {
+		return domain.AdminIdentity{}, errors.New("admin identity actor already exists")
+	}
+	m.adminIdentities[identity.ID] = identity
+	m.adminIdentityActorID[identity.Actor] = identity.ID
+	m.audits = append(m.audits, build(identity))
+	return identity, nil
+}
+
+func (m *Memory) RotateAdminIdentityKeyWithAudit(_ context.Context, id string, keyHash string, keyPrefix string, now time.Time, actor string, build AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	identity, ok := m.adminIdentities[strings.TrimSpace(id)]
+	if !ok {
+		return domain.AdminIdentity{}, false, nil
+	}
+	identity.KeyHash = strings.TrimSpace(keyHash)
+	identity.KeyPrefix = strings.TrimSpace(keyPrefix)
+	identity.RotatedAt = now
+	identity.UpdatedAt = now
+	identity.UpdatedBy = strings.TrimSpace(actor)
+	m.adminIdentities[identity.ID] = identity
+	m.audits = append(m.audits, build(identity))
+	return identity, true, nil
+}
+
+func (m *Memory) DisableAdminIdentityWithAudit(_ context.Context, id string, now time.Time, actor string, build AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	identity, ok := m.adminIdentities[strings.TrimSpace(id)]
+	if !ok {
+		return domain.AdminIdentity{}, false, nil
+	}
+	identity.Status = domain.AdminIdentityStatusDisabled
+	identity.DisabledAt = now
+	identity.UpdatedAt = now
+	identity.UpdatedBy = strings.TrimSpace(actor)
+	identity.DisabledBy = strings.TrimSpace(actor)
+	m.adminIdentities[identity.ID] = identity
+	m.audits = append(m.audits, build(identity))
+	return identity, true, nil
+}
+
+func (m *Memory) TouchAdminIdentityLastUsed(_ context.Context, id string, now time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	identity, ok := m.adminIdentities[strings.TrimSpace(id)]
+	if !ok {
+		return nil
+	}
+	identity.LastUsedAt = now
+	identity.UpdatedAt = now
+	m.adminIdentities[identity.ID] = identity
+	return nil
 }
 
 func (m *Memory) grantMatchesScope(grant domain.AccessGrant, scope ManagementScope, tenantIDs map[string]struct{}) bool {

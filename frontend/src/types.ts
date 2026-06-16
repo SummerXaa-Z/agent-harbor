@@ -548,3 +548,45 @@ export interface McpRpcCallResult {
   payload: unknown
   status: number
 }
+
+export type AdminIdentityRole = 'platform_admin' | 'tenant_admin' | 'security_reviewer'
+export type AdminIdentityStatus = 'active' | 'disabled'
+export type AdminIdentitySource = 'bootstrap' | 'managed'
+
+export interface AdminIdentity {
+  id: string
+  actor: string
+  displayName: string
+  role: AdminIdentityRole
+  tenantId?: string
+  workspaceId?: string
+  status: AdminIdentityStatus
+  source: AdminIdentitySource
+  keyPrefix?: string
+  createdAt: string
+  updatedAt: string
+  lastUsedAt?: string
+  rotatedAt?: string
+  disabledAt?: string
+  createdBy?: string
+  updatedBy?: string
+  disabledBy?: string
+}
+
+export interface CreateAdminIdentityRequest {
+  actor: string
+  displayName?: string
+  role: AdminIdentityRole
+  tenantId?: string
+  workspaceId?: string
+}
+
+export interface CreateAdminIdentityResponse {
+  identity: AdminIdentity
+  key: string
+}
+
+export interface RotateAdminIdentityKeyResponse {
+  identity: AdminIdentity
+  key: string
+}

@@ -29,6 +29,17 @@ func NewAgentKey() (plaintext string, prefix string) {
 	return plaintext, prefix
 }
 
+func NewAdminKey() (plaintext string, prefix string) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		panic(err)
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	plaintext = "ahadm_" + token
+	prefix = "ahadm_" + token[:8]
+	return plaintext, prefix
+}
+
 func HashSecret(secret string) string {
 	sum := sha256.Sum256([]byte(secret))
 	return hex.EncodeToString(sum[:])

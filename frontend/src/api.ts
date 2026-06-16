@@ -50,6 +50,7 @@ import type {
   AccessDecisionExplainRequest,
   AccessDecisionExplainResult,
   AccessProfileFilters,
+  AdminIdentity,
   Agent,
   ApiEnvelope,
   AuditEvent,
@@ -60,6 +61,8 @@ import type {
   ConsoleData,
   ConsoleSession,
   CreateAccessGrantRequest,
+  CreateAdminIdentityRequest,
+  CreateAdminIdentityResponse,
   CreateAgentKeyRequest,
   CreateAgentKeyResponse,
   CreateAgentRequest,
@@ -72,6 +75,7 @@ import type {
   ManagementScope,
   McpRpcCallResult,
   ProviderContract,
+  RotateAdminIdentityKeyResponse,
   RotateAgentCredentialsRequest,
   RoutePolicy,
   SystemMetric,
@@ -355,6 +359,28 @@ export async function fetchAgents(
 
 export async function fetchTenants(adminKey?: string, signal?: AbortSignal): Promise<Tenant[]> {
   return request<Tenant[]>('/api/v1/tenants', { adminKey, signal })
+}
+
+export async function fetchAdminIdentities(adminKey?: string, signal?: AbortSignal): Promise<AdminIdentity[]> {
+  return request<AdminIdentity[]>('/api/v1/admin-identities', { adminKey, signal })
+}
+
+export async function createAdminIdentity(
+  body: CreateAdminIdentityRequest,
+  adminKey?: string,
+): Promise<CreateAdminIdentityResponse> {
+  return request<CreateAdminIdentityResponse>('/api/v1/admin-identities', { adminKey, body })
+}
+
+export async function rotateAdminIdentityKey(
+  id: string,
+  adminKey?: string,
+): Promise<RotateAdminIdentityKeyResponse> {
+  return request<RotateAdminIdentityKeyResponse>(`/api/v1/admin-identities/${encodeURIComponent(id)}/key:rotate`, { adminKey, body: {} })
+}
+
+export async function disableAdminIdentity(id: string, adminKey?: string): Promise<AdminIdentity> {
+  return request<AdminIdentity>(`/api/v1/admin-identities/${encodeURIComponent(id)}:disable`, { adminKey, body: {} })
 }
 
 export async function fetchAccessGrants(

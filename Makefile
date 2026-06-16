@@ -23,10 +23,11 @@ SCENARIO_SCRIPTS := \
 	scripts/scenario-web-console-production-journey.sh \
 	scripts/scenario-production-hardening.sh \
 	scripts/scenario-admin-tenant-boundary.sh \
+	scripts/scenario-admin-access-management.sh \
 	scripts/demo.sh \
 	scripts/scenario-tenant-access-profile.sh
 
-.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-all
+.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -56,11 +57,12 @@ help:
 	@printf '  make web-console-production-journey Run the web console production journey smoke gate\n'
 	@printf '  make production-hardening  Run the production safety baseline gate\n'
 	@printf '  make scenario-admin-tenant-boundary Run scoped admin tenant/workspace boundary gate\n'
+	@printf '  make scenario-admin-access-management Run managed administrator lifecycle gate\n'
 	@printf '  make scenario-all          Run all scenarios against BASE_URL\n'
 
 check: gofmt-check test vet build makefile-targets-test frontend-test frontend-build scenario-scripts-lint github-config-lint
 
-release-check: gofmt-check test-fresh vet build production-hardening web-console-production-journey scenario-admin-tenant-boundary makefile-targets-test frontend-test frontend-build scenario-scripts-lint github-config-lint
+release-check: gofmt-check test-fresh vet build production-hardening web-console-production-journey scenario-admin-tenant-boundary scenario-admin-access-management makefile-targets-test frontend-test frontend-build scenario-scripts-lint github-config-lint
 
 fmt:
 	gofmt -w $(GO_FILES)
@@ -142,6 +144,9 @@ production-hardening:
 
 scenario-admin-tenant-boundary:
 	bash scripts/scenario-admin-tenant-boundary.sh
+
+scenario-admin-access-management:
+	bash scripts/scenario-admin-access-management.sh
 
 scenario-all:
 	bash scripts/scenario-all.sh

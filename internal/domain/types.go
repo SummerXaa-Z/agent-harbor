@@ -91,6 +91,67 @@ type AuditEvent struct {
 	CreatedAt    time.Time      `json:"createdAt"`
 }
 
+type AdminIdentityRole string
+
+const (
+	AdminIdentityRolePlatformAdmin    AdminIdentityRole = "platform_admin"
+	AdminIdentityRoleTenantAdmin      AdminIdentityRole = "tenant_admin"
+	AdminIdentityRoleSecurityReviewer AdminIdentityRole = "security_reviewer"
+)
+
+type AdminIdentityStatus string
+
+const (
+	AdminIdentityStatusActive   AdminIdentityStatus = "active"
+	AdminIdentityStatusDisabled AdminIdentityStatus = "disabled"
+)
+
+type AdminIdentitySource string
+
+const (
+	AdminIdentitySourceBootstrap AdminIdentitySource = "bootstrap"
+	AdminIdentitySourceManaged   AdminIdentitySource = "managed"
+)
+
+type AdminIdentity struct {
+	ID          string              `json:"id"`
+	Actor       string              `json:"actor"`
+	DisplayName string              `json:"displayName"`
+	Role        AdminIdentityRole   `json:"role"`
+	TenantID    string              `json:"tenantId,omitempty"`
+	WorkspaceID string              `json:"workspaceId,omitempty"`
+	Status      AdminIdentityStatus `json:"status"`
+	Source      AdminIdentitySource `json:"source"`
+	KeyHash     string              `json:"-"`
+	KeyPrefix   string              `json:"keyPrefix,omitempty"`
+	CreatedAt   time.Time           `json:"createdAt"`
+	UpdatedAt   time.Time           `json:"updatedAt"`
+	LastUsedAt  time.Time           `json:"lastUsedAt,omitempty,omitzero"`
+	RotatedAt   time.Time           `json:"rotatedAt,omitempty,omitzero"`
+	DisabledAt  time.Time           `json:"disabledAt,omitempty,omitzero"`
+	CreatedBy   string              `json:"createdBy,omitempty"`
+	UpdatedBy   string              `json:"updatedBy,omitempty"`
+	DisabledBy  string              `json:"disabledBy,omitempty"`
+}
+
+type CreateAdminIdentityRequest struct {
+	Actor       string            `json:"actor"`
+	DisplayName string            `json:"displayName"`
+	Role        AdminIdentityRole `json:"role"`
+	TenantID    string            `json:"tenantId"`
+	WorkspaceID string            `json:"workspaceId"`
+}
+
+type CreateAdminIdentityResponse struct {
+	Identity AdminIdentity `json:"identity"`
+	Key      string        `json:"key"`
+}
+
+type RotateAdminIdentityKeyResponse struct {
+	Identity AdminIdentity `json:"identity"`
+	Key      string        `json:"key"`
+}
+
 type AgentKey struct {
 	ID        string    `json:"id"`
 	AgentID   string    `json:"agentId"`

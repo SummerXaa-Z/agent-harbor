@@ -14,6 +14,8 @@ const permissionApprovalDecisionHook = readFileSync(new URL("../src/hooks/usePer
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const accessProfileView = readFileSync(new URL("../src/components/TenantAccessProfileView.tsx", import.meta.url), "utf8");
+const adminAccessView = readFileSync(new URL("../src/components/AdminAccessManagementView.tsx", import.meta.url), "utf8");
+const adminAccessHook = readFileSync(new URL("../src/hooks/useAdminAccessController.ts", import.meta.url), "utf8");
 const capabilityGovernanceView = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
 const consoleViews = readFileSync(new URL("../src/components/ConsoleViews.tsx", import.meta.url), "utf8");
 const coreJourneyWorkbench = readFileSync(new URL("../src/components/CoreJourneyWorkbench.tsx", import.meta.url), "utf8");
@@ -122,6 +124,21 @@ test("permission request process navigation hides request capability counts", ()
   assert.match(workbench, /count: step\.key === "request" \? undefined : step\.count/);
   assert.match(workbench, /total: step\.key === "request" \? undefined : step\.total/);
   assert.match(workbench, /typeof step\.count === "number" && typeof step\.total === "number"/);
+});
+
+test("administrator boundary workspace uses modal actions and never renders key hashes", () => {
+  assert.match(app, /const viewCanRenderWithoutConsoleData = activeView\.key === "admin-access";/);
+  assert.match(app, /!\s*data && !viewCanRenderWithoutConsoleData/);
+  assert.match(adminAccessHook, /forbidden:\s*false/);
+  assert.match(adminAccessHook, /error\.adminAccessPlatformRequired/);
+  assert.match(adminAccessView, /!controller\.forbidden/);
+  assert.match(adminAccessView, /adminAccess\.forbiddenTitle/);
+  assert.match(adminAccessView, /admin-access-modal-backdrop/);
+  assert.match(adminAccessView, /controller\.oneTimeKey/);
+  assert.match(adminAccessView, /className="primary-button"[\s\S]*t\("adminAccess\.create"\)/);
+  assert.match(adminAccessView, /className="primary-button"[\s\S]*t\("adminAccess\.rotate"\)/);
+  assert.match(adminAccessView, /className="danger-button"[\s\S]*t\("adminAccess\.disable"\)/);
+  assert.doesNotMatch(adminAccessView, /keyHash/);
 });
 
 test("permission request process steps prefer completed evidence over stale preview copy", () => {

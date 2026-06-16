@@ -11,6 +11,7 @@ export type NavKey =
   | "access"
   | "traces"
   | "evidence"
+  | "admin-access"
 
 export type NavGroupKey = "onboarding" | "configuration" | "primary" | "audit"
 
@@ -45,6 +46,7 @@ export const navItems: NavItem[] = [
   { detailKey: "navDetail.traces", groupKey: "audit", key: "traces", label: "Call Logs" },
   { detailKey: "navDetail.evidence", groupKey: "audit", key: "evidence", label: "Go-Live Status" },
   { detailKey: "navDetail.cockpit", groupKey: "audit", key: "cockpit", label: "System Check" },
+  { detailKey: "navDetail.adminAccess", groupKey: "configuration", key: "admin-access", label: "Administrators & Boundaries" },
   { detailKey: "navDetail.tenants", groupKey: "configuration", key: "tenants", label: "Tenants & Organization" },
   { detailKey: "navDetail.registry", groupKey: "configuration", key: "registry", label: "Resource Management" },
   { detailKey: "navDetail.capabilities", groupKey: "configuration", key: "capabilities", label: "Tool Capabilities" },
@@ -112,6 +114,11 @@ const views: Record<NavKey, ConsoleView> = {
     key: "evidence",
     primaryPanelKey: "goLiveAcceptance",
     titleKey: "page.evidence",
+  },
+  "admin-access": {
+    key: "admin-access",
+    primaryPanelKey: "adminAccess",
+    titleKey: "page.adminAccess",
   },
 }
 

@@ -159,6 +159,7 @@ import { ActionModalButton, IconMore, IconOpen, Panel } from "./components/Conso
 import { ProductionJourneyCheckpoint } from "./components/ProductionJourneyCheckpoint";
 import {
   AccessView,
+  AdminAccessView,
   AiAdminView,
   AskView,
   CapabilitiesView,
@@ -171,6 +172,7 @@ import {
   TenantsView,
   TracesView
 } from "./components/ConsoleViews";
+import { AdminAccessManagementView } from "./components/AdminAccessManagementView";
 import { AskAccessPanel } from "./components/AskAccessView";
 import { CoreJourneyWorkbench } from "./components/CoreJourneyWorkbench";
 import { GettingStartedView } from "./components/GettingStartedView";
@@ -200,6 +202,7 @@ import { TenantAccessProfileView } from "./components/TenantAccessProfileView";
 import { TenantOrganizationView, type TenantWorkspaceContext } from "./components/TenantOrganizationView";
 import { Badge } from "./components/ui";
 import { useAccessProfileController } from "./hooks/useAccessProfileController";
+import { useAdminAccessController } from "./hooks/useAdminAccessController";
 import { useAskAccessController } from "./hooks/useAskAccessController";
 import { useCapabilityGovernanceController } from "./hooks/useCapabilityGovernanceController";
 import { useConnectionDiagnostics } from "./hooks/useConnectionDiagnostics";
@@ -300,6 +303,8 @@ function navIconFor(key: NavKey) {
       return FileSearch;
     case "ai-admin":
       return ShieldCheck;
+    case "admin-access":
+      return KeyRound;
     case "tenants":
       return Building2;
     case "registry":
@@ -511,6 +516,10 @@ export function ConsoleController() {
     onRefresh: refresh,
     scope,
     t
+  });
+  const adminAccess = useAdminAccessController({
+    adminKey,
+    enabled: consoleAccessReady
   });
   const capabilityGovernance = useCapabilityGovernanceController({
     adminKey,
@@ -2226,6 +2235,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       workspaceAssignments={workspaceAssignments}
     />
   );
+  const adminAccessPanel = (
+    <AdminAccessManagementView controller={adminAccess} t={t} />
+  );
   const aiAdminPanel = (
       <AiAdminPermissionWorkbench
         accessSubjects={aiAdminAccessSubjects}
@@ -2480,6 +2492,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         return <CapabilitiesView capabilityGovernancePanel={capabilityGovernancePanel()} />;
       case "tenants":
         return <TenantsView tenantOrganizationPanel={tenantOrganizationPanel} />;
+      case "admin-access":
+        return <AdminAccessView adminAccessPanel={adminAccessPanel} />;
       case "access":
         return <AccessView accessProfilePanel={accessProfilePanel} journeyCheckpoint={productionJourneyCheckpoint} />;
       case "traces":
@@ -2512,6 +2526,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         );
     }
   })();
+  const viewCanRenderWithoutConsoleData = activeView.key === "admin-access";
 
   return (
     <div className="app-shell">
@@ -2750,7 +2765,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           </section>
         ) : null}
 
-        {!data ? (
+        {!data && !viewCanRenderWithoutConsoleData ? (
           <section className="workspace-loading" role="status" aria-live="polite">
             <div className="workspace-loading-copy">
               <strong>{t("status.loadingConsole")}</strong>

@@ -62,6 +62,18 @@ type managementMCPScopeArgs struct {
 	WorkspaceID string `json:"workspaceId"`
 }
 
+type managementMCPCreateAdminIdentityArgs struct {
+	Actor       string `json:"actor"`
+	DisplayName string `json:"displayName"`
+	Role        string `json:"role"`
+	TenantID    string `json:"tenantId"`
+	WorkspaceID string `json:"workspaceId"`
+}
+
+type managementMCPAdminIdentityIDArgs struct {
+	ID string `json:"id"`
+}
+
 type managementMCPCapabilityArgs struct {
 	TenantID    string                           `json:"tenantId"`
 	WorkspaceID string                           `json:"workspaceId"`
@@ -204,6 +216,48 @@ func managementMCPRequestFromHTTP(r *http.Request) (managementMCPRequest, error)
 
 func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest) (managementMCPCallResult, error) {
 	switch req.Params.Name {
+	case "list_admin_identities":
+		rows, err := s.adminIdentityRowsForPlatform(r)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(rows), nil
+	case "create_admin_identity":
+		args, err := decodeManagementMCPArguments[managementMCPCreateAdminIdentityArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		created, err := s.createManagedAdminIdentity(r, domain.CreateAdminIdentityRequest{
+			Actor:       args.Actor,
+			DisplayName: args.DisplayName,
+			Role:        domain.AdminIdentityRole(args.Role),
+			TenantID:    args.TenantID,
+			WorkspaceID: args.WorkspaceID,
+		})
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(created), nil
+	case "rotate_admin_identity_key":
+		args, err := decodeManagementMCPArguments[managementMCPAdminIdentityIDArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		rotated, err := s.rotateManagedAdminIdentityKey(r, args.ID)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(rotated), nil
+	case "disable_admin_identity":
+		args, err := decodeManagementMCPArguments[managementMCPAdminIdentityIDArgs](req.Params.Arguments)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		disabled, err := s.disableManagedAdminIdentity(r, args.ID)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(disabled), nil
 	case "list_permission_package_templates":
 		return managementMCPResult(permissionpack.Templates()), nil
 	case "draft_permission_package":
@@ -451,6 +505,36 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 
 func managementMCPTools() []managementMCPTool {
 	return []managementMCPTool{
+		{
+			Name:        "list_admin_identities",
+			Description: "List bootstrap and managed administrator identities, including roles, status, and tenant/workspace boundaries. Requires platform administrator.",
+			InputSchema: objectSchema(map[string]any{}, []string{}),
+		},
+		{
+			Name:        "create_admin_identity",
+			Description: "Create a managed administrator identity and return its one-time key. Requires platform administrator.",
+			InputSchema: objectSchema(map[string]any{
+				"actor":       stringSchema("Unique administrator actor."),
+				"displayName": stringSchema("Business-readable administrator name."),
+				"role":        map[string]any{"type": "string", "enum": []string{"platform_admin", "tenant_admin", "security_reviewer"}},
+				"tenantId":    stringSchema("Required for tenant_admin or security_reviewer."),
+				"workspaceId": stringSchema("Optional scoped workspace."),
+			}, []string{"actor", "role"}),
+		},
+		{
+			Name:        "rotate_admin_identity_key",
+			Description: "Rotate a managed administrator key and return the new one-time key. Requires platform administrator.",
+			InputSchema: objectSchema(map[string]any{
+				"id": stringSchema("Managed administrator identity id."),
+			}, []string{"id"}),
+		},
+		{
+			Name:        "disable_admin_identity",
+			Description: "Disable a managed administrator identity. Requires platform administrator.",
+			InputSchema: objectSchema(map[string]any{
+				"id": stringSchema("Managed administrator identity id."),
+			}, []string{"id"}),
+		},
 		{
 			Name:        "list_permission_package_templates",
 			Description: "List deterministic permission package templates an admin agent can use for low-friction permission changes.",

@@ -10,6 +10,8 @@ import type {
 
 export type ResourceLifecycleKind = "caller" | "mcp_target" | "agent";
 export type ResourceLifecycleActionKind =
+  | "create_key"
+  | "create_policy"
   | "rotate_credential"
   | "review_capabilities"
   | "start_permission_change"

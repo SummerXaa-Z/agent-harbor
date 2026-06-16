@@ -2667,6 +2667,49 @@ button {
   gap: 10px;
 }
 
+.resource-action-context {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--radius-control);
+  background: var(--brand-soft);
+}
+
+.resource-action-context > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.resource-action-context strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-action-context small {
+  flex: 0 0 auto;
+  color: var(--brand-strong);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.resource-action-context p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .route-presets {
   display: flex;
   flex-wrap: wrap;

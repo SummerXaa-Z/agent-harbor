@@ -26,7 +26,49 @@ test("credential blockers open the rotate credential modal", () => {
     mcpTargets: [targetA]
   });
 
-  assert.deepEqual(plan, { agentId: "target-a", kind: "open_modal", modal: "rotate_credential" });
+  assert.deepEqual(plan, {
+    agentId: "target-a",
+    context: {
+      resourceKindKey: "resource.kind.mcpTarget",
+      resourceName: "工单工具服务",
+      tenantName: "客户服务中心",
+      workspaceName: "ws-a"
+    },
+    kind: "open_modal",
+    modal: "rotate_credential"
+  });
+});
+
+test("key creation from a caller opens with the caller preselected", () => {
+  const plan = planResourceLifecycleAction({
+    agents: [callerA, targetA],
+    ...formatters,
+    item: { ...item(callerA, "create_key"), kind: "caller", kindKey: "resource.kind.caller" },
+    localCallers: [callerA],
+    mcpTargets: [targetA]
+  });
+
+  assert.equal(plan.kind, "open_modal");
+  assert.equal(plan.modal, "create_key");
+  assert.equal(plan.agentId, "caller-a");
+  assert.equal(plan.context.resourceName, "客服助手");
+  assert.equal(plan.context.resourceKindKey, "resource.kind.caller");
+});
+
+test("policy creation preselects same-scope caller and target", () => {
+  const plan = planResourceLifecycleAction({
+    agents: [callerB, callerA, targetA],
+    ...formatters,
+    item: item(targetA, "create_policy"),
+    localCallers: [callerB, callerA],
+    mcpTargets: [targetA]
+  });
+
+  assert.equal(plan.kind, "open_modal");
+  assert.equal(plan.modal, "create_policy");
+  assert.equal(plan.callerAgentId, "caller-a");
+  assert.equal(plan.targetAgentId, "target-a");
+  assert.equal(plan.context.resourceName, "工单工具服务");
 });
 
 test("capability blockers navigate with the target preselected", () => {

@@ -93,6 +93,7 @@ import {
 } from "./resourceLifecycle";
 import {
   planResourceLifecycleAction,
+  type ResourceLifecycleActionContext,
   type ResourceLifecycleModal
 } from "./resourceLifecycleActionPlanner";
 import {
@@ -332,17 +333,18 @@ const defaultAccessProfileFilters: AccessProfileFilters = {
 type ResourceActionModal = "" | ResourceLifecycleModal;
 
 interface ResourceActionRequest {
+  context: ResourceLifecycleActionContext | null;
   modal: ResourceActionModal;
   openToken: number;
 }
 
-const defaultResourceActionRequest: ResourceActionRequest = { modal: "", openToken: 0 };
+const defaultResourceActionRequest: ResourceActionRequest = { context: null, modal: "", openToken: 0 };
 
 function resourceActionRequestReducer(
   current: ResourceActionRequest,
-  modal: ResourceActionModal
+  action: { context?: ResourceLifecycleActionContext | null; modal: ResourceActionModal }
 ): ResourceActionRequest {
-  return { modal, openToken: current.openToken + 1 };
+  return { context: action.context ?? null, modal: action.modal, openToken: current.openToken + 1 };
 }
 
 function navIconFor(key: NavKey) {
@@ -488,6 +490,7 @@ export function ConsoleController() {
     resourceActionRequestReducer,
     defaultResourceActionRequest
   );
+  const resourceActionContext = resourceActionRequest.context;
   const resourceActionModal = resourceActionRequest.modal;
   const resourceActionOpenToken = resourceActionRequest.openToken;
   const [tenantOrganizationState, setTenantOrganizationState] = useReducer(
@@ -576,8 +579,8 @@ export function ConsoleController() {
     userSelectedNavRef.current = true;
     setActiveNav("ai-admin");
   }
-  function openResourceActionModal(modal: ResourceActionModal) {
-    dispatchResourceActionRequest(modal);
+  function openResourceActionModal(modal: ResourceActionModal, context: ResourceLifecycleActionContext | null = null) {
+    dispatchResourceActionRequest({ context, modal });
   }
   const management = useManagementOperations({
     adminKey,
@@ -612,11 +615,26 @@ export function ConsoleController() {
       mcpTargets
     });
     if (plan.kind === "open_modal") {
-      management.setRotateForm({
-        ...management.rotateForm,
-        agentId: plan.agentId
-      });
-      openResourceActionModal(plan.modal);
+      if (plan.modal === "create_key" && plan.agentId) {
+        management.setKeyForm({
+          ...management.keyForm,
+          agentId: plan.agentId
+        });
+      }
+      if (plan.modal === "rotate_credential" && plan.agentId) {
+        management.setRotateForm({
+          ...management.rotateForm,
+          agentId: plan.agentId
+        });
+      }
+      if (plan.modal === "create_policy") {
+        management.setPolicyForm({
+          ...management.policyForm,
+          callerAgentId: plan.callerAgentId ?? management.policyForm.callerAgentId,
+          targetAgentId: plan.targetAgentId ?? management.policyForm.targetAgentId
+        });
+      }
+      openResourceActionModal(plan.modal, plan.context);
       return;
     }
     if (plan.kind === "capability_prefill") {
@@ -2282,6 +2300,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       >
         <PolicyCreateForm
           agents={agents}
+          context={resourceActionContext}
           form={management.policyForm}
           message={management.policyMessage}
           onChange={management.setPolicyForm}
@@ -2540,6 +2559,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       >
         <KeyCreateForm
           agents={localCallers}
+          context={resourceActionContext}
           createdKey={management.createdKey}
           form={management.keyForm}
           message={management.keyMessage}
@@ -2563,6 +2583,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       >
         <CredentialRotateForm
           agents={agents}
+          context={resourceActionContext}
           form={management.rotateForm}
           message={management.rotateMessage}
           onChange={management.setRotateForm}

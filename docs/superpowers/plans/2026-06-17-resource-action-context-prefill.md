@@ -24,7 +24,7 @@
 
 ## Task 1: Planner Contract
 
-- [ ] **Step 1: Write failing planner assertions**
+- [x] **Step 1: Write failing planner assertions**
 
 Add tests in `frontend/tests/resourceLifecycleActionPlanner.test.mjs` that assert:
 
@@ -50,7 +50,7 @@ assert.equal(policyPlan.callerAgentId, "caller-a");
 assert.equal(policyPlan.targetAgentId, "target-a");
 ```
 
-- [ ] **Step 2: Run focused test and confirm RED**
+- [x] **Step 2: Run focused test and confirm RED**
 
 Run:
 
@@ -60,7 +60,7 @@ pnpm --dir frontend exec node --test tests/resourceLifecycleActionPlanner.test.m
 
 Expected: fail because modal plans do not include context or create-key/create-policy handling yet.
 
-- [ ] **Step 3: Implement richer planner plan types**
+- [x] **Step 3: Implement richer planner plan types**
 
 Change `ResourceLifecycleActionPlan` so `open_modal` can include:
 
@@ -73,7 +73,7 @@ targetAgentId?: string;
 
 Add `ResourceLifecycleActionContext` with `resourceName`, `resourceKindKey`, `tenantName`, and `workspaceName`.
 
-- [ ] **Step 4: Run focused planner test and confirm GREEN**
+- [x] **Step 4: Run focused planner test and confirm GREEN**
 
 Run:
 
@@ -85,19 +85,21 @@ Expected: pass.
 
 ## Task 2: Controller Prefill
 
-- [ ] **Step 1: Add controller structure guards**
+- [x] **Step 1: Add controller structure guards**
 
-In `frontend/tests/styleTheme.test.mjs`, assert that:
+In `frontend/tests/styleTheme.test.mjs`, assert that context is held in the existing resource-action reducer instead of adding another controller `useState` cell:
 
 ```js
-assert.match(app, /const \[resourceActionContext, setResourceActionContext\] = useState<ResourceLifecycleActionContext \| null>\(null\)/);
+assert.match(app, /context: ResourceLifecycleActionContext \| null/);
+assert.match(app, /const resourceActionContext = resourceActionRequest\.context/);
+assert.match(app, /openResourceActionModal\(plan\.modal, plan\.context\)/);
 assert.match(app, /management\.setKeyForm\(\{[\s\S]*agentId: plan\.agentId/);
 assert.match(app, /management\.setPolicyForm\(\{[\s\S]*callerAgentId: plan\.callerAgentId/);
 assert.match(app, /management\.setPolicyForm\(\{[\s\S]*targetAgentId: plan\.targetAgentId/);
 assert.doesNotMatch(app, /sameScopeCaller|sameScopeTarget/);
 ```
 
-- [ ] **Step 2: Run style guard and confirm RED**
+- [x] **Step 2: Run style guard and confirm RED**
 
 Run:
 
@@ -107,12 +109,12 @@ pnpm --dir frontend exec node --test tests/styleTheme.test.mjs
 
 Expected: fail until controller applies the richer plan.
 
-- [ ] **Step 3: Apply modal plans in `ConsoleController.tsx`**
+- [x] **Step 3: Apply modal plans in `ConsoleController.tsx`**
 
-Import `ResourceLifecycleActionContext`, add `resourceActionContext` state, set it from `plan.context`, and update the matching form state:
+Import `ResourceLifecycleActionContext`, extend the existing `resourceActionRequest` reducer with a `context` field, and update the matching form state:
 
 ```ts
-setResourceActionContext(plan.context);
+openResourceActionModal(plan.modal, plan.context);
 if (plan.modal === "create_key" && plan.agentId) {
   management.setKeyForm({ ...management.keyForm, agentId: plan.agentId });
 }
@@ -128,13 +130,13 @@ if (plan.modal === "create_policy") {
 }
 ```
 
-- [ ] **Step 4: Pass context into action forms**
+- [x] **Step 4: Pass context into action forms**
 
 Pass `context={resourceActionContext}` to `KeyCreateForm`, `CredentialRotateForm`, and `PolicyCreateForm`. Pass no context to `AgentCreateForm`.
 
 ## Task 3: Form Context UI and i18n
 
-- [ ] **Step 1: Add i18n assertions**
+- [x] **Step 1: Add i18n assertions**
 
 In `frontend/tests/i18n.test.mjs`, assert EN and zh-CN include:
 
@@ -142,7 +144,7 @@ In `frontend/tests/i18n.test.mjs`, assert EN and zh-CN include:
 - `resource.actionContext.resource`
 - `resource.actionContext.scope`
 
-- [ ] **Step 2: Add form context component**
+- [x] **Step 2: Add form context component**
 
 In `frontend/src/components/ManagementForms.tsx`, import `ResourceLifecycleActionContext` and add:
 
@@ -164,11 +166,11 @@ function ResourceActionContextStrip({ context, t }: { context?: ResourceLifecycl
 
 Render it at the top of `KeyCreateForm`, `CredentialRotateForm`, and `PolicyCreateForm`.
 
-- [ ] **Step 3: Style the context strip**
+- [x] **Step 3: Style the context strip**
 
 Add `.resource-action-context` styles in `frontend/src/styles.css` using existing tokens only.
 
-- [ ] **Step 4: Run focused UI/i18n tests**
+- [x] **Step 4: Run focused UI/i18n tests**
 
 Run:
 
@@ -180,11 +182,11 @@ Expected: pass.
 
 ## Task 4: Docs, Full Verification, and PR
 
-- [ ] **Step 1: Update `CHANGELOG.md`**
+- [x] **Step 1: Update `CHANGELOG.md`**
 
 Add one EN and one zh-CN bullet under Unreleased describing context-aware resource action forms.
 
-- [ ] **Step 2: Run full frontend gate**
+- [x] **Step 2: Run full frontend gate**
 
 Run:
 
@@ -196,7 +198,7 @@ git diff --check
 
 Expected: all pass.
 
-- [ ] **Step 3: Run repository gates**
+- [x] **Step 3: Run repository gates**
 
 Run:
 
@@ -207,7 +209,7 @@ make release-check
 
 Expected: all pass.
 
-- [ ] **Step 4: Mark plan complete**
+- [x] **Step 4: Mark plan complete**
 
 Update every checkbox in this plan to `[x]`.
 

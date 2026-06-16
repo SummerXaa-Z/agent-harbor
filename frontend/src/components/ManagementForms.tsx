@@ -6,6 +6,7 @@ import {
   permissionEntityDisplayName,
   type Translator
 } from "../consolePresenters";
+import type { ResourceLifecycleActionContext } from "../resourceLifecycleActionPlanner";
 import type {
   Agent,
   AgentStatus,
@@ -91,6 +92,7 @@ export function AgentCreateForm({
 
 export function KeyCreateForm({
   agents,
+  context,
   createdKey,
   form,
   message,
@@ -99,6 +101,7 @@ export function KeyCreateForm({
   t
 }: {
   agents: Agent[];
+  context?: ResourceLifecycleActionContext | null;
   createdKey: CreateAgentKeyResponse | null;
   form: KeyCreateFormState;
   message: string;
@@ -108,6 +111,7 @@ export function KeyCreateForm({
 }) {
   return (
     <form className="control-form" onSubmit={onSubmit}>
+      <ResourceActionContextStrip context={context} t={t} />
       <label>{t("form.caller")}<select required value={form.agentId} onChange={(event) => onChange({ ...form, agentId: event.target.value })}><option value="">{t("form.selectCaller")}</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
       <label>{t("form.name")}<input value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
       <label>{t("form.ttlSeconds")}<input inputMode="numeric" max={3600} min={1} type="number" value={form.expiresInSeconds} onChange={(event) => onChange({ ...form, expiresInSeconds: event.target.value })} /></label>
@@ -125,6 +129,7 @@ export function KeyCreateForm({
 
 export function CredentialRotateForm({
   agents,
+  context,
   form,
   message,
   onChange,
@@ -132,6 +137,7 @@ export function CredentialRotateForm({
   t
 }: {
   agents: Agent[];
+  context?: ResourceLifecycleActionContext | null;
   form: CredentialRotateFormState;
   message: string;
   onChange: (form: CredentialRotateFormState) => void;
@@ -140,6 +146,7 @@ export function CredentialRotateForm({
 }) {
   return (
     <form className="control-form" onSubmit={onSubmit}>
+      <ResourceActionContextStrip context={context} t={t} />
       <label>{t("form.agent")}<select required value={form.agentId} onChange={(event) => onChange({ ...form, agentId: event.target.value })}><option value="">{t("form.selectAgent")}</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
       <label>{t("form.credentialKey")}<input placeholder="apiToken" value={form.credentialName} onChange={(event) => onChange({ ...form, credentialName: event.target.value })} /></label>
       <label>{t("form.newSecret")}<input placeholder="Bearer ..." type="password" value={form.credentialValue} onChange={(event) => onChange({ ...form, credentialValue: event.target.value })} /></label>
@@ -150,6 +157,7 @@ export function CredentialRotateForm({
 
 export function PolicyCreateForm({
   agents,
+  context,
   form,
   message,
   onChange,
@@ -157,6 +165,7 @@ export function PolicyCreateForm({
   t
 }: {
   agents: Agent[];
+  context?: ResourceLifecycleActionContext | null;
   form: PolicyCreateFormState;
   message: string;
   onChange: (form: PolicyCreateFormState) => void;
@@ -165,6 +174,7 @@ export function PolicyCreateForm({
 }) {
   return (
     <form className="control-form policy-create-form" id="policy-create-form" onSubmit={onSubmit}>
+      <ResourceActionContextStrip context={context} t={t} />
       <label>{t("form.name")}<input placeholder="Allow MCP tools/call" value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} /></label>
       <label>{t("form.caller")}<select required value={form.callerAgentId} onChange={(event) => onChange({ ...form, callerAgentId: event.target.value })}><option value="">{t("form.selectCaller")}</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
       <label>{t("form.target")}<select required value={form.targetAgentId} onChange={(event) => onChange({ ...form, targetAgentId: event.target.value })}><option value="">{t("form.anyTarget")}</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
@@ -258,6 +268,27 @@ function FormFooter({ message, submitLabel }: { message: string; submitLabel: st
     <div className="form-footer">
       <button className="primary-button" type="submit">{submitLabel}</button>
       {message ? <span>{message}</span> : null}
+    </div>
+  );
+}
+
+function ResourceActionContextStrip({
+  context,
+  t
+}: {
+  context?: ResourceLifecycleActionContext | null;
+  t: Translator;
+}) {
+  if (!context) return null;
+
+  return (
+    <div className="resource-action-context">
+      <span className="section-kicker">{t("resource.actionContext.title")}</span>
+      <div>
+        <strong>{context.resourceName}</strong>
+        <small>{t(context.resourceKindKey)}</small>
+      </div>
+      <p>{t("resource.actionContext.scope")}: {context.tenantName} / {context.workspaceName}</p>
     </div>
   );
 }

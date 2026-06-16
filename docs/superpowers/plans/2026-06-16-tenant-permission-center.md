@@ -1495,7 +1495,7 @@ git add scripts/scenario-tenant-permission-center.sh Makefile tests/makefile_tar
 git commit -m "test: gate tenant permission center"
 ```
 
-- [ ] **Step 8: Push and open PR**
+- [x] **Step 8: Push and open PR**
 
 ```bash
 git push -u origin codex/tenant-organization-permission-center
@@ -1509,3 +1509,5 @@ PR body must include:
 - Verification results.
 - Browser smoke notes.
 - Non-goals: no SSO, no direct grant editing, no My Access portal.
+
+Actual PR: https://github.com/SummerXaa-Z/agent-harbor/pull/93

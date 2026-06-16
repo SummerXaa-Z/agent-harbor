@@ -31,6 +31,10 @@ import {
 } from "../coreJourneyPreflight";
 import type { Translator } from "../consolePresenters";
 import type { Language } from "../i18n";
+import {
+  journeyCompletionRefreshFailedMessageKey,
+  refreshAfterJourneyCompletion
+} from "../journeyCompletionRefresh";
 import type {
   AccessProfileFilters,
   ConsoleData,
@@ -326,17 +330,7 @@ export function useCoreJourneyController({
         traceLimit: "10",
         workspaceId: nextConfig.workspaceId
       };
-      const [nextData, nextProfile] = await Promise.all([
-        loadConsoleData(adminKey, nextTraceFilters),
-        loadTenantAccessProfile(nextConfig.childTenantId, adminKey, {
-          ...nextAccessFilters,
-          traceLimit: 10
-        })
-      ]);
       setTraceFilters(nextTraceFilters);
-      setData(nextData);
-      setAccessProfile(nextProfile);
-      setLastRefresh(new Date());
       setResult({
         allowedStatus: allowedCall.status,
         callerId: caller.id,
@@ -344,7 +338,28 @@ export function useCoreJourneyController({
         targetId: target.id,
         toolListStatus: toolList.status
       });
-      setMessage(t("message.coreJourneyComplete"));
+      const refreshResult = await refreshAfterJourneyCompletion({
+        onRefresh: async () => {
+          const [nextData, nextProfile] = await Promise.all([
+            loadConsoleData(adminKey, nextTraceFilters),
+            loadTenantAccessProfile(nextConfig.childTenantId, adminKey, {
+              ...nextAccessFilters,
+              traceLimit: 10
+            })
+          ]);
+          return { nextData, nextProfile };
+        }
+      });
+      if (refreshResult.ok) {
+        setData(refreshResult.value.nextData);
+        setAccessProfile(refreshResult.value.nextProfile);
+        setLastRefresh(new Date());
+      }
+      setMessage(
+        refreshResult.ok
+          ? t("message.coreJourneyComplete")
+          : t(journeyCompletionRefreshFailedMessageKey("core_journey"))
+      );
     } catch (error) {
       setMessage(localizedErrorMessage(t, language, error, "error.coreJourneyFailed"));
     } finally {

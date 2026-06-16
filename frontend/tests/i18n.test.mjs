@@ -211,6 +211,7 @@ test("createTranslator returns Chinese labels for operator controls", () => {
   assert.equal(t("form.credentialHeader"), "凭据 Header");
   assert.equal(t("action.createAgent"), "创建 Agent");
   assert.equal(t("action.rotateCredential"), "轮换凭据");
+  assert.equal(t("action.openResourceManagement"), "打开资源管理");
   assert.equal(t("table.policy"), "策略");
   assert.equal(t("form.decision"), "判定结果");
   assert.equal(t("form.traceRunId"), "运行批次");
@@ -218,6 +219,7 @@ test("createTranslator returns Chinese labels for operator controls", () => {
   assert.equal(t("status.agentDraft"), "草稿");
   assert.equal(t("status.policyAllow"), "允许");
   assert.equal(t("empty.routePolicies.title"), "暂无路由策略");
+  assert.equal(t("empty.routePolicies.detail"), "请在资源管理中创建策略；完成生命周期配置后，受治理的路由会显示在这里。");
   assert.equal(t("auditAction.permission_package.applied"), "应用权限包");
   assert.equal(t("auditActor.local-dev"), "本地开发管理员");
 });

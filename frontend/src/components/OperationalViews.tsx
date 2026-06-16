@@ -113,12 +113,6 @@ export function AccessPolicyWorkspace({
 }) {
   const [auditCollapsed, setAuditCollapsed] = useState(true);
 
-  function focusPolicyForm() {
-    const trigger = document.querySelector<HTMLButtonElement>("#policy-create-panel .action-modal-trigger");
-    trigger?.scrollIntoView({ behavior: "smooth", block: "center" });
-    trigger?.click();
-  }
-
   return (
     <>
       {policies.length === 0 ? (
@@ -128,10 +122,10 @@ export function AccessPolicyWorkspace({
             <h3>{t("text.policyEmptyTitle")}</h3>
             <p>{t("text.policyEmptyDetail")}</p>
           </div>
-          <button className="policy-empty-action" type="button" onClick={focusPolicyForm}>
+          <a className="policy-empty-action" href="#registry">
             <Route size={14} />
-            {t("action.createFirstPolicy")}
-          </button>
+            {t("action.openResourceManagement")}
+          </a>
         </section>
       ) : null}
       {routeGovernancePanel}

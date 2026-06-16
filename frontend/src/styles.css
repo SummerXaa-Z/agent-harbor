@@ -1202,13 +1202,13 @@ button {
 
 .resource-lifecycle-command-center {
   display: grid;
-  grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1.25fr);
+  grid-template-columns: minmax(220px, 0.85fr) minmax(0, 1.15fr);
   gap: var(--space-3);
   align-items: center;
   padding: var(--space-3);
   border: 1px solid var(--line-subtle);
   border-radius: var(--radius-control);
-  background: var(--surface-raised);
+  background: var(--surface);
 }
 
 .resource-lifecycle-command-copy {
@@ -1255,12 +1255,24 @@ button {
 
 .action-modal-trigger-command {
   width: auto;
-  min-height: 36px;
+  min-height: var(--control-height);
   gap: 10px;
-  padding: 0 12px;
+  padding: 0 var(--space-4);
   border-color: var(--brand-border);
   background: var(--surface);
   box-shadow: none;
+}
+
+.action-modal-trigger-command.is-primary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--surface);
+}
+
+.action-modal-trigger-command.is-secondary {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .production-journey-checkpoint {
@@ -1344,11 +1356,22 @@ button {
   background: var(--brand-soft);
 }
 
+.action-modal-trigger-command.is-primary:hover {
+  border-color: var(--brand-strong);
+  background: var(--brand-strong);
+}
+
+.action-modal-trigger-command.is-primary .action-modal-trigger-label svg,
+.action-modal-trigger-command.is-primary .action-modal-trigger-label strong,
+.action-modal-trigger-command.is-primary .action-modal-trigger-affordance {
+  color: var(--surface);
+}
+
 .action-modal-trigger-command .action-modal-trigger-affordance {
   min-height: 24px;
-  padding: 0 7px;
-  border-color: var(--brand-border);
-  background: var(--brand-soft);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .resource-lifecycle-list {
@@ -2106,11 +2129,11 @@ button {
 
 .action-modal-panel {
   display: grid;
-  width: min(720px, calc(100vw - 48px));
+  width: min(680px, calc(100vw - 48px));
   max-height: min(760px, calc(100vh - 48px));
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--surface);
   box-shadow: var(--shadow-pop);
 }
@@ -2150,8 +2173,16 @@ button {
 .action-modal-body {
   max-height: calc(min(760px, 100vh - 48px) - 56px);
   overflow: auto;
-  padding: 16px;
+  padding: var(--space-4);
+  background: var(--surface-raised);
   overscroll-behavior: contain;
+}
+
+.action-modal-body .control-form {
+  padding: var(--space-4);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface);
 }
 
 @media (max-width: 720px) {

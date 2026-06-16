@@ -563,10 +563,19 @@ button {
   white-space: nowrap;
 }
 
-.session-chip > span {
+.session-chip-main {
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.session-chip-scope {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .session-chip button {

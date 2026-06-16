@@ -23,6 +23,7 @@ scripts=(
   scripts/scenario-mcp-capability-governance.sh
   scripts/scenario-data-permission-enforcement.sh
   scripts/scenario-tenant-hierarchy.sh
+  scripts/scenario-admin-tenant-boundary.sh
   scripts/scenario-tenant-access-profile.sh
 )
 

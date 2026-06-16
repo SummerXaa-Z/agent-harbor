@@ -8,6 +8,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Admin identities can now be scoped by role, tenant, and workspace. Scoped tenant admins are intersected with their allowed tenant subtree and workspace across REST management APIs, permission-package operations, browser sessions, and management MCP tools.
+- 管理员身份现在可以按角色、租户和工作区设定边界；范围化租户管理员在 REST 管理 API、权限包操作、浏览器会话和管理 MCP 工具中都会被限制在授权租户子树与工作区内。
+- Release readiness now includes `make scenario-admin-tenant-boundary`, proving scoped admins can list and write only in their own tenant/workspace and cannot widen access through management MCP arguments.
+- 发布验收现在包含 `make scenario-admin-tenant-boundary`，用于验证范围化管理员只能在自己的租户/工作区内查看和变更，并且不能通过管理 MCP 参数扩大访问范围。
 - The API now exposes public `GET /api/v1/system/info` compatibility metadata, and the console blocks permission validation early when the connected backend is missing required journey capabilities.
 - API 现在公开提供 `GET /api/v1/system/info` 兼容信息；当连接的后端缺少主旅程能力时，控制台会在权限验证前明确阻断并提示升级。
 - The global Connection menu now includes a production diagnostics action that checks console session, API compatibility, live data source, and MCP tool-service readiness before operators continue the permission journey.

@@ -56,9 +56,9 @@ Tenant
 
 The tenant is the primary control boundary. A registered tenant can manage its own subtree; unregistered tenant strings keep exact-match behavior for compatibility.
 
-The data plane uses short-lived Agent Keys. Management APIs require configured admin authentication by default: use `AGENT_HARBOR_ADMIN_KEY` for a shared local admin key or `AGENT_HARBOR_ADMIN_IDENTITIES` for named administrators and reviewers. The web console signs in through `/api/v1/auth/login` and exchanges the admin key for an HttpOnly `agent_harbor_session` cookie; direct `X-Admin-Key` remains available for API clients and advanced local overrides. Set `AGENT_HARBOR_SESSION_SECRET` for deployment-style environments so console sessions are signed with a stable secret. `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true` is development-only and must not be used for production deployments.
+The data plane uses short-lived Agent Keys. Management APIs require configured admin authentication by default: use `AGENT_HARBOR_ADMIN_KEY` for a shared local admin key or `AGENT_HARBOR_ADMIN_IDENTITIES` for named administrators and reviewers. Named identities can also carry role, tenant, and workspace boundaries, for example `AGENT_HARBOR_ADMIN_IDENTITIES="platform=platform-key|role=platform_admin;east=east-key|role=tenant_admin|tenant=tenant-east|workspace=ws-support"`. Scoped tenant admins can only read or mutate their allowed tenant subtree and workspace across REST management APIs, permission-package operations, and the management MCP endpoint. The web console signs in through `/api/v1/auth/login` and exchanges the admin key for an HttpOnly `agent_harbor_session` cookie; direct `X-Admin-Key` remains available for API clients and advanced local overrides. Set `AGENT_HARBOR_SESSION_SECRET` for deployment-style environments so console sessions are signed with a stable secret. `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true` is development-only and must not be used for production deployments.
 
-数据面使用短期 Agent Key。管理 API 默认要求配置管理员认证：可以使用 `AGENT_HARBOR_ADMIN_KEY` 作为共享本地管理员密钥，也可以使用 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置具名管理员和审批人。Web 控制台通过 `/api/v1/auth/login` 登录，并把管理员密钥换成 HttpOnly `agent_harbor_session` Cookie；直接 `X-Admin-Key` 仍保留给 API 客户端和本地高级覆盖。部署式环境应设置 `AGENT_HARBOR_SESSION_SECRET`，确保控制台会话使用稳定密钥签名。`AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true` 仅用于开发，不得用于生产部署。
+数据面使用短期 Agent Key。管理 API 默认要求配置管理员认证：可以使用 `AGENT_HARBOR_ADMIN_KEY` 作为共享本地管理员密钥，也可以使用 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置具名管理员和审批人。具名身份也可以绑定角色、租户和工作区边界，例如 `AGENT_HARBOR_ADMIN_IDENTITIES="platform=platform-key|role=platform_admin;east=east-key|role=tenant_admin|tenant=tenant-east|workspace=ws-support"`。租户管理员只能在被授权的租户子树和工作区内读取或变更 REST 管理 API、权限包操作和管理 MCP 端点。Web 控制台通过 `/api/v1/auth/login` 登录，并把管理员密钥换成 HttpOnly `agent_harbor_session` Cookie；直接 `X-Admin-Key` 仍保留给 API 客户端和本地高级覆盖。部署式环境应设置 `AGENT_HARBOR_SESSION_SECRET`，确保控制台会话使用稳定密钥签名。`AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true` 仅用于开发，不得用于生产部署。
 
 ## Quick Start
 
@@ -214,9 +214,9 @@ For release-candidate validation of production defaults, run:
 make production-hardening
 ```
 
-`make release-check` also includes the production safety baseline and the web console production journey smoke gate.
+`make release-check` also includes the production safety baseline, scoped admin tenant boundary gate, and the web console production journey smoke gate.
 
-`make release-check` 同时包含生产安全基线和 Web 控制台生产旅程 smoke gate。
+`make release-check` 同时包含生产安全基线、范围化管理员租户边界门禁和 Web 控制台生产旅程 smoke gate。
 
 ## Web Console
 
@@ -296,7 +296,7 @@ Use `.env.example` as the local configuration template.
 | `AGENT_HARBOR_ADDR` | API listen address. Defaults to `:9090`. |
 | `AGENT_HARBOR_DEPLOYMENT_MODE` | Optional deployment mode. Set to `production` for deployment-style preflight checks that block development-only admin bypass and private-upstream flags before startup. 可选部署模式；设置为 `production` 后，启动前会执行部署预检并阻断开发专用的管理绕过和私有上游开关。 |
 | `AGENT_HARBOR_ADMIN_KEY` | Optional shared management API key. Management and audit endpoints require this key, a named admin identity, or the explicit development unauthenticated flag. |
-| `AGENT_HARBOR_ADMIN_IDENTITIES` | Optional named admin identities for production approvals. Use comma or semicolon separated `actor=key` entries, for example `requester=req-key;security=sec-key`. Matching keys set `requestedBy` and `reviewedBy` to the actor and prevent reviewer impersonation. 可选具名管理身份，使用 `actor=key`；匹配后审批发起人与审批人来自认证身份，而不是请求体自报。 |
+| `AGENT_HARBOR_ADMIN_IDENTITIES` | Optional named admin identities for production approvals and scoped administration. Use comma or semicolon separated entries: `actor=key` for a platform admin, or `actor=key\|role=tenant_admin\|tenant=tenant-east\|workspace=ws-support` for a tenant/workspace-scoped admin. Matching keys set `requestedBy` and `reviewedBy` to the actor, prevent reviewer impersonation, and restrict scoped admins across REST management APIs and management MCP tools. 可选具名管理身份，用于生产审批和范围化管理；`actor=key` 表示平台管理员，`actor=key\|role=tenant_admin\|tenant=tenant-east\|workspace=ws-support` 表示限定租户/工作区的管理员。匹配后审批发起人与审批人来自认证身份，并且范围化管理员会在 REST 管理 API 与管理 MCP 工具中受到同一边界限制。 |
 | `AGENT_HARBOR_SESSION_SECRET` | Optional signing secret for web-console HttpOnly sessions. Set a stable high-entropy value in deployment-style environments; if unset, sessions are derived from the configured admin credentials. Web 控制台 HttpOnly 会话签名密钥；部署式环境建议设置稳定高熵值，未设置时会从已配置管理员凭据派生。 |
 | `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN` | Development-only boolean. Allows management endpoints without `X-Admin-Key` only when no admin key or named identities are configured. Defaults to `false`. |
 | `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` | Development-only boolean. Allows loopback/private upstream endpoints for local scenarios when set to `true`. Defaults to `false`. |

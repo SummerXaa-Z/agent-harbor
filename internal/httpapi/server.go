@@ -36,8 +36,11 @@ type callerContextKey struct{}
 type adminActorContextKey struct{}
 
 type AdminIdentity struct {
-	Actor string
-	Key   string
+	Actor       string
+	Key         string
+	Role        string
+	TenantID    string
+	WorkspaceID string
 }
 
 type Server struct {
@@ -105,11 +108,8 @@ func WithAdminIdentities(identities []AdminIdentity) Option {
 	return func(s *Server) {
 		s.adminIdentities = make([]AdminIdentity, 0, len(identities))
 		for _, identity := range identities {
-			normalized := AdminIdentity{
-				Actor: strings.TrimSpace(identity.Actor),
-				Key:   strings.TrimSpace(identity.Key),
-			}
-			if normalized.Actor == "" || normalized.Key == "" {
+			normalized, ok := normalizeAdminIdentity(identity)
+			if !ok {
 				continue
 			}
 			s.adminIdentities = append(s.adminIdentities, normalized)
@@ -311,8 +311,8 @@ func localDevCORS(extraOrigins []string) func(http.Handler) http.Handler {
 
 func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if actor, _, ok := s.developmentSession(); ok {
-			ctx := context.WithValue(r.Context(), adminActorContextKey{}, actor)
+		if principal, _, ok := s.developmentSession(); ok {
+			ctx := context.WithValue(r.Context(), adminActorContextKey{}, principal)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
@@ -321,13 +321,13 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 			return
 		}
 		provided := r.Header.Get("X-Admin-Key")
-		if actor, ok := s.adminActorForKey(provided); ok {
-			ctx := context.WithValue(r.Context(), adminActorContextKey{}, actor)
+		if principal, ok := s.adminPrincipalForKey(provided); ok {
+			ctx := context.WithValue(r.Context(), adminActorContextKey{}, principal)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
-		if actor, _, ok := s.consoleSessionFromRequest(r); ok {
-			ctx := context.WithValue(r.Context(), adminActorContextKey{}, actor)
+		if principal, _, ok := s.consoleSessionFromRequest(r); ok {
+			ctx := context.WithValue(r.Context(), adminActorContextKey{}, principal)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
@@ -335,28 +335,46 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) adminActorForKey(provided string) (string, bool) {
+func (s *Server) adminPrincipalForKey(provided string) (adminPrincipal, bool) {
 	for _, identity := range s.adminIdentities {
 		if len(provided) == len(identity.Key) && subtle.ConstantTimeCompare([]byte(provided), []byte(identity.Key)) == 1 {
-			return identity.Actor, true
+			return identity.principal(), true
 		}
 	}
 	if s.adminKey != "" {
 		if len(provided) != len(s.adminKey) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.adminKey)) != 1 {
-			return "", false
+			return adminPrincipal{}, false
 		}
-		return "admin-key", true
+		return platformAdminPrincipal("admin-key"), true
 	}
-	return "", false
+	return adminPrincipal{}, false
+}
+
+func (s *Server) adminPrincipalForActor(actor string) (adminPrincipal, bool) {
+	actor = strings.TrimSpace(actor)
+	if actor == "" {
+		return adminPrincipal{}, false
+	}
+	for _, identity := range s.adminIdentities {
+		if identity.Actor == actor {
+			return identity.principal(), true
+		}
+	}
+	if actor == "admin-key" && s.adminKey != "" {
+		return platformAdminPrincipal("admin-key"), true
+	}
+	if actor == developmentAdminActor && s.developmentAdminBypassActive() {
+		return platformAdminPrincipal(developmentAdminActor), true
+	}
+	return adminPrincipal{}, false
 }
 
 func requestAuthenticatedAdminActor(r *http.Request) (string, bool) {
-	actor, ok := r.Context().Value(adminActorContextKey{}).(string)
-	actor = strings.TrimSpace(actor)
-	if !ok || actor == "" {
+	principal, ok := requestAdminPrincipal(r)
+	if !ok {
 		return "", false
 	}
-	return actor, true
+	return principal.Actor, true
 }
 
 func reviewerFromRequest(reviewer string, r *http.Request) (string, error) {
@@ -421,6 +439,14 @@ func (s *Server) createTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	tenantScopeID := tenant.ID
+	if tenant.ParentTenantID != "" {
+		tenantScopeID = tenant.ParentTenantID
+	}
+	if err := s.requireTenantManagementScope(r, tenantScopeID); err != nil {
+		writeError(w, err)
+		return
+	}
 	created, err := s.repo.CreateTenantWithAudit(r.Context(), tenant, func(created domain.Tenant) domain.AuditEvent {
 		return s.managementAuditEvent(r, created.ID, "", "tenant.created", "tenant", created.ID, "Tenant created", map[string]any{
 			"parentTenantId": created.ParentTenantID,
@@ -482,8 +508,13 @@ func (s *Server) tenantFromRequest(ctx context.Context, req domain.CreateTenantR
 }
 
 func (s *Server) listTenants(w http.ResponseWriter, r *http.Request) {
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	rows, err := s.repo.ListTenants(r.Context(), store.TenantFilter{
-		TenantID:       strings.TrimSpace(r.URL.Query().Get("tenantId")),
+		TenantID:       scope.TenantID,
 		ParentTenantID: strings.TrimSpace(r.URL.Query().Get("parentTenantId")),
 	})
 	if err != nil {
@@ -514,6 +545,10 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	agent, err := s.agentFromRequest(req)
 	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.requireAgentManagementScope(r, agent); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -629,7 +664,12 @@ func validateAgentForSave(agent domain.Agent, allowPrivateUpstreams bool) error 
 }
 
 func (s *Server) listAgents(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.repo.ListAgents(r.Context(), store.AgentFilter{ManagementScope: managementScopeFromRequest(r)})
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	rows, err := s.repo.ListAgents(r.Context(), store.AgentFilter{ManagementScope: scope})
 	if err != nil {
 		writeError(w, err)
 		return
@@ -663,6 +703,10 @@ func (s *Server) updateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ok {
 		writeError(w, domain.NotFound("agent not found"))
+		return
+	}
+	if err := s.requireAgentManagementScope(r, existing); err != nil {
+		writeError(w, err)
 		return
 	}
 	updated := existing
@@ -732,6 +776,10 @@ func (s *Server) rotateAgentCredentials(w http.ResponseWriter, r *http.Request) 
 		writeError(w, domain.NotFound("agent not found"))
 		return
 	}
+	if err := s.requireAgentManagementScope(r, agent); err != nil {
+		writeError(w, err)
+		return
+	}
 	effective := agent
 	effective.Credentials = credentials
 	if err := validateAgentForSave(effective, s.allowPrivateUpstreams); err != nil {
@@ -764,6 +812,10 @@ func (s *Server) disableAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ok {
 		writeError(w, domain.NotFound("agent not found"))
+		return
+	}
+	if err := s.requireAgentManagementScope(r, agent); err != nil {
+		writeError(w, err)
 		return
 	}
 	now := s.now()
@@ -804,6 +856,10 @@ func (s *Server) createAgentKey(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ok {
 		writeError(w, domain.NotFound("agent not found"))
+		return
+	}
+	if err := s.requireAgentManagementScope(r, agent); err != nil {
+		writeError(w, err)
 		return
 	}
 	if agent.Status != domain.AgentStatusActive {
@@ -855,7 +911,12 @@ func (s *Server) createAgentKey(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listAgentKeys(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.repo.ListAgentKeys(r.Context(), managementScopeFromRequest(r))
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	rows, err := s.repo.ListAgentKeys(r.Context(), scope)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -888,6 +949,10 @@ func (s *Server) revokeAgentKey(w http.ResponseWriter, r *http.Request) {
 	}
 	if !foundForAudit {
 		writeError(w, domain.NotFound("agent key not found"))
+		return
+	}
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: tenantID, WorkspaceID: workspaceID}); err != nil {
+		writeError(w, err)
 		return
 	}
 	now := s.now()
@@ -931,11 +996,21 @@ func (s *Server) createAccessGrant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("caller agent not found"))
 		return
 	}
-	if _, ok, err := s.repo.GetAgent(r.Context(), req.TargetID); err != nil {
+	if err := s.requireAgentManagementScope(r, caller); err != nil {
 		writeError(w, err)
 		return
-	} else if !ok {
+	}
+	target, ok, err := s.repo.GetAgent(r.Context(), req.TargetID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
 		writeError(w, domain.NotFound("target agent not found"))
+		return
+	}
+	if err := s.requireAgentManagementScope(r, target); err != nil {
+		writeError(w, err)
 		return
 	}
 	grant := domain.AccessGrant{
@@ -962,7 +1037,12 @@ func (s *Server) createAccessGrant(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listAccessGrants(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.repo.ListAccessGrants(r.Context(), managementScopeFromRequest(r))
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	rows, err := s.repo.ListAccessGrants(r.Context(), scope)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -995,6 +1075,10 @@ func (s *Server) revokeAccessGrant(w http.ResponseWriter, r *http.Request) {
 	}
 	if !foundForAudit {
 		writeError(w, domain.NotFound("access grant not found"))
+		return
+	}
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: tenantID, WorkspaceID: workspaceID}); err != nil {
+		writeError(w, err)
 		return
 	}
 	now := s.now()
@@ -1065,6 +1149,10 @@ func (s *Server) createRoutePolicy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("caller agent not found"))
 		return
 	}
+	if err := s.requireAgentManagementScope(r, caller); err != nil {
+		writeError(w, err)
+		return
+	}
 	target, ok, err := s.repo.GetAgent(r.Context(), req.TargetID)
 	if err != nil {
 		writeError(w, err)
@@ -1109,7 +1197,12 @@ func (s *Server) createRoutePolicy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listRoutePolicies(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.repo.ListRoutePolicies(r.Context(), managementScopeFromRequest(r))
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	rows, err := s.repo.ListRoutePolicies(r.Context(), scope)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -1126,6 +1219,10 @@ func (s *Server) updateRoutePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ok {
 		writeError(w, domain.NotFound("route policy not found"))
+		return
+	}
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: existing.TenantID, WorkspaceID: existing.WorkspaceID}); err != nil {
+		writeError(w, err)
 		return
 	}
 	var req domain.UpdateRoutePolicyRequest
@@ -1206,6 +1303,10 @@ func (s *Server) disableRoutePolicy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("route policy not found"))
 		return
 	}
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: existing.TenantID, WorkspaceID: existing.WorkspaceID}); err != nil {
+		writeError(w, err)
+		return
+	}
 	now := s.now()
 	policy, ok, err := s.repo.DisableRoutePolicyWithAudit(r.Context(), existing.ID, now, func(disabled domain.RoutePolicy) domain.AuditEvent {
 		return s.managementAuditEvent(r, disabled.TenantID, disabled.WorkspaceID, "route_policy.disabled", "route_policy", disabled.ID, "Route policy disabled", routePolicyAuditMetadata(disabled))
@@ -1230,6 +1331,10 @@ func (s *Server) refreshTargetCapabilities(w http.ResponseWriter, r *http.Reques
 	}
 	if !ok {
 		writeError(w, domain.NotFound("target agent not found"))
+		return
+	}
+	if err := s.requireAgentManagementScope(r, target); err != nil {
+		writeError(w, err)
 		return
 	}
 	if target.ChannelType != "mcp" {
@@ -1257,8 +1362,13 @@ func (s *Server) listCapabilities(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "status must be pending_review, approved, deprecated, or removed"))
 		return
 	}
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	rows, err := s.repo.ListCapabilities(r.Context(), store.CapabilityFilter{
-		ManagementScope: managementScopeFromRequest(r),
+		ManagementScope: scope,
 		TargetID:        strings.TrimSpace(r.URL.Query().Get("targetId")),
 		Status:          status,
 	})
@@ -1277,6 +1387,10 @@ func (s *Server) updateCapability(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ok {
 		writeError(w, domain.NotFound("capability not found"))
+		return
+	}
+	if err := s.requireCapabilityManagementScope(r, existing); err != nil {
+		writeError(w, err)
 		return
 	}
 	var req domain.UpdateCapabilityRequest
@@ -1351,8 +1465,13 @@ func (s *Server) listPermissionPackageApplications(w http.ResponseWriter, r *htt
 		writeError(w, err)
 		return
 	}
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	rows, err := s.repo.ListPermissionPackageApplications(r.Context(), store.PermissionPackageApplicationFilter{
-		ManagementScope:  managementScopeFromRequest(r),
+		ManagementScope:  scope,
 		TemplateID:       strings.TrimSpace(r.URL.Query().Get("templateId")),
 		TargetID:         strings.TrimSpace(r.URL.Query().Get("targetId")),
 		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
@@ -1393,8 +1512,13 @@ func (s *Server) listPermissionPackageApplicationHealth(w http.ResponseWriter, r
 		writeError(w, err)
 		return
 	}
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	applications, err := s.repo.ListPermissionPackageApplications(r.Context(), store.PermissionPackageApplicationFilter{
-		ManagementScope:  managementScopeFromRequest(r),
+		ManagementScope:  scope,
 		TemplateID:       strings.TrimSpace(r.URL.Query().Get("templateId")),
 		TargetID:         strings.TrimSpace(r.URL.Query().Get("targetId")),
 		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
@@ -1615,6 +1739,10 @@ func (s *Server) previewPermissionPackageWorkbench(w http.ResponseWriter, r *htt
 		writeError(w, err)
 		return
 	}
+	if err := s.requirePermissionPackageDraftScope(r, req.PermissionPackageDraftRequest); err != nil {
+		writeError(w, err)
+		return
+	}
 	result, err := s.permissionPackageWorkbenchPreview(r.Context(), req)
 	if err != nil {
 		writeError(w, err)
@@ -1629,6 +1757,10 @@ func (s *Server) getPermissionPackageProductionReadiness(w http.ResponseWriter, 
 		writeError(w, err)
 		return
 	}
+	if err := s.requirePermissionPackageQueryScope(r, query); err != nil {
+		writeError(w, err)
+		return
+	}
 	result, err := s.permissionPackageProductionReadiness(r.Context(), query)
 	if err != nil {
 		writeError(w, err)
@@ -1640,6 +1772,10 @@ func (s *Server) getPermissionPackageProductionReadiness(w http.ResponseWriter, 
 func (s *Server) getPermissionPackageProductionEvidenceReport(w http.ResponseWriter, r *http.Request) {
 	query, err := permissionPackageProductionReadinessQueryFromRequest(r)
 	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.requirePermissionPackageQueryScope(r, query); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -2422,9 +2558,14 @@ func (s *Server) getPermissionPackageApplicationImpact(w http.ResponseWriter, r 
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "rehearsal must be grant_drift when provided"))
 		return
 	}
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	rows, err := s.repo.ListPermissionPackageApplications(r.Context(), store.PermissionPackageApplicationFilter{
 		ID:              applicationID,
-		ManagementScope: managementScopeFromRequest(r),
+		ManagementScope: scope,
 		Limit:           1,
 	})
 	if err != nil {
@@ -2748,8 +2889,13 @@ func (s *Server) listPermissionPackageApprovalRequests(w http.ResponseWriter, r 
 		return
 	}
 	reviewer := strings.TrimSpace(r.URL.Query().Get("reviewer"))
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	filter := store.PermissionPackageApprovalRequestFilter{
-		ManagementScope:  managementScopeFromRequest(r),
+		ManagementScope:  scope,
 		TemplateID:       strings.TrimSpace(r.URL.Query().Get("templateId")),
 		TargetID:         strings.TrimSpace(r.URL.Query().Get("targetId")),
 		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
@@ -2775,6 +2921,10 @@ func (s *Server) createPermissionPackageDraft(w http.ResponseWriter, r *http.Req
 		writeError(w, err)
 		return
 	}
+	if err := s.requirePermissionPackageDraftScope(r, req); err != nil {
+		writeError(w, err)
+		return
+	}
 	draft, err := s.buildPermissionPackageDraft(r.Context(), req)
 	if err != nil {
 		writeError(w, err)
@@ -2786,6 +2936,10 @@ func (s *Server) createPermissionPackageDraft(w http.ResponseWriter, r *http.Req
 func (s *Server) preflightPermissionPackage(w http.ResponseWriter, r *http.Request) {
 	var req domain.PermissionPackageApplyRequest
 	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.requirePermissionPackageDraftScope(r, req.PermissionPackageDraftRequest); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -2894,6 +3048,10 @@ func (s *Server) createPermissionPackageApprovalRequest(w http.ResponseWriter, r
 		writeError(w, err)
 		return
 	}
+	if err := s.requirePermissionPackageDraftScope(r, req); err != nil {
+		writeError(w, err)
+		return
+	}
 	created, err := s.createPermissionPackageApprovalRequestRecord(r.Context(), req, managementActor(r), s.now())
 	if err != nil {
 		writeError(w, err)
@@ -2936,6 +3094,10 @@ func (s *Server) withdrawPermissionPackageApprovalRequest(w http.ResponseWriter,
 		writeError(w, domain.NotFound("approval request not found"))
 		return
 	}
+	if err := s.requirePermissionPackageApprovalRequestScope(r, existing); err != nil {
+		writeError(w, err)
+		return
+	}
 	requester := managementActor(r)
 	saved, err := s.withdrawPermissionPackageApprovalRequestRecord(r.Context(), existing, requester, req.Comment, s.now())
 	if err != nil {
@@ -2969,6 +3131,10 @@ func (s *Server) resolvePermissionPackageApprovalRequest(w http.ResponseWriter, 
 	}
 	if !ok {
 		writeError(w, domain.NotFound("approval request not found"))
+		return
+	}
+	if err := s.requirePermissionPackageApprovalRequestScope(r, existing); err != nil {
+		writeError(w, err)
 		return
 	}
 	reviewer, err := reviewerFromRequest(req.Reviewer, r)
@@ -3015,6 +3181,9 @@ func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.PermissionPackageApplyRequest) (domain.PermissionPackageApplyResponse, error) {
 	req.ApprovalRequestID = strings.TrimSpace(req.ApprovalRequestID)
+	if err := s.requirePermissionPackageDraftScope(r, req.PermissionPackageDraftRequest); err != nil {
+		return domain.PermissionPackageApplyResponse{}, err
+	}
 	draft, err := s.buildPermissionPackageDraft(r.Context(), req.PermissionPackageDraftRequest)
 	if err != nil {
 		return domain.PermissionPackageApplyResponse{}, err
@@ -3407,6 +3576,10 @@ func (s *Server) createTenantEntitlement(w http.ResponseWriter, r *http.Request)
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "capabilityId must belong to targetId"))
 		return
 	}
+	if err := s.requireTenantManagementScope(r, req.TenantID); err != nil {
+		writeError(w, err)
+		return
+	}
 	if _, ok := domain.EffectiveDataScopes(capability.DataScopes, req.DataScopes); !ok {
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "dataScopes must be equal to or narrower than capability dataScopes"))
 		return
@@ -3444,8 +3617,13 @@ func (s *Server) createTenantEntitlement(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) listTenantEntitlements(w http.ResponseWriter, r *http.Request) {
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	rows, err := s.repo.ListTenantEntitlements(r.Context(), store.EntitlementFilter{
-		ManagementScope: managementScopeFromRequest(r),
+		ManagementScope: scope,
 		TargetID:        strings.TrimSpace(r.URL.Query().Get("targetId")),
 		CapabilityID:    strings.TrimSpace(r.URL.Query().Get("capabilityId")),
 	})
@@ -3506,6 +3684,10 @@ func (s *Server) createWorkspaceAssignment(w http.ResponseWriter, r *http.Reques
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "dataScopes must be equal to or narrower than tenant entitlement dataScopes"))
 		return
 	}
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: entitlement.TenantID, WorkspaceID: req.WorkspaceID}); err != nil {
+		writeError(w, err)
+		return
+	}
 	now := s.now()
 	assignment := domain.WorkspaceAssignment{
 		ID:                  security.NewID("wsa"),
@@ -3537,8 +3719,13 @@ func (s *Server) createWorkspaceAssignment(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) listWorkspaceAssignments(w http.ResponseWriter, r *http.Request) {
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	rows, err := s.repo.ListWorkspaceAssignments(r.Context(), store.AssignmentFilter{
-		ManagementScope: managementScopeFromRequest(r),
+		ManagementScope: scope,
 		EntitlementID:   strings.TrimSpace(r.URL.Query().Get("entitlementId")),
 	})
 	if err != nil {
@@ -3617,6 +3804,10 @@ func (s *Server) createInstanceAssignment(w http.ResponseWriter, r *http.Request
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "caller instance must match workspace assignment tenant and workspace"))
 		return
 	}
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: workspaceAssignment.TenantID, WorkspaceID: workspaceAssignment.WorkspaceID}); err != nil {
+		writeError(w, err)
+		return
+	}
 	now := s.now()
 	assignment := domain.InstanceAssignment{
 		ID:                    security.NewID("ina"),
@@ -3649,8 +3840,13 @@ func (s *Server) createInstanceAssignment(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) listInstanceAssignments(w http.ResponseWriter, r *http.Request) {
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	rows, err := s.repo.ListInstanceAssignments(r.Context(), store.InstanceAssignmentFilter{
-		ManagementScope:  managementScopeFromRequest(r),
+		ManagementScope:  scope,
 		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
 		CapabilityID:     strings.TrimSpace(r.URL.Query().Get("capabilityId")),
 	})
@@ -4882,8 +5078,13 @@ func sleepBeforeRetry(ctx context.Context, backoff time.Duration) bool {
 }
 
 func (s *Server) listTraces(w http.ResponseWriter, r *http.Request) {
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	filter := store.TraceFilter{
-		ManagementScope: managementScopeFromRequest(r),
+		ManagementScope: scope,
 		RunID:           r.URL.Query().Get("runId"),
 		CallerID:        r.URL.Query().Get("callerAgentId"),
 		TargetID:        r.URL.Query().Get("targetAgentId"),
@@ -4904,8 +5105,13 @@ func (s *Server) listTraces(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listAuditEvents(w http.ResponseWriter, r *http.Request) {
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	filter := store.AuditEventFilter{
-		ManagementScope: managementScopeFromRequest(r),
+		ManagementScope: scope,
 		Action:          strings.TrimSpace(r.URL.Query().Get("action")),
 		ResourceType:    strings.TrimSpace(r.URL.Query().Get("resourceType")),
 		ResourceID:      strings.TrimSpace(r.URL.Query().Get("resourceId")),
@@ -4925,7 +5131,12 @@ func (s *Server) listAuditEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) runtimeMetrics(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.repo.ListTraces(r.Context(), store.TraceFilter{ManagementScope: managementScopeFromRequest(r)})
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	rows, err := s.repo.ListTraces(r.Context(), store.TraceFilter{ManagementScope: scope})
 	if err != nil {
 		writeError(w, err)
 		return
@@ -5061,6 +5272,31 @@ func managementScopeFromRequest(r *http.Request) store.ManagementScope {
 		TenantID:    strings.TrimSpace(r.URL.Query().Get("tenantId")),
 		WorkspaceID: strings.TrimSpace(r.URL.Query().Get("workspaceId")),
 	}
+}
+
+func (s *Server) effectiveManagementScopeFromRequest(r *http.Request) (store.ManagementScope, error) {
+	return s.effectiveManagementScopeForRequest(r, managementScopeFromRequest(r))
+}
+
+func (s *Server) effectiveManagementScopeForRequest(r *http.Request, requested store.ManagementScope) (store.ManagementScope, error) {
+	principal, ok := requestAdminPrincipal(r)
+	if !ok {
+		return requested, nil
+	}
+	return s.effectiveManagementScope(r.Context(), requested, principal)
+}
+
+func (s *Server) requirePermissionPackageDraftScope(r *http.Request, req domain.PermissionPackageDraftRequest) error {
+	req = trimPermissionPackageDraftRequest(req)
+	return s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: req.TenantID, WorkspaceID: req.WorkspaceID})
+}
+
+func (s *Server) requirePermissionPackageQueryScope(r *http.Request, query permissionPackageProductionReadinessQuery) error {
+	return s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID})
+}
+
+func (s *Server) requirePermissionPackageApprovalRequestScope(r *http.Request, approval domain.PermissionPackageApprovalRequest) error {
+	return s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: approval.TenantID, WorkspaceID: approval.WorkspaceID})
 }
 
 func auditLimitFromRequest(r *http.Request) (int, error) {

@@ -17,25 +17,31 @@ type consoleLoginRequest struct {
 }
 
 type consoleSessionPayload struct {
-	Actor     string `json:"actor"`
-	ExpiresAt int64  `json:"expiresAt"`
+	Actor       string `json:"actor"`
+	Role        string `json:"role,omitempty"`
+	TenantID    string `json:"tenantId,omitempty"`
+	WorkspaceID string `json:"workspaceId,omitempty"`
+	ExpiresAt   int64  `json:"expiresAt"`
 }
 
 type consoleSessionResponse struct {
 	Actor         string `json:"actor,omitempty"`
+	Role          string `json:"role,omitempty"`
+	TenantID      string `json:"tenantId,omitempty"`
+	WorkspaceID   string `json:"workspaceId,omitempty"`
 	Authenticated bool   `json:"authenticated"`
 	ExpiresAt     string `json:"expiresAt,omitempty"`
 	RequiresLogin bool   `json:"requiresLogin"`
 }
 
 func (s *Server) getAuthSession(w http.ResponseWriter, r *http.Request) {
-	actor, expiresAt, ok := s.consoleSessionFromRequest(r)
-	writeJSON(w, http.StatusOK, s.consoleSessionResponse(actor, expiresAt, ok))
+	principal, expiresAt, ok := s.consoleSessionFromRequest(r)
+	writeJSON(w, http.StatusOK, s.consoleSessionResponse(principal, expiresAt, ok))
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if s.developmentAdminBypassActive() {
-		writeJSON(w, http.StatusOK, s.consoleSessionResponse(developmentAdminActor, time.Time{}, true))
+		writeJSON(w, http.StatusOK, s.consoleSessionResponse(platformAdminPrincipal(developmentAdminActor), time.Time{}, true))
 		return
 	}
 
@@ -44,52 +50,56 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	actor, ok := s.adminActorForKey(req.AdminKey)
+	principal, ok := s.adminPrincipalForKey(req.AdminKey)
 	if !ok {
 		writeError(w, domain.Unauthorized("missing or invalid admin key"))
 		return
 	}
 	expiresAt := s.now().Add(defaultConsoleSessionTTL).UTC()
-	token, err := s.signConsoleSession(actor, expiresAt)
+	token, err := s.signConsoleSession(principal, expiresAt)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	http.SetCookie(w, s.consoleSessionCookie(token, expiresAt, false, r))
-	writeJSON(w, http.StatusOK, s.consoleSessionResponse(actor, expiresAt, true))
+	writeJSON(w, http.StatusOK, s.consoleSessionResponse(principal, expiresAt, true))
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, s.consoleSessionCookie("", time.Unix(0, 0).UTC(), true, r))
-	actor, expiresAt, ok := s.developmentSession()
-	writeJSON(w, http.StatusOK, s.consoleSessionResponse(actor, expiresAt, ok))
+	principal, expiresAt, ok := s.developmentSession()
+	writeJSON(w, http.StatusOK, s.consoleSessionResponse(principal, expiresAt, ok))
 }
 
-func (s *Server) consoleSessionFromRequest(r *http.Request) (string, time.Time, bool) {
-	if actor, expiresAt, ok := s.developmentSession(); ok {
-		return actor, expiresAt, true
+func (s *Server) consoleSessionFromRequest(r *http.Request) (adminPrincipal, time.Time, bool) {
+	if principal, expiresAt, ok := s.developmentSession(); ok {
+		return principal, expiresAt, true
 	}
 	cookie, err := r.Cookie(consoleSessionCookieName)
 	if err != nil {
-		return "", time.Time{}, false
+		return adminPrincipal{}, time.Time{}, false
 	}
 	return s.verifyConsoleSession(cookie.Value)
 }
 
-func (s *Server) developmentSession() (string, time.Time, bool) {
+func (s *Server) developmentSession() (adminPrincipal, time.Time, bool) {
 	if s.developmentAdminBypassActive() {
-		return developmentAdminActor, time.Time{}, true
+		return platformAdminPrincipal(developmentAdminActor), time.Time{}, true
 	}
-	return "", time.Time{}, false
+	return adminPrincipal{}, time.Time{}, false
 }
 
 func (s *Server) developmentAdminBypassActive() bool {
 	return s.adminKey == "" && len(s.adminIdentities) == 0 && s.allowUnauthenticatedAdmin
 }
 
-func (s *Server) consoleSessionResponse(actor string, expiresAt time.Time, authenticated bool) consoleSessionResponse {
+func (s *Server) consoleSessionResponse(principal adminPrincipal, expiresAt time.Time, authenticated bool) consoleSessionResponse {
+	principal = normalizeAdminPrincipal(principal)
 	response := consoleSessionResponse{
-		Actor:         actor,
+		Actor:         principal.Actor,
+		Role:          principal.Role,
+		TenantID:      principal.TenantID,
+		WorkspaceID:   principal.WorkspaceID,
 		Authenticated: authenticated,
 		RequiresLogin: !s.developmentAdminBypassActive(),
 	}
@@ -98,6 +108,9 @@ func (s *Server) consoleSessionResponse(actor string, expiresAt time.Time, authe
 	}
 	if !authenticated {
 		response.Actor = ""
+		response.Role = ""
+		response.TenantID = ""
+		response.WorkspaceID = ""
 		response.ExpiresAt = ""
 	}
 	return response
@@ -119,8 +132,15 @@ func (s *Server) consoleSessionCookie(value string, expiresAt time.Time, clear b
 	return cookie
 }
 
-func (s *Server) signConsoleSession(actor string, expiresAt time.Time) (string, error) {
-	payload, err := json.Marshal(consoleSessionPayload{Actor: strings.TrimSpace(actor), ExpiresAt: expiresAt.Unix()})
+func (s *Server) signConsoleSession(principal adminPrincipal, expiresAt time.Time) (string, error) {
+	principal = normalizeAdminPrincipal(principal)
+	payload, err := json.Marshal(consoleSessionPayload{
+		Actor:       principal.Actor,
+		Role:        principal.Role,
+		TenantID:    principal.TenantID,
+		WorkspaceID: principal.WorkspaceID,
+		ExpiresAt:   expiresAt.Unix(),
+	})
 	if err != nil {
 		return "", err
 	}
@@ -129,29 +149,33 @@ func (s *Server) signConsoleSession(actor string, expiresAt time.Time) (string, 
 	return "v1." + encodedPayload + "." + signature, nil
 }
 
-func (s *Server) verifyConsoleSession(token string) (string, time.Time, bool) {
+func (s *Server) verifyConsoleSession(token string) (adminPrincipal, time.Time, bool) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 || parts[0] != "v1" {
-		return "", time.Time{}, false
+		return adminPrincipal{}, time.Time{}, false
 	}
 	expected := s.consoleSessionSignature(parts[1])
 	if !hmac.Equal([]byte(expected), []byte(parts[2])) {
-		return "", time.Time{}, false
+		return adminPrincipal{}, time.Time{}, false
 	}
 	rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return "", time.Time{}, false
+		return adminPrincipal{}, time.Time{}, false
 	}
 	var payload consoleSessionPayload
 	if err := json.Unmarshal(rawPayload, &payload); err != nil {
-		return "", time.Time{}, false
+		return adminPrincipal{}, time.Time{}, false
 	}
 	actor := strings.TrimSpace(payload.Actor)
 	expiresAt := time.Unix(payload.ExpiresAt, 0).UTC()
 	if actor == "" || !expiresAt.After(s.now()) {
-		return "", time.Time{}, false
+		return adminPrincipal{}, time.Time{}, false
 	}
-	return actor, expiresAt, true
+	principal, ok := s.adminPrincipalForActor(actor)
+	if !ok {
+		return adminPrincipal{}, time.Time{}, false
+	}
+	return principal, expiresAt, true
 }
 
 func (s *Server) consoleSessionSignature(encodedPayload string) string {
@@ -175,6 +199,12 @@ func (s *Server) consoleSessionSecret() []byte {
 		_, _ = hash.Write([]byte(identity.Actor))
 		_, _ = hash.Write([]byte("="))
 		_, _ = hash.Write([]byte(identity.Key))
+		_, _ = hash.Write([]byte("|role:"))
+		_, _ = hash.Write([]byte(normalizeAdminRole(identity.Role)))
+		_, _ = hash.Write([]byte("|tenant:"))
+		_, _ = hash.Write([]byte(identity.TenantID))
+		_, _ = hash.Write([]byte("|workspace:"))
+		_, _ = hash.Write([]byte(identity.WorkspaceID))
 	}
 	return hash.Sum(nil)
 }

@@ -211,6 +211,9 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
+		if err := s.requirePermissionPackageDraftScope(r, args); err != nil {
+			return managementMCPCallResult{}, err
+		}
 		draft, err := s.buildPermissionPackageDraft(r.Context(), args)
 		if err != nil {
 			return managementMCPCallResult{}, err
@@ -219,6 +222,9 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 	case "preflight_permission_package":
 		args, err := decodeManagementMCPArguments[domain.PermissionPackageApplyRequest](req.Params.Arguments)
 		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		if err := s.requirePermissionPackageDraftScope(r, args.PermissionPackageDraftRequest); err != nil {
 			return managementMCPCallResult{}, err
 		}
 		preflight, err := s.preflightPermissionPackageRequest(r.Context(), args)
@@ -241,6 +247,9 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
+		if err := s.requirePermissionPackageDraftScope(r, args); err != nil {
+			return managementMCPCallResult{}, err
+		}
 		created, err := s.createPermissionPackageApprovalRequestRecord(r.Context(), args, managementActor(r), s.now())
 		if err != nil {
 			return managementMCPCallResult{}, err
@@ -255,6 +264,10 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 			return managementMCPCallResult{}, err
 		}
 		filter, err := permissionPackageApprovalRequestFilterFromMCPArgs(args)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		filter.ManagementScope, err = s.effectiveManagementScopeForRequest(r, filter.ManagementScope)
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
@@ -308,6 +321,10 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
+		filter.ManagementScope, err = s.effectiveManagementScopeForRequest(r, filter.ManagementScope)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
 		rows, err := s.repo.ListPermissionPackageApplications(r.Context(), filter)
 		if err != nil {
 			return managementMCPCallResult{}, err
@@ -320,6 +337,9 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		}
 		query, err := permissionPackageProductionReadinessQueryFromMCPArgs(args)
 		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		if err := s.requirePermissionPackageQueryScope(r, query); err != nil {
 			return managementMCPCallResult{}, err
 		}
 		readiness, err := s.permissionPackageProductionReadiness(r.Context(), query)
@@ -336,6 +356,9 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
+		if err := s.requirePermissionPackageQueryScope(r, query); err != nil {
+			return managementMCPCallResult{}, err
+		}
 		report, err := s.permissionPackageProductionEvidenceReport(r.Context(), query)
 		if err != nil {
 			return managementMCPCallResult{}, err
@@ -344,6 +367,9 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 	case "explain_permission_package_draft":
 		args, err := decodeManagementMCPArguments[domain.PermissionPackageDraftRequest](req.Params.Arguments)
 		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		if err := s.requirePermissionPackageDraftScope(r, args); err != nil {
 			return managementMCPCallResult{}, err
 		}
 		explanation, err := s.explainManagementMCPPermissionPackageDraft(r, args)
@@ -356,6 +382,9 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
+		if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: strings.TrimSpace(args.TenantID), WorkspaceID: strings.TrimSpace(args.WorkspaceID)}); err != nil {
+			return managementMCPCallResult{}, err
+		}
 		explanation, err := s.explainManagementMCPAccessDecision(r, args)
 		if err != nil {
 			return managementMCPCallResult{}, err
@@ -364,6 +393,9 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 	case "get_tenant_access_profile":
 		args, err := decodeManagementMCPArguments[managementMCPAccessProfileArgs](req.Params.Arguments)
 		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: strings.TrimSpace(args.TenantID), WorkspaceID: strings.TrimSpace(args.WorkspaceID)}); err != nil {
 			return managementMCPCallResult{}, err
 		}
 		profile, err := s.managementMCPAccessProfile(r, args)
@@ -376,10 +408,14 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
-		rows, err := s.repo.ListAgents(r.Context(), store.AgentFilter{ManagementScope: store.ManagementScope{
+		scope, err := s.effectiveManagementScopeForRequest(r, store.ManagementScope{
 			TenantID:    strings.TrimSpace(args.TenantID),
 			WorkspaceID: strings.TrimSpace(args.WorkspaceID),
-		}})
+		})
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		rows, err := s.repo.ListAgents(r.Context(), store.AgentFilter{ManagementScope: scope})
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
@@ -392,13 +428,17 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if args.Status != "" && !validCapabilityDiscoveryStatus(args.Status) {
 			return managementMCPCallResult{}, domain.BadRequest("VALIDATION_FAILED", "status must be pending_review, approved, deprecated, or removed")
 		}
+		scope, err := s.effectiveManagementScopeForRequest(r, store.ManagementScope{
+			TenantID:    strings.TrimSpace(args.TenantID),
+			WorkspaceID: strings.TrimSpace(args.WorkspaceID),
+		})
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
 		rows, err := s.repo.ListCapabilities(r.Context(), store.CapabilityFilter{
-			ManagementScope: store.ManagementScope{
-				TenantID:    strings.TrimSpace(args.TenantID),
-				WorkspaceID: strings.TrimSpace(args.WorkspaceID),
-			},
-			TargetID: strings.TrimSpace(args.TargetID),
-			Status:   args.Status,
+			ManagementScope: scope,
+			TargetID:        strings.TrimSpace(args.TargetID),
+			Status:          args.Status,
 		})
 		if err != nil {
 			return managementMCPCallResult{}, err
@@ -604,6 +644,9 @@ func (s *Server) resolveManagementMCPPermissionPackageApprovalRequest(r *http.Re
 	if !ok {
 		return domain.PermissionPackageApprovalRequest{}, domain.NotFound("approval request not found")
 	}
+	if err := s.requirePermissionPackageApprovalRequestScope(r, existing); err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
+	}
 	reviewer := strings.TrimSpace(args.Reviewer)
 	if reviewer == "" {
 		reviewer = managementActor(r)
@@ -638,6 +681,9 @@ func (s *Server) withdrawManagementMCPPermissionPackageApprovalRequest(r *http.R
 	}
 	if !ok {
 		return domain.PermissionPackageApprovalRequest{}, domain.NotFound("approval request not found")
+	}
+	if err := s.requirePermissionPackageApprovalRequestScope(r, existing); err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
 	}
 	saved, err := s.withdrawPermissionPackageApprovalRequestRecord(r.Context(), existing, managementActor(r), args.Comment, s.now())
 	if err != nil {

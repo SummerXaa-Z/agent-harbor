@@ -585,6 +585,10 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	if err := s.rejectDuplicateAgentCreate(r.Context(), agent); err != nil {
+		writeError(w, err)
+		return
+	}
 	created, err := s.repo.CreateAgentWithAudit(r.Context(), agent, func(created domain.Agent) domain.AuditEvent {
 		return s.managementAuditEvent(r, created.TenantID, created.WorkspaceID, "agent.created", "agent", created.ID, "Agent created", map[string]any{
 			"channelType":        created.ChannelType,
@@ -819,6 +823,10 @@ func (s *Server) rotateAgentCredentials(w http.ResponseWriter, r *http.Request) 
 		writeError(w, err)
 		return
 	}
+	if sameCredentials(agent.Credentials, credentials) {
+		writeJSON(w, http.StatusOK, agent)
+		return
+	}
 	now := s.now()
 	updated, ok, err := s.repo.RotateAgentCredentialsWithAudit(r.Context(), agent.ID, credentials, now, func(updated domain.Agent) domain.AuditEvent {
 		return s.managementAuditEvent(r, updated.TenantID, updated.WorkspaceID, "agent.credentials_rotated", "agent", updated.ID, "Agent credentials rotated", map[string]any{
@@ -875,6 +883,8 @@ func (s *Server) createAgentKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	req.AgentID = strings.TrimSpace(req.AgentID)
+	req.Name = strings.TrimSpace(req.Name)
 	if strings.TrimSpace(req.AgentID) == "" {
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "agentId is required"))
 		return
@@ -910,8 +920,12 @@ func (s *Server) createAgentKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "expiresInSeconds must be between 1 and 3600"))
 		return
 	}
-	plaintext, prefix := security.NewAgentKey()
 	now := s.now()
+	if err := s.rejectRecentDuplicateAgentKey(r.Context(), agent, req.Name, now); err != nil {
+		writeError(w, err)
+		return
+	}
+	plaintext, prefix := security.NewAgentKey()
 	key := domain.AgentKey{
 		ID:        security.NewID("key"),
 		AgentID:   req.AgentID,
@@ -1218,6 +1232,10 @@ func (s *Server) createRoutePolicy(w http.ResponseWriter, r *http.Request) {
 		Retry:       retry,
 		CreatedAt:   now,
 		UpdatedAt:   now,
+	}
+	if err := s.rejectDuplicateRoutePolicy(r.Context(), policy); err != nil {
+		writeError(w, err)
+		return
 	}
 	created, err := s.repo.CreateRoutePolicyWithAudit(r.Context(), policy, func(created domain.RoutePolicy) domain.AuditEvent {
 		return s.managementAuditEvent(r, created.TenantID, created.WorkspaceID, "route_policy.created", "route_policy", created.ID, "Route policy created", routePolicyAuditMetadata(created))

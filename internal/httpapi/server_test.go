@@ -1871,6 +1871,98 @@ func TestDataPlaneAllowedDeniedTraces(t *testing.T) {
 	}
 }
 
+func TestManagementMutationsRejectDuplicateAgentAndKey(t *testing.T) {
+	router := newRouter()
+	first := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"tenantId":    "tenant-dup",
+		"name":        "Support Agent",
+		"workspaceId": "ws-dup",
+		"channelType": "local",
+		"status":      "active",
+	}, "")
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first agent create failed: %d body=%s", first.Code, first.Body.String())
+	}
+	created := decodeData[agentResponse](t, first)
+
+	duplicate := request(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"tenantId":    "tenant-dup",
+		"name":        " support agent ",
+		"workspaceId": "ws-dup",
+		"channelType": "local",
+		"status":      "active",
+	}, "")
+	if duplicate.Code != http.StatusConflict || !strings.Contains(duplicate.Body.String(), "DUPLICATE_RESOURCE_MUTATION") {
+		t.Fatalf("duplicate agent should be a conflict, got %d body=%s", duplicate.Code, duplicate.Body.String())
+	}
+
+	firstKey := request(t, router, http.MethodPost, "/api/v1/agent-keys", map[string]any{
+		"agentId":          created.ID,
+		"name":             "console key",
+		"expiresInSeconds": 900,
+	}, "")
+	if firstKey.Code != http.StatusCreated {
+		t.Fatalf("first key create failed: %d body=%s", firstKey.Code, firstKey.Body.String())
+	}
+	duplicateKey := request(t, router, http.MethodPost, "/api/v1/agent-keys", map[string]any{
+		"agentId":          created.ID,
+		"name":             "console key",
+		"expiresInSeconds": 900,
+	}, "")
+	if duplicateKey.Code != http.StatusConflict || !strings.Contains(duplicateKey.Body.String(), "DUPLICATE_RESOURCE_MUTATION") {
+		t.Fatalf("duplicate key should be a conflict, got %d body=%s", duplicateKey.Code, duplicateKey.Body.String())
+	}
+}
+
+func TestManagementCredentialRotationDuplicateIsNoop(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	agent := createAgent(t, router, map[string]any{
+		"tenantId":    "tenant-rotate",
+		"name":        "Credential Target",
+		"workspaceId": "ws-rotate",
+		"channelType": "mcp",
+		"status":      "active",
+		"channelConfig": map[string]any{
+			"endpoint": "https://api.example.com/mcp",
+			"credentialHeaders": map[string]any{
+				"Authorization": "apiToken",
+			},
+		},
+		"credentials": map[string]any{
+			"apiToken": "Bearer one",
+		},
+	})
+	if agent.CredentialVersion != 1 {
+		t.Fatalf("expected initial credential version 1, got %#v", agent)
+	}
+
+	duplicate := decodeData[agentResponse](t, request(t, router, http.MethodPost, "/api/v1/agents/"+agent.ID+"/credentials:rotate", map[string]any{
+		"credentials": map[string]any{
+			"apiToken": "Bearer one",
+		},
+	}, ""))
+	if duplicate.CredentialVersion != agent.CredentialVersion {
+		t.Fatalf("duplicate credential rotation should be a no-op, got %#v", duplicate)
+	}
+	events, err := repo.ListAuditEvents(context.Background(), store.AuditEventFilter{Action: "agent.credentials_rotated"})
+	if err != nil {
+		t.Fatalf("list rotation audit events: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("duplicate credential rotation should not append audit events: %#v", events)
+	}
+
+	rotated := decodeData[agentResponse](t, request(t, router, http.MethodPost, "/api/v1/agents/"+agent.ID+"/credentials:rotate", map[string]any{
+		"credentials": map[string]any{
+			"apiToken": "Bearer two",
+		},
+	}, ""))
+	if rotated.CredentialVersion != agent.CredentialVersion+1 {
+		t.Fatalf("changed credential rotation should increment version, got %#v", rotated)
+	}
+}
+
 func TestRoutePolicyCRUDAndAudit(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -1927,6 +2019,18 @@ func TestRoutePolicyCRUDAndAudit(t *testing.T) {
 		created.Name != "Allow tool list" || created.RouteType != "mcp" || created.RouteKey != "tools/list" ||
 		created.Effect != "allow" || created.Status != "enabled" || created.Priority != 25 {
 		t.Fatalf("unexpected created route policy: %#v", created)
+	}
+	duplicate := request(t, router, http.MethodPost, "/api/v1/route-policies", map[string]any{
+		"name":          "Duplicate allow tool list",
+		"callerAgentId": caller.ID,
+		"targetAgentId": target.ID,
+		"routeType":     "mcp",
+		"routeKey":      "tools/list",
+		"effect":        "allow",
+		"priority":      25,
+	}, "")
+	if duplicate.Code != http.StatusConflict || !strings.Contains(duplicate.Body.String(), "DUPLICATE_RESOURCE_MUTATION") {
+		t.Fatalf("duplicate route policy should be a conflict, got %d body=%s", duplicate.Code, duplicate.Body.String())
 	}
 
 	list := decodeData[[]routePolicyResponse](t, request(t, router, http.MethodGet, "/api/v1/route-policies?tenantId=tenant-policy&workspaceId=ws-policy", nil, ""))

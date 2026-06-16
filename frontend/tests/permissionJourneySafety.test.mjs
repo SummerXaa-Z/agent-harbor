@@ -232,12 +232,15 @@ test("retry validation messages are localized before reaching operator panels", 
 });
 
 test("management mutation forms block duplicate submit while requests are in flight", () => {
+  assert.match(managementHook, /ApiRequestError/);
   assert.match(managementHook, /import \{ useRef, useState, type FormEvent \} from "react"/);
   assert.match(managementHook, /type ManagementMutationAction = "" \| "create_agent" \| "create_key" \| "rotate_credential" \| "create_policy"/);
   assert.match(managementHook, /const managementMutationInFlightRef = useRef<ManagementMutationAction>\(""\)/);
   assert.match(managementHook, /const \[managementMutationAction, setManagementMutationAction\] = useState<ManagementMutationAction>\(""\)/);
   assert.match(managementHook, /function beginManagementMutation\(action: ManagementMutationAction\)/);
   assert.match(managementHook, /function endManagementMutation\(action: ManagementMutationAction\)/);
+  assert.match(managementHook, /DUPLICATE_RESOURCE_MUTATION/);
+  assert.match(managementHook, /message\.duplicateResourceMutation/);
   assert.match(managementHook, /managementMutationAction,/);
 
   [

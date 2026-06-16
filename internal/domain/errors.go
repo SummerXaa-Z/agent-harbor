@@ -16,6 +16,10 @@ func BadRequest(code, message string) AppError {
 	return AppError{Status: 400, Code: code, Message: message}
 }
 
+func Conflict(code, message string) AppError {
+	return AppError{Status: 409, Code: code, Message: message}
+}
+
 func PayloadTooLarge(message string) AppError {
 	return AppError{Status: 413, Code: "PAYLOAD_TOO_LARGE", Message: message}
 }

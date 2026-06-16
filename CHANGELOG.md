@@ -49,6 +49,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 资源管理的操作表单现在会保留选中资源上下文；从生命周期行打开时，会自动带入可安全推断的 Agent、凭据和策略字段。
 - Resource Management operation forms now block duplicate submits while Agent, key, credential, and policy mutations are running.
 - 资源管理的操作表单现在会在 Agent、密钥、凭据和策略变更执行期间阻止重复提交。
+- Resource Management APIs now reject duplicate Agent, key, and route-policy mutations and treat identical credential rotations as no-op updates, reducing duplicate resources from retries.
+- 资源管理 API 现在会拒绝重复的 Agent、密钥和路由规则变更，并将完全相同的凭据轮换视为无变更，降低重试导致的重复资源风险。
 - Resource Management now owns Agent, credential, and policy creation as the single lifecycle mutation entry; Routes and Access Policies stay focused on review/governance and route empty states back to Resource Management.
 - 资源管理现在统一承接 Agent、凭据和策略创建；路由规则和访问策略页面专注审查与治理，空状态会引导回资源管理。
 - Moved Permission Changes approval-decision confirmation state into a focused hook, reducing the workbench component while keeping approval, rejection, and withdraw behavior unchanged.

@@ -53,6 +53,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 资源管理 API 现在会拒绝重复的 Agent、密钥和路由规则变更，并将完全相同的凭据轮换视为无变更，降低重试导致的重复资源风险。
 - Browser console sessions now require a session-bound CSRF header for management writes while API key automation remains unchanged.
 - 浏览器控制台会话现在会在管理写操作中校验会话绑定的 CSRF 请求头，API key 自动化调用不受影响。
+- Console login now rate-limits repeated failed admin-key attempts per client while leaving authenticated API key automation unchanged.
+- 控制台登录现在会按客户端限制连续失败的管理员密钥尝试，已认证的 API key 自动化调用不受影响。
 - Resource Management now owns Agent, credential, and policy creation as the single lifecycle mutation entry; Routes and Access Policies stay focused on review/governance and route empty states back to Resource Management.
 - 资源管理现在统一承接 Agent、凭据和策略创建；路由规则和访问策略页面专注审查与治理，空状态会引导回资源管理。
 - Moved Permission Changes approval-decision confirmation state into a focused hook, reducing the workbench component while keeping approval, rejection, and withdraw behavior unchanged.

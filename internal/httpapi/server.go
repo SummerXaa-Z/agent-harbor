@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -52,6 +53,8 @@ type Server struct {
 	allowPrivateUpstreams     bool
 	approvalReviewers         []domain.PermissionPackageApprovalReviewer
 	corsOrigins               []string
+	loginFailureMu            sync.Mutex
+	loginFailures             map[string]consoleLoginFailure
 	sessionSecret             []byte
 }
 

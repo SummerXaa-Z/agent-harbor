@@ -1034,6 +1034,50 @@ func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	}
 }
 
+func TestConsoleLoginRateLimit(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	for i := 0; i < 5; i++ {
+		resp := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "wrong-admin"}, "")
+		if resp.Code != http.StatusUnauthorized {
+			t.Fatalf("failed login %d should be unauthorized before throttle, got %d body=%s", i+1, resp.Code, resp.Body.String())
+		}
+	}
+	limited := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "wrong-admin"}, "")
+	if limited.Code != http.StatusTooManyRequests || !strings.Contains(limited.Body.String(), "RATE_LIMITED") {
+		t.Fatalf("sixth failed login should be rate limited, got %d body=%s", limited.Code, limited.Body.String())
+	}
+
+	apiKeyCreate := decodeData[agentResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "API Key Still Works",
+		"workspaceId": "ws-login-limit",
+		"channelType": "local",
+		"status":      "active",
+	}, "", "test-admin"))
+	if apiKeyCreate.ID == "" {
+		t.Fatalf("api key management request should bypass login throttle: %#v", apiKeyCreate)
+	}
+}
+
+func TestConsoleLoginRateLimitClearsAfterSuccess(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	for i := 0; i < 4; i++ {
+		resp := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "wrong-admin"}, "")
+		if resp.Code != http.StatusUnauthorized {
+			t.Fatalf("failed login %d should be unauthorized before success, got %d body=%s", i+1, resp.Code, resp.Body.String())
+		}
+	}
+	login := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "test-admin"}, "")
+	if login.Code != http.StatusOK {
+		t.Fatalf("valid login should clear failure count, got %d body=%s", login.Code, login.Body.String())
+	}
+	wrongAfterSuccess := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "wrong-admin"}, "")
+	if wrongAfterSuccess.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong login after success should restart failure count, got %d body=%s", wrongAfterSuccess.Code, wrongAfterSuccess.Body.String())
+	}
+}
+
 func TestConsoleAuthSessionSupportsNamedAdminIdentities(t *testing.T) {
 	router := newRouterWithRepoAndAdminIdentities(store.NewMemory(), []httpapi.AdminIdentity{
 		{Actor: "requester", Key: "requester-key"},

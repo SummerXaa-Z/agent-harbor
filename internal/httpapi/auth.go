@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -37,6 +38,13 @@ type consoleSessionResponse struct {
 }
 
 const consoleSessionCSRFHeader = "X-AgentHarbor-CSRF"
+const consoleLoginFailureWindow = 5 * time.Minute
+const consoleLoginMaxFailures = 5
+
+type consoleLoginFailure struct {
+	Count      int
+	WindowEnds time.Time
+}
 
 func (s *Server) getAuthSession(w http.ResponseWriter, r *http.Request) {
 	principal, expiresAt, ok := s.consoleSessionFromRequest(r)
@@ -60,11 +68,17 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	if err := s.requireConsoleLoginAllowed(r); err != nil {
+		writeError(w, err)
+		return
+	}
 	principal, ok := s.adminPrincipalForKey(r.Context(), req.AdminKey)
 	if !ok {
+		s.recordConsoleLoginFailure(r)
 		writeError(w, domain.Unauthorized("missing or invalid admin key"))
 		return
 	}
+	s.clearConsoleLoginFailures(r)
 	expiresAt := s.now().Add(defaultConsoleSessionTTL).UTC()
 	token, err := s.signConsoleSession(principal, expiresAt)
 	if err != nil {
@@ -241,6 +255,72 @@ func requiresCSRFProtection(method string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func (s *Server) consoleLoginClientKey(r *http.Request) string {
+	if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
+		for _, part := range strings.Split(forwardedFor, ",") {
+			if candidate := strings.TrimSpace(part); candidate != "" {
+				return candidate
+			}
+		}
+	}
+	remoteAddr := strings.TrimSpace(r.RemoteAddr)
+	if remoteAddr == "" {
+		return "unknown"
+	}
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err == nil && strings.TrimSpace(host) != "" {
+		return strings.TrimSpace(host)
+	}
+	return remoteAddr
+}
+
+func (s *Server) requireConsoleLoginAllowed(r *http.Request) error {
+	key := s.consoleLoginClientKey(r)
+	now := s.now()
+	s.loginFailureMu.Lock()
+	defer s.loginFailureMu.Unlock()
+	if s.loginFailures == nil {
+		return nil
+	}
+	failure, ok := s.loginFailures[key]
+	if !ok {
+		return nil
+	}
+	if !failure.WindowEnds.After(now) {
+		delete(s.loginFailures, key)
+		return nil
+	}
+	if failure.Count >= consoleLoginMaxFailures {
+		return domain.TooManyRequests("RATE_LIMITED", "too many failed console login attempts; retry later")
+	}
+	return nil
+}
+
+func (s *Server) recordConsoleLoginFailure(r *http.Request) {
+	key := s.consoleLoginClientKey(r)
+	now := s.now()
+	s.loginFailureMu.Lock()
+	defer s.loginFailureMu.Unlock()
+	if s.loginFailures == nil {
+		s.loginFailures = map[string]consoleLoginFailure{}
+	}
+	failure := s.loginFailures[key]
+	if !failure.WindowEnds.After(now) {
+		failure = consoleLoginFailure{WindowEnds: now.Add(consoleLoginFailureWindow)}
+	}
+	failure.Count++
+	s.loginFailures[key] = failure
+}
+
+func (s *Server) clearConsoleLoginFailures(r *http.Request) {
+	key := s.consoleLoginClientKey(r)
+	s.loginFailureMu.Lock()
+	defer s.loginFailureMu.Unlock()
+	if s.loginFailures != nil {
+		delete(s.loginFailures, key)
 	}
 }
 

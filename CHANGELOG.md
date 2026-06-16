@@ -57,6 +57,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 控制台登录现在会按客户端限制连续失败的管理员密钥尝试，已认证的 API key 自动化调用不受影响。
 - Console login lockouts now expose retry timing to the browser and show localized retry guidance instead of a generic sign-in failure.
 - 控制台登录触发限流时现在会向浏览器暴露重试时间，并显示本地化的稍后重试提示，而不是普通登录失败。
+- Console authentication responses are no-store and the web console now refreshes expired browser sessions back to the sign-in screen before stale management writes.
+- 控制台认证响应现在禁止缓存，浏览器会话过期后会主动回到登录界面，避免继续发起过期的管理写操作。
 - Resource Management now owns Agent, credential, and policy creation as the single lifecycle mutation entry; Routes and Access Policies stay focused on review/governance and route empty states back to Resource Management.
 - 资源管理现在统一承接 Agent、凭据和策略创建；路由规则和访问策略页面专注审查与治理，空状态会引导回资源管理。
 - Moved Permission Changes approval-decision confirmation state into a focused hook, reducing the workbench component while keeping approval, rejection, and withdraw behavior unchanged.

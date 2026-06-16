@@ -959,6 +959,9 @@ func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	if missing.Code != http.StatusOK {
 		t.Fatalf("session status should be public, got %d body=%s", missing.Code, missing.Body.String())
 	}
+	if got := missing.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("session status should not be cached, got Cache-Control=%q", got)
+	}
 	missingSession := decodeData[map[string]any](t, missing)
 	if missingSession["authenticated"] != false || missingSession["requiresLogin"] != true {
 		t.Fatalf("expected unauthenticated production session, got %#v", missingSession)
@@ -972,6 +975,9 @@ func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	login := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "test-admin"}, "")
 	if login.Code != http.StatusOK {
 		t.Fatalf("login should succeed, got %d body=%s", login.Code, login.Body.String())
+	}
+	if got := login.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("login response should not be cached, got Cache-Control=%q", got)
 	}
 	session := decodeData[map[string]any](t, login)
 	if session["authenticated"] != true || session["actor"] != "admin-key" || session["requiresLogin"] != true {
@@ -1027,6 +1033,9 @@ func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	logout := requestWithCookieAndCSRF(t, router, http.MethodPost, "/api/v1/auth/logout", nil, cookies[0], csrfToken)
 	if logout.Code != http.StatusOK {
 		t.Fatalf("logout should succeed, got %d body=%s", logout.Code, logout.Body.String())
+	}
+	if got := logout.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("logout response should not be cached, got Cache-Control=%q", got)
 	}
 	clearedCookies := logout.Result().Cookies()
 	if len(clearedCookies) != 1 || clearedCookies[0].Name != "agent_harbor_session" || clearedCookies[0].MaxAge != -1 {

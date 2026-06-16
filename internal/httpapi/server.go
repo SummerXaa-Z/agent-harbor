@@ -202,6 +202,7 @@ func (s *Server) Router() http.Handler {
 			r.Post("/admin-identities/{id}:disable", s.disableAdminIdentity)
 			r.Post("/tenants", s.createTenant)
 			r.Get("/tenants", s.listTenants)
+			r.Get("/tenants/{id}/permission-center", s.getTenantPermissionCenter)
 			r.Get("/tenants/{id}/access-profile", s.getTenantAccessProfile)
 			r.Get("/tenants/{id}", s.getTenant)
 			r.Post("/agents", s.createAgent)

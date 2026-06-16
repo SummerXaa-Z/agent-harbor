@@ -364,12 +364,18 @@ test("tenant organization workspace is a first-class resource entry", () => {
   assert.match(app, /accessSubjects=\{aiAdminAccessSubjects\}/);
   assert.match(consoleViews, /export function TenantsView/);
   assert.match(tenantOrganizationView, /buildTenantOrganizationModel/);
+  assert.match(tenantOrganizationView, /buildTenantPermissionCenterViewModel/);
   assert.match(tenantOrganizationView, /className="tenant-organization content-grid"/);
   assert.match(tenantOrganizationView, /className="primary-button"/);
   assert.match(tenantOrganizationView, /tenant-permission-modal/);
   assert.match(tenantOrganizationView, /role="dialog"/);
   assert.match(tenantOrganizationView, /aria-haspopup="dialog"/);
+  assert.match(tenantOrganizationView, /tenantCenter\.snapshot/);
+  assert.match(tenantOrganizationView, /tenantCenter\.adminBoundary/);
   assert.match(tenantOrganizationView, /className="tenant-access-directory"/);
+  assert.match(app, /selectedTenantId=\{tenantOrganizationEffectiveTenantId\}/);
+  assert.match(tenantOrganizationView, /href="#admin-access"/);
+  assert.match(app, /fetchTenantPermissionCenter/);
   assert.match(tenantOrganizationView, /accessSubjectsForWorkspace/);
   assert.match(tenantOrganizationView, /ApprovalDropdown/);
   assert.match(tenantOrganizationView, /sourceView: "tenants"/);

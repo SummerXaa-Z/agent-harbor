@@ -380,6 +380,9 @@ test("tenant organization workspace is a first-class resource entry", () => {
   assert.match(tenantOrganizationView, /ApprovalDropdown/);
   assert.match(tenantOrganizationView, /sourceView: "tenants"/);
   assert.match(styles, /\.tenant-organization\s*\{/);
+  assert.match(styles, /\.tenant-center-panel\s*\{/);
+  assert.match(styles, /\.tenant-center-metrics\s*\{/);
+  assert.match(styles, /\.tenant-center-actions\s*\{/);
   assert.match(styles, /\.tenant-permission-modal\s*\{/);
   assert.match(styles, /\.tenant-access-directory\s*\{/);
   assert.match(styles, /\.tenant-org-actions\s*\{[^}]*background:\s*var\(--brand-soft\);/s);

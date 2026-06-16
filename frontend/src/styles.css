@@ -1582,6 +1582,86 @@ button {
   justify-content: flex-end;
 }
 
+.tenant-center-status,
+.tenant-center-panel {
+  margin: 0 var(--space-4) var(--space-4);
+}
+
+.tenant-center-status {
+  padding: var(--space-3);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius);
+  background: var(--surface-subtle);
+  color: var(--muted);
+  font-size: var(--text-base);
+}
+
+.tenant-center-panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+
+.tenant-center-header,
+.tenant-center-actions,
+.tenant-center-empty-reasons {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tenant-center-header {
+  justify-content: space-between;
+}
+
+.tenant-center-header > div {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.tenant-center-header .section-kicker {
+  margin: 0;
+  padding-left: 0;
+}
+
+.tenant-center-header strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--text-base);
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tenant-center-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.tenant-center-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.tenant-center-empty-reasons {
+  flex-wrap: wrap;
+}
+
+.tenant-center-empty-reasons span {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-full);
+  background: var(--surface-subtle);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
 .tenant-org-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -6063,6 +6143,15 @@ td code {
 
   .tenant-org-actions > div:last-child {
     justify-content: flex-start;
+  }
+
+  .tenant-center-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .tenant-center-metrics {
+    grid-template-columns: 1fr;
   }
 
   .tenant-org-metrics,

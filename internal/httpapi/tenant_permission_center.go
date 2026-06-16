@@ -198,7 +198,7 @@ func tenantPermissionCenterOperatorBoundaryFromPrincipal(principal adminPrincipa
 
 func (s *Server) tenantPermissionCenterAdministrators(ctx context.Context, tenantID string, workspaceID string, principal adminPrincipal) ([]tenantPermissionCenterAdministrator, error) {
 	if normalizeAdminRole(principal.Role) != adminRolePlatformAdmin {
-		return nil, nil
+		return []tenantPermissionCenterAdministrator{}, nil
 	}
 	rows := append([]domain.AdminIdentity{}, s.bootstrapAdminIdentities()...)
 	managed, err := s.repo.ListAdminIdentities(ctx)

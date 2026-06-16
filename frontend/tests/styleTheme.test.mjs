@@ -372,6 +372,9 @@ test("tenant organization workspace is a first-class resource entry", () => {
   assert.match(tenantOrganizationView, /aria-haspopup="dialog"/);
   assert.match(tenantOrganizationView, /tenantCenter\.snapshot/);
   assert.match(tenantOrganizationView, /tenantCenter\.adminBoundary/);
+  assert.match(tenantOrganizationView, /tenantCenter\.capabilityDetail/);
+  assert.match(tenantOrganizationView, /tenantCenter\.dataScopes/);
+  assert.match(tenantOrganizationView, /centerViewModel\.capabilitySummaries/);
   assert.match(tenantOrganizationView, /className="tenant-access-directory"/);
   assert.match(app, /selectedTenantId=\{tenantOrganizationEffectiveTenantId\}/);
   assert.match(tenantOrganizationView, /href="#admin-access"/);
@@ -382,6 +385,9 @@ test("tenant organization workspace is a first-class resource entry", () => {
   assert.match(styles, /\.tenant-organization\s*\{/);
   assert.match(styles, /\.tenant-center-panel\s*\{/);
   assert.match(styles, /\.tenant-center-metrics\s*\{/);
+  assert.match(styles, /\.tenant-center-scope\s*\{/);
+  assert.match(styles, /\.tenant-center-capability-list\s*\{/);
+  assert.match(styles, /\.tenant-center-scope-tags\s*\{/);
   assert.match(styles, /\.tenant-center-actions\s*\{/);
   assert.match(styles, /\.tenant-permission-modal\s*\{/);
   assert.match(styles, /\.tenant-access-directory\s*\{/);

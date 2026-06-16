@@ -302,6 +302,38 @@ export function TenantOrganizationView({
               <TenantOrgMetric icon={<Network size={16} />} label={t("tenantCenter.capabilities")} value={`${centerViewModel.metric.allowedCapabilities}/${centerViewModel.metric.blockedCapabilities}`} detail={tx(t, "tenantOrg.permissionDetail", { allowed: centerViewModel.metric.allowedCapabilities, denied: centerViewModel.metric.blockedCapabilities })} />
               <TenantOrgMetric icon={<UserRoundCheck size={16} />} label={t("tenantCenter.adminBoundary")} value={String(centerViewModel.metric.administrators)} detail={centerViewModel.canManageAdministrators ? t("tenantCenter.manageAdmins") : t("adminAccess.readOnly")} />
             </div>
+            <div className="tenant-center-scope">
+              <div>
+                <span className="section-kicker">{t("tenantCenter.capabilityDetail")}</span>
+                {centerViewModel.capabilitySummaries.length > 0 ? (
+                  <div className="tenant-center-capability-list">
+                    {centerViewModel.capabilitySummaries.map((capability) => (
+                      <article key={`${capability.targetName}-${capability.capabilityName}-${capability.effect}`}>
+                        <div>
+                          <strong>{permissionEntityDisplayName(capability.capabilityName, t)}</strong>
+                          <small>{permissionEntityDisplayName(capability.targetName, t)}</small>
+                        </div>
+                        <Badge tone={capability.effect === "allow" ? "success" : "danger"}>
+                          {capability.effect === "allow" ? t("tenantCenter.effect.allow") : t("tenantCenter.effect.deny")}
+                        </Badge>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="tenant-org-muted">{t("tenantCenter.empty.noCapabilities")}</p>
+                )}
+              </div>
+              <div>
+                <span className="section-kicker">{t("tenantCenter.dataScopes")}</span>
+                {centerViewModel.dataScopeLabels.length > 0 ? (
+                  <div className="tenant-center-scope-tags">
+                    {centerViewModel.dataScopeLabels.map((label) => <span key={label}>{permissionEntityDisplayName(label, t)}</span>)}
+                  </div>
+                ) : (
+                  <p className="tenant-org-muted">{t("tenantCenter.empty.noDataScopes")}</p>
+                )}
+              </div>
+            </div>
             <div className="tenant-center-actions">
               <button className="primary-button" type="button" onClick={openPermissionModal}>
                 <ShieldCheck size={15} />

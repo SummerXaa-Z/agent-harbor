@@ -1447,7 +1447,7 @@ In `CHANGELOG.md`, add an Unreleased bullet:
 - Added a tenant permission center projection and console summary for tenant-scoped administrators, permissions, capabilities, data scopes, and next actions.
 ```
 
-- [ ] **Step 5: Run full gates**
+- [x] **Step 5: Run full gates**
 
 ```bash
 go test ./internal/httpapi -run 'TenantPermissionCenter' -count=1
@@ -1461,7 +1461,7 @@ make release-check
 
 Expected: all PASS.
 
-- [ ] **Step 6: Browser smoke**
+- [x] **Step 6: Browser smoke**
 
 Start the app:
 
@@ -1477,7 +1477,18 @@ Open `http://127.0.0.1:5174/#tenants` and verify:
 - Admin Boundaries action is visible for platform admin and hidden for tenant admin.
 - Raw tenant IDs and assignment IDs are only in advanced details, not primary cards.
 
-- [ ] **Step 7: Commit docs and scenario**
+Actual verification:
+
+- `go test ./internal/httpapi -run 'TenantPermissionCenter' -count=1` passed after adding a regression check that scoped tenant-admin responses return `administrators: []` instead of `null`.
+- `pnpm --dir frontend exec node --test tests/tenantPermissionCenter.test.mjs tests/styleTheme.test.mjs tests/i18n.test.mjs` passed with presenter coverage for assigned capabilities, data scopes, and nullable array compatibility.
+- `pnpm --dir frontend build` passed.
+- `make scenario-tenant-permission-center` passed.
+- `make check` passed with 238 frontend tests.
+- `make release-check` passed.
+- Browser smoke on `http://127.0.0.1:5177/#tenants` confirmed platform-admin tenant detail shows permission snapshot, administrator boundary, workspaces, assigned capability detail, and `support / tickets / us-east` data scope; tenant-scoped permission-change modal preserved tenant, workspace, caller, target, and access-object context; access-profile handoff preserved tenant/workspace context.
+- Browser smoke on a strict-auth stack at `http://127.0.0.1:5178/#tenants` confirmed `tenant-key` loads only the scoped tenant/workspace, does not blank when administrators are hidden, hides the `管理管理员` action, and still opens the permission-change modal with scoped tenant/workspace/caller/target context.
+
+- [x] **Step 7: Commit docs and scenario**
 
 ```bash
 git add scripts/scenario-tenant-permission-center.sh Makefile tests/makefile_targets_test.sh README.md CHANGELOG.md docs/superpowers/plans/2026-06-16-tenant-permission-center.md

@@ -8,6 +8,7 @@ import type {
 
 export interface TenantPermissionCenterViewModel {
   canManageAdministrators: boolean;
+  capabilitySummaries: TenantPermissionCenterCapabilitySummary[];
   dataScopeLabels: string[];
   emptyReasons: string[];
   metric: {
@@ -25,31 +26,54 @@ export interface TenantPermissionCenterViewModel {
   tenantPath: string;
 }
 
+export interface TenantPermissionCenterCapabilitySummary {
+  capabilityName: string;
+  dataScopeLabels: string[];
+  effect: "allow" | "deny";
+  targetName: string;
+  workspaceIds: string[];
+}
+
 export function buildTenantPermissionCenterViewModel(
   center: TenantPermissionCenterResponse,
   options: { selectedWorkspaceId?: string } = {},
 ): TenantPermissionCenterViewModel {
-  const selectedWorkspaceId = options.selectedWorkspaceId || center.workspaces[0]?.workspaceId || "";
-  const allowedCapabilities = center.capabilities.filter((capability) => capability.effect === "allow").length;
-  const blockedCapabilities = center.capabilities.filter((capability) => capability.effect === "deny").length;
-  const emptyReasons = tenantPermissionCenterEmptyReasons(center);
+  const administrators = center.administrators ?? [];
+  const capabilities = center.capabilities ?? [];
+  const permissionPackages = center.permissionPackages ?? [];
+  const scopeTenants = center.scopeTenants ?? [];
+  const workspaces = center.workspaces ?? [];
+  const selectedWorkspaceId = options.selectedWorkspaceId || workspaces[0]?.workspaceId || "";
+  const allowedCapabilities = capabilities.filter((capability) => capability.effect === "allow").length;
+  const blockedCapabilities = capabilities.filter((capability) => capability.effect === "deny").length;
+  const emptyReasons = tenantPermissionCenterEmptyReasons({ capabilities, workspaces });
   return {
     canManageAdministrators: center.operatorBoundary.canManageAdministrators,
-    dataScopeLabels: uniqueDataScopeLabels(center.permissionPackages.flatMap((item) => item.dataScopes ?? [])),
+    capabilitySummaries: capabilities.slice(0, 4).map((capability) => ({
+      capabilityName: capability.capabilityName || capability.capabilityId,
+      dataScopeLabels: uniqueDataScopeLabels(capability.dataScopes ?? []),
+      effect: capability.effect,
+      targetName: capability.targetName || capability.targetId,
+      workspaceIds: capability.workspaceIds ?? [],
+    })),
+    dataScopeLabels: uniqueDataScopeLabels([
+      ...permissionPackages.flatMap((item) => item.dataScopes ?? []),
+      ...capabilities.flatMap((item) => item.dataScopes ?? []),
+    ]),
     emptyReasons,
     metric: {
-      administrators: center.administrators.length,
+      administrators: administrators.length,
       allowedCapabilities,
       blockedCapabilities,
-      packages: center.permissionPackages.length,
-      workspaces: center.workspaces.length,
+      packages: permissionPackages.length,
+      workspaces: workspaces.length,
     },
     operatorBoundaryLabel: operatorBoundaryLabel(center),
-    primaryActions: center.nextActions,
+    primaryActions: center.nextActions ?? [],
     selectedWorkspaceId,
-    status: emptyReasons.length > 0 ? "blocked" : strongestStatus(center.permissionPackages),
+    status: emptyReasons.length > 0 ? "blocked" : strongestStatus(permissionPackages),
     tenantName: center.tenant.name || center.tenant.id,
-    tenantPath: tenantPathLabel(center.scopeTenants, center.tenant),
+    tenantPath: tenantPathLabel(scopeTenants, center.tenant),
   };
 }
 
@@ -82,7 +106,7 @@ function strongestStatus(packages: TenantPermissionCenterResponse["permissionPac
   return "ready";
 }
 
-function tenantPermissionCenterEmptyReasons(center: TenantPermissionCenterResponse) {
+function tenantPermissionCenterEmptyReasons(center: Pick<TenantPermissionCenterResponse, "workspaces" | "capabilities">) {
   const reasons: string[] = [];
   if (center.workspaces.length === 0) reasons.push("tenantCenter.empty.noWorkspaces");
   if (center.capabilities.length === 0) reasons.push("tenantCenter.empty.noCapabilities");

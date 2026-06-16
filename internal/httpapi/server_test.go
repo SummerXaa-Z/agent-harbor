@@ -1342,9 +1342,13 @@ func TestTenantPermissionCenterHonorsScopedAdminBoundary(t *testing.T) {
 	now := time.Now().UTC()
 	createDirectTenant(t, repo, "tenant-west-center", "tenant-root-center", "Finance", now)
 
-	center := decodeData[tenantPermissionCenterResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/tenants/"+tenantID+"/permission-center", nil, "", "east-key"))
+	scopedResponse := requestWithAdmin(t, router, http.MethodGet, "/api/v1/tenants/"+tenantID+"/permission-center", nil, "", "east-key")
+	center := decodeData[tenantPermissionCenterResponse](t, scopedResponse)
 	if center.OperatorBoundary.Actor != "east-admin" || center.OperatorBoundary.CanManageAdministrators {
 		t.Fatalf("tenant admin boundary should be read-only for admin management, got %#v", center.OperatorBoundary)
+	}
+	if center.Administrators == nil || bytes.Contains(scopedResponse.Body.Bytes(), []byte(`"administrators":null`)) {
+		t.Fatalf("tenant admin boundary should return an empty administrators array, body=%s", scopedResponse.Body.String())
 	}
 	if center.OperatorBoundary.TenantID != tenantID || center.OperatorBoundary.WorkspaceID != workspaceID {
 		t.Fatalf("unexpected scoped boundary: %#v", center.OperatorBoundary)

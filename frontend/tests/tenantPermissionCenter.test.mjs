@@ -15,7 +15,7 @@ const center = {
     { actor: "tenant-admin", displayName: "Tenant Admin", id: "adm-1", role: "tenant_admin", source: "managed", status: "active", tenantId: tenant.id, workspaceId: "ws-support" },
   ],
   capabilities: [
-    { capabilityId: "cap-search", capabilityName: "Search tickets", dataScopes: [{ dataDomain: "support", region: "us-east" }], effect: "allow", targetId: "target-ticket", targetName: "Ticket Tool Service", workspaceIds: ["ws-support"] },
+    { capabilityId: "cap-search", capabilityName: "Search tickets", dataScopes: [{ dataDomain: "support", dataset: "tickets", region: "us-east" }], effect: "allow", targetId: "target-ticket", targetName: "Ticket Tool Service", workspaceIds: ["ws-support"] },
     { capabilityId: "cap-export", capabilityName: "Export tickets", dataScopes: [], effect: "deny", targetId: "target-ticket", targetName: "Ticket Tool Service", workspaceIds: ["ws-support"] },
   ],
   generatedAt: now,
@@ -42,7 +42,9 @@ test("tenant permission center presenter summarizes ready tenant governance", ()
   assert.equal(vm.metric.allowedCapabilities, 1);
   assert.equal(vm.metric.blockedCapabilities, 1);
   assert.equal(vm.metric.administrators, 1);
-  assert.deepEqual(vm.dataScopeLabels, ["support / us-east"]);
+  assert.deepEqual(vm.capabilitySummaries.map((capability) => capability.capabilityName), ["Search tickets", "Export tickets"]);
+  assert.deepEqual(vm.capabilitySummaries[0].dataScopeLabels, ["support / tickets / us-east"]);
+  assert.deepEqual(vm.dataScopeLabels, ["support / us-east", "support / tickets / us-east"]);
   assert.deepEqual(vm.primaryActions.map((action) => action.code), ["start_permission_change", "open_access_profile", "manage_administrators"]);
 });
 
@@ -56,6 +58,17 @@ test("tenant permission center presenter hides admin management for scoped admin
   assert.equal(vm.operatorBoundaryLabel, "tenant_admin / Customer Service / ws-support");
   assert.equal(vm.canManageAdministrators, false);
   assert.equal(tenantPermissionCenterActionTarget(vm.primaryActions, "manage_administrators"), "");
+});
+
+test("tenant permission center presenter tolerates nullable array fields from older APIs", () => {
+  const vm = buildTenantPermissionCenterViewModel({
+    ...center,
+    administrators: null,
+    nextActions: null,
+  });
+
+  assert.equal(vm.metric.administrators, 0);
+  assert.deepEqual(vm.primaryActions, []);
 });
 
 test("tenant permission center presenter marks empty tenant as setup needed", () => {

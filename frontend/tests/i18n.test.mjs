@@ -80,8 +80,11 @@ test("administrator boundary workspace has complete bilingual copy", () => {
     "adminAccess.status.active",
     "adminAccess.status.disabled",
     "message.adminAccessCreated",
+    "message.adminAccessCreatedReloadFailed",
     "message.adminAccessRotated",
+    "message.adminAccessRotatedReloadFailed",
     "message.adminAccessDisabled",
+    "message.adminAccessDisabledReloadFailed",
     "error.adminAccessOperation",
     "error.adminAccessPlatformRequired"
   ];

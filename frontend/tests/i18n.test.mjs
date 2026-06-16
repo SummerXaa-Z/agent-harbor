@@ -94,6 +94,33 @@ test("administrator boundary workspace has complete bilingual copy", () => {
   }
 });
 
+test("tenant permission center copy is bilingual", () => {
+  const keys = [
+    "tenantCenter.adminBoundary",
+    "tenantCenter.adminBoundaryDetail",
+    "tenantCenter.capabilities",
+    "tenantCenter.dataScopes",
+    "tenantCenter.empty.noCapabilities",
+    "tenantCenter.empty.noWorkspaces",
+    "tenantCenter.manageAdmins",
+    "tenantCenter.openAccessProfile",
+    "tenantCenter.operatorBoundary",
+    "tenantCenter.permissionPackages",
+    "tenantCenter.snapshot",
+    "tenantCenter.startPermissionChange",
+    "tenantCenter.status.blocked",
+    "tenantCenter.status.needs_review",
+    "tenantCenter.status.ready",
+    "tenantCenter.workspaces",
+  ];
+  for (const language of ["en", "zh-CN"]) {
+    const t = createTranslator(language);
+    for (const key of keys) {
+      assert.notEqual(t(key), key, `${language} missing ${key}`);
+    }
+  }
+});
+
 test("createTranslator returns core journey Chinese labels", () => {
   const t = createTranslator("zh-CN");
 

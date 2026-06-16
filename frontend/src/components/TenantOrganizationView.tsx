@@ -12,6 +12,10 @@ import {
   buildTenantOrganizationModel,
   type TenantOrganizationSelection
 } from "../tenantOrganization";
+import {
+  buildTenantPermissionCenterViewModel,
+  tenantPermissionCenterActionTarget
+} from "../tenantPermissionCenter";
 import type {
   Agent,
   Capability,
@@ -19,6 +23,7 @@ import type {
   PermissionChangeHandoffContext,
   Tenant,
   TenantEntitlement,
+  TenantPermissionCenterResponse,
   WorkspaceAssignment
 } from "../types";
 import { Panel } from "./ConsolePrimitives";
@@ -31,9 +36,14 @@ interface TenantOrganizationViewProps {
   capabilities: Capability[];
   instanceAssignments: InstanceAssignment[];
   onOpenAccessProfile: (context: TenantWorkspaceContext) => void;
+  onSelectedTenantIdChange: (tenantId: string) => void;
   onStartPermissionChange: (context: PermissionChangeHandoffContext) => void;
+  selectedTenantId: string;
   t: Translator;
   tenantEntitlements: TenantEntitlement[];
+  tenantPermissionCenter: TenantPermissionCenterResponse | null;
+  tenantPermissionCenterError: string;
+  tenantPermissionCenterLoading: boolean;
   tenants: Tenant[];
   workspaceAssignments: WorkspaceAssignment[];
 }
@@ -58,13 +68,17 @@ export function TenantOrganizationView({
   capabilities,
   instanceAssignments,
   onOpenAccessProfile,
+  onSelectedTenantIdChange,
   onStartPermissionChange,
+  selectedTenantId,
   t,
   tenantEntitlements,
+  tenantPermissionCenter,
+  tenantPermissionCenterError,
+  tenantPermissionCenterLoading,
   tenants,
   workspaceAssignments
 }: TenantOrganizationViewProps) {
-  const [selectedTenantId, setSelectedTenantId] = useState("");
   const [permissionModalOpen, setPermissionModalOpen] = useState(false);
   const [permissionForm, setPermissionForm] = useState<TenantPermissionForm>({
     accessSubjectId: "",
@@ -87,11 +101,14 @@ export function TenantOrganizationView({
 
   useEffect(() => {
     if (model.selectedTenantId && model.selectedTenantId !== selectedTenantId) {
-      setSelectedTenantId(model.selectedTenantId);
+      onSelectedTenantIdChange(model.selectedTenantId);
     }
-  }, [model.selectedTenantId, selectedTenantId]);
+  }, [model.selectedTenantId, onSelectedTenantIdChange, selectedTenantId]);
 
   const context = model.selected ? tenantWorkspaceContext(model.selected, t) : null;
+  const centerViewModel = tenantPermissionCenter && tenantPermissionCenter.tenant.id === model.selected?.tenant.id
+    ? buildTenantPermissionCenterViewModel(tenantPermissionCenter, { selectedWorkspaceId: context?.workspaceId })
+    : null;
   const permissionDefaults = model.selected && context
     ? tenantPermissionDefaults(model.selected, agents, context.workspaceId, t)
     : { callerInstanceId: "", callerName: "", targetId: "", targetName: "" };
@@ -210,7 +227,7 @@ export function TenantOrganizationView({
                 aria-current={selected ? "true" : undefined}
                 className={`tenant-tree-row ${selected ? "is-selected" : ""}`}
                 key={node.tenant.id}
-                onClick={() => setSelectedTenantId(node.tenant.id)}
+                onClick={() => onSelectedTenantIdChange(node.tenant.id)}
                 style={{ "--tenant-depth": node.depth } as CSSProperties}
                 type="button"
               >
@@ -262,6 +279,84 @@ export function TenantOrganizationView({
             </button>
           </div>
         </div>
+
+        {tenantPermissionCenterLoading ? (
+          <div className="tenant-center-status" role="status">{t("status.loadingConsole")}</div>
+        ) : null}
+        {tenantPermissionCenterError ? (
+          <div className="strip-error">{tenantPermissionCenterError}</div>
+        ) : null}
+        {centerViewModel ? (
+          <section className="tenant-center-panel" aria-label={t("tenantCenter.snapshot")}>
+            <div className="tenant-center-header">
+              <div>
+                <span className="section-kicker">{t("tenantCenter.operatorBoundary")}</span>
+                <strong>{centerViewModel.operatorBoundaryLabel}</strong>
+              </div>
+              <Badge tone={centerViewModel.status === "ready" ? "success" : centerViewModel.status === "needs_review" ? "warning" : "neutral"}>
+                {t(`tenantCenter.status.${centerViewModel.status}`)}
+              </Badge>
+            </div>
+            <div className="tenant-center-metrics">
+              <TenantOrgMetric icon={<ShieldCheck size={16} />} label={t("tenantCenter.permissionPackages")} value={String(centerViewModel.metric.packages)} detail={t("tenantCenter.snapshot")} />
+              <TenantOrgMetric icon={<Network size={16} />} label={t("tenantCenter.capabilities")} value={`${centerViewModel.metric.allowedCapabilities}/${centerViewModel.metric.blockedCapabilities}`} detail={tx(t, "tenantOrg.permissionDetail", { allowed: centerViewModel.metric.allowedCapabilities, denied: centerViewModel.metric.blockedCapabilities })} />
+              <TenantOrgMetric icon={<UserRoundCheck size={16} />} label={t("tenantCenter.adminBoundary")} value={String(centerViewModel.metric.administrators)} detail={centerViewModel.canManageAdministrators ? t("tenantCenter.manageAdmins") : t("adminAccess.readOnly")} />
+            </div>
+            <div className="tenant-center-scope">
+              <div>
+                <span className="section-kicker">{t("tenantCenter.capabilityDetail")}</span>
+                {centerViewModel.capabilitySummaries.length > 0 ? (
+                  <div className="tenant-center-capability-list">
+                    {centerViewModel.capabilitySummaries.map((capability) => (
+                      <article key={`${capability.targetName}-${capability.capabilityName}-${capability.effect}`}>
+                        <div>
+                          <strong>{permissionEntityDisplayName(capability.capabilityName, t)}</strong>
+                          <small>{permissionEntityDisplayName(capability.targetName, t)}</small>
+                        </div>
+                        <Badge tone={capability.effect === "allow" ? "success" : "danger"}>
+                          {capability.effect === "allow" ? t("tenantCenter.effect.allow") : t("tenantCenter.effect.deny")}
+                        </Badge>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="tenant-org-muted">{t("tenantCenter.empty.noCapabilities")}</p>
+                )}
+              </div>
+              <div>
+                <span className="section-kicker">{t("tenantCenter.dataScopes")}</span>
+                {centerViewModel.dataScopeLabels.length > 0 ? (
+                  <div className="tenant-center-scope-tags">
+                    {centerViewModel.dataScopeLabels.map((label) => <span key={label}>{permissionEntityDisplayName(label, t)}</span>)}
+                  </div>
+                ) : (
+                  <p className="tenant-org-muted">{t("tenantCenter.empty.noDataScopes")}</p>
+                )}
+              </div>
+            </div>
+            <div className="tenant-center-actions">
+              <button className="primary-button" type="button" onClick={openPermissionModal}>
+                <ShieldCheck size={15} />
+                {t("tenantCenter.startPermissionChange")}
+              </button>
+              <button className="secondary-button" type="button" onClick={() => onOpenAccessProfile(context)}>
+                <LockKeyhole size={15} />
+                {t("tenantCenter.openAccessProfile")}
+              </button>
+              {tenantPermissionCenterActionTarget(centerViewModel.primaryActions, "manage_administrators") ? (
+                <a className="secondary-button" href="#admin-access">
+                  <UserRoundCheck size={15} />
+                  {t("tenantCenter.manageAdmins")}
+                </a>
+              ) : null}
+            </div>
+            {centerViewModel.emptyReasons.length > 0 ? (
+              <div className="tenant-center-empty-reasons">
+                {centerViewModel.emptyReasons.map((key) => <span key={key}>{t(key)}</span>)}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         {permissionModalOpen ? (
           <div

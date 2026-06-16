@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   Building2,
   Boxes,
@@ -42,6 +42,7 @@ import {
   fetchPermissionPackageProductionEvidenceReport,
   fetchPermissionPackageProductionReadiness,
   fetchPermissionPackageTemplates,
+  fetchTenantPermissionCenter,
   isApiCompatibilityFallbackError,
   loadConsoleData,
   loadTenantAccessProfile,
@@ -233,6 +234,7 @@ import type {
   Tenant,
   TenantAccessProfileData,
   TenantEntitlement,
+  TenantPermissionCenterResponse,
   TraceDecision,
   TraceFilters,
   WorkspaceAssignment
@@ -260,6 +262,30 @@ const defaultAiAdminForm: PermissionPackageDraftInput = {
   tenantId: defaultManagementScope.tenantId,
   workspaceId: defaultManagementScope.workspaceId
 };
+
+interface TenantOrganizationConsoleState {
+  permissionCenter: TenantPermissionCenterResponse | null;
+  permissionCenterError: string;
+  permissionCenterLoading: boolean;
+  selectedTenantId: string;
+}
+
+const defaultTenantOrganizationConsoleState: TenantOrganizationConsoleState = {
+  permissionCenter: null,
+  permissionCenterError: "",
+  permissionCenterLoading: false,
+  selectedTenantId: ""
+};
+
+function tenantOrganizationConsoleStateReducer(
+  current: TenantOrganizationConsoleState,
+  patch: Partial<TenantOrganizationConsoleState>
+): TenantOrganizationConsoleState {
+  const changed = (Object.keys(patch) as Array<keyof TenantOrganizationConsoleState>).some(
+    (key) => current[key] !== patch[key]
+  );
+  return changed ? { ...current, ...patch } : current;
+}
 
 function initialLanguage(): Language {
   if (typeof window === "undefined") {
@@ -434,6 +460,14 @@ export function ConsoleController() {
   const [traceFilters, setTraceFilters] = useState<TraceFilters>(defaultTraceFilters);
   const [language, setLanguage] = useState<Language>(initialLanguage);
   const [handoffContexts, setHandoffContexts] = useState<{ ask: AskHandoffContext | null; permissionChange: PermissionChangeHandoffContext | null; permissionNotice: PermissionChangeHandoffContext | null }>({ ask: null, permissionChange: null, permissionNotice: null });
+  const [tenantOrganizationState, setTenantOrganizationState] = useReducer(
+    tenantOrganizationConsoleStateReducer,
+    defaultTenantOrganizationConsoleState
+  );
+  const tenantOrganizationSelectedTenantId = tenantOrganizationState.selectedTenantId;
+  const tenantPermissionCenter = tenantOrganizationState.permissionCenter;
+  const tenantPermissionCenterLoading = tenantOrganizationState.permissionCenterLoading;
+  const tenantPermissionCenterError = tenantOrganizationState.permissionCenterError;
   const [aiAdminForm, setAiAdminForm] = useState<PermissionPackageDraftInput>(defaultAiAdminForm);
   const [aiAdminMessage, setAiAdminMessage] = useState<LocalizedMessage | null>(null);
   const [aiAdminApplying, setAiAdminApplying] = useState(false);
@@ -495,6 +529,9 @@ export function ConsoleController() {
   const renderedAiAdminMessage = localizedMessageText(aiAdminMessage, t, language);
   const renderedConsoleLoginMessage = localizedMessageText(consoleAuth.loginMessage, t, language);
   const consoleAccessReady = consoleAuth.accessReady;
+  function setTenantOrganizationSelectedTenantId(tenantId: string) {
+    setTenantOrganizationState({ selectedTenantId: tenantId });
+  }
   function selectActiveNav(key: NavKey) {
     userSelectedNavRef.current = true;
     setActiveNav(key);
@@ -1870,6 +1907,58 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const instanceAssignments = data?.instanceAssignments ?? [];
   const evidenceRuns = data?.evidenceRuns ?? [];
   const metrics = data?.systemMetrics ?? [];
+  const tenantOrganizationEffectiveTenantId = tenantOrganizationSelectedTenantId || scope.tenantId || tenants[0]?.id || "";
+
+  useEffect(() => {
+    if (tenants.length === 0) {
+      setTenantOrganizationSelectedTenantId("");
+      return;
+    }
+    if (tenantOrganizationSelectedTenantId && tenants.some((tenant) => tenant.id === tenantOrganizationSelectedTenantId)) {
+      return;
+    }
+    const scopedTenant = scope.tenantId && tenants.some((tenant) => tenant.id === scope.tenantId)
+      ? scope.tenantId
+      : "";
+    setTenantOrganizationSelectedTenantId(scopedTenant || tenants[0].id);
+  }, [scope.tenantId, tenantOrganizationSelectedTenantId, tenants]);
+
+  useEffect(() => {
+    if (!consoleAccessReady || activeNav !== "tenants" || tenants.length === 0 || !tenantOrganizationEffectiveTenantId) {
+      setTenantOrganizationState({ permissionCenterLoading: false });
+      return;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+    setTenantOrganizationState({
+      permissionCenter: null,
+      permissionCenterError: "",
+      permissionCenterLoading: true
+    });
+    fetchTenantPermissionCenter(tenantOrganizationEffectiveTenantId, undefined, adminKey, controller.signal)
+      .then((center) => {
+        if (active) setTenantOrganizationState({ permissionCenter: center });
+      })
+      .catch((error) => {
+        if (error instanceof Error && error.name === "AbortError") return;
+        if (!active) return;
+        setTenantOrganizationState({
+          permissionCenter: null,
+          permissionCenterError: error instanceof Error
+            ? error.message
+            : createTranslator(language)("error.loadTenantPermissionCenter")
+        });
+      })
+      .finally(() => {
+        if (active) setTenantOrganizationState({ permissionCenterLoading: false });
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [activeNav, adminKey, consoleAccessReady, language, tenantOrganizationEffectiveTenantId, tenants.length]);
+
   const setupSteps = data ? gettingStartedSteps(data) : [];
   const resourceLifecycleSummary = useMemo(
     () =>
@@ -2228,9 +2317,14 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       capabilities={capabilities}
       instanceAssignments={instanceAssignments}
       onOpenAccessProfile={openTenantAccessProfile}
+      onSelectedTenantIdChange={setTenantOrganizationSelectedTenantId}
       onStartPermissionChange={openTenantPermissionChange}
+      selectedTenantId={tenantOrganizationEffectiveTenantId}
       t={t}
       tenantEntitlements={tenantEntitlements}
+      tenantPermissionCenter={tenantPermissionCenter}
+      tenantPermissionCenterError={tenantPermissionCenterError}
+      tenantPermissionCenterLoading={tenantPermissionCenterLoading}
       tenants={tenants}
       workspaceAssignments={workspaceAssignments}
     />

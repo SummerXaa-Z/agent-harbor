@@ -136,7 +136,7 @@ make release-check
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit, push, open PR, and merge when CI is green**
+- [x] **Step 5: Commit, push, open PR, and merge when CI is green**
 
 Run:
 

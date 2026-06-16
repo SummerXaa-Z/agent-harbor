@@ -230,3 +230,31 @@ test("retry validation messages are localized before reaching operator panels", 
   assert.doesNotMatch(app, /async function submitAgent\(/);
   assert.doesNotMatch(app, /async function submitRoutePolicy\(/);
 });
+
+test("management mutation forms block duplicate submit while requests are in flight", () => {
+  assert.match(managementHook, /import \{ useRef, useState, type FormEvent \} from "react"/);
+  assert.match(managementHook, /type ManagementMutationAction = "" \| "create_agent" \| "create_key" \| "rotate_credential" \| "create_policy"/);
+  assert.match(managementHook, /const managementMutationInFlightRef = useRef<ManagementMutationAction>\(""\)/);
+  assert.match(managementHook, /const \[managementMutationAction, setManagementMutationAction\] = useState<ManagementMutationAction>\(""\)/);
+  assert.match(managementHook, /function beginManagementMutation\(action: ManagementMutationAction\)/);
+  assert.match(managementHook, /function endManagementMutation\(action: ManagementMutationAction\)/);
+  assert.match(managementHook, /managementMutationAction,/);
+
+  [
+    ["submitAgent", "create_agent"],
+    ["submitKey", "create_key"],
+    ["submitCredentialRotation", "rotate_credential"],
+    ["submitRoutePolicy", "create_policy"],
+  ].forEach(([functionName, action]) => {
+    const block = functionBlock(functionName, managementHook);
+    const beginIndex = block.indexOf(`beginManagementMutation("${action}")`);
+    const tryIndex = block.indexOf("try {");
+    const finallyIndex = block.indexOf("finally {");
+    const endIndex = block.indexOf(`endManagementMutation("${action}")`);
+
+    assert.ok(beginIndex >= 0, `${functionName} should begin guarded mutation ${action}`);
+    assert.ok(beginIndex < tryIndex, `${functionName} should guard before mutation logic`);
+    assert.ok(finallyIndex > beginIndex, `${functionName} should clean up in finally`);
+    assert.ok(endIndex > finallyIndex, `${functionName} should end guarded mutation in finally`);
+  });
+});

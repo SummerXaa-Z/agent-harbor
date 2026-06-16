@@ -340,6 +340,10 @@ test("management mutation forms open from resource command modals", () => {
   assert.match(app, /<KeyCreateForm[\s\S]*context=\{resourceActionContext\}/);
   assert.match(app, /<CredentialRotateForm[\s\S]*context=\{resourceActionContext\}/);
   assert.match(app, /<PolicyCreateForm[\s\S]*context=\{resourceActionContext\}/);
+  assert.match(app, /submitting=\{management\.managementMutationAction === "create_agent"\}/);
+  assert.match(app, /submitting=\{management\.managementMutationAction === "create_key"\}/);
+  assert.match(app, /submitting=\{management\.managementMutationAction === "rotate_credential"\}/);
+  assert.match(app, /submitting=\{management\.managementMutationAction === "create_policy"\}/);
   assert.match(managementForms, /ResourceActionContextStrip/);
   assert.match(managementForms, /className="resource-action-context"/);
   assert.match(managementForms, /t\("resource\.actionContext\.title"\)/);
@@ -564,6 +568,10 @@ test("management forms and console primitives are split from the app shell", () 
   assert.match(managementForms, /export function CredentialRotateForm/);
   assert.match(managementForms, /export function PolicyCreateForm/);
   assert.match(managementForms, /export function TraceFilterBar/);
+  assert.match(managementForms, /submitting\?: boolean/);
+  assert.match(managementForms, /submittingLabel=\{t\("action\.processing"\)\}/);
+  assert.match(managementForms, /disabled=\{submitting\}/);
+  assert.match(managementForms, /aria-busy=\{submitting \|\| undefined\}/);
   assert.match(consolePrimitives, /export function MetricCard/);
   assert.match(consolePrimitives, /export function Panel/);
 });

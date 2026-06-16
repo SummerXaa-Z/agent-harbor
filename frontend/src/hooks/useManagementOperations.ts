@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import {
   createAgent,
   createAgentKey,
@@ -52,6 +52,8 @@ const defaultPolicyForm: PolicyCreateFormState = {
   targetAgentId: ""
 };
 
+type ManagementMutationAction = "" | "create_agent" | "create_key" | "rotate_credential" | "create_policy";
+
 interface UseManagementOperationsArgs {
   adminKey: string;
   defaultScope: ManagementScope;
@@ -79,9 +81,25 @@ export function useManagementOperations({
   const [policyForm, setPolicyForm] = useState(defaultPolicyForm);
   const [policyMessage, setPolicyMessage] = useState("");
   const [cleanupActionId, setCleanupActionId] = useState("");
+  const managementMutationInFlightRef = useRef<ManagementMutationAction>("");
+  const [managementMutationAction, setManagementMutationAction] = useState<ManagementMutationAction>("");
+
+  function beginManagementMutation(action: ManagementMutationAction) {
+    if (managementMutationInFlightRef.current) return false;
+    managementMutationInFlightRef.current = action;
+    setManagementMutationAction(action);
+    return true;
+  }
+
+  function endManagementMutation(action: ManagementMutationAction) {
+    if (managementMutationInFlightRef.current !== action) return;
+    managementMutationInFlightRef.current = "";
+    setManagementMutationAction("");
+  }
 
   async function submitAgent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!beginManagementMutation("create_agent")) return;
     setAgentMessage("");
     try {
       const channelConfig: JsonObject = {};
@@ -133,6 +151,8 @@ export function useManagementOperations({
       await onRefresh();
     } catch (error) {
       setAgentMessage(localizedErrorMessage(t, language, error, "error.createAgent"));
+    } finally {
+      endManagementMutation("create_agent");
     }
   }
 
@@ -170,6 +190,7 @@ export function useManagementOperations({
 
   async function submitKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!beginManagementMutation("create_key")) return;
     setKeyMessage("");
     setCreatedKey(null);
     try {
@@ -191,11 +212,14 @@ export function useManagementOperations({
       setKeyForm({ ...defaultKeyForm, agentId: keyForm.agentId });
     } catch (error) {
       setKeyMessage(localizedErrorMessage(t, language, error, "error.createKey"));
+    } finally {
+      endManagementMutation("create_key");
     }
   }
 
   async function submitCredentialRotation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!beginManagementMutation("rotate_credential")) return;
     setRotateMessage("");
     try {
       const credentialName = rotateForm.credentialName.trim();
@@ -217,11 +241,14 @@ export function useManagementOperations({
       await onRefresh();
     } catch (error) {
       setRotateMessage(localizedErrorMessage(t, language, error, "error.rotateCredential"));
+    } finally {
+      endManagementMutation("rotate_credential");
     }
   }
 
   async function submitRoutePolicy(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!beginManagementMutation("create_policy")) return;
     setPolicyMessage("");
     try {
       const priority = Number(policyForm.priority);
@@ -257,6 +284,8 @@ export function useManagementOperations({
       await onRefresh();
     } catch (error) {
       setPolicyMessage(localizedErrorMessage(t, language, error, "error.createRoutePolicy"));
+    } finally {
+      endManagementMutation("create_policy");
     }
   }
 
@@ -269,6 +298,7 @@ export function useManagementOperations({
     handleDisablePolicy,
     keyForm,
     keyMessage,
+    managementMutationAction,
     policyForm,
     policyMessage,
     rotateForm,

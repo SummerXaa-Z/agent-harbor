@@ -2557,6 +2557,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       <ActionModalButton
         closeLabel={t("action.dismiss")}
         icon={<KeyRound size={16} />}
+        onClose={management.clearCreatedKey}
         openLabel={t("action.open")}
         openToken={resourceActionModal === "create_key" ? resourceActionOpenToken : undefined}
         tone={tone}
@@ -2570,6 +2571,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           form={management.keyForm}
           message={management.keyMessage}
           onChange={management.setKeyForm}
+          onDismissCreatedKey={management.clearCreatedKey}
           onSubmit={management.submitKey}
           submitting={management.managementMutationAction === "create_key"}
           t={t}

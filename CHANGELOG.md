@@ -51,6 +51,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 资源管理的操作表单现在会在 Agent、密钥、凭据和策略变更执行期间阻止重复提交。
 - Resource Management now separates successful resource mutations from follow-up refresh failures, keeps one-time keys visible, and shows a compact resource-status freshness line with manual refresh.
 - 资源管理现在会区分资源变更成功和后续刷新失败，保留一次性密钥展示，并在页面上显示紧凑的资源状态新鲜度与手动刷新入口。
+- Resource Management one-time Agent keys are now cleared when the key modal closes, when the operator dismisses the key, when the key form changes, or when another key request starts.
+- 资源管理中的 Agent 一次性密钥现在会在密钥弹窗关闭、管理员手动清除、密钥表单变更或再次创建密钥时清理明文。
 - Resource Management APIs now reject duplicate Agent, key, and route-policy mutations and treat identical credential rotations as no-op updates, reducing duplicate resources from retries.
 - 资源管理 API 现在会拒绝重复的 Agent、密钥和路由规则变更，并将完全相同的凭据轮换视为无变更，降低重试导致的重复资源风险。
 - Browser console sessions now require a session-bound CSRF header for management writes while API key automation remains unchanged.

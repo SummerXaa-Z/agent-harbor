@@ -519,7 +519,9 @@ Run the local demo stack on isolated ports if needed. Verify:
 4. An authorization-blocked row moves to `#ai-admin` and shows the Resource Management handoff notice.
 5. A runtime-blocked or ready row moves to `#traces` with the target filter set.
 
-- [ ] **Step 5: Commit, push, and open PR**
+- [x] **Step 5: Commit, push, and open PR**
+
+  PR: https://github.com/SummerXaa-Z/agent-harbor/pull/95
 
 Commit:
 

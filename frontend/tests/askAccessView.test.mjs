@@ -16,6 +16,7 @@ const capabilityView = readFileSync(new URL("../src/components/CapabilityGoverna
 const accessProfileView = readFileSync(new URL("../src/components/TenantAccessProfileView.tsx", import.meta.url), "utf8");
 const accessProfileHook = readFileSync(new URL("../src/hooks/useAccessProfileController.ts", import.meta.url), "utf8");
 const presenters = readFileSync(new URL("../src/consolePresenters.ts", import.meta.url), "utf8");
+const resourceLifecycleActionPlanner = readFileSync(new URL("../src/resourceLifecycleActionPlanner.ts", import.meta.url), "utf8");
 
 test("answer-first access query is registered as a first-class console workspace", () => {
   assert.match(navigation, /\|\s+"ask"/);
@@ -49,7 +50,7 @@ test("permission change handoff is consumed once and only pre-fills the editable
   assert.match(controller, /permissionHandoffContext=\{handoffContexts\.permissionNotice\}/);
   assert.match(controller, /onDismissPermissionHandoff/);
   assert.match(types, /sourceView: 'ask' \| 'tenants' \| 'registry'/);
-  assert.match(controller, /sourceView: "registry"/);
+  assert.match(resourceLifecycleActionPlanner, /sourceView: "registry"/);
   assert.match(workbench, /permissionHandoffContext\?\.sourceView === "registry"/);
   assert.match(workbench, /className="permission-handoff-notice"/);
   assert.match(workbench, /onDismissPermissionHandoff/);

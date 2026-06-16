@@ -85,9 +85,16 @@ import {
   healthCheckFailureDetail
 } from "./healthCheckPresentation";
 import {
+  resourcePermissionIntent
+} from "./permissionWorkbenchPresenters";
+import {
   buildResourceLifecycleSummary,
   type ResourceLifecycleItem
 } from "./resourceLifecycle";
+import {
+  planResourceLifecycleAction,
+  type ResourceLifecycleModal
+} from "./resourceLifecycleActionPlanner";
 import {
   deriveProductionJourney
 } from "./productionJourney";
@@ -322,7 +329,7 @@ const defaultAccessProfileFilters: AccessProfileFilters = {
   traceLimit: "20",
   workspaceId: ""
 };
-type ResourceActionModal = "" | "rotate_credential" | "create_policy" | "create_key";
+type ResourceActionModal = "" | ResourceLifecycleModal;
 
 interface ResourceActionRequest {
   modal: ResourceActionModal;
@@ -594,63 +601,45 @@ export function ConsoleController() {
     t
   });
   function handleResourceLifecycleAction(item: ResourceLifecycleItem) {
-    if (item.nextActionKind === "rotate_credential") {
+    const plan = planResourceLifecycleAction({
+      agents,
+      formatEntityName: (name) => permissionEntityDisplayName(name, t),
+      formatPermissionIntent: (targetName) => resourcePermissionIntent(targetName, t),
+      formatTenantName: (tenantId) => permissionTenantPathLabel(tenantId, tenants, t).primary,
+      formatWorkspaceName: (workspaceId) => permissionWorkspaceDisplayName(workspaceId, agents, t),
+      item,
+      localCallers,
+      mcpTargets
+    });
+    if (plan.kind === "open_modal") {
       management.setRotateForm({
         ...management.rotateForm,
-        agentId: item.id
+        agentId: plan.agentId
       });
-      openResourceActionModal("rotate_credential");
+      openResourceActionModal(plan.modal);
       return;
     }
-    if (item.nextActionKind === "review_capabilities") {
+    if (plan.kind === "capability_prefill") {
       capabilityGovernance.setForm({
         ...capabilityGovernance.form,
-        targetId: item.id
+        targetId: plan.targetId
       });
       userSelectedNavRef.current = true;
-      setActiveNav("capabilities");
+      setActiveNav(plan.navKey);
       return;
     }
-    if (item.nextActionKind === "start_permission_change") {
-      const resourceAgent = agents.find((agent) => agent.id === item.id);
-      const sameScopeCaller = localCallers.find(
-        (agent) => agent.tenantId === item.tenantId && agent.workspaceId === item.workspaceId
-      );
-      const sameScopeTarget = mcpTargets.find(
-        (agent) => agent.tenantId === item.tenantId && agent.workspaceId === item.workspaceId
-      );
-      const caller = item.kind === "caller" ? resourceAgent : sameScopeCaller ?? localCallers[0];
-      const target = item.kind === "caller" ? sameScopeTarget ?? mcpTargets[0] : resourceAgent;
-      const targetName = target ? permissionEntityDisplayName(target.name, t) : item.name;
-      openTenantPermissionChange({
-        callerInstanceId: caller?.id,
-        callerName: caller ? permissionEntityDisplayName(caller.name, t) : undefined,
-        intentText: tx(t, "resource.permissionIntent", { target: targetName }),
-        sourceView: "registry",
-        targetId: target?.id ?? item.id,
-        targetName,
-        tenantId: item.tenantId,
-        tenantName: permissionTenantPathLabel(item.tenantId, tenants, t).primary,
-        workspaceId: item.workspaceId,
-        workspaceName: permissionWorkspaceDisplayName(item.workspaceId, agents, t)
-      });
+    if (plan.kind === "permission_handoff") {
+      openTenantPermissionChange(plan.context);
       return;
     }
-    if (item.nextActionKind === "review_runtime") {
-      setTraceFilters((current) => ({
-        ...current,
-        callerAgentId: item.kind === "caller" ? item.id : current.callerAgentId,
-        targetAgentId: item.kind === "caller" ? current.targetAgentId : item.id
-      }));
+    if (plan.kind === "runtime_filters") {
+      setTraceFilters((current) => ({ ...current, ...plan.traceFilters }));
       userSelectedNavRef.current = true;
-      setActiveNav("traces");
+      setActiveNav(plan.navKey);
       return;
     }
-    const nextNav = navKeyFromHash(item.nextActionHash);
-    if (nextNav) {
-      userSelectedNavRef.current = true;
-      setActiveNav(nextNav);
-    }
+    userSelectedNavRef.current = true;
+    setActiveNav(plan.navKey);
   }
   const accessProfileController = useAccessProfileController({
     activeNav,

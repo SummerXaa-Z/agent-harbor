@@ -22,6 +22,7 @@ const runtimeEvidenceViews = readFileSync(new URL("../src/components/RuntimeEvid
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const tenantOrganizationView = readFileSync(new URL("../src/components/TenantOrganizationView.tsx", import.meta.url), "utf8");
+const resourceLifecycleActionPlanner = readExistingFile(new URL("../src/resourceLifecycleActionPlanner.ts", import.meta.url));
 const resourceLifecycleView = readFileSync(new URL("../src/components/ResourceLifecycleView.tsx", import.meta.url), "utf8");
 const productionJourney = readExistingFile(new URL("../src/productionJourney.ts", import.meta.url));
 const productionJourneyCheckpoint = readExistingFile(new URL("../src/components/ProductionJourneyCheckpoint.tsx", import.meta.url));
@@ -260,6 +261,9 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(consolePrimitives, /useEffect\(\(\) => \{[\s\S]*if \(openToken === undefined\) return;[\s\S]*setOpen\(true\)/);
   assert.match(app, /resourceActionModal/);
   assert.match(app, /handleResourceLifecycleAction/);
+  assert.match(app, /planResourceLifecycleAction/);
+  assert.match(resourceLifecycleActionPlanner, /export function planResourceLifecycleAction/);
+  assert.doesNotMatch(app, /sameScopeCaller|sameScopeTarget|resource\.permissionIntent/);
   assert.match(app, /openToken=\{resourceActionModal === "rotate_credential" \? resourceActionOpenToken : undefined\}/);
   assert.doesNotMatch(registryView, /createAgentPanel|createKeyPanel|rotateCredentialPanel/);
   assert.doesNotMatch(app, /RoutesView[\s\S]*routeGovernancePanel=\{routeGovernancePanel\("span-12", createPolicyAction\(\)\)\}/);

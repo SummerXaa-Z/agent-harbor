@@ -7,6 +7,7 @@ import { translationKeys } from "../src/i18n.ts";
 const controller = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
 const hook = readFileSync(new URL("../src/hooks/useAskAccessController.ts", import.meta.url), "utf8");
 const navigation = readFileSync(new URL("../src/consoleNavigation.ts", import.meta.url), "utf8");
+const types = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
 const view = readFileSync(new URL("../src/components/AskAccessView.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
@@ -47,6 +48,9 @@ test("permission change handoff is consumed once and only pre-fills the editable
   assert.match(controller, /permissionChange:\s*null,\s*permissionNotice:\s*context/);
   assert.match(controller, /permissionHandoffContext=\{handoffContexts\.permissionNotice\}/);
   assert.match(controller, /onDismissPermissionHandoff/);
+  assert.match(types, /sourceView: 'ask' \| 'tenants' \| 'registry'/);
+  assert.match(controller, /sourceView: "registry"/);
+  assert.match(workbench, /permissionHandoffContext\?\.sourceView === "registry"/);
   assert.match(workbench, /className="permission-handoff-notice"/);
   assert.match(workbench, /onDismissPermissionHandoff/);
   assert.doesNotMatch(controller, /handoffContexts\.permissionChange[\s\S]{0,900}createPermissionPackageApprovalRequest/);
@@ -68,7 +72,9 @@ test("ask access copy is bilingual", () => {
     "ask.liveMode",
     "ask.questionTitle",
     "text.permissionHandoffDetail",
+    "text.permissionHandoffRegistryTitle",
     "text.permissionHandoffTitle",
+    "resource.permissionIntent",
     "nav.ask",
     "navDetail.ask",
     "page.ask"

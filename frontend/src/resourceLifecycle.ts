@@ -9,6 +9,12 @@ import type {
 } from "./types";
 
 export type ResourceLifecycleKind = "caller" | "mcp_target" | "agent";
+export type ResourceLifecycleActionKind =
+  | "rotate_credential"
+  | "review_capabilities"
+  | "start_permission_change"
+  | "review_runtime"
+  | "review_resource";
 export type ResourceLifecycleStatus =
   | "ready"
   | "needs_credentials"
@@ -23,11 +29,13 @@ export interface ResourceLifecycleItem {
   approvedCapabilityCount: number;
   capabilityCount: number;
   credentialVersion: number;
+  detailKey: string;
   grantCount: number;
   id: string;
   kind: ResourceLifecycleKind;
   kindKey: string;
   name: string;
+  nextActionKind: ResourceLifecycleActionKind;
   nextActionHash: ResourceLifecycleNextActionHash;
   nextActionKey: string;
   runtimeDecisionCount: number;
@@ -103,11 +111,13 @@ function buildResourceLifecycleItem(agent: Agent, input: ResourceLifecycleInput)
     approvedCapabilityCount: approvedCapabilities.length,
     capabilityCount: capabilities.length,
     credentialVersion: agent.credentialVersion,
+    detailKey: detailKey(status),
     grantCount,
     id: agent.id,
     kind,
     kindKey: resourceKindKey(kind),
     name: agent.name,
+    nextActionKind: nextActionKind(status),
     nextActionHash: nextActionHash(status),
     nextActionKey: nextActionKey(status),
     runtimeDecisionCount,
@@ -186,6 +196,30 @@ function nextActionKey(status: ResourceLifecycleStatus) {
     ready: "resource.nextAction.reviewRuntime"
   };
   return keys[status];
+}
+
+function detailKey(status: ResourceLifecycleStatus) {
+  const keys: Record<ResourceLifecycleStatus, string> = {
+    disabled: "resource.detail.disabled",
+    needs_approval: "resource.detail.needsApproval",
+    needs_capabilities: "resource.detail.needsCapabilities",
+    needs_credentials: "resource.detail.needsCredentials",
+    needs_runtime: "resource.detail.needsRuntime",
+    ready: "resource.detail.ready"
+  };
+  return keys[status];
+}
+
+function nextActionKind(status: ResourceLifecycleStatus): ResourceLifecycleActionKind {
+  const actions: Record<ResourceLifecycleStatus, ResourceLifecycleActionKind> = {
+    disabled: "review_resource",
+    needs_approval: "start_permission_change",
+    needs_capabilities: "review_capabilities",
+    needs_credentials: "rotate_credential",
+    needs_runtime: "review_runtime",
+    ready: "review_runtime"
+  };
+  return actions[status];
 }
 
 function nextActionHash(status: ResourceLifecycleStatus): ResourceLifecycleNextActionHash {

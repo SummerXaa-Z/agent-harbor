@@ -143,12 +143,20 @@ test("resource lifecycle directs incomplete MCP targets to the right next action
   const byId = Object.fromEntries(summary.items.map((item) => [item.id, item]));
 
   assert.equal(byId["agt-missing-credential"].status, "needs_credentials");
+  assert.equal(byId["agt-missing-credential"].detailKey, "resource.detail.needsCredentials");
+  assert.equal(byId["agt-missing-credential"].nextActionKind, "rotate_credential");
   assert.equal(byId["agt-missing-credential"].nextActionHash, "#registry");
   assert.equal(byId["agt-missing-capability"].status, "needs_capabilities");
+  assert.equal(byId["agt-missing-capability"].detailKey, "resource.detail.needsCapabilities");
+  assert.equal(byId["agt-missing-capability"].nextActionKind, "review_capabilities");
   assert.equal(byId["agt-missing-capability"].nextActionHash, "#capabilities");
   assert.equal(byId["agt-needs-approval"].status, "needs_approval");
+  assert.equal(byId["agt-needs-approval"].detailKey, "resource.detail.needsApproval");
+  assert.equal(byId["agt-needs-approval"].nextActionKind, "start_permission_change");
   assert.equal(byId["agt-needs-approval"].nextActionHash, "#ai-admin");
   assert.equal(byId["agt-disabled"].status, "disabled");
+  assert.equal(byId["agt-disabled"].detailKey, "resource.detail.disabled");
+  assert.equal(byId["agt-disabled"].nextActionKind, "review_resource");
   assert.equal(summary.needsAttention, 4);
 });
 
@@ -164,6 +172,8 @@ test("resource lifecycle treats approved but unverified resources as runtime fol
   });
 
   assert.equal(summary.items[0].status, "needs_runtime");
+  assert.equal(summary.items[0].detailKey, "resource.detail.needsRuntime");
+  assert.equal(summary.items[0].nextActionKind, "review_runtime");
   assert.equal(summary.items[0].nextActionHash, "#traces");
   assert.equal(summary.items[0].approvedCapabilityCount, 1);
   assert.equal(summary.items[0].grantCount, 1);

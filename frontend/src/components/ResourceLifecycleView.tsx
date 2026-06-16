@@ -13,11 +13,13 @@ import type { ResourceLifecycleItem, ResourceLifecycleStatus, ResourceLifecycleS
 import { Badge, EmptyRow } from "./ui";
 
 export function ResourceLifecycleView({
+  onResourceAction,
   primaryActions,
   secondaryActions,
   summary,
   t
 }: {
+  onResourceAction?: (item: ResourceLifecycleItem) => void;
   primaryActions?: ReactNode;
   secondaryActions?: ReactNode;
   summary: ResourceLifecycleSummary;
@@ -94,33 +96,58 @@ export function ResourceLifecycleView({
             title={t("resource.empty.title")}
           />
         ) : (
-          summary.items.map((item) => <ResourceLifecycleRow item={item} key={item.id} t={t} />)
+          summary.items.map((item) => (
+            <ResourceLifecycleRow
+              item={item}
+              key={item.id}
+              onResourceAction={onResourceAction}
+              t={t}
+            />
+          ))
         )}
       </section>
     </div>
   );
 }
 
-function ResourceLifecycleRow({ item, t }: { item: ResourceLifecycleItem; t: Translator }) {
+function ResourceLifecycleRow({
+  item,
+  onResourceAction,
+  t
+}: {
+  item: ResourceLifecycleItem;
+  onResourceAction?: (item: ResourceLifecycleItem) => void;
+  t: Translator;
+}) {
   const requiresAction = item.status !== "ready";
+  const actionClassName = `${requiresAction ? "primary-button" : "secondary-button"} resource-lifecycle-action`;
 
   return (
     <div className="resource-lifecycle-row">
       <div className="resource-lifecycle-name">
         <strong>{permissionEntityDisplayName(item.name, t)}</strong>
         <span>{t(item.kindKey)}</span>
+        <span>{t(item.detailKey)}</span>
       </div>
       <Badge tone={statusTone(item.status)}>{t(item.statusKey)}</Badge>
       <span>{item.approvedCapabilityCount}/{item.capabilityCount}</span>
       <span>{item.grantCount}</span>
       <span>{item.runtimeDecisionCount}</span>
-      <a
-        className={`${requiresAction ? "primary-button" : "secondary-button"} resource-lifecycle-action`}
-        href={item.nextActionHash}
-      >
-        {t(item.nextActionKey)}
-        <ArrowRight size={14} />
-      </a>
+      {onResourceAction ? (
+        <button
+          className={actionClassName}
+          type="button"
+          onClick={() => onResourceAction(item)}
+        >
+          {t(item.nextActionKey)}
+          <ArrowRight size={14} />
+        </button>
+      ) : (
+        <a className={actionClassName} href={item.nextActionHash}>
+          {t(item.nextActionKey)}
+          <ArrowRight size={14} />
+        </a>
+      )}
     </div>
   );
 }

@@ -34,7 +34,8 @@ test("capability governance copy is bilingual", () => {
     "section.existingGrantChains",
     "text.capabilityCatalogHelp",
     "text.capabilityGrantHelp",
-    "text.currentCapabilityScopeDetail"
+    "text.currentCapabilityScopeDetail",
+    "message.grantChainCreatedRefreshFailed"
   ]) {
     assert.equal(english.has(key), true, `${key} missing in English`);
     assert.equal(chinese.has(key), true, `${key} missing in zh-CN`);

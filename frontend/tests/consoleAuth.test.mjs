@@ -43,3 +43,12 @@ test("login view uses a real password form and language switch", () => {
   assert.match(loginViewSource, /onLanguageChange\("zh-CN"\)/);
   assert.match(loginViewSource, /onLanguageChange\("en"\)/);
 });
+
+test("rate limited console login shows localized retry guidance", () => {
+  assert.match(authHookSource, /ApiRequestError/);
+  assert.match(authHookSource, /error\.code === "RATE_LIMITED"/);
+  assert.match(authHookSource, /error\.consoleLoginRateLimited/);
+  assert.match(authHookSource, /retryAfterSeconds/);
+  assert.match(i18nSource, /"error\.consoleLoginRateLimited": "Too many failed sign-in attempts\. Try again in about \{seconds\} seconds\."/);
+  assert.match(i18nSource, /"error\.consoleLoginRateLimited": "登录失败次数过多，请约 \{seconds\} 秒后再试。"/);
+});

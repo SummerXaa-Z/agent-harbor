@@ -339,7 +339,7 @@ Browser validation on the isolated demo stack (`AGENT_HARBOR_DEMO_API_PORT=19090
 - `#policies` no longer renders an inline create-policy panel; its empty state shows `打开资源管理` with `href="#registry"`.
 - Clicking `打开资源管理` returns to `#registry` and the visible Chinese page text does not include `证据`.
 
-- [ ] **Step 4: Commit and push**
+- [x] **Step 4: Commit and push**
 
 Commit:
 
@@ -349,6 +349,10 @@ git commit -m "Improve resource management workflow"
 git push -u origin codex/resource-management-consolidation
 ```
 
-- [ ] **Step 5: Open PR**
+Completed with commit `375634d` on `codex/resource-management-consolidation`.
+
+- [x] **Step 5: Open PR**
 
 Create a ready PR against `main` with test evidence and note that no backend behavior changed.
+
+Ready PR opened: https://github.com/SummerXaa-Z/agent-harbor/pull/94

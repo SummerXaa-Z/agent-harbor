@@ -23,7 +23,7 @@
 
 ## Task 1: Safety Guards
 
-- [ ] **Step 1: Add failing safety assertions**
+- [x] **Step 1: Add failing safety assertions**
 
 In `frontend/tests/permissionJourneySafety.test.mjs`, assert that `useManagementOperations.ts` contains:
 
@@ -37,7 +37,7 @@ assert.match(managementHook, /managementMutationAction/);
 
 For `submitAgent`, `submitKey`, `submitCredentialRotation`, and `submitRoutePolicy`, assert each block calls `beginManagementMutation(...)` and has a `finally` block calling `endManagementMutation(...)`.
 
-- [ ] **Step 2: Run focused safety test and confirm RED**
+- [x] **Step 2: Run focused safety test and confirm RED**
 
 Run:
 
@@ -47,7 +47,7 @@ pnpm --dir frontend exec node --test tests/permissionJourneySafety.test.mjs
 
 Expected: fail until the hook owns the guard.
 
-- [ ] **Step 3: Implement hook guard**
+- [x] **Step 3: Implement hook guard**
 
 In `frontend/src/hooks/useManagementOperations.ts`:
 
@@ -72,7 +72,7 @@ function endManagementMutation(action: ManagementMutationAction) {
 
 Wrap the four submit handlers with this guard and return `managementMutationAction`.
 
-- [ ] **Step 4: Run focused safety test and confirm GREEN**
+- [x] **Step 4: Run focused safety test and confirm GREEN**
 
 Run:
 
@@ -84,7 +84,7 @@ Expected: pass.
 
 ## Task 2: Form Busy State
 
-- [ ] **Step 1: Add structure assertions**
+- [x] **Step 1: Add structure assertions**
 
 In `frontend/tests/styleTheme.test.mjs`, assert that all four management forms accept `submitting`, that `FormFooter` receives it, and that `ConsoleController.tsx` passes action-specific comparisons such as:
 
@@ -95,11 +95,11 @@ assert.match(app, /submitting=\{management\.managementMutationAction === "rotate
 assert.match(app, /submitting=\{management\.managementMutationAction === "create_policy"\}/);
 ```
 
-- [ ] **Step 2: Implement form props**
+- [x] **Step 2: Implement form props**
 
 Add `submitting?: boolean` to `AgentCreateForm`, `KeyCreateForm`, `CredentialRotateForm`, and `PolicyCreateForm`. Pass it to `FormFooter`.
 
-- [ ] **Step 3: Disable submit button**
+- [x] **Step 3: Disable submit button**
 
 Change `FormFooter` to:
 
@@ -116,21 +116,21 @@ function FormFooter({ message, submitLabel, submitting, submittingLabel }: { ...
 }
 ```
 
-- [ ] **Step 4: Wire controller props**
+- [x] **Step 4: Wire controller props**
 
 Pass the four action-specific `submitting` values from `ConsoleController.tsx`.
 
 ## Task 3: i18n, Changelog, and Verification
 
-- [ ] **Step 1: Add i18n copy**
+- [x] **Step 1: Add i18n copy**
 
 Add `action.processing` to EN and zh-CN. Extend `frontend/tests/i18n.test.mjs`.
 
-- [ ] **Step 2: Update changelog**
+- [x] **Step 2: Update changelog**
 
 Add one EN and one zh-CN Unreleased bullet for duplicate-submit protection on resource management operations.
 
-- [ ] **Step 3: Run focused tests**
+- [x] **Step 3: Run focused tests**
 
 Run:
 
@@ -140,7 +140,7 @@ pnpm --dir frontend exec node --test tests/permissionJourneySafety.test.mjs test
 
 Expected: pass.
 
-- [ ] **Step 4: Run full gates**
+- [x] **Step 4: Run full gates**
 
 Run:
 
@@ -154,6 +154,6 @@ make release-check
 
 Expected: all pass.
 
-- [ ] **Step 5: Mark plan complete and ship**
+- [x] **Step 5: Mark plan complete and ship**
 
 Mark all plan checkboxes, commit, push, create PR, wait for CI, and merge when green.

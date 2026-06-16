@@ -123,6 +123,7 @@ test("tenant permission center copy is bilingual", () => {
 
 test("resource action context copy is bilingual", () => {
   const keys = [
+    "action.processing",
     "resource.actionContext.resource",
     "resource.actionContext.scope",
     "resource.actionContext.title"

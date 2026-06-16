@@ -59,12 +59,14 @@ export function AgentCreateForm({
   message,
   onChange,
   onSubmit,
+  submitting = false,
   t
 }: {
   form: AgentCreateFormState;
   message: string;
   onChange: (form: AgentCreateFormState) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  submitting?: boolean;
   t: Translator;
 }) {
   return (
@@ -85,7 +87,7 @@ export function AgentCreateForm({
         <label>{t("form.backoffMs")}<input inputMode="numeric" max={1000} min={0} type="number" value={form.retryBackoffMs} onChange={(event) => onChange({ ...form, retryBackoffMs: event.target.value })} /></label>
       </div>
       <label>{t("form.description")}<textarea rows={2} value={form.description} onChange={(event) => onChange({ ...form, description: event.target.value })} /></label>
-      <FormFooter message={message} submitLabel={t("action.createAgent")} />
+      <FormFooter message={message} submitting={submitting} submittingLabel={t("action.processing")} submitLabel={t("action.createAgent")} />
     </form>
   );
 }
@@ -98,6 +100,7 @@ export function KeyCreateForm({
   message,
   onChange,
   onSubmit,
+  submitting = false,
   t
 }: {
   agents: Agent[];
@@ -107,6 +110,7 @@ export function KeyCreateForm({
   message: string;
   onChange: (form: KeyCreateFormState) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  submitting?: boolean;
   t: Translator;
 }) {
   return (
@@ -122,7 +126,7 @@ export function KeyCreateForm({
           <button className="secondary-button" type="button" onClick={() => void navigator.clipboard?.writeText(createdKey.key)}><Copy size={14} /> {t("action.copy")}</button>
         </div>
       ) : null}
-      <FormFooter message={message} submitLabel={t("action.createKey")} />
+      <FormFooter message={message} submitting={submitting} submittingLabel={t("action.processing")} submitLabel={t("action.createKey")} />
     </form>
   );
 }
@@ -134,6 +138,7 @@ export function CredentialRotateForm({
   message,
   onChange,
   onSubmit,
+  submitting = false,
   t
 }: {
   agents: Agent[];
@@ -142,6 +147,7 @@ export function CredentialRotateForm({
   message: string;
   onChange: (form: CredentialRotateFormState) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  submitting?: boolean;
   t: Translator;
 }) {
   return (
@@ -150,7 +156,7 @@ export function CredentialRotateForm({
       <label>{t("form.agent")}<select required value={form.agentId} onChange={(event) => onChange({ ...form, agentId: event.target.value })}><option value="">{t("form.selectAgent")}</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
       <label>{t("form.credentialKey")}<input placeholder="apiToken" value={form.credentialName} onChange={(event) => onChange({ ...form, credentialName: event.target.value })} /></label>
       <label>{t("form.newSecret")}<input placeholder="Bearer ..." type="password" value={form.credentialValue} onChange={(event) => onChange({ ...form, credentialValue: event.target.value })} /></label>
-      <FormFooter message={message} submitLabel={t("action.rotateCredential")} />
+      <FormFooter message={message} submitting={submitting} submittingLabel={t("action.processing")} submitLabel={t("action.rotateCredential")} />
     </form>
   );
 }
@@ -162,6 +168,7 @@ export function PolicyCreateForm({
   message,
   onChange,
   onSubmit,
+  submitting = false,
   t
 }: {
   agents: Agent[];
@@ -170,6 +177,7 @@ export function PolicyCreateForm({
   message: string;
   onChange: (form: PolicyCreateFormState) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  submitting?: boolean;
   t: Translator;
 }) {
   return (
@@ -209,7 +217,7 @@ export function PolicyCreateForm({
         <label>{t("form.retryAttempts")}<input inputMode="numeric" max={4} min={1} type="number" value={form.retryMaxAttempts} onChange={(event) => onChange({ ...form, retryMaxAttempts: event.target.value })} /></label>
         <label>{t("form.retryBackoffMs")}<input inputMode="numeric" max={1000} min={0} type="number" value={form.retryBackoffMs} onChange={(event) => onChange({ ...form, retryBackoffMs: event.target.value })} /></label>
       </div>
-      <FormFooter message={message} submitLabel={t("action.createPolicy")} />
+      <FormFooter message={message} submitting={submitting} submittingLabel={t("action.processing")} submitLabel={t("action.createPolicy")} />
     </form>
   );
 }
@@ -263,10 +271,22 @@ export function TraceFilterBar({
   );
 }
 
-function FormFooter({ message, submitLabel }: { message: string; submitLabel: string }) {
+function FormFooter({
+  message,
+  submitLabel,
+  submitting,
+  submittingLabel
+}: {
+  message: string;
+  submitLabel: string;
+  submitting: boolean;
+  submittingLabel: string;
+}) {
   return (
-    <div className="form-footer">
-      <button className="primary-button" type="submit">{submitLabel}</button>
+    <div aria-busy={submitting || undefined} className="form-footer">
+      <button className="primary-button" disabled={submitting} type="submit">
+        {submitting ? submittingLabel : submitLabel}
+      </button>
       {message ? <span>{message}</span> : null}
     </div>
   );

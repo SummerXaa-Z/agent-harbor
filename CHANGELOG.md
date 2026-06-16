@@ -47,6 +47,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 资源管理现在常驻展示选中资源上下文，包含租户/工作区范围、生命周期状态、能力、授权、运行计数和推荐下一步，管理员跨工作区处理前不会丢失当前资源背景。
 - Resource Management action forms now preserve selected resource context and prefill safe Agent, credential, and policy fields when launched from a lifecycle row.
 - 资源管理的操作表单现在会保留选中资源上下文；从生命周期行打开时，会自动带入可安全推断的 Agent、凭据和策略字段。
+- Resource Management operation forms now block duplicate submits while Agent, key, credential, and policy mutations are running.
+- 资源管理的操作表单现在会在 Agent、密钥、凭据和策略变更执行期间阻止重复提交。
 - Resource Management now owns Agent, credential, and policy creation as the single lifecycle mutation entry; Routes and Access Policies stay focused on review/governance and route empty states back to Resource Management.
 - 资源管理现在统一承接 Agent、凭据和策略创建；路由规则和访问策略页面专注审查与治理，空状态会引导回资源管理。
 - Moved Permission Changes approval-decision confirmation state into a focused hook, reducing the workbench component while keeping approval, rejection, and withdraw behavior unchanged.

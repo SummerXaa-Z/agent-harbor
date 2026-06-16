@@ -2305,6 +2305,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           message={management.policyMessage}
           onChange={management.setPolicyForm}
           onSubmit={management.submitRoutePolicy}
+          submitting={management.managementMutationAction === "create_policy"}
           t={t}
         />
       </ActionModalButton>
@@ -2541,6 +2542,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           message={management.agentMessage}
           onChange={management.setAgentForm}
           onSubmit={management.submitAgent}
+          submitting={management.managementMutationAction === "create_agent"}
           t={t}
         />
       </ActionModalButton>
@@ -2565,6 +2567,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           message={management.keyMessage}
           onChange={management.setKeyForm}
           onSubmit={management.submitKey}
+          submitting={management.managementMutationAction === "create_key"}
           t={t}
         />
       </ActionModalButton>
@@ -2588,6 +2591,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           message={management.rotateMessage}
           onChange={management.setRotateForm}
           onSubmit={management.submitCredentialRotation}
+          submitting={management.managementMutationAction === "rotate_credential"}
           t={t}
         />
       </ActionModalButton>

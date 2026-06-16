@@ -52,3 +52,12 @@ test("rate limited console login shows localized retry guidance", () => {
   assert.match(i18nSource, /"error\.consoleLoginRateLimited": "Too many failed sign-in attempts\. Try again in about \{seconds\} seconds\."/);
   assert.match(i18nSource, /"error\.consoleLoginRateLimited": "登录失败次数过多，请约 \{seconds\} 秒后再试。"/);
 });
+
+test("console auth refreshes an expired session back to login", () => {
+  assert.match(authHookSource, /sessionExpiryDelayMs/);
+  assert.match(authHookSource, /window\.setTimeout/);
+  assert.match(authHookSource, /window\.clearTimeout/);
+  assert.match(authHookSource, /error\.consoleSessionExpired/);
+  assert.match(i18nSource, /"error\.consoleSessionExpired": "Your console session expired\. Sign in again before making changes\."/);
+  assert.match(i18nSource, /"error\.consoleSessionExpired": "控制台会话已过期，请重新登录后再继续操作。"/);
+});

@@ -48,6 +48,7 @@ type consoleLoginFailure struct {
 }
 
 func (s *Server) getAuthSession(w http.ResponseWriter, r *http.Request) {
+	setConsoleAuthNoStore(w)
 	principal, expiresAt, ok := s.consoleSessionFromRequest(r)
 	response := s.consoleSessionResponse(principal, expiresAt, ok)
 	if ok {
@@ -59,6 +60,7 @@ func (s *Server) getAuthSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	setConsoleAuthNoStore(w)
 	if s.developmentAdminBypassActive() {
 		writeJSON(w, http.StatusOK, s.consoleSessionResponse(platformAdminPrincipal(developmentAdminActor), time.Time{}, true))
 		return
@@ -94,6 +96,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	setConsoleAuthNoStore(w)
 	if sessionToken, ok := consoleSessionTokenFromRequest(r); ok {
 		if _, _, valid := s.verifyConsoleSession(r.Context(), sessionToken); valid {
 			if err := s.validateConsoleSessionCSRF(r, sessionToken); err != nil {
@@ -105,6 +108,10 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, s.consoleSessionCookie("", time.Unix(0, 0).UTC(), true, r))
 	principal, expiresAt, ok := s.developmentSession()
 	writeJSON(w, http.StatusOK, s.consoleSessionResponse(principal, expiresAt, ok))
+}
+
+func setConsoleAuthNoStore(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store")
 }
 
 func (s *Server) consoleSessionFromRequest(r *http.Request) (adminPrincipal, time.Time, bool) {

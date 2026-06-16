@@ -5,6 +5,7 @@ import {
   loginConsole,
   logoutConsole
 } from "../api";
+import { sessionExpiryDelayMs } from "../consoleSession";
 import type { ConsoleSession } from "../types";
 
 export interface ConsoleAuthMessage {
@@ -57,6 +58,41 @@ export function useConsoleAuth() {
       controller.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (!state.session?.authenticated || state.session.requiresLogin === false) return;
+    const delayMs = sessionExpiryDelayMs(state.session.expiresAt);
+    if (delayMs === null) return;
+
+    let active = true;
+    let controller: AbortController | null = null;
+    const timeoutId = window.setTimeout(() => {
+      controller = new AbortController();
+      fetchConsoleSession(controller.signal)
+        .then((session) => {
+          if (!active) return;
+          setState((current) => ({
+            ...current,
+            loginMessage: session.authenticated ? current.loginMessage : { key: "error.consoleSessionExpired" },
+            session
+          }));
+        })
+        .catch((error) => {
+          if (!active || isAbortError(error)) return;
+          setState((current) => ({
+            ...current,
+            loginMessage: { key: "error.consoleSessionUnavailable" },
+            session: { authenticated: false, requiresLogin: true }
+          }));
+        });
+    }, delayMs);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+      controller?.abort();
+    };
+  }, [state.session?.authenticated, state.session?.expiresAt, state.session?.requiresLogin]);
 
   async function login(onSuccess?: () => void) {
     const nextAdminKey = state.loginKey.trim();

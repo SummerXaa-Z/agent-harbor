@@ -6,6 +6,11 @@ import {
   refreshTargetCapabilities,
   updateCapability
 } from "../api";
+import {
+  capabilityGrantRefreshFailedMessageKey,
+  mergeCapabilityGrantChainIntoConsoleData,
+  refreshAfterCapabilityGrantMutation
+} from "../capabilityGrantRefresh";
 import type { CapabilityGrantForm } from "../components/CapabilityGovernanceView";
 import {
   capabilityDisplayName,
@@ -191,7 +196,7 @@ export function useCapabilityGovernanceController({
         },
         adminKey
       );
-      await createInstanceAssignment(
+      const instanceAssignment = await createInstanceAssignment(
         {
           callerInstanceId,
           dataScopes,
@@ -202,8 +207,20 @@ export function useCapabilityGovernanceController({
         },
         adminKey
       );
+      setData((current) =>
+        current
+          ? mergeCapabilityGrantChainIntoConsoleData(current, {
+              entitlement,
+              instanceAssignment,
+              workspaceAssignment
+            })
+          : current
+      );
       setMessage(t("message.grantChainCreated"));
-      await onRefresh();
+      const refreshResult = await refreshAfterCapabilityGrantMutation({ onRefresh });
+      if (!refreshResult.ok) {
+        setMessage(t(capabilityGrantRefreshFailedMessageKey()));
+      }
     } catch (error) {
       if (shouldUseLocalCapabilityFallback(error, data) && data) {
         setData((current) =>

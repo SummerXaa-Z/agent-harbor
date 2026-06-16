@@ -34,7 +34,7 @@
 - Modify: `internal/app/app_test.go`
 - Modify: `internal/httpapi/server_test.go`
 
-- [ ] **Step 1: Add env parser test**
+- [x] **Step 1: Add env parser test**
 
 Add this test near `TestApprovalReviewersFromEnvParsesScopedRules` in `internal/app/app_test.go`:
 
@@ -61,7 +61,7 @@ func TestAdminIdentitiesFromEnvParsesScopedRules(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Add auth session test**
+- [x] **Step 2: Add auth session test**
 
 Add this test after `TestConsoleAuthSessionSupportsNamedAdminIdentities` in `internal/httpapi/server_test.go`:
 
@@ -90,7 +90,7 @@ func TestConsoleAuthSessionReportsScopedAdminIdentity(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Run red tests**
+- [x] **Step 3: Run red tests**
 
 Run:
 
@@ -108,7 +108,7 @@ Expected: FAIL because `AdminIdentity` and `consoleSessionResponse` do not expos
 - Modify: `internal/httpapi/auth.go`
 - Modify: `internal/app/app.go`
 
-- [ ] **Step 1: Add admin principal helpers**
+- [x] **Step 1: Add admin principal helpers**
 
 Create `internal/httpapi/admin_scope.go`:
 
@@ -265,7 +265,7 @@ func intersectAdminWorkspaceScope(requestedWorkspaceID string, principalWorkspac
 }
 ```
 
-- [ ] **Step 2: Extend `AdminIdentity` and option normalization**
+- [x] **Step 2: Extend `AdminIdentity` and option normalization**
 
 In `internal/httpapi/server.go`, replace `AdminIdentity` and `WithAdminIdentities` normalization with:
 
@@ -296,7 +296,7 @@ func WithAdminIdentities(identities []AdminIdentity) Option {
 }
 ```
 
-- [ ] **Step 3: Store principal in request context**
+- [x] **Step 3: Store principal in request context**
 
 Change `requireAdmin`, `adminActorForKey`, and `requestAuthenticatedAdminActor` in `internal/httpapi/server.go` to store `adminPrincipal` instead of only actor:
 
@@ -351,7 +351,7 @@ func requestAuthenticatedAdminActor(r *http.Request) (string, bool) {
 }
 ```
 
-- [ ] **Step 4: Extend console session payload and response**
+- [x] **Step 4: Extend console session payload and response**
 
 In `internal/httpapi/auth.go`, change payload/session helpers to use `adminPrincipal`:
 
@@ -377,7 +377,7 @@ type consoleSessionResponse struct {
 
 Update `login`, `getAuthSession`, `logout`, `consoleSessionFromRequest`, `developmentSession`, `consoleSessionResponse`, `signConsoleSession`, and `verifyConsoleSession` so they pass/return `adminPrincipal`.
 
-- [ ] **Step 5: Parse scoped env identities**
+- [x] **Step 5: Parse scoped env identities**
 
 In `internal/app/app.go`, update `adminIdentitiesFromEnv()` so the value after `actor=` is parsed as `key|role=...|tenant=...|workspace=...`:
 
@@ -414,7 +414,7 @@ func parseAdminIdentityValue(actor string, rawValue string) (httpapi.AdminIdenti
 
 Call this helper from `adminIdentitiesFromEnv()`.
 
-- [ ] **Step 6: Run focused tests**
+- [x] **Step 6: Run focused tests**
 
 Run:
 
@@ -430,7 +430,7 @@ Expected: PASS.
 - Modify: `internal/httpapi/server.go`
 - Modify: `internal/httpapi/server_test.go`
 
-- [ ] **Step 1: Add red list-scope test**
+- [x] **Step 1: Add red list-scope test**
 
 Add this test near `TestManagementScopeFiltersLists`:
 
@@ -466,7 +466,7 @@ func TestScopedAdminIdentityCannotWidenManagementLists(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Replace request-only scope helper**
+- [x] **Step 2: Replace request-only scope helper**
 
 Keep `managementScopeFromRequest(r)` as requested scope only, and add:
 
@@ -499,11 +499,11 @@ Minimum list handlers:
 - `listTraces`
 - `runtimeMetrics`
 
-- [ ] **Step 3: Scope tenant listing**
+- [x] **Step 3: Scope tenant listing**
 
 Update `listTenants` to intersect requested `tenantId` with the admin principal. For a scoped admin with no `tenantId` query, set the filter to the admin tenant. If `parentTenantId` is supplied, verify that parent tenant intersects the admin scope before listing.
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 Run:
 
@@ -520,7 +520,7 @@ Expected: PASS.
 - Modify: `internal/httpapi/server.go`
 - Modify: `internal/httpapi/server_test.go`
 
-- [ ] **Step 1: Add red mutation-scope test**
+- [x] **Step 1: Add red mutation-scope test**
 
 Add this test near the new scoped list test:
 
@@ -564,7 +564,7 @@ func TestScopedAdminIdentityCannotMutateOutsideScope(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Add reusable mutation guard helpers**
+- [x] **Step 2: Add reusable mutation guard helpers**
 
 In `internal/httpapi/admin_scope.go`, add:
 
@@ -620,7 +620,7 @@ func (s *Server) requireCapabilityManagementScope(r *http.Request, capability do
 }
 ```
 
-- [ ] **Step 3: Guard primary resource mutations**
+- [x] **Step 3: Guard primary resource mutations**
 
 Before side effects, call the guard named in each bullet:
 
@@ -635,7 +635,7 @@ Before side effects, call the guard named in each bullet:
 - `createWorkspaceAssignment`: call `requireRequestedScopeAllowed` with assignment tenant/workspace.
 - `createInstanceAssignment`: call `requireRequestedScopeAllowed` with assignment tenant/workspace and `requireAgentManagementScope` for the caller instance.
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 Run:
 
@@ -653,7 +653,7 @@ Expected: PASS.
 - Modify: `internal/httpapi/server_test.go`
 - Modify: `internal/httpapi/management_mcp_test.go`
 
-- [ ] **Step 1: Add permission package red test**
+- [x] **Step 1: Add permission package red test**
 
 Add this test near `TestPermissionPackageApprovalReviewerUsesAuthenticatedAdminIdentity`:
 
@@ -701,7 +701,7 @@ func TestScopedAdminIdentityCannotOperatePermissionPackageOutsideScope(t *testin
 }
 ```
 
-- [ ] **Step 2: Guard permission package routes**
+- [x] **Step 2: Guard permission package routes**
 
 Guard the request tenant/workspace before building drafts or reading related state in:
 
@@ -726,7 +726,7 @@ authenticated admin scope must include approval tenant/workspace
 reviewer routing must allow the reviewer to resolve the approval
 ```
 
-- [ ] **Step 3: Add management MCP red test**
+- [x] **Step 3: Add management MCP red test**
 
 Add a management MCP test proving a scoped admin key cannot list or draft outside its scope:
 
@@ -759,11 +759,11 @@ func TestManagementMCPInheritsScopedAdminBoundary(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: Scope management MCP tools**
+- [x] **Step 4: Scope management MCP tools**
 
 In `internal/httpapi/management_mcp.go`, before each repo call that accepts `tenantId`/`workspaceId`, call the same effective-scope helper. For tool calls that mutate permission packages, validate the input scope before building the draft or applying changes.
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 Run:
 
@@ -782,7 +782,7 @@ Expected: PASS.
 - Modify: `frontend/tests/i18n.test.mjs`
 - Modify: `frontend/tests/permissionFlowLayout.test.mjs`
 
-- [ ] **Step 1: Add source-guard tests**
+- [x] **Step 1: Add source-guard tests**
 
 In `frontend/tests/permissionFlowLayout.test.mjs`, add assertions that the console uses session scope and does not present scope as a free widening control for scoped sessions:
 
@@ -804,7 +804,7 @@ If `types` is not already loaded in the test file, add:
 const types = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
 ```
 
-- [ ] **Step 2: Extend `ConsoleSession`**
+- [x] **Step 2: Extend `ConsoleSession`**
 
 In `frontend/src/types.ts`, update:
 
@@ -820,7 +820,7 @@ export interface ConsoleSession {
 }
 ```
 
-- [ ] **Step 3: Derive session scope and show chip**
+- [x] **Step 3: Derive session scope and show chip**
 
 In `ConsoleController.tsx`, derive:
 
@@ -849,7 +849,7 @@ Render a compact chip near the existing session chip:
 
 When `scopedSessionActive` is true, initialize or clamp the local `scope` state to `sessionScope`. The user may narrow inside that scope, but clearing it must snap back to the session scope.
 
-- [ ] **Step 4: Add bilingual copy**
+- [x] **Step 4: Add bilingual copy**
 
 Add i18n keys:
 
@@ -873,7 +873,7 @@ and Chinese equivalents:
 "auth.scopeWorkspace": "工作区 {workspace}",
 ```
 
-- [ ] **Step 5: Run frontend focused tests**
+- [x] **Step 5: Run frontend focused tests**
 
 Run:
 
@@ -892,7 +892,7 @@ Expected: PASS.
 - Modify: `README.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] **Step 1: Add scenario script**
+- [x] **Step 1: Add scenario script**
 
 Create `scripts/scenario-admin-tenant-boundary.sh` that:
 
@@ -910,7 +910,7 @@ AGENT_HARBOR_SESSION_SECRET="admin-boundary-session-secret"
 6. Uses east key to create a west agent and verifies `403`.
 7. Uses east key through `/api/v1/management/mcp` and verifies out-of-scope tool arguments are rejected.
 
-- [ ] **Step 2: Wire Makefile**
+- [x] **Step 2: Wire Makefile**
 
 Add:
 
@@ -922,7 +922,7 @@ scenario-admin-tenant-boundary:
 
 Add `scenario-admin-tenant-boundary` to `release-check`.
 
-- [ ] **Step 3: Extend makefile target tests**
+- [x] **Step 3: Extend makefile target tests**
 
 In `tests/makefile_targets_test.sh`, assert:
 
@@ -934,7 +934,7 @@ assert_file_contains "scripts/scenario-admin-tenant-boundary.sh" "tenant_admin"
 assert_file_contains "scripts/scenario-admin-tenant-boundary.sh" "403"
 ```
 
-- [ ] **Step 4: Update docs**
+- [x] **Step 4: Update docs**
 
 Add README text explaining scoped admin identity syntax:
 
@@ -944,7 +944,7 @@ AGENT_HARBOR_ADMIN_IDENTITIES="platform=platform-key|role=platform_admin;east=ea
 
 Add CHANGELOG entries in English and Chinese for scoped admin tenant boundaries.
 
-- [ ] **Step 5: Run full gates**
+- [x] **Step 5: Run full gates**
 
 Run:
 

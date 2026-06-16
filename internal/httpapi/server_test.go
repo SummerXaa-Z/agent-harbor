@@ -895,6 +895,283 @@ func TestConsoleAuthSessionSupportsNamedAdminIdentities(t *testing.T) {
 	}
 }
 
+func TestConsoleAuthSessionReportsScopedAdminIdentity(t *testing.T) {
+	router := newRouterWithRepoAndAdminIdentities(store.NewMemory(), []httpapi.AdminIdentity{
+		{Actor: "east-admin", Key: "east-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+
+	login := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "east-key"}, "")
+	if login.Code != http.StatusOK {
+		t.Fatalf("login should accept scoped admin key, got %d body=%s", login.Code, login.Body.String())
+	}
+	session := decodeData[map[string]any](t, login)
+	if session["actor"] != "east-admin" || session["role"] != "tenant_admin" || session["tenantId"] != "tenant-east" || session["workspaceId"] != "ws-support" {
+		t.Fatalf("unexpected scoped session response: %#v", session)
+	}
+	cookies := login.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected one session cookie, got %#v", cookies)
+	}
+	me := decodeData[map[string]any](t, requestWithCookie(t, router, http.MethodGet, "/api/v1/auth/session", nil, cookies[0]))
+	if me["actor"] != "east-admin" || me["role"] != "tenant_admin" || me["tenantId"] != "tenant-east" || me["workspaceId"] != "ws-support" {
+		t.Fatalf("session endpoint should return scoped principal, got %#v", me)
+	}
+}
+
+func TestScopedAdminIdentityCannotWidenManagementLists(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "east-admin", Key: "east-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	createDirectTenant(t, repo, "tenant-west", "tenant-root", "West tenant", now)
+	eastTarget := createDirectAgent(t, repo, "East MCP", "tenant-east", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	westTarget := createDirectAgent(t, repo, "West MCP", "tenant-west", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithAction(t, repo, eastTarget.ID, "east_tool", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	createDirectCapabilityWithAction(t, repo, westTarget.ID, "west_tool", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+
+	tenants := decodeData[[]tenantResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/tenants", nil, "", "east-key"))
+	if got := tenantResponseIDs(tenants); !reflect.DeepEqual(got, []string{"tenant-east"}) {
+		t.Fatalf("scoped tenant admin should only see own tenant tree, got %#v", got)
+	}
+
+	agents := decodeData[[]agentResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/agents", nil, "", "east-key"))
+	if len(agents) != 1 || agents[0].ID != eastTarget.ID {
+		t.Fatalf("scoped tenant admin should only see own agents, got %#v", agents)
+	}
+
+	capabilities := decodeData[[]capabilityResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/capabilities", nil, "", "east-key"))
+	if len(capabilities) != 1 || capabilities[0].Key != "east_tool" {
+		t.Fatalf("scoped tenant admin should only see own capabilities, got %#v", capabilities)
+	}
+
+	widen := requestWithAdmin(t, router, http.MethodGet, "/api/v1/agents?tenantId=tenant-west&workspaceId=ws-finance", nil, "", "east-key")
+	if widen.Code != http.StatusForbidden {
+		t.Fatalf("scoped tenant admin should not widen to another tenant, got %d body=%s", widen.Code, widen.Body.String())
+	}
+}
+
+func TestScopedAdminIdentityCannotMutateOutsideScope(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "east-admin", Key: "east-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	createDirectTenant(t, repo, "tenant-west", "tenant-root", "West tenant", now)
+	westCaller := createDirectAgent(t, repo, "West caller", "tenant-west", "ws-finance", "local", domain.AgentStatusActive, nil)
+	westTarget := createDirectAgent(t, repo, "West MCP", "tenant-west", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	westCapability := createDirectCapabilityWithAction(t, repo, westTarget.ID, "west_tool", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+
+	allowedAgent := requestWithAdmin(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "East caller",
+		"tenantId":    "tenant-east",
+		"workspaceId": "ws-support",
+		"channelType": "local",
+		"status":      "active",
+	}, "", "east-key")
+	if allowedAgent.Code != http.StatusCreated {
+		t.Fatalf("scoped tenant admin should create inside own scope, got %d body=%s", allowedAgent.Code, allowedAgent.Body.String())
+	}
+
+	deniedAgent := requestWithAdmin(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "West caller",
+		"tenantId":    "tenant-west",
+		"workspaceId": "ws-finance",
+		"channelType": "local",
+	}, "", "east-key")
+	if deniedAgent.Code != http.StatusForbidden {
+		t.Fatalf("scoped tenant admin should not create outside tenant, got %d body=%s", deniedAgent.Code, deniedAgent.Body.String())
+	}
+
+	deniedTenant := requestWithAdmin(t, router, http.MethodPost, "/api/v1/tenants", map[string]any{
+		"id":             "tenant-west-child",
+		"parentTenantId": "tenant-west",
+		"name":           "West child",
+	}, "", "east-key")
+	if deniedTenant.Code != http.StatusForbidden {
+		t.Fatalf("scoped tenant admin should not create tenant outside scope, got %d body=%s", deniedTenant.Code, deniedTenant.Body.String())
+	}
+
+	allowedTenant := requestWithAdmin(t, router, http.MethodPost, "/api/v1/tenants", map[string]any{
+		"id":             "tenant-east-child",
+		"parentTenantId": "tenant-east",
+		"name":           "East child",
+	}, "", "east-key")
+	if allowedTenant.Code != http.StatusCreated {
+		t.Fatalf("scoped tenant admin should create child tenant inside scope, got %d body=%s", allowedTenant.Code, allowedTenant.Body.String())
+	}
+
+	updateAgent := requestWithAdmin(t, router, http.MethodPatch, "/api/v1/agents/"+westTarget.ID, map[string]any{
+		"status": "disabled",
+	}, "", "east-key")
+	if updateAgent.Code != http.StatusForbidden {
+		t.Fatalf("scoped tenant admin should not update outside agent, got %d body=%s", updateAgent.Code, updateAgent.Body.String())
+	}
+
+	createKey := requestWithAdmin(t, router, http.MethodPost, "/api/v1/agent-keys", map[string]any{
+		"agentId": westCaller.ID,
+	}, "", "east-key")
+	if createKey.Code != http.StatusForbidden {
+		t.Fatalf("scoped tenant admin should not create outside agent key, got %d body=%s", createKey.Code, createKey.Body.String())
+	}
+
+	createGrant := requestWithAdmin(t, router, http.MethodPost, "/api/v1/access-grants", map[string]any{
+		"callerAgentId": westCaller.ID,
+		"targetAgentId": westTarget.ID,
+		"routeType":     "mcp",
+		"routeKey":      "tools/call",
+	}, "", "east-key")
+	if createGrant.Code != http.StatusForbidden {
+		t.Fatalf("scoped tenant admin should not create outside access grant, got %d body=%s", createGrant.Code, createGrant.Body.String())
+	}
+
+	createRoute := requestWithAdmin(t, router, http.MethodPost, "/api/v1/route-policies", map[string]any{
+		"callerAgentId": westCaller.ID,
+		"targetAgentId": westTarget.ID,
+		"routeType":     "mcp",
+		"routeKey":      "tools/call",
+		"effect":        "allow",
+	}, "", "east-key")
+	if createRoute.Code != http.StatusForbidden {
+		t.Fatalf("scoped tenant admin should not create outside route policy, got %d body=%s", createRoute.Code, createRoute.Body.String())
+	}
+
+	updateCapability := requestWithAdmin(t, router, http.MethodPatch, "/api/v1/capabilities/"+westCapability.ID, map[string]any{
+		"discoveryStatus": "approved",
+	}, "", "east-key")
+	if updateCapability.Code != http.StatusForbidden {
+		t.Fatalf("scoped tenant admin should not update outside capability, got %d body=%s", updateCapability.Code, updateCapability.Body.String())
+	}
+
+	refreshCapabilities := requestWithAdmin(t, router, http.MethodPost, "/api/v1/targets/"+westTarget.ID+"/capabilities:refresh", nil, "", "east-key")
+	if refreshCapabilities.Code != http.StatusForbidden {
+		t.Fatalf("scoped tenant admin should not refresh outside target, got %d body=%s", refreshCapabilities.Code, refreshCapabilities.Body.String())
+	}
+}
+
+func TestScopedAdminIdentityCannotOperatePermissionPackageOutsideScope(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "east-admin", Key: "east-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	createDirectTenant(t, repo, "tenant-west", "tenant-root", "West tenant", now)
+	westCaller := createDirectAgent(t, repo, "West caller", "tenant-west", "ws-finance", "local", domain.AgentStatusActive, nil)
+	westTarget := createDirectAgent(t, repo, "West MCP", "tenant-west", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithAction(t, repo, westTarget.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	input := map[string]any{
+		"callerInstanceId": westCaller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow sales read access.",
+		"subjectSelector":  "role:sales",
+		"targetId":         westTarget.ID,
+		"templateId":       "sales-readonly",
+		"tenantId":         "tenant-west",
+		"workspaceId":      "ws-finance",
+	}
+
+	for _, tc := range []struct {
+		name   string
+		path   string
+		method string
+	}{
+		{name: "draft", method: http.MethodPost, path: "/api/v1/permission-packages/drafts"},
+		{name: "preflight", method: http.MethodPost, path: "/api/v1/permission-packages:preflight"},
+		{name: "apply", method: http.MethodPost, path: "/api/v1/permission-packages:apply"},
+		{name: "approval", method: http.MethodPost, path: "/api/v1/permission-packages/approval-requests"},
+		{name: "workbench", method: http.MethodPost, path: "/api/v1/permission-packages/workbench:preview"},
+	} {
+		resp := requestWithAdmin(t, router, tc.method, tc.path, input, "", "east-key")
+		if resp.Code != http.StatusForbidden {
+			t.Fatalf("%s should reject permission package outside admin scope, got %d body=%s", tc.name, resp.Code, resp.Body.String())
+		}
+	}
+}
+
+func TestManagementMCPInheritsScopedAdminBoundary(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "east-admin", Key: "east-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	createDirectTenant(t, repo, "tenant-west", "tenant-root", "West tenant", now)
+	eastAgent := createDirectAgent(t, repo, "East caller", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	westCaller := createDirectAgent(t, repo, "West caller", "tenant-west", "ws-finance", "local", domain.AgentStatusActive, nil)
+	westTarget := createDirectAgent(t, repo, "West MCP", "tenant-west", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithAction(t, repo, westTarget.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+
+	listCall := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "scoped-list-agents",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "list_agents",
+			"arguments": map[string]any{},
+		},
+	}, "", "east-key"))
+	var agents []agentResponse
+	if err := json.Unmarshal(listCall.Result.StructuredContent, &agents); err != nil {
+		t.Fatalf("decode scoped MCP agents: %v", err)
+	}
+	if len(agents) != 1 || agents[0].ID != eastAgent.ID {
+		t.Fatalf("scoped management MCP should only list own agents, got %#v", agents)
+	}
+
+	widen := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "scoped-list-west",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_agents",
+			"arguments": map[string]any{
+				"tenantId":    "tenant-west",
+				"workspaceId": "ws-finance",
+			},
+		},
+	}, "", "east-key")
+	var widenEnvelope mcpEnvelopeResponse
+	if err := json.Unmarshal(widen.Body.Bytes(), &widenEnvelope); err != nil {
+		t.Fatalf("decode scoped MCP widen envelope: %v body=%s", err, widen.Body.String())
+	}
+	if widenEnvelope.Error == nil || !strings.Contains(widenEnvelope.Error.Message, "outside authenticated admin scope") {
+		t.Fatalf("expected scoped MCP widen rejection, got %#v body=%s", widenEnvelope, widen.Body.String())
+	}
+
+	draftOutside := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "scoped-draft-west",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "draft_permission_package",
+			"arguments": map[string]any{
+				"callerInstanceId": westCaller.ID,
+				"region":           "us-east",
+				"requestText":      "Allow sales read access.",
+				"subjectSelector":  "role:sales",
+				"targetId":         westTarget.ID,
+				"templateId":       "sales-readonly",
+				"tenantId":         "tenant-west",
+				"workspaceId":      "ws-finance",
+			},
+		},
+	}, "", "east-key")
+	var draftEnvelope mcpEnvelopeResponse
+	if err := json.Unmarshal(draftOutside.Body.Bytes(), &draftEnvelope); err != nil {
+		t.Fatalf("decode scoped MCP draft envelope: %v body=%s", err, draftOutside.Body.String())
+	}
+	if draftEnvelope.Error == nil || !strings.Contains(draftEnvelope.Error.Message, "outside authenticated admin scope") {
+		t.Fatalf("expected scoped MCP draft rejection, got %#v body=%s", draftEnvelope, draftOutside.Body.String())
+	}
+}
+
 func TestConsoleAuthSessionReportsDevelopmentMode(t *testing.T) {
 	router := newRouter()
 

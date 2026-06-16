@@ -21,6 +21,14 @@ assert_target_depends_on() {
   fi
 }
 
+assert_target_exists() {
+  local target="$1"
+  if ! grep -Eq "^[[:space:]]*${target}:" Makefile; then
+    echo "expected target ${target} to exist" >&2
+    exit 1
+  fi
+}
+
 assert_file_contains() {
   local file="$1"
   local needle="$2"
@@ -38,6 +46,8 @@ assert_target_depends_on "release-check" "production-hardening"
 assert_target_depends_on "web-console-production-journey" "frontend-deps"
 assert_target_depends_on "web-console-production-journey" "real-mcp-deps"
 assert_target_depends_on "release-check" "web-console-production-journey"
+assert_target_exists "scenario-admin-tenant-boundary"
+assert_target_depends_on "release-check" "scenario-admin-tenant-boundary"
 
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "authRequired"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "productionAcceptance.ts"
@@ -46,3 +56,6 @@ assert_file_contains "scripts/scenario-web-console-production-journey.sh" "conne
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "connection-diagnostics-action"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "tests/connectionDiagnostics.test.mjs"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "tests/productionAcceptance.test.mjs"
+assert_file_contains "scripts/scenario-admin-tenant-boundary.sh" "AGENT_HARBOR_ADMIN_IDENTITIES"
+assert_file_contains "scripts/scenario-admin-tenant-boundary.sh" "tenant_admin"
+assert_file_contains "scripts/scenario-admin-tenant-boundary.sh" "403"

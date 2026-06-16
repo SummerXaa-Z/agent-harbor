@@ -191,6 +191,27 @@ func TestApprovalReviewersFromEnvParsesScopedRules(t *testing.T) {
 	}
 }
 
+func TestAdminIdentitiesFromEnvParsesScopedRules(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_ADMIN_IDENTITIES", "platform=platform-key|role=platform_admin,tenant-east=east-key|role=tenant_admin|tenant=tenant-east|workspace=ws-support,legacy=legacy-key")
+
+	identities, err := adminIdentitiesFromEnv()
+	if err != nil {
+		t.Fatalf("parse admin identities: %v", err)
+	}
+	if len(identities) != 3 {
+		t.Fatalf("expected three identities, got %#v", identities)
+	}
+	if identities[0].Actor != "platform" || identities[0].Key != "platform-key" || identities[0].Role != "platform_admin" || identities[0].TenantID != "" || identities[0].WorkspaceID != "" {
+		t.Fatalf("unexpected platform identity: %#v", identities[0])
+	}
+	if identities[1].Actor != "tenant-east" || identities[1].Key != "east-key" || identities[1].Role != "tenant_admin" || identities[1].TenantID != "tenant-east" || identities[1].WorkspaceID != "ws-support" {
+		t.Fatalf("unexpected scoped identity: %#v", identities[1])
+	}
+	if identities[2].Actor != "legacy" || identities[2].Key != "legacy-key" || identities[2].Role != "platform_admin" || identities[2].TenantID != "" || identities[2].WorkspaceID != "" {
+		t.Fatalf("legacy identity should default to platform admin: %#v", identities[2])
+	}
+}
+
 func TestApprovalReviewersFromEnvRejectsMalformedRules(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_APPROVAL_REVIEWERS", "security-root=tenant-root")
 

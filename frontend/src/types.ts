@@ -212,7 +212,10 @@ export interface ConsoleSession {
   actor?: string
   authenticated: boolean
   expiresAt?: string
+  role?: string
   requiresLogin: boolean
+  tenantId?: string
+  workspaceId?: string
 }
 
 export interface RoutePolicy {

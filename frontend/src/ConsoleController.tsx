@@ -218,6 +218,7 @@ import type {
   AgentStatus,
   AuditEvent,
   Capability,
+  ConsoleSession,
   ConsoleData,
   CreateAgentKeyResponse,
   DataScope,
@@ -326,6 +327,23 @@ function tx(t: Translator, key: string, values: Record<string, string | number>)
     (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
     t(key)
   );
+}
+
+function sessionRoleLabel(session: ConsoleSession | null, t: Translator) {
+  const role = session?.role?.trim() || "platform_admin";
+  return t(`auth.role.${role}`, role);
+}
+
+function sessionScopeLabel(session: ConsoleSession | null, t: Translator) {
+  const tenantId = session?.tenantId?.trim();
+  const workspaceId = session?.workspaceId?.trim();
+  if (!tenantId && !workspaceId) {
+    return t("auth.scope.allTenants");
+  }
+  if (tenantId && workspaceId) {
+    return tx(t, "auth.scope.tenantWorkspace", { tenantId, workspaceId });
+  }
+  return tenantId || workspaceId || t("auth.scope.allTenants");
 }
 
 function connectionDiagnosticDetail(row: ConnectionDiagnosticRow, t: Translator) {
@@ -2009,6 +2027,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const sessionActorLabel = consoleAuth.session?.actor
     ? t(`auditActor.${consoleAuth.session.actor}`, consoleAuth.session.actor)
     : t("auth.unknownActor");
+  const sessionRole = sessionRoleLabel(consoleAuth.session, t);
+  const sessionScope = sessionScopeLabel(consoleAuth.session, t);
 
   if (consoleAuth.sessionLoading) {
     return (
@@ -2566,9 +2586,17 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
                 EN
               </button>
             </div>
-            <div className="session-chip" title={tx(t, "auth.sessionActorTitle", { actor: sessionActorLabel })}>
+            <div
+              className="session-chip"
+              title={tx(t, "auth.sessionScopeTitle", {
+                actor: sessionActorLabel,
+                role: sessionRole,
+                scope: sessionScope
+              })}
+            >
               <LockKeyhole size={14} />
-              <span>{sessionActorLabel}</span>
+              <span className="session-chip-main">{sessionActorLabel}</span>
+              <span className="session-chip-scope">{sessionRole} · {sessionScope}</span>
               {consoleAuth.session?.requiresLogin ? (
                 <button onClick={() => void handleConsoleLogout()} type="button">
                   <LogOut size={14} />

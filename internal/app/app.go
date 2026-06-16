@@ -279,16 +279,40 @@ func adminIdentitiesFromEnv() ([]httpapi.AdminIdentity, error) {
 		if entry == "" {
 			continue
 		}
-		actor, key, ok := strings.Cut(entry, "=")
+		actor, config, ok := strings.Cut(entry, "=")
 		if !ok {
 			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES entries must use actor=key")
 		}
+		parts := strings.Split(strings.TrimSpace(config), "|")
 		identity := httpapi.AdminIdentity{
 			Actor: strings.TrimSpace(actor),
-			Key:   strings.TrimSpace(key),
+			Key:   strings.TrimSpace(parts[0]),
+			Role:  "platform_admin",
+		}
+		for _, part := range parts[1:] {
+			name, value, ok := strings.Cut(strings.TrimSpace(part), "=")
+			if !ok {
+				return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES scoped attributes must use name=value")
+			}
+			switch strings.TrimSpace(name) {
+			case "role":
+				identity.Role = strings.TrimSpace(value)
+			case "tenant", "tenantId":
+				identity.TenantID = strings.TrimSpace(value)
+			case "workspace", "workspaceId":
+				identity.WorkspaceID = strings.TrimSpace(value)
+			default:
+				return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES unknown scoped attribute %q", strings.TrimSpace(name))
+			}
 		}
 		if identity.Actor == "" || identity.Key == "" {
 			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES entries must include actor and key")
+		}
+		if identity.Role == "" {
+			identity.Role = "platform_admin"
+		}
+		if identity.Role != "platform_admin" && identity.TenantID == "" {
+			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES scoped admin roles must include tenant")
 		}
 		identities = append(identities, identity)
 	}

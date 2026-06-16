@@ -55,6 +55,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 权限变更的展示层现在统一承接就绪/预检文案兜底，并从 `ConsoleController` 删除了过期的重复展示辅助函数。
 - Console operator messages now store translation descriptors instead of rendered language snapshots across Access Query, Tenant Access Profile, Capability Governance, Core Journey, and Resource Management.
 - 控制台操作反馈现在在访问查询、租户访问画像、能力治理、核心自检和资源管理中存储翻译描述符，而不是已渲染的语言快照。
+- AI Admin inline status messages for readiness, preflight, reviewer queue, access answers, application health, impact, production status, and validation journey now re-render from the active language.
+- AI Admin 的就绪检查、应用前预检、审批队列、访问判定、应用健康、影响分析、上线状态和运行验证等内联状态消息现在会按当前语言重新渲染。
 - Browser console fallbacks now avoid echoing raw backend error text in administrator and management operation messages on the primary operator path.
 - 浏览器控制台现在会避免在管理员与资源管理操作提示中直接回显后端原始错误文本，降低中文主路径出现英文接口错误的风险。
 - Resource Management now presents lifecycle operations directly in the resource workbench: create Agent, create key, rotate credential, create policy, review capabilities, start permission changes, and review runtime all start from the same entry.

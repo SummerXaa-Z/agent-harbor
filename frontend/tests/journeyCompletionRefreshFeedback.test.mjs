@@ -40,7 +40,7 @@ test("AI Admin approval journey commits runtime result before follow-up refresh"
   assert.ok(resultIndex >= 0, "runtime result should be committed");
   assert.ok(refreshIndex > resultIndex, "follow-up refresh should run after runtime result is committed");
   assert.match(block, /journeyCompletionRefreshFailedMessageKey\("ai_admin_approval"\)/);
-  assert.match(block, /setAiAdminApprovalJourneyMessage\(\s*refreshResult\.ok/);
+  assert.match(block, /setAiAdminApprovalJourneyMessage\(\s*\{\s*key: refreshResult\.ok \? "message\.aiAdminApprovalJourneyComplete" : journeyCompletionRefreshFailedMessageKey\("ai_admin_approval"\)\s*\}/);
   assert.ok(
     block.indexOf("const [nextData, nextProfile, auditRows] = await Promise.all") > refreshIndex,
     "AI Admin follow-up refresh calls should be contained inside completion refresh helper"

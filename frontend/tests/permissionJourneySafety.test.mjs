@@ -202,6 +202,33 @@ test("operator hook messages keep translation descriptors instead of language sn
   assert.doesNotMatch(adminAccessHook, /error\.adminAccessOperation[\s\S]*detail: error\.message/);
 });
 
+test("AI Admin status messages keep translation descriptors instead of language snapshots", () => {
+  [
+    "ApplicationHealth",
+    "ApplyPreflight",
+    "ApplicationImpact",
+    "ProductionReadiness",
+    "ReviewerQueue",
+    "AccessDecisionExplain",
+    "ApprovalJourney",
+    "ApprovalReadiness"
+  ].forEach((name) => {
+    assert.match(
+      app,
+      new RegExp(String.raw`const \[aiAdmin${name}MessageState, setAiAdmin${name}Message\]\s*=\s*useState<LocalizedMessage \| null>\(null\)`)
+    );
+    assert.match(
+      app,
+      new RegExp(String.raw`const aiAdmin${name}Message = localizedMessageText\(aiAdmin${name}MessageState, t, language\)`)
+    );
+  });
+
+  assert.match(app, /function permissionPackagePreflightMessageState\(preflight: PermissionPackageApplyPreflight\): LocalizedMessage/);
+  assert.doesNotMatch(app, /setAiAdmin[A-Za-z]+Message\(t\(/);
+  assert.doesNotMatch(app, /setAiAdmin[A-Za-z]+Message\(tx\(t,/);
+  assert.doesNotMatch(app, /setAiAdmin[A-Za-z]+Message\(localizedErrorMessage\(t, language,/);
+});
+
 test("permission apply consumed approval retry shows recovery guidance", () => {
   const block = functionBlock("applyAiAdminPermissionPackage");
 

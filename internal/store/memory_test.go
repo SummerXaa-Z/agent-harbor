@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
+	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 )
 
 func TestMemoryCapabilityAssignmentEvaluation(t *testing.T) {
@@ -696,12 +697,122 @@ func TestMemoryTenantHierarchyScopesManagementReads(t *testing.T) {
 	}
 }
 
+func TestMemoryAdminIdentityLifecycle(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	now := time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC)
+	oldHash := security.HashSecret("admin-secret-old")
+	newHash := security.HashSecret("admin-secret-new")
+	identity := domain.AdminIdentity{
+		ID:          "adm_memory",
+		Actor:       "tenant-admin",
+		DisplayName: "Tenant Admin",
+		Role:        domain.AdminIdentityRoleTenantAdmin,
+		TenantID:    "tenant-east",
+		WorkspaceID: "ws-support",
+		Status:      domain.AdminIdentityStatusActive,
+		Source:      domain.AdminIdentitySourceManaged,
+		KeyHash:     oldHash,
+		KeyPrefix:   "ahadm_old",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		CreatedBy:   "platform",
+		UpdatedBy:   "platform",
+	}
+
+	created, err := repo.CreateAdminIdentityWithAudit(ctx, identity, func(created domain.AdminIdentity) domain.AuditEvent {
+		return domain.AuditEvent{ID: "aud_created", Actor: "platform", Action: "admin_identity.created", ResourceType: "admin_identity", ResourceID: created.ID, CreatedAt: now}
+	})
+	if err != nil {
+		t.Fatalf("create admin identity: %v", err)
+	}
+	if created.Actor != identity.Actor || created.KeyHash != oldHash {
+		t.Fatalf("unexpected created admin identity: %#v", created)
+	}
+
+	rows, err := repo.ListAdminIdentities(ctx)
+	if err != nil {
+		t.Fatalf("list admin identities: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != identity.ID {
+		t.Fatalf("unexpected admin identity list: %#v", rows)
+	}
+	byID, ok, err := repo.GetAdminIdentity(ctx, identity.ID)
+	if err != nil || !ok || byID.Actor != identity.Actor {
+		t.Fatalf("get admin identity: ok=%v identity=%#v err=%v", ok, byID, err)
+	}
+	byActor, ok, err := repo.GetAdminIdentityByActor(ctx, identity.Actor)
+	if err != nil || !ok || byActor.ID != identity.ID {
+		t.Fatalf("get admin identity by actor: ok=%v identity=%#v err=%v", ok, byActor, err)
+	}
+	byHash, ok, err := repo.FindAdminIdentityByKeyHash(ctx, oldHash)
+	if err != nil || !ok || byHash.ID != identity.ID {
+		t.Fatalf("find admin identity by key hash: ok=%v identity=%#v err=%v", ok, byHash, err)
+	}
+
+	rotatedAt := now.Add(time.Minute)
+	rotated, ok, err := repo.RotateAdminIdentityKeyWithAudit(ctx, identity.ID, newHash, "ahadm_new", rotatedAt, "platform", func(rotated domain.AdminIdentity) domain.AuditEvent {
+		return domain.AuditEvent{ID: "aud_rotated", Actor: "platform", Action: "admin_identity.key_rotated", ResourceType: "admin_identity", ResourceID: rotated.ID, CreatedAt: rotatedAt}
+	})
+	if err != nil || !ok {
+		t.Fatalf("rotate admin identity key: ok=%v identity=%#v err=%v", ok, rotated, err)
+	}
+	if rotated.KeyHash != newHash || rotated.KeyPrefix != "ahadm_new" || !rotated.RotatedAt.Equal(rotatedAt) {
+		t.Fatalf("unexpected rotated admin identity: %#v", rotated)
+	}
+	if _, ok, err := repo.FindAdminIdentityByKeyHash(ctx, oldHash); err != nil || ok {
+		t.Fatalf("old admin hash should not authenticate after rotation: ok=%v err=%v", ok, err)
+	}
+	if byHash, ok, err := repo.FindAdminIdentityByKeyHash(ctx, newHash); err != nil || !ok || byHash.ID != identity.ID {
+		t.Fatalf("new admin hash should authenticate: ok=%v identity=%#v err=%v", ok, byHash, err)
+	}
+
+	lastUsedAt := now.Add(2 * time.Minute)
+	if err := repo.TouchAdminIdentityLastUsed(ctx, identity.ID, lastUsedAt); err != nil {
+		t.Fatalf("touch last used: %v", err)
+	}
+	touched, ok, err := repo.GetAdminIdentity(ctx, identity.ID)
+	if err != nil || !ok || !touched.LastUsedAt.Equal(lastUsedAt) {
+		t.Fatalf("expected touched last used, ok=%v identity=%#v err=%v", ok, touched, err)
+	}
+
+	disabledAt := now.Add(3 * time.Minute)
+	disabled, ok, err := repo.DisableAdminIdentityWithAudit(ctx, identity.ID, disabledAt, "platform", func(disabled domain.AdminIdentity) domain.AuditEvent {
+		return domain.AuditEvent{ID: "aud_disabled", Actor: "platform", Action: "admin_identity.disabled", ResourceType: "admin_identity", ResourceID: disabled.ID, CreatedAt: disabledAt}
+	})
+	if err != nil || !ok {
+		t.Fatalf("disable admin identity: ok=%v identity=%#v err=%v", ok, disabled, err)
+	}
+	if disabled.Status != domain.AdminIdentityStatusDisabled || !disabled.DisabledAt.Equal(disabledAt) || disabled.DisabledBy != "platform" {
+		t.Fatalf("unexpected disabled admin identity: %#v", disabled)
+	}
+	if _, ok, err := repo.FindAdminIdentityByKeyHash(ctx, newHash); err != nil || ok {
+		t.Fatalf("disabled admin hash should not authenticate: ok=%v err=%v", ok, err)
+	}
+
+	events, err := repo.ListAuditEvents(ctx, AuditEventFilter{ResourceType: "admin_identity"})
+	if err != nil {
+		t.Fatalf("list admin identity audit events: %v", err)
+	}
+	if got := auditActionsForStore(events); !reflect.DeepEqual(got, []string{"admin_identity.created", "admin_identity.key_rotated", "admin_identity.disabled"}) {
+		t.Fatalf("unexpected admin identity audit actions: %#v", got)
+	}
+}
+
 func tenantIDs(rows []domain.Tenant) []string {
 	ids := make([]string, 0, len(rows))
 	for _, row := range rows {
 		ids = append(ids, row.ID)
 	}
 	return ids
+}
+
+func auditActionsForStore(events []domain.AuditEvent) []string {
+	actions := make([]string, 0, len(events))
+	for _, event := range events {
+		actions = append(actions, event.Action)
+	}
+	return actions
 }
 
 func agentIDs(rows []domain.Agent) []string {

@@ -369,6 +369,116 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPostgresAdminIdentityLifecycle(t *testing.T) {
+	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set AGENT_HARBOR_TEST_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	defer pool.Close()
+	if err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	repo := store.NewPostgresWithCredentialKey(pool, []byte("0123456789abcdef0123456789abcdef"))
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	identityID := security.NewID("adm")
+	actor := "pg-admin-" + identityID
+	oldHash := security.HashSecret("pg-admin-secret-old-" + identityID)
+	newHash := security.HashSecret("pg-admin-secret-new-" + identityID)
+	identity := domain.AdminIdentity{
+		ID:          identityID,
+		Actor:       actor,
+		DisplayName: "PG Tenant Admin",
+		Role:        domain.AdminIdentityRoleTenantAdmin,
+		TenantID:    "tenant-east",
+		WorkspaceID: "ws-support",
+		Status:      domain.AdminIdentityStatusActive,
+		Source:      domain.AdminIdentitySourceManaged,
+		KeyHash:     oldHash,
+		KeyPrefix:   "ahadm_pg_old",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		CreatedBy:   "platform",
+		UpdatedBy:   "platform",
+	}
+
+	created, err := repo.CreateAdminIdentityWithAudit(ctx, identity, func(created domain.AdminIdentity) domain.AuditEvent {
+		return domain.AuditEvent{ID: security.NewID("aud"), Actor: "platform", Action: "admin_identity.created", ResourceType: "admin_identity", ResourceID: created.ID, CreatedAt: now}
+	})
+	if err != nil {
+		t.Fatalf("create admin identity: %v", err)
+	}
+	if created.ID != identity.ID || created.Actor != actor || created.KeyHash != oldHash {
+		t.Fatalf("unexpected created admin identity: %#v", created)
+	}
+
+	rows, err := repo.ListAdminIdentities(ctx)
+	if err != nil {
+		t.Fatalf("list admin identities: %v", err)
+	}
+	if !adminIdentityIDsContain(rows, identity.ID) {
+		t.Fatalf("created admin identity missing from list: %#v", rows)
+	}
+	byActor, ok, err := repo.GetAdminIdentityByActor(ctx, actor)
+	if err != nil || !ok || byActor.ID != identity.ID {
+		t.Fatalf("get admin identity by actor: ok=%v identity=%#v err=%v", ok, byActor, err)
+	}
+	byHash, ok, err := repo.FindAdminIdentityByKeyHash(ctx, oldHash)
+	if err != nil || !ok || byHash.ID != identity.ID {
+		t.Fatalf("find admin identity by key hash: ok=%v identity=%#v err=%v", ok, byHash, err)
+	}
+
+	rotatedAt := now.Add(time.Minute)
+	rotated, ok, err := repo.RotateAdminIdentityKeyWithAudit(ctx, identity.ID, newHash, "ahadm_pg_new", rotatedAt, "platform", func(rotated domain.AdminIdentity) domain.AuditEvent {
+		return domain.AuditEvent{ID: security.NewID("aud"), Actor: "platform", Action: "admin_identity.key_rotated", ResourceType: "admin_identity", ResourceID: rotated.ID, CreatedAt: rotatedAt}
+	})
+	if err != nil || !ok {
+		t.Fatalf("rotate admin identity key: ok=%v identity=%#v err=%v", ok, rotated, err)
+	}
+	if rotated.KeyHash != newHash || rotated.KeyPrefix != "ahadm_pg_new" || !rotated.RotatedAt.Equal(rotatedAt) {
+		t.Fatalf("unexpected rotated admin identity: %#v", rotated)
+	}
+	if _, ok, err := repo.FindAdminIdentityByKeyHash(ctx, oldHash); err != nil || ok {
+		t.Fatalf("old admin hash should not authenticate after rotation: ok=%v err=%v", ok, err)
+	}
+
+	lastUsedAt := now.Add(2 * time.Minute)
+	if err := repo.TouchAdminIdentityLastUsed(ctx, identity.ID, lastUsedAt); err != nil {
+		t.Fatalf("touch last used: %v", err)
+	}
+	touched, ok, err := repo.GetAdminIdentity(ctx, identity.ID)
+	if err != nil || !ok || !touched.LastUsedAt.Equal(lastUsedAt) {
+		t.Fatalf("expected touched last used, ok=%v identity=%#v err=%v", ok, touched, err)
+	}
+
+	disabledAt := now.Add(3 * time.Minute)
+	disabled, ok, err := repo.DisableAdminIdentityWithAudit(ctx, identity.ID, disabledAt, "platform", func(disabled domain.AdminIdentity) domain.AuditEvent {
+		return domain.AuditEvent{ID: security.NewID("aud"), Actor: "platform", Action: "admin_identity.disabled", ResourceType: "admin_identity", ResourceID: disabled.ID, CreatedAt: disabledAt}
+	})
+	if err != nil || !ok {
+		t.Fatalf("disable admin identity: ok=%v identity=%#v err=%v", ok, disabled, err)
+	}
+	if disabled.Status != domain.AdminIdentityStatusDisabled || !disabled.DisabledAt.Equal(disabledAt) || disabled.DisabledBy != "platform" {
+		t.Fatalf("unexpected disabled admin identity: %#v", disabled)
+	}
+	if _, ok, err := repo.FindAdminIdentityByKeyHash(ctx, newHash); err != nil || ok {
+		t.Fatalf("disabled admin hash should not authenticate: ok=%v err=%v", ok, err)
+	}
+
+	events, err := repo.ListAuditEvents(ctx, store.AuditEventFilter{ResourceType: "admin_identity", ResourceID: identity.ID})
+	if err != nil {
+		t.Fatalf("list admin identity audit events: %v", err)
+	}
+	if got := postgresAuditActions(events); !reflect.DeepEqual(got, []string{"admin_identity.created", "admin_identity.key_rotated", "admin_identity.disabled"}) {
+		t.Fatalf("unexpected admin identity audit actions: %#v", got)
+	}
+}
+
 func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
 	if databaseURL == "" {
@@ -963,4 +1073,21 @@ func TestPostgresAuditedCreateAgentRollsBackWhenAuditFails(t *testing.T) {
 	if auditCount != 1 {
 		t.Fatalf("expected only seeded audit event after rollback, count=%d", auditCount)
 	}
+}
+
+func adminIdentityIDsContain(rows []domain.AdminIdentity, id string) bool {
+	for _, row := range rows {
+		if row.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func postgresAuditActions(events []domain.AuditEvent) []string {
+	actions := make([]string, 0, len(events))
+	for _, event := range events {
+		actions = append(actions, event.Action)
+	}
+	return actions
 }

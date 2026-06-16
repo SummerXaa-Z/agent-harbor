@@ -1793,6 +1793,168 @@ func (p *Postgres) ListAuditEvents(ctx context.Context, filter AuditEventFilter)
 	return scanAuditEvents(rows)
 }
 
+const adminIdentityColumns = `
+	id, actor, display_name, role, tenant_id, workspace_id, status, source,
+	key_hash, key_prefix, created_at, updated_at, last_used_at, rotated_at,
+	disabled_at, created_by, updated_by, disabled_by
+`
+
+func (p *Postgres) ListAdminIdentities(ctx context.Context) ([]domain.AdminIdentity, error) {
+	rows, err := p.pool.Query(ctx, `
+		select `+adminIdentityColumns+`
+		from admin_identities
+		order by created_at asc, id asc
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list admin identities: %w", err)
+	}
+	defer rows.Close()
+	return scanAdminIdentities(rows)
+}
+
+func (p *Postgres) GetAdminIdentity(ctx context.Context, id string) (domain.AdminIdentity, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select `+adminIdentityColumns+`
+		from admin_identities
+		where id=$1
+	`, strings.TrimSpace(id))
+	identity, err := scanAdminIdentity(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AdminIdentity{}, false, nil
+	}
+	if err != nil {
+		return domain.AdminIdentity{}, false, fmt.Errorf("get admin identity: %w", err)
+	}
+	return identity, true, nil
+}
+
+func (p *Postgres) GetAdminIdentityByActor(ctx context.Context, actor string) (domain.AdminIdentity, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select `+adminIdentityColumns+`
+		from admin_identities
+		where actor=$1
+	`, strings.TrimSpace(actor))
+	identity, err := scanAdminIdentity(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AdminIdentity{}, false, nil
+	}
+	if err != nil {
+		return domain.AdminIdentity{}, false, fmt.Errorf("get admin identity by actor: %w", err)
+	}
+	return identity, true, nil
+}
+
+func (p *Postgres) FindAdminIdentityByKeyHash(ctx context.Context, hash string) (domain.AdminIdentity, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select `+adminIdentityColumns+`
+		from admin_identities
+		where key_hash=$1 and status=$2
+	`, strings.TrimSpace(hash), string(domain.AdminIdentityStatusActive))
+	identity, err := scanAdminIdentity(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AdminIdentity{}, false, nil
+	}
+	if err != nil {
+		return domain.AdminIdentity{}, false, fmt.Errorf("find admin identity by key hash: %w", err)
+	}
+	return identity, true, nil
+}
+
+func (p *Postgres) CreateAdminIdentityWithAudit(ctx context.Context, identity domain.AdminIdentity, build AdminIdentityAuditBuilder) (domain.AdminIdentity, error) {
+	var created domain.AdminIdentity
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		created, err = p.createAdminIdentity(ctx, tx, identity)
+		if err != nil {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, build(created))
+		return err
+	})
+	return created, err
+}
+
+func (p *Postgres) createAdminIdentity(ctx context.Context, exec sqlExecutor, identity domain.AdminIdentity) (domain.AdminIdentity, error) {
+	_, err := exec.Exec(ctx, `
+		insert into admin_identities (
+			id, actor, display_name, role, tenant_id, workspace_id, status, source,
+			key_hash, key_prefix, created_at, updated_at, last_used_at, rotated_at,
+			disabled_at, created_by, updated_by, disabled_by
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+	`, identity.ID, identity.Actor, identity.DisplayName, string(identity.Role), identity.TenantID, identity.WorkspaceID,
+		string(identity.Status), string(identity.Source), identity.KeyHash, identity.KeyPrefix, identity.CreatedAt, identity.UpdatedAt,
+		nullTime(identity.LastUsedAt), nullTime(identity.RotatedAt), nullTime(identity.DisabledAt),
+		identity.CreatedBy, identity.UpdatedBy, identity.DisabledBy)
+	if err != nil {
+		return domain.AdminIdentity{}, fmt.Errorf("insert admin identity: %w", err)
+	}
+	return identity, nil
+}
+
+func (p *Postgres) RotateAdminIdentityKeyWithAudit(ctx context.Context, id string, keyHash string, keyPrefix string, now time.Time, actor string, build AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error) {
+	var updated domain.AdminIdentity
+	var ok bool
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx, `
+			update admin_identities
+			set key_hash=$2, key_prefix=$3, rotated_at=$4, updated_at=$4, updated_by=$5
+			where id=$1
+			returning `+adminIdentityColumns+`
+		`, strings.TrimSpace(id), strings.TrimSpace(keyHash), strings.TrimSpace(keyPrefix), now, strings.TrimSpace(actor))
+		var err error
+		updated, err = scanAdminIdentity(row)
+		if errors.Is(err, pgx.ErrNoRows) {
+			ok = false
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("rotate admin identity key: %w", err)
+		}
+		ok = true
+		_, err = p.appendAuditEvent(ctx, tx, build(updated))
+		return err
+	})
+	return updated, ok, err
+}
+
+func (p *Postgres) DisableAdminIdentityWithAudit(ctx context.Context, id string, now time.Time, actor string, build AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error) {
+	var disabled domain.AdminIdentity
+	var ok bool
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx, `
+			update admin_identities
+			set status=$2, disabled_at=$3, updated_at=$3, updated_by=$4, disabled_by=$4
+			where id=$1
+			returning `+adminIdentityColumns+`
+		`, strings.TrimSpace(id), string(domain.AdminIdentityStatusDisabled), now, strings.TrimSpace(actor))
+		var err error
+		disabled, err = scanAdminIdentity(row)
+		if errors.Is(err, pgx.ErrNoRows) {
+			ok = false
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("disable admin identity: %w", err)
+		}
+		ok = true
+		_, err = p.appendAuditEvent(ctx, tx, build(disabled))
+		return err
+	})
+	return disabled, ok, err
+}
+
+func (p *Postgres) TouchAdminIdentityLastUsed(ctx context.Context, id string, now time.Time) error {
+	_, err := p.pool.Exec(ctx, `
+		update admin_identities
+		set last_used_at=$2, updated_at=$2
+		where id=$1
+	`, strings.TrimSpace(id), now)
+	if err != nil {
+		return fmt.Errorf("touch admin identity last used: %w", err)
+	}
+	return nil
+}
+
 type scanner interface {
 	Scan(dest ...any) error
 }
@@ -2319,6 +2481,66 @@ func scanAuditEvents(rows pgx.Rows) ([]domain.AuditEvent, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+func scanAdminIdentities(rows pgx.Rows) ([]domain.AdminIdentity, error) {
+	var out []domain.AdminIdentity
+	for rows.Next() {
+		identity, err := scanAdminIdentity(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, identity)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanAdminIdentity(row scanner) (domain.AdminIdentity, error) {
+	var identity domain.AdminIdentity
+	var role string
+	var status string
+	var source string
+	var lastUsedAt *time.Time
+	var rotatedAt *time.Time
+	var disabledAt *time.Time
+	if err := row.Scan(
+		&identity.ID,
+		&identity.Actor,
+		&identity.DisplayName,
+		&role,
+		&identity.TenantID,
+		&identity.WorkspaceID,
+		&status,
+		&source,
+		&identity.KeyHash,
+		&identity.KeyPrefix,
+		&identity.CreatedAt,
+		&identity.UpdatedAt,
+		&lastUsedAt,
+		&rotatedAt,
+		&disabledAt,
+		&identity.CreatedBy,
+		&identity.UpdatedBy,
+		&identity.DisabledBy,
+	); err != nil {
+		return domain.AdminIdentity{}, err
+	}
+	identity.Role = domain.AdminIdentityRole(role)
+	identity.Status = domain.AdminIdentityStatus(status)
+	identity.Source = domain.AdminIdentitySource(source)
+	if lastUsedAt != nil {
+		identity.LastUsedAt = *lastUsedAt
+	}
+	if rotatedAt != nil {
+		identity.RotatedAt = *rotatedAt
+	}
+	if disabledAt != nil {
+		identity.DisabledAt = *disabledAt
+	}
+	return identity, nil
 }
 
 func nullTime(value time.Time) any {

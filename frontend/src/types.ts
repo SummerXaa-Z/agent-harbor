@@ -590,3 +590,69 @@ export interface RotateAdminIdentityKeyResponse {
   identity: AdminIdentity
   key: string
 }
+
+export type TenantPermissionCenterStatus = 'ready' | 'needs_review' | 'blocked'
+export type TenantPermissionCenterActionTarget = 'ai-admin' | 'access' | 'admin-access' | 'getting-started'
+
+export interface TenantPermissionCenterOperatorBoundary {
+  actor: string
+  role: AdminIdentityRole
+  tenantId?: string
+  workspaceId?: string
+  canManageAdministrators: boolean
+}
+
+export interface TenantPermissionCenterAdministrator {
+  id: string
+  actor: string
+  displayName: string
+  role: AdminIdentityRole
+  tenantId?: string
+  workspaceId?: string
+  status: AdminIdentityStatus
+  source: AdminIdentitySource
+}
+
+export interface TenantPermissionCenterWorkspace {
+  workspaceId: string
+  callerCount: number
+  targetCount: number
+  assignmentCount: number
+}
+
+export interface TenantPermissionCenterPackage {
+  templateId: string
+  templateName: string
+  status: TenantPermissionCenterStatus
+  allowedCapabilityCount: number
+  blockedCapabilityCount: number
+  dataScopes?: DataScope[]
+  latestApplicationId?: string
+}
+
+export interface TenantPermissionCenterCapability {
+  targetId: string
+  targetName: string
+  capabilityId: string
+  capabilityName: string
+  effect: RoutePolicyEffect
+  dataScopes?: DataScope[]
+  workspaceIds: string[]
+}
+
+export interface TenantPermissionCenterNextAction {
+  code: string
+  targetView: TenantPermissionCenterActionTarget
+}
+
+export interface TenantPermissionCenterResponse {
+  tenant: Tenant
+  scopeTenants: Tenant[]
+  operatorBoundary: TenantPermissionCenterOperatorBoundary
+  administrators: TenantPermissionCenterAdministrator[]
+  workspaces: TenantPermissionCenterWorkspace[]
+  permissionPackages: TenantPermissionCenterPackage[]
+  capabilities: TenantPermissionCenterCapability[]
+  nextActions: TenantPermissionCenterNextAction[]
+  generatedAt: string
+}

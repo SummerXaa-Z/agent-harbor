@@ -82,6 +82,7 @@ import type {
   Tenant,
   TenantAccessProfile,
   TenantAccessProfileData,
+  TenantPermissionCenterResponse,
   TenantEntitlement,
   TraceEvent,
   TraceFilters,
@@ -485,6 +486,19 @@ export async function fetchTenantAccessProfile(
   const query = queryString(normalizeAccessProfileFilters(filters))
   return request<TenantAccessProfile>(
     `/api/v1/tenants/${encodeURIComponent(tenantId.trim())}/access-profile${query}`,
+    { adminKey, signal },
+  )
+}
+
+export async function fetchTenantPermissionCenter(
+  tenantId: string,
+  workspaceId?: string,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<TenantPermissionCenterResponse> {
+  const query = queryString({ workspaceId })
+  return request<TenantPermissionCenterResponse>(
+    `/api/v1/tenants/${encodeURIComponent(tenantId.trim())}/permission-center${query}`,
     { adminKey, signal },
   )
 }

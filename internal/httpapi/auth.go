@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -68,8 +69,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	if err := s.requireConsoleLoginAllowed(r); err != nil {
-		writeError(w, err)
+	if retryAfterSeconds := s.consoleLoginRetryAfterSeconds(r); retryAfterSeconds > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+		writeError(w, domain.TooManyRequests("RATE_LIMITED", "too many failed console login attempts; retry later"))
 		return
 	}
 	principal, ok := s.adminPrincipalForKey(r.Context(), req.AdminKey)
@@ -277,26 +279,26 @@ func (s *Server) consoleLoginClientKey(r *http.Request) string {
 	return remoteAddr
 }
 
-func (s *Server) requireConsoleLoginAllowed(r *http.Request) error {
+func (s *Server) consoleLoginRetryAfterSeconds(r *http.Request) int {
 	key := s.consoleLoginClientKey(r)
 	now := s.now()
 	s.loginFailureMu.Lock()
 	defer s.loginFailureMu.Unlock()
 	if s.loginFailures == nil {
-		return nil
+		return 0
 	}
 	failure, ok := s.loginFailures[key]
 	if !ok {
-		return nil
+		return 0
 	}
 	if !failure.WindowEnds.After(now) {
 		delete(s.loginFailures, key)
-		return nil
+		return 0
 	}
 	if failure.Count >= consoleLoginMaxFailures {
-		return domain.TooManyRequests("RATE_LIMITED", "too many failed console login attempts; retry later")
+		return ceilDurationSeconds(failure.WindowEnds.Sub(now))
 	}
-	return nil
+	return 0
 }
 
 func (s *Server) recordConsoleLoginFailure(r *http.Request) {
@@ -322,6 +324,13 @@ func (s *Server) clearConsoleLoginFailures(r *http.Request) {
 	if s.loginFailures != nil {
 		delete(s.loginFailures, key)
 	}
+}
+
+func ceilDurationSeconds(duration time.Duration) int {
+	if duration <= 0 {
+		return 0
+	}
+	return int((duration + time.Second - 1) / time.Second)
 }
 
 func (s *Server) consoleSessionSecret() []byte {

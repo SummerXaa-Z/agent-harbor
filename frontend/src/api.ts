@@ -174,14 +174,21 @@ function shouldSendConsoleCsrf(method: string) {
 
 export class ApiRequestError extends Error {
   readonly code?: string
+  readonly retryAfterSeconds?: number
   readonly status: number
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, code?: string, retryAfterSeconds?: number) {
     super(message)
     this.name = 'ApiRequestError'
     this.code = code
+    this.retryAfterSeconds = retryAfterSeconds
     this.status = status
   }
+}
+
+function parseRetryAfterSeconds(value: string | null): number | undefined {
+  const parsed = Number.parseInt(value || '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -213,6 +220,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       response.status,
       message || `Request failed with status ${response.status}`,
       isEnvelope<T>(payload) ? payload.error : undefined,
+      parseRetryAfterSeconds(response.headers.get('Retry-After')),
     )
   }
 

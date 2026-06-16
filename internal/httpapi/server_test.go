@@ -1047,6 +1047,9 @@ func TestConsoleLoginRateLimit(t *testing.T) {
 	if limited.Code != http.StatusTooManyRequests || !strings.Contains(limited.Body.String(), "RATE_LIMITED") {
 		t.Fatalf("sixth failed login should be rate limited, got %d body=%s", limited.Code, limited.Body.String())
 	}
+	if got := limited.Header().Get("Retry-After"); got != "300" {
+		t.Fatalf("rate limited login should expose retry window, got Retry-After=%q", got)
+	}
 
 	apiKeyCreate := decodeData[agentResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
 		"name":        "API Key Still Works",

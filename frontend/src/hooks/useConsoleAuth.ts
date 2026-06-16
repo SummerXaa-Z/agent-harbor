@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  ApiRequestError,
   fetchConsoleSession,
   loginConsole,
   logoutConsole
@@ -73,8 +74,8 @@ export function useConsoleAuth() {
         session: nextSession
       }));
       onSuccess?.();
-    } catch {
-      setState((current) => ({ ...current, loginMessage: { key: "error.consoleLoginFailed" } }));
+    } catch (error) {
+      setState((current) => ({ ...current, loginMessage: consoleLoginFailureMessage(error) }));
     } finally {
       setState((current) => ({ ...current, loginSubmitting: false }));
     }
@@ -106,4 +107,14 @@ export function useConsoleAuth() {
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
+}
+
+function consoleLoginFailureMessage(error: unknown): ConsoleAuthMessage {
+  if (error instanceof ApiRequestError && error.code === "RATE_LIMITED") {
+    return {
+      key: "error.consoleLoginRateLimited",
+      params: { seconds: error.retryAfterSeconds ?? 300 }
+    };
+  }
+  return { key: "error.consoleLoginFailed" };
 }

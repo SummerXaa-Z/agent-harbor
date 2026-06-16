@@ -140,6 +140,10 @@ import {
   refreshAfterPermissionApply
 } from "./permissionApplyRefresh";
 import {
+  journeyCompletionRefreshFailedMessageKey,
+  refreshAfterJourneyCompletion
+} from "./journeyCompletionRefresh";
+import {
   createPermissionPackageDraft,
   defaultPermissionPackageDraftInput,
   permissionPackageTemplates,
@@ -1502,28 +1506,7 @@ export function ConsoleController() {
         traceLimit: "10",
         workspaceId: nextConfig.workspaceId
       };
-      const [nextData, nextProfile, auditRows] = await Promise.all([
-        loadConsoleData(adminKey, nextTraceFilters),
-        loadTenantAccessProfile(nextConfig.childTenantId, adminKey, {
-          ...validationAccessFilters,
-          traceLimit: 10
-        }),
-        fetchAuditEvents(
-          {
-            action: "permission_package.applied",
-            resourceId: application.id,
-            tenantId: nextConfig.childTenantId,
-            workspaceId: nextConfig.workspaceId
-          },
-          adminKey
-        )
-      ]);
-      const appliedAudit = auditRows.find((event) => event.metadata?.approvalRequestId === approvedApproval.id) ?? auditRows[0] ?? null;
       setTraceFilters(nextTraceFilters);
-      setData(appliedAudit ? { ...nextData, auditEvents: [appliedAudit, ...nextData.auditEvents.filter((event) => event.id !== appliedAudit.id)] } : nextData);
-      setAiAdminApprovalJourneyAccessProfile(nextProfile);
-      setAiAdminApprovalAuditEvent(appliedAudit);
-      setLastRefresh(new Date());
       setAiAdminApprovalJourneyResult({
         allowedStatus: allowedCall.status,
         applicationId: application.id,
@@ -1533,13 +1516,48 @@ export function ConsoleController() {
         targetId: target.id,
         toolListStatus: toolList.status
       });
-      await refreshAiAdminApplicationHealth(validationForm, { requireLiveApi: false });
-      await refreshAiAdminProductionReadiness(validationForm, {
-        approvalRequestId: approvedApproval.id,
-        requireLiveApi: false,
-        subjectId: nextConfig.subjectId
+      const refreshResult = await refreshAfterJourneyCompletion({
+        onRefresh: async () => {
+          const [nextData, nextProfile, auditRows] = await Promise.all([
+            loadConsoleData(adminKey, nextTraceFilters),
+            loadTenantAccessProfile(nextConfig.childTenantId, adminKey, {
+              ...validationAccessFilters,
+              traceLimit: 10
+            }),
+            fetchAuditEvents(
+              {
+                action: "permission_package.applied",
+                resourceId: application.id,
+                tenantId: nextConfig.childTenantId,
+                workspaceId: nextConfig.workspaceId
+              },
+              adminKey
+            )
+          ]);
+          const appliedAudit = auditRows.find((event) => event.metadata?.approvalRequestId === approvedApproval.id) ?? auditRows[0] ?? null;
+          return { appliedAudit, nextData, nextProfile };
+        }
       });
-      setAiAdminApprovalJourneyMessage(t("message.aiAdminApprovalJourneyComplete"));
+      if (refreshResult.ok) {
+        const { appliedAudit, nextData, nextProfile } = refreshResult.value;
+        setData(appliedAudit ? { ...nextData, auditEvents: [appliedAudit, ...nextData.auditEvents.filter((event) => event.id !== appliedAudit.id)] } : nextData);
+        setAiAdminApprovalJourneyAccessProfile(nextProfile);
+        setAiAdminApprovalAuditEvent(appliedAudit);
+        setLastRefresh(new Date());
+      }
+      await Promise.allSettled([
+        refreshAiAdminApplicationHealth(validationForm, { requireLiveApi: false }),
+        refreshAiAdminProductionReadiness(validationForm, {
+          approvalRequestId: approvedApproval.id,
+          requireLiveApi: false,
+          subjectId: nextConfig.subjectId
+        })
+      ]);
+      setAiAdminApprovalJourneyMessage(
+        refreshResult.ok
+          ? t("message.aiAdminApprovalJourneyComplete")
+          : t(journeyCompletionRefreshFailedMessageKey("ai_admin_approval"))
+      );
       setAiAdminMessage({ key: "message.permissionPackageApplied", params: { count: applied.tenantEntitlements.length } });
     } catch (error) {
       setAiAdminApprovalJourneyMessage(localizedErrorMessage(t, language, error, "error.permissionPackageApprovalJourneyFailed"));

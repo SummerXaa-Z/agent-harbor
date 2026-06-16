@@ -41,6 +41,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 发布验收现在包含 `make web-console-production-journey`，用于对已启动的生产旅程控制台路径执行无新增依赖的 smoke gate。
 - Web console now shows a compact production journey checkpoint across setup, resource management, access query, permission changes, and go-live status, so operators can see the current stage and next safe action without reading technical identifiers.
 - Web 控制台现在在开始使用、资源管理、访问查询、权限变更和上线状态中展示轻量生产旅程提示，管理员无需阅读技术标识即可确认当前阶段和下一步安全动作。
+- First-run and AI Admin runtime validation now commit the completed runtime result before refreshing console/profile/audit records, so a late refresh failure no longer misreports a completed validation as failed.
+- 首次使用和 AI Admin 运行验证现在会先记录已完成的运行结果，再刷新控制台、访问画像和审计记录；后续刷新失败不会再把已完成的验证误报为失败。
 - User-facing console copy now avoids "evidence/证据" wording in primary labels, using acceptance records, runtime records, audit records, handoff material, and go-live status language instead.
 - 控制台用户可见文案不再使用 “evidence/证据” 作为主路径表达，统一改为验收记录、运行记录、审计记录、交接材料和上线状态等业务语言。
 - Resource Management now presents lifecycle operations directly in the resource workbench: create Agent, create key, rotate credential, create policy, review capabilities, start permission changes, and review runtime all start from the same entry.

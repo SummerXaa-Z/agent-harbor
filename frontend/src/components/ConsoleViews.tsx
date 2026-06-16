@@ -138,6 +138,14 @@ export function TenantsView({ tenantOrganizationPanel }: { tenantOrganizationPan
   return <>{tenantOrganizationPanel}</>;
 }
 
+export function AdminAccessView({ adminAccessPanel }: { adminAccessPanel: ReactNode }) {
+  return (
+    <section className="content-grid">
+      {adminAccessPanel}
+    </section>
+  );
+}
+
 export function TracesView({
   managementAuditPanel,
   tracePanel

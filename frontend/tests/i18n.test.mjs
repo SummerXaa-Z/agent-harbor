@@ -60,6 +60,37 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("connectionDiagnostics.mcp.error"), "Tool service check failed: {detail}");
 });
 
+test("administrator boundary workspace has complete bilingual copy", () => {
+  const keys = [
+    "page.adminAccess",
+    "nav.admin-access",
+    "navDetail.adminAccess",
+    "adminAccess.create",
+    "adminAccess.title",
+    "adminAccess.subtitle",
+    "adminAccess.oneTimeKey",
+    "adminAccess.oneTimeKeyDetail",
+    "adminAccess.role.platform_admin",
+    "adminAccess.role.tenant_admin",
+    "adminAccess.role.security_reviewer",
+    "adminAccess.source.bootstrap",
+    "adminAccess.source.managed",
+    "adminAccess.status.active",
+    "adminAccess.status.disabled",
+    "message.adminAccessCreated",
+    "message.adminAccessRotated",
+    "message.adminAccessDisabled",
+    "error.adminAccessOperation"
+  ];
+
+  for (const language of ["en", "zh-CN"]) {
+    const t = createTranslator(language);
+    for (const key of keys) {
+      assert.notEqual(t(key), key, `${language} should define ${key}`);
+    }
+  }
+});
+
 test("createTranslator returns core journey Chinese labels", () => {
   const t = createTranslator("zh-CN");
 
@@ -76,17 +107,20 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("nav.access"), "权限画像");
   assert.equal(t("nav.traces"), "运行审计");
   assert.equal(t("nav.evidence"), "上线检查");
+  assert.equal(t("nav.admin-access"), "管理员");
   assert.equal(t("nav.registry"), "资源管理");
   assert.equal(t("nav.tenants"), "租户与组织");
   assert.equal(t("navGroup.primary"), "查与改");
   assert.equal(t("navGroup.audit"), "审计与验收");
   assert.equal(t("navGroup.configuration"), "资源清单");
   assert.equal(t("navDetail.ai-admin"), "新建、审批、应用并验收权限变更。");
+  assert.equal(t("navDetail.adminAccess"), "管理管理员登录密钥和租户边界。");
   assert.equal(t("navDetail.access"), "按租户和工作区盘点生效权限。");
   assert.equal(t("navDetail.tenants"), "管理租户边界，并从租户发起权限变更。");
   assert.equal(t("navDetail.traces"), "复核运行时允许和拒绝调用。");
   assert.equal(t("page.cockpit"), "系统自检");
   assert.equal(t("page.access"), "租户权限控制台");
+  assert.equal(t("page.adminAccess"), "管理员与边界");
   assert.equal(t("page.evidence"), "上线检查");
   assert.equal(t("page.registry"), "资源管理");
   assert.equal(t("page.tenants"), "租户与组织");

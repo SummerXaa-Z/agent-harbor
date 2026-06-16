@@ -962,7 +962,7 @@ git commit -m "feat: expose admin identity MCP tools"
 - Modify: `frontend/tests/i18n.test.mjs`
 - Modify: `frontend/tests/permissionFlowLayout.test.mjs`
 
-- [ ] **Step 1: Add frontend types**
+- [x] **Step 1: Add frontend types**
 
 Add to `frontend/src/types.ts`:
 
@@ -1010,7 +1010,7 @@ export interface RotateAdminIdentityKeyResponse {
 }
 ```
 
-- [ ] **Step 2: Add API client functions**
+- [x] **Step 2: Add API client functions**
 
 In `frontend/src/api.ts`, import the new types and add:
 
@@ -1032,7 +1032,7 @@ export async function disableAdminIdentity(id: string, adminKey?: string): Promi
 }
 ```
 
-- [ ] **Step 3: Add navigation item**
+- [x] **Step 3: Add navigation item**
 
 In `frontend/src/consoleNavigation.ts`, add nav key `"admin-access"` and item:
 
@@ -1050,7 +1050,7 @@ Add view:
 },
 ```
 
-- [ ] **Step 4: Add presenter helpers**
+- [x] **Step 4: Add presenter helpers**
 
 Create `frontend/src/adminAccess.ts`:
 
@@ -1078,7 +1078,7 @@ export function summarizeAdminIdentities(rows: AdminIdentity[]): AdminAccessSumm
 }
 ```
 
-- [ ] **Step 5: Add controller hook**
+- [x] **Step 5: Add controller hook**
 
 Create `frontend/src/hooks/useAdminAccessController.ts` with state:
 
@@ -1110,7 +1110,7 @@ clearOneTimeKey()
 
 All messages must store `{ key, params }`, not translated strings.
 
-- [ ] **Step 6: Add workspace component**
+- [x] **Step 6: Add workspace component**
 
 Create `frontend/src/components/AdminAccessManagementView.tsx` with:
 
@@ -1125,7 +1125,7 @@ Create `frontend/src/components/AdminAccessManagementView.tsx` with:
 
 Use existing class patterns: `primary-button`, `secondary-button`, `danger-button`, `content-panel`, `form-grid`, and token colors.
 
-- [ ] **Step 7: Wire ConsoleController**
+- [x] **Step 7: Wire ConsoleController**
 
 Import hook and view, create `adminAccessPanel`, and add a case:
 
@@ -1142,7 +1142,7 @@ export function AdminAccessView({ adminAccessPanel }: { adminAccessPanel: ReactN
 }
 ```
 
-- [ ] **Step 8: Add i18n keys**
+- [x] **Step 8: Add i18n keys**
 
 Add English and Simplified Chinese keys:
 
@@ -1168,7 +1168,7 @@ Chinese:
 "adminAccess.oneTimeKeyDetail": "请立即复制，关闭后不会再次展示。",
 ```
 
-- [ ] **Step 9: Add frontend tests**
+- [x] **Step 9: Add frontend tests**
 
 Add source tests that assert:
 

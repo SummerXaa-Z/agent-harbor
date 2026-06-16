@@ -7,6 +7,10 @@ import {
   fetchAdminIdentities,
   rotateAdminIdentityKey
 } from "../api";
+import {
+  adminAccessReloadFailedMessageKey,
+  reloadAfterAdminAccessMutation
+} from "../adminAccessMutationReload";
 import type {
   AdminIdentity,
   CreateAdminIdentityRequest
@@ -26,6 +30,10 @@ interface AdminAccessState {
   modal: "create" | "rotate" | "disable" | null;
   oneTimeKey: string;
   selected: AdminIdentity | null;
+}
+
+interface LoadAdminIdentitiesOptions {
+  throwOnError?: boolean;
 }
 
 const initialState: AdminAccessState = {
@@ -48,7 +56,7 @@ export function useAdminAccessController({
 }) {
   const [state, setState] = useState<AdminAccessState>(initialState);
 
-  const loadAdminIdentities = useCallback(async (signal?: AbortSignal) => {
+  const loadAdminIdentities = useCallback(async (signal?: AbortSignal, options: LoadAdminIdentitiesOptions = {}) => {
     setState((current) => ({ ...current, loading: true }));
     try {
       const identities = await fetchAdminIdentities(adminKey, signal);
@@ -60,6 +68,7 @@ export function useAdminAccessController({
       }));
     } catch (error) {
       if (isAbortError(error)) return;
+      if (options.throwOnError) throw error;
       setState((current) => ({
         ...current,
         forbidden: isForbiddenAdminAccessError(error),
@@ -102,15 +111,25 @@ export function useAdminAccessController({
     setState((current) => ({ ...current, creating: true, message: null, oneTimeKey: "" }));
     try {
       const created = await createAdminIdentity(body, adminKey);
+      const actor = created.identity.displayName || created.identity.actor;
       setState((current) => ({
         ...current,
         identities: mergeIdentity(current.identities, created.identity),
-        message: { key: "message.adminAccessCreated", params: { actor: created.identity.displayName || created.identity.actor } },
+        message: { key: "message.adminAccessCreated", params: { actor } },
         modal: null,
         oneTimeKey: created.key,
         selected: created.identity
       }));
-      await loadAdminIdentities();
+      const reloadResult = await reloadAfterAdminAccessMutation({
+        action: "create_admin",
+        onReload: () => loadAdminIdentities(undefined, { throwOnError: true })
+      });
+      if (!reloadResult.ok) {
+        setState((current) => ({
+          ...current,
+          message: { key: adminAccessReloadFailedMessageKey("create_admin"), params: { actor } }
+        }));
+      }
     } catch (error) {
       setState((current) => ({ ...current, message: localizedAdminAccessError(error, "error.adminAccessCreate") }));
     } finally {
@@ -127,15 +146,25 @@ export function useAdminAccessController({
     setState((current) => ({ ...current, creating: true, message: null, oneTimeKey: "" }));
     try {
       const rotated = await rotateAdminIdentityKey(selected.id, adminKey);
+      const actor = rotated.identity.displayName || rotated.identity.actor;
       setState((current) => ({
         ...current,
         identities: mergeIdentity(current.identities, rotated.identity),
-        message: { key: "message.adminAccessRotated", params: { actor: rotated.identity.displayName || rotated.identity.actor } },
+        message: { key: "message.adminAccessRotated", params: { actor } },
         modal: null,
         oneTimeKey: rotated.key,
         selected: rotated.identity
       }));
-      await loadAdminIdentities();
+      const reloadResult = await reloadAfterAdminAccessMutation({
+        action: "rotate_admin_key",
+        onReload: () => loadAdminIdentities(undefined, { throwOnError: true })
+      });
+      if (!reloadResult.ok) {
+        setState((current) => ({
+          ...current,
+          message: { key: adminAccessReloadFailedMessageKey("rotate_admin_key"), params: { actor } }
+        }));
+      }
     } catch (error) {
       setState((current) => ({ ...current, message: localizedAdminAccessError(error, "error.adminAccessRotate") }));
     } finally {
@@ -152,14 +181,24 @@ export function useAdminAccessController({
     setState((current) => ({ ...current, creating: true, message: null }));
     try {
       const disabled = await disableAdminIdentity(selected.id, adminKey);
+      const actor = disabled.displayName || disabled.actor;
       setState((current) => ({
         ...current,
         identities: mergeIdentity(current.identities, disabled),
-        message: { key: "message.adminAccessDisabled", params: { actor: disabled.displayName || disabled.actor } },
+        message: { key: "message.adminAccessDisabled", params: { actor } },
         modal: null,
         selected: disabled
       }));
-      await loadAdminIdentities();
+      const reloadResult = await reloadAfterAdminAccessMutation({
+        action: "disable_admin",
+        onReload: () => loadAdminIdentities(undefined, { throwOnError: true })
+      });
+      if (!reloadResult.ok) {
+        setState((current) => ({
+          ...current,
+          message: { key: adminAccessReloadFailedMessageKey("disable_admin"), params: { actor } }
+        }));
+      }
     } catch (error) {
       setState((current) => ({ ...current, message: localizedAdminAccessError(error, "error.adminAccessDisable") }));
     } finally {

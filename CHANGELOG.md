@@ -13,6 +13,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 租户权限中心现在会在租户工作区直接展示已分配能力和数据范围；范围化租户管理员响应会返回稳定空数组，避免只读管理员边界下控制台白屏。
 - Web console now includes Administrators & Boundaries, where platform administrators can create scoped managed administrators, rotate one-time keys, disable identities, and audit lifecycle changes without editing deployment configuration.
 - 控制台新增“管理员与边界”，平台管理员可以在产品内创建范围化管理员、轮换一次性密钥、禁用身份并审计生命周期变更，不再依赖修改部署配置完成日常管理。
+- Administrators & Boundaries now separates successful administrator writes from follow-up list reload failures, keeping one-time keys visible and avoiding false failure feedback after create, rotate, or disable operations.
+- “管理员与边界”现在会区分管理员写入成功和后续列表刷新失败；创建、轮换或停用操作完成后会保留一次性密钥展示，避免把刷新失败误报成操作失败。
 - Release readiness now includes `make scenario-admin-access-management`, proving managed administrator creation, scoped login, tenant-boundary enforcement, key rotation, disablement, and audit redaction in one production lifecycle gate.
 - 发布验收现在包含 `make scenario-admin-access-management`，在同一个生产生命周期门禁中验证托管管理员创建、范围化登录、租户边界约束、密钥轮换、禁用和审计脱敏。
 - Admin identities can now be scoped by role, tenant, and workspace. Scoped tenant admins are intersected with their allowed tenant subtree and workspace across REST management APIs, permission-package operations, browser sessions, and management MCP tools.

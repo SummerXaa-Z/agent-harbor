@@ -179,7 +179,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("empty.auditTraces.title"), "暂无运行记录");
   assert.equal(t("empty.auditTraces.detail"), "允许、拒绝和工具发现过滤记录会显示在这里。");
   assert.equal(t("panel.evidenceRuns"), "历史验收");
-  assert.equal(t("panel.resourceLifecycle"), "资源生命周期");
+  assert.equal(t("panel.resourceLifecycle"), "资源管理");
   assert.equal(t("resource.status.needsApproval"), "需要授权");
   assert.equal(t("resource.detail.needsCredentials"), "需要先配置目标服务凭据。");
   assert.equal(t("resource.detail.needsCapabilities"), "需要发现并复核可用能力。");
@@ -187,10 +187,12 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("resource.detail.needsRuntime"), "需要一次真实调用来确认运行结果。");
   assert.equal(t("resource.permissionIntent"), "为 {target} 创建授权。");
   assert.equal(t("resource.contextTitle"), "当前资源");
-  assert.equal(t("resource.contextDetail"), "先确认资源上下文，再执行下一步操作。");
+  assert.equal(t("resource.contextDetail"), "所选资源会决定推荐操作，同时保留租户和工作区上下文。");
   assert.equal(t("resource.contextScope"), "范围");
   assert.equal(t("resource.contextHealth"), "状态");
   assert.equal(t("resource.contextNext"), "推荐下一步");
+  assert.equal(t("resource.listTitle"), "资源清单");
+  assert.equal(t("resource.listCount").replace("{count}", "3"), "3 个资源");
   assert.equal(t("resource.actionContext.title"), "操作上下文");
   assert.equal(t("resource.actionContext.resource"), "资源");
   assert.equal(t("resource.actionContext.scope"), "操作范围");

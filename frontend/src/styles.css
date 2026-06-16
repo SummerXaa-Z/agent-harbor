@@ -1126,15 +1126,15 @@ button {
 
 .resource-lifecycle-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(420px, 0.85fr);
-  gap: var(--space-4);
-  align-items: end;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: start;
 }
 
 .resource-lifecycle-hero h3 {
   margin: var(--space-1) 0 var(--space-2);
-  font-size: 20px;
-  line-height: 26px;
+  font-size: 18px;
+  line-height: 24px;
   letter-spacing: 0;
 }
 
@@ -1202,10 +1202,10 @@ button {
 
 .resource-lifecycle-command-center {
   display: grid;
-  grid-template-columns: minmax(220px, 0.85fr) minmax(0, 1.15fr);
-  gap: var(--space-3);
-  align-items: center;
-  padding: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 16px;
+  align-items: start;
+  padding: 14px 16px;
   border: 1px solid var(--line-subtle);
   border-radius: var(--radius-control);
   background: var(--surface);
@@ -1245,7 +1245,8 @@ button {
 
 .resource-lifecycle-secondary-actions {
   grid-column: 1 / -1;
-  padding-top: var(--space-2);
+  justify-content: flex-start;
+  padding-top: 10px;
   border-top: 1px solid var(--line-subtle);
 }
 
@@ -1255,15 +1256,13 @@ button {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: center;
-  padding: 10px 12px;
-  border: 1px solid var(--line-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line-subtle);
+  background: transparent;
 }
 
 .resource-lifecycle-refresh-status.is-stale {
-  border-color: var(--warning-border);
-  background: var(--warning-soft);
+  border-top-color: var(--warning-border);
 }
 
 .resource-lifecycle-refresh-status span {
@@ -1296,28 +1295,6 @@ button {
 
 .resource-lifecycle-command-actions .action-modal-inline {
   display: flex;
-}
-
-.action-modal-trigger-command {
-  width: auto;
-  min-height: var(--control-height);
-  gap: 10px;
-  padding: 0 var(--space-4);
-  border-color: var(--brand-border);
-  background: var(--surface);
-  box-shadow: none;
-}
-
-.action-modal-trigger-command.is-primary {
-  border-color: var(--brand);
-  background: var(--brand);
-  color: var(--surface);
-}
-
-.action-modal-trigger-command.is-secondary {
-  border-color: var(--line-strong);
-  background: var(--surface);
-  color: var(--ink);
 }
 
 .production-journey-checkpoint {
@@ -1396,37 +1373,13 @@ button {
   justify-self: end;
 }
 
-.action-modal-trigger-command:hover {
-  border-color: var(--brand-border-strong);
-  background: var(--brand-soft);
-}
-
-.action-modal-trigger-command.is-primary:hover {
-  border-color: var(--brand-strong);
-  background: var(--brand-strong);
-}
-
-.action-modal-trigger-command.is-primary .action-modal-trigger-label svg,
-.action-modal-trigger-command.is-primary .action-modal-trigger-label strong,
-.action-modal-trigger-command.is-primary .action-modal-trigger-affordance {
-  color: var(--surface);
-}
-
-.action-modal-trigger-command .action-modal-trigger-affordance {
-  min-height: 24px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
 .resource-lifecycle-context-panel {
   display: grid;
-  grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.4fr) auto;
-  gap: var(--space-4);
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.35fr) minmax(172px, auto);
+  gap: 14px;
   align-items: center;
-  padding: var(--space-3);
+  padding: 14px 16px;
   border: 1px solid var(--line-subtle);
-  border-left: 3px solid var(--brand);
   border-radius: var(--radius-control);
   background: var(--surface);
 }
@@ -1455,7 +1408,7 @@ button {
 
 .resource-lifecycle-context-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1.25fr) minmax(180px, 1.15fr) repeat(3, minmax(72px, 0.55fr));
+  grid-template-columns: minmax(170px, 1.25fr) minmax(156px, 1fr) repeat(3, minmax(64px, 0.45fr));
   gap: var(--space-2);
   min-width: 0;
 }
@@ -1464,10 +1417,13 @@ button {
   display: grid;
   min-width: 0;
   gap: 3px;
-  padding: 8px 10px;
-  border: 1px solid var(--line-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
+  padding: 0 10px;
+  border-left: 1px solid var(--line-subtle);
+}
+
+.resource-lifecycle-context-grid > span:first-child {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .resource-lifecycle-context-grid small {
@@ -1516,7 +1472,29 @@ button {
   display: grid;
   border: 1px solid var(--line-subtle);
   border-radius: var(--radius-control);
+  background: var(--surface);
   overflow: hidden;
+}
+
+.resource-lifecycle-list-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.resource-lifecycle-list-title strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.resource-lifecycle-list-title span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .resource-lifecycle-header,
@@ -1530,14 +1508,14 @@ button {
 .resource-lifecycle-header {
   min-height: 36px;
   padding: 0 var(--space-3);
-  background: var(--surface-raised);
+  background: var(--surface-subtle);
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
 .resource-lifecycle-row {
-  min-height: 58px;
+  min-height: 54px;
   padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--line-subtle);
 }
@@ -2275,6 +2253,53 @@ button {
 .action-modal-trigger-compact .action-modal-trigger-affordance svg {
   width: 14px;
   height: 14px;
+}
+
+.action-modal-trigger-command {
+  width: auto;
+  min-height: 38px;
+  gap: 8px;
+  padding: 0 12px;
+  border-color: var(--brand-border);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.action-modal-trigger-command.is-primary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--surface);
+}
+
+.action-modal-trigger-command.is-secondary {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.action-modal-trigger-command .action-modal-trigger-affordance {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: currentColor;
+  font-size: 0;
+}
+
+.action-modal-trigger-command:hover {
+  border-color: var(--brand-border-strong);
+  background: var(--brand-soft);
+}
+
+.action-modal-trigger-command.is-primary:hover {
+  border-color: var(--brand-strong);
+  background: var(--brand-strong);
+}
+
+.action-modal-trigger-command.is-primary .action-modal-trigger-label svg,
+.action-modal-trigger-command.is-primary .action-modal-trigger-label strong,
+.action-modal-trigger-command.is-primary .action-modal-trigger-affordance {
+  color: var(--surface);
 }
 
 .action-modal-backdrop {

@@ -111,6 +111,10 @@ export function ResourceLifecycleView({
       ) : null}
 
       <section className="resource-lifecycle-list" aria-label={t("resource.listAria")}>
+        <div className="resource-lifecycle-list-title">
+          <strong>{t("resource.listTitle")}</strong>
+          <span>{tx(t, "resource.listCount", { count: summary.items.length })}</span>
+        </div>
         <div className="resource-lifecycle-header" aria-hidden="true">
           <span>{t("resource.column.resource")}</span>
           <span>{t("resource.column.status")}</span>

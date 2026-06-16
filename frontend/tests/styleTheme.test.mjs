@@ -263,12 +263,18 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(styles, /\.content-grid\s*\{[^}]*align-items:\s*start;/s);
   assert.match(styles, /\.resource-lifecycle\s*\{/);
   assert.match(styles, /\.resource-lifecycle-command-center\s*\{/);
+  assert.match(styles, /\.resource-lifecycle-command-center\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
   assert.match(styles, /\.resource-lifecycle-context-panel\s*\{/);
   assert.match(styles, /\.resource-lifecycle-context-grid\s*\{/);
   assert.match(styles, /\.resource-lifecycle-resource-button\s*\{/);
+  assert.match(styles, /\.resource-lifecycle-list-title\s*\{/);
+  assert.match(resourceLifecycleView, /resource-lifecycle-list-title/);
+  assert.match(resourceLifecycleView, /t\("resource\.listTitle"\)/);
+  assert.match(resourceLifecycleView, /tx\(t,\s*"resource\.listCount"/);
   assert.match(styles, /\.resource-lifecycle-row\.is-selected\s*\{/);
   assert.match(styles, /\.action-modal-trigger-command\.is-primary\s*\{/);
   assert.match(styles, /\.action-modal-trigger-command\.is-secondary\s*\{/);
+  assert.match(styles, /\.action-modal-trigger-command \.action-modal-trigger-affordance\s*\{[^}]*font-size:\s*0;/s);
   assert.match(styles, /\.action-modal-body \.control-form\s*\{/);
   assert.doesNotMatch(styles, /\.action-modal-trigger-command\s*\{[^}]*box-shadow:\s*var\(--shadow-card\);/s);
   assert.match(resourceLifecycleView, /summary\.items\.map/);

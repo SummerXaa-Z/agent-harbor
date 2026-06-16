@@ -167,7 +167,7 @@ test("permission journey messages store translation keys instead of rendered lan
   assert.match(app, /const renderedAiAdminMessage = localizedMessageText\(aiAdminMessage, t, language\)/);
   assert.match(app, /message=\{renderedAiAdminMessage\}/);
   assert.match(createBlock, /setAiAdminMessage\(\{ key: "message\.permissionApprovalCreated", params: \{ id: request\.id \} \}\)/);
-  assert.match(applyBlock, /setAiAdminMessage\(\{ key: "message\.permissionPackageApplied", params: \{ count: appliedCount \} \}\)/);
+  assert.match(applyBlock, /setAiAdminMessage\(\{[\s\S]*key: refreshResult\.ok \? "message\.permissionPackageApplied" : permissionApplyRefreshFailedMessageKey\(\),[\s\S]*params: \{ count: appliedCount \}[\s\S]*\}\)/);
   assert.match(exportBlock, /setAiAdminMessage\(\{ key: "message\.productionEvidenceExported" \}\)/);
   assert.doesNotMatch(app, /setAiAdminMessage\(tx\(t,/);
 });

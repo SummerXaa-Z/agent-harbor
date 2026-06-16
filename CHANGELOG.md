@@ -31,6 +31,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 上线检查工作区现在使用独立的上线判断模型，在历史记录表之前先展示一个可上线/已阻断判断、阻断项、连接状态、运行验证和交接状态。
 - Permission Changes now returns a stable consumed-approval error code and the console shows recovery guidance with a best-effort status refresh when an already-used approval is retried.
 - 权限变更现在会在重复使用已消费审批时返回稳定错误码，控制台会展示恢复指引并尽力刷新当前状态，避免管理员误以为需要重复提交。
+- Permission Changes now separates successful permission application from follow-up console/profile refresh failures, keeping returned application and grant records visible instead of reporting the apply as failed.
+- 权限变更现在会区分权限应用成功和后续控制台/访问画像刷新失败；应用返回的记录和授权对象会先保留在界面中，避免把刷新失败误报成应用失败。
 - Production deployment mode now runs a configuration preflight that blocks development-only admin bypass and private-upstream flags before startup.
 - 生产部署模式现在会执行配置预检，在启动前阻断开发专用的管理绕过和私有上游开关。
 - Frontend dependency security now pins Vite's transitive `esbuild` resolution to the patched `0.28.1` line through a pnpm override, with tests guarding against lockfile downgrade.

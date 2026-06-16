@@ -135,10 +135,16 @@ import {
   type AiAdminProductionConsoleStatus
 } from "./aiAdminProductionConsole";
 import {
+  mergePermissionApplyResultIntoConsoleData,
+  permissionApplyRefreshFailedMessageKey,
+  refreshAfterPermissionApply
+} from "./permissionApplyRefresh";
+import {
   createPermissionPackageDraft,
   defaultPermissionPackageDraftInput,
   permissionPackageTemplates,
   subjectIdExampleFromSelector,
+  type PermissionPackageApplyResult,
   type PermissionPackageApplyInput,
   type PermissionPackageApplyPreflight,
   type PermissionPackageApplyPreflightCheck,
@@ -1876,6 +1882,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     setAiAdminApplying(true);
     try {
       let appliedCount = aiAdminDraft.allowedCapabilities.length;
+      let appliedResult: PermissionPackageApplyResult | null = null;
       let application: PermissionPackageApplication | null = null;
       try {
         const applied = await applyPermissionPackage(
@@ -1884,6 +1891,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
             : aiAdminForm,
           adminKey
         );
+        appliedResult = applied;
         appliedCount = applied.tenantEntitlements.length;
         application = applied.application ?? null;
       } catch (error) {
@@ -1904,26 +1912,41 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         traceLimit: "10",
         workspaceId: aiAdminForm.workspaceId
       };
-      const [nextData, nextProfile] = await Promise.all([
-        loadConsoleData(adminKey, traceFilters),
-        loadTenantAccessProfile(aiAdminForm.tenantId, adminKey, {
-          ...nextAccessFilters,
-          traceLimit: 10
-        })
-      ]);
       setScope(nextScope);
       accessProfileController.updateFilters(nextAccessFilters);
-      setData(nextData);
-      accessProfileController.setProfile(nextProfile);
-      setLastRefresh(new Date());
       setAiAdminApplication(application);
+      if (appliedResult) {
+        setData((current) => current ? mergePermissionApplyResultIntoConsoleData(current, appliedResult) : current);
+      }
+      const refreshResult = await refreshAfterPermissionApply({
+        onRefresh: async () => {
+          const [nextData, nextProfile] = await Promise.all([
+            loadConsoleData(adminKey, traceFilters),
+            loadTenantAccessProfile(aiAdminForm.tenantId, adminKey, {
+              ...nextAccessFilters,
+              traceLimit: 10
+            })
+          ]);
+          return { nextData, nextProfile };
+        }
+      });
+      if (refreshResult.ok) {
+        setData(refreshResult.value.nextData);
+        accessProfileController.setProfile(refreshResult.value.nextProfile);
+        setLastRefresh(new Date());
+      }
       if (application) {
-        await refreshAiAdminApplicationHealth(aiAdminForm, { requireLiveApi: false });
-        await refreshAiAdminProductionReadiness(aiAdminForm, { requireLiveApi: false });
+        await Promise.allSettled([
+          refreshAiAdminApplicationHealth(aiAdminForm, { requireLiveApi: false }),
+          refreshAiAdminProductionReadiness(aiAdminForm, { requireLiveApi: false })
+        ]);
       }
       setAiAdminApplicationImpact(null);
       setAiAdminApplicationImpactMessage("");
-      setAiAdminMessage({ key: "message.permissionPackageApplied", params: { count: appliedCount } });
+      setAiAdminMessage({
+        key: refreshResult.ok ? "message.permissionPackageApplied" : permissionApplyRefreshFailedMessageKey(),
+        params: { count: appliedCount }
+      });
       await loadAiAdminApprovalRequestsForDraft(aiAdminDraft).catch(() => undefined);
     } catch (error) {
       if (isConsumedApprovalRetryError(error)) {

@@ -196,6 +196,10 @@ func (s *Server) Router() http.Handler {
 		r.Post("/auth/logout", s.logout)
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAdmin)
+			r.Get("/admin-identities", s.listAdminIdentities)
+			r.Post("/admin-identities", s.createAdminIdentity)
+			r.Post("/admin-identities/{id}/key:rotate", s.rotateAdminIdentityKey)
+			r.Post("/admin-identities/{id}:disable", s.disableAdminIdentity)
 			r.Post("/tenants", s.createTenant)
 			r.Get("/tenants", s.listTenants)
 			r.Get("/tenants/{id}/access-profile", s.getTenantAccessProfile)
@@ -316,12 +320,8 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
-		if s.adminKey == "" && len(s.adminIdentities) == 0 {
-			writeError(w, domain.Unauthorized("admin authentication is required"))
-			return
-		}
 		provided := r.Header.Get("X-Admin-Key")
-		if principal, ok := s.adminPrincipalForKey(provided); ok {
+		if principal, ok := s.adminPrincipalForKey(r.Context(), provided); ok {
 			ctx := context.WithValue(r.Context(), adminActorContextKey{}, principal)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
@@ -335,7 +335,15 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) adminPrincipalForKey(provided string) (adminPrincipal, bool) {
+func (s *Server) adminPrincipalForKey(ctx context.Context, provided string) (adminPrincipal, bool) {
+	provided = strings.TrimSpace(provided)
+	if provided != "" {
+		managed, ok, err := s.repo.FindAdminIdentityByKeyHash(ctx, security.HashSecret(provided))
+		if err == nil && ok && managed.Status == domain.AdminIdentityStatusActive {
+			_ = s.repo.TouchAdminIdentityLastUsed(ctx, managed.ID, s.now())
+			return adminPrincipalFromManagedIdentity(managed), true
+		}
+	}
 	for _, identity := range s.adminIdentities {
 		if len(provided) == len(identity.Key) && subtle.ConstantTimeCompare([]byte(provided), []byte(identity.Key)) == 1 {
 			return identity.principal(), true
@@ -350,10 +358,14 @@ func (s *Server) adminPrincipalForKey(provided string) (adminPrincipal, bool) {
 	return adminPrincipal{}, false
 }
 
-func (s *Server) adminPrincipalForActor(actor string) (adminPrincipal, bool) {
+func (s *Server) adminPrincipalForActor(ctx context.Context, actor string) (adminPrincipal, bool) {
 	actor = strings.TrimSpace(actor)
 	if actor == "" {
 		return adminPrincipal{}, false
+	}
+	managed, ok, err := s.repo.GetAdminIdentityByActor(ctx, actor)
+	if err == nil && ok && managed.Status == domain.AdminIdentityStatusActive {
+		return adminPrincipalFromManagedIdentity(managed), true
 	}
 	for _, identity := range s.adminIdentities {
 		if identity.Actor == actor {

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -50,7 +51,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	principal, ok := s.adminPrincipalForKey(req.AdminKey)
+	principal, ok := s.adminPrincipalForKey(r.Context(), req.AdminKey)
 	if !ok {
 		writeError(w, domain.Unauthorized("missing or invalid admin key"))
 		return
@@ -79,7 +80,7 @@ func (s *Server) consoleSessionFromRequest(r *http.Request) (adminPrincipal, tim
 	if err != nil {
 		return adminPrincipal{}, time.Time{}, false
 	}
-	return s.verifyConsoleSession(cookie.Value)
+	return s.verifyConsoleSession(r.Context(), cookie.Value)
 }
 
 func (s *Server) developmentSession() (adminPrincipal, time.Time, bool) {
@@ -149,7 +150,7 @@ func (s *Server) signConsoleSession(principal adminPrincipal, expiresAt time.Tim
 	return "v1." + encodedPayload + "." + signature, nil
 }
 
-func (s *Server) verifyConsoleSession(token string) (adminPrincipal, time.Time, bool) {
+func (s *Server) verifyConsoleSession(ctx context.Context, token string) (adminPrincipal, time.Time, bool) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 || parts[0] != "v1" {
 		return adminPrincipal{}, time.Time{}, false
@@ -171,7 +172,7 @@ func (s *Server) verifyConsoleSession(token string) (adminPrincipal, time.Time, 
 	if actor == "" || !expiresAt.After(s.now()) {
 		return adminPrincipal{}, time.Time{}, false
 	}
-	principal, ok := s.adminPrincipalForActor(actor)
+	principal, ok := s.adminPrincipalForActor(ctx, actor)
 	if !ok {
 		return adminPrincipal{}, time.Time{}, false
 	}

@@ -17,6 +17,9 @@ import {
   type ProductionAcceptanceAction,
   type ProductionAcceptanceStatus
 } from "../productionAcceptance";
+import {
+  permissionProductionReadinessNextAction
+} from "../productionReadinessCopy";
 import type {
   PermissionPackageDraft,
   PermissionPackageDraftInput,
@@ -352,26 +355,6 @@ function permissionPackageTemplateName(template: PermissionPackageTemplate, t: T
 
 function permissionPackageTemplateNameById(templateId: string, t: Translator) {
   return t(`permissionPackage.${templateId}.name`, templateId);
-}
-
-function permissionProductionReadinessNextAction(action: string, t: Translator) {
-  const known: Record<string, string> = {
-    "Apply the approved permission package before production readiness.": "productionNext.applyApproved",
-    "Inspect the latest permission package application scope before go-live.": "productionNext.inspectScope",
-    "Production readiness evidence is complete.": "productionNext.complete",
-    "Production readiness is complete.": "productionNext.complete",
-    "Resolve apply preflight blockers before claiming production readiness.": "productionNext.resolvePreflight",
-    "Resolve impact review blockers before production readiness.": "productionNext.resolveImpact",
-    "Review application health and drift blockers before production readiness.": "productionNext.reviewHealth",
-    "Run a denied MCP call that proves blocked tools stay blocked.": "productionNext.runDenied",
-    "Run an allowed MCP call with the production subject before go-live.": "productionNext.runAllowed",
-    "Verify permission package applied audit evidence before production readiness.": "productionNext.verifyAudit",
-    "Verify the permission package applied audit record before production readiness.": "productionNext.verifyAudit",
-    "Verify tenant entitlement, workspace assignment, and caller assignment evidence.": "productionNext.verifyGrantChain",
-    "Verify tenant entitlement, workspace assignment, and caller assignment records.": "productionNext.verifyGrantChain"
-  };
-  const key = known[action];
-  return key ? t(key) : action;
 }
 
 function productionAcceptanceStatusTone(status: ProductionAcceptanceStatus): Tone {

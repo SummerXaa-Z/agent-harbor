@@ -12,6 +12,7 @@ import {
 } from "../src/apiPaths.ts";
 
 const apiSource = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
+const typesSource = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
 
 test("permission package workbench preview posts the request body instead of query text", () => {
   assert.match(apiSource, /function previewPermissionPackageWorkbench\(/);
@@ -27,6 +28,15 @@ test("permission package access subjects load from the management API", () => {
 
 test("management API requests include console session cookies", () => {
   assert.match(apiSource, /credentials:\s*['"]include['"]/);
+});
+
+test("console session mutations send csrf token from session state", () => {
+  assert.match(typesSource, /csrfToken\?: string/);
+  assert.match(apiSource, /let consoleCsrfToken = ['"]['"]/);
+  assert.match(apiSource, /function setConsoleCsrfToken/);
+  assert.match(apiSource, /X-AgentHarbor-CSRF/);
+  assert.match(apiSource, /function shouldSendConsoleCsrf/);
+  assert.match(apiSource, /setConsoleCsrfToken\(session\.csrfToken\)/);
 });
 
 test("API request errors preserve backend error codes", () => {

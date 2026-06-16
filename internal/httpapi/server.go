@@ -302,7 +302,7 @@ func localDevCORS(extraOrigins []string) func(http.Handler) http.Handler {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Key, X-Run-Id, X-AgentHarbor-Subject-Id")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Key, X-Run-Id, X-AgentHarbor-Subject-Id, X-AgentHarbor-CSRF")
 				w.Header().Set("Vary", "Origin")
 				if r.Method == http.MethodOptions {
 					w.WriteHeader(http.StatusNoContent)
@@ -327,7 +327,20 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
-		if principal, _, ok := s.consoleSessionFromRequest(r); ok {
+		if sessionToken, ok := consoleSessionTokenFromRequest(r); ok {
+			principal, _, sessionOK := s.verifyConsoleSession(r.Context(), sessionToken)
+			if !sessionOK {
+				if !s.hasConfiguredAdminAuthentication(r.Context()) {
+					writeError(w, domain.Unauthorized("admin authentication is required"))
+					return
+				}
+				writeError(w, domain.Unauthorized("missing or invalid admin key"))
+				return
+			}
+			if err := s.validateConsoleSessionCSRF(r, sessionToken); err != nil {
+				writeError(w, err)
+				return
+			}
 			ctx := context.WithValue(r.Context(), adminActorContextKey{}, principal)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return

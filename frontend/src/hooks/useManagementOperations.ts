@@ -106,6 +106,15 @@ export function useManagementOperations({
     setManagementMutationAction("");
   }
 
+  function clearCreatedKey() {
+    setCreatedKey(null);
+  }
+
+  function updateKeyForm(next: KeyCreateFormState) {
+    setCreatedKey(null);
+    setKeyForm(next);
+  }
+
   async function finishManagementMutation(
     action: ManagementMutationAction,
     setMessage: (message: string) => void
@@ -217,9 +226,9 @@ export function useManagementOperations({
 
   async function submitKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setCreatedKey(null);
     if (!beginManagementMutation("create_key")) return;
     setKeyMessage("");
-    setCreatedKey(null);
     try {
       const ttl = Number(keyForm.expiresInSeconds);
       if (!Number.isInteger(ttl) || ttl < 1 || ttl > 3600) {
@@ -318,6 +327,7 @@ export function useManagementOperations({
     agentForm,
     agentMessage,
     cleanupActionId,
+    clearCreatedKey,
     createdKey,
     handleAgentStatusChange,
     handleDisablePolicy,
@@ -330,7 +340,7 @@ export function useManagementOperations({
     rotateForm,
     rotateMessage,
     setAgentForm,
-    setKeyForm,
+    setKeyForm: updateKeyForm,
     setPolicyForm,
     setRotateForm,
     submitAgent,

@@ -61,6 +61,7 @@ export function ActionModalButton({
   openLabel,
   closeLabel,
   id,
+  onClose,
   openToken,
   tone = "secondary",
   variant = "compact",
@@ -71,6 +72,7 @@ export function ActionModalButton({
   openLabel: string;
   closeLabel: string;
   id?: string;
+  onClose?: () => void;
   openToken?: number;
   tone?: "primary" | "secondary";
   variant?: "compact" | "command";
@@ -86,6 +88,7 @@ export function ActionModalButton({
       closeLabel={closeLabel}
       icon={icon}
       id={id}
+      onClose={onClose}
       openLabel={openLabel}
       openToken={openToken}
       title={title}
@@ -104,6 +107,7 @@ function ActionModalLauncher({
   className,
   triggerClassName,
   id,
+  onClose,
   openToken,
   children
 }: {
@@ -114,6 +118,7 @@ function ActionModalLauncher({
   className: string;
   triggerClassName: string;
   id?: string;
+  onClose?: () => void;
   openToken?: number;
   children: ReactNode;
 }) {
@@ -121,6 +126,12 @@ function ActionModalLauncher({
   const dialogId = `${id ?? "action-modal"}-${generatedId}`;
   const [open, setOpen] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  function closeModal() {
+    if (!open) return;
+    setOpen(false);
+    onClose?.();
+  }
 
   useEffect(() => {
     if (openToken === undefined) return;
@@ -134,7 +145,7 @@ function ActionModalLauncher({
     const previousOverflow = document.body.style.overflow;
     const focusTimer = window.setTimeout(() => closeButtonRef.current?.focus(), 0);
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") closeModal();
     };
 
     document.body.style.overflow = "hidden";
@@ -173,7 +184,7 @@ function ActionModalLauncher({
           className="action-modal-backdrop"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setOpen(false);
+            if (event.target === event.currentTarget) closeModal();
           }}
         >
           <section
@@ -194,7 +205,7 @@ function ActionModalLauncher({
                 className="icon-button compact"
                 title={closeLabel}
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={closeModal}
               >
                 <X size={15} />
               </button>

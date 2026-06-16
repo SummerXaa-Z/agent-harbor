@@ -1,5 +1,5 @@
 import type { FormEvent } from "react";
-import { Copy, RefreshCw } from "lucide-react";
+import { Copy, RefreshCw, X } from "lucide-react";
 
 import {
   formatDate,
@@ -99,6 +99,7 @@ export function KeyCreateForm({
   form,
   message,
   onChange,
+  onDismissCreatedKey,
   onSubmit,
   submitting = false,
   t
@@ -109,6 +110,7 @@ export function KeyCreateForm({
   form: KeyCreateFormState;
   message: string;
   onChange: (form: KeyCreateFormState) => void;
+  onDismissCreatedKey: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   submitting?: boolean;
   t: Translator;
@@ -123,7 +125,10 @@ export function KeyCreateForm({
         <div className="one-time-key">
           <div><strong>{t("text.oneTimeKey")}</strong><span>{tx(t, "text.oneTimeKeyDetail", { expiresAt: formatDate(createdKey.expiresAt) })}</span></div>
           <code>{createdKey.key}</code>
-          <button className="secondary-button" type="button" onClick={() => void navigator.clipboard?.writeText(createdKey.key)}><Copy size={14} /> {t("action.copy")}</button>
+          <div className="one-time-key-actions">
+            <button className="secondary-button" type="button" onClick={() => void navigator.clipboard?.writeText(createdKey.key)}><Copy size={14} /> {t("action.copy")}</button>
+            <button className="secondary-button" type="button" onClick={onDismissCreatedKey}><X size={14} /> {t("action.clearOneTimeKey")}</button>
+          </div>
         </div>
       ) : null}
       <FormFooter message={message} submitting={submitting} submittingLabel={t("action.processing")} submitLabel={t("action.createKey")} />

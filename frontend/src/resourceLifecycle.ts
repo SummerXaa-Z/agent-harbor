@@ -2,6 +2,7 @@ import type {
   Agent,
   Capability,
   InstanceAssignment,
+  ManagementScope,
   RoutePolicy,
   TenantEntitlement,
   TraceEvent,
@@ -72,6 +73,7 @@ export interface ResourceLifecycleInput {
   capabilities: Capability[];
   instanceAssignments: InstanceAssignment[];
   routePolicies: RoutePolicy[];
+  scope?: ManagementScope;
   tenantEntitlements: TenantEntitlement[];
   traces: TraceEvent[];
   workspaceAssignments: WorkspaceAssignment[];
@@ -252,7 +254,9 @@ function resourceSetupGaps(
   items: ResourceLifecycleItem[],
   input: ResourceLifecycleInput
 ): ResourceLifecycleSetupGap[] {
-  const activeItems = items.filter((item) => item.status !== "disabled");
+  const setupScope = input.scope;
+  const scopedItems = setupScope ? items.filter((item) => resourceInScope(item, setupScope)) : items;
+  const activeItems = scopedItems.filter((item) => item.status !== "disabled");
   const activeTargetIds = new Set(
     activeItems
       .filter((item) => item.kind !== "caller")
@@ -272,6 +276,12 @@ function resourceSetupGaps(
     gaps.push(setupGap("capability"));
   }
   return gaps;
+}
+
+function resourceInScope(item: ResourceLifecycleItem, scope: ManagementScope) {
+  const tenantId = scope.tenantId.trim();
+  const workspaceId = scope.workspaceId.trim();
+  return (!tenantId || item.tenantId === tenantId) && (!workspaceId || item.workspaceId === workspaceId);
 }
 
 function setupGap(kind: ResourceLifecycleSetupGapKind): ResourceLifecycleSetupGap {

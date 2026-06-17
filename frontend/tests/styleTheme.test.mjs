@@ -396,6 +396,7 @@ test("management mutation forms open from resource command modals", () => {
   assert.match(app, /<ActionModalButton[\s\S]*id="policy-create-panel"[\s\S]*title=\{t\("panel\.createPolicy"\)\}/);
   assert.match(app, /<ActionModalButton[\s\S]*title=\{t\("panel\.rotateCredential"\)\}/);
   assert.match(app, /ResourceLifecycleActionContext/);
+  assert.match(app, /scope: normalizedScope\(scope\)/);
   assert.match(app, /context: ResourceLifecycleActionContext \| null/);
   assert.match(app, /const resourceActionContext = resourceActionRequest\.context/);
   assert.match(app, /openResourceActionModal\(plan\.modal, plan\.context\)/);

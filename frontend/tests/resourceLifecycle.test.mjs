@@ -200,6 +200,52 @@ test("resource lifecycle exposes access query setup gaps", () => {
   assert.deepEqual(queryReady.setupGaps, []);
 });
 
+test("resource lifecycle setup gaps honor the current management scope", () => {
+  const scopedGaps = buildResourceLifecycleSummary({
+    agents: [
+      agent({ channelType: "local", id: "agt-east-caller", name: "East Caller", tenantId: "tenant-east", workspaceId: "ws-east" }),
+      agent({ id: "agt-east-target", name: "East Target", tenantId: "tenant-east", workspaceId: "ws-east" })
+    ],
+    capabilities: [capability({ id: "cap-east", targetId: "agt-east-target" })],
+    instanceAssignments: [],
+    routePolicies: [],
+    scope: { tenantId: "tenant-west", workspaceId: "ws-west" },
+    tenantEntitlements: [],
+    traces: [],
+    workspaceAssignments: []
+  });
+  const scopedCallerOnly = buildResourceLifecycleSummary({
+    agents: [
+      agent({ channelType: "local", id: "agt-west-caller", name: "West Caller", tenantId: "tenant-west", workspaceId: "ws-west" }),
+      agent({ id: "agt-east-target", name: "East Target", tenantId: "tenant-east", workspaceId: "ws-east" })
+    ],
+    capabilities: [capability({ id: "cap-east", targetId: "agt-east-target" })],
+    instanceAssignments: [],
+    routePolicies: [],
+    scope: { tenantId: "tenant-west", workspaceId: "ws-west" },
+    tenantEntitlements: [],
+    traces: [],
+    workspaceAssignments: []
+  });
+  const scopedReady = buildResourceLifecycleSummary({
+    agents: [
+      agent({ channelType: "local", id: "agt-west-caller", name: "West Caller", tenantId: "tenant-west", workspaceId: "ws-west" }),
+      agent({ id: "agt-west-target", name: "West Target", tenantId: "tenant-west", workspaceId: "ws-west" })
+    ],
+    capabilities: [capability({ id: "cap-west", targetId: "agt-west-target" })],
+    instanceAssignments: [],
+    routePolicies: [],
+    scope: { tenantId: "tenant-west", workspaceId: "ws-west" },
+    tenantEntitlements: [],
+    traces: [],
+    workspaceAssignments: []
+  });
+
+  assert.deepEqual(scopedGaps.setupGaps.map((gap) => gap.kind), ["caller", "target"]);
+  assert.deepEqual(scopedCallerOnly.setupGaps.map((gap) => gap.kind), ["target"]);
+  assert.deepEqual(scopedReady.setupGaps, []);
+});
+
 test("resource lifecycle treats approved but unverified resources as runtime follow-up", () => {
   const summary = buildResourceLifecycleSummary({
     agents: [agent({ id: "agt-target" })],

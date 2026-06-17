@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Resource Management readiness gaps now respect the active tenant and workspace scope, so resources in another tenant no longer make the current scope look ready.
+- 资源管理页的准备度缺口现在会跟随当前租户和工作区上下文计算，其他租户的资源不会再让当前范围误判为已就绪。
 - Resource Management Create Agent actions launched from readiness gaps now prefill safe caller or target Agent drafts without carrying endpoint or credential secrets.
 - 资源管理页从准备度缺口打开“创建 Agent”时，现在会按调用方或目标服务预填安全草稿，并且不会携带 endpoint 或凭据密钥。
 - Resource Management readiness gaps for missing caller or target Agents now open the Create Agent dialog directly, keeping operators in the same workspace while completing access-query setup.

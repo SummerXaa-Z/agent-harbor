@@ -2095,11 +2095,12 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         capabilities,
         instanceAssignments,
         routePolicies: policies,
+        scope: normalizedScope(scope),
         tenantEntitlements,
         traces,
         workspaceAssignments
       }),
-    [agents, capabilities, instanceAssignments, policies, tenantEntitlements, traces, workspaceAssignments]
+    [agents, capabilities, instanceAssignments, policies, scope, tenantEntitlements, traces, workspaceAssignments]
   );
   const localCallers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const mcpTargets = agents.filter((agent) => agent.channelType === "mcp");

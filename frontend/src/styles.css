@@ -1250,6 +1250,30 @@ button {
   border-top: 1px solid var(--line-subtle);
 }
 
+.resource-lifecycle-empty-guidance {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 3px;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-subtle);
+  border-left: 3px solid var(--brand);
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
+}
+
+.resource-lifecycle-empty-guidance strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.resource-lifecycle-empty-guidance span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .resource-lifecycle-refresh-status {
   grid-column: 1 / -1;
   display: grid;

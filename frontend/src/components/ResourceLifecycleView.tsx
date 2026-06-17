@@ -92,6 +92,12 @@ export function ResourceLifecycleView({
           </div>
           {primaryActions}
           {secondaryActions}
+          {!hasResources ? (
+            <div className="resource-lifecycle-empty-guidance" role="note">
+              <strong>{t("resource.empty.title")}</strong>
+              <span>{t("resource.empty.detail")}</span>
+            </div>
+          ) : null}
           <ResourceLifecycleRefreshStatus
             lastRefreshedAt={lastRefreshedAt}
             onRefresh={onRefresh}

@@ -355,6 +355,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- Resource Management now shows compact inline guidance inside the operation center when no resources exist, giving first-time operators a clear next step without adding another empty card.
+- 资源管理现在在无资源时把紧凑提示放进操作中心，让首次使用者明确下一步，同时避免再新增一张空态卡片。
 - Resource Management advanced maintenance now uses a balanced registry/contract layout with a unified drawer background and shadowless inner sections, reducing the disconnected-card feel on wide screens.
 - 资源管理的高级维护区现在采用更均衡的注册表/契约布局，并统一抽屉背景、去掉内部卡片阴影，降低宽屏下模块散落的感觉。
 - The production journey checkpoint now renders as a compact wide-screen context bar with current action, stages, and next action in one row, reducing first-viewport weight without losing journey context.

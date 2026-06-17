@@ -1302,10 +1302,11 @@ button {
   width: 100%;
   box-sizing: border-box;
   grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px 16px;
-  align-items: start;
-  padding: 10px 14px;
+  grid-template-columns: minmax(170px, 0.58fr) minmax(0, 1fr) auto;
+  gap: 10px 14px;
+  align-items: center;
+  min-height: 48px;
+  padding: 8px 12px;
   border: 1px solid var(--line-subtle);
   border-radius: var(--radius-control);
   background: var(--surface);
@@ -1326,9 +1327,8 @@ button {
 }
 
 .production-journey-steps {
-  grid-column: 1 / -1;
   display: flex;
-  gap: 6px 14px;
+  gap: 5px 12px;
   align-items: center;
   margin: 0;
   padding: 0;
@@ -1377,7 +1377,7 @@ button {
 }
 
 .production-journey-next {
-  min-height: 32px;
+  min-height: 30px;
   justify-self: end;
 }
 

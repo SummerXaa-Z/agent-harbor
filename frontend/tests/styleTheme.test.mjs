@@ -330,9 +330,11 @@ test("production journey checkpoint stays compact and model-driven", () => {
   assert.match(styles, /\.production-journey-checkpoint\s*\{[^}]*display:\s*grid;/s);
   assert.match(styles, /\.production-journey-checkpoint\s*\{[^}]*width:\s*100%;/s);
   assert.match(styles, /\.production-journey-checkpoint\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
-  assert.match(styles, /\.production-journey-checkpoint\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
+  assert.match(styles, /\.production-journey-checkpoint\s*\{[^}]*grid-template-columns:\s*minmax\(170px,\s*0\.58fr\)\s*minmax\(0,\s*1fr\)\s*auto;/s);
+  assert.match(styles, /\.production-journey-checkpoint\s*\{[^}]*min-height:\s*48px;/s);
   assert.match(styles, /\.production-journey-steps\s*\{[^}]*display:\s*flex;/s);
   assert.match(styles, /\.production-journey-steps\s*\{[^}]*flex-wrap:\s*wrap;/s);
+  assert.doesNotMatch(styles, /\.production-journey-steps\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
   assert.doesNotMatch(styles, /\.production-journey-checkpoint\s*\{[^}]*box-shadow:/s);
 });
 

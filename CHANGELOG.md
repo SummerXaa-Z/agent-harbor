@@ -355,6 +355,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- The production journey checkpoint now renders as a compact wide-screen context bar with current action, stages, and next action in one row, reducing first-viewport weight without losing journey context.
+- 生产路径提示现在在宽屏下改为紧凑上下文条，将当前动作、阶段和下一步收进同一行，减少首屏占用但不丢失流程上下文。
 - Agent Registry empty states now use a tighter list-level density, reducing the icon, copy size, and empty-area height so no-data pages look less like unfinished demo tables.
 - Agent 注册表空态现在采用更紧凑的列表级密度，降低图标、文案字号和空白区域高度，让无数据页面不再像未完成的 Demo 表格。
 - Web console panels now remove decorative "open" and "more" header icon buttons unless a real action is attached, keeping visible buttons reserved for executable operator tasks.

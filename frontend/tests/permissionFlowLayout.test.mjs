@@ -367,6 +367,7 @@ test("system self-check uses structured configuration and copyable runtime conte
   const rowEnd = coreJourneyWorkbench.indexOf("function coreJourneyStatusTone", rowStart);
   const row = coreJourneyWorkbench.slice(rowStart, rowEnd);
 
+  assert.match(coreJourneyWorkbench, /ChevronRight/);
   assert.match(panel, /className="core-journey-config"/);
   assert.match(panel, /className="core-journey-config-grid"/);
   assert.match(panel, /className="core-journey-health"/);
@@ -374,6 +375,8 @@ test("system self-check uses structured configuration and copyable runtime conte
   assert.match(panel, /className="core-journey-task"/);
   assert.match(panel, /className="core-journey-advanced"/);
   assert.match(panel, /className="core-journey-runtime-summary"/);
+  assert.match(panel, /className="core-journey-disclosure-action"/);
+  assert.match(panel, /t\("action\.viewDetails"\)/);
   assert.match(panel, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("detail\.runId"\)\} value=\{config\.runId\} \/>/);
   assert.match(panel, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.tenantId"\)\} value=\{config\.childTenantId\} \/>/);
   assert.doesNotMatch(panel, /<div className="core-journey-meta">/);
@@ -384,6 +387,8 @@ test("system self-check uses structured configuration and copyable runtime conte
   assert.match(styles, /\.core-journey-score strong\s*\{[^}]*font-size:\s*18px;/s);
   assert.match(styles, /\.core-journey-advanced summary\s*\{/);
   assert.match(styles, /\.core-journey-advanced summary\s*\{[^}]*min-height:\s*46px;/s);
+  assert.match(styles, /\.core-journey-runtime-summary summary \.core-journey-disclosure-action,\s*\.core-journey-advanced summary \.core-journey-disclosure-action\s*\{/);
+  assert.match(styles, /\.core-journey-runtime-summary\[open\] \.core-journey-disclosure-action svg,\s*\.core-journey-advanced\[open\] \.core-journey-disclosure-action svg\s*\{[^}]*transform:\s*rotate\(90deg\);/s);
   assert.match(styles, /\.core-journey-advanced:not\(\[open\]\)\s*>\s*:not\(summary\)\s*\{[^}]*display:\s*none !important;/s);
   assert.match(styles, /\.core-journey-config-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(styles, /\.core-journey-runtime-summary\s*\{/);

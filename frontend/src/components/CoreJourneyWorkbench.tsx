@@ -1,4 +1,5 @@
 import {
+  ChevronRight,
   DatabaseZap,
   FileSearch,
   LockKeyhole,
@@ -142,6 +143,10 @@ export function CoreJourneyWorkbench({
             <strong>{t("section.selfCheckAdvanced")}</strong>
             <span>{t("text.selfCheckAdvancedDetail")}</span>
           </div>
+          <span className="core-journey-disclosure-action">
+            {t("action.viewDetails")}
+            <ChevronRight size={15} aria-hidden="true" />
+          </span>
         </summary>
         <section className="core-journey-config">
           <header>
@@ -193,6 +198,10 @@ export function CoreJourneyWorkbench({
             <strong>{t("section.selfCheckRuntimeDetail")}</strong>
             <span>{runtimeEvidenceSummary}</span>
           </div>
+          <span className="core-journey-disclosure-action">
+            {t("action.viewDetails")}
+            <ChevronRight size={15} aria-hidden="true" />
+          </span>
         </summary>
         <div className="core-journey-runtime-grid">
           <TechnicalId copyLabel={t("action.copy")} label={t("detail.runId")} value={config.runId} />

@@ -5062,6 +5062,32 @@ td code {
   white-space: nowrap;
 }
 
+.core-journey-runtime-summary summary .core-journey-disclosure-action,
+.core-journey-advanced summary .core-journey-disclosure-action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--radius-control);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.core-journey-runtime-summary summary .core-journey-disclosure-action svg,
+.core-journey-advanced summary .core-journey-disclosure-action svg {
+  transition: transform 120ms ease;
+}
+
+.core-journey-runtime-summary[open] .core-journey-disclosure-action svg,
+.core-journey-advanced[open] .core-journey-disclosure-action svg {
+  transform: rotate(90deg);
+}
+
 .core-journey-runtime-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

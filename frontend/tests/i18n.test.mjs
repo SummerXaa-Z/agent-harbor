@@ -255,7 +255,10 @@ test("createTranslator returns Chinese labels for operator controls", () => {
   assert.equal(t("status.agentDraft"), "草稿");
   assert.equal(t("status.policyAllow"), "允许");
   assert.equal(t("empty.routePolicies.title"), "暂无路由策略");
-  assert.equal(t("empty.routePolicies.detail"), "请在资源管理中创建策略；完成生命周期配置后，受治理的路由会显示在这里。");
+  assert.equal(t("empty.routePolicies.detail"), "请在资源管理中创建策略；完成资源配置后，受治理的路由会显示在这里。");
+  assert.equal(t("resource.detail.ready"), "资源已就绪，可继续查看运行情况。");
+  assert.equal(t("resource.refreshStatus.staleDetail"), "继续处理该资源变更前请先刷新。");
+  assert.equal(t("resource.stagesAria"), "资源配置步骤");
   assert.equal(t("auditAction.permission_package.applied"), "应用权限包");
   assert.equal(t("auditActor.local-dev"), "本地开发管理员");
 });

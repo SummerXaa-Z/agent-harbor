@@ -16,6 +16,7 @@ import type {
   CoreJourneyStep,
   CoreJourneyStepStatus
 } from "../coreJourney";
+import { coreJourneyStepDetailLabel } from "../coreJourneyPresentation";
 import {
   coreJourneyPreflightCanRun,
   coreJourneyPreflightRows,
@@ -236,12 +237,13 @@ export function CoreJourneyWorkbench({
 }
 
 function CoreJourneyStepRow({ step, t }: { step: CoreJourneyStep; t: Translator }) {
+  const detail = coreJourneyStepDetailLabel(step, t);
   return (
     <article className={`core-journey-step status-${step.status}`}>
       <Badge tone={coreJourneyStatusTone(step.status)}>{coreJourneyStatusLabel(step.status, t)}</Badge>
       <div>
         <strong>{t(`journey.step.${step.key}`)}</strong>
-        <span className="core-journey-step-detail" translate="no">{step.detail}</span>
+        <span className="core-journey-step-detail" title={step.detail}>{detail}</span>
       </div>
       <code className="core-journey-step-metric">{step.metric}</code>
     </article>

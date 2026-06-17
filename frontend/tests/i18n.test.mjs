@@ -241,6 +241,9 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("preflight.api.title"), "API 服务");
   assert.equal(t("preflight.mockMcp.title"), "MCP 工具服务");
   assert.equal(t("journey.step.grantChain"), "租户/工作区/实例授权");
+  assert.equal(t("coreJourney.stepDetail.tenantTree.missing"), "等待创建三级租户范围。");
+  assert.equal(t("coreJourney.stepDetail.agentPair.complete"), "调用方和目标服务已匹配。");
+  assert.equal(t("coreJourney.stepDetail.runtimeEvidence.complete"), "允许和拒绝调用均已验证。");
   assert.equal(t("traceRoute.mcpToolsCall"), "工具调用");
   assert.equal(t("traceRoute.mcpToolsList"), "工具发现");
   assert.equal(t("traceReason.filteredToolsListByCapabilityAssignments"), "工具列表已按权限收敛");

@@ -75,6 +75,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 系统自检页的高级配置和运行明细现在使用更明确的按钮式展开入口，默认不暴露表单，同时保留排查能力。
 - System self-check now shows business-readable tenant and workspace labels in the top context strip while preserving raw scope IDs in hover titles.
 - 系统自检顶部上下文现在展示业务可读的租户和工作区名称，并在悬停标题中保留原始范围 ID。
+- System self-check step rows now show operator-readable state descriptions instead of raw generated tenant, workspace, and run identifiers, while retaining the raw detail in hover titles.
+- 系统自检的检查项明细现在展示面向管理员的状态说明，不再在主界面暴露生成的租户、工作区和运行 ID；原始明细仍保留在悬停标题中便于排障。
 - Resource Management row actions now keep resource context while opening credential actions in place and routing capability, permission, and runtime follow-ups with focused handoff state.
 - 资源管理的行级操作现在会保留资源上下文：凭据操作就地打开，能力、权限和运行后续动作带着上下文进入对应工作区。
 - Resource Management now keeps a selected resource context panel visible, showing tenant/workspace scope, lifecycle health, capability, permission, runtime counts, and the recommended next action before operators jump across workspaces.

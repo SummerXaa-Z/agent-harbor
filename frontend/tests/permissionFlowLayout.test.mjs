@@ -380,7 +380,9 @@ test("system self-check uses structured configuration and copyable runtime conte
   assert.match(panel, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("detail\.runId"\)\} value=\{config\.runId\} \/>/);
   assert.match(panel, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.tenantId"\)\} value=\{config\.childTenantId\} \/>/);
   assert.doesNotMatch(panel, /<div className="core-journey-meta">/);
-  assert.match(row, /className="core-journey-step-detail" translate="no"/);
+  assert.match(coreJourneyWorkbench, /coreJourneyStepDetailLabel/);
+  assert.match(row, /className="core-journey-step-detail" title=\{step\.detail\}/);
+  assert.doesNotMatch(row, /className="core-journey-step-detail" translate="no"/);
   assert.match(row, /className="core-journey-step-metric"/);
   assert.match(styles, /\.core-journey-health\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
   assert.match(styles, /\.core-journey-health-summary strong\s*\{[^}]*font-size:\s*16px;/s);

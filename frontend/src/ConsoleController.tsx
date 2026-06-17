@@ -2750,7 +2750,6 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       default:
         return (
           <CockpitView
-            agentRegistryPanel={agentRegistryPanel("span-8")}
             coreJourneyPanel={coreJourneyPanel}
             evidenceRunsPanel={evidenceRunsPanel("span-4")}
             runtimeSignalsPanel={runtimeSignalsPanel("span-5")}

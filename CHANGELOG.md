@@ -355,6 +355,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- System Check no longer repeats the Agent Registry panel, keeping resource lifecycle work centralized in Resource Management and reducing cockpit page clutter.
+- 系统自检不再重复展示 Agent 注册表，让资源生命周期工作继续集中在资源管理页，减少自检页的信息混杂。
 - Resource Management now shows compact inline guidance inside the operation center when no resources exist, giving first-time operators a clear next step without adding another empty card.
 - 资源管理现在在无资源时把紧凑提示放进操作中心，让首次使用者明确下一步，同时避免再新增一张空态卡片。
 - Resource Management advanced maintenance now uses a balanced registry/contract layout with a unified drawer background and shadowless inner sections, reducing the disconnected-card feel on wide screens.

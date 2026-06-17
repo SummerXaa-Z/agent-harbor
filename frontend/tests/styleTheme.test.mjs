@@ -213,10 +213,30 @@ test("product shell removes demo controls and scopes connection settings", () =>
 });
 
 test("workspace telemetry is scoped to system check instead of repeating on every workspace", () => {
+  const cockpitStart = consoleViews.indexOf("export function CockpitView");
+  const cockpitEnd = consoleViews.length;
+  const cockpitView = consoleViews.slice(cockpitStart, cockpitEnd);
+  const activeViewSwitchStart = app.indexOf("switch (activeView.key)");
+  const cockpitCaseStart = app.indexOf('case "cockpit":', activeViewSwitchStart);
+  const cockpitCaseEnd = app.indexOf("const viewCanRenderWithoutConsoleData", cockpitCaseStart);
+  const cockpitCase = app.slice(cockpitCaseStart, cockpitCaseEnd);
+  const registryCaseStart = app.indexOf('case "registry":', activeViewSwitchStart);
+  const registryCaseEnd = app.indexOf('case "routes":', registryCaseStart);
+  const registryCase = app.slice(registryCaseStart, registryCaseEnd);
+
+  assert.notEqual(activeViewSwitchStart, -1);
   assert.match(app, /const showWorkspaceTelemetry = activeView\.key === "cockpit";/);
   assert.match(app, /className="system-check-context"/);
   assert.match(app, /className="system-check-context-main"/);
   assert.match(app, /className="system-check-signals"/);
+  assert.notEqual(cockpitCaseStart, -1);
+  assert.notEqual(cockpitCaseEnd, -1);
+  assert.notEqual(registryCaseStart, -1);
+  assert.notEqual(registryCaseEnd, -1);
+  assert.match(consoleViews, /export function CockpitView/);
+  assert.doesNotMatch(cockpitView, /agentRegistryPanel/);
+  assert.doesNotMatch(cockpitCase, /agentRegistryPanel/);
+  assert.match(registryCase, /agentRegistryPanel=\{agentRegistryPanel\("span-7"\)\}/);
   assert.equal(app.includes("<MetricCard"), false);
   assert.match(styles, /\.system-check-context\s*\{[^}]*background:\s*var\(--surface\);/s);
   assert.match(styles, /\.system-check-signals\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);

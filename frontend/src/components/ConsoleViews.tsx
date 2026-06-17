@@ -225,13 +225,11 @@ export function EvidenceView({
 }
 
 export function CockpitView({
-  agentRegistryPanel,
   coreJourneyPanel,
   evidenceRunsPanel,
   runtimeSignalsPanel,
   tracePanel
 }: {
-  agentRegistryPanel: ReactNode;
   coreJourneyPanel: ReactNode;
   evidenceRunsPanel: ReactNode;
   runtimeSignalsPanel: ReactNode;
@@ -243,7 +241,6 @@ export function CockpitView({
       {runtimeSignalsPanel}
       {tracePanel}
       {evidenceRunsPanel}
-      {agentRegistryPanel}
     </section>
   );
 }

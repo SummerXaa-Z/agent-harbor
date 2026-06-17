@@ -577,12 +577,16 @@ test("access policy page routes creation back to resource management", () => {
   assert.match(operationalViews, /function AccessPolicyWorkspace/);
   assert.match(policiesView, /<AccessPolicyWorkspace/);
   assert.match(operationalViews, /className="policy-empty-action"/);
+  assert.match(operationalViews, /className="policy-empty-state"/);
+  assert.doesNotMatch(operationalViews, /<td colSpan=\{6\}>[\s\S]*empty\.routePolicies/);
   assert.match(operationalViews, /href="#registry"/);
   assert.match(operationalViews, /t\("action\.openResourceManagement"\)/);
   assert.match(operationalViews, /auditCollapsed/);
   assert.doesNotMatch(app, /\{managementAuditPanel\("span-5"\)\}/);
   assert.match(styles, /\.policy-workspace\s*\{/);
   assert.match(styles, /\.policy-empty-action\s*\{/);
+  assert.match(styles, /\.policy-empty-state\s*\{[^}]*min-height:\s*128px;/s);
+  assert.match(styles, /\.policy-empty-state \.empty-row\s*\{[^}]*padding:\s*0;/s);
 });
 
 test("operational list components are split from the app shell", () => {

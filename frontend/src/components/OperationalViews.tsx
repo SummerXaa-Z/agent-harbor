@@ -43,6 +43,13 @@ export function PolicyTable({
   t: Translator;
 }) {
   const names = agentNameMap(agents);
+  if (policies.length === 0) {
+    return (
+      <div className="policy-empty-state">
+        <EmptyRow title={t("empty.routePolicies.title")} detail={t("empty.routePolicies.detail")} />
+      </div>
+    );
+  }
 
   return (
     <div className="table-wrap">
@@ -58,13 +65,6 @@ export function PolicyTable({
           </tr>
         </thead>
         <tbody>
-          {policies.length === 0 ? (
-            <tr>
-              <td colSpan={6}>
-                <EmptyRow title={t("empty.routePolicies.title")} detail={t("empty.routePolicies.detail")} />
-              </td>
-            </tr>
-          ) : null}
           {policies.map((policy) => (
             <tr className={policy.status === "disabled" ? "row-disabled" : undefined} key={policy.id}>
               <td>

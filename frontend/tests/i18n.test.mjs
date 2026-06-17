@@ -401,6 +401,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("text.approvalExpiresAt"), "{date} 到期");
   assert.equal(t("text.runtimeValidationResultTitle"), "运行验证结果");
   assert.equal(t("text.runtimeValidationResultReady"), "授权访问已放行，阻断访问已拒绝。");
+  assert.equal(t("text.runtimeValidationBlockedDetail"), "先完成权限应用，再进行运行验证。");
   assert.equal(t("productionConsole.request"), "变更申请");
   assert.equal(t("productionConsole.policyGate"), "策略门禁");
   assert.equal(t("productionConsole.approval"), "审批");

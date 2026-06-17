@@ -652,7 +652,8 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /const approvalEffectivelyResolved = !draft\.policyGate\.canApplyDirectly/);
   assert.match(workbench, /approvalRequest\?\.status === "approved" \|\| Boolean\(application\) \|\| goLiveReady/);
   assert.match(workbench, /const runtimeValidationReady = Boolean\(approvalJourneyResult\) \|\| goLiveReady/);
-  assert.match(workbench, /runtimeValidationReady \? t\("text\.runtimeValidationResultReady"\) : t\("text\.runtimeValidationResultPending"\)/);
+  assert.match(workbench, /const runtimeValidationText = runtimeValidationReady/);
+  assert.match(workbench, /<span>\{runtimeValidationText\}<\/span>/);
   assert.match(workbench, /application \? \(/);
   assert.match(workbench, /className="approval-action-status is-complete"/);
   assert.match(workbench, /t\("action\.permissionPackageApplied"\)/);
@@ -699,9 +700,16 @@ test("permission request shows a concrete completion state with three exits", ()
 test("permission request go-live step presents one guided primary action", () => {
   assert.match(workbench, /if \(journeyStatus\.nextActionKey === "action\.completePermissionRequest"\) \{\s*setPermissionDraftSheet\("edit"\);/);
   assert.match(workbench, /if \(journeyStatus\.nextActionKey === "action\.startPermissionApproval"\) \{\s*startNewPermissionChangeInSheet\(\);/);
-  assert.match(workbench, /const goLivePrimaryActionKey = goLiveReady/);
+  assert.match(workbench, /const goLivePrerequisitesReady = Boolean\(application\) \|\| goLiveReady;/);
+  assert.match(workbench, /const goLivePrimaryActionKey = !goLivePrerequisitesReady/);
+  assert.match(workbench, /!goLivePrerequisitesReady\s*\?\s*journeyStatus\.nextActionKey/);
+  assert.match(workbench, /const goLiveNextActionText = !goLivePrerequisitesReady\s*\?\s*t\(journeyStatus\.nextActionKey\)/);
+  assert.match(workbench, /const runtimeValidationText = runtimeValidationReady/);
+  assert.match(workbench, /goLivePrerequisitesReady\s*\?\s*t\("text\.runtimeValidationResultPending"\)/);
+  assert.match(workbench, /t\("text\.runtimeValidationBlockedDetail"\)/);
   assert.match(workbench, /runtimeValidationReady\s*\?\s*"action\.checkProductionReadiness"/);
   assert.match(workbench, /const runGoLivePrimaryAction = \(\) => \{/);
+  assert.match(workbench, /if \(!goLivePrerequisitesReady\) \{\s*runProductionPrimaryAction\(\);/);
   assert.match(workbench, /goLivePrimaryActionKey === "action\.exportProductionEvidence"[\s\S]*onExportProductionEvidence\(\);/);
   assert.match(workbench, /goLivePrimaryActionKey === "action\.checkProductionReadiness"[\s\S]*onRefreshProductionReadiness\(\);/);
   assert.match(workbench, /onClick=\{runGoLivePrimaryAction\}/);

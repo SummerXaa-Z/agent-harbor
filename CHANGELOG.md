@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Permission Changes now keeps the process sidebar gated to the current step: incomplete or unapplied changes show the same safe next action as the main workflow, and runtime validation copy waits until permissions are applied.
+- 权限变更的处理流程侧栏现在会跟随当前步骤：未补全或未应用的变更只显示与主流程一致的安全下一步，运行验证说明会等权限应用后再出现。
 - Permission Changes now shows “Complete configuration / 补全配置” and opens the configuration sheet when required draft fields are missing, instead of suggesting approval submission too early.
 - 权限变更在草稿关键字段缺失时会显示“补全配置”并打开配置面板，不再过早提示管理员“提交审批”。
 - Permission Changes now opens its draft editor from an explicit command sheet, keeping the main workspace focused on current status, approval, apply, and go-live checks.

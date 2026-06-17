@@ -304,6 +304,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const reviewerQueueTitleKey = reviewerQueueReadOnly ? "section.permissionApprovalTrace" : "section.permissionReviewerQueue";
   const reviewerQueueRefreshKey = reviewerQueueReadOnly ? "action.refreshApprovalTrace" : "action.refreshReviewerQueue";
   const runtimeValidationReady = Boolean(approvalJourneyResult) || goLiveReady;
+  const goLivePrerequisitesReady = Boolean(application) || goLiveReady;
   const approvalEffectivelyResolved = !draft.policyGate.canApplyDirectly
     && (approvalRequest?.status === "approved" || Boolean(application) || goLiveReady);
   const approvalDisplayStatus: PermissionPackageApprovalRequest["status"] | null = approvalEffectivelyResolved
@@ -548,17 +549,31 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const runQuickSecondaryAction = goLiveReady
     ? onOpenAccessProfile
     : runtimeValidationReady ? scrollToAcceptanceDetails : () => scrollToPermissionRequestStep(currentWizardStep);
-  const goLivePrimaryActionKey = goLiveReady
+  const goLivePrimaryActionKey = !goLivePrerequisitesReady
+    ? journeyStatus.nextActionKey
+    : goLiveReady
     ? "action.exportProductionEvidence"
     : runtimeValidationReady
       ? "action.checkProductionReadiness"
       : "action.runApprovalJourney";
-  const goLivePrimaryActionIcon = goLivePrimaryActionKey === "action.exportProductionEvidence"
+  const goLiveNextActionText = !goLivePrerequisitesReady
+    ? t(journeyStatus.nextActionKey)
+    : t(goLiveNextKey);
+  const runtimeValidationText = runtimeValidationReady
+    ? t("text.runtimeValidationResultReady")
+    : goLivePrerequisitesReady
+      ? t("text.runtimeValidationResultPending")
+      : t("text.runtimeValidationBlockedDetail");
+  const goLivePrimaryActionIcon = !goLivePrerequisitesReady
+    ? <CheckCircle2 size={14} />
+    : goLivePrimaryActionKey === "action.exportProductionEvidence"
     ? <Download size={14} />
     : goLivePrimaryActionKey === "action.checkProductionReadiness"
       ? <RefreshCw size={14} />
       : <Workflow size={14} />;
-  const goLivePrimaryActionLabel = goLivePrimaryActionKey === "action.exportProductionEvidence" && productionEvidenceExporting
+  const goLivePrimaryActionLabel = !goLivePrerequisitesReady
+    ? t(journeyStatus.nextActionKey)
+    : goLivePrimaryActionKey === "action.exportProductionEvidence" && productionEvidenceExporting
     ? t("action.exportingProductionEvidence")
     : goLivePrimaryActionKey === "action.checkProductionReadiness" && productionReadinessLoading
       ? t("action.checkingProductionReadiness")
@@ -566,6 +581,10 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
         ? t("action.runningApprovalJourney")
         : t(goLivePrimaryActionKey);
   const runGoLivePrimaryAction = () => {
+    if (!goLivePrerequisitesReady) {
+      runProductionPrimaryAction();
+      return;
+    }
     if (goLivePrimaryActionKey === "action.exportProductionEvidence") {
       onExportProductionEvidence();
       return;
@@ -911,7 +930,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               <>
                 <div className="approval-next-line" id={permissionRequestStepSectionId("acceptance")}>
                   <span>{t("text.nextActions")}</span>
-                  <strong>{t(goLiveNextKey)}</strong>
+                  <strong>{goLiveNextActionText}</strong>
                 </div>
                 <div className="approval-actions">
                   <button className="primary-button" disabled={liveDataBlocked || permissionRequestBusy} onClick={runGoLivePrimaryAction} type="button">
@@ -923,7 +942,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             )}
             <div className="approval-runtime" id={permissionRequestStepSectionId("validation")}>
               <strong>{t("text.runtimeValidationResultTitle")}</strong>
-              <span>{runtimeValidationReady ? t("text.runtimeValidationResultReady") : t("text.runtimeValidationResultPending")}</span>
+              <span>{runtimeValidationText}</span>
               {approvalJourneyMessage ? <em>{approvalJourneyMessage}</em> : null}
             </div>
           </section>

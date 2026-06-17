@@ -664,8 +664,9 @@ test("runtime evidence views are split from the app shell", () => {
   assert.match(runtimeEvidenceViews, /export function SignalBoard/);
   assert.match(runtimeEvidenceViews, /export function TraceTable/);
   assert.match(runtimeEvidenceViews, /export function ManagementAuditTable/);
-  assert.match(consolePrimitives, /export function IconMore/);
-  assert.match(consolePrimitives, /export function IconOpen/);
+  assert.doesNotMatch(consolePrimitives, /export function IconMore/);
+  assert.doesNotMatch(consolePrimitives, /export function IconOpen/);
+  assert.doesNotMatch(app, /action=\{<Icon(?:More|Open)/);
 });
 
 test("go-live acceptance overview is split from the app shell", () => {

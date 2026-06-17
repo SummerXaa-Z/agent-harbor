@@ -167,7 +167,7 @@ import {
 } from "./permissionRequestJourney";
 import { AiAdminPermissionWorkbench } from "./components/AiAdminPermissionWorkbench";
 import { CapabilityGovernanceView } from "./components/CapabilityGovernanceView";
-import { ActionModalButton, IconMore, IconOpen, Panel } from "./components/ConsolePrimitives";
+import { ActionModalButton, Panel } from "./components/ConsolePrimitives";
 import { ProductionJourneyCheckpoint } from "./components/ProductionJourneyCheckpoint";
 import {
   AccessView,
@@ -2274,13 +2274,13 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   }
 
   const tracePanel = (className = "span-7") => (
-    <Panel className={className} icon={<FileSearch size={18} />} title={t("panel.auditTraces")} action={<IconOpen title={t("action.open")} />}>
+    <Panel className={className} icon={<FileSearch size={18} />} title={t("panel.auditTraces")}>
       <TraceFilterBar agents={agents} filters={traceFilters} onChange={setTraceFilters} onRefresh={refresh} t={t} />
       <TraceTable traces={traces} agents={agents} t={t} />
     </Panel>
   );
   const managementAuditPanel = (className = "span-12") => (
-    <Panel className={className} icon={<ClipboardCheck size={18} />} title={t("panel.managementAudit")} action={<IconOpen title={t("action.open")} />}>
+    <Panel className={className} icon={<ClipboardCheck size={18} />} title={t("panel.managementAudit")}>
       <ManagementAuditTable events={auditEvents} t={t} />
     </Panel>
   );
@@ -2333,7 +2333,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       </ActionModalButton>
     );
   }
-  const routeGovernancePanel = (className = "span-8", action: ReactNode = <IconMore title={t("action.more")} />) => (
+  const routeGovernancePanel = (className = "span-8", action?: ReactNode) => (
     <Panel className={className} icon={<Workflow size={18} />} title={t("panel.routeGovernance")} action={action}>
       <PolicyTable
         agents={agents}
@@ -2346,12 +2346,12 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     </Panel>
   );
   const evidenceRunsPanel = (className = "span-4") => (
-    <Panel className={className} icon={<ClipboardCheck size={18} />} title={t("panel.evidenceRuns")} action={<IconOpen title={t("action.open")} />}>
+    <Panel className={className} icon={<ClipboardCheck size={18} />} title={t("panel.evidenceRuns")}>
       <EvidenceTimeline runs={evidenceRuns} t={t} />
     </Panel>
   );
   const runtimeSignalsPanel = (className = "span-5") => (
-    <Panel className={className} icon={<DatabaseZap size={18} />} title={t("panel.runtimeSignals")} action={<IconMore title={t("action.more")} />}>
+    <Panel className={className} icon={<DatabaseZap size={18} />} title={t("panel.runtimeSignals")}>
       <SignalBoard metrics={metrics} t={t} />
     </Panel>
   );
@@ -2386,12 +2386,12 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     </Panel>
   );
   const contractMatrixPanel = (className = "span-4") => (
-    <Panel className={className} icon={<Layers3 size={18} />} title={t("panel.contractMatrix")} action={<IconOpen title={t("action.open")} />}>
+    <Panel className={className} icon={<Layers3 size={18} />} title={t("panel.contractMatrix")}>
       <ContractMatrix channels={channels} providers={data?.providers ?? []} t={t} />
     </Panel>
   );
   const capabilityGovernancePanel = (className = "span-12") => (
-    <Panel className={className} icon={<DatabaseZap size={18} />} title={t("panel.mcpCapabilities")} action={<IconMore title={t("action.more")} />}>
+    <Panel className={className} icon={<DatabaseZap size={18} />} title={t("panel.mcpCapabilities")}>
       <CapabilityGovernanceView
         actionId={capabilityGovernance.actionId}
         agents={agents}
@@ -2416,7 +2416,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     <AskAccessPanel agents={agents} capabilities={capabilities} controller={askAccess} liveDataAvailable={Boolean(data?.loadedFromApi)} t={t} tenants={tenants} title={t("panel.askAccess")} />
   );
   const accessProfilePanel = (
-    <Panel className="span-12" icon={<LockKeyhole size={18} />} title={t("panel.accessProfile")} action={<IconOpen title={t("action.open")} />}>
+    <Panel className="span-12" icon={<LockKeyhole size={18} />} title={t("panel.accessProfile")}>
       <TenantAccessProfileView
         agents={agents}
         capabilities={capabilities}

@@ -355,6 +355,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- Web console panels now remove decorative "open" and "more" header icon buttons unless a real action is attached, keeping visible buttons reserved for executable operator tasks.
+- Web 控制台面板现在移除没有真实动作的“打开 / 更多”标题栏图标按钮，只在确实可执行的操作上展示按钮，减少误导性的视觉入口。
 - Access Query now renders its tenant/workspace and caller/target/capability fields inside one restrained condition panel instead of nested group cards, making the primary query path feel closer to a standard B2B management form.
 - 访问查询现在把租户/工作区和调用方/目标/能力字段收进同一个克制的条件区，不再呈现为多层分组卡片，让主查询路径更接近标准 B 端管理表单。
 - Agent Registry empty state now stays in Resource Management, using compact left-aligned guidance that points operators to the in-page Create Agent action instead of sending them back to Getting Started.

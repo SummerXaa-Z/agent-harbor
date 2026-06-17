@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { ChevronRight, ExternalLink, MoreHorizontal, X } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 
 import type { Tone } from "../consolePresenters";
 
@@ -215,21 +215,5 @@ function ActionModalLauncher({
         </div>
       ) : null}
     </div>
-  );
-}
-
-export function IconMore({ title = "More" }: { title?: string }) {
-  return (
-    <button aria-label={title} className="icon-button compact" title={title} type="button">
-      <MoreHorizontal size={16} />
-    </button>
-  );
-}
-
-export function IconOpen({ title = "Open" }: { title?: string }) {
-  return (
-    <button aria-label={title} className="icon-button compact" title={title} type="button">
-      <ExternalLink size={15} />
-    </button>
   );
 }

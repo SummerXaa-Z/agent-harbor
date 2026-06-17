@@ -204,17 +204,24 @@ export function CoreJourneyWorkbench({
             <ChevronRight size={15} aria-hidden="true" />
           </span>
         </summary>
-        <div className="core-journey-runtime-grid">
-          <TechnicalId copyLabel={t("action.copy")} label={t("detail.runId")} value={config.runId} />
-          <TechnicalId copyLabel={t("action.copy")} label={t("form.tenantId")} value={config.childTenantId} />
-          <span className="core-journey-runtime-field">
-            <span>{t("form.allowedTool")}</span>
-            <code translate="no">{form.allowedTool}</code>
+        <div className="core-journey-runtime-cards">
+          <span className="core-journey-runtime-card">
+            <span>{t("section.selfCheckRuntimeScope")}</span>
+            <strong>{t("text.selfCheckRuntimeScopeDetail")}</strong>
+            <code translate="no">{form.mcpEndpoint}</code>
           </span>
-          <span className="core-journey-runtime-field">
-            <span>{t("form.deniedTool")}</span>
-            <code translate="no">{form.deniedTool}</code>
+          <span className="core-journey-runtime-card">
+            <span>{t("section.selfCheckRuntimeDecision")}</span>
+            <strong>{t("text.selfCheckRuntimeDecisionDetail")}</strong>
+            <code translate="no">{form.allowedTool} / {form.deniedTool}</code>
           </span>
+        </div>
+        <div className="core-journey-runtime-diagnostics">
+          <strong>{t("section.selfCheckDiagnosticIdentifiers")}</strong>
+          <div className="core-journey-runtime-grid">
+            <TechnicalId copyLabel={t("action.copy")} label={t("detail.runId")} value={config.runId} />
+            <TechnicalId copyLabel={t("action.copy")} label={t("form.tenantId")} value={config.childTenantId} />
+          </div>
         </div>
       </details>
 

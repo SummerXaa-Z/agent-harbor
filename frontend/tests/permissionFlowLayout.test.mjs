@@ -377,8 +377,14 @@ test("system self-check uses structured configuration and copyable runtime conte
   assert.match(panel, /className="core-journey-runtime-summary"/);
   assert.match(panel, /className="core-journey-disclosure-action"/);
   assert.match(panel, /t\("action\.viewDetails"\)/);
-  assert.match(panel, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("detail\.runId"\)\} value=\{config\.runId\} \/>/);
-  assert.match(panel, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.tenantId"\)\} value=\{config\.childTenantId\} \/>/);
+  assert.match(panel, /className="core-journey-runtime-cards"/);
+  assert.match(panel, /className="core-journey-runtime-card"/);
+  assert.match(panel, /t\("section\.selfCheckRuntimeScope"\)/);
+  assert.match(panel, /t\("section\.selfCheckRuntimeDecision"\)/);
+  assert.match(panel, /className="core-journey-runtime-diagnostics"/);
+  assert.match(panel, /t\("section\.selfCheckDiagnosticIdentifiers"\)/);
+  assert.match(panel, /<div className="core-journey-runtime-diagnostics">[\s\S]*<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("detail\.runId"\)\} value=\{config\.runId\} \/>/);
+  assert.match(panel, /<div className="core-journey-runtime-diagnostics">[\s\S]*<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.tenantId"\)\} value=\{config\.childTenantId\} \/>/);
   assert.doesNotMatch(panel, /<div className="core-journey-meta">/);
   assert.match(coreJourneyWorkbench, /coreJourneyStepDetailLabel/);
   assert.match(row, /className="core-journey-step-detail" title=\{step\.detail\}/);
@@ -395,6 +401,8 @@ test("system self-check uses structured configuration and copyable runtime conte
   assert.match(styles, /\.core-journey-config-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(styles, /\.core-journey-runtime-summary\s*\{/);
   assert.match(styles, /\.core-journey-runtime-summary:not\(\[open\]\)\s*>\s*:not\(summary\)\s*\{[^}]*display:\s*none !important;/s);
+  assert.match(styles, /\.core-journey-runtime-cards\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
+  assert.match(styles, /\.core-journey-runtime-diagnostics\s*\{[^}]*border:\s*1px dashed var\(--line\);/s);
   assert.match(styles, /\.core-journey-preflight-grid,\s*\.core-journey-steps\s*\{[^}]*gap:\s*8px;[^}]*background:\s*transparent;/s);
   assert.match(styles, /\.core-journey-preflight-row,\s*\.core-journey-step\s*\{[^}]*border:\s*1px solid var\(--line-subtle\);[^}]*border-radius:\s*var\(--radius-control\);/s);
   assert.match(styles, /\.core-journey-preflight-row::before,\s*\.core-journey-step::before\s*\{[^}]*display:\s*none;[^}]*content:\s*none;/s);

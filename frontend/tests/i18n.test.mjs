@@ -223,6 +223,9 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("section.selfCheckTask"), "检查任务");
   assert.equal(t("section.selfCheckAdvanced"), "高级配置");
   assert.equal(t("section.selfCheckRuntimeDetail"), "运行明细");
+  assert.equal(t("section.selfCheckRuntimeScope"), "运行范围");
+  assert.equal(t("section.selfCheckRuntimeDecision"), "运行判定");
+  assert.equal(t("section.selfCheckDiagnosticIdentifiers"), "排障标识");
   assert.equal(t("status.systemHealthReady"), "可执行");
   assert.equal(t("status.systemHealthNeedsCheck"), "需检查");
   assert.equal(t("text.cockpitKeyMessageTitle"), "让 Agent 的工具和数据访问可申请、可审批、可验证");
@@ -238,6 +241,8 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("text.systemHealthReadyTitle"), "可以执行自检");
   assert.equal(t("text.systemHealthNeedsCheckTitle"), "需要先完成预检");
   assert.equal(t("text.selfCheckAdvancedDetail"), "仅在切换工作区、端点或工具名称时调整这些配置。");
+  assert.equal(t("text.selfCheckRuntimeScopeDetail"), "从隔离的自检工作区调用目标 MCP 服务。");
+  assert.equal(t("text.selfCheckRuntimeDecisionDetail"), "验证一个允许工具和一个阻断工具，确认运行时判定符合授权。");
   assert.equal(t("preflight.api.title"), "API 服务");
   assert.equal(t("preflight.mockMcp.title"), "MCP 工具服务");
   assert.equal(t("journey.step.grantChain"), "租户/工作区/实例授权");

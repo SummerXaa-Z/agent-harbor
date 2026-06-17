@@ -14,7 +14,10 @@ test("capability governance page prioritizes catalog and opens grant creation on
   assert.match(capabilityView, /\{hasTargetCapabilities \? \(/);
   assert.match(capabilityView, /className="primary-button capability-grant-launcher"/);
   assert.match(capabilityView, /className="primary-button capability-refresh-launcher"/);
+  assert.match(capabilityView, /className="primary-button capability-review-launcher"/);
+  assert.match(capabilityView, /firstPendingCapability/);
   assert.match(capabilityView, /t\("empty\.capabilities\.actionRefresh"\)/);
+  assert.match(capabilityView, /t\("action\.reviewCapabilityApproval"\)/);
   assert.match(capabilityView, /const \[grantPanelOpen, setGrantPanelOpen\] = useState\(false\)/);
   assert.match(capabilityView, /className="capability-grant-sheet"/);
   assert.match(capabilityView, /className="assignment-list-heading"/);
@@ -35,6 +38,7 @@ test("capability governance copy is bilingual", () => {
     "section.capabilityGrant",
     "section.currentCapabilityScope",
     "section.existingGrantChains",
+    "action.reviewCapabilityApproval",
     "text.capabilityCatalogHelp",
     "text.capabilityGrantHelp",
     "text.currentCapabilityScopeDetail",

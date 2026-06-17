@@ -99,6 +99,8 @@ export function CapabilityGovernanceView({
     return targetId ? capabilities.filter((capability) => capability.targetId === targetId) : capabilities;
   }, [capabilities, form.targetId]);
   const hasTargetCapabilities = targetCapabilities.length > 0;
+  const approvedCapabilities = targetCapabilities.filter((capability) => capability.discoveryStatus === "approved");
+  const firstPendingCapability = targetCapabilities.find((capability) => capability.discoveryStatus === "pending_review");
   const visibleCapabilities = useMemo(() => {
     const query = capabilityQuery.trim().toLowerCase();
     return targetCapabilities.filter((capability) => {
@@ -234,6 +236,11 @@ export function CapabilityGovernanceView({
     setGrantPanelOpen(true);
   }
 
+  function reviewPendingCapability(capability: Capability) {
+    setCapabilityStatusFilter("pending_review");
+    setSelectedCapabilityId(capability.id);
+  }
+
   return (
     <div className="capability-governance">
       {handoffContext ? (
@@ -298,10 +305,31 @@ export function CapabilityGovernanceView({
             <div className="capability-catalog-actions">
               <span>{visibleCapabilities.length}/{targetCapabilities.length}</span>
               {hasTargetCapabilities ? (
-                <button className="primary-button capability-grant-launcher" onClick={() => openGrantPanel()} type="button">
-                  <ShieldCheck size={14} />
-                  {t("action.grantChain")}
-                </button>
+                approvedCapabilities.length > 0 ? (
+                  <button className="primary-button capability-grant-launcher" onClick={() => openGrantPanel()} type="button">
+                    <ShieldCheck size={14} />
+                    {t("action.grantChain")}
+                  </button>
+                ) : firstPendingCapability ? (
+                  <button
+                    className="primary-button capability-review-launcher"
+                    onClick={() => reviewPendingCapability(firstPendingCapability)}
+                    type="button"
+                  >
+                    <FileSearch size={14} />
+                    {t("action.reviewCapabilityApproval")}
+                  </button>
+                ) : (
+                  <button
+                    className="primary-button capability-refresh-launcher"
+                    disabled={!form.targetId || actionId === `refresh:${form.targetId}`}
+                    onClick={onRefreshTarget}
+                    type="button"
+                  >
+                    <RefreshCw size={14} />
+                    {actionId === `refresh:${form.targetId}` ? t("action.loading") : t("empty.capabilities.actionRefresh")}
+                  </button>
+                )
               ) : (
                 <button
                   className="primary-button capability-refresh-launcher"
@@ -441,14 +469,26 @@ export function CapabilityGovernanceView({
                 <span>{t("section.dataScope")}<strong>{dataScopeText(selectedCatalogCapability.dataScopes, t) || t("text.noDataScope")}</strong></span>
                 <span>{t("text.technicalDetails")}<strong>{selectedCatalogCapability.key}</strong></span>
               </div>
-              <button
-                className="secondary-button table-detail-action"
-                onClick={() => openGrantPanel(selectedCatalogCapability)}
-                type="button"
-              >
-                <ShieldCheck size={14} />
-                {t("action.grantChain")}
-              </button>
+              {selectedCatalogCapability.discoveryStatus === "approved" ? (
+                <button
+                  className="secondary-button table-detail-action"
+                  onClick={() => openGrantPanel(selectedCatalogCapability)}
+                  type="button"
+                >
+                  <ShieldCheck size={14} />
+                  {t("action.grantChain")}
+                </button>
+              ) : (
+                <button
+                  className="secondary-button table-detail-action"
+                  disabled={actionId === selectedCatalogCapability.id}
+                  onClick={() => onApprove(selectedCatalogCapability)}
+                  type="button"
+                >
+                  <ShieldCheck size={14} />
+                  {actionId === selectedCatalogCapability.id ? t("action.approving") : t("action.approve")}
+                </button>
+              )}
               <button
                 className="secondary-button table-detail-action"
                 onClick={() => onQueryAccess({

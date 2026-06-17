@@ -125,6 +125,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 能力治理现在会在后续控制台刷新失败时仍保留刚创建的租户/工作区/调用方授权链，并将“授权清单未刷新”与“写入已完成”分开提示。
 - Capability Governance now switches the catalog primary action to refresh capabilities when the selected target has no tools, instead of opening an unusable grant-chain form.
 - 能力治理在所选目标暂无工具能力时，会把目录主动作切换为刷新能力，不再打开无法完成的授权链表单。
+- Capability Governance now routes targets with only pending capabilities to capability review first, and only shows grant-chain creation once at least one capability is approved.
+- 能力治理在目标只有待审能力时会先引导复核能力，至少有一个能力已批准后才显示创建授权链主动作。
 - Resource Management one-time Agent keys are now cleared when the key modal closes, when the operator dismisses the key, when the key form changes, or when another key request starts.
 - 资源管理中的 Agent 一次性密钥现在会在密钥弹窗关闭、管理员手动清除、密钥表单变更或再次创建密钥时清理明文。
 - Resource Management APIs now reject duplicate Agent, key, and route-policy mutations and treat identical credential rotations as no-op updates, reducing duplicate resources from retries.

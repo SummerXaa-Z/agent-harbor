@@ -2081,6 +2081,14 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   );
   const localCallers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const mcpTargets = agents.filter((agent) => agent.channelType === "mcp");
+  const systemScopeTenantLabel = permissionTenantPathLabel(scope.tenantId, tenants, t);
+  const systemScopeTenantTitle = systemScopeTenantLabel.path === systemScopeTenantLabel.primary
+    ? scope.tenantId
+    : `${systemScopeTenantLabel.path} · ${scope.tenantId}`;
+  const systemScopeWorkspaceLabel = permissionWorkspaceDisplayName(scope.workspaceId, agents, t);
+  const systemScopeWorkspaceTitle = systemScopeWorkspaceLabel === scope.workspaceId
+    ? scope.workspaceId
+    : `${systemScopeWorkspaceLabel} · ${scope.workspaceId}`;
   const localAiAdminDraft = useMemo(
     () => createPermissionPackageDraft(aiAdminForm, { capabilities }),
     [aiAdminForm, capabilities]
@@ -2957,8 +2965,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
               <div className="scope-control">
                 <span>{t("status.scope")}</span>
                 <div className="scope-values">
-                  <span title={scope.tenantId}>{scope.tenantId}</span>
-                  <span title={scope.workspaceId}>{scope.workspaceId}</span>
+                  <span title={systemScopeTenantTitle}>{systemScopeTenantLabel.primary}</span>
+                  <span title={systemScopeWorkspaceTitle}>{systemScopeWorkspaceLabel}</span>
                 </div>
               </div>
             </div>

@@ -194,6 +194,10 @@ test("product shell removes demo controls and scopes connection settings", () =>
   assert.match(app, /connection-diagnostics-list/);
   assert.match(readExistingFile(connectionDiagnosticsHookUrl), /async function run\(\)/);
   assert.match(app, /className="scope-values"/);
+  assert.match(app, /const systemScopeTenantLabel = permissionTenantPathLabel\(scope\.tenantId, tenants, t\);/);
+  assert.match(app, /const systemScopeWorkspaceLabel = permissionWorkspaceDisplayName\(scope\.workspaceId, agents, t\);/);
+  assert.match(app, /<span title=\{systemScopeTenantTitle\}>\{systemScopeTenantLabel\.primary\}<\/span>/);
+  assert.match(app, /<span title=\{systemScopeWorkspaceTitle\}>\{systemScopeWorkspaceLabel\}<\/span>/);
   assert.equal(app.includes("className=\"scope-inputs\""), false);
   assert.match(app, /const \[connectionMenuOpen, setConnectionMenuOpen\] = useState\(false\)/);
   assert.match(app, /setConnectionMenuOpen\(false\)/);

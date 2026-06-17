@@ -164,16 +164,38 @@ export function AdminAccessView({ adminAccessPanel }: { adminAccessPanel: ReactN
 }
 
 export function TracesView({
+  managementAuditEventCount,
   managementAuditPanel,
+  t,
   tracePanel
 }: {
+  managementAuditEventCount: number;
   managementAuditPanel: ReactNode;
+  t: Translator;
   tracePanel: ReactNode;
 }) {
   return (
     <section className="content-grid">
       {tracePanel}
-      {managementAuditPanel}
+      {managementAuditEventCount > 0 ? (
+        managementAuditPanel
+      ) : (
+        <details className="resource-advanced-details trace-audit-disclosure">
+          <summary>
+            <span>
+              <strong>{t("panel.managementAudit")}</strong>
+              <small>{t("empty.managementAudit.detail")}</small>
+            </span>
+            <span className="resource-advanced-action">
+              {t("action.showAudit")}
+              <ChevronRight size={15} aria-hidden="true" />
+            </span>
+          </summary>
+          <div className="trace-audit-disclosure-body">
+            {managementAuditPanel}
+          </div>
+        </details>
+      )}
     </section>
   );
 }

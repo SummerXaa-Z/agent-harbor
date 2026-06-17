@@ -2730,7 +2730,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       case "traces":
         return (
           <TracesView
+            managementAuditEventCount={auditEvents.length}
             managementAuditPanel={managementAuditPanel("span-12")}
+            t={t}
             tracePanel={tracePanel("span-12")}
           />
         );

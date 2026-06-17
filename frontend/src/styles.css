@@ -3560,6 +3560,17 @@ button {
   justify-items: start;
 }
 
+.trace-audit-disclosure-body {
+  display: grid;
+  padding: 0 var(--space-4) var(--space-4);
+  border-top: 1px solid var(--line-subtle);
+}
+
+.trace-audit-disclosure-body > .panel {
+  border-radius: var(--radius-control);
+  box-shadow: none;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

@@ -594,6 +594,20 @@ test("access policy page routes creation back to resource management", () => {
   assert.match(styles, /\.policy-empty-state \.empty-row,\s*\n\.capability-empty-state \.empty-row,\s*\n\.admin-access-empty-state \.empty-row,\s*\n\.management-audit-empty-state \.empty-row\s*\{[^}]*padding:\s*0;/s);
 });
 
+test("runtime audit hides empty management audit behind disclosure", () => {
+  const tracesStart = consoleViews.indexOf("export function TracesView");
+  const evidenceStart = consoleViews.indexOf("export function EvidenceView", tracesStart);
+  const tracesView = consoleViews.slice(tracesStart, evidenceStart);
+
+  assert.match(tracesView, /managementAuditEventCount: number/);
+  assert.match(tracesView, /managementAuditEventCount > 0 \? \(/);
+  assert.match(tracesView, /className="resource-advanced-details trace-audit-disclosure"/);
+  assert.match(tracesView, /t\("empty\.managementAudit\.detail"\)/);
+  assert.match(app, /managementAuditEventCount=\{auditEvents\.length\}/);
+  assert.match(styles, /\.trace-audit-disclosure-body\s*\{/);
+  assert.match(styles, /\.trace-audit-disclosure-body > \.panel\s*\{/);
+});
+
 test("operational list components are split from the app shell", () => {
   assert.match(app, /from "\.\/components\/OperationalViews"/);
   assert.match(app, /from "\.\/components\/ConsoleViews"/);

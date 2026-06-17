@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Bootstrap administrator identities now reject duplicate actors or duplicate keys during startup configuration parsing, preventing ambiguous audit actors and tenant/workspace boundaries.
+- 引导管理员身份现在会在启动配置解析时拒绝重复 actor 或重复 key，避免审计主体和租户/工作区边界产生歧义。
 - Console login rate limiting now trusts `X-Forwarded-For` only from local or private proxy sources, preventing direct clients from bypassing failed-login throttling by spoofing forwarded IPs.
 - 控制台登录限流现在只在请求来自本机或私网代理时信任 `X-Forwarded-For`，防止直连客户端通过伪造转发 IP 绕过失败登录限流。
 - Resource Management permission-change handoffs no longer prefill callers or targets from another tenant/workspace when the matching resource is missing in the current scope.

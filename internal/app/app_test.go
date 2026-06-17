@@ -212,6 +212,30 @@ func TestAdminIdentitiesFromEnvParsesScopedRules(t *testing.T) {
 	}
 }
 
+func TestAdminIdentitiesFromEnvRejectsDuplicateActors(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_ADMIN_IDENTITIES", "platform=platform-key,platform=another-key|role=tenant_admin|tenant=tenant-east")
+
+	_, err := adminIdentitiesFromEnv()
+	if err == nil {
+		t.Fatalf("expected duplicate admin identity actor to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "duplicate actor") {
+		t.Fatalf("expected duplicate actor error, got %q", got)
+	}
+}
+
+func TestAdminIdentitiesFromEnvRejectsDuplicateKeys(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_ADMIN_IDENTITIES", "platform=shared-key,tenant-east=shared-key|role=tenant_admin|tenant=tenant-east")
+
+	_, err := adminIdentitiesFromEnv()
+	if err == nil {
+		t.Fatalf("expected duplicate admin identity key to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "duplicate key") {
+		t.Fatalf("expected duplicate key error, got %q", got)
+	}
+}
+
 func TestApprovalReviewersFromEnvRejectsMalformedRules(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_APPROVAL_REVIEWERS", "security-root=tenant-root")
 

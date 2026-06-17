@@ -274,6 +274,8 @@ func adminIdentitiesFromEnv() ([]httpapi.AdminIdentity, error) {
 		return r == ',' || r == ';'
 	})
 	identities := make([]httpapi.AdminIdentity, 0, len(entries))
+	seenActors := map[string]struct{}{}
+	seenKeys := map[string]struct{}{}
 	for _, entry := range entries {
 		entry = strings.TrimSpace(entry)
 		if entry == "" {
@@ -308,12 +310,20 @@ func adminIdentitiesFromEnv() ([]httpapi.AdminIdentity, error) {
 		if identity.Actor == "" || identity.Key == "" {
 			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES entries must include actor and key")
 		}
+		if _, ok := seenActors[identity.Actor]; ok {
+			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES duplicate actor %q", identity.Actor)
+		}
+		if _, ok := seenKeys[identity.Key]; ok {
+			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES duplicate key for actor %q", identity.Actor)
+		}
 		if identity.Role == "" {
 			identity.Role = "platform_admin"
 		}
 		if identity.Role != "platform_admin" && identity.TenantID == "" {
 			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES scoped admin roles must include tenant")
 		}
+		seenActors[identity.Actor] = struct{}{}
+		seenKeys[identity.Key] = struct{}{}
 		identities = append(identities, identity)
 	}
 	return identities, nil

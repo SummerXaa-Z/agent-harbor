@@ -38,6 +38,7 @@ export function ResourceLifecycleView({
   t: Translator;
 }) {
   const [selectedResourceId, setSelectedResourceId] = useState("");
+  const hasResources = summary.items.length > 0;
   const defaultSelectedItem = summary.items.find((item) => item.status !== "ready") ?? summary.items[0];
   const selectedItem = summary.items.find((item) => item.id === selectedResourceId) ?? defaultSelectedItem;
   const metrics = [
@@ -110,26 +111,28 @@ export function ResourceLifecycleView({
         />
       ) : null}
 
-      <section className="resource-lifecycle-list" aria-label={t("resource.listAria")}>
+      <section className={`resource-lifecycle-list${hasResources ? "" : " is-empty"}`} aria-label={t("resource.listAria")}>
         <div className="resource-lifecycle-list-title">
           <strong>{t("resource.listTitle")}</strong>
           <span>{tx(t, "resource.listCount", { count: summary.items.length })}</span>
         </div>
-        <div className="resource-lifecycle-header" aria-hidden="true">
-          <span>{t("resource.column.resource")}</span>
-          <span>{t("resource.column.status")}</span>
-          <span>{t("resource.column.capabilities")}</span>
-          <span>{t("resource.column.permission")}</span>
-          <span>{t("resource.column.runtime")}</span>
-          <span>{t("resource.column.next")}</span>
-        </div>
-        {summary.items.length === 0 ? (
-          <EmptyRow
-            actionHash="#getting-started"
-            actionLabel={t("empty.registry.action")}
-            detail={t("resource.empty.detail")}
-            title={t("resource.empty.title")}
-          />
+        {hasResources ? (
+          <div className="resource-lifecycle-header" aria-hidden="true">
+            <span>{t("resource.column.resource")}</span>
+            <span>{t("resource.column.status")}</span>
+            <span>{t("resource.column.capabilities")}</span>
+            <span>{t("resource.column.permission")}</span>
+            <span>{t("resource.column.runtime")}</span>
+            <span>{t("resource.column.next")}</span>
+          </div>
+        ) : null}
+        {!hasResources ? (
+          <div className="resource-lifecycle-empty">
+            <EmptyRow
+              detail={t("resource.empty.detail")}
+              title={t("resource.empty.title")}
+            />
+          </div>
         ) : (
           summary.items.map((item) => (
             <ResourceLifecycleRow

@@ -419,7 +419,19 @@ test("agent registry provides search status filtering and a details entry", () =
   assert.match(operationalViews, /setSelectedAgentId\(agent\.id\)/);
   assert.match(styles, /\.table-toolbar\s*\{/);
   assert.match(styles, /\.registry-empty-state\s*\{/);
+  assert.match(styles, /\.registry-empty-state\s*\{[^}]*min-height:\s*132px;/s);
   assert.match(styles, /\.table-detail-panel\s*\{/);
+});
+
+test("empty resource lifecycle list avoids table chrome", () => {
+  assert.match(resourceLifecycleView, /const hasResources = summary\.items\.length > 0/);
+  assert.match(resourceLifecycleView, /className=\{`resource-lifecycle-list\$\{hasResources \? "" : " is-empty"\}`\}/);
+  assert.match(resourceLifecycleView, /\{hasResources \? \(\s*<div className="resource-lifecycle-header"/);
+  assert.match(resourceLifecycleView, /\{!hasResources \? \(\s*<div className="resource-lifecycle-empty">/);
+  assert.doesNotMatch(resourceLifecycleView, /actionHash="#getting-started"[\s\S]*resource\.empty/);
+  assert.match(styles, /\.resource-lifecycle-list\.is-empty\s*\{[^}]*background:\s*var\(--surface-subtle\);/s);
+  assert.match(styles, /\.resource-lifecycle-empty\s*\{[^}]*min-height:\s*128px;/s);
+  assert.match(styles, /\.resource-lifecycle-empty \.empty-row\s*\{[^}]*padding:\s*0;/s);
 });
 
 test("table actions distinguish neutral state changes from destructive actions", () => {

@@ -1505,6 +1505,23 @@ button {
   font-weight: 700;
 }
 
+.resource-lifecycle-list.is-empty {
+  background: var(--surface-subtle);
+}
+
+.resource-lifecycle-empty {
+  display: grid;
+  min-height: 128px;
+  place-items: center;
+  padding: var(--space-4);
+}
+
+.resource-lifecycle-empty .empty-row {
+  width: min(100%, 520px);
+  min-height: 0;
+  padding: 0;
+}
+
 .resource-lifecycle-header,
 .resource-lifecycle-row {
   display: grid;
@@ -3123,9 +3140,9 @@ button {
 
 .registry-empty-state {
   display: grid;
-  min-height: 180px;
+  min-height: 132px;
   place-items: center;
-  padding: var(--space-5);
+  padding: var(--space-4);
 }
 
 .registry-empty-state .empty-row {

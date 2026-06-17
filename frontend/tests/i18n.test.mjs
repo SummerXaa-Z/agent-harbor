@@ -201,6 +201,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("resource.contextNext"), "推荐下一步");
   assert.equal(t("resource.listTitle"), "资源清单");
   assert.equal(t("resource.listCount").replace("{count}", "3"), "3 个资源");
+  assert.equal(t("resource.empty.detail"), "使用上方操作按钮注册调用方或 MCP 工具服务，再配置凭据、能力、权限和运行验证。");
   assert.equal(t("resource.actionContext.title"), "操作上下文");
   assert.equal(t("resource.actionContext.resource"), "资源");
   assert.equal(t("resource.actionContext.scope"), "操作范围");

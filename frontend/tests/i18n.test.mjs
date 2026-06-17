@@ -174,7 +174,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("navDetail.tenants"), "管理租户边界，并从租户发起权限变更。");
   assert.equal(t("navDetail.traces"), "复核运行时允许和拒绝调用。");
   assert.equal(t("page.cockpit"), "系统自检");
-  assert.equal(t("page.access"), "租户权限控制台");
+  assert.equal(t("page.access"), "权限画像");
   assert.equal(t("page.adminAccess"), "管理员与边界");
   assert.equal(t("page.evidence"), "上线检查");
   assert.equal(t("page.registry"), "资源管理");

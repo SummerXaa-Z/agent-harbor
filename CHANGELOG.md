@@ -93,6 +93,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 资源管理在尚无资源时不再额外展示“暂无受管资源”空卡，只保留资源操作入口和 Agent 注册表空态作为配置引导。
 - Runtime Audit now keeps an empty Management Audit section behind a compact disclosure, while still showing the audit table directly once management events exist.
 - 运行审计页现在会把空的管理审计区收进紧凑展开项；一旦存在管理事件，仍直接展示审计表格。
+- Access Profile page titles now align with the navigation label, using "Access Profile / 权限画像" instead of the broader tenant-console wording.
+- 权限画像页面标题现在与导航一致，不再使用更泛的“租户权限控制台”表述。
 - Resource Management row actions now keep resource context while opening credential actions in place and routing capability, permission, and runtime follow-ups with focused handoff state.
 - 资源管理的行级操作现在会保留资源上下文：凭据操作就地打开，能力、权限和运行后续动作带着上下文进入对应工作区。
 - Resource Management now keeps a selected resource context panel visible, showing tenant/workspace scope, lifecycle health, capability, permission, runtime counts, and the recommended next action before operators jump across workspaces.

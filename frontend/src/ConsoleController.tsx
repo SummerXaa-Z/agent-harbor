@@ -2644,13 +2644,15 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   }
   const resourceLifecyclePrimaryActions = (
     <div className="resource-lifecycle-command-actions">
-      {createAgentAction("command", "primary")}
+      <div className="resource-lifecycle-command-primary">
+        {createAgentAction("command", "primary")}
+      </div>
       {agents.length > 0 ? (
-        <>
+        <div className="resource-lifecycle-maintenance-actions">
           {createKeyAction("command", "secondary")}
           {rotateCredentialAction("command", "secondary")}
           {createPolicyAction("command", "secondary")}
-        </>
+        </div>
       ) : null}
     </div>
   );

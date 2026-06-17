@@ -316,8 +316,11 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(styles, /\.resource-advanced-grid > \.panel \.panel-header\s*\{[^}]*min-height:\s*44px;/s);
   assert.match(styles, /\.action-modal-trigger-command\.is-primary\s*\{/);
   assert.match(styles, /\.action-modal-trigger-command\.is-secondary\s*\{/);
+  assert.match(styles, /\.action-modal-trigger-command\.is-secondary:hover\s*\{/);
   assert.match(styles, /\.action-modal-trigger-command \.action-modal-trigger-affordance\s*\{[^}]*font-size:\s*0;/s);
-  assert.match(styles, /\.action-modal-body \.control-form\s*\{/);
+  assert.match(styles, /\.action-modal-body \.control-form\s*\{[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*background:\s*transparent;/s);
+  assert.match(styles, /\.resource-lifecycle-command-primary\s*\{/);
+  assert.match(styles, /\.resource-lifecycle-maintenance-actions\s*\{/);
   assert.doesNotMatch(styles, /\.action-modal-trigger-command\s*\{[^}]*box-shadow:\s*var\(--shadow-card\);/s);
   assert.match(resourceLifecycleView, /summary\.items\.map/);
   assert.match(resourceLifecycleView, /onResourceAction/);
@@ -424,7 +427,10 @@ test("management mutation forms open from resource command modals", () => {
   assert.match(styles, /\.action-modal-trigger\s*\{[\s\S]*cursor:\s*pointer;/);
   assert.match(styles, /\.action-modal-trigger-compact\s*\{[\s\S]*width:\s*auto;/);
   assert.match(styles, /\.action-modal-backdrop\s*\{[\s\S]*position:\s*fixed;[\s\S]*overscroll-behavior:\s*contain;/);
-  assert.match(styles, /\.action-modal-panel\s*\{[\s\S]*width:\s*min\(680px,\s*calc\(100vw - 48px\)\);/);
+  assert.match(styles, /\.action-modal-panel\s*\{[\s\S]*width:\s*min\(720px,\s*calc\(100vw - 48px\)\);/);
+  assert.match(styles, /\.action-modal-body \.control-form\s*\{[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*background:\s*transparent;/s);
+  assert.match(app, /className="resource-lifecycle-command-primary"/);
+  assert.match(app, /className="resource-lifecycle-maintenance-actions"/);
   assert.doesNotMatch(consoleViews, /createPolicyPanel=\{createPolicyPanel\}/);
   assert.doesNotMatch(styles, /\.action-modal-entry/);
   assert.doesNotMatch(styles, /\.action-disclosure-panel/);

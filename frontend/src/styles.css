@@ -1241,6 +1241,28 @@ button {
 
 .resource-lifecycle-command-actions {
   grid-column: 2;
+  align-items: center;
+}
+
+.resource-lifecycle-command-primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.resource-lifecycle-maintenance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.resource-lifecycle-maintenance-actions {
+  padding-left: 10px;
+  border-left: 1px solid var(--line-subtle);
 }
 
 .resource-lifecycle-secondary-actions {
@@ -2406,12 +2428,13 @@ button {
   border-color: var(--brand);
   background: var(--brand);
   color: var(--surface);
+  box-shadow: var(--shadow-primary);
 }
 
 .action-modal-trigger-command.is-secondary {
-  border-color: var(--line-strong);
+  border-color: var(--brand-border);
   background: var(--surface);
-  color: var(--ink);
+  color: var(--brand-strong);
 }
 
 .action-modal-trigger-command .action-modal-trigger-affordance {
@@ -2426,6 +2449,12 @@ button {
 .action-modal-trigger-command:hover {
   border-color: var(--brand-border-strong);
   background: var(--brand-soft);
+}
+
+.action-modal-trigger-command.is-secondary:hover {
+  border-color: var(--brand-border-strong);
+  background: var(--brand-soft);
+  color: var(--brand-strong);
 }
 
 .action-modal-trigger-command.is-primary:hover {
@@ -2452,7 +2481,7 @@ button {
 
 .action-modal-panel {
   display: grid;
-  width: min(680px, calc(100vw - 48px));
+  width: min(720px, calc(100vw - 48px));
   max-height: min(760px, calc(100vh - 48px));
   overflow: hidden;
   border: 1px solid var(--line);
@@ -2502,10 +2531,9 @@ button {
 }
 
 .action-modal-body .control-form {
-  padding: var(--space-4);
-  border: 1px solid var(--line-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 @media (max-width: 720px) {
@@ -6772,6 +6800,11 @@ td code {
   .resource-lifecycle-secondary-actions {
     grid-column: 1;
     justify-content: flex-start;
+  }
+
+  .resource-lifecycle-maintenance-actions {
+    padding-left: 0;
+    border-left: 0;
   }
 
   .resource-lifecycle-context-panel {

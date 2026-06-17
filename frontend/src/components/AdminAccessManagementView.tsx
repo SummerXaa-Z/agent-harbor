@@ -120,44 +120,44 @@ export function AdminAccessManagementView({ controller, t }: AdminAccessManageme
           </section>
         ) : null}
 
-        <div className="table-wrap admin-access-table">
-          <table>
-            <thead>
-              <tr>
-                <th>{t("adminAccess.column.admin")}</th>
-                <th>{t("adminAccess.column.role")}</th>
-                <th>{t("adminAccess.column.scope")}</th>
-                <th>{t("adminAccess.column.source")}</th>
-                <th>{t("adminAccess.column.status")}</th>
-                <th>{t("adminAccess.column.key")}</th>
-                <th>{t("adminAccess.column.lastUsed")}</th>
-                <th>{t("adminAccess.column.actions")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {controller.identities.length === 0 ? (
+        {controller.identities.length === 0 ? (
+          <div className="admin-access-empty-state">
+            <EmptyRow
+              actionLabel={controller.forbidden ? undefined : t("adminAccess.create")}
+              detail={controller.forbidden ? t("adminAccess.forbiddenDetail") : t("adminAccess.emptyDetail")}
+              onAction={controller.forbidden ? undefined : controller.openCreate}
+              title={controller.forbidden ? t("adminAccess.forbiddenTitle") : t("adminAccess.emptyTitle")}
+            />
+          </div>
+        ) : (
+          <div className="table-wrap admin-access-table">
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={8}>
-                    <EmptyRow
-                      actionLabel={controller.forbidden ? undefined : t("adminAccess.create")}
-                      detail={controller.forbidden ? t("adminAccess.forbiddenDetail") : t("adminAccess.emptyDetail")}
-                      onAction={controller.forbidden ? undefined : controller.openCreate}
-                      title={controller.forbidden ? t("adminAccess.forbiddenTitle") : t("adminAccess.emptyTitle")}
-                    />
-                  </td>
+                  <th>{t("adminAccess.column.admin")}</th>
+                  <th>{t("adminAccess.column.role")}</th>
+                  <th>{t("adminAccess.column.scope")}</th>
+                  <th>{t("adminAccess.column.source")}</th>
+                  <th>{t("adminAccess.column.status")}</th>
+                  <th>{t("adminAccess.column.key")}</th>
+                  <th>{t("adminAccess.column.lastUsed")}</th>
+                  <th>{t("adminAccess.column.actions")}</th>
                 </tr>
-              ) : controller.identities.map((identity) => (
-                <AdminIdentityRow
-                  identity={identity}
-                  key={identity.id}
-                  onDisable={controller.openDisable}
-                  onRotate={controller.openRotate}
-                  t={t}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {controller.identities.map((identity) => (
+                  <AdminIdentityRow
+                    identity={identity}
+                    key={identity.id}
+                    onDisable={controller.openDisable}
+                    onRotate={controller.openRotate}
+                    t={t}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {controller.modal === "create" ? (

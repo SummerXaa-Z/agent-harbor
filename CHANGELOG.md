@@ -85,6 +85,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 路由策略列表现在使用一致的紧凑空态，不再渲染只有空行的表格。
 - Capability catalogs now use a compact setup prompt when no tools have been discovered, while filtered no-result states keep the table context.
 - 工具能力目录在尚未发现任何能力时改为紧凑配置引导；只有筛选无结果时才保留表格语境。
+- Administrator access management now uses a compact empty state instead of rendering an empty eight-column table.
+- 管理员访问管理在没有管理员记录时改为紧凑空态，不再显示八列表格空壳。
 - Resource Management row actions now keep resource context while opening credential actions in place and routing capability, permission, and runtime follow-ups with focused handoff state.
 - 资源管理的行级操作现在会保留资源上下文：凭据操作就地打开，能力、权限和运行后续动作带着上下文进入对应工作区。
 - Resource Management now keeps a selected resource context panel visible, showing tenant/workspace scope, lifecycle health, capability, permission, runtime counts, and the recommended next action before operators jump across workspaces.

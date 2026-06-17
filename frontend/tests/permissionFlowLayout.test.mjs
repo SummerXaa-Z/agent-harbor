@@ -133,6 +133,9 @@ test("administrator boundary workspace uses modal actions and never renders key 
   assert.match(adminAccessHook, /error\.adminAccessPlatformRequired/);
   assert.match(adminAccessView, /!controller\.forbidden/);
   assert.match(adminAccessView, /adminAccess\.forbiddenTitle/);
+  assert.match(adminAccessView, /className="admin-access-empty-state"/);
+  assert.doesNotMatch(adminAccessView, /<td colSpan=\{8\}>/);
+  assert.match(styles, /\.admin-access-empty-state\s*\{[^}]*min-height:\s*128px;/s);
   assert.match(adminAccessView, /admin-access-modal-backdrop/);
   assert.match(adminAccessView, /controller\.oneTimeKey/);
   assert.match(adminAccessView, /className="primary-button"[\s\S]*t\("adminAccess\.create"\)/);

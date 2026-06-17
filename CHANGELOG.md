@@ -355,6 +355,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- Agent Registry empty state now stays in Resource Management, using compact left-aligned guidance that points operators to the in-page Create Agent action instead of sending them back to Getting Started.
+- Agent 注册表空态现在留在资源管理页，用更紧凑的左对齐提示引导管理员使用页内“创建 Agent”入口，不再跳回“开始使用”。
 - Resource Management now removes the duplicate selected-row action: the selected resource row shows a focused-state label, while the context panel remains the single recommended operation entry.
 - 资源管理页现在移除选中资源行里的重复操作入口：选中行只展示当前关注状态，推荐操作统一保留在上下文面板。
 - Getting Started now uses a guided first-run layout with a prominent current step, nearby primary action, compact progress summary, and tighter checklist instead of a wide table-like workspace.

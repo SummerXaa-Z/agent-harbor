@@ -416,13 +416,16 @@ test("agent registry provides search status filtering and a details entry", () =
   assert.match(operationalViews, /const visibleAgents = agents\.filter/);
   assert.match(operationalViews, /className="table-toolbar"/);
   assert.match(operationalViews, /className="registry-empty-state"/);
+  assert.doesNotMatch(agentTable, /empty\.registry\.action/);
+  assert.doesNotMatch(agentTable, /actionHash=\{hasAgents \? undefined : "#getting-started"\}/);
   assert.doesNotMatch(agentTable, /<td colSpan=\{6\}>/);
   assert.match(operationalViews, /placeholder=\{t\("form\.searchAgents"\)\}/);
   assert.match(operationalViews, /className="table-detail-panel"/);
   assert.match(operationalViews, /setSelectedAgentId\(agent\.id\)/);
   assert.match(styles, /\.table-toolbar\s*\{/);
   assert.match(styles, /\.registry-empty-state\s*\{/);
-  assert.match(styles, /\.registry-empty-state\s*\{[^}]*min-height:\s*132px;/s);
+  assert.match(styles, /\.registry-empty-state\s*\{[^}]*justify-items:\s*start;[^}]*min-height:\s*96px;/s);
+  assert.match(styles, /\.registry-empty-state \.empty-row\s*\{[^}]*justify-content:\s*start;/s);
   assert.match(styles, /\.table-detail-panel\s*\{/);
 });
 

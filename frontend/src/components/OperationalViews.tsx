@@ -210,8 +210,6 @@ export function AgentTable({
           <EmptyRow
             title={hasAgents ? t("empty.filteredResults.title") : t("empty.registry.title")}
             detail={hasAgents ? t("empty.filteredResults.detail") : t("empty.registry.detail")}
-            actionLabel={hasAgents ? undefined : t("empty.registry.action")}
-            actionHash={hasAgents ? undefined : "#getting-started"}
           />
         </div>
       ) : (

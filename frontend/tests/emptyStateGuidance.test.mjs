@@ -19,8 +19,9 @@ test("empty row supports optional guidance actions without replacing the empty s
 });
 
 test("setup-dependent empty states point to the next useful workspace", () => {
-  assert.match(operationalViews, /empty\.registry\.action/);
-  assert.match(operationalViews, /actionHash=\{hasAgents \? undefined : "#getting-started"\}/);
+  assert.match(operationalViews, /empty\.registry\.detail/);
+  assert.doesNotMatch(operationalViews, /empty\.registry\.action/);
+  assert.doesNotMatch(operationalViews, /actionHash=\{hasAgents \? undefined : "#getting-started"\}/);
 
   assert.match(capabilityGovernance, /empty\.capabilities\.actionRegisterAgents/);
   assert.match(capabilityGovernance, /empty\.capabilities\.actionRefresh/);
@@ -35,12 +36,12 @@ test("setup-dependent empty states point to the next useful workspace", () => {
 });
 
 test("empty state guidance copy is bilingual", () => {
-  for (const key of [
+ for (const key of [
     "empty.auditTraces.action",
     "empty.capabilities.actionRefresh",
     "empty.capabilities.actionRegisterAgents",
     "empty.grantChains.action",
-    "empty.registry.action"
+    "empty.registry.detail"
   ]) {
     assert.match(i18n, new RegExp(`"${key}"`), `${key} should be present in i18n`);
   }

@@ -114,7 +114,8 @@ test("ai admin workbench has a growth guard while controller hooks are split", (
   assert.match(permissionWorkbenchPresenters, /export function permissionWorkbenchStepDisplayDetailCode/);
   assert.match(permissionWorkbenchPresenters, /export function permissionWorkbenchStepDisplayStatus/);
   assert.match(permissionWorkbenchParts, /export function CapabilityChipList/);
-  assert.doesNotMatch(workbench, /import \{ useState \} from "react"/);
+  assert.match(permissionWorkbenchParts, /export function PermissionChangeDraftSheet/);
+  assert.match(workbench, /useState<"closed" \| "edit">\("closed"\)/);
   assert.doesNotMatch(workbench, /setPendingApprovalDecision/);
   assert.doesNotMatch(workbench, /function resolvePermissionJourneyStatus/);
   assert.doesNotMatch(workbench, /function permissionWorkbenchStepDisplayDetailCode/);
@@ -572,6 +573,21 @@ test("approval messages expose semantic status styling", () => {
   assert.match(workbench, /approval-inline-message status-\$\{approvalReadinessMessageTone\}/);
   assert.match(styles, /\.approval-inline-message\.status-error\s*\{/);
   assert.match(styles, /\.approval-inline-message\.status-success\s*\{/);
+});
+
+test("permission change draft uses an explicit command sheet", () => {
+  assert.match(permissionWorkbenchParts, /className="permission-draft-command"/);
+  assert.match(permissionWorkbenchParts, /className="permission-draft-sheet-backdrop"/);
+  assert.match(permissionWorkbenchParts, /className="permission-draft-sheet"/);
+  assert.match(workbench, /<PermissionChangeDraftSheet/);
+  assert.match(workbench, /isOpen=\{permissionDraftSheet === "edit"\}/);
+  assert.match(workbench, /onClose=\{\(\) => setPermissionDraftSheet\("closed"\)\}/);
+  assert.match(workbench, /onOpenDraftSheet=\{\(\) => setPermissionDraftSheet\("edit"\)\}/);
+  assert.match(workbench, /function startNewPermissionChangeInSheet\(\)/);
+  assert.match(workbench, /setPermissionDraftSheet\("edit"\)/);
+  assert.match(workbenchStyles, /\.permission-draft-command\s*\{/);
+  assert.match(workbenchStyles, /\.permission-draft-sheet-backdrop\s*\{/);
+  assert.match(workbenchStyles, /\.permission-draft-sheet\s*\{/);
 });
 
 test("removed demo-era selectors stay out of the production shell", () => {

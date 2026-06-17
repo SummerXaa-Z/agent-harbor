@@ -101,12 +101,14 @@ test("permission request process steps navigate to their operator sections", () 
   assert.doesNotMatch(workbench, /function permissionRequestStepSectionId/);
   assert.doesNotMatch(workbench, /function permissionRequestStepTarget/);
   assert.match(workbench, /function scrollToPermissionRequestStep/);
+  assert.match(workbench, /if \(step === "scope" \|\| step === "template"\) \{/);
+  assert.match(workbench, /setPermissionDraftSheet\("edit"\);/);
   assert.match(workbench, /document\.getElementById\(permissionRequestStepSectionId\(step\)\)\?\.scrollIntoView/);
   assert.match(permissionWorkbenchPresenters, /if \(step === "request"\) return "scope"/);
   assert.match(permissionWorkbenchPresenters, /if \(step === "validation"\) return "validation"/);
   assert.match(permissionWorkbenchPresenters, /if \(step === "acceptance"\) return "acceptance"/);
-  assert.match(workbench, /id=\{permissionRequestStepSectionId\("scope"\)\}/);
-  assert.match(workbench, /id=\{permissionRequestStepSectionId\("template"\)\}/);
+  assert.match(permissionWorkbenchParts, /id=\{permissionRequestStepSectionId\("scope"\)\}/);
+  assert.match(permissionWorkbenchParts, /id=\{permissionRequestStepSectionId\("template"\)\}/);
   assert.match(workbench, /id=\{permissionRequestStepSectionId\("approval"\)\}/);
   assert.match(workbench, /id=\{permissionRequestStepSectionId\("apply"\)\}/);
   assert.match(workbench, /id=\{permissionRequestStepSectionId\("goLive"\)\}/);
@@ -188,13 +190,13 @@ test("permission request top chrome avoids nested card and table treatment", () 
 });
 
 test("permission request embeds a concise concept guide without blocking the task flow", () => {
-  assert.match(workbench, /<details className="approval-concept-guide">/);
-  assert.match(workbench, /<summary>\{t\("section\.permissionConceptGuide"\)\}<\/summary>/);
-  assert.match(workbench, /className="approval-concept-grid"/);
-  assert.match(workbench, /concept\.tenant/);
-  assert.match(workbench, /concept\.caller/);
-  assert.match(workbench, /concept\.permissionPackage/);
-  assert.match(workbench, /concept\.evidence/);
+  assert.match(permissionWorkbenchParts, /<details className="approval-concept-guide">/);
+  assert.match(permissionWorkbenchParts, /<summary>\{t\("section\.permissionConceptGuide"\)\}<\/summary>/);
+  assert.match(permissionWorkbenchParts, /className="approval-concept-grid"/);
+  assert.match(permissionWorkbenchParts, /concept\.tenant/);
+  assert.match(permissionWorkbenchParts, /concept\.caller/);
+  assert.match(permissionWorkbenchParts, /concept\.permissionPackage/);
+  assert.match(permissionWorkbenchParts, /concept\.evidence/);
   assert.match(styles, /\.approval-concept-guide\s*\{/);
   assert.match(styles, /\.approval-concept-grid\s*\{/);
   assert.match(i18n, /"section\.permissionConceptGuide": "概念速览"/);
@@ -695,7 +697,7 @@ test("permission request shows a concrete completion state with three exits", ()
 });
 
 test("permission request go-live step presents one guided primary action", () => {
-  assert.match(workbench, /if \(journeyStatus\.nextActionKey === "action\.startPermissionApproval"\) \{\s*onStartNewPermissionChange\(\);/);
+  assert.match(workbench, /if \(journeyStatus\.nextActionKey === "action\.startPermissionApproval"\) \{\s*startNewPermissionChangeInSheet\(\);/);
   assert.match(workbench, /const goLivePrimaryActionKey = goLiveReady/);
   assert.match(workbench, /runtimeValidationReady\s*\?\s*"action\.checkProductionReadiness"/);
   assert.match(workbench, /const runGoLivePrimaryAction = \(\) => \{/);
@@ -724,14 +726,14 @@ test("permission request advanced messages suppress successful load noise", () =
 });
 
 test("permission request hides raw workspace identifiers from the primary path", () => {
-  const workspaceLabelStart = workbench.indexOf('approval-readonly-field');
-  const technicalDetailsStart = workbench.indexOf('<details className="approval-details">');
+  const workspaceLabelStart = permissionWorkbenchParts.indexOf('approval-readonly-field');
+  const technicalDetailsStart = permissionWorkbenchParts.indexOf('<details className="approval-details">');
   assert.notEqual(workspaceLabelStart, -1);
   assert.notEqual(technicalDetailsStart, -1);
   assert.ok(workspaceLabelStart < technicalDetailsStart);
-  assert.match(workbench.slice(workspaceLabelStart, technicalDetailsStart), /workspaceName/);
-  assert.doesNotMatch(workbench.slice(workspaceLabelStart, technicalDetailsStart), /form\.workspaceId/);
-  assert.match(workbench, /<summary>\{t\("text\.technicalOverrides"\)\}<\/summary>/);
+  assert.match(permissionWorkbenchParts.slice(workspaceLabelStart, technicalDetailsStart), /workspaceName/);
+  assert.doesNotMatch(permissionWorkbenchParts.slice(workspaceLabelStart, technicalDetailsStart), /form\.workspaceId/);
+  assert.match(permissionWorkbenchParts, /<summary>\{t\("text\.technicalOverrides"\)\}<\/summary>/);
   assert.match(styles, /\.approval-details:not\(\[open\]\) > :not\(summary\)\s*\{/);
 });
 
@@ -816,10 +818,10 @@ test("permission request overview keeps context in one authoritative bar", () =>
 });
 
 test("permission request core selectors avoid forced ellipsis at review widths", () => {
-  assert.match(workbench, /className="approval-field is-wide"/);
-  assert.match(workbench, /className="approval-readonly-field is-wide"/);
-  assert.match(workbench, /className="approval-field approval-subject-field is-wide"/);
-  assert.match(workbench, /className="approval-select is-wide"/);
+  assert.match(permissionWorkbenchParts, /className="approval-field is-wide"/);
+  assert.match(permissionWorkbenchParts, /className="approval-readonly-field is-wide"/);
+  assert.match(permissionWorkbenchParts, /className="approval-field approval-subject-field is-wide"/);
+  assert.match(permissionWorkbenchParts, /className="approval-select is-wide"/);
   assert.match(styles, /\.approval-form-grid \.approval-dropdown-trigger span\s*\{[^}]*white-space:\s*normal;/s);
   assert.match(styles, /\.approval-form-grid \.approval-dropdown-trigger span\s*\{[^}]*text-overflow:\s*clip;/s);
   assert.match(styles, /@media \(max-width: 1120px\)\s*\{[\s\S]*\.approval-flow-layout,\s*[\s\S]*\.approval-form-grid\s*\{[^}]*grid-template-columns:\s*1fr;/s);
@@ -837,9 +839,9 @@ test("permission request dropdowns use deduplicated business labels", () => {
 });
 
 test("permission request primary path avoids native select menus", () => {
-  const formStart = workbench.indexOf('<div className="approval-form-grid">');
-  const formEnd = workbench.indexOf('<div className="approval-package-preview"', formStart);
-  const primaryForm = workbench.slice(formStart, formEnd);
+  const formStart = permissionWorkbenchParts.indexOf('<div className="approval-form-grid">');
+  const formEnd = permissionWorkbenchParts.indexOf('<div className="approval-package-preview"', formStart);
+  const primaryForm = permissionWorkbenchParts.slice(formStart, formEnd);
   assert.notEqual(formStart, -1);
   assert.notEqual(formEnd, -1);
   assert.match(dropdown, /export function ApprovalDropdown/);
@@ -850,13 +852,22 @@ test("permission request primary path avoids native select menus", () => {
   assert.doesNotMatch(primaryForm, /<select/);
 });
 
+test("permission change draft editor opens from a command sheet", () => {
+  assert.match(workbench, /useState<"closed" \| "edit">\("closed"\)/);
+  assert.match(workbench, /<PermissionChangeDraftSheet/);
+  assert.match(workbench, /isOpen=\{permissionDraftSheet === "edit"\}/);
+  assert.match(workbench, /onOpenDraftSheet=\{\(\) => setPermissionDraftSheet\("edit"\)\}/);
+  assert.match(workbench, /onClose=\{\(\) => setPermissionDraftSheet\("closed"\)\}/);
+  assert.doesNotMatch(workbench, /className=\{`approval-section approval-request-form-section/);
+});
+
 test("permission request freezes configuration after approval or apply", () => {
-  const formStart = workbench.indexOf('<section className={`approval-section approval-request-form-section');
-  const formEnd = workbench.indexOf('<div className="approval-package-preview"', formStart);
-  const primaryForm = workbench.slice(formStart, formEnd);
-  const advancedStart = workbench.indexOf('<details className="approval-details">');
-  const processStart = workbench.indexOf('<aside className="approval-process-panel"', advancedStart);
-  const advancedForm = workbench.slice(advancedStart, processStart);
+  const formStart = permissionWorkbenchParts.indexOf('<div className="approval-form-grid">');
+  const formEnd = permissionWorkbenchParts.indexOf('<div className="approval-package-preview"', formStart);
+  const primaryForm = permissionWorkbenchParts.slice(formStart, formEnd);
+  const advancedStart = permissionWorkbenchParts.indexOf('<details className="approval-details">');
+  const advancedEnd = permissionWorkbenchParts.indexOf('</details>', advancedStart);
+  const advancedForm = permissionWorkbenchParts.slice(advancedStart, advancedEnd);
 
   assert.match(workbench, /const requestFormLocked = Boolean\(application\)/);
   assert.match(workbench, /approvalRequest\?\.status === "pending"/);
@@ -865,14 +876,15 @@ test("permission request freezes configuration after approval or apply", () => {
   assert.match(workbench, /const requestFormLockedDetailKey = requestFormActiveLocked\s*\?\s*"text\.permissionRequestLockedActiveDetail"\s*:\s*"text\.permissionRequestLockedApprovalDetail"/);
   assert.match(workbench, /const requestFormTitleKey = requestFormLocked \? "section\.permissionRequestReview" : "section\.permissionRequestForm"/);
   assert.match(workbench, /const requestFormHelpKey = requestFormLocked \? "text\.permissionRequestReviewHelp" : "text\.permissionRequestScopeHelp"/);
-  assert.match(workbench, /requestFormLocked \? "is-read-only" : ""/);
-  assert.match(workbench, /<strong>\{t\(requestFormTitleKey\)\}<\/strong>/);
-  assert.match(workbench, /<p>\{t\(requestFormHelpKey\)\}<\/p>/);
-  assert.match(workbench, /text\.permissionRequestLockedTitle/);
-  assert.match(workbench, /requestFormActiveLocked \? \(/);
-  assert.match(workbench, /onClick=\{onStartNewPermissionChange\}/);
-  assert.match(primaryForm, /disabled=\{requestFormLocked\}/);
-  assert.match(advancedForm, /disabled=\{requestFormLocked\}/);
+  assert.match(workbench, /isLocked=\{requestFormLocked\}/);
+  assert.match(workbench, /isActiveLocked=\{requestFormActiveLocked\}/);
+  assert.match(workbench, /requestFormTitleKey=\{requestFormTitleKey\}/);
+  assert.match(workbench, /requestFormHelpKey=\{requestFormHelpKey\}/);
+  assert.match(permissionWorkbenchParts, /text\.permissionRequestLockedTitle/);
+  assert.match(permissionWorkbenchParts, /isActiveLocked \? \(/);
+  assert.match(permissionWorkbenchParts, /onClick=\{onStartNewPermissionChange\}/);
+  assert.match(primaryForm, /disabled=\{isLocked\}/);
+  assert.match(advancedForm, /disabled=\{isLocked\}/);
   assert.match(dropdown, /disabled\?: boolean/);
   assert.match(dropdown, /disabled=\{disabled\}/);
   assert.match(dropdown, /const menuOpen = open && !disabled/);
@@ -884,12 +896,12 @@ test("permission request freezes configuration after approval or apply", () => {
 });
 
 test("permission request chooses access objects instead of raw subject selectors", () => {
-  const formStart = workbench.indexOf('<div className="approval-form-grid">');
-  const formEnd = workbench.indexOf('<div className="approval-package-preview"', formStart);
-  const primaryForm = workbench.slice(formStart, formEnd);
-  const advancedStart = workbench.indexOf('<details className="approval-details">');
-  const processStart = workbench.indexOf('<aside className="approval-process-panel"', advancedStart);
-  const advancedForm = workbench.slice(advancedStart, processStart);
+  const formStart = permissionWorkbenchParts.indexOf('<div className="approval-form-grid">');
+  const formEnd = permissionWorkbenchParts.indexOf('<div className="approval-package-preview"', formStart);
+  const primaryForm = permissionWorkbenchParts.slice(formStart, formEnd);
+  const advancedStart = permissionWorkbenchParts.indexOf('<details className="approval-details">');
+  const advancedEnd = permissionWorkbenchParts.indexOf('</details>', advancedStart);
+  const advancedForm = permissionWorkbenchParts.slice(advancedStart, advancedEnd);
 
   assert.match(app, /fetchPermissionPackageAccessSubjects/);
   assert.match(app, /aiAdminAccessSubjects/);

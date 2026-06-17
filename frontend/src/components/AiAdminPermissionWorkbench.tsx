@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   CheckCircle2,
   ClipboardCheck,
@@ -15,7 +16,6 @@ import {
   normalizeAccessSubjectOptions,
   type AccessSubjectOption
 } from "../accessSubjects";
-import { summarizeDataScopes } from "../accessProfile";
 import {
   aiAdminApprovalReadinessRows,
   type AiAdminApprovalReadinessState
@@ -27,13 +27,11 @@ import {
   type AiAdminApprovalJourneyResult
 } from "../aiAdminApprovalJourney";
 import type { AiAdminProductionConsoleSummary } from "../aiAdminProductionConsole";
-import { dataScopeValueLabels } from "../consolePresenters";
 import {
   currentPermissionRequestWizardStep,
   permissionRequestProcessStepStatuses,
   type PermissionRequestWizardStep
 } from "../permissionRequestJourney";
-import { applyPermissionRequestAccessSubject } from "../permissionRequestForm";
 import { usePermissionApprovalDecision } from "../hooks/usePermissionApprovalDecision";
 import {
   accessDecisionOutcomeLabel,
@@ -89,8 +87,7 @@ import type {
   PermissionChangeHandoffContext,
   Tenant
 } from "../types";
-import { ApprovalDropdown } from "./ApprovalDropdown";
-import { CapabilityChipList } from "./PermissionWorkbenchParts";
+import { PermissionChangeDraftSheet } from "./PermissionWorkbenchParts";
 import { TechnicalId } from "./TechnicalId";
 import { Badge, EmptyRow } from "./ui";
 
@@ -247,6 +244,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     onRejectApprovalRequest,
     onSelectApprovalRequest, onWithdrawApprovalRequest, t
   });
+  const [permissionDraftSheet, setPermissionDraftSheet] = useState<"closed" | "edit">("closed");
   const callers = agents.filter((agent) => agent.status === "active" && agent.channelType === "local");
   const selectedCaller = agents.find((agent) => agent.id === form.callerInstanceId);
   const selectedTarget = mcpTargets.find((agent) => agent.id === form.targetId);
@@ -335,7 +333,6 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const goLiveCompletedAt = productionReadiness?.generatedAt
     ? tx(t, "text.permissionChangeCompletedAt", { date: formatDate(productionReadiness.generatedAt) })
     : "";
-  const dataScopeLabels = dataScopeValueLabels(t);
   const messageTone = permissionInlineMessageTone(message);
   const approvalReadinessMessageTone = permissionInlineMessageTone(approvalReadinessMessage);
   const applyPreflightMessageTone = permissionInlineMessageTone(applyPreflightMessage);
@@ -359,7 +356,15 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const reviewerIdentity = approvalReviewer.trim()
     ? permissionEntityDisplayName(approvalReviewer.trim(), t)
     : t("text.approvalReviewerFallback");
+  function startNewPermissionChangeInSheet() {
+    onStartNewPermissionChange();
+    setPermissionDraftSheet("edit");
+  }
   function scrollToPermissionRequestStep(step: PermissionRequestStepTarget) {
+    if (step === "scope" || step === "template") {
+      setPermissionDraftSheet("edit");
+      return;
+    }
     document.getElementById(permissionRequestStepSectionId(step))?.scrollIntoView({
       behavior: "smooth",
       block: "start"
@@ -393,7 +398,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       return;
     }
     if (journeyStatus.nextActionKey === "action.startPermissionApproval") {
-      onStartNewPermissionChange();
+      startNewPermissionChangeInSheet();
       return;
     }
     if (primaryActionCode === "create_approval_request" || productionSummary.primaryActionKey === "action.createApprovalRequest") {
@@ -718,184 +723,34 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
 
       <div className="approval-flow-layout">
         <main className="approval-request-panel">
-          <section className={`approval-section approval-request-form-section ${requestFormLocked ? "is-read-only" : ""}`} id={permissionRequestStepSectionId("scope")}>
-            <header>
-              <div>
-                <strong>{t(requestFormTitleKey)}</strong>
-                <p>{t(requestFormHelpKey)}</p>
-              </div>
-              <Badge tone={journeyStatus.tone}>{t(journeyStatus.labelKey)}</Badge>
-            </header>
-            {requestFormLocked ? (
-              <div className="approval-lock-notice">
-                <div>
-                  <strong>{t("text.permissionRequestLockedTitle")}</strong>
-                  <span>{t(requestFormLockedDetailKey)}</span>
-                </div>
-                {requestFormActiveLocked ? (
-                  <button className="secondary-button" disabled={permissionRequestBusy} onClick={onStartNewPermissionChange} type="button">
-                    <ClipboardCheck size={14} />
-                    {t("action.startPermissionApproval")}
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-            <details className="approval-concept-guide">
-              <summary>{t("section.permissionConceptGuide")}</summary>
-              <div className="approval-concept-grid">
-                <article>
-                  <strong>{t("concept.tenant")}</strong>
-                  <span>{t("concept.tenant.detail")}</span>
-                </article>
-                <article>
-                  <strong>{t("concept.caller")}</strong>
-                  <span>{t("concept.caller.detail")}</span>
-                </article>
-                <article>
-                  <strong>{t("concept.permissionPackage")}</strong>
-                  <span>{t("concept.permissionPackage.detail")}</span>
-                </article>
-                <article>
-                  <strong>{t("concept.evidence")}</strong>
-                  <span>{t("concept.evidence.detail")}</span>
-                </article>
-              </div>
-            </details>
-            <label className="approval-request">
-              {t("form.adminRequest")}
-              <textarea
-                disabled={requestFormLocked}
-                rows={3}
-                value={form.requestText}
-                onChange={(event) => onChange({ ...form, requestText: event.target.value })}
-              />
-            </label>
-            <div className="approval-form-grid">
-              <div className="approval-field is-wide">
-                <span className="approval-field-label">{t("form.businessTenant")}</span>
-                <ApprovalDropdown
-                  disabled={requestFormLocked}
-                  label={t("form.businessTenant")}
-                  options={tenantDropdownOptions}
-                  value={form.tenantId}
-                  onChange={(value) => onChange({ ...form, tenantId: value })}
-                />
-                <span>{tenantPath.path}</span>
-              </div>
-              <div className="approval-readonly-field is-wide">
-                <span>{t("form.businessWorkspace")}</span>
-                <strong>{workspaceName}</strong>
-                <small>{t("text.workspaceResolvedDetail")}</small>
-              </div>
-              <div className="approval-field">
-                <span className="approval-field-label">{t("form.businessCaller")}</span>
-                <ApprovalDropdown
-                  disabled={requestFormLocked}
-                  label={t("form.businessCaller")}
-                  options={callerDropdownOptions}
-                  value={form.callerInstanceId}
-                  onChange={(value) => onChange({ ...form, callerInstanceId: value })}
-                />
-              </div>
-              <div className="approval-field">
-                <span className="approval-field-label">{t("form.target")}</span>
-                <ApprovalDropdown
-                  disabled={requestFormLocked}
-                  label={t("form.target")}
-                  options={targetDropdownOptions}
-                  value={form.targetId}
-                  onChange={(value) => onChange({ ...form, targetId: value })}
-                />
-              </div>
-              <div className="approval-field approval-subject-field is-wide">
-                <span className="approval-field-label">{t("form.accessSubject")}</span>
-                <ApprovalDropdown
-                  disabled={requestFormLocked}
-                  label={t("form.accessSubject")}
-                  options={accessSubjectDropdownOptions}
-                  value={selectedAccessSubject.id}
-                  onChange={(value) => onChange(applyPermissionRequestAccessSubject(form, accessSubjectCatalog, value))}
-                />
-                <small>{t(selectedAccessSubject.detailKey)}</small>
-              </div>
-              <label>
-                {t("form.region")}
-                <input disabled={requestFormLocked} value={form.region} onChange={(event) => onChange({ ...form, region: event.target.value })} />
-              </label>
-              <div className="approval-select is-wide">
-                <span className="approval-field-label">{t("form.permissionPackage")}</span>
-                <ApprovalDropdown
-                  disabled={requestFormLocked}
-                  label={t("form.permissionPackage")}
-                  options={templateDropdownOptions}
-                  value={form.templateId}
-                  onChange={(value) => onChange({ ...form, templateId: value })}
-                />
-              </div>
-            </div>
-            <div className="approval-package-preview" id={permissionRequestStepSectionId("template")}>
-              <div>
-                <span>{t("section.permissionWizardTemplate")}</span>
-                <strong>{permissionPackageTemplateName(draft.template, t)}</strong>
-                <p>{permissionPackageTemplateSummary(draft.template, t)}</p>
-              </div>
-              <div className="approval-capability-columns">
-                <CapabilityChipList
-                  capabilities={draft.allowedCapabilities}
-                  emptyLabel={t("empty.permissionAllowed.detail")}
-                  label={t("section.allowedByPackage")}
-                  tone="success"
-                  t={t}
-                />
-                <CapabilityChipList
-                  capabilities={draft.blockedCapabilities}
-                  emptyLabel={t("empty.permissionBlocked.detail")}
-                  label={t("section.blockedByPackage")}
-                  tone="danger"
-                  t={t}
-                />
-              </div>
-              <div className="approval-scope">
-                <span>{t("section.dataScope")}</span>
-                <code>{summarizeDataScopes(draft.dataScopes, t("text.noDataScope"), dataScopeLabels)}</code>
-              </div>
-            </div>
-            <details className="approval-details">
-              <summary>{t("text.technicalOverrides")}</summary>
-              <label>
-                {t("form.workspaceId")}
-                <input disabled={requestFormLocked} value={form.workspaceId} onChange={(event) => onChange({ ...form, workspaceId: event.target.value })} />
-              </label>
-              <label>
-                {t("form.subjectSelector")}
-                <input
-                  disabled={requestFormLocked}
-                  placeholder={t("form.subjectSelectorPlaceholder")}
-                  value={form.subjectSelector ?? ""}
-                  onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })}
-                />
-                <small>{t("text.subjectSelectorAdvancedHelp")}</small>
-              </label>
-              <dl>
-                <div>
-                  <dt>{t("form.tenantId")}</dt>
-                  <dd>{form.tenantId || "-"}</dd>
-                </div>
-                <div>
-                  <dt>{t("form.workspaceId")}</dt>
-                  <dd>{form.workspaceId || "-"}</dd>
-                </div>
-                <div>
-                  <dt>{t("form.callerInstance")}</dt>
-                  <dd>{selectedCaller?.id || form.callerInstanceId || "-"}</dd>
-                </div>
-                <div>
-                  <dt>{t("form.target")}</dt>
-                  <dd>{selectedTarget?.id || form.targetId || "-"}</dd>
-                </div>
-              </dl>
-            </details>
-          </section>
+          <PermissionChangeDraftSheet
+            accessSubjectCatalog={accessSubjectCatalog}
+            accessSubjectDropdownOptions={accessSubjectDropdownOptions}
+            callerDropdownOptions={callerDropdownOptions}
+            draft={draft}
+            form={form}
+            isActiveLocked={requestFormActiveLocked}
+            isLocked={requestFormLocked}
+            isOpen={permissionDraftSheet === "edit"}
+            lockedDetailKey={requestFormLockedDetailKey}
+            onChange={onChange}
+            onClose={() => setPermissionDraftSheet("closed")}
+            onOpenDraftSheet={() => setPermissionDraftSheet("edit")}
+            onStartNewPermissionChange={startNewPermissionChangeInSheet}
+            requestFormHelpKey={requestFormHelpKey}
+            requestFormTitleKey={requestFormTitleKey}
+            selectedAccessSubject={selectedAccessSubject}
+            selectedCaller={selectedCaller}
+            selectedTarget={selectedTarget}
+            statusLabel={t(journeyStatus.labelKey)}
+            statusTone={journeyStatus.tone}
+            templateDropdownOptions={templateDropdownOptions}
+            targetDropdownOptions={targetDropdownOptions}
+            tenantDropdownOptions={tenantDropdownOptions}
+            tenantPath={tenantPath}
+            t={t}
+            workspaceName={workspaceName}
+          />
         </main>
 
         <aside className="approval-process-panel" aria-label={t("section.permissionRequestProcess")}>
@@ -1042,7 +897,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                     <FileSearch size={14} />
                     {t("action.openAccessProfile")}
                   </button>
-                  <button className="secondary-button" disabled={permissionRequestBusy} onClick={onStartNewPermissionChange} type="button">
+                  <button className="secondary-button" disabled={permissionRequestBusy} onClick={startNewPermissionChangeInSheet} type="button">
                     <ClipboardCheck size={14} />
                     {t("action.startPermissionApproval")}
                   </button>

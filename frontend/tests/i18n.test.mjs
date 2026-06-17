@@ -300,6 +300,9 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("action.runApprovalJourney"), "执行运行验证");
   assert.equal(t("action.startPermissionApproval"), "新建权限变更");
   assert.equal(t("action.startTenantPermissionChange"), "新建权限变更");
+  assert.equal(t("action.editPermissionChangeDraft"), "编辑配置");
+  assert.equal(t("action.reviewPermissionChangeDraft"), "复核配置");
+  assert.equal(t("action.closePermissionChangeDraft"), "关闭配置");
   assert.equal(t("action.runningApprovalJourney"), "验证中");
   assert.equal(t("action.checkApprovalReadiness"), "检查环境");
   assert.equal(t("text.aiAdminApprovalJourneyCompletion"), "状态检查进度");
@@ -370,6 +373,10 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("text.permissionRequestTaskTitle"), "权限变更配置");
   assert.equal(t("text.permissionRequestTaskBody"), "配置租户、调用方和权限包；审批通过后应用变更，并完成状态检查。");
   assert.equal(t("text.permissionRequestStatusSummary"), "权限变更状态摘要");
+  assert.equal(t("text.permissionDraftCommandTitle"), "权限变更配置");
+  assert.equal(t("text.permissionDraftCommandDetail"), "需要调整租户、调用方、目标、访问角色或权限包时再打开。");
+  assert.equal(t("text.permissionDraftSheetTitle"), "配置权限变更");
+  assert.equal(t("text.permissionDraftSheetDetail"), "配置本次权限变更的业务范围。关闭面板不会提交，也不会丢弃当前草稿。");
   assert.equal(t("text.currentWorkspaceContext"), "当前工作上下文");
   assert.equal(t("text.permissionRequestNextAction"), "建议下一步");
   assert.equal(t("text.permissionRequestScopeHelp"), "选择业务租户、调用方、工具服务和访问角色；技术 ID 只在技术覆盖里保留。");

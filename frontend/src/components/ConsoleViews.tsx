@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 
 import type { Translator } from "../consolePresenters";
 import type { RoutePolicy } from "../types";
@@ -53,19 +54,35 @@ export function RegistryView({
   agentRegistryPanel,
   contractMatrixPanel,
   journeyCheckpoint,
-  resourceLifecyclePanel
+  resourceLifecyclePanel,
+  t
 }: {
   agentRegistryPanel: ReactNode;
   contractMatrixPanel: ReactNode;
   journeyCheckpoint?: ReactNode;
   resourceLifecyclePanel: ReactNode;
+  t: Translator;
 }) {
   return (
     <section className="content-grid">
       {journeyCheckpoint}
       {resourceLifecyclePanel}
-      {agentRegistryPanel}
-      {contractMatrixPanel}
+      <details className="resource-advanced-details">
+        <summary>
+          <span>
+            <strong>{t("resource.advanced.title")}</strong>
+            <small>{t("resource.advanced.detail")}</small>
+          </span>
+          <span className="resource-advanced-action">
+            {t("resource.advanced.action")}
+            <ChevronRight size={15} aria-hidden="true" />
+          </span>
+        </summary>
+        <div className="resource-advanced-grid">
+          {agentRegistryPanel}
+          {contractMatrixPanel}
+        </div>
+      </details>
     </section>
   );
 }

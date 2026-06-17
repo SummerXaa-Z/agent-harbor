@@ -2691,6 +2691,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
             contractMatrixPanel={contractMatrixPanel("span-4")}
             journeyCheckpoint={productionJourneyCheckpoint}
             resourceLifecyclePanel={resourceLifecyclePanel()}
+            t={t}
           />
         );
       case "routes":

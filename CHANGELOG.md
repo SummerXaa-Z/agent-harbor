@@ -69,6 +69,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 资源、访问和权限页面现在会把 MCP 能力治理场景中的资源名转成业务标签，避免生成的运行标识占据主标题。
 - Resource Management copy now uses resource status/configuration wording instead of lifecycle wording on visible operator paths.
 - 资源管理页可见文案现在使用“资源状态/资源配置”等表达，不再在操作路径上使用“生命周期”。
+- Resource Management now collapses the Agent registry and contract matrix into an Advanced resource details section, keeping the primary operator path focused on the resource workbench.
+- 资源管理页现在默认收起 Agent 注册表和契约矩阵，放入“高级资源明细”，让主路径聚焦资源工作台。
 - Resource Management row actions now keep resource context while opening credential actions in place and routing capability, permission, and runtime follow-ups with focused handoff state.
 - 资源管理的行级操作现在会保留资源上下文：凭据操作就地打开，能力、权限和运行后续动作带着上下文进入对应工作区。
 - Resource Management now keeps a selected resource context panel visible, showing tenant/workspace scope, lifecycle health, capability, permission, runtime counts, and the recommended next action before operators jump across workspaces.

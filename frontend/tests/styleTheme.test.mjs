@@ -226,6 +226,7 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
 
   assert.notEqual(registryStart, -1);
   assert.notEqual(routesStart, -1);
+  assert.match(consoleViews, /import \{ ChevronRight \} from "lucide-react";/);
   assert.match(app, /from "\.\/resourceLifecycle"/);
   assert.match(app, /from "\.\/components\/ResourceLifecycleView"/);
   assert.match(consoleViews, /resourceLifecyclePanel/);
@@ -260,6 +261,12 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(app, /agentRegistryPanel=\{agentRegistryPanel\("span-8"\)\}/);
   assert.doesNotMatch(app, /const agentRegistryActions =/);
   assert.match(app, /contractMatrixPanel=\{contractMatrixPanel\("span-4"\)\}/);
+  assert.match(registryView, /<details className="resource-advanced-details">/);
+  assert.match(registryView, /<summary>/);
+  assert.match(registryView, /t\("resource\.advanced\.title"\)/);
+  assert.match(registryView, /t\("resource\.advanced\.detail"\)/);
+  assert.match(registryView, /t\("resource\.advanced\.action"\)/);
+  assert.match(registryView, /className="resource-advanced-grid"[\s\S]*\{agentRegistryPanel\}[\s\S]*\{contractMatrixPanel\}/);
   assert.match(styles, /\.content-grid\s*\{[^}]*align-items:\s*start;/s);
   assert.match(styles, /\.resource-lifecycle\s*\{/);
   assert.match(styles, /\.resource-lifecycle-command-center\s*\{/);
@@ -272,6 +279,10 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(resourceLifecycleView, /t\("resource\.listTitle"\)/);
   assert.match(resourceLifecycleView, /tx\(t,\s*"resource\.listCount"/);
   assert.match(styles, /\.resource-lifecycle-row\.is-selected\s*\{/);
+  assert.match(styles, /\.resource-advanced-details\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
+  assert.match(styles, /\.resource-advanced-details summary\s*\{/);
+  assert.match(styles, /\.resource-advanced-action\s*\{/);
+  assert.match(styles, /\.resource-advanced-grid\s*\{[^}]*grid-template-columns:\s*repeat\(12,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(styles, /\.action-modal-trigger-command\.is-primary\s*\{/);
   assert.match(styles, /\.action-modal-trigger-command\.is-secondary\s*\{/);
   assert.match(styles, /\.action-modal-trigger-command \.action-modal-trigger-affordance\s*\{[^}]*font-size:\s*0;/s);

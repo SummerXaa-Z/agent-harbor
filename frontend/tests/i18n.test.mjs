@@ -128,9 +128,13 @@ test("resource action context copy is bilingual", () => {
   const keys = [
     "action.processing",
     "message.duplicateResourceMutation",
+    "resource.advanced.action",
+    "resource.advanced.detail",
+    "resource.advanced.title",
     "resource.actionContext.resource",
     "resource.actionContext.scope",
-    "resource.actionContext.title"
+    "resource.actionContext.title",
+    "resource.detail.ready"
   ];
 
   for (const language of ["en", "zh-CN"]) {
@@ -139,6 +143,7 @@ test("resource action context copy is bilingual", () => {
       assert.notEqual(t(key), key, `${language} missing ${key}`);
     }
   }
+  assert.equal(createTranslator("en")("resource.detail.ready"), "The resource is ready; keep reviewing runtime activity.");
 });
 
 test("createTranslator returns core journey Chinese labels", () => {
@@ -188,6 +193,9 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("resource.permissionIntent"), "为 {target} 创建授权。");
   assert.equal(t("resource.contextTitle"), "当前资源");
   assert.equal(t("resource.contextDetail"), "所选资源会决定推荐操作，同时保留租户和工作区上下文。");
+  assert.equal(t("resource.advanced.title"), "高级资源明细");
+  assert.equal(t("resource.advanced.action"), "查看明细");
+  assert.equal(t("resource.advanced.detail"), "仅在排查问题、批量核对或审计复核时展开 Agent 注册表和契约矩阵。");
   assert.equal(t("resource.contextScope"), "范围");
   assert.equal(t("resource.contextHealth"), "状态");
   assert.equal(t("resource.contextNext"), "推荐下一步");

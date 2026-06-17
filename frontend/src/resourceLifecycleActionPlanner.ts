@@ -1,6 +1,6 @@
 import type { NavKey } from "./consoleNavigation";
 import type { ResourceLifecycleItem } from "./resourceLifecycle";
-import type { Agent, PermissionChangeHandoffContext, TraceFilters } from "./types";
+import type { Agent, CapabilityGovernanceHandoffContext, PermissionChangeHandoffContext, TraceFilters } from "./types";
 
 export type ResourceLifecycleModal = "rotate_credential" | "create_policy" | "create_key";
 
@@ -20,7 +20,7 @@ export type ResourceLifecycleActionPlan =
       modal: ResourceLifecycleModal;
       targetAgentId?: string;
     }
-  | { kind: "capability_prefill"; navKey: "capabilities"; targetId: string }
+  | { context: CapabilityGovernanceHandoffContext; kind: "capability_prefill"; navKey: "capabilities"; targetId: string }
   | { context: PermissionChangeHandoffContext; kind: "permission_handoff" }
   | { kind: "runtime_filters"; navKey: "traces"; traceFilters: TraceFilters }
   | { kind: "navigate"; navKey: NavKey };
@@ -76,7 +76,17 @@ export function planResourceLifecycleAction({
     };
   }
   if (item.nextActionKind === "review_capabilities") {
-    return { kind: "capability_prefill", navKey: "capabilities", targetId: item.id };
+    return {
+      context: capabilityHandoffContext({
+        formatEntityName,
+        formatTenantName,
+        formatWorkspaceName,
+        item
+      }),
+      kind: "capability_prefill",
+      navKey: "capabilities",
+      targetId: item.id
+    };
   }
   if (item.nextActionKind === "start_permission_change") {
     return {
@@ -118,6 +128,28 @@ function resourceActionContext({
     resourceKindKey: item.kindKey,
     resourceName: formatEntityName(item.name),
     tenantName: formatTenantName(item.tenantId),
+    workspaceName: formatWorkspaceName(item.workspaceId)
+  };
+}
+
+function capabilityHandoffContext({
+  formatEntityName,
+  formatTenantName,
+  formatWorkspaceName,
+  item
+}: {
+  formatEntityName: (name: string) => string;
+  formatTenantName: (tenantId: string) => string;
+  formatWorkspaceName: (workspaceId: string) => string;
+  item: ResourceLifecycleItem;
+}): CapabilityGovernanceHandoffContext {
+  return {
+    sourceView: "registry",
+    targetId: item.id,
+    targetName: formatEntityName(item.name),
+    tenantId: item.tenantId,
+    tenantName: formatTenantName(item.tenantId),
+    workspaceId: item.workspaceId,
     workspaceName: formatWorkspaceName(item.workspaceId)
   };
 }

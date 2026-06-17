@@ -80,7 +80,20 @@ test("capability blockers navigate with the target preselected", () => {
     mcpTargets: [targetA]
   });
 
-  assert.deepEqual(plan, { kind: "capability_prefill", navKey: "capabilities", targetId: "target-a" });
+  assert.deepEqual(plan, {
+    context: {
+      sourceView: "registry",
+      targetId: "target-a",
+      targetName: "工单工具服务",
+      tenantId: "tenant-a",
+      tenantName: "客户服务中心",
+      workspaceId: "ws-a",
+      workspaceName: "ws-a"
+    },
+    kind: "capability_prefill",
+    navKey: "capabilities",
+    targetId: "target-a"
+  });
 });
 
 test("permission blockers for a target choose the same-scope caller", () => {

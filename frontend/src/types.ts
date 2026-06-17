@@ -439,6 +439,16 @@ export interface PermissionChangeHandoffContext {
   sourceView: 'ask' | 'tenants' | 'registry'
 }
 
+export interface CapabilityGovernanceHandoffContext {
+  tenantId: string
+  tenantName?: string
+  workspaceId: string
+  workspaceName?: string
+  targetId: string
+  targetName?: string
+  sourceView: 'registry'
+}
+
 export interface AskHandoffContext {
   tenantId?: string
   workspaceId?: string

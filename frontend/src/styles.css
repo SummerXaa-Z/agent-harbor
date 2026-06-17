@@ -5625,6 +5625,45 @@ td code {
   min-width: 0;
 }
 
+.capability-handoff-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--brand-border);
+  background: var(--brand-soft);
+  color: var(--brand-text);
+}
+
+.capability-handoff-notice svg {
+  color: var(--brand-strong);
+}
+
+.capability-handoff-notice div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.capability-handoff-notice strong {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.capability-handoff-notice span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .capability-scope-bar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
@@ -7107,6 +7146,7 @@ td code {
   .table-detail-grid,
   .policy-workspace,
   .capability-toolbar,
+  .capability-handoff-notice,
   .capability-scope-bar,
   .capability-scope-controls,
   .capability-catalog-heading,

@@ -24,11 +24,13 @@ import type {
   Agent,
   AskHandoffContext,
   Capability,
+  CapabilityGovernanceHandoffContext,
   InstanceAssignment,
   Tenant,
   TenantEntitlement,
   WorkspaceAssignment
 } from "../types";
+import { tx } from "../localizedMessages";
 import { ApprovalDropdown } from "./ApprovalDropdown";
 import { Badge, EmptyRow } from "./ui";
 
@@ -46,12 +48,14 @@ export function CapabilityGovernanceView({
   agents,
   capabilities,
   form,
+  handoffContext,
   instanceAssignments,
   message,
   mcpTargets,
   onApprove,
   onChange,
   onCreateGrantChain,
+  onDismissHandoff,
   onQueryAccess,
   onRefreshTarget,
   t,
@@ -63,12 +67,14 @@ export function CapabilityGovernanceView({
   agents: Agent[];
   capabilities: Capability[];
   form: CapabilityGrantForm;
+  handoffContext?: CapabilityGovernanceHandoffContext | null;
   instanceAssignments: InstanceAssignment[];
   message: string;
   mcpTargets: Agent[];
   onApprove: (capability: Capability) => void;
   onChange: (form: CapabilityGrantForm) => void;
   onCreateGrantChain: (event: FormEvent<HTMLFormElement>) => void;
+  onDismissHandoff?: () => void;
   onQueryAccess: (context: AskHandoffContext) => void;
   onRefreshTarget: () => void;
   t: Translator;
@@ -230,6 +236,28 @@ export function CapabilityGovernanceView({
 
   return (
     <div className="capability-governance">
+      {handoffContext ? (
+        <section className="capability-handoff-notice" role="status" aria-live="polite">
+          <FileSearch size={16} />
+          <div>
+            <strong>{t("text.capabilityHandoffTitle")}</strong>
+            <span>
+              {tx(t, "text.capabilityHandoffDetail", {
+                target: handoffContext.targetName ?? handoffContext.targetId,
+                tenant: handoffContext.tenantName ?? handoffContext.tenantId,
+                workspace: handoffContext.workspaceName ?? handoffContext.workspaceId
+              })}
+            </span>
+          </div>
+          {onDismissHandoff ? (
+            <button className="secondary-button" onClick={onDismissHandoff} type="button">
+              <X aria-hidden="true" size={14} />
+              {t("action.dismiss")}
+            </button>
+          ) : null}
+        </section>
+      ) : null}
+
       <div className="capability-scope-bar">
         <div className="capability-scope-copy">
           <span className="section-kicker">{t("section.currentCapabilityScope")}</span>

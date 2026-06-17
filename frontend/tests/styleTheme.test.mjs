@@ -590,7 +590,17 @@ test("mobile shell keeps navigation labels readable", () => {
 test("capability workspace compresses metrics and opens grant operations on demand", () => {
   assert.match(app, /<CapabilitiesView capabilityGovernancePanel=\{capabilityGovernancePanel\(\)\} \/>/);
   assert.match(consoleViews, /export function CapabilitiesView[\s\S]*<section className="content-grid">[\s\S]*\{capabilityGovernancePanel\}/);
+  assert.match(app, /capabilityGovernance:\s*CapabilityGovernanceHandoffContext \| null/);
+  assert.match(app, /capabilityGovernance:\s*null/);
+  assert.match(app, /setHandoffContexts\(\(current\) => \(\{ \.\.\.current, capabilityGovernance: plan\.context \}\)\)/);
+  assert.match(app, /handoffContext=\{handoffContexts\.capabilityGovernance\}/);
+  assert.match(app, /onDismissHandoff=\{\(\) => setHandoffContexts\(\(current\) => \(\{ \.\.\.current, capabilityGovernance: null \}\)\)\}/);
+  assert.match(capabilityGovernanceView, /handoffContext\?: CapabilityGovernanceHandoffContext \| null/);
+  assert.match(capabilityGovernanceView, /className="capability-handoff-notice"/);
+  assert.match(capabilityGovernanceView, /text\.capabilityHandoffDetail/);
   assert.match(styles, /\.capability-layout\s*\{[^}]*grid-template-areas:\s*"catalog assignments";/s);
+  assert.match(styles, /\.capability-handoff-notice\s*\{/);
+  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*\.capability-handoff-notice,/s);
   assert.match(capabilityGovernanceView, /className="primary-button capability-grant-launcher"/);
   assert.match(capabilityGovernanceView, /className="capability-grant-sheet"/);
 });

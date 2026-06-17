@@ -208,6 +208,11 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("resource.actionContext.resource"), "资源");
   assert.equal(t("resource.actionContext.scope"), "操作范围");
   assert.equal(t("text.permissionHandoffRegistryTitle"), "已从资源管理带入");
+  assert.equal(t("text.capabilityHandoffTitle"), "已从资源管理带入");
+  assert.equal(
+    t("text.capabilityHandoffDetail"),
+    "已选中 {tenant} / {workspace} 下的 {target}。先复核发现到的能力，必要时刷新，再创建授权链。"
+  );
   assert.equal(t("resource.nextAction.capabilities"), "发现能力");
   assert.equal(t("empty.evidenceRuns.title"), "暂无历史验收记录");
   assert.equal(t("section.goLiveAcceptance"), "上线检查");

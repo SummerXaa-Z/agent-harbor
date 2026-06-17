@@ -166,7 +166,7 @@ import {
   type PermissionRequestWizardStep
 } from "./permissionRequestJourney";
 import { AiAdminPermissionWorkbench } from "./components/AiAdminPermissionWorkbench";
-import { CapabilityGovernanceView } from "./components/CapabilityGovernanceView";
+import { CapabilityGovernanceView, type CapabilityGrantForm } from "./components/CapabilityGovernanceView";
 import { ActionModalButton, Panel } from "./components/ConsolePrimitives";
 import { ProductionJourneyCheckpoint } from "./components/ProductionJourneyCheckpoint";
 import {
@@ -233,6 +233,7 @@ import type {
   AgentStatus,
   AuditEvent,
   Capability,
+  CapabilityGovernanceHandoffContext,
   ConsoleSession,
   ConsoleData,
   CreateAgentKeyResponse,
@@ -462,7 +463,12 @@ export function ConsoleController() {
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [traceFilters, setTraceFilters] = useState<TraceFilters>(defaultTraceFilters);
   const [language, setLanguage] = useState<Language>(initialLanguage);
-  const [handoffContexts, setHandoffContexts] = useState<{ ask: AskHandoffContext | null; permissionChange: PermissionChangeHandoffContext | null; permissionNotice: PermissionChangeHandoffContext | null }>({ ask: null, permissionChange: null, permissionNotice: null });
+  const [handoffContexts, setHandoffContexts] = useState<{
+    ask: AskHandoffContext | null;
+    capabilityGovernance: CapabilityGovernanceHandoffContext | null;
+    permissionChange: PermissionChangeHandoffContext | null;
+    permissionNotice: PermissionChangeHandoffContext | null;
+  }>({ ask: null, capabilityGovernance: null, permissionChange: null, permissionNotice: null });
   const [resourceActionRequest, dispatchResourceActionRequest] = useReducer(
     resourceActionRequestReducer,
     defaultResourceActionRequest
@@ -596,6 +602,15 @@ export function ConsoleController() {
     setData,
     t
   });
+  function handleCapabilityGovernanceFormChange(nextForm: CapabilityGrantForm) {
+    capabilityGovernance.setForm(nextForm);
+    if (
+      handoffContexts.capabilityGovernance
+      && nextForm.targetId !== handoffContexts.capabilityGovernance.targetId
+    ) {
+      setHandoffContexts((current) => ({ ...current, capabilityGovernance: null }));
+    }
+  }
   function handleResourceLifecycleAction(item: ResourceLifecycleItem) {
     const plan = planResourceLifecycleAction({
       agents,
@@ -635,6 +650,7 @@ export function ConsoleController() {
         ...capabilityGovernance.form,
         targetId: plan.targetId
       });
+      setHandoffContexts((current) => ({ ...current, capabilityGovernance: plan.context }));
       userSelectedNavRef.current = true;
       setActiveNav(plan.navKey);
       return;
@@ -2397,12 +2413,14 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         agents={agents}
         capabilities={capabilities}
         form={capabilityGovernance.form}
+        handoffContext={handoffContexts.capabilityGovernance}
         instanceAssignments={instanceAssignments}
         message={capabilityGovernance.message}
         mcpTargets={mcpTargets}
         onApprove={capabilityGovernance.handleApproveCapability}
-        onChange={capabilityGovernance.setForm}
+        onChange={handleCapabilityGovernanceFormChange}
         onCreateGrantChain={capabilityGovernance.submitCapabilityGrantChain}
+        onDismissHandoff={() => setHandoffContexts((current) => ({ ...current, capabilityGovernance: null }))}
         onQueryAccess={openAskAccess}
         onRefreshTarget={capabilityGovernance.handleRefreshTargetCapabilities}
         t={t}

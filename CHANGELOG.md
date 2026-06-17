@@ -355,6 +355,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- Capability Governance now shows a dismissible Resource Management handoff notice when operators arrive from a resource's "review capabilities" action, keeping the selected target, tenant, and workspace context visible through capability discovery.
+- 工具能力页现在会在用户从资源管理的“发现能力”动作进入时展示可关闭的上下文提示，保留目标、租户和工作区信息，避免能力发现流程丢上下文。
 - System Check no longer repeats the Agent Registry panel, keeping resource lifecycle work centralized in Resource Management and reducing cockpit page clutter.
 - 系统自检不再重复展示 Agent 注册表，让资源生命周期工作继续集中在资源管理页，减少自检页的信息混杂。
 - Resource Management now shows compact inline guidance inside the operation center when no resources exist, giving first-time operators a clear next step without adding another empty card.

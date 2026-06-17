@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Resource Management permission-change handoffs no longer prefill callers or targets from another tenant/workspace when the matching resource is missing in the current scope.
+- 资源管理页发起权限变更时，如果当前租户/工作区缺少匹配的调用方或目标服务，将不再用其他租户/工作区的对象自动预填。
 - Resource Management now scopes the main inventory, metrics, grants, routes, and runtime counts to the active tenant and workspace, preventing cross-tenant resources from appearing ready in the current workspace.
 - 资源管理页现在会把主资源列表、指标、授权、路由和运行计数限定在当前租户与工作区内，避免跨租户资源在当前工作区被误显示为就绪。
 - Resource Management readiness gaps now respect the active tenant and workspace scope, so resources in another tenant no longer make the current scope look ready.

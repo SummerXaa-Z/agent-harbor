@@ -167,16 +167,16 @@ function permissionHandoffContext({
   const resourceAgent = agents.find((agent) => agent.id === item.id);
   const sameScopeCaller = localCallers.find((agent) => sameScope(agent, item));
   const sameScopeTarget = mcpTargets.find((agent) => sameScope(agent, item));
-  const caller = item.kind === "caller" ? resourceAgent : sameScopeCaller ?? localCallers[0];
-  const target = item.kind === "caller" ? sameScopeTarget ?? mcpTargets[0] : resourceAgent;
-  const targetName = target ? formatEntityName(target.name) : item.name;
+  const caller = item.kind === "caller" ? resourceAgent : sameScopeCaller;
+  const target = item.kind === "caller" ? sameScopeTarget : resourceAgent;
+  const targetName = target ? formatEntityName(target.name) : undefined;
 
   return {
     callerInstanceId: caller?.id,
     callerName: caller ? formatEntityName(caller.name) : undefined,
-    intentText: formatPermissionIntent(targetName),
+    intentText: targetName ? formatPermissionIntent(targetName) : undefined,
     sourceView: "registry",
-    targetId: target?.id ?? item.id,
+    targetId: target?.id,
     targetName,
     tenantId: item.tenantId,
     tenantName: formatTenantName(item.tenantId),

@@ -126,6 +126,39 @@ test("permission blockers for a caller choose the same-scope target", () => {
   assert.equal(plan.context.targetId, "target-a");
 });
 
+test("permission blockers never prefill a cross-scope caller", () => {
+  const plan = planResourceLifecycleAction({
+    agents: [callerB, targetA],
+    ...formatters,
+    item: item(targetA, "start_permission_change"),
+    localCallers: [callerB],
+    mcpTargets: [targetA]
+  });
+
+  assert.equal(plan.kind, "permission_handoff");
+  assert.equal(plan.context.callerInstanceId, undefined);
+  assert.equal(plan.context.callerName, undefined);
+  assert.equal(plan.context.targetId, "target-a");
+  assert.equal(plan.context.targetName, "工单工具服务");
+});
+
+test("permission blockers never prefill a cross-scope target", () => {
+  const plan = planResourceLifecycleAction({
+    agents: [callerA, targetB],
+    ...formatters,
+    item: { ...item(callerA, "start_permission_change"), kind: "caller", kindKey: "resource.kind.caller" },
+    localCallers: [callerA],
+    mcpTargets: [targetB]
+  });
+
+  assert.equal(plan.kind, "permission_handoff");
+  assert.equal(plan.context.callerInstanceId, "caller-a");
+  assert.equal(plan.context.callerName, "客服助手");
+  assert.equal(plan.context.targetId, undefined);
+  assert.equal(plan.context.targetName, undefined);
+  assert.equal(plan.context.intentText, undefined);
+});
+
 test("runtime plans filter caller rows by caller and target rows by target", () => {
   const callerPlan = planResourceLifecycleAction({
     agents: [callerA, targetA],

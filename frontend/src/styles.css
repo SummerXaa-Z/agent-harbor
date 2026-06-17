@@ -4288,15 +4288,16 @@ td span {
 .ask-query-groups {
   display: grid;
   gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
 }
 
 .ask-query-group {
   display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--line-muted);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .ask-query-group-title {

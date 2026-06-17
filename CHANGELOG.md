@@ -355,6 +355,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- Access Query now renders its tenant/workspace and caller/target/capability fields inside one restrained condition panel instead of nested group cards, making the primary query path feel closer to a standard B2B management form.
+- 访问查询现在把租户/工作区和调用方/目标/能力字段收进同一个克制的条件区，不再呈现为多层分组卡片，让主查询路径更接近标准 B 端管理表单。
 - Agent Registry empty state now stays in Resource Management, using compact left-aligned guidance that points operators to the in-page Create Agent action instead of sending them back to Getting Started.
 - Agent 注册表空态现在留在资源管理页，用更紧凑的左对齐提示引导管理员使用页内“创建 Agent”入口，不再跳回“开始使用”。
 - Resource Management now removes the duplicate selected-row action: the selected resource row shows a focused-state label, while the context panel remains the single recommended operation entry.

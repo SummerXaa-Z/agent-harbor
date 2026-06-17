@@ -101,6 +101,9 @@ test("ask access view keeps the primary path answer-first and business-readable"
   assert.match(view, /className="ask-answer-empty"/);
   assert.match(view, /permissionEntityDisplayName\(tenant\.name, t\)/);
   assert.match(view, /function agentOptions\(agents: Agent\[], t: Translator\)/);
+  assert.match(styles, /\.ask-query-groups\s*\{[^}]*border:\s*1px solid var\(--line-subtle\);[^}]*background:\s*var\(--surface-muted\);/s);
+  assert.match(styles, /\.ask-query-group\s*\{[^}]*min-width:\s*0;/s);
+  assert.doesNotMatch(styles, /\.ask-query-group\s*\{[^}]*border:/s);
   assert.doesNotMatch(view, /EmptyRow/);
   assert.doesNotMatch(view, /ask-sentence-text/);
   assert.match(presenters, /"Policy Router": t\("demo\.policyRouterTarget"\)/);

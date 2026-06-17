@@ -12,7 +12,7 @@ import {
 import { permissionEntityDisplayName, type Tone, type Translator } from "../consolePresenters";
 import type { ManagementMutationRefreshState } from "../managementMutationRefresh";
 import type { ResourceLifecycleItem, ResourceLifecycleStatus, ResourceLifecycleSummary } from "../resourceLifecycle";
-import { Badge, EmptyRow } from "./ui";
+import { Badge } from "./ui";
 
 export function ResourceLifecycleView({
   formatTenantName = (tenantId) => tenantId,
@@ -111,12 +111,12 @@ export function ResourceLifecycleView({
         />
       ) : null}
 
-      <section className={`resource-lifecycle-list${hasResources ? "" : " is-empty"}`} aria-label={t("resource.listAria")}>
-        <div className="resource-lifecycle-list-title">
-          <strong>{t("resource.listTitle")}</strong>
-          <span>{tx(t, "resource.listCount", { count: summary.items.length })}</span>
-        </div>
-        {hasResources ? (
+      {hasResources ? (
+        <section className="resource-lifecycle-list" aria-label={t("resource.listAria")}>
+          <div className="resource-lifecycle-list-title">
+            <strong>{t("resource.listTitle")}</strong>
+            <span>{tx(t, "resource.listCount", { count: summary.items.length })}</span>
+          </div>
           <div className="resource-lifecycle-header" aria-hidden="true">
             <span>{t("resource.column.resource")}</span>
             <span>{t("resource.column.status")}</span>
@@ -125,16 +125,7 @@ export function ResourceLifecycleView({
             <span>{t("resource.column.runtime")}</span>
             <span>{t("resource.column.next")}</span>
           </div>
-        ) : null}
-        {!hasResources ? (
-          <div className="resource-lifecycle-empty">
-            <EmptyRow
-              detail={t("resource.empty.detail")}
-              title={t("resource.empty.title")}
-            />
-          </div>
-        ) : (
-          summary.items.map((item) => (
+          {summary.items.map((item) => (
             <ResourceLifecycleRow
               item={item}
               key={item.id}
@@ -143,9 +134,9 @@ export function ResourceLifecycleView({
               selected={item.id === selectedItem?.id}
               t={t}
             />
-          ))
-        )}
-      </section>
+          ))}
+        </section>
+      ) : null}
     </div>
   );
 }

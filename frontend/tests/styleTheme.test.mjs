@@ -424,8 +424,10 @@ test("agent registry provides search status filtering and a details entry", () =
   assert.match(operationalViews, /setSelectedAgentId\(agent\.id\)/);
   assert.match(styles, /\.table-toolbar\s*\{/);
   assert.match(styles, /\.registry-empty-state\s*\{/);
-  assert.match(styles, /\.registry-empty-state\s*\{[^}]*justify-items:\s*start;[^}]*min-height:\s*96px;/s);
-  assert.match(styles, /\.registry-empty-state \.empty-row\s*\{[^}]*justify-content:\s*start;/s);
+  assert.match(styles, /\.registry-empty-state\s*\{[^}]*justify-items:\s*start;[^}]*min-height:\s*72px;/s);
+  assert.match(styles, /\.registry-empty-state \.empty-row\s*\{[^}]*grid-template-columns:\s*28px minmax\(0,\s*360px\);[^}]*justify-content:\s*start;/s);
+  assert.match(styles, /\.registry-empty-state \.empty-row-icon\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px;/s);
+  assert.match(styles, /\.registry-empty-state \.empty-row strong\s*\{[^}]*font-size:\s*var\(--text-sm\);/s);
   assert.match(styles, /\.table-detail-panel\s*\{/);
 });
 

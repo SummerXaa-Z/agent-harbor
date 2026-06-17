@@ -3138,15 +3138,32 @@ button {
   display: grid;
   align-items: center;
   justify-items: start;
-  min-height: 96px;
-  padding: var(--space-4);
+  min-height: 72px;
+  padding: var(--space-3);
 }
 
 .registry-empty-state .empty-row {
+  grid-template-columns: 28px minmax(0, 360px);
+  gap: var(--space-2);
   justify-content: start;
   width: min(100%, 640px);
   min-height: 0;
   padding: 0;
+}
+
+.registry-empty-state .empty-row-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.registry-empty-state .empty-row strong {
+  font-size: var(--text-sm);
+  line-height: 18px;
+}
+
+.registry-empty-state .empty-row span {
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .table-toolbar {

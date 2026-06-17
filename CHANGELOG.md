@@ -355,6 +355,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- Agent Registry empty states now use a tighter list-level density, reducing the icon, copy size, and empty-area height so no-data pages look less like unfinished demo tables.
+- Agent 注册表空态现在采用更紧凑的列表级密度，降低图标、文案字号和空白区域高度，让无数据页面不再像未完成的 Demo 表格。
 - Web console panels now remove decorative "open" and "more" header icon buttons unless a real action is attached, keeping visible buttons reserved for executable operator tasks.
 - Web 控制台面板现在移除没有真实动作的“打开 / 更多”标题栏图标按钮，只在确实可执行的操作上展示按钮，减少误导性的视觉入口。
 - Access Query now renders its tenant/workspace and caller/target/capability fields inside one restrained condition panel instead of nested group cards, making the primary query path feel closer to a standard B2B management form.

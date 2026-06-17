@@ -290,6 +290,12 @@ wait_http "Production config check API" "http://${API_HOST}:$((UNAUTH_API_PORT +
 kill "$PROD_SAFE_PID" >/dev/null 2>&1 || true
 wait "$PROD_SAFE_PID" >/dev/null 2>&1 || true
 echo "production deployment preflight accepts safe minimal config"
+if ! grep -q "persistent_storage_configured" "$LOG_DIR/api-prod-safe.log"; then
+	echo "production safe config warning did not mention persistent_storage_configured" >&2
+	show_logs
+	exit 1
+fi
+echo "production deployment preflight warns when persistent storage is not configured"
 
 AGENT_HARBOR_ADDR="$API_ADDR" \
 AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \

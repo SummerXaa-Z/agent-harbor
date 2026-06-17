@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Production deployment mode now warns when `AGENT_HARBOR_DATABASE_URL` is missing, making in-memory production startup visible before tenant, grant, credential, or audit state can be lost on restart.
+- 生产部署模式现在会在缺少 `AGENT_HARBOR_DATABASE_URL` 时输出预警，让内存存储启动在租户、授权、凭据或审计状态因重启丢失前变得可见。
 - Production deployment mode now disables default local development CORS origins; browser origins must be explicitly set through `AGENT_HARBOR_CORS_ORIGINS`.
 - 生产部署模式现在会关闭默认本地开发 CORS 来源；浏览器来源必须通过 `AGENT_HARBOR_CORS_ORIGINS` 显式配置。
 - Bootstrap administrator identities now reject duplicate actors or duplicate keys during startup configuration parsing, preventing ambiguous audit actors and tenant/workspace boundaries.

@@ -366,6 +366,35 @@ func TestDeploymentConfigPreflightWarnsForDerivedSessionSecret(t *testing.T) {
 	}
 }
 
+func TestDeploymentConfigPreflightWarnsForInMemoryProductionStorage(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       "test-admin",
+		"AGENT_HARBOR_SESSION_SECRET":  "stable-session-secret",
+	})
+	if err != nil {
+		t.Fatalf("preflight should warn, not fail: %v", err)
+	}
+	if !hasDeploymentCheck(checks, "persistent_storage_configured", "warning", "warning") {
+		t.Fatalf("expected persistent storage warning, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightAcceptsProductionDatabaseStorage(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       "test-admin",
+		"AGENT_HARBOR_SESSION_SECRET":  "stable-session-secret",
+		"AGENT_HARBOR_DATABASE_URL":    "postgres://agent-harbor.example.invalid/agent_harbor",
+	})
+	if err != nil {
+		t.Fatalf("preflight should accept database storage: %v", err)
+	}
+	if !hasDeploymentCheck(checks, "persistent_storage_configured", "warning", "passed") {
+		t.Fatalf("expected persistent storage pass, got %#v", checks)
+	}
+}
+
 func TestDeploymentConfigPreflightKeepsDevelopmentModeCompatible(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN", "true")
 

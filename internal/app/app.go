@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -75,10 +76,12 @@ func New(ctx context.Context) (*App, error) {
 		closeFn()
 		return nil, err
 	}
-	if _, err := deploymentConfigPreflightFromEnv(deploymentEnv); err != nil {
+	deploymentChecks, err := deploymentConfigPreflightFromEnv(deploymentEnv)
+	if err != nil {
 		closeFn()
 		return nil, err
 	}
+	logDeploymentConfigWarnings(deploymentChecks)
 	return &App{
 		server: httpapi.New(
 			repo,
@@ -111,6 +114,7 @@ func deploymentEnvFromOS() map[string]string {
 		"AGENT_HARBOR_ADMIN_KEY",
 		"AGENT_HARBOR_ADMIN_IDENTITIES",
 		"AGENT_HARBOR_SESSION_SECRET",
+		"AGENT_HARBOR_DATABASE_URL",
 	}
 	env := make(map[string]string, len(keys))
 	for _, key := range keys {
@@ -199,7 +203,30 @@ func validateDeploymentConfig(mode string, env map[string]string) []deploymentCo
 			Message:  "AGENT_HARBOR_SESSION_SECRET is explicitly configured",
 		})
 	}
+	if strings.TrimSpace(env["AGENT_HARBOR_DATABASE_URL"]) == "" {
+		checks = append(checks, deploymentConfigCheck{
+			Code:     "persistent_storage_configured",
+			Severity: "warning",
+			Status:   "warning",
+			Message:  "AGENT_HARBOR_DATABASE_URL should be set in production so tenants, grants, credentials, and audit records survive restart",
+		})
+	} else {
+		checks = append(checks, deploymentConfigCheck{
+			Code:     "persistent_storage_configured",
+			Severity: "warning",
+			Status:   "passed",
+			Message:  "persistent database storage is configured",
+		})
+	}
 	return checks
+}
+
+func logDeploymentConfigWarnings(checks []deploymentConfigCheck) {
+	for _, check := range checks {
+		if check.Severity == "warning" && check.Status == "warning" {
+			slog.Warn("deployment configuration warning", "code", check.Code, "message", check.Message)
+		}
+	}
 }
 
 func envBoolTrue(raw string) bool {

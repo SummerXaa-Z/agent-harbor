@@ -287,7 +287,7 @@ export function resolvePermissionJourneyStatus(args: {
     return {
       detailKey: "permissionJourney.statusDetail.needsInput",
       labelKey: "permissionJourney.status.needsInput",
-      nextActionKey: "action.createApprovalRequest",
+      nextActionKey: "action.completePermissionRequest",
       tone: "warning"
     };
   }

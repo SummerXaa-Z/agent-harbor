@@ -393,6 +393,10 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       onRefreshApplyPreflight();
       return;
     }
+    if (journeyStatus.nextActionKey === "action.completePermissionRequest") {
+      setPermissionDraftSheet("edit");
+      return;
+    }
     if (journeyStatus.nextActionKey === "action.createApprovalRequest") {
       onCreateApprovalRequest();
       return;

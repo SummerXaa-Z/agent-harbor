@@ -697,6 +697,7 @@ test("permission request shows a concrete completion state with three exits", ()
 });
 
 test("permission request go-live step presents one guided primary action", () => {
+  assert.match(workbench, /if \(journeyStatus\.nextActionKey === "action\.completePermissionRequest"\) \{\s*setPermissionDraftSheet\("edit"\);/);
   assert.match(workbench, /if \(journeyStatus\.nextActionKey === "action\.startPermissionApproval"\) \{\s*startNewPermissionChangeInSheet\(\);/);
   assert.match(workbench, /const goLivePrimaryActionKey = goLiveReady/);
   assert.match(workbench, /runtimeValidationReady\s*\?\s*"action\.checkProductionReadiness"/);

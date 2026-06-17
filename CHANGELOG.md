@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Permission Changes now shows “Complete configuration / 补全配置” and opens the configuration sheet when required draft fields are missing, instead of suggesting approval submission too early.
+- 权限变更在草稿关键字段缺失时会显示“补全配置”并打开配置面板，不再过早提示管理员“提交审批”。
 - Permission Changes now opens its draft editor from an explicit command sheet, keeping the main workspace focused on current status, approval, apply, and go-live checks.
 - 权限变更页现在通过明确的配置面板打开草稿编辑，主工作区默认聚焦当前状态、审批、应用和上线检查。
 - Added a tenant permission center projection and console summary for tenant-scoped administrators, permissions, capabilities, data scopes, and next actions.

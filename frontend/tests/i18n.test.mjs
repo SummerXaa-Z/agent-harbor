@@ -442,6 +442,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("action.confirmRejectPermissionRequest"), "确认拒绝");
   assert.equal(t("action.cancelApprovalDecision"), "取消");
   assert.equal(t("action.createApprovalRequest"), "提交审批");
+  assert.equal(t("action.completePermissionRequest"), "补全配置");
   assert.equal(t("empty.permissionApplyPreflight.detail"), "应用权限前先运行预检。");
   assert.equal(t("message.permissionPackageApprovalRequired"), "该申请需要先审批：{detail}。");
   assert.equal(t("message.permissionPackageReadinessWarning"), "应用前请先复核这次权限变更。");

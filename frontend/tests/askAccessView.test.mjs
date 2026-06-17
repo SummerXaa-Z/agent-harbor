@@ -79,6 +79,12 @@ test("ask access copy is bilingual", () => {
     "ask.group.context",
     "ask.intent.openAccess",
     "ask.liveMode",
+    "ask.setupBlocker.capabilities.action",
+    "ask.setupBlocker.capabilities.detail",
+    "ask.setupBlocker.capabilities.title",
+    "ask.setupBlocker.resources.action",
+    "ask.setupBlocker.resources.detail",
+    "ask.setupBlocker.resources.title",
     "ask.questionTitle",
     "text.permissionHandoffDetail",
     "text.permissionHandoffRegistryTitle",
@@ -99,10 +105,18 @@ test("ask access view keeps the primary path answer-first and business-readable"
   assert.match(view, /className="ask-query-groups"/);
   assert.match(view, /className="ask-query-grid ask-query-grid-access"/);
   assert.match(view, /className="ask-answer-empty"/);
+  assert.match(view, /const setupBlocker = askSetupBlocker/);
+  assert.match(view, /className="ask-setup-blocker"/);
+  assert.match(view, /href=\{setupBlocker\.href\}/);
+  assert.match(view, /"#registry"/);
+  assert.match(view, /"#capabilities"/);
   assert.match(view, /permissionEntityDisplayName\(tenant\.name, t\)/);
   assert.match(view, /function agentOptions\(agents: Agent\[], t: Translator\)/);
+  assert.match(view, /function askSetupBlocker/);
   assert.match(styles, /\.ask-query-groups\s*\{[^}]*border:\s*1px solid var\(--line-subtle\);[^}]*background:\s*var\(--surface-muted\);/s);
   assert.match(styles, /\.ask-query-group\s*\{[^}]*min-width:\s*0;/s);
+  assert.match(styles, /\.ask-setup-blocker\s*\{/);
+  assert.match(styles, /\.ask-setup-blocker a\s*\{/);
   assert.doesNotMatch(styles, /\.ask-query-group\s*\{[^}]*border:/s);
   assert.doesNotMatch(view, /EmptyRow/);
   assert.doesNotMatch(view, /ask-sentence-text/);

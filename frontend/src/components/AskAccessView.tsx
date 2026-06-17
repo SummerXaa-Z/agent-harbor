@@ -1,4 +1,4 @@
-import { ArrowRight, History, Search, Wrench } from "lucide-react";
+import { AlertCircle, ArrowRight, History, Search, Wrench } from "lucide-react";
 
 import type {
   AskAccessSelection,
@@ -127,6 +127,13 @@ export function AskAccessView({
       value: capability.id
     }));
   const canExplain = requestBuild.complete && liveDataAvailable && !loading;
+  const setupBlocker = askSetupBlocker({
+    callerOptions,
+    capabilityOptions,
+    liveDataAvailable,
+    targetOptions,
+    tenantOptions
+  });
   const answerHeading = result
     ? result.outcome === "allowed" ? t("ask.allowedTitle") : t("ask.deniedTitle")
     : t("ask.answerPendingTitle");
@@ -190,6 +197,19 @@ export function AskAccessView({
                 </div>
               </section>
             </div>
+            {setupBlocker ? (
+              <div className="ask-setup-blocker" role="note">
+                <AlertCircle aria-hidden="true" size={16} />
+                <div>
+                  <strong>{t(setupBlocker.titleKey)}</strong>
+                  <span>{t(setupBlocker.detailKey)}</span>
+                </div>
+                <a className="secondary-button" href={setupBlocker.href}>
+                  {t(setupBlocker.actionKey)}
+                  <ArrowRight aria-hidden="true" size={14} />
+                </a>
+              </div>
+            ) : null}
             <div className="ask-query-footer">
               <label className="ask-subject-field">
                 <span>{t("ask.field.subject")}</span>
@@ -341,6 +361,50 @@ function uniqueOptions(values: string[], labelFor: (value: string) => string) {
 
 function withEmptyOption(options: ApprovalDropdownOption[], emptyLabel: string) {
   return options.length > 0 ? options : [{ label: emptyLabel, value: "" }];
+}
+
+interface AskSetupBlockerInput {
+  callerOptions: ApprovalDropdownOption[]
+  capabilityOptions: ApprovalDropdownOption[]
+  liveDataAvailable: boolean
+  targetOptions: ApprovalDropdownOption[]
+  tenantOptions: ApprovalDropdownOption[]
+}
+
+interface AskSetupBlocker {
+  actionKey: string
+  detailKey: string
+  href: "#registry" | "#capabilities"
+  titleKey: string
+}
+
+function askSetupBlocker({
+  callerOptions,
+  capabilityOptions,
+  liveDataAvailable,
+  targetOptions,
+  tenantOptions
+}: AskSetupBlockerInput): AskSetupBlocker | null {
+  if (!liveDataAvailable) {
+    return null;
+  }
+  if (tenantOptions.length === 0 || callerOptions.length === 0 || targetOptions.length === 0) {
+    return {
+      actionKey: "ask.setupBlocker.resources.action",
+      detailKey: "ask.setupBlocker.resources.detail",
+      href: "#registry",
+      titleKey: "ask.setupBlocker.resources.title"
+    };
+  }
+  if (capabilityOptions.length === 0) {
+    return {
+      actionKey: "ask.setupBlocker.capabilities.action",
+      detailKey: "ask.setupBlocker.capabilities.detail",
+      href: "#capabilities",
+      titleKey: "ask.setupBlocker.capabilities.title"
+    };
+  }
+  return null;
 }
 
 function workspaceLabel(workspaceId: string, t: Translator) {

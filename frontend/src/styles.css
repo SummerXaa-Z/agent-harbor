@@ -4445,6 +4445,45 @@ td span {
   white-space: nowrap;
 }
 
+.ask-setup-blocker {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-control);
+  background: var(--warning-surface);
+  color: var(--warning-strong);
+}
+
+.ask-setup-blocker svg {
+  color: var(--warning);
+}
+
+.ask-setup-blocker div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ask-setup-blocker strong {
+  color: var(--warning-strong);
+  font-size: var(--text-sm);
+  line-height: 18px;
+}
+
+.ask-setup-blocker span {
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  line-height: 17px;
+}
+
+.ask-setup-blocker a {
+  justify-self: end;
+  white-space: nowrap;
+}
+
 .ask-query-footer {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) auto;
@@ -7200,6 +7239,15 @@ td code {
   .ask-answer,
   .ask-context-card {
     padding: var(--space-3);
+  }
+
+  .ask-setup-blocker {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .ask-setup-blocker a {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .access-decision-moved-body {

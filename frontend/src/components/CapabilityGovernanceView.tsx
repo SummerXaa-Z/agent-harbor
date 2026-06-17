@@ -92,6 +92,7 @@ export function CapabilityGovernanceView({
     const targetId = form.targetId.trim();
     return targetId ? capabilities.filter((capability) => capability.targetId === targetId) : capabilities;
   }, [capabilities, form.targetId]);
+  const hasTargetCapabilities = targetCapabilities.length > 0;
   const visibleCapabilities = useMemo(() => {
     const query = capabilityQuery.trim().toLowerCase();
     return targetCapabilities.filter((capability) => {
@@ -274,106 +275,117 @@ export function CapabilityGovernanceView({
               </button>
             </div>
           </div>
-          <div className="table-toolbar">
-            <label>
-              <span>{t("form.capability")}</span>
-              <input
-                placeholder={t("form.searchCapabilities")}
-                value={capabilityQuery}
-                onChange={(event) => setCapabilityQuery(event.target.value)}
-              />
-            </label>
-            <label>
-              <span>{t("table.status")}</span>
-              <ApprovalDropdown
-                label={t("table.status")}
-                options={capabilityStatusOptions}
-                value={capabilityStatusFilter}
-                onChange={setCapabilityStatusFilter}
-              />
-            </label>
-          </div>
-          <div className="table-wrap">
-            <table className="capability-table">
-              <thead>
-                <tr>
-                  <th>{t("table.capability")}</th>
-                  <th>{t("table.target")}</th>
-                  <th>{t("table.governance")}</th>
-                  <th>{t("table.grants")}</th>
-                  <th>{t("table.action")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleCapabilities.length === 0 ? (
-                  <tr>
-                    <td colSpan={5}>
-                      <EmptyRow
-                        title={targetCapabilities.length === 0 ? t("empty.capabilities.title") : t("empty.filteredResults.title")}
-                        detail={targetCapabilities.length === 0 ? t("empty.capabilities.detail") : t("empty.filteredResults.detail")}
-                        actionLabel={capabilityEmptyActionLabel}
-                        actionHash={capabilityEmptyActionHash}
-                        onAction={capabilityEmptyAction}
-                      />
-                    </td>
-                  </tr>
-                ) : null}
-                {visibleCapabilities.map((capability) => {
-                  const entitlementIds = entitlementIdsByCapability[capability.id] ?? [];
-                  const workspaceIds = entitlementIds.flatMap((id) => workspaceIdsByEntitlement[id] ?? []);
-                  const instanceCount = workspaceIds.reduce(
-                    (total, id) => total + (instancesByWorkspaceAssignment[id]?.length ?? 0),
-                    0
-                  );
-                  return (
-                    <tr key={capability.id}>
-                      <td>
-                        <strong>{capabilityDisplayName(capability, t)}</strong>
-                        <span>{capabilitySummaryText(capability, t)}</span>
-                      </td>
-                      <td>{agentNames[capability.targetId] ?? capability.targetId}</td>
-                      <td>
-                        <div className="capability-meta-stack">
-                          <Badge tone={capability.action === "delete" || capability.action === "admin" ? "danger" : capability.action === "export" ? "warning" : "info"}>{translatedValue(t, capability.action)}</Badge>
-                          <Badge tone={riskTone(capability.riskLevel)}>{translatedValue(t, capability.riskLevel)}</Badge>
-                          <Badge tone={capabilityStatusTone(capability.discoveryStatus)}>{capabilityDiscoveryStatusLabel(capability.discoveryStatus, t)}</Badge>
-                        </div>
-                      </td>
-                      <td>
-                        <strong>{entitlementIds.length}/{workspaceIds.length}/{instanceCount}</strong>
-                        <span>{t("detail.tenantWorkspaceInstance")}</span>
-                      </td>
-                      <td>
-                        <div className="table-action-group">
-                          <button
-                            className="table-action"
-                            onClick={() => setSelectedCapabilityId(capability.id)}
-                            type="button"
-                          >
-                            <FileSearch size={13} />
-                            {t("action.viewDetails")}
-                          </button>
-                          {capability.discoveryStatus === "approved" ? (
-                            <span className="muted-action">{t("status.capabilityApproved")}</span>
-                          ) : (
-                            <button
-                              className="table-action"
-                              disabled={actionId === capability.id}
-                              onClick={() => onApprove(capability)}
-                              type="button"
-                            >
-                              <ShieldCheck size={13} />
-                              {actionId === capability.id ? t("action.approving") : t("action.approve")}
-                            </button>
-                          )}
-                        </div>
-                      </td>
+          {hasTargetCapabilities ? (
+            <>
+              <div className="table-toolbar">
+                <label>
+                  <span>{t("form.capability")}</span>
+                  <input
+                    placeholder={t("form.searchCapabilities")}
+                    value={capabilityQuery}
+                    onChange={(event) => setCapabilityQuery(event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>{t("table.status")}</span>
+                  <ApprovalDropdown
+                    label={t("table.status")}
+                    options={capabilityStatusOptions}
+                    value={capabilityStatusFilter}
+                    onChange={setCapabilityStatusFilter}
+                  />
+                </label>
+              </div>
+              <div className="table-wrap">
+                <table className="capability-table">
+                  <thead>
+                    <tr>
+                      <th>{t("table.capability")}</th>
+                      <th>{t("table.target")}</th>
+                      <th>{t("table.governance")}</th>
+                      <th>{t("table.grants")}</th>
+                      <th>{t("table.action")}</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {visibleCapabilities.length === 0 ? (
+                      <tr>
+                        <td colSpan={5}>
+                          <EmptyRow
+                            title={t("empty.filteredResults.title")}
+                            detail={t("empty.filteredResults.detail")}
+                          />
+                        </td>
+                      </tr>
+                    ) : null}
+                    {visibleCapabilities.map((capability) => {
+                      const entitlementIds = entitlementIdsByCapability[capability.id] ?? [];
+                      const workspaceIds = entitlementIds.flatMap((id) => workspaceIdsByEntitlement[id] ?? []);
+                      const instanceCount = workspaceIds.reduce(
+                        (total, id) => total + (instancesByWorkspaceAssignment[id]?.length ?? 0),
+                        0
+                      );
+                      return (
+                        <tr key={capability.id}>
+                          <td>
+                            <strong>{capabilityDisplayName(capability, t)}</strong>
+                            <span>{capabilitySummaryText(capability, t)}</span>
+                          </td>
+                          <td>{agentNames[capability.targetId] ?? capability.targetId}</td>
+                          <td>
+                            <div className="capability-meta-stack">
+                              <Badge tone={capability.action === "delete" || capability.action === "admin" ? "danger" : capability.action === "export" ? "warning" : "info"}>{translatedValue(t, capability.action)}</Badge>
+                              <Badge tone={riskTone(capability.riskLevel)}>{translatedValue(t, capability.riskLevel)}</Badge>
+                              <Badge tone={capabilityStatusTone(capability.discoveryStatus)}>{capabilityDiscoveryStatusLabel(capability.discoveryStatus, t)}</Badge>
+                            </div>
+                          </td>
+                          <td>
+                            <strong>{entitlementIds.length}/{workspaceIds.length}/{instanceCount}</strong>
+                            <span>{t("detail.tenantWorkspaceInstance")}</span>
+                          </td>
+                          <td>
+                            <div className="table-action-group">
+                              <button
+                                className="table-action"
+                                onClick={() => setSelectedCapabilityId(capability.id)}
+                                type="button"
+                              >
+                                <FileSearch size={13} />
+                                {t("action.viewDetails")}
+                              </button>
+                              {capability.discoveryStatus === "approved" ? (
+                                <span className="muted-action">{t("status.capabilityApproved")}</span>
+                              ) : (
+                                <button
+                                  className="table-action"
+                                  disabled={actionId === capability.id}
+                                  onClick={() => onApprove(capability)}
+                                  type="button"
+                                >
+                                  <ShieldCheck size={13} />
+                                  {actionId === capability.id ? t("action.approving") : t("action.approve")}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="capability-empty-state">
+              <EmptyRow
+                title={t("empty.capabilities.title")}
+                detail={t("empty.capabilities.detail")}
+                actionLabel={capabilityEmptyActionLabel}
+                actionHash={capabilityEmptyActionHash}
+                onAction={capabilityEmptyAction}
+              />
+            </div>
+          )}
           {selectedCatalogCapability ? (
             <aside className="capability-detail-panel">
               <div>

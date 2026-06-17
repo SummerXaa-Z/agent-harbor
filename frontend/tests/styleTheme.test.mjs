@@ -565,8 +565,13 @@ test("capability catalog provides search status filtering and a details entry", 
   assert.match(capabilityGovernanceView, /const visibleCapabilities = useMemo/);
   assert.match(capabilityGovernanceView, /placeholder=\{t\("form\.searchCapabilities"\)\}/);
   assert.match(capabilityGovernanceView, /className="capability-detail-panel"/);
+  assert.match(capabilityGovernanceView, /className="capability-empty-state"/);
+  assert.match(capabilityGovernanceView, /const hasTargetCapabilities = targetCapabilities\.length > 0/);
+  assert.doesNotMatch(capabilityGovernanceView, /targetCapabilities\.length === 0 \? t\("empty\.capabilities\.title"\)/);
   assert.match(capabilityGovernanceView, /setSelectedCapabilityId\(capability\.id\)/);
   assert.match(styles, /\.capability-detail-panel\s*\{/);
+  assert.match(styles, /\.policy-empty-state,\s*\n\.capability-empty-state\s*\{[^}]*min-height:\s*128px;/s);
+  assert.match(styles, /\.policy-empty-state \.empty-row,\s*\n\.capability-empty-state \.empty-row\s*\{[^}]*padding:\s*0;/s);
 });
 
 test("access policy page routes creation back to resource management", () => {
@@ -585,8 +590,8 @@ test("access policy page routes creation back to resource management", () => {
   assert.doesNotMatch(app, /\{managementAuditPanel\("span-5"\)\}/);
   assert.match(styles, /\.policy-workspace\s*\{/);
   assert.match(styles, /\.policy-empty-action\s*\{/);
-  assert.match(styles, /\.policy-empty-state\s*\{[^}]*min-height:\s*128px;/s);
-  assert.match(styles, /\.policy-empty-state \.empty-row\s*\{[^}]*padding:\s*0;/s);
+  assert.match(styles, /\.policy-empty-state,\s*\n\.capability-empty-state\s*\{[^}]*min-height:\s*128px;/s);
+  assert.match(styles, /\.policy-empty-state \.empty-row,\s*\n\.capability-empty-state \.empty-row\s*\{[^}]*padding:\s*0;/s);
 });
 
 test("operational list components are split from the app shell", () => {

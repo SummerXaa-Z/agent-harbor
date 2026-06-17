@@ -297,10 +297,22 @@ export function CapabilityGovernanceView({
             </div>
             <div className="capability-catalog-actions">
               <span>{visibleCapabilities.length}/{targetCapabilities.length}</span>
-              <button className="primary-button capability-grant-launcher" onClick={() => openGrantPanel()} type="button">
-                <ShieldCheck size={14} />
-                {t("action.grantChain")}
-              </button>
+              {hasTargetCapabilities ? (
+                <button className="primary-button capability-grant-launcher" onClick={() => openGrantPanel()} type="button">
+                  <ShieldCheck size={14} />
+                  {t("action.grantChain")}
+                </button>
+              ) : (
+                <button
+                  className="primary-button capability-refresh-launcher"
+                  disabled={!form.targetId || actionId === `refresh:${form.targetId}`}
+                  onClick={onRefreshTarget}
+                  type="button"
+                >
+                  <RefreshCw size={14} />
+                  {actionId === `refresh:${form.targetId}` ? t("action.loading") : t("empty.capabilities.actionRefresh")}
+                </button>
+              )}
             </div>
           </div>
           {hasTargetCapabilities ? (

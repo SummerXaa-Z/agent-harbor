@@ -11,7 +11,10 @@ const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8
 test("capability governance page prioritizes catalog and opens grant creation on demand", () => {
   assert.match(capabilityView, /className="capability-scope-bar"/);
   assert.match(capabilityView, /className="capability-catalog-heading"/);
+  assert.match(capabilityView, /\{hasTargetCapabilities \? \(/);
   assert.match(capabilityView, /className="primary-button capability-grant-launcher"/);
+  assert.match(capabilityView, /className="primary-button capability-refresh-launcher"/);
+  assert.match(capabilityView, /t\("empty\.capabilities\.actionRefresh"\)/);
   assert.match(capabilityView, /const \[grantPanelOpen, setGrantPanelOpen\] = useState\(false\)/);
   assert.match(capabilityView, /className="capability-grant-sheet"/);
   assert.match(capabilityView, /className="assignment-list-heading"/);

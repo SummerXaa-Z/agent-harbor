@@ -135,6 +135,14 @@ export function TraceTable({ traces, agents, t }: { traces: TraceEvent[]; agents
 }
 
 export function ManagementAuditTable({ events, t }: { events: AuditEvent[]; t: Translator }) {
+  if (events.length === 0) {
+    return (
+      <div className="management-audit-empty-state">
+        <EmptyRow title={t("empty.managementAudit.title")} detail={t("empty.managementAudit.detail")} />
+      </div>
+    );
+  }
+
   return (
     <div className="table-wrap">
       <table className="audit-table">
@@ -149,13 +157,6 @@ export function ManagementAuditTable({ events, t }: { events: AuditEvent[]; t: T
           </tr>
         </thead>
         <tbody>
-          {events.length === 0 ? (
-            <tr>
-              <td colSpan={6}>
-                <EmptyRow title={t("empty.managementAudit.title")} detail={t("empty.managementAudit.detail")} />
-              </td>
-            </tr>
-          ) : null}
           {events.map((event) => (
             <tr key={event.id}>
               <td>{formatDate(event.createdAt)}</td>

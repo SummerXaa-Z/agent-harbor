@@ -135,7 +135,7 @@ test("administrator boundary workspace uses modal actions and never renders key 
   assert.match(adminAccessView, /adminAccess\.forbiddenTitle/);
   assert.match(adminAccessView, /className="admin-access-empty-state"/);
   assert.doesNotMatch(adminAccessView, /<td colSpan=\{8\}>/);
-  assert.match(styles, /\.admin-access-empty-state\s*\{[^}]*min-height:\s*128px;/s);
+  assert.match(styles, /\.admin-access-empty-state,\s*\n\.management-audit-empty-state\s*\{[^}]*min-height:\s*128px;/s);
   assert.match(adminAccessView, /admin-access-modal-backdrop/);
   assert.match(adminAccessView, /controller\.oneTimeKey/);
   assert.match(adminAccessView, /className="primary-button"[\s\S]*t\("adminAccess\.create"\)/);
@@ -502,12 +502,15 @@ test("management audit evidence uses business labels before technical ids", () =
   assert.match(runtimeEvidenceViews, /auditActorLabel\(event\.actor, t\)/);
   assert.match(runtimeEvidenceViews, /auditSummaryLabel\(event\.summary, t\)/);
   assert.match(runtimeEvidenceViews, /className="audit-technical"/);
+  assert.match(auditTable, /className="management-audit-empty-state"/);
+  assert.doesNotMatch(auditTable, /<td colSpan=\{6\}>/);
   assert.match(auditTable, /<summary>\{t\("text\.auditDetails"\)\}<\/summary>/);
   assert.doesNotMatch(auditTable, /text\.technicalDetails/);
   assert.doesNotMatch(runtimeEvidenceViews, /<span>\{event\.resourceId\}<\/span>/);
   assert.match(i18n, /"auditAction\.permission_package\.applied": "应用权限包"/);
   assert.match(i18n, /"auditActor\.local-dev": "本地开发管理员"/);
   assert.match(i18n, /"text\.auditDetails": "详情"/);
+  assert.match(styles, /\.admin-access-empty-state,\s*\n\.management-audit-empty-state\s*\{[^}]*min-height:\s*128px;/s);
   assert.match(styles, /\.audit-technical summary\s*\{/);
   assert.match(styles, /\.badge\s*\{[^}]*text-transform:\s*none;/s);
   assert.doesNotMatch(styles, /\.badge\s*\{[^}]*text-transform:\s*lowercase;/s);

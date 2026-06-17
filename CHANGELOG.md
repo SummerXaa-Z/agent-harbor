@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Console login rate limiting now trusts `X-Forwarded-For` only from local or private proxy sources, preventing direct clients from bypassing failed-login throttling by spoofing forwarded IPs.
+- 控制台登录限流现在只在请求来自本机或私网代理时信任 `X-Forwarded-For`，防止直连客户端通过伪造转发 IP 绕过失败登录限流。
 - Resource Management permission-change handoffs no longer prefill callers or targets from another tenant/workspace when the matching resource is missing in the current scope.
 - 资源管理页发起权限变更时，如果当前租户/工作区缺少匹配的调用方或目标服务，将不再用其他租户/工作区的对象自动预填。
 - Resource Management now scopes the main inventory, metrics, grants, routes, and runtime counts to the active tenant and workspace, preventing cross-tenant resources from appearing ready in the current workspace.

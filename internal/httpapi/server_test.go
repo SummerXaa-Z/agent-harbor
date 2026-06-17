@@ -1071,6 +1071,26 @@ func TestConsoleLoginRateLimit(t *testing.T) {
 	}
 }
 
+func TestConsoleLoginRateLimitTrustsForwardedForOnlyFromTrustedProxy(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	for i := 0; i < 5; i++ {
+		resp := requestLoginWithClientHeaders(t, router, "198.51.100.20:4000", "203.0.113."+strconv.Itoa(i+1))
+		if resp.Code != http.StatusUnauthorized {
+			t.Fatalf("public failed login %d should be unauthorized before throttle, got %d body=%s", i+1, resp.Code, resp.Body.String())
+		}
+	}
+	limited := requestLoginWithClientHeaders(t, router, "198.51.100.20:4000", "203.0.113.99")
+	if limited.Code != http.StatusTooManyRequests || !strings.Contains(limited.Body.String(), "RATE_LIMITED") {
+		t.Fatalf("public client should not bypass rate limit by changing X-Forwarded-For, got %d body=%s", limited.Code, limited.Body.String())
+	}
+
+	proxied := requestLoginWithClientHeaders(t, router, "127.0.0.1:4000", "203.0.113.200")
+	if proxied.Code != http.StatusUnauthorized {
+		t.Fatalf("trusted local proxy should isolate a different forwarded client, got %d body=%s", proxied.Code, proxied.Body.String())
+	}
+}
+
 func TestConsoleLoginRateLimitClearsAfterSuccess(t *testing.T) {
 	router := newRouterWithAdmin("test-admin")
 
@@ -6991,6 +7011,17 @@ func requestWithCookieAndCSRF(t *testing.T, router http.Handler, method string, 
 func requestWithRunIDAndAdmin(t *testing.T, router http.Handler, method string, path string, body any, bearer string, runID string, adminKey string) *httptest.ResponseRecorder {
 	t.Helper()
 	rec, req := buildRequest(t, method, path, body, bearer, runID, adminKey)
+	router.ServeHTTP(rec, req)
+	return rec
+}
+
+func requestLoginWithClientHeaders(t *testing.T, router http.Handler, remoteAddr string, forwardedFor string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec, req := buildRequest(t, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "wrong-admin"}, "", "", "")
+	req.RemoteAddr = remoteAddr
+	if forwardedFor != "" {
+		req.Header.Set("X-Forwarded-For", forwardedFor)
+	}
 	router.ServeHTTP(rec, req)
 	return rec
 }

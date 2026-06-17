@@ -268,22 +268,40 @@ func requiresCSRFProtection(method string) bool {
 }
 
 func (s *Server) consoleLoginClientKey(r *http.Request) string {
-	if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
+	remoteHost := consoleLoginRemoteHost(r)
+	forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
+	if trustedConsoleForwardedForSource(remoteHost) {
 		for _, part := range strings.Split(forwardedFor, ",") {
 			if candidate := strings.TrimSpace(part); candidate != "" {
 				return candidate
 			}
 		}
 	}
+	if remoteHost != "" {
+		return remoteHost
+	}
 	remoteAddr := strings.TrimSpace(r.RemoteAddr)
 	if remoteAddr == "" {
 		return "unknown"
+	}
+	return remoteAddr
+}
+
+func consoleLoginRemoteHost(r *http.Request) string {
+	remoteAddr := strings.TrimSpace(r.RemoteAddr)
+	if remoteAddr == "" {
+		return ""
 	}
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err == nil && strings.TrimSpace(host) != "" {
 		return strings.TrimSpace(host)
 	}
 	return remoteAddr
+}
+
+func trustedConsoleForwardedForSource(remoteHost string) bool {
+	ip := net.ParseIP(strings.TrimSpace(remoteHost))
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate())
 }
 
 func (s *Server) consoleLoginRetryAfterSeconds(r *http.Request) int {

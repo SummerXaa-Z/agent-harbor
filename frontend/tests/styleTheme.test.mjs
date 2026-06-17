@@ -631,6 +631,8 @@ test("capability workspace compresses metrics and opens grant operations on dema
   assert.match(capabilityGovernanceView, /className="primary-button capability-grant-launcher"/);
   assert.match(capabilityGovernanceView, /className="primary-button capability-refresh-launcher"/);
   assert.match(capabilityGovernanceView, /className="primary-button capability-review-launcher"/);
+  assert.match(capabilityGovernanceView, /className="capability-grant-blocker"/);
+  assert.match(styles, /\.capability-grant-blocker\s*\{/);
   assert.match(capabilityGovernanceView, /className="capability-grant-sheet"/);
 });
 

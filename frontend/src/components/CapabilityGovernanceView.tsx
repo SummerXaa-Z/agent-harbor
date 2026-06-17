@@ -123,6 +123,24 @@ export function CapabilityGovernanceView({
   const selectedCatalogCapability = capabilities.find((capability) => capability.id === selectedCapabilityId) ?? null;
   const selectedAccessSubject = accessSubjectOptionForSelector(form.subjectSelector);
   const currentTargetLabel = form.targetId ? agentNames[form.targetId] ?? form.targetId : t("form.allMcpTargets");
+  const normalizedSubjectSelector = form.subjectSelector.trim();
+  const grantFormReady = Boolean(
+    selectedCapability &&
+    form.tenantId.trim() &&
+    form.workspaceId.trim() &&
+    form.callerInstanceId.trim() &&
+    normalizedSubjectSelector &&
+    normalizedSubjectSelector !== "*"
+  );
+  const grantFormBlocker = !selectedCapability
+    ? t("message.validationCapabilityRequired")
+    : !form.tenantId.trim() || !form.workspaceId.trim()
+      ? t("message.validationTenantWorkspaceCaller")
+      : !form.callerInstanceId.trim()
+        ? t("message.capabilityGrantCallerRequired")
+        : !normalizedSubjectSelector || normalizedSubjectSelector === "*"
+          ? t("message.validationSubjectSelectorRequired")
+          : "";
   const capabilityEmptyActionLabel = targetCapabilities.length > 0
     ? undefined
     : mcpTargets.length === 0
@@ -615,12 +633,23 @@ export function CapabilityGovernanceView({
                 <summary>{t("text.technicalOverrides")}</summary>
                 <label>{t("form.subjectSelector")}<input placeholder={t("form.subjectSelectorPlaceholder")} value={form.subjectSelector} onChange={(event) => onChange({ ...form, subjectSelector: event.target.value })} /></label>
               </details>
+              {grantFormBlocker ? (
+                <div className="capability-grant-blocker" role="note">
+                  <span>{grantFormBlocker}</span>
+                  {!form.callerInstanceId.trim() ? (
+                    <a className="secondary-button compact" href="#registry" onClick={() => setGrantPanelOpen(false)}>
+                      {t("action.openResourceManagement")}
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="capability-scope-strip">
                 <span>{selectedCapability ? translatedValue(t, selectedCapability.sensitivity) : t("text.sensitivity")}</span>
                 <span>{selectedCapability ? translatedValue(t, selectedCapability.riskLevel) : t("text.risk")}</span>
                 <span>{dataScopeText(selectedCapability?.dataScopes, t) || t("text.noDataScope")}</span>
               </div>
               <FormFooter
+                disabled={!grantFormReady || actionId === `grant:${form.capabilityId}`}
                 message=""
                 submitLabel={actionId === `grant:${form.capabilityId}` ? t("action.loading") : t("action.grantChain")}
               />
@@ -632,10 +661,10 @@ export function CapabilityGovernanceView({
   );
 }
 
-function FormFooter({ message, submitLabel }: { message: string; submitLabel: string }) {
+function FormFooter({ disabled = false, message, submitLabel }: { disabled?: boolean; message: string; submitLabel: string }) {
   return (
     <div className="form-footer">
-      <button className="primary-button" type="submit">{submitLabel}</button>
+      <button className="primary-button" disabled={disabled} type="submit">{submitLabel}</button>
       {message ? <span>{message}</span> : null}
     </div>
   );

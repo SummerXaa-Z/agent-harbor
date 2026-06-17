@@ -6022,6 +6022,30 @@ td code {
   font-weight: 700;
 }
 
+.capability-grant-blocker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-control);
+  background: var(--warning-surface);
+  color: var(--warning-strong);
+  font-size: var(--text-sm);
+  line-height: 18px;
+}
+
+.capability-grant-blocker span {
+  min-width: 0;
+}
+
+.capability-grant-blocker .secondary-button {
+  min-height: 30px;
+  padding-inline: var(--space-3);
+  background: var(--surface);
+}
+
 .capability-scope-strip {
   display: flex;
   flex-wrap: wrap;

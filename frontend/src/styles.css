@@ -1299,19 +1299,24 @@ button {
 
 .production-journey-checkpoint {
   display: grid;
-  grid-template-columns: minmax(160px, 0.9fr) minmax(0, 2fr) auto;
-  gap: var(--space-4);
-  align-items: center;
-  padding: var(--space-3) var(--space-4);
+  width: 100%;
+  box-sizing: border-box;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  align-items: start;
+  padding: 10px 14px;
   border: 1px solid var(--line-subtle);
   border-radius: var(--radius-control);
   background: var(--surface);
 }
 
 .production-journey-copy {
-  display: grid;
+  display: flex;
   min-width: 0;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .production-journey-copy strong {
@@ -1321,13 +1326,14 @@ button {
 }
 
 .production-journey-steps {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: var(--space-2);
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px 14px;
   align-items: center;
   margin: 0;
   padding: 0;
   list-style: none;
+  flex-wrap: wrap;
 }
 
 .production-journey-steps li {
@@ -1336,15 +1342,16 @@ button {
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
+  line-height: 16px;
   white-space: nowrap;
 }
 
 .production-journey-steps li span {
   display: inline-flex;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--line);
@@ -1370,6 +1377,7 @@ button {
 }
 
 .production-journey-next {
+  min-height: 32px;
   justify-self: end;
 }
 
@@ -6480,10 +6488,6 @@ td code {
 
   .production-journey-checkpoint {
     grid-template-columns: 1fr;
-  }
-
-  .production-journey-steps {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .production-journey-next {

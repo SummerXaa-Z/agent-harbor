@@ -63,6 +63,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 资源管理页现在把生命周期操作直接收束到资源工作台：创建 Agent、创建密钥、轮换凭据、创建策略、查看能力、发起权限变更和查看运行状态都从同一个入口开始。
 - Resource Management now tightens its workbench language and layout: the primary panel is named Resource Management, action triggers read as operation buttons, and the resource list has a clear title and count instead of appearing as a loose table.
 - 资源管理页现在进一步收束工作台用词和布局：主面板命名为“资源管理”，操作入口呈现为明确按钮，资源清单带有标题和数量，不再像松散表格。
+- The production journey checkpoint now uses a two-line status layout with wrapping stages, keeping the next safe action visible without squeezing the resource workbench.
+- 生产路径提示现在改为两层状态布局，阶段可自然换行；在不挤压资源工作台的前提下保留下一步安全动作。
 - Resource Management row actions now keep resource context while opening credential actions in place and routing capability, permission, and runtime follow-ups with focused handoff state.
 - 资源管理的行级操作现在会保留资源上下文：凭据操作就地打开，能力、权限和运行后续动作带着上下文进入对应工作区。
 - Resource Management now keeps a selected resource context panel visible, showing tenant/workspace scope, lifecycle health, capability, permission, runtime counts, and the recommended next action before operators jump across workspaces.

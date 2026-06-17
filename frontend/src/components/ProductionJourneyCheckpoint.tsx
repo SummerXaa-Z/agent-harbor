@@ -26,7 +26,11 @@ export function ProductionJourneyCheckpoint({
           const complete = completed.has(stage.key);
           const current = journey.currentStageKey === stage.key;
           return (
-            <li className={current ? "is-current" : complete ? "is-complete" : ""} key={stage.key}>
+            <li
+              aria-current={current ? "step" : undefined}
+              className={current ? "is-current" : complete ? "is-complete" : ""}
+              key={stage.key}
+            >
               <span aria-hidden="true">{complete ? <Check size={12} /> : null}</span>
               {t(stage.labelKey)}
             </li>

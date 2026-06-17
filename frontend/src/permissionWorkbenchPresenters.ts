@@ -193,6 +193,8 @@ export function permissionEntityDisplayName(value: string, t: Translator) {
     "Security Reviewer": t("accessSubject.securityReviewer.name")
   };
   if (demoNames[normalized]) return demoNames[normalized];
+  if (normalized.startsWith("MCP Capability Caller")) return t("demo.mcpCapabilityCaller");
+  if (normalized.startsWith("MCP Capability MCP Target")) return t("demo.mcpCapabilityTarget");
   if (normalized.includes("Permission Package Approval")) {
     return normalized.replaceAll("Permission Package Approval", t("demo.permissionRequestApproval"));
   }

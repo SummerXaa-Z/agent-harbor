@@ -415,6 +415,10 @@ test("capability names use business labels in primary UI", () => {
   assert.match(presenters, /"Default Workspace Team": t\("demo\.permissionRequestApprovalProject"\)/);
   assert.match(presenters, /"Security Reviewer": t\("accessSubject\.securityReviewer\.name"\)/);
   assert.match(permissionWorkbenchPresenters, /"Security Reviewer": t\("accessSubject\.securityReviewer\.name"\)/);
+  assert.match(presenters, /normalized\.startsWith\("MCP Capability Caller"\)[\s\S]*demo\.mcpCapabilityCaller/);
+  assert.match(presenters, /normalized\.startsWith\("MCP Capability MCP Target"\)[\s\S]*demo\.mcpCapabilityTarget/);
+  assert.match(permissionWorkbenchPresenters, /normalized\.startsWith\("MCP Capability Caller"\)[\s\S]*demo\.mcpCapabilityCaller/);
+  assert.match(permissionWorkbenchPresenters, /normalized\.startsWith\("MCP Capability MCP Target"\)[\s\S]*demo\.mcpCapabilityTarget/);
   assert.match(presenters, /export function dataScopeText\(scopes\?: DataScope\[\], t\?: Translator\)/);
   assert.match(i18n, /"capability\.search_customer\.name": "查询客户"/);
   assert.match(i18n, /"capability\.update_ticket\.name": "更新工单"/);

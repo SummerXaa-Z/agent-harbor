@@ -293,6 +293,8 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("section.permissionWizardGoLive"), "状态检查");
   assert.equal(t("demo.coreJourneyTarget"), "标准工具服务");
   assert.equal(t("demo.coreJourneyWorkspace"), "平台工作区");
+  assert.equal(t("demo.mcpCapabilityCaller"), "客服助手");
+  assert.equal(t("demo.mcpCapabilityTarget"), "工单工具服务");
   assert.doesNotMatch(t("demo.coreJourneyCaller"), /自检/);
   assert.doesNotMatch(t("demo.coreJourneyProject"), /自检/);
   assert.doesNotMatch(t("demo.coreJourneyRoot"), /自检/);

@@ -1588,6 +1588,19 @@ button {
   justify-self: start;
 }
 
+.resource-lifecycle-selected-action {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  min-height: 30px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-full);
+  background: var(--surface-subtle);
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .resource-advanced-details {
   grid-column: 1 / -1;
   border: 1px solid var(--line-subtle);

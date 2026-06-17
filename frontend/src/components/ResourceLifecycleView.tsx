@@ -289,7 +289,9 @@ function ResourceLifecycleRow({
       <span>{item.approvedCapabilityCount}/{item.capabilityCount}</span>
       <span>{item.grantCount}</span>
       <span>{item.runtimeDecisionCount}</span>
-      {onResourceAction ? (
+      {selected ? (
+        <span className="muted-action resource-lifecycle-selected-action">{t("resource.selectedRow")}</span>
+      ) : onResourceAction ? (
         <button
           className={actionClassName}
           type="button"

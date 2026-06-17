@@ -282,7 +282,10 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(resourceLifecycleView, /resource-lifecycle-list-title/);
   assert.match(resourceLifecycleView, /t\("resource\.listTitle"\)/);
   assert.match(resourceLifecycleView, /tx\(t,\s*"resource\.listCount"/);
+  assert.match(resourceLifecycleView, /selected \? \(\s*<span className="muted-action resource-lifecycle-selected-action">\{t\("resource\.selectedRow"\)\}<\/span>/);
+  assert.match(resourceLifecycleView, /\) : onResourceAction \? \(/);
   assert.match(styles, /\.resource-lifecycle-row\.is-selected\s*\{/);
+  assert.match(styles, /\.resource-lifecycle-selected-action\s*\{/);
   assert.match(styles, /\.resource-advanced-details\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
   assert.match(styles, /\.resource-advanced-details summary\s*\{/);
   assert.match(styles, /\.resource-advanced-action\s*\{/);

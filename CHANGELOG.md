@@ -355,6 +355,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- Resource Management now removes the duplicate selected-row action: the selected resource row shows a focused-state label, while the context panel remains the single recommended operation entry.
+- 资源管理页现在移除选中资源行里的重复操作入口：选中行只展示当前关注状态，推荐操作统一保留在上下文面板。
 - Getting Started now uses a guided first-run layout with a prominent current step, nearby primary action, compact progress summary, and tighter checklist instead of a wide table-like workspace.
 - 开始使用页现在改为首次接入向导布局，突出当前下一步、就近展示主操作、压缩进度摘要和检查清单，不再像一张横向大表。
 - Getting Started and the audit navigation now use go-live status wording instead of go-live evidence wording for the operator-facing final step.

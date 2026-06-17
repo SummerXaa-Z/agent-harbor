@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Production deployment mode now disables default local development CORS origins; browser origins must be explicitly set through `AGENT_HARBOR_CORS_ORIGINS`.
+- 生产部署模式现在会关闭默认本地开发 CORS 来源；浏览器来源必须通过 `AGENT_HARBOR_CORS_ORIGINS` 显式配置。
 - Bootstrap administrator identities now reject duplicate actors or duplicate keys during startup configuration parsing, preventing ambiguous audit actors and tenant/workspace boundaries.
 - 引导管理员身份现在会在启动配置解析时拒绝重复 actor 或重复 key，避免审计主体和租户/工作区边界产生歧义。
 - Console login rate limiting now trusts `X-Forwarded-For` only from local or private proxy sources, preventing direct clients from bypassing failed-login throttling by spoofing forwarded IPs.

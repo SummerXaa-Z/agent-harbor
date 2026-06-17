@@ -155,6 +155,58 @@ func TestNewAllowsConfiguredCORSOriginsFromEnv(t *testing.T) {
 	}
 }
 
+func TestNewProductionModeRequiresExplicitCORSOrigins(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "test-admin")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
+
+	app, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("new app: %v", err)
+	}
+	defer app.Close()
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/mcp/agents/browser-gate/rpc", nil)
+	req.Header.Set("Origin", "http://127.0.0.1:5174")
+	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, X-AgentHarbor-Subject-Id")
+	rec := httptest.NewRecorder()
+
+	app.Router().ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("production mode should not allow default local dev CORS origin, got %q", got)
+	}
+}
+
+func TestNewProductionModeAllowsExplicitCORSOrigins(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "test-admin")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
+	t.Setenv("AGENT_HARBOR_CORS_ORIGINS", "https://console.example.com")
+
+	app, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("new app: %v", err)
+	}
+	defer app.Close()
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/mcp/agents/browser-gate/rpc", nil)
+	req.Header.Set("Origin", "https://console.example.com")
+	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, X-AgentHarbor-Subject-Id")
+	rec := httptest.NewRecorder()
+
+	app.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("configured production CORS origin should allow preflight, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://console.example.com" {
+		t.Fatalf("unexpected allowed production origin %q", got)
+	}
+}
+
 func TestPrivateUpstreamsEnvRejectsInvalidBoolean(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS", "sometimes")
 

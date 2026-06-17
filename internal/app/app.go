@@ -69,7 +69,13 @@ func New(ctx context.Context) (*App, error) {
 		closeFn()
 		return nil, err
 	}
-	if _, err := deploymentConfigPreflightFromEnv(deploymentEnvFromOS()); err != nil {
+	deploymentEnv := deploymentEnvFromOS()
+	deploymentMode, err := deploymentModeFromEnv(deploymentEnv)
+	if err != nil {
+		closeFn()
+		return nil, err
+	}
+	if _, err := deploymentConfigPreflightFromEnv(deploymentEnv); err != nil {
 		closeFn()
 		return nil, err
 	}
@@ -83,6 +89,7 @@ func New(ctx context.Context) (*App, error) {
 			httpapi.WithPrivateUpstreamsAllowed(allowPrivateUpstreams),
 			httpapi.WithPermissionPackageApprovalReviewers(approvalReviewers),
 			httpapi.WithCORSOrigins(corsOriginsFromEnv()),
+			httpapi.WithDefaultLocalCORSOrigins(deploymentMode != "production"),
 		),
 		close: closeFn,
 	}, nil

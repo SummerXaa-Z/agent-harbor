@@ -53,6 +53,7 @@ type Server struct {
 	allowPrivateUpstreams     bool
 	approvalReviewers         []domain.PermissionPackageApprovalReviewer
 	corsOrigins               []string
+	defaultLocalCORSOrigins   bool
 	loginFailureMu            sync.Mutex
 	loginFailures             map[string]consoleLoginFailure
 	sessionSecret             []byte
@@ -171,10 +172,17 @@ func WithCORSOrigins(origins []string) Option {
 	}
 }
 
+func WithDefaultLocalCORSOrigins(enabled bool) Option {
+	return func(s *Server) {
+		s.defaultLocalCORSOrigins = enabled
+	}
+}
+
 func New(repo store.Repository, options ...Option) *Server {
 	server := &Server{
-		repo: repo,
-		now:  func() time.Time { return time.Now().UTC() },
+		repo:                    repo,
+		now:                     func() time.Time { return time.Now().UTC() },
+		defaultLocalCORSOrigins: true,
 	}
 	for _, option := range options {
 		option(server)
@@ -187,7 +195,7 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
-	r.Use(localDevCORS(s.corsOrigins))
+	r.Use(localDevCORS(s.corsOrigins, s.defaultLocalCORSOrigins))
 
 	r.Get("/healthz", s.health)
 	r.Route("/api/v1", func(r chi.Router) {
@@ -268,32 +276,35 @@ func (s *Server) Router() http.Handler {
 	return r
 }
 
-func localDevCORS(extraOrigins []string) func(http.Handler) http.Handler {
-	allowedOrigins := map[string]struct{}{
-		"http://localhost:4173": {},
-		"http://localhost:4174": {},
-		"http://localhost:4175": {},
-		"http://localhost:4176": {},
-		"http://localhost:5173": {},
-		"http://localhost:5174": {},
-		"http://localhost:5175": {},
-		"http://localhost:5176": {},
-		"http://127.0.0.1:4173": {},
-		"http://127.0.0.1:4174": {},
-		"http://127.0.0.1:4175": {},
-		"http://127.0.0.1:4176": {},
-		"http://127.0.0.1:5173": {},
-		"http://127.0.0.1:5174": {},
-		"http://127.0.0.1:5175": {},
-		"http://127.0.0.1:5176": {},
-		"http://[::1]:4173":     {},
-		"http://[::1]:4174":     {},
-		"http://[::1]:4175":     {},
-		"http://[::1]:4176":     {},
-		"http://[::1]:5173":     {},
-		"http://[::1]:5174":     {},
-		"http://[::1]:5175":     {},
-		"http://[::1]:5176":     {},
+func localDevCORS(extraOrigins []string, includeDefaultLocalOrigins bool) func(http.Handler) http.Handler {
+	allowedOrigins := map[string]struct{}{}
+	if includeDefaultLocalOrigins {
+		allowedOrigins = map[string]struct{}{
+			"http://localhost:4173": {},
+			"http://localhost:4174": {},
+			"http://localhost:4175": {},
+			"http://localhost:4176": {},
+			"http://localhost:5173": {},
+			"http://localhost:5174": {},
+			"http://localhost:5175": {},
+			"http://localhost:5176": {},
+			"http://127.0.0.1:4173": {},
+			"http://127.0.0.1:4174": {},
+			"http://127.0.0.1:4175": {},
+			"http://127.0.0.1:4176": {},
+			"http://127.0.0.1:5173": {},
+			"http://127.0.0.1:5174": {},
+			"http://127.0.0.1:5175": {},
+			"http://127.0.0.1:5176": {},
+			"http://[::1]:4173":     {},
+			"http://[::1]:4174":     {},
+			"http://[::1]:4175":     {},
+			"http://[::1]:4176":     {},
+			"http://[::1]:5173":     {},
+			"http://[::1]:5174":     {},
+			"http://[::1]:5175":     {},
+			"http://[::1]:5176":     {},
+		}
 	}
 	for _, origin := range extraOrigins {
 		allowedOrigins[origin] = struct{}{}

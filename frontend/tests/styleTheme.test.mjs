@@ -262,9 +262,9 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(app, /createKeyAction\("command", "secondary"\)/);
   assert.match(app, /rotateCredentialAction\("command", "secondary"\)/);
   assert.match(app, /createPolicyAction\("command", "secondary"\)/);
-  assert.match(app, /agentRegistryPanel=\{agentRegistryPanel\("span-8"\)\}/);
+  assert.match(app, /agentRegistryPanel=\{agentRegistryPanel\("span-7"\)\}/);
   assert.doesNotMatch(app, /const agentRegistryActions =/);
-  assert.match(app, /contractMatrixPanel=\{contractMatrixPanel\("span-4"\)\}/);
+  assert.match(app, /contractMatrixPanel=\{contractMatrixPanel\("span-5"\)\}/);
   assert.match(registryView, /<details className="resource-advanced-details">/);
   assert.match(registryView, /<summary>/);
   assert.match(registryView, /t\("resource\.advanced\.title"\)/);
@@ -290,6 +290,9 @@ test("agent tools workspace balances registry layout and hides inactive empty-st
   assert.match(styles, /\.resource-advanced-details summary\s*\{/);
   assert.match(styles, /\.resource-advanced-action\s*\{/);
   assert.match(styles, /\.resource-advanced-grid\s*\{[^}]*grid-template-columns:\s*repeat\(12,\s*minmax\(0,\s*1fr\)\);/s);
+  assert.match(styles, /\.resource-advanced-grid\s*\{[^}]*gap:\s*var\(--space-3\);[^}]*background:\s*var\(--surface-subtle\);/s);
+  assert.match(styles, /\.resource-advanced-grid > \.panel\s*\{[^}]*margin-top:\s*0;[^}]*box-shadow:\s*none;/s);
+  assert.match(styles, /\.resource-advanced-grid > \.panel \.panel-header\s*\{[^}]*min-height:\s*44px;/s);
   assert.match(styles, /\.action-modal-trigger-command\.is-primary\s*\{/);
   assert.match(styles, /\.action-modal-trigger-command\.is-secondary\s*\{/);
   assert.match(styles, /\.action-modal-trigger-command \.action-modal-trigger-affordance\s*\{[^}]*font-size:\s*0;/s);

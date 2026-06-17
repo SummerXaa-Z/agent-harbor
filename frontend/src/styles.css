@@ -1676,13 +1676,21 @@ button {
 .resource-advanced-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: var(--space-4);
-  padding: 0 var(--space-4) var(--space-4);
+  gap: var(--space-3);
+  padding: var(--space-3);
   border-top: 1px solid var(--line-subtle);
+  background: var(--surface-subtle);
 }
 
 .resource-advanced-grid > .panel {
-  margin-top: var(--space-4);
+  margin-top: 0;
+  border-color: var(--line-subtle);
+  box-shadow: none;
+}
+
+.resource-advanced-grid > .panel .panel-header {
+  min-height: 44px;
+  background: var(--surface);
 }
 
 .tenant-organization {

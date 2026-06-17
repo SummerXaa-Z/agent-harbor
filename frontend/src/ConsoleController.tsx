@@ -2695,8 +2695,8 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       case "registry":
         return (
           <RegistryView
-            agentRegistryPanel={agentRegistryPanel("span-8")}
-            contractMatrixPanel={contractMatrixPanel("span-4")}
+            agentRegistryPanel={agentRegistryPanel("span-7")}
+            contractMatrixPanel={contractMatrixPanel("span-5")}
             journeyCheckpoint={productionJourneyCheckpoint}
             resourceLifecyclePanel={resourceLifecyclePanel()}
             t={t}

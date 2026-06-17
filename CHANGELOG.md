@@ -355,6 +355,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- Resource Management advanced maintenance now uses a balanced registry/contract layout with a unified drawer background and shadowless inner sections, reducing the disconnected-card feel on wide screens.
+- 资源管理的高级维护区现在采用更均衡的注册表/契约布局，并统一抽屉背景、去掉内部卡片阴影，降低宽屏下模块散落的感觉。
 - The production journey checkpoint now renders as a compact wide-screen context bar with current action, stages, and next action in one row, reducing first-viewport weight without losing journey context.
 - 生产路径提示现在在宽屏下改为紧凑上下文条，将当前动作、阶段和下一步收进同一行，减少首屏占用但不丢失流程上下文。
 - Agent Registry empty states now use a tighter list-level density, reducing the icon, copy size, and empty-area height so no-data pages look less like unfinished demo tables.

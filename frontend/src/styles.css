@@ -1344,12 +1344,24 @@ button {
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--ink);
+  font: inherit;
+  text-align: left;
   text-decoration: none;
 }
 
+.resource-lifecycle-setup-gap.is-action {
+  cursor: pointer;
+}
+
+.resource-lifecycle-setup-gap.is-action:hover,
 .resource-lifecycle-setup-gap.is-link:hover {
   border-color: var(--brand-border-strong);
   background: var(--surface-raised);
+}
+
+.resource-lifecycle-setup-gap.is-action:focus-visible {
+  box-shadow: var(--shadow-focus);
+  outline: 0;
 }
 
 .resource-lifecycle-setup-gap span {

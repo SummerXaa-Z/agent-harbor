@@ -23,6 +23,7 @@ export function ResourceLifecycleView({
   formatTenantName = (tenantId) => tenantId,
   formatWorkspaceName = (workspaceId) => workspaceId,
   lastRefreshedAt,
+  onCreateAgent,
   onResourceAction,
   onRefresh,
   primaryActions,
@@ -34,6 +35,7 @@ export function ResourceLifecycleView({
   formatTenantName?: (tenantId: string) => string;
   formatWorkspaceName?: (workspaceId: string) => string;
   lastRefreshedAt?: Date;
+  onCreateAgent?: () => void;
   onResourceAction?: (item: ResourceLifecycleItem) => void;
   onRefresh?: () => void;
   primaryActions?: ReactNode;
@@ -104,7 +106,7 @@ export function ResourceLifecycleView({
             </div>
           ) : null}
           {hasResources && summary.setupGaps.length > 0 ? (
-            <ResourceLifecycleSetupGaps gaps={summary.setupGaps} t={t} />
+            <ResourceLifecycleSetupGaps gaps={summary.setupGaps} onCreateAgent={onCreateAgent} t={t} />
           ) : null}
           <ResourceLifecycleRefreshStatus
             lastRefreshedAt={lastRefreshedAt}
@@ -157,9 +159,11 @@ export function ResourceLifecycleView({
 
 function ResourceLifecycleSetupGaps({
   gaps,
+  onCreateAgent,
   t
 }: {
   gaps: ResourceLifecycleSetupGap[];
+  onCreateAgent?: () => void;
   t: Translator;
 }) {
   return (
@@ -170,6 +174,8 @@ function ResourceLifecycleSetupGaps({
       </div>
       <div className="resource-lifecycle-setup-gaps-list">
         {gaps.map((gap) => {
+          const canCreateAgent =
+            (gap.kind === "caller" || gap.kind === "target") && gap.actionHash === "#registry" && onCreateAgent;
           const content = (
             <>
               <span>
@@ -179,6 +185,18 @@ function ResourceLifecycleSetupGaps({
               <em>{t(gap.actionKey)}</em>
             </>
           );
+          if (canCreateAgent) {
+            return (
+              <button
+                className="resource-lifecycle-setup-gap is-action"
+                key={gap.kind}
+                onClick={onCreateAgent}
+                type="button"
+              >
+                {content}
+              </button>
+            );
+          }
           return gap.actionHash === "#registry" ? (
             <div className="resource-lifecycle-setup-gap" key={gap.kind}>
               {content}

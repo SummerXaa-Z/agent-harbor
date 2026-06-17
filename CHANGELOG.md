@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Resource Management readiness gaps for missing caller or target Agents now open the Create Agent dialog directly, keeping operators in the same workspace while completing access-query setup.
+- 资源管理页在缺少调用方或目标 Agent 时，现在可从访问查询准备度缺口直接打开“创建 Agent”表单，管理员无需离开当前工作区就能补齐配置。
 - Permission Changes now keeps the process sidebar gated to the current step: incomplete or unapplied changes show the same safe next action as the main workflow, and runtime validation copy waits until permissions are applied.
 - 权限变更的处理流程侧栏现在会跟随当前步骤：未补全或未应用的变更只显示与主流程一致的安全下一步，运行验证说明会等权限应用后再出现。
 - Permission Changes now shows “Complete configuration / 补全配置” and opens the configuration sheet when required draft fields are missing, instead of suggesting approval submission too early.

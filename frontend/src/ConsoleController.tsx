@@ -333,7 +333,7 @@ const defaultAccessProfileFilters: AccessProfileFilters = {
   traceLimit: "20",
   workspaceId: ""
 };
-type ResourceActionModal = "" | ResourceLifecycleModal;
+type ResourceActionModal = "" | ResourceLifecycleModal | "create_agent";
 
 interface ResourceActionRequest {
   context: ResourceLifecycleActionContext | null;
@@ -2378,6 +2378,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           formatTenantName={(tenantId) => permissionTenantPathLabel(tenantId, tenants, t).primary}
           formatWorkspaceName={(workspaceId) => permissionWorkspaceDisplayName(workspaceId, agents, t)}
           lastRefreshedAt={lastRefresh}
+          onCreateAgent={() => openResourceActionModal("create_agent")}
           onResourceAction={handleResourceLifecycleAction}
           onRefresh={() => void refresh()}
           primaryActions={resourceLifecyclePrimaryActions}
@@ -2575,7 +2576,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       <ActionModalButton
         closeLabel={t("action.dismiss")}
         icon={<Boxes size={16} />}
+        id="agent-create-panel"
         openLabel={t("action.open")}
+        openToken={resourceActionModal === "create_agent" ? resourceActionOpenToken : undefined}
         tone={tone}
         title={t("panel.createAgent")}
         variant={variant}

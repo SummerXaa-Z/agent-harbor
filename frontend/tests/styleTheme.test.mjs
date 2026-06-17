@@ -469,8 +469,10 @@ test("empty resource lifecycle uses inline guidance without duplicate empty card
   assert.match(resourceLifecycleView, /summary\.items\.map\(\(item\) => \(/);
   assert.match(resourceLifecycleView, /!hasResources \? \(\s*<div className="resource-lifecycle-empty-guidance" role="note">/);
   assert.match(resourceLifecycleView, /summary\.setupGaps\.length > 0/);
+  assert.match(resourceLifecycleView, /onCreateAgent\?: \(\) => void/);
+  assert.match(resourceLifecycleView, /<ResourceLifecycleSetupGaps gaps=\{summary\.setupGaps\} onCreateAgent=\{onCreateAgent\} t=\{t\} \/>/);
   assert.match(resourceLifecycleView, /className="resource-lifecycle-setup-gaps"/);
-  assert.match(resourceLifecycleView, /className="resource-lifecycle-setup-gap"/);
+  assert.match(resourceLifecycleView, /className="resource-lifecycle-setup-gap is-action"/);
   assert.match(resourceLifecycleView, /t\("resource\.empty\.title"\)/);
   assert.match(resourceLifecycleView, /t\("resource\.empty\.detail"\)/);
   assert.doesNotMatch(resourceLifecycleView, /EmptyRow/);
@@ -481,6 +483,8 @@ test("empty resource lifecycle uses inline guidance without duplicate empty card
   assert.match(styles, /\.resource-lifecycle-empty-guidance span\s*\{[^}]*font-size:\s*12px;/s);
   assert.match(styles, /\.resource-lifecycle-setup-gaps\s*\{/);
   assert.match(styles, /\.resource-lifecycle-setup-gap\s*\{/);
+  assert.match(styles, /\.resource-lifecycle-setup-gap\.is-action\s*\{/);
+  assert.match(styles, /\.resource-lifecycle-setup-gap\.is-action:focus-visible\s*\{/);
 });
 
 test("table actions distinguish neutral state changes from destructive actions", () => {

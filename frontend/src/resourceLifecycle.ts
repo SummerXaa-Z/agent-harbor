@@ -80,8 +80,9 @@ export interface ResourceLifecycleInput {
 }
 
 export function buildResourceLifecycleSummary(input: ResourceLifecycleInput): ResourceLifecycleSummary {
-  const items = input.agents.map((agent) => buildResourceLifecycleItem(agent, input));
-  const setupGaps = resourceSetupGaps(items, input);
+  const allItems = input.agents.map((agent) => buildResourceLifecycleItem(agent, input));
+  const items = scopedResourceItems(allItems, input.scope);
+  const setupGaps = resourceSetupGaps(items);
 
   return {
     activeResources: items.filter((item) => item.status !== "disabled").length,
@@ -98,17 +99,32 @@ export function buildResourceLifecycleSummary(input: ResourceLifecycleInput): Re
 function buildResourceLifecycleItem(agent: Agent, input: ResourceLifecycleInput): ResourceLifecycleItem {
   const capabilities = input.capabilities.filter((capability) => capability.targetId === agent.id);
   const approvedCapabilities = capabilities.filter((capability) => capability.discoveryStatus === "approved");
-  const entitlements = input.tenantEntitlements.filter((entitlement) => entitlement.targetId === agent.id && entitlement.status === "enabled");
-  const workspaceAssignments = enabledWorkspaceAssignmentsForEntitlements(entitlements, input.workspaceAssignments);
-  const instanceAssignments = enabledInstanceAssignmentsForWorkspaces(workspaceAssignments, input.instanceAssignments);
+  const entitlements = input.tenantEntitlements.filter(
+    (entitlement) =>
+      entitlement.targetId === agent.id &&
+      entitlement.status === "enabled" &&
+      tenantRecordInScope(entitlement, input.scope)
+  );
+  const workspaceAssignments = enabledWorkspaceAssignmentsForEntitlements(entitlements, input.workspaceAssignments)
+    .filter((assignment) => workspaceRecordInScope(assignment, input.scope));
+  const instanceAssignments = enabledInstanceAssignmentsForWorkspaces(workspaceAssignments, input.instanceAssignments)
+    .filter((assignment) => workspaceRecordInScope(assignment, input.scope));
   const callerInstanceAssignments = input.instanceAssignments.filter(
-    (assignment) => assignment.status === "enabled" && assignment.callerInstanceId === agent.id
+    (assignment) =>
+      assignment.status === "enabled" &&
+      assignment.callerInstanceId === agent.id &&
+      workspaceRecordInScope(assignment, input.scope)
   );
   const routePolicies = input.routePolicies.filter(
-    (policy) => policy.status === "enabled" && (policy.callerAgentId === agent.id || policy.targetAgentId === agent.id)
+    (policy) =>
+      policy.status === "enabled" &&
+      (policy.callerAgentId === agent.id || policy.targetAgentId === agent.id) &&
+      workspaceRecordInScope(policy, input.scope)
   );
   const runtimeDecisionCount = input.traces.filter(
-    (trace) => trace.callerAgentId === agent.id || trace.callerInstanceId === agent.id || trace.targetAgentId === agent.id
+    (trace) =>
+      (trace.callerAgentId === agent.id || trace.callerInstanceId === agent.id || trace.targetAgentId === agent.id) &&
+      workspaceRecordInScope(trace, input.scope)
   ).length;
   const kind = resourceKind(agent);
   const grantCount = kind === "caller"
@@ -250,13 +266,8 @@ function nextActionHash(status: ResourceLifecycleStatus): ResourceLifecycleNextA
   return hashes[status];
 }
 
-function resourceSetupGaps(
-  items: ResourceLifecycleItem[],
-  input: ResourceLifecycleInput
-): ResourceLifecycleSetupGap[] {
-  const setupScope = input.scope;
-  const scopedItems = setupScope ? items.filter((item) => resourceInScope(item, setupScope)) : items;
-  const activeItems = scopedItems.filter((item) => item.status !== "disabled");
+function resourceSetupGaps(items: ResourceLifecycleItem[]): ResourceLifecycleSetupGap[] {
+  const activeItems = items.filter((item) => item.status !== "disabled");
   const activeTargetIds = new Set(
     activeItems
       .filter((item) => item.kind !== "caller")
@@ -264,7 +275,7 @@ function resourceSetupGaps(
   );
   const hasCaller = activeItems.some((item) => item.kind === "caller");
   const hasTarget = activeTargetIds.size > 0;
-  const hasTargetCapability = input.capabilities.some((capability) => activeTargetIds.has(capability.targetId));
+  const hasTargetCapability = activeItems.some((item) => item.kind !== "caller" && item.capabilityCount > 0);
   const gaps: ResourceLifecycleSetupGap[] = [];
 
   if (!hasCaller) {
@@ -278,10 +289,22 @@ function resourceSetupGaps(
   return gaps;
 }
 
-function resourceInScope(item: ResourceLifecycleItem, scope: ManagementScope) {
+function scopedResourceItems(items: ResourceLifecycleItem[], scope?: ManagementScope) {
+  if (!scope) return items;
+  return items.filter((item) => workspaceRecordInScope(item, scope));
+}
+
+function tenantRecordInScope(record: { tenantId?: string }, scope?: ManagementScope) {
+  if (!scope) return true;
+  const tenantId = scope.tenantId.trim();
+  return !tenantId || record.tenantId === tenantId;
+}
+
+function workspaceRecordInScope(record: { tenantId?: string; workspaceId?: string }, scope?: ManagementScope) {
+  if (!scope) return true;
   const tenantId = scope.tenantId.trim();
   const workspaceId = scope.workspaceId.trim();
-  return (!tenantId || item.tenantId === tenantId) && (!workspaceId || item.workspaceId === workspaceId);
+  return (!tenantId || record.tenantId === tenantId) && (!workspaceId || record.workspaceId === workspaceId);
 }
 
 function setupGap(kind: ResourceLifecycleSetupGapKind): ResourceLifecycleSetupGap {

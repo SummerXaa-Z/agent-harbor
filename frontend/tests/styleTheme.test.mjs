@@ -22,6 +22,7 @@ const runtimeEvidenceViews = readFileSync(new URL("../src/components/RuntimeEvid
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const tenantOrganizationView = readFileSync(new URL("../src/components/TenantOrganizationView.tsx", import.meta.url), "utf8");
+const resourceLifecycle = readFileSync(new URL("../src/resourceLifecycle.ts", import.meta.url), "utf8");
 const resourceLifecycleActionPlanner = readExistingFile(new URL("../src/resourceLifecycleActionPlanner.ts", import.meta.url));
 const resourceLifecycleView = readFileSync(new URL("../src/components/ResourceLifecycleView.tsx", import.meta.url), "utf8");
 const productionJourney = readExistingFile(new URL("../src/productionJourney.ts", import.meta.url));
@@ -438,6 +439,15 @@ test("management mutation forms open from resource command modals", () => {
   assert.doesNotMatch(consoleViews, /createPolicyPanel=\{createPolicyPanel\}/);
   assert.doesNotMatch(styles, /\.action-modal-entry/);
   assert.doesNotMatch(styles, /\.action-disclosure-panel/);
+});
+
+test("resource lifecycle summary keeps inventory scoped to the active management scope", () => {
+  assert.match(resourceLifecycle, /const allItems = input\.agents\.map\(\(agent\) => buildResourceLifecycleItem\(agent, input\)\)/);
+  assert.match(resourceLifecycle, /const items = scopedResourceItems\(allItems, input\.scope\)/);
+  assert.match(resourceLifecycle, /function scopedResourceItems\(items: ResourceLifecycleItem\[], scope\?: ManagementScope\)/);
+  assert.match(resourceLifecycle, /tenantRecordInScope\(entitlement, input\.scope\)/);
+  assert.match(resourceLifecycle, /workspaceRecordInScope\(policy, input\.scope\)/);
+  assert.match(resourceLifecycle, /workspaceRecordInScope\(trace, input\.scope\)/);
 });
 
 test("agent registry provides search status filtering and a details entry", () => {

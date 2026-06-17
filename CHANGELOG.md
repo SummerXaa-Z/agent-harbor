@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Resource Management now scopes the main inventory, metrics, grants, routes, and runtime counts to the active tenant and workspace, preventing cross-tenant resources from appearing ready in the current workspace.
+- 资源管理页现在会把主资源列表、指标、授权、路由和运行计数限定在当前租户与工作区内，避免跨租户资源在当前工作区被误显示为就绪。
 - Resource Management readiness gaps now respect the active tenant and workspace scope, so resources in another tenant no longer make the current scope look ready.
 - 资源管理页的准备度缺口现在会跟随当前租户和工作区上下文计算，其他租户的资源不会再让当前范围误判为已就绪。
 - Resource Management Create Agent actions launched from readiness gaps now prefill safe caller or target Agent drafts without carrying endpoint or credential secrets.

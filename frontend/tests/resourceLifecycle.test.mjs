@@ -84,6 +84,24 @@ function instanceAssignment(overrides = {}) {
   };
 }
 
+function routePolicy(overrides = {}) {
+  return {
+    callerAgentId: "agt-caller",
+    createdAt: now,
+    effect: "allow",
+    id: "policy-support",
+    name: "Allow support route",
+    priority: 100,
+    routeType: "mcp",
+    status: "enabled",
+    targetAgentId: "agt-target",
+    tenantId: "tenant-support",
+    updatedAt: now,
+    workspaceId: "ws-support",
+    ...overrides
+  };
+}
+
 function trace(overrides = {}) {
   return {
     callerAgentId: "agt-caller",
@@ -244,6 +262,73 @@ test("resource lifecycle setup gaps honor the current management scope", () => {
   assert.deepEqual(scopedGaps.setupGaps.map((gap) => gap.kind), ["caller", "target"]);
   assert.deepEqual(scopedCallerOnly.setupGaps.map((gap) => gap.kind), ["target"]);
   assert.deepEqual(scopedReady.setupGaps, []);
+});
+
+test("resource lifecycle inventory and status counts honor the current management scope", () => {
+  const summary = buildResourceLifecycleSummary({
+    agents: [
+      agent({ channelType: "local", id: "agt-west-caller", name: "West Caller", tenantId: "tenant-west", workspaceId: "ws-west" }),
+      agent({ id: "agt-west-target", name: "West Target", tenantId: "tenant-west", workspaceId: "ws-west" }),
+      agent({ id: "agt-east-target", name: "East Target", tenantId: "tenant-east", workspaceId: "ws-east" })
+    ],
+    capabilities: [
+      capability({ id: "cap-west", targetId: "agt-west-target" }),
+      capability({ id: "cap-east", targetId: "agt-east-target" })
+    ],
+    instanceAssignments: [
+      instanceAssignment({
+        callerInstanceId: "agt-west-caller",
+        id: "ia-east",
+        tenantId: "tenant-east",
+        workspaceAssignmentId: "wsa-east",
+        workspaceId: "ws-east"
+      })
+    ],
+    routePolicies: [
+      routePolicy({
+        callerAgentId: "agt-west-caller",
+        id: "policy-east",
+        targetAgentId: "agt-west-target",
+        tenantId: "tenant-east",
+        workspaceId: "ws-east"
+      })
+    ],
+    scope: { tenantId: "tenant-west", workspaceId: "ws-west" },
+    tenantEntitlements: [
+      entitlement({
+        capabilityId: "cap-west",
+        id: "ent-east",
+        targetId: "agt-west-target",
+        tenantId: "tenant-east"
+      })
+    ],
+    traces: [
+      trace({
+        callerAgentId: "agt-west-caller",
+        id: "trace-east",
+        targetAgentId: "agt-west-target",
+        tenantId: "tenant-east",
+        workspaceId: "ws-east"
+      })
+    ],
+    workspaceAssignments: [
+      workspaceAssignment({
+        id: "wsa-east",
+        tenantEntitlementId: "ent-east",
+        tenantId: "tenant-east",
+        workspaceId: "ws-east"
+      })
+    ]
+  });
+
+  assert.equal(summary.totalResources, 2);
+  assert.equal(summary.callers, 1);
+  assert.equal(summary.mcpTargets, 1);
+  assert.deepEqual(summary.items.map((item) => item.id), ["agt-west-caller", "agt-west-target"]);
+  assert.deepEqual(summary.items.map((item) => item.grantCount), [0, 0]);
+  assert.deepEqual(summary.items.map((item) => item.runtimeDecisionCount), [0, 0]);
+  assert.deepEqual(summary.items.map((item) => item.status), ["needs_approval", "needs_approval"]);
+  assert.deepEqual(summary.setupGaps, []);
 });
 
 test("resource lifecycle treats approved but unverified resources as runtime follow-up", () => {

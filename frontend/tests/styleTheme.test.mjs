@@ -399,6 +399,9 @@ test("management mutation forms open from resource command modals", () => {
   assert.match(app, /context: ResourceLifecycleActionContext \| null/);
   assert.match(app, /const resourceActionContext = resourceActionRequest\.context/);
   assert.match(app, /openResourceActionModal\(plan\.modal, plan\.context\)/);
+  assert.match(app, /import \{ setupGapAgentDraft \} from "\.\/resourceSetupGapAgentDraft"/);
+  assert.match(app, /function openSetupGapCreateAgent\(kind: ResourceLifecycleSetupGapKind\)/);
+  assert.match(app, /management\.setAgentForm\(setupGapAgentDraft\(kind, t\)\)/);
   assert.match(app, /management\.setKeyForm\(\{[\s\S]*agentId: plan\.agentId/s);
   assert.match(app, /management\.setRotateForm\(\{[\s\S]*agentId: plan\.agentId/s);
   assert.match(app, /management\.setPolicyForm\(\{[\s\S]*callerAgentId: plan\.callerAgentId/s);
@@ -469,8 +472,9 @@ test("empty resource lifecycle uses inline guidance without duplicate empty card
   assert.match(resourceLifecycleView, /summary\.items\.map\(\(item\) => \(/);
   assert.match(resourceLifecycleView, /!hasResources \? \(\s*<div className="resource-lifecycle-empty-guidance" role="note">/);
   assert.match(resourceLifecycleView, /summary\.setupGaps\.length > 0/);
-  assert.match(resourceLifecycleView, /onCreateAgent\?: \(\) => void/);
+  assert.match(resourceLifecycleView, /onCreateAgent\?: \(kind: ResourceLifecycleSetupGapKind\) => void/);
   assert.match(resourceLifecycleView, /<ResourceLifecycleSetupGaps gaps=\{summary\.setupGaps\} onCreateAgent=\{onCreateAgent\} t=\{t\} \/>/);
+  assert.match(resourceLifecycleView, /onClick=\{\(\) => onCreateAgent\(gap\.kind\)\}/);
   assert.match(resourceLifecycleView, /className="resource-lifecycle-setup-gaps"/);
   assert.match(resourceLifecycleView, /className="resource-lifecycle-setup-gap is-action"/);
   assert.match(resourceLifecycleView, /t\("resource\.empty\.title"\)/);

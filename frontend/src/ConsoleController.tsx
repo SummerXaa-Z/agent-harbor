@@ -93,13 +93,15 @@ import {
 } from "./permissionWorkbenchPresenters";
 import {
   buildResourceLifecycleSummary,
-  type ResourceLifecycleItem
+  type ResourceLifecycleItem,
+  type ResourceLifecycleSetupGapKind
 } from "./resourceLifecycle";
 import {
   planResourceLifecycleAction,
   type ResourceLifecycleActionContext,
   type ResourceLifecycleModal
 } from "./resourceLifecycleActionPlanner";
+import { setupGapAgentDraft } from "./resourceSetupGapAgentDraft";
 import {
   deriveProductionJourney
 } from "./productionJourney";
@@ -589,6 +591,10 @@ export function ConsoleController() {
     scope,
     t
   });
+  function openSetupGapCreateAgent(kind: ResourceLifecycleSetupGapKind) {
+    management.setAgentForm(setupGapAgentDraft(kind, t));
+    openResourceActionModal("create_agent");
+  }
   const adminAccess = useAdminAccessController({
     adminKey,
     enabled: consoleAccessReady
@@ -2378,7 +2384,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           formatTenantName={(tenantId) => permissionTenantPathLabel(tenantId, tenants, t).primary}
           formatWorkspaceName={(workspaceId) => permissionWorkspaceDisplayName(workspaceId, agents, t)}
           lastRefreshedAt={lastRefresh}
-          onCreateAgent={() => openResourceActionModal("create_agent")}
+          onCreateAgent={openSetupGapCreateAgent}
           onResourceAction={handleResourceLifecycleAction}
           onRefresh={() => void refresh()}
           primaryActions={resourceLifecyclePrimaryActions}

@@ -13,6 +13,7 @@ import { permissionEntityDisplayName, type Tone, type Translator } from "../cons
 import type { ManagementMutationRefreshState } from "../managementMutationRefresh";
 import type {
   ResourceLifecycleItem,
+  ResourceLifecycleSetupGapKind,
   ResourceLifecycleSetupGap,
   ResourceLifecycleStatus,
   ResourceLifecycleSummary
@@ -35,7 +36,7 @@ export function ResourceLifecycleView({
   formatTenantName?: (tenantId: string) => string;
   formatWorkspaceName?: (workspaceId: string) => string;
   lastRefreshedAt?: Date;
-  onCreateAgent?: () => void;
+  onCreateAgent?: (kind: ResourceLifecycleSetupGapKind) => void;
   onResourceAction?: (item: ResourceLifecycleItem) => void;
   onRefresh?: () => void;
   primaryActions?: ReactNode;
@@ -163,7 +164,7 @@ function ResourceLifecycleSetupGaps({
   t
 }: {
   gaps: ResourceLifecycleSetupGap[];
-  onCreateAgent?: () => void;
+  onCreateAgent?: (kind: ResourceLifecycleSetupGapKind) => void;
   t: Translator;
 }) {
   return (
@@ -190,7 +191,7 @@ function ResourceLifecycleSetupGaps({
               <button
                 className="resource-lifecycle-setup-gap is-action"
                 key={gap.kind}
-                onClick={onCreateAgent}
+                onClick={() => onCreateAgent(gap.kind)}
                 type="button"
               >
                 {content}

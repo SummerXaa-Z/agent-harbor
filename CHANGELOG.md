@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Resource Management Create Agent actions launched from readiness gaps now prefill safe caller or target Agent drafts without carrying endpoint or credential secrets.
+- 资源管理页从准备度缺口打开“创建 Agent”时，现在会按调用方或目标服务预填安全草稿，并且不会携带 endpoint 或凭据密钥。
 - Resource Management readiness gaps for missing caller or target Agents now open the Create Agent dialog directly, keeping operators in the same workspace while completing access-query setup.
 - 资源管理页在缺少调用方或目标 Agent 时，现在可从访问查询准备度缺口直接打开“创建 Agent”表单，管理员无需离开当前工作区就能补齐配置。
 - Permission Changes now keeps the process sidebar gated to the current step: incomplete or unapplied changes show the same safe next action as the main workflow, and runtime validation copy waits until permissions are applied.

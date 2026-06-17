@@ -160,6 +160,46 @@ test("resource lifecycle directs incomplete MCP targets to the right next action
   assert.equal(summary.needsAttention, 4);
 });
 
+test("resource lifecycle exposes access query setup gaps", () => {
+  const targetOnly = buildResourceLifecycleSummary({
+    agents: [agent()],
+    capabilities: [],
+    instanceAssignments: [],
+    routePolicies: [],
+    tenantEntitlements: [],
+    traces: [],
+    workspaceAssignments: []
+  });
+  const callerOnly = buildResourceLifecycleSummary({
+    agents: [agent({ channelType: "local", id: "agt-caller", name: "Support Assistant" })],
+    capabilities: [],
+    instanceAssignments: [],
+    routePolicies: [],
+    tenantEntitlements: [],
+    traces: [],
+    workspaceAssignments: []
+  });
+  const queryReady = buildResourceLifecycleSummary({
+    agents: [
+      agent({ channelType: "local", id: "agt-caller", name: "Support Assistant" }),
+      agent()
+    ],
+    capabilities: [capability()],
+    instanceAssignments: [],
+    routePolicies: [],
+    tenantEntitlements: [],
+    traces: [],
+    workspaceAssignments: []
+  });
+
+  assert.deepEqual(targetOnly.setupGaps.map((gap) => gap.kind), ["caller", "capability"]);
+  assert.equal(targetOnly.setupGaps[0].titleKey, "resource.setupGap.caller.title");
+  assert.equal(targetOnly.setupGaps[1].actionHash, "#capabilities");
+  assert.deepEqual(callerOnly.setupGaps.map((gap) => gap.kind), ["target"]);
+  assert.equal(callerOnly.setupGaps[0].detailKey, "resource.setupGap.target.detail");
+  assert.deepEqual(queryReady.setupGaps, []);
+});
+
 test("resource lifecycle treats approved but unverified resources as runtime follow-up", () => {
   const summary = buildResourceLifecycleSummary({
     agents: [agent({ id: "agt-target" })],

@@ -135,6 +135,17 @@ test("resource action context copy is bilingual", () => {
     "resource.actionContext.scope",
     "resource.actionContext.title",
     "resource.detail.ready",
+    "resource.setupGap.capability.action",
+    "resource.setupGap.capability.detail",
+    "resource.setupGap.capability.title",
+    "resource.setupGap.caller.action",
+    "resource.setupGap.caller.detail",
+    "resource.setupGap.caller.title",
+    "resource.setupGap.detail",
+    "resource.setupGap.target.action",
+    "resource.setupGap.target.detail",
+    "resource.setupGap.target.title",
+    "resource.setupGap.title",
     "resource.selectedRow"
   ];
 

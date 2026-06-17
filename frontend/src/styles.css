@@ -1296,6 +1296,91 @@ button {
   line-height: 18px;
 }
 
+.resource-lifecycle-setup-gaps {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  padding: 11px 12px;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--radius-control);
+  background: var(--brand-soft);
+}
+
+.resource-lifecycle-setup-gaps-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.resource-lifecycle-setup-gaps-copy strong {
+  color: var(--brand-strong);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.resource-lifecycle-setup-gaps-copy span {
+  color: var(--brand-text);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.resource-lifecycle-setup-gaps-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.resource-lifecycle-setup-gap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.resource-lifecycle-setup-gap.is-link:hover {
+  border-color: var(--brand-border-strong);
+  background: var(--surface-raised);
+}
+
+.resource-lifecycle-setup-gap span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.resource-lifecycle-setup-gap strong {
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.resource-lifecycle-setup-gap small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-lifecycle-setup-gap em {
+  color: var(--brand-strong);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .resource-lifecycle-refresh-status {
   grid-column: 1 / -1;
   display: grid;
@@ -6846,6 +6931,10 @@ td code {
     border-left: 0;
   }
 
+  .resource-lifecycle-setup-gaps {
+    grid-template-columns: 1fr;
+  }
+
   .resource-lifecycle-context-panel {
     grid-template-columns: 1fr;
   }
@@ -7248,6 +7337,10 @@ td code {
   .ask-setup-blocker a {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .resource-lifecycle-setup-gap {
+    grid-template-columns: 1fr;
   }
 
   .access-decision-moved-body {

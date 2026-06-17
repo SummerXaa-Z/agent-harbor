@@ -81,6 +81,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 资源管理页现在把“创建 Agent”主动作和密钥、凭据、策略等维护动作分开呈现；资源操作弹窗使用独立表单，不再出现卡片套卡片。
 - Access Query now explains missing setup prerequisites inline and links operators to Resource Management or Tool Capabilities before they can run a live access query.
 - 访问查询现在会在缺少必要配置时直接说明原因，并在执行实时查询前引导管理员进入资源管理或工具能力页面补齐配置。
+- Resource Management now shows access-query readiness gaps when partial resources exist, making missing caller Agents, target services, or tool capabilities visible before operators return to Access Query.
+- 资源管理现在会在已有部分资源但仍无法访问查询时展示“访问查询准备度”缺口，让缺调用方 Agent、目标服务或工具能力的问题在返回访问查询前就能看清。
 - System self-check advanced settings and runtime details now use explicit button-like disclosure actions, making optional diagnostic panels easier to recognize without exposing their forms by default.
 - 系统自检页的高级配置和运行明细现在使用更明确的按钮式展开入口，默认不暴露表单，同时保留排查能力。
 - System self-check now shows business-readable tenant and workspace labels in the top context strip while preserving raw scope IDs in hover titles.

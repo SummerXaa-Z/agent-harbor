@@ -11,7 +11,12 @@ import {
 
 import { permissionEntityDisplayName, type Tone, type Translator } from "../consolePresenters";
 import type { ManagementMutationRefreshState } from "../managementMutationRefresh";
-import type { ResourceLifecycleItem, ResourceLifecycleStatus, ResourceLifecycleSummary } from "../resourceLifecycle";
+import type {
+  ResourceLifecycleItem,
+  ResourceLifecycleSetupGap,
+  ResourceLifecycleStatus,
+  ResourceLifecycleSummary
+} from "../resourceLifecycle";
 import { Badge } from "./ui";
 
 export function ResourceLifecycleView({
@@ -98,6 +103,9 @@ export function ResourceLifecycleView({
               <span>{t("resource.empty.detail")}</span>
             </div>
           ) : null}
+          {hasResources && summary.setupGaps.length > 0 ? (
+            <ResourceLifecycleSetupGaps gaps={summary.setupGaps} t={t} />
+          ) : null}
           <ResourceLifecycleRefreshStatus
             lastRefreshedAt={lastRefreshedAt}
             onRefresh={onRefresh}
@@ -143,6 +151,45 @@ export function ResourceLifecycleView({
           ))}
         </section>
       ) : null}
+    </div>
+  );
+}
+
+function ResourceLifecycleSetupGaps({
+  gaps,
+  t
+}: {
+  gaps: ResourceLifecycleSetupGap[];
+  t: Translator;
+}) {
+  return (
+    <div className="resource-lifecycle-setup-gaps" role="note">
+      <div className="resource-lifecycle-setup-gaps-copy">
+        <strong>{t("resource.setupGap.title")}</strong>
+        <span>{t("resource.setupGap.detail")}</span>
+      </div>
+      <div className="resource-lifecycle-setup-gaps-list">
+        {gaps.map((gap) => {
+          const content = (
+            <>
+              <span>
+                <strong>{t(gap.titleKey)}</strong>
+                <small>{t(gap.detailKey)}</small>
+              </span>
+              <em>{t(gap.actionKey)}</em>
+            </>
+          );
+          return gap.actionHash === "#registry" ? (
+            <div className="resource-lifecycle-setup-gap" key={gap.kind}>
+              {content}
+            </div>
+          ) : (
+            <a className="resource-lifecycle-setup-gap is-link" href={gap.actionHash} key={gap.kind}>
+              {content}
+            </a>
+          );
+        })}
+      </div>
     </div>
   );
 }

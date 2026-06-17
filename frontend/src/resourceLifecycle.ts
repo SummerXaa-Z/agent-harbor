@@ -9,6 +9,7 @@ import type {
 } from "./types";
 
 export type ResourceLifecycleKind = "caller" | "mcp_target" | "agent";
+export type ResourceLifecycleSetupGapKind = "caller" | "target" | "capability";
 export type ResourceLifecycleActionKind =
   | "create_key"
   | "create_policy"
@@ -47,6 +48,14 @@ export interface ResourceLifecycleItem {
   workspaceId: string;
 }
 
+export interface ResourceLifecycleSetupGap {
+  actionHash: ResourceLifecycleNextActionHash;
+  actionKey: string;
+  detailKey: string;
+  kind: ResourceLifecycleSetupGapKind;
+  titleKey: string;
+}
+
 export interface ResourceLifecycleSummary {
   activeResources: number;
   callers: number;
@@ -54,6 +63,7 @@ export interface ResourceLifecycleSummary {
   mcpTargets: number;
   needsAttention: number;
   readyResources: number;
+  setupGaps: ResourceLifecycleSetupGap[];
   totalResources: number;
 }
 
@@ -69,6 +79,7 @@ export interface ResourceLifecycleInput {
 
 export function buildResourceLifecycleSummary(input: ResourceLifecycleInput): ResourceLifecycleSummary {
   const items = input.agents.map((agent) => buildResourceLifecycleItem(agent, input));
+  const setupGaps = resourceSetupGaps(items, input);
 
   return {
     activeResources: items.filter((item) => item.status !== "disabled").length,
@@ -77,6 +88,7 @@ export function buildResourceLifecycleSummary(input: ResourceLifecycleInput): Re
     mcpTargets: items.filter((item) => item.kind === "mcp_target").length,
     needsAttention: items.filter((item) => item.status !== "ready").length,
     readyResources: items.filter((item) => item.status === "ready").length,
+    setupGaps,
     totalResources: items.length
   };
 }
@@ -234,4 +246,57 @@ function nextActionHash(status: ResourceLifecycleStatus): ResourceLifecycleNextA
     ready: "#traces"
   };
   return hashes[status];
+}
+
+function resourceSetupGaps(
+  items: ResourceLifecycleItem[],
+  input: ResourceLifecycleInput
+): ResourceLifecycleSetupGap[] {
+  const activeItems = items.filter((item) => item.status !== "disabled");
+  const activeTargetIds = new Set(
+    activeItems
+      .filter((item) => item.kind !== "caller")
+      .map((item) => item.id)
+  );
+  const hasCaller = activeItems.some((item) => item.kind === "caller");
+  const hasTarget = activeTargetIds.size > 0;
+  const hasTargetCapability = input.capabilities.some((capability) => activeTargetIds.has(capability.targetId));
+  const gaps: ResourceLifecycleSetupGap[] = [];
+
+  if (!hasCaller) {
+    gaps.push(setupGap("caller"));
+  }
+  if (!hasTarget) {
+    gaps.push(setupGap("target"));
+  } else if (!hasTargetCapability) {
+    gaps.push(setupGap("capability"));
+  }
+  return gaps;
+}
+
+function setupGap(kind: ResourceLifecycleSetupGapKind): ResourceLifecycleSetupGap {
+  const gaps: Record<ResourceLifecycleSetupGapKind, ResourceLifecycleSetupGap> = {
+    caller: {
+      actionHash: "#registry",
+      actionKey: "resource.setupGap.caller.action",
+      detailKey: "resource.setupGap.caller.detail",
+      kind: "caller",
+      titleKey: "resource.setupGap.caller.title"
+    },
+    capability: {
+      actionHash: "#capabilities",
+      actionKey: "resource.setupGap.capability.action",
+      detailKey: "resource.setupGap.capability.detail",
+      kind: "capability",
+      titleKey: "resource.setupGap.capability.title"
+    },
+    target: {
+      actionHash: "#registry",
+      actionKey: "resource.setupGap.target.action",
+      detailKey: "resource.setupGap.target.detail",
+      kind: "target",
+      titleKey: "resource.setupGap.target.title"
+    }
+  };
+  return gaps[kind];
 }

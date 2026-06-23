@@ -432,6 +432,24 @@ func TestDeploymentConfigPreflightBlocksShortProductionAdminIdentityKey(t *testi
 	}
 }
 
+func TestDeploymentConfigPreflightBlocksSharedAdminKeyMatchingNamedIdentity(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":  "production",
+		"AGENT_HARBOR_ADMIN_KEY":        strongProductionAdminKey,
+		"AGENT_HARBOR_ADMIN_IDENTITIES": "platform=" + strongProductionAdminKey + "|role=platform_admin",
+		"AGENT_HARBOR_SESSION_SECRET":   strongProductionSessionSecret,
+	})
+	if err == nil {
+		t.Fatalf("expected shared admin key matching a named identity key to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ADMIN_KEY") || !strings.Contains(got, "AGENT_HARBOR_ADMIN_IDENTITIES") {
+		t.Fatalf("expected production config error to name conflicting admin key settings, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "admin_key_uniqueness", "blocking", "failed") {
+		t.Fatalf("expected admin key uniqueness failure, got %#v", checks)
+	}
+}
+
 func TestDeploymentConfigPreflightAllowsSafeProductionConfig(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
 	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)

@@ -263,6 +263,10 @@ if port_in_use "$((UNAUTH_API_PORT + 5))"; then
 	echo "production preflight before storage check API port $((UNAUTH_API_PORT + 5)) is already in use" >&2
 	exit 1
 fi
+if port_in_use "$((UNAUTH_API_PORT + 6))"; then
+	echo "production admin key conflict check API port $((UNAUTH_API_PORT + 6)) is already in use" >&2
+	exit 1
+fi
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT_DIR"
@@ -359,6 +363,31 @@ if ! grep -q "AGENT_HARBOR_CORS_ORIGINS" "$LOG_DIR/api-prod-invalid-cors.log"; t
 	exit 1
 fi
 echo "production deployment preflight rejects invalid CORS origins"
+
+AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 6))" \
+AGENT_HARBOR_DEPLOYMENT_MODE=production \
+AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \
+AGENT_HARBOR_ADMIN_IDENTITIES="platform=${ADMIN_KEY}|role=platform_admin" \
+AGENT_HARBOR_SESSION_SECRET=production-hardening-session-secret \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL= \
+AGENT_HARBOR_CREDENTIAL_KEY= \
+	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-admin-key-conflict.log" 2>&1 && {
+	echo "expected production mode to reject shared admin key matching a named identity key" >&2
+	show_logs
+	exit 1
+}
+if ! grep -q "AGENT_HARBOR_ADMIN_KEY" "$LOG_DIR/api-prod-admin-key-conflict.log" || ! grep -q "AGENT_HARBOR_ADMIN_IDENTITIES" "$LOG_DIR/api-prod-admin-key-conflict.log"; then
+	echo "production admin key conflict failure did not mention both admin key settings" >&2
+	show_logs
+	exit 1
+fi
+if grep -q "$ADMIN_KEY" "$LOG_DIR/api-prod-admin-key-conflict.log"; then
+	echo "production admin key conflict failure leaked the configured admin key" >&2
+	show_logs
+	exit 1
+fi
+echo "production deployment preflight rejects shared admin key matching named identity"
 
 AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 5))" \
 AGENT_HARBOR_DEPLOYMENT_MODE=production \

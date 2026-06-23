@@ -200,6 +200,7 @@ func validateDeploymentConfig(mode string, env map[string]string) []deploymentCo
 			"admin authentication is configured",
 		),
 		productionAdminKeyStrengthCheck(env),
+		productionAdminKeyUniquenessCheck(env),
 		productionCORSOriginsCheck(env),
 	)
 
@@ -281,6 +282,27 @@ func productionAdminKeyStrengthCheck(env map[string]string) deploymentConfigChec
 	if len(failures) > 0 {
 		check.Status = "failed"
 		check.Message = strings.Join(failures, "; ")
+	}
+	return check
+}
+
+func productionAdminKeyUniquenessCheck(env map[string]string) deploymentConfigCheck {
+	check := deploymentConfigCheck{
+		Code:     "admin_key_uniqueness",
+		Severity: "blocking",
+		Status:   "passed",
+		Message:  "shared and named bootstrap admin keys are distinct",
+	}
+	sharedKey := strings.TrimSpace(env["AGENT_HARBOR_ADMIN_KEY"])
+	if sharedKey == "" {
+		return check
+	}
+	for _, identityKey := range adminIdentityKeysFromConfig(env["AGENT_HARBOR_ADMIN_IDENTITIES"]) {
+		if identityKey == sharedKey {
+			check.Status = "failed"
+			check.Message = "AGENT_HARBOR_ADMIN_KEY must not match any AGENT_HARBOR_ADMIN_IDENTITIES key"
+			return check
+		}
 	}
 	return check
 }

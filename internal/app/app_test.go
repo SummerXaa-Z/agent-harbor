@@ -210,6 +210,28 @@ func TestNewProductionModeAllowsExplicitCORSOrigins(t *testing.T) {
 	}
 }
 
+func TestNewRejectsInvalidConfiguredCORSOrigin(t *testing.T) {
+	for _, raw := range []string{
+		"*",
+		"console.example.com",
+		"https://console.example.com:bad",
+		"https://console.example.com/path",
+		"ftp://console.example.com",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv("AGENT_HARBOR_CORS_ORIGINS", raw)
+
+			_, err := New(context.Background())
+			if err == nil {
+				t.Fatalf("expected invalid configured CORS origin %q to fail", raw)
+			}
+			if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_CORS_ORIGINS") {
+				t.Fatalf("expected CORS origin error to name env var, got %q", got)
+			}
+		})
+	}
+}
+
 func TestPrivateUpstreamsEnvRejectsInvalidBoolean(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS", "sometimes")
 
@@ -405,6 +427,24 @@ func TestDeploymentConfigPreflightAllowsSafeProductionConfig(t *testing.T) {
 		t.Fatalf("safe production config should start: %v", err)
 	}
 	defer app.Close()
+}
+
+func TestDeploymentConfigPreflightBlocksInvalidProductionCORSOrigins(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
+		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
+		"AGENT_HARBOR_CORS_ORIGINS":    "*",
+	})
+	if err == nil {
+		t.Fatalf("expected invalid production CORS origins to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_CORS_ORIGINS") {
+		t.Fatalf("expected production config error to name CORS origins, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "cors_origins_valid", "blocking", "failed") {
+		t.Fatalf("expected CORS origin validation failure, got %#v", checks)
+	}
 }
 
 func TestDeploymentConfigPreflightWarnsForDerivedSessionSecret(t *testing.T) {

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- `AGENT_HARBOR_CORS_ORIGINS` now rejects wildcard, path-bearing, non-HTTP, or otherwise invalid browser origins, and production preflight reports invalid CORS origin configuration as a blocking startup error.
+- `AGENT_HARBOR_CORS_ORIGINS` 现在会拒绝通配、带路径、非 HTTP 或其他无效浏览器 Origin；生产预检会把无效 CORS 来源配置作为启动阻断错误。
 - Web-console session cookies now set `Secure` for direct TLS requests or trusted local/private proxy requests carrying `X-Forwarded-Proto: https` or `Forwarded: proto=https`, while ignoring spoofed forwarded scheme headers from public clients.
 - Web 控制台会话 Cookie 现在会在真实 TLS 请求，或可信本机/私网代理携带 `X-Forwarded-Proto: https` 或 `Forwarded: proto=https` 时设置 `Secure`，同时忽略公网客户端伪造的转发协议信息。
 - PostgreSQL credential encryption keys now reject repeated, low-diversity, and common sample values instead of accepting any 32-byte string.

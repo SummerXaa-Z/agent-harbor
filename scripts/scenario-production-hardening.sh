@@ -248,7 +248,15 @@ if port_in_use "$((UNAUTH_API_PORT + 1))"; then
 	exit 1
 fi
 if port_in_use "$((UNAUTH_API_PORT + 2))"; then
-	echo "production safe config check API port $((UNAUTH_API_PORT + 2)) is already in use" >&2
+	echo "production weak session secret check API port $((UNAUTH_API_PORT + 2)) is already in use" >&2
+	exit 1
+fi
+if port_in_use "$((UNAUTH_API_PORT + 3))"; then
+	echo "production invalid CORS check API port $((UNAUTH_API_PORT + 3)) is already in use" >&2
+	exit 1
+fi
+if port_in_use "$((UNAUTH_API_PORT + 4))"; then
+	echo "production safe config check API port $((UNAUTH_API_PORT + 4)) is already in use" >&2
 	exit 1
 fi
 
@@ -332,13 +340,33 @@ AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 3))" \
 AGENT_HARBOR_DEPLOYMENT_MODE=production \
 AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \
 AGENT_HARBOR_SESSION_SECRET=production-hardening-session-secret \
+AGENT_HARBOR_CORS_ORIGINS="*" \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL= \
+AGENT_HARBOR_CREDENTIAL_KEY= \
+	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-invalid-cors.log" 2>&1 && {
+	echo "expected production mode to reject invalid AGENT_HARBOR_CORS_ORIGINS" >&2
+	show_logs
+	exit 1
+}
+if ! grep -q "AGENT_HARBOR_CORS_ORIGINS" "$LOG_DIR/api-prod-invalid-cors.log"; then
+	echo "production invalid CORS failure did not mention AGENT_HARBOR_CORS_ORIGINS" >&2
+	show_logs
+	exit 1
+fi
+echo "production deployment preflight rejects invalid CORS origins"
+
+AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 4))" \
+AGENT_HARBOR_DEPLOYMENT_MODE=production \
+AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \
+AGENT_HARBOR_SESSION_SECRET=production-hardening-session-secret \
 AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
 AGENT_HARBOR_DATABASE_URL= \
 AGENT_HARBOR_CREDENTIAL_KEY= \
 	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-safe.log" 2>&1 &
 PROD_SAFE_PID="$!"
 PIDS+=("$PROD_SAFE_PID")
-wait_http "Production config check API" "http://${API_HOST}:$((UNAUTH_API_PORT + 3))/healthz"
+wait_http "Production config check API" "http://${API_HOST}:$((UNAUTH_API_PORT + 4))/healthz"
 kill "$PROD_SAFE_PID" >/dev/null 2>&1 || true
 wait "$PROD_SAFE_PID" >/dev/null 2>&1 || true
 echo "production deployment preflight accepts safe minimal config"

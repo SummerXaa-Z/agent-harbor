@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -70,6 +71,11 @@ func New(ctx context.Context) (*App, error) {
 		closeFn()
 		return nil, err
 	}
+	corsOrigins, err := corsOriginsFromEnv()
+	if err != nil {
+		closeFn()
+		return nil, err
+	}
 	deploymentEnv := deploymentEnvFromOS()
 	deploymentMode, err := deploymentModeFromEnv(deploymentEnv)
 	if err != nil {
@@ -91,7 +97,7 @@ func New(ctx context.Context) (*App, error) {
 			httpapi.WithUnauthenticatedAdminAllowed(allowUnauthenticatedAdmin),
 			httpapi.WithPrivateUpstreamsAllowed(allowPrivateUpstreams),
 			httpapi.WithPermissionPackageApprovalReviewers(approvalReviewers),
-			httpapi.WithCORSOrigins(corsOriginsFromEnv()),
+			httpapi.WithCORSOrigins(corsOrigins),
 			httpapi.WithDefaultLocalCORSOrigins(deploymentMode != "production"),
 		),
 		close: closeFn,
@@ -115,6 +121,7 @@ func deploymentEnvFromOS() map[string]string {
 		"AGENT_HARBOR_ADMIN_IDENTITIES",
 		"AGENT_HARBOR_SESSION_SECRET",
 		"AGENT_HARBOR_DATABASE_URL",
+		"AGENT_HARBOR_CORS_ORIGINS",
 	}
 	env := make(map[string]string, len(keys))
 	for _, key := range keys {
@@ -187,6 +194,7 @@ func validateDeploymentConfig(mode string, env map[string]string) []deploymentCo
 			"admin authentication is configured",
 		),
 		productionAdminKeyStrengthCheck(env),
+		productionCORSOriginsCheck(env),
 	)
 
 	if strings.TrimSpace(env["AGENT_HARBOR_SESSION_SECRET"]) == "" {
@@ -368,10 +376,31 @@ func unauthenticatedAdminAllowedFromEnv() (bool, error) {
 	return allowed, nil
 }
 
-func corsOriginsFromEnv() []string {
-	raw := strings.TrimSpace(os.Getenv("AGENT_HARBOR_CORS_ORIGINS"))
+func productionCORSOriginsCheck(env map[string]string) deploymentConfigCheck {
+	if _, err := corsOriginsFromRaw(env["AGENT_HARBOR_CORS_ORIGINS"]); err != nil {
+		return deploymentConfigCheck{
+			Code:     "cors_origins_valid",
+			Severity: "blocking",
+			Status:   "failed",
+			Message:  err.Error(),
+		}
+	}
+	return deploymentConfigCheck{
+		Code:     "cors_origins_valid",
+		Severity: "blocking",
+		Status:   "passed",
+		Message:  "CORS origins are valid",
+	}
+}
+
+func corsOriginsFromEnv() ([]string, error) {
+	return corsOriginsFromRaw(os.Getenv("AGENT_HARBOR_CORS_ORIGINS"))
+}
+
+func corsOriginsFromRaw(raw string) ([]string, error) {
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return nil
+		return nil, nil
 	}
 	entries := strings.FieldsFunc(raw, func(r rune) bool {
 		return r == ',' || r == ';'
@@ -382,9 +411,29 @@ func corsOriginsFromEnv() []string {
 		if origin == "" {
 			continue
 		}
+		if err := validateCORSOrigin(origin); err != nil {
+			return nil, err
+		}
 		origins = append(origins, origin)
 	}
-	return origins
+	return origins, nil
+}
+
+func validateCORSOrigin(origin string) error {
+	if strings.Contains(origin, "*") {
+		return fmt.Errorf("AGENT_HARBOR_CORS_ORIGINS must contain explicit http or https origins, got %q", origin)
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("AGENT_HARBOR_CORS_ORIGINS entries must be absolute http or https origins, got %q", origin)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("AGENT_HARBOR_CORS_ORIGINS entries must use http or https, got %q", origin)
+	}
+	if parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("AGENT_HARBOR_CORS_ORIGINS entries must not include user info, path, query, or fragment, got %q", origin)
+	}
+	return nil
 }
 
 func adminIdentitiesFromEnv() ([]httpapi.AdminIdentity, error) {

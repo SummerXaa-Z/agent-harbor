@@ -270,7 +270,7 @@ func requiresCSRFProtection(method string) bool {
 func (s *Server) consoleLoginClientKey(r *http.Request) string {
 	remoteHost := consoleLoginRemoteHost(r)
 	forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
-	if trustedConsoleForwardedForSource(remoteHost) {
+	if trustedConsoleForwardedHeaderSource(remoteHost) {
 		for _, part := range strings.Split(forwardedFor, ",") {
 			if candidate := strings.TrimSpace(part); candidate != "" {
 				return candidate
@@ -299,7 +299,7 @@ func consoleLoginRemoteHost(r *http.Request) string {
 	return remoteAddr
 }
 
-func trustedConsoleForwardedForSource(remoteHost string) bool {
+func trustedConsoleForwardedHeaderSource(remoteHost string) bool {
 	ip := net.ParseIP(strings.TrimSpace(remoteHost))
 	return ip != nil && (ip.IsLoopback() || ip.IsPrivate())
 }
@@ -387,5 +387,34 @@ func isHTTPSRequest(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	if !trustedConsoleForwardedHeaderSource(consoleLoginRemoteHost(r)) {
+		return false
+	}
+	if forwardedProtoHeaderIsHTTPS(r.Header.Get("X-Forwarded-Proto")) {
+		return true
+	}
+	return forwardedHeaderProtoIsHTTPS(r.Header.Get("Forwarded"))
+}
+
+func forwardedProtoHeaderIsHTTPS(header string) bool {
+	for _, part := range strings.Split(header, ",") {
+		if candidate := strings.TrimSpace(part); candidate != "" {
+			return strings.EqualFold(candidate, "https")
+		}
+	}
+	return false
+}
+
+func forwardedHeaderProtoIsHTTPS(header string) bool {
+	for _, entry := range strings.Split(header, ",") {
+		for _, param := range strings.Split(entry, ";") {
+			key, value, ok := strings.Cut(strings.TrimSpace(param), "=")
+			if !ok || !strings.EqualFold(strings.TrimSpace(key), "proto") {
+				continue
+			}
+			value = strings.Trim(strings.TrimSpace(value), `"`)
+			return strings.EqualFold(value, "https")
+		}
+	}
+	return false
 }

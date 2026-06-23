@@ -155,6 +155,39 @@ assert_body_contains() {
   fi
 }
 
+assert_trusted_forwarded_login_sets_secure_cookie() {
+	local headers
+	local body
+	local status
+	headers="$(mktemp)"
+	body="$(mktemp)"
+	if ! status="$(curl -sS -D "$headers" -o "$body" -w "%{http_code}" \
+		-X POST "$BASE_URL/api/v1/auth/login" \
+		-H "Content-Type: application/json" \
+		-H "X-Forwarded-Proto: https" \
+		-d "{\"adminKey\":\"$ADMIN_KEY\"}")"; then
+		rm -f "$headers" "$body"
+		echo "curl failed for trusted forwarded console login" >&2
+		show_logs
+		exit 1
+	fi
+	if [[ "$status" != "200" ]]; then
+		echo "expected trusted forwarded console login status 200, got $status" >&2
+		cat "$body" >&2
+		rm -f "$headers" "$body"
+		show_logs
+		exit 1
+	fi
+	if ! tr -d '\r' < "$headers" | grep -qi '^Set-Cookie: agent_harbor_session=.*; Secure'; then
+		echo "trusted forwarded console login did not set a Secure session cookie" >&2
+		cat "$headers" >&2
+		rm -f "$headers" "$body"
+		show_logs
+		exit 1
+	fi
+	rm -f "$headers" "$body"
+}
+
 json_body() {
   python3 - "$@" <<'PY'
 import json
@@ -329,6 +362,9 @@ wait_http "API" "$BASE_URL/healthz"
 request GET "/healthz" none
 expect_status 200 "public health check"
 echo "public health check verified"
+
+assert_trusted_forwarded_login_sets_secure_cookie
+echo "trusted forwarded HTTPS console login sets Secure session cookie"
 
 request POST "/api/v1/agents" none "$(json_body local-agent "$RUN_ID")"
 expect_status 401 "management endpoint without admin key"

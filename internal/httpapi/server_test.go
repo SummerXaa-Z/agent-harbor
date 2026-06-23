@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -1040,6 +1041,52 @@ func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	clearedCookies := logout.Result().Cookies()
 	if len(clearedCookies) != 1 || clearedCookies[0].Name != "agent_harbor_session" || clearedCookies[0].MaxAge != -1 {
 		t.Fatalf("logout should clear the session cookie, got %#v", clearedCookies)
+	}
+}
+
+func TestConsoleAuthSessionCookieSecureFlagUsesTLSAndTrustedForwardedProto(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	directTLS := requestLoginWithTransport(t, router, "", "", true)
+	if directTLS.Code != http.StatusOK {
+		t.Fatalf("TLS login should succeed, got %d body=%s", directTLS.Code, directTLS.Body.String())
+	}
+	tlsCookies := directTLS.Result().Cookies()
+	if len(tlsCookies) != 1 || !tlsCookies[0].Secure {
+		t.Fatalf("TLS login should set a Secure session cookie, got %#v", tlsCookies)
+	}
+
+	proxiedHTTPS := requestLoginWithTransport(t, router, "127.0.0.1:4000", "https", false)
+	if proxiedHTTPS.Code != http.StatusOK {
+		t.Fatalf("trusted forwarded HTTPS login should succeed, got %d body=%s", proxiedHTTPS.Code, proxiedHTTPS.Body.String())
+	}
+	proxiedCookies := proxiedHTTPS.Result().Cookies()
+	if len(proxiedCookies) != 1 || !proxiedCookies[0].Secure {
+		t.Fatalf("trusted forwarded HTTPS login should set a Secure session cookie, got %#v", proxiedCookies)
+	}
+
+	proxiedForwarded := requestLoginWithTransportHeaders(t, router, "10.0.0.10:4000", map[string]string{
+		"Forwarded": `for=203.0.113.8;proto=https;host=console.example.com`,
+	}, false)
+	if proxiedForwarded.Code != http.StatusOK {
+		t.Fatalf("trusted Forwarded proto login should succeed, got %d body=%s", proxiedForwarded.Code, proxiedForwarded.Body.String())
+	}
+	forwardedCookies := proxiedForwarded.Result().Cookies()
+	if len(forwardedCookies) != 1 || !forwardedCookies[0].Secure {
+		t.Fatalf("trusted Forwarded proto login should set a Secure session cookie, got %#v", forwardedCookies)
+	}
+}
+
+func TestConsoleAuthSessionCookieSecureFlagIgnoresUntrustedForwardedProto(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	login := requestLoginWithTransport(t, router, "198.51.100.20:4000", "https", false)
+	if login.Code != http.StatusOK {
+		t.Fatalf("login should succeed even when forwarded proto is untrusted, got %d body=%s", login.Code, login.Body.String())
+	}
+	cookies := login.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Secure {
+		t.Fatalf("public clients must not force Secure session cookies by spoofing X-Forwarded-Proto, got %#v", cookies)
 	}
 }
 
@@ -7021,6 +7068,29 @@ func requestLoginWithClientHeaders(t *testing.T, router http.Handler, remoteAddr
 	req.RemoteAddr = remoteAddr
 	if forwardedFor != "" {
 		req.Header.Set("X-Forwarded-For", forwardedFor)
+	}
+	router.ServeHTTP(rec, req)
+	return rec
+}
+
+func requestLoginWithTransport(t *testing.T, router http.Handler, remoteAddr string, forwardedProto string, tlsRequest bool) *httptest.ResponseRecorder {
+	t.Helper()
+	headers := map[string]string{}
+	if forwardedProto != "" {
+		headers["X-Forwarded-Proto"] = forwardedProto
+	}
+	return requestLoginWithTransportHeaders(t, router, remoteAddr, headers, tlsRequest)
+}
+
+func requestLoginWithTransportHeaders(t *testing.T, router http.Handler, remoteAddr string, headers map[string]string, tlsRequest bool) *httptest.ResponseRecorder {
+	t.Helper()
+	rec, req := buildRequest(t, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "test-admin"}, "", "", "")
+	req.RemoteAddr = remoteAddr
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+	if tlsRequest {
+		req.TLS = &tls.ConnectionState{}
 	}
 	router.ServeHTTP(rec, req)
 	return rec

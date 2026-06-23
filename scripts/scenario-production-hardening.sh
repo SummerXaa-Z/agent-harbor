@@ -267,6 +267,10 @@ if port_in_use "$((UNAUTH_API_PORT + 6))"; then
 	echo "production admin key conflict check API port $((UNAUTH_API_PORT + 6)) is already in use" >&2
 	exit 1
 fi
+if port_in_use "$((UNAUTH_API_PORT + 7))"; then
+	echo "production missing session secret check API port $((UNAUTH_API_PORT + 7)) is already in use" >&2
+	exit 1
+fi
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT_DIR"
@@ -324,6 +328,24 @@ if ! grep -q "AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN" "$LOG_DIR/api-prod-unsaf
 	exit 1
 fi
 echo "production deployment preflight rejects unauthenticated admin flag"
+
+AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 7))" \
+AGENT_HARBOR_DEPLOYMENT_MODE=production \
+AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL= \
+AGENT_HARBOR_CREDENTIAL_KEY= \
+	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-missing-session-secret.log" 2>&1 && {
+	echo "expected production mode to require AGENT_HARBOR_SESSION_SECRET" >&2
+	show_logs
+	exit 1
+}
+if ! grep -q "AGENT_HARBOR_SESSION_SECRET" "$LOG_DIR/api-prod-missing-session-secret.log"; then
+	echo "production missing session secret failure did not mention AGENT_HARBOR_SESSION_SECRET" >&2
+	show_logs
+	exit 1
+fi
+echo "production deployment preflight requires explicit session secret"
 
 AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 2))" \
 AGENT_HARBOR_DEPLOYMENT_MODE=production \

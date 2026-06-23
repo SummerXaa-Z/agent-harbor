@@ -16,8 +16,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web 控制台会话 Cookie 现在会在真实 TLS 请求，或可信本机/私网代理携带 `X-Forwarded-Proto: https` 或 `Forwarded: proto=https` 时设置 `Secure`，同时忽略公网客户端伪造的转发协议信息。
 - PostgreSQL credential encryption keys now reject repeated, low-diversity, and common sample values instead of accepting any 32-byte string.
 - PostgreSQL 凭据加密密钥现在会拒绝重复、低多样性和常见示例值，不再接受任意 32 字节字符串。
-- Production deployment mode now blocks explicit short or common weak `AGENT_HARBOR_SESSION_SECRET` values before startup.
-- 生产部署模式现在会在启动前阻断显式配置的过短或常见弱值 `AGENT_HARBOR_SESSION_SECRET`。
+- Production deployment mode now requires `AGENT_HARBOR_SESSION_SECRET` and blocks missing, short, or common weak values before startup.
+- 生产部署模式现在要求配置 `AGENT_HARBOR_SESSION_SECRET`，并会在启动前阻断缺失、过短或常见弱值。
 - Production deployment mode now blocks short or common weak bootstrap admin keys configured through `AGENT_HARBOR_ADMIN_KEY` or `AGENT_HARBOR_ADMIN_IDENTITIES`.
 - 生产部署模式现在会阻断通过 `AGENT_HARBOR_ADMIN_KEY` 或 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置的过短或常见弱值引导管理员密钥。
 - Production deployment mode now blocks `AGENT_HARBOR_ADMIN_KEY` when it matches any `AGENT_HARBOR_ADMIN_IDENTITIES` key, preventing ambiguous bootstrap administrator identity resolution.

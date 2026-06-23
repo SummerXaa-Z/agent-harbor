@@ -207,14 +207,14 @@ func validateDeploymentConfig(mode string, env map[string]string) []deploymentCo
 	if strings.TrimSpace(env["AGENT_HARBOR_SESSION_SECRET"]) == "" {
 		checks = append(checks, deploymentConfigCheck{
 			Code:     "session_secret_explicit",
-			Severity: "warning",
-			Status:   "warning",
-			Message:  "AGENT_HARBOR_SESSION_SECRET should be set to a stable high-entropy value in production",
+			Severity: "blocking",
+			Status:   "failed",
+			Message:  "AGENT_HARBOR_SESSION_SECRET is required in production",
 		})
 	} else {
 		checks = append(checks, deploymentConfigCheck{
 			Code:     "session_secret_explicit",
-			Severity: "warning",
+			Severity: "blocking",
 			Status:   "passed",
 			Message:  "AGENT_HARBOR_SESSION_SECRET is explicitly configured",
 		})

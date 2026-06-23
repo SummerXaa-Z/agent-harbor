@@ -480,16 +480,19 @@ func TestDeploymentConfigPreflightBlocksInvalidProductionCORSOrigins(t *testing.
 	}
 }
 
-func TestDeploymentConfigPreflightWarnsForDerivedSessionSecret(t *testing.T) {
+func TestDeploymentConfigPreflightRequiresProductionSessionSecret(t *testing.T) {
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
 		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
 	})
-	if err != nil {
-		t.Fatalf("preflight should warn, not fail: %v", err)
+	if err == nil {
+		t.Fatalf("expected missing production session secret to fail")
 	}
-	if !hasDeploymentCheck(checks, "session_secret_explicit", "warning", "warning") {
-		t.Fatalf("expected session secret warning, got %#v", checks)
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_SESSION_SECRET") {
+		t.Fatalf("expected production config error to name missing session secret, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "session_secret_explicit", "blocking", "failed") {
+		t.Fatalf("expected session secret explicit failure, got %#v", checks)
 	}
 }
 

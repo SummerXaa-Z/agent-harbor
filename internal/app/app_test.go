@@ -158,55 +158,28 @@ func TestNewAllowsConfiguredCORSOriginsFromEnv(t *testing.T) {
 	}
 }
 
-func TestNewProductionModeRequiresExplicitCORSOrigins(t *testing.T) {
-	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
-	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
-	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
-
-	app, err := New(context.Background())
-	if err != nil {
-		t.Fatalf("new app: %v", err)
+func TestProductionModeDisablesDefaultLocalCORSOrigins(t *testing.T) {
+	if defaultLocalCORSOriginsAllowed("production") {
+		t.Fatalf("production mode should disable default local CORS origins")
 	}
-	defer app.Close()
-
-	req := httptest.NewRequest(http.MethodOptions, "/api/v1/mcp/agents/browser-gate/rpc", nil)
-	req.Header.Set("Origin", "http://127.0.0.1:5174")
-	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
-	req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, X-AgentHarbor-Subject-Id")
-	rec := httptest.NewRecorder()
-
-	app.Router().ServeHTTP(rec, req)
-
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
-		t.Fatalf("production mode should not allow default local dev CORS origin, got %q", got)
+	if !defaultLocalCORSOriginsAllowed("development") {
+		t.Fatalf("development mode should keep default local CORS origins")
 	}
 }
 
-func TestNewProductionModeAllowsExplicitCORSOrigins(t *testing.T) {
-	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
-	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
-	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
-	t.Setenv("AGENT_HARBOR_CORS_ORIGINS", "https://console.example.com")
-
-	app, err := New(context.Background())
+func TestDeploymentConfigPreflightAllowsExplicitProductionCORSOrigins(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
+		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":    "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CORS_ORIGINS":    "https://console.example.com",
+	})
 	if err != nil {
-		t.Fatalf("new app: %v", err)
+		t.Fatalf("configured production CORS origin should pass preflight: %v", err)
 	}
-	defer app.Close()
-
-	req := httptest.NewRequest(http.MethodOptions, "/api/v1/mcp/agents/browser-gate/rpc", nil)
-	req.Header.Set("Origin", "https://console.example.com")
-	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
-	req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, X-AgentHarbor-Subject-Id")
-	rec := httptest.NewRecorder()
-
-	app.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("configured production CORS origin should allow preflight, got %d body=%s", rec.Code, rec.Body.String())
-	}
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://console.example.com" {
-		t.Fatalf("unexpected allowed production origin %q", got)
+	if !hasDeploymentCheck(checks, "cors_origins_valid", "blocking", "passed") {
+		t.Fatalf("expected production CORS origin validation pass, got %#v", checks)
 	}
 }
 
@@ -451,15 +424,18 @@ func TestDeploymentConfigPreflightBlocksSharedAdminKeyMatchingNamedIdentity(t *t
 }
 
 func TestDeploymentConfigPreflightAllowsSafeProductionConfig(t *testing.T) {
-	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
-	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
-	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
-
-	app, err := New(context.Background())
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
+		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":    "postgres://agent-harbor.example.invalid/agent_harbor",
+	})
 	if err != nil {
-		t.Fatalf("safe production config should start: %v", err)
+		t.Fatalf("safe production config should pass preflight: %v", err)
 	}
-	defer app.Close()
+	if !hasDeploymentCheck(checks, "persistent_storage_configured", "blocking", "passed") {
+		t.Fatalf("expected persistent storage pass, got %#v", checks)
+	}
 }
 
 func TestDeploymentConfigPreflightBlocksInvalidProductionCORSOrigins(t *testing.T) {
@@ -530,17 +506,20 @@ func TestDeploymentConfigPreflightBlocksCommonProductionSessionSecret(t *testing
 	}
 }
 
-func TestDeploymentConfigPreflightWarnsForInMemoryProductionStorage(t *testing.T) {
+func TestDeploymentConfigPreflightRequiresProductionDatabaseStorage(t *testing.T) {
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
 		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
 		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
 	})
-	if err != nil {
-		t.Fatalf("preflight should warn, not fail: %v", err)
+	if err == nil {
+		t.Fatalf("expected missing production database URL to fail")
 	}
-	if !hasDeploymentCheck(checks, "persistent_storage_configured", "warning", "warning") {
-		t.Fatalf("expected persistent storage warning, got %#v", checks)
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_DATABASE_URL") {
+		t.Fatalf("expected production config error to name missing database URL, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "persistent_storage_configured", "blocking", "failed") {
+		t.Fatalf("expected persistent storage failure, got %#v", checks)
 	}
 }
 
@@ -554,7 +533,7 @@ func TestDeploymentConfigPreflightAcceptsProductionDatabaseStorage(t *testing.T)
 	if err != nil {
 		t.Fatalf("preflight should accept database storage: %v", err)
 	}
-	if !hasDeploymentCheck(checks, "persistent_storage_configured", "warning", "passed") {
+	if !hasDeploymentCheck(checks, "persistent_storage_configured", "blocking", "passed") {
 		t.Fatalf("expected persistent storage pass, got %#v", checks)
 	}
 }

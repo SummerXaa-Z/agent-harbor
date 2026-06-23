@@ -104,7 +104,7 @@ func New(ctx context.Context) (*App, error) {
 			httpapi.WithPrivateUpstreamsAllowed(allowPrivateUpstreams),
 			httpapi.WithPermissionPackageApprovalReviewers(approvalReviewers),
 			httpapi.WithCORSOrigins(corsOrigins),
-			httpapi.WithDefaultLocalCORSOrigins(deploymentMode != "production"),
+			httpapi.WithDefaultLocalCORSOrigins(defaultLocalCORSOriginsAllowed(deploymentMode)),
 		),
 		close: closeFn,
 	}, nil
@@ -167,6 +167,10 @@ func deploymentModeFromEnv(env map[string]string) (string, error) {
 	}
 }
 
+func defaultLocalCORSOriginsAllowed(deploymentMode string) bool {
+	return deploymentMode != "production"
+}
+
 func validateDeploymentConfig(mode string, env map[string]string) []deploymentConfigCheck {
 	checks := []deploymentConfigCheck{
 		{
@@ -223,14 +227,14 @@ func validateDeploymentConfig(mode string, env map[string]string) []deploymentCo
 	if strings.TrimSpace(env["AGENT_HARBOR_DATABASE_URL"]) == "" {
 		checks = append(checks, deploymentConfigCheck{
 			Code:     "persistent_storage_configured",
-			Severity: "warning",
-			Status:   "warning",
-			Message:  "AGENT_HARBOR_DATABASE_URL should be set in production so tenants, grants, credentials, and audit records survive restart",
+			Severity: "blocking",
+			Status:   "failed",
+			Message:  "AGENT_HARBOR_DATABASE_URL is required in production so tenants, grants, credentials, and audit records survive restart",
 		})
 	} else {
 		checks = append(checks, deploymentConfigCheck{
 			Code:     "persistent_storage_configured",
-			Severity: "warning",
+			Severity: "blocking",
 			Status:   "passed",
 			Message:  "persistent database storage is configured",
 		})

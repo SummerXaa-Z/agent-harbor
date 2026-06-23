@@ -29,9 +29,9 @@ This covers:
 - scenario script syntax checks via `make scenario-scripts-lint`
 - GitHub YAML configuration parse checks via `make github-config-lint`
 
-The production safety baseline starts a local memory-backed API with `AGENT_HARBOR_ADMIN_KEY` set and private upstreams disabled. It must prove that health remains public, management APIs reject missing or wrong admin keys, management routes fail closed when no admin authentication is configured, `AGENT_HARBOR_DEPLOYMENT_MODE=production` rejects development-only admin bypass, private-upstream flags, weak or conflicting bootstrap admin keys, missing or weak session secrets, and invalid CORS origins before startup or storage initialization, permission-package and management MCP endpoints use the same admin-key protection, loopback/private MCP upstreams are rejected by default, and public HTTPS MCP targets remain registrable.
+The production safety baseline starts a local API with `AGENT_HARBOR_ADMIN_KEY` set and private upstreams disabled. It must prove that health remains public, management APIs reject missing or wrong admin keys, management routes fail closed when no admin authentication is configured, `AGENT_HARBOR_DEPLOYMENT_MODE=production` rejects development-only admin bypass, private-upstream flags, weak or conflicting bootstrap admin keys, missing or weak session secrets, missing persistent storage, and invalid CORS origins before startup or storage initialization, permission-package and management MCP endpoints use the same admin-key protection, loopback/private MCP upstreams are rejected by default, and public HTTPS MCP targets remain registrable.
 
-生产安全基线还必须验证 `AGENT_HARBOR_DEPLOYMENT_MODE=production` 会在启动或存储初始化前阻断开发专用的管理绕过、私有上游开关、弱或冲突的引导管理员密钥、缺失或弱值会话密钥和无效 CORS 来源。
+生产安全基线还必须验证 `AGENT_HARBOR_DEPLOYMENT_MODE=production` 会在启动或存储初始化前阻断开发专用的管理绕过、私有上游开关、弱或冲突的引导管理员密钥、缺失或弱值会话密钥、缺失持久化存储和无效 CORS 来源。
 
 The web console production journey gate starts an isolated local API, the official SDK MCP demo service, and the web console. It must prove the console is served, primary journey routes are reachable, and the production journey, language, and navigation regression tests pass without adding browser automation dependencies.
 

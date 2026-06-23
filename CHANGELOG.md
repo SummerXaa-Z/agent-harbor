@@ -22,8 +22,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 生产部署模式现在会阻断通过 `AGENT_HARBOR_ADMIN_KEY` 或 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置的过短或常见弱值引导管理员密钥。
 - Production deployment mode now blocks `AGENT_HARBOR_ADMIN_KEY` when it matches any `AGENT_HARBOR_ADMIN_IDENTITIES` key, preventing ambiguous bootstrap administrator identity resolution.
 - 生产部署模式现在会阻断 `AGENT_HARBOR_ADMIN_KEY` 与任一 `AGENT_HARBOR_ADMIN_IDENTITIES` key 相同的配置，避免引导管理员身份解析产生歧义。
-- Production deployment mode now warns when `AGENT_HARBOR_DATABASE_URL` is missing, making in-memory production startup visible before tenant, grant, credential, or audit state can be lost on restart.
-- 生产部署模式现在会在缺少 `AGENT_HARBOR_DATABASE_URL` 时输出预警，让内存存储启动在租户、授权、凭据或审计状态因重启丢失前变得可见。
+- Production deployment mode now requires `AGENT_HARBOR_DATABASE_URL`, blocking in-memory production startup before tenant, grant, credential, or audit state can be lost on restart.
+- 生产部署模式现在要求配置 `AGENT_HARBOR_DATABASE_URL`，会在租户、授权、凭据或审计状态可能因重启丢失前阻断内存存储生产启动。
 - Production deployment mode now disables default local development CORS origins; browser origins must be explicitly set through `AGENT_HARBOR_CORS_ORIGINS`.
 - 生产部署模式现在会关闭默认本地开发 CORS 来源；浏览器来源必须通过 `AGENT_HARBOR_CORS_ORIGINS` 显式配置。
 - Bootstrap administrator identities now reject duplicate actors or duplicate keys during startup configuration parsing, preventing ambiguous audit actors and tenant/workspace boundaries.

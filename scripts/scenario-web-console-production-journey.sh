@@ -15,12 +15,35 @@ RUN_ID="${RUN_ID:-web-console-production-journey-$(date +%Y%m%d%H%M%S)}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="${TMPDIR:-/tmp}/agent-harbor-web-gate-${RUN_ID}"
 PIDS=()
+CLEANED_UP=0
+
+track_pid() {
+  PIDS+=("$1")
+  disown "$1" >/dev/null 2>&1 || true
+}
 
 cleanup() {
+  if [[ "$CLEANED_UP" == "1" ]]; then
+    return
+  fi
+  CLEANED_UP=1
+
   local pid
   for pid in "${PIDS[@]:-}"; do
     kill "$pid" >/dev/null 2>&1 || true
   done
+  kill_port_listener "$API_PORT" TERM
+  kill_port_listener "$MCP_PORT" TERM
+  kill_port_listener "$FRONTEND_PORT" TERM
+  sleep 0.2
+  for pid in "${PIDS[@]:-}"; do
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill -KILL "$pid" >/dev/null 2>&1 || true
+    fi
+  done
+  kill_port_listener "$API_PORT" KILL
+  kill_port_listener "$MCP_PORT" KILL
+  kill_port_listener "$FRONTEND_PORT" KILL
   wait >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -54,6 +77,18 @@ finally:
     sock.close()
 raise SystemExit(1)
 PY
+}
+
+kill_port_listener() {
+  local port="$1"
+  local signal="$2"
+  local pid
+  command -v lsof >/dev/null 2>&1 || return 0
+  while IFS= read -r pid; do
+    [[ -n "$pid" ]] || continue
+    [[ "$pid" != "$$" ]] || continue
+    kill "-$signal" "$pid" >/dev/null 2>&1 || true
+  done < <(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
 }
 
 assert_port_free() {
@@ -120,13 +155,13 @@ echo "MCP=http://${MCP_HOST}:${MCP_PORT}/mcp"
 echo "RUN_ID=$RUN_ID"
 
 AGENT_HARBOR_ADDR="$API_ADDR" AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true go run ./cmd/agent-harbor > "$LOG_DIR/api.log" 2>&1 &
-PIDS+=("$!")
+track_pid "$!"
 
 (cd scripts/real-mcp && REAL_MCP_HOST="$MCP_HOST" REAL_MCP_PORT="$MCP_PORT" node server.mjs) > "$LOG_DIR/mcp.log" 2>&1 &
-PIDS+=("$!")
+track_pid "$!"
 
 VITE_API_BASE="$BASE_URL" pnpm --dir frontend dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort > "$LOG_DIR/frontend.log" 2>&1 &
-PIDS+=("$!")
+track_pid "$!"
 
 wait_http "API" "$BASE_URL/healthz"
 wait_http "MCP" "http://${MCP_HOST}:${MCP_PORT}/healthz"
@@ -173,3 +208,5 @@ pnpm --dir frontend exec node --test \
   tests/consoleNavigation.test.mjs
 
 echo "Web console production journey smoke complete"
+cleanup
+trap - EXIT

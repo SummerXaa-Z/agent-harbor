@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Production deployment mode now blocks short or common weak bootstrap admin keys configured through `AGENT_HARBOR_ADMIN_KEY` or `AGENT_HARBOR_ADMIN_IDENTITIES`.
+- 生产部署模式现在会阻断通过 `AGENT_HARBOR_ADMIN_KEY` 或 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置的过短或常见弱值引导管理员密钥。
 - Production deployment mode now warns when `AGENT_HARBOR_DATABASE_URL` is missing, making in-memory production startup visible before tenant, grant, credential, or audit state can be lost on restart.
 - 生产部署模式现在会在缺少 `AGENT_HARBOR_DATABASE_URL` 时输出预警，让内存存储启动在租户、授权、凭据或审计状态因重启丢失前变得可见。
 - Production deployment mode now disables default local development CORS origins; browser origins must be explicitly set through `AGENT_HARBOR_CORS_ORIGINS`.
@@ -504,6 +506,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- Web console production journey smoke gate now explicitly cleans up its API, MCP, and frontend test servers after completion, preventing `make release-check` from hanging on local service processes.
+- Web 控制台生产旅程 smoke 门禁现在会在完成后显式清理 API、MCP 和前端测试服务，避免 `make release-check` 因本地服务进程残留而挂起。
 - Getting Started no longer treats fallback sample tenants, Agents, capabilities, grants, traces, or evidence as completed setup progress; sample mode now shows one page-level read-only notice and keeps the real first step focused on connecting the backend API.
 - 开始使用页不再把回退示例租户、Agent、能力、授权、运行记录或记录算作已完成配置；示例模式现在只显示一条页面级只读提示，并把真实第一步聚焦在连接后端 API。
 - Permission Changes result messages now store translation keys and parameters instead of rendered strings, so approval, apply, and evidence-export feedback follows the active UI language after switching between English and Simplified Chinese.

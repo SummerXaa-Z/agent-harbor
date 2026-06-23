@@ -186,6 +186,7 @@ func validateDeploymentConfig(mode string, env map[string]string) []deploymentCo
 			"AGENT_HARBOR_ADMIN_KEY or AGENT_HARBOR_ADMIN_IDENTITIES is required in production",
 			"admin authentication is configured",
 		),
+		productionAdminKeyStrengthCheck(env),
 	)
 
 	if strings.TrimSpace(env["AGENT_HARBOR_SESSION_SECRET"]) == "" {
@@ -227,6 +228,73 @@ func logDeploymentConfigWarnings(checks []deploymentConfigCheck) {
 			slog.Warn("deployment configuration warning", "code", check.Code, "message", check.Message)
 		}
 	}
+}
+
+const minProductionAdminKeyLength = 16
+
+var commonWeakProductionAdminKeys = map[string]struct{}{
+	"admin":           {},
+	"agent-harbor":    {},
+	"agentharbor":     {},
+	"changeme":        {},
+	"change-me":       {},
+	"local-admin-key": {},
+	"password":        {},
+	"secret":          {},
+	"test":            {},
+	"test-admin":      {},
+}
+
+func productionAdminKeyStrengthCheck(env map[string]string) deploymentConfigCheck {
+	var failures []string
+	if key := strings.TrimSpace(env["AGENT_HARBOR_ADMIN_KEY"]); key != "" && weakProductionAdminKey(key) {
+		failures = append(failures, "AGENT_HARBOR_ADMIN_KEY must be at least 16 characters and not a common weak value")
+	}
+	for _, key := range adminIdentityKeysFromConfig(env["AGENT_HARBOR_ADMIN_IDENTITIES"]) {
+		if weakProductionAdminKey(key) {
+			failures = append(failures, "AGENT_HARBOR_ADMIN_IDENTITIES keys must be at least 16 characters and not common weak values")
+			break
+		}
+	}
+	check := deploymentConfigCheck{
+		Code:     "admin_key_strength",
+		Severity: "blocking",
+		Status:   "passed",
+		Message:  "bootstrap admin keys meet minimum production strength",
+	}
+	if len(failures) > 0 {
+		check.Status = "failed"
+		check.Message = strings.Join(failures, "; ")
+	}
+	return check
+}
+
+func weakProductionAdminKey(key string) bool {
+	key = strings.TrimSpace(key)
+	if len(key) < minProductionAdminKeyLength {
+		return true
+	}
+	_, weak := commonWeakProductionAdminKeys[strings.ToLower(key)]
+	return weak
+}
+
+func adminIdentityKeysFromConfig(raw string) []string {
+	entries := strings.FieldsFunc(strings.TrimSpace(raw), func(r rune) bool {
+		return r == ',' || r == ';'
+	})
+	keys := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		_, config, ok := strings.Cut(strings.TrimSpace(entry), "=")
+		if !ok {
+			continue
+		}
+		key, _, _ := strings.Cut(strings.TrimSpace(config), "|")
+		key = strings.TrimSpace(key)
+		if key != "" {
+			keys = append(keys, key)
+		}
+	}
+	return keys
 }
 
 func envBoolTrue(raw string) bool {

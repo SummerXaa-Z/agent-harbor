@@ -10,6 +10,8 @@ import (
 	"testing"
 )
 
+const strongProductionAdminKey = "test-production-admin-key-32"
+
 func TestPostgresCredentialKeyFromEnvRequiresKey(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_CREDENTIAL_KEY", "")
 
@@ -157,7 +159,7 @@ func TestNewAllowsConfiguredCORSOriginsFromEnv(t *testing.T) {
 
 func TestNewProductionModeRequiresExplicitCORSOrigins(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
-	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "test-admin")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
 	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
 
 	app, err := New(context.Background())
@@ -181,7 +183,7 @@ func TestNewProductionModeRequiresExplicitCORSOrigins(t *testing.T) {
 
 func TestNewProductionModeAllowsExplicitCORSOrigins(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
-	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "test-admin")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
 	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
 	t.Setenv("AGENT_HARBOR_CORS_ORIGINS", "https://console.example.com")
 
@@ -299,7 +301,7 @@ func TestApprovalReviewersFromEnvRejectsMalformedRules(t *testing.T) {
 
 func TestDeploymentConfigPreflightBlocksUnsafeProductionFlags(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
-	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "test-admin")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
 	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
 	t.Setenv("AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN", "true")
 	t.Setenv("AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS", "true")
@@ -315,7 +317,7 @@ func TestDeploymentConfigPreflightBlocksUnsafeProductionFlags(t *testing.T) {
 
 func TestDeploymentConfigPreflightBlocksTruthyProductionFlags(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
-	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "test-admin")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
 	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
 	t.Setenv("AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN", "1")
 
@@ -341,9 +343,60 @@ func TestDeploymentConfigPreflightRequiresProductionAdminAuthentication(t *testi
 	}
 }
 
+func TestDeploymentConfigPreflightBlocksShortProductionAdminKey(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       "short-key",
+		"AGENT_HARBOR_SESSION_SECRET":  "stable-session-secret",
+	})
+	if err == nil {
+		t.Fatalf("expected short production admin key to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ADMIN_KEY") {
+		t.Fatalf("expected production config error to name short admin key, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "admin_key_strength", "blocking", "failed") {
+		t.Fatalf("expected admin key strength failure, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightBlocksCommonProductionAdminKey(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       "changeme",
+		"AGENT_HARBOR_SESSION_SECRET":  "stable-session-secret",
+	})
+	if err == nil {
+		t.Fatalf("expected common production admin key to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ADMIN_KEY") {
+		t.Fatalf("expected production config error to name common admin key, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "admin_key_strength", "blocking", "failed") {
+		t.Fatalf("expected admin key strength failure, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightBlocksShortProductionAdminIdentityKey(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":  "production",
+		"AGENT_HARBOR_ADMIN_IDENTITIES": "platform=short-key|role=platform_admin",
+		"AGENT_HARBOR_SESSION_SECRET":   "stable-session-secret",
+	})
+	if err == nil {
+		t.Fatalf("expected short production admin identity key to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ADMIN_IDENTITIES") {
+		t.Fatalf("expected production config error to name short admin identity key, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "admin_key_strength", "blocking", "failed") {
+		t.Fatalf("expected admin key strength failure, got %#v", checks)
+	}
+}
+
 func TestDeploymentConfigPreflightAllowsSafeProductionConfig(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
-	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "test-admin")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
 	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
 
 	app, err := New(context.Background())
@@ -356,7 +409,7 @@ func TestDeploymentConfigPreflightAllowsSafeProductionConfig(t *testing.T) {
 func TestDeploymentConfigPreflightWarnsForDerivedSessionSecret(t *testing.T) {
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
-		"AGENT_HARBOR_ADMIN_KEY":       "test-admin",
+		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
 	})
 	if err != nil {
 		t.Fatalf("preflight should warn, not fail: %v", err)
@@ -369,7 +422,7 @@ func TestDeploymentConfigPreflightWarnsForDerivedSessionSecret(t *testing.T) {
 func TestDeploymentConfigPreflightWarnsForInMemoryProductionStorage(t *testing.T) {
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
-		"AGENT_HARBOR_ADMIN_KEY":       "test-admin",
+		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
 		"AGENT_HARBOR_SESSION_SECRET":  "stable-session-secret",
 	})
 	if err != nil {
@@ -383,7 +436,7 @@ func TestDeploymentConfigPreflightWarnsForInMemoryProductionStorage(t *testing.T
 func TestDeploymentConfigPreflightAcceptsProductionDatabaseStorage(t *testing.T) {
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
-		"AGENT_HARBOR_ADMIN_KEY":       "test-admin",
+		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
 		"AGENT_HARBOR_SESSION_SECRET":  "stable-session-secret",
 		"AGENT_HARBOR_DATABASE_URL":    "postgres://agent-harbor.example.invalid/agent_harbor",
 	})

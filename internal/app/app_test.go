@@ -23,7 +23,7 @@ func TestPostgresCredentialKeyFromEnvRequiresKey(t *testing.T) {
 }
 
 func TestPostgresCredentialKeyFromEnvParsesRawKey(t *testing.T) {
-	t.Setenv("AGENT_HARBOR_CREDENTIAL_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("AGENT_HARBOR_CREDENTIAL_KEY", "AgentHarborCredentialKey-2026!!!")
 
 	key, err := postgresCredentialKeyFromEnv()
 	if err != nil {

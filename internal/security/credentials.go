@@ -1,6 +1,7 @@
 package security
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -19,15 +20,66 @@ func ParseCredentialKey(raw string) ([]byte, error) {
 		return nil, nil
 	}
 	if decoded, err := base64.StdEncoding.DecodeString(trimmed); err == nil && len(decoded) == CredentialKeySize {
-		return decoded, nil
+		return checkedCredentialKey(decoded)
 	}
 	if decoded, err := base64.RawStdEncoding.DecodeString(trimmed); err == nil && len(decoded) == CredentialKeySize {
-		return decoded, nil
+		return checkedCredentialKey(decoded)
 	}
 	if len([]byte(trimmed)) == CredentialKeySize {
-		return []byte(trimmed), nil
+		return checkedCredentialKey([]byte(trimmed))
 	}
 	return nil, fmt.Errorf("credential key must be 32 bytes raw or base64-encoded")
+}
+
+func checkedCredentialKey(key []byte) ([]byte, error) {
+	if weakCredentialKey(key) {
+		return nil, fmt.Errorf("credential key is too weak; use 32 random bytes or a 32-byte base64-encoded random key")
+	}
+	return key, nil
+}
+
+func weakCredentialKey(key []byte) bool {
+	if len(key) != CredentialKeySize {
+		return true
+	}
+	if repeatedCredentialKeyBlock(key) {
+		return true
+	}
+	unique := make(map[byte]struct{}, len(key))
+	for _, b := range key {
+		unique[b] = struct{}{}
+	}
+	if len(unique) < 8 {
+		return true
+	}
+	switch strings.ToLower(string(key)) {
+	case "0123456789abcdef0123456789abcdef",
+		"12345678901234567890123456789012",
+		"passwordpasswordpasswordpassword":
+		return true
+	default:
+		return false
+	}
+}
+
+func repeatedCredentialKeyBlock(key []byte) bool {
+	for blockSize := 1; blockSize <= len(key)/2; blockSize++ {
+		if len(key)%blockSize != 0 {
+			continue
+		}
+		block := key[:blockSize]
+		repeated := true
+		for offset := blockSize; offset < len(key); offset += blockSize {
+			if !bytes.Equal(block, key[offset:offset+blockSize]) {
+				repeated = false
+				break
+			}
+		}
+		if repeated {
+			return true
+		}
+	}
+	return false
 }
 
 func EncryptCredentials(credentials map[string]string, key []byte) ([]byte, error) {

@@ -315,7 +315,7 @@ Use `.env.example` as the local configuration template.
 | `AGENT_HARBOR_APPROVAL_REVIEWERS` | Optional approval reviewer routing rules. Use comma or semicolon separated `reviewer=tenantId/workspaceId` entries, for example `security-root=tenant-root/*;security-east=tenant-east/ws-support`. `*` allows any tenant or workspace. Pair this with `AGENT_HARBOR_ADMIN_IDENTITIES` in production so route checks use authenticated reviewer actors. 可选审批人路由规则，生产环境建议与 `AGENT_HARBOR_ADMIN_IDENTITIES` 配合使用，让路由校验基于已认证审批人身份。 |
 | `AGENT_HARBOR_CORS_ORIGINS` | Optional comma or semicolon separated browser origins. Development mode adds these origins to the default local console origins; production deployment mode allows only the origins listed here. Use it for isolated browser gates, non-default local frontend ports, or production console domains. 可选浏览器来源白名单，使用逗号或分号分隔。开发模式会把这些来源追加到默认本地控制台来源；生产部署模式只允许这里显式列出的来源。可用于隔离浏览器门禁、非默认本地前端端口或生产控制台域名。 |
 | `AGENT_HARBOR_DATABASE_URL` | Optional PostgreSQL connection string. If unset, AgentHarbor uses the in-memory repository; production deployment mode logs a warning because tenant, grant, credential, and audit state will not survive restart. 可选 PostgreSQL 连接串。未设置时使用内存仓库；生产部署模式会输出预警，因为租户、授权、凭据和审计状态不会在重启后保留。 |
-| `AGENT_HARBOR_CREDENTIAL_KEY` | 32-byte raw or base64 key used to encrypt persisted agent credentials. Required with PostgreSQL. |
+| `AGENT_HARBOR_CREDENTIAL_KEY` | 32 random raw bytes or a base64-encoded 32-byte random key used to encrypt persisted agent credentials. Required with PostgreSQL; repeated, low-diversity, or common sample keys are rejected. 用于加密持久化 Agent 凭据的 32 字节随机原始值或 base64 编码随机 key；配置 PostgreSQL 时必填，重复、低多样性或常见示例 key 会被拒绝。 |
 | `AGENT_HARBOR_TEST_DATABASE_URL` | PostgreSQL connection string used by integration tests. |
 | `VITE_API_BASE` | Frontend API base URL. |
 
@@ -324,8 +324,8 @@ Run `make production-hardening` before any deployment-style handoff. It proves t
 PostgreSQL example:
 
 ```bash
+export AGENT_HARBOR_CREDENTIAL_KEY="$(openssl rand -base64 32)"
 AGENT_HARBOR_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' \
-AGENT_HARBOR_CREDENTIAL_KEY='0123456789abcdef0123456789abcdef' \
   go run ./cmd/agent-harbor
 ```
 

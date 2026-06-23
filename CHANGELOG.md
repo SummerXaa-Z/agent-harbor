@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- PostgreSQL credential encryption keys now reject repeated, low-diversity, and common sample values instead of accepting any 32-byte string.
+- PostgreSQL 凭据加密密钥现在会拒绝重复、低多样性和常见示例值，不再接受任意 32 字节字符串。
 - Production deployment mode now blocks explicit short or common weak `AGENT_HARBOR_SESSION_SECRET` values before startup.
 - 生产部署模式现在会在启动前阻断显式配置的过短或常见弱值 `AGENT_HARBOR_SESSION_SECRET`。
 - Production deployment mode now blocks short or common weak bootstrap admin keys configured through `AGENT_HARBOR_ADMIN_KEY` or `AGENT_HARBOR_ADMIN_IDENTITIES`.

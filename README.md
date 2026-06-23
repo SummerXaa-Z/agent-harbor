@@ -319,9 +319,9 @@ Use `.env.example` as the local configuration template.
 | `AGENT_HARBOR_TEST_DATABASE_URL` | PostgreSQL connection string used by integration tests. |
 | `VITE_API_BASE` | Frontend API base URL. |
 
-Run `make production-hardening` before any deployment-style handoff. It proves that `AGENT_HARBOR_ADMIN_KEY` protection is enforced across management APIs, that management routes fail closed without configured admin authentication, that console login behind a trusted HTTPS-forwarding proxy emits a Secure session cookie, that `AGENT_HARBOR_DEPLOYMENT_MODE=production` rejects development-only flags, weak bootstrap admin keys, and invalid CORS origins before startup, and that `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` stays disabled unless explicitly set for local development scenarios.
+Run `make production-hardening` before any deployment-style handoff. It proves that `AGENT_HARBOR_ADMIN_KEY` protection is enforced across management APIs, that management routes fail closed without configured admin authentication, that console login behind a trusted HTTPS-forwarding proxy emits a Secure session cookie, that `AGENT_HARBOR_DEPLOYMENT_MODE=production` rejects development-only flags, weak bootstrap admin keys, and invalid CORS origins before startup or storage initialization, and that `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` stays disabled unless explicitly set for local development scenarios.
 
-部署式交付前请先运行 `make production-hardening`。它会验证管理 API 的管理员密钥保护、未配置管理员认证时的失败关闭行为、可信 HTTPS 转发代理后的控制台登录会设置 Secure 会话 Cookie、生产模式会在启动前拒绝开发专用开关、弱引导管理员密钥和无效 CORS 来源，并确认私有上游访问默认保持关闭。
+部署式交付前请先运行 `make production-hardening`。它会验证管理 API 的管理员密钥保护、未配置管理员认证时的失败关闭行为、可信 HTTPS 转发代理后的控制台登录会设置 Secure 会话 Cookie、生产模式会在启动或存储初始化前拒绝开发专用开关、弱引导管理员密钥和无效 CORS 来源，并确认私有上游访问默认保持关闭。
 
 PostgreSQL example:
 

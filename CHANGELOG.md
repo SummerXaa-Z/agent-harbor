@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Production deployment preflight now runs before PostgreSQL storage initialization, so invalid production configuration fails before migrations, credential-key parsing, or database connection attempts.
+- 生产部署预检现在会先于 PostgreSQL 存储初始化执行，因此无效生产配置会在迁移、凭据密钥解析或数据库连接尝试之前失败。
 - `AGENT_HARBOR_CORS_ORIGINS` now rejects wildcard, path-bearing, non-HTTP, or otherwise invalid browser origins, and production preflight reports invalid CORS origin configuration as a blocking startup error.
 - `AGENT_HARBOR_CORS_ORIGINS` 现在会拒绝通配、带路径、非 HTTP 或其他无效浏览器 Origin；生产预检会把无效 CORS 来源配置作为启动阻断错误。
 - Web-console session cookies now set `Secure` for direct TLS requests or trusted local/private proxy requests carrying `X-Forwarded-Proto: https` or `Forwarded: proto=https`, while ignoring spoofed forwarded scheme headers from public clients.

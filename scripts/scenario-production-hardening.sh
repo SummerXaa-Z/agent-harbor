@@ -259,6 +259,10 @@ if port_in_use "$((UNAUTH_API_PORT + 4))"; then
 	echo "production safe config check API port $((UNAUTH_API_PORT + 4)) is already in use" >&2
 	exit 1
 fi
+if port_in_use "$((UNAUTH_API_PORT + 5))"; then
+	echo "production preflight before storage check API port $((UNAUTH_API_PORT + 5)) is already in use" >&2
+	exit 1
+fi
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT_DIR"
@@ -355,6 +359,30 @@ if ! grep -q "AGENT_HARBOR_CORS_ORIGINS" "$LOG_DIR/api-prod-invalid-cors.log"; t
 	exit 1
 fi
 echo "production deployment preflight rejects invalid CORS origins"
+
+AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 5))" \
+AGENT_HARBOR_DEPLOYMENT_MODE=production \
+AGENT_HARBOR_ADMIN_KEY=short-key \
+AGENT_HARBOR_SESSION_SECRET=production-hardening-session-secret \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL="://invalid-postgres-url" \
+AGENT_HARBOR_CREDENTIAL_KEY= \
+	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-preflight-before-storage.log" 2>&1 && {
+	echo "expected production preflight to reject weak admin key before storage initialization" >&2
+	show_logs
+	exit 1
+}
+if ! grep -q "AGENT_HARBOR_ADMIN_KEY" "$LOG_DIR/api-prod-preflight-before-storage.log"; then
+	echo "production preflight-before-storage failure did not mention AGENT_HARBOR_ADMIN_KEY" >&2
+	show_logs
+	exit 1
+fi
+if grep -q "connect postgres" "$LOG_DIR/api-prod-preflight-before-storage.log"; then
+	echo "production preflight-before-storage check attempted PostgreSQL before failing config preflight" >&2
+	show_logs
+	exit 1
+fi
+echo "production deployment preflight runs before storage initialization"
 
 AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 4))" \
 AGENT_HARBOR_DEPLOYMENT_MODE=production \

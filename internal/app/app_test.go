@@ -383,6 +383,21 @@ func TestDeploymentConfigPreflightBlocksShortProductionAdminKey(t *testing.T) {
 	}
 }
 
+func TestNewRunsProductionPreflightBeforeStorageInitialization(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "short-key")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
+	t.Setenv("AGENT_HARBOR_DATABASE_URL", "://invalid-postgres-url")
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatalf("expected production preflight to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ADMIN_KEY") {
+		t.Fatalf("expected production preflight error before storage initialization, got %q", got)
+	}
+}
+
 func TestDeploymentConfigPreflightBlocksCommonProductionAdminKey(t *testing.T) {
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",

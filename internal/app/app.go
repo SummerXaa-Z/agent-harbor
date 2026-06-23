@@ -32,25 +32,20 @@ type deploymentConfigCheck struct {
 }
 
 func New(ctx context.Context) (*App, error) {
-	repo := store.Repository(store.NewMemory())
 	closeFn := func() {}
-	if databaseURL := os.Getenv("AGENT_HARBOR_DATABASE_URL"); databaseURL != "" {
-		pool, err := pgxpool.New(ctx, databaseURL)
-		if err != nil {
-			return nil, fmt.Errorf("connect postgres: %w", err)
-		}
-		if err := db.Migrate(ctx, pool); err != nil {
-			pool.Close()
-			return nil, err
-		}
-		credentialKey, err := postgresCredentialKeyFromEnv()
-		if err != nil {
-			pool.Close()
-			return nil, fmt.Errorf("parse credential key: %w", err)
-		}
-		repo = store.NewPostgresWithCredentialKey(pool, credentialKey)
-		closeFn = pool.Close
+	deploymentEnv := deploymentEnvFromOS()
+	deploymentMode, err := deploymentModeFromEnv(deploymentEnv)
+	if err != nil {
+		closeFn()
+		return nil, err
 	}
+	deploymentChecks, err := deploymentConfigPreflightFromEnv(deploymentEnv)
+	if err != nil {
+		closeFn()
+		return nil, err
+	}
+	logDeploymentConfigWarnings(deploymentChecks)
+
 	allowPrivateUpstreams, err := privateUpstreamsAllowedFromEnv()
 	if err != nil {
 		closeFn()
@@ -76,18 +71,29 @@ func New(ctx context.Context) (*App, error) {
 		closeFn()
 		return nil, err
 	}
-	deploymentEnv := deploymentEnvFromOS()
-	deploymentMode, err := deploymentModeFromEnv(deploymentEnv)
-	if err != nil {
-		closeFn()
-		return nil, err
+
+	repo := store.Repository(store.NewMemory())
+	if databaseURL := os.Getenv("AGENT_HARBOR_DATABASE_URL"); databaseURL != "" {
+		pool, err := pgxpool.New(ctx, databaseURL)
+		if err != nil {
+			closeFn()
+			return nil, fmt.Errorf("connect postgres: %w", err)
+		}
+		if err := db.Migrate(ctx, pool); err != nil {
+			pool.Close()
+			closeFn()
+			return nil, err
+		}
+		credentialKey, err := postgresCredentialKeyFromEnv()
+		if err != nil {
+			pool.Close()
+			closeFn()
+			return nil, fmt.Errorf("parse credential key: %w", err)
+		}
+		repo = store.NewPostgresWithCredentialKey(pool, credentialKey)
+		closeFn = pool.Close
 	}
-	deploymentChecks, err := deploymentConfigPreflightFromEnv(deploymentEnv)
-	if err != nil {
-		closeFn()
-		return nil, err
-	}
-	logDeploymentConfigWarnings(deploymentChecks)
+
 	return &App{
 		server: httpapi.New(
 			repo,

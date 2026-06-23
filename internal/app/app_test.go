@@ -11,6 +11,7 @@ import (
 )
 
 const strongProductionAdminKey = "test-production-admin-key-32"
+const strongProductionSessionSecret = "test-production-session-secret-32-bytes"
 
 func TestPostgresCredentialKeyFromEnvRequiresKey(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_CREDENTIAL_KEY", "")
@@ -160,7 +161,7 @@ func TestNewAllowsConfiguredCORSOriginsFromEnv(t *testing.T) {
 func TestNewProductionModeRequiresExplicitCORSOrigins(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
 	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
-	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
 
 	app, err := New(context.Background())
 	if err != nil {
@@ -184,7 +185,7 @@ func TestNewProductionModeRequiresExplicitCORSOrigins(t *testing.T) {
 func TestNewProductionModeAllowsExplicitCORSOrigins(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
 	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
-	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
 	t.Setenv("AGENT_HARBOR_CORS_ORIGINS", "https://console.example.com")
 
 	app, err := New(context.Background())
@@ -302,7 +303,7 @@ func TestApprovalReviewersFromEnvRejectsMalformedRules(t *testing.T) {
 func TestDeploymentConfigPreflightBlocksUnsafeProductionFlags(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
 	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
-	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
 	t.Setenv("AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN", "true")
 	t.Setenv("AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS", "true")
 
@@ -318,7 +319,7 @@ func TestDeploymentConfigPreflightBlocksUnsafeProductionFlags(t *testing.T) {
 func TestDeploymentConfigPreflightBlocksTruthyProductionFlags(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
 	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
-	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
 	t.Setenv("AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN", "1")
 
 	_, err := New(context.Background())
@@ -332,7 +333,7 @@ func TestDeploymentConfigPreflightBlocksTruthyProductionFlags(t *testing.T) {
 
 func TestDeploymentConfigPreflightRequiresProductionAdminAuthentication(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
-	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
 
 	_, err := New(context.Background())
 	if err == nil {
@@ -347,7 +348,7 @@ func TestDeploymentConfigPreflightBlocksShortProductionAdminKey(t *testing.T) {
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
 		"AGENT_HARBOR_ADMIN_KEY":       "short-key",
-		"AGENT_HARBOR_SESSION_SECRET":  "stable-session-secret",
+		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
 	})
 	if err == nil {
 		t.Fatalf("expected short production admin key to fail")
@@ -364,7 +365,7 @@ func TestDeploymentConfigPreflightBlocksCommonProductionAdminKey(t *testing.T) {
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
 		"AGENT_HARBOR_ADMIN_KEY":       "changeme",
-		"AGENT_HARBOR_SESSION_SECRET":  "stable-session-secret",
+		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
 	})
 	if err == nil {
 		t.Fatalf("expected common production admin key to fail")
@@ -381,7 +382,7 @@ func TestDeploymentConfigPreflightBlocksShortProductionAdminIdentityKey(t *testi
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE":  "production",
 		"AGENT_HARBOR_ADMIN_IDENTITIES": "platform=short-key|role=platform_admin",
-		"AGENT_HARBOR_SESSION_SECRET":   "stable-session-secret",
+		"AGENT_HARBOR_SESSION_SECRET":   strongProductionSessionSecret,
 	})
 	if err == nil {
 		t.Fatalf("expected short production admin identity key to fail")
@@ -397,7 +398,7 @@ func TestDeploymentConfigPreflightBlocksShortProductionAdminIdentityKey(t *testi
 func TestDeploymentConfigPreflightAllowsSafeProductionConfig(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
 	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
-	t.Setenv("AGENT_HARBOR_SESSION_SECRET", "stable-session-secret")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
 
 	app, err := New(context.Background())
 	if err != nil {
@@ -419,11 +420,45 @@ func TestDeploymentConfigPreflightWarnsForDerivedSessionSecret(t *testing.T) {
 	}
 }
 
+func TestDeploymentConfigPreflightBlocksShortProductionSessionSecret(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
+		"AGENT_HARBOR_SESSION_SECRET":  "short-secret",
+	})
+	if err == nil {
+		t.Fatalf("expected short production session secret to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_SESSION_SECRET") {
+		t.Fatalf("expected production config error to name short session secret, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "session_secret_strength", "blocking", "failed") {
+		t.Fatalf("expected session secret strength failure, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightBlocksCommonProductionSessionSecret(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
+		"AGENT_HARBOR_SESSION_SECRET":  "secret",
+	})
+	if err == nil {
+		t.Fatalf("expected common production session secret to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_SESSION_SECRET") {
+		t.Fatalf("expected production config error to name common session secret, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "session_secret_strength", "blocking", "failed") {
+		t.Fatalf("expected session secret strength failure, got %#v", checks)
+	}
+}
+
 func TestDeploymentConfigPreflightWarnsForInMemoryProductionStorage(t *testing.T) {
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
 		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
-		"AGENT_HARBOR_SESSION_SECRET":  "stable-session-secret",
+		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
 	})
 	if err != nil {
 		t.Fatalf("preflight should warn, not fail: %v", err)
@@ -437,7 +472,7 @@ func TestDeploymentConfigPreflightAcceptsProductionDatabaseStorage(t *testing.T)
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
 		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
-		"AGENT_HARBOR_SESSION_SECRET":  "stable-session-secret",
+		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
 		"AGENT_HARBOR_DATABASE_URL":    "postgres://agent-harbor.example.invalid/agent_harbor",
 	})
 	if err != nil {

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Production deployment mode now blocks explicit short or common weak `AGENT_HARBOR_SESSION_SECRET` values before startup.
+- 生产部署模式现在会在启动前阻断显式配置的过短或常见弱值 `AGENT_HARBOR_SESSION_SECRET`。
 - Production deployment mode now blocks short or common weak bootstrap admin keys configured through `AGENT_HARBOR_ADMIN_KEY` or `AGENT_HARBOR_ADMIN_IDENTITIES`.
 - 生产部署模式现在会阻断通过 `AGENT_HARBOR_ADMIN_KEY` 或 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置的过短或常见弱值引导管理员密钥。
 - Production deployment mode now warns when `AGENT_HARBOR_DATABASE_URL` is missing, making in-memory production startup visible before tenant, grant, credential, or audit state can be lost on restart.

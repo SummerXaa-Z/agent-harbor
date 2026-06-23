@@ -203,6 +203,7 @@ func validateDeploymentConfig(mode string, env map[string]string) []deploymentCo
 			Status:   "passed",
 			Message:  "AGENT_HARBOR_SESSION_SECRET is explicitly configured",
 		})
+		checks = append(checks, productionSessionSecretStrengthCheck(env))
 	}
 	if strings.TrimSpace(env["AGENT_HARBOR_DATABASE_URL"]) == "" {
 		checks = append(checks, deploymentConfigCheck{
@@ -231,8 +232,9 @@ func logDeploymentConfigWarnings(checks []deploymentConfigCheck) {
 }
 
 const minProductionAdminKeyLength = 16
+const minProductionSessionSecretLength = 32
 
-var commonWeakProductionAdminKeys = map[string]struct{}{
+var commonWeakProductionSecretValues = map[string]struct{}{
 	"admin":           {},
 	"agent-harbor":    {},
 	"agentharbor":     {},
@@ -270,11 +272,29 @@ func productionAdminKeyStrengthCheck(env map[string]string) deploymentConfigChec
 }
 
 func weakProductionAdminKey(key string) bool {
-	key = strings.TrimSpace(key)
-	if len(key) < minProductionAdminKeyLength {
+	return weakProductionSecretValue(key, minProductionAdminKeyLength)
+}
+
+func productionSessionSecretStrengthCheck(env map[string]string) deploymentConfigCheck {
+	check := deploymentConfigCheck{
+		Code:     "session_secret_strength",
+		Severity: "blocking",
+		Status:   "passed",
+		Message:  "session secret meets minimum production strength",
+	}
+	if weakProductionSecretValue(env["AGENT_HARBOR_SESSION_SECRET"], minProductionSessionSecretLength) {
+		check.Status = "failed"
+		check.Message = "AGENT_HARBOR_SESSION_SECRET must be at least 32 characters and not a common weak value"
+	}
+	return check
+}
+
+func weakProductionSecretValue(secret string, minLength int) bool {
+	secret = strings.TrimSpace(secret)
+	if len(secret) < minLength {
 		return true
 	}
-	_, weak := commonWeakProductionAdminKeys[strings.ToLower(key)]
+	_, weak := commonWeakProductionSecretValues[strings.ToLower(secret)]
 	return weak
 }
 

@@ -279,6 +279,25 @@ echo "production deployment preflight rejects unauthenticated admin flag"
 AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 2))" \
 AGENT_HARBOR_DEPLOYMENT_MODE=production \
 AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \
+AGENT_HARBOR_SESSION_SECRET=secret \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL= \
+AGENT_HARBOR_CREDENTIAL_KEY= \
+	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-weak-session-secret.log" 2>&1 && {
+	echo "expected production mode to reject weak AGENT_HARBOR_SESSION_SECRET" >&2
+	show_logs
+	exit 1
+}
+if ! grep -q "AGENT_HARBOR_SESSION_SECRET" "$LOG_DIR/api-prod-weak-session-secret.log"; then
+	echo "production weak session secret failure did not mention AGENT_HARBOR_SESSION_SECRET" >&2
+	show_logs
+	exit 1
+fi
+echo "production deployment preflight rejects weak session secret"
+
+AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 3))" \
+AGENT_HARBOR_DEPLOYMENT_MODE=production \
+AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \
 AGENT_HARBOR_SESSION_SECRET=production-hardening-session-secret \
 AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
 AGENT_HARBOR_DATABASE_URL= \
@@ -286,7 +305,7 @@ AGENT_HARBOR_CREDENTIAL_KEY= \
 	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-safe.log" 2>&1 &
 PROD_SAFE_PID="$!"
 PIDS+=("$PROD_SAFE_PID")
-wait_http "Production config check API" "http://${API_HOST}:$((UNAUTH_API_PORT + 2))/healthz"
+wait_http "Production config check API" "http://${API_HOST}:$((UNAUTH_API_PORT + 3))/healthz"
 kill "$PROD_SAFE_PID" >/dev/null 2>&1 || true
 wait "$PROD_SAFE_PID" >/dev/null 2>&1 || true
 echo "production deployment preflight accepts safe minimal config"

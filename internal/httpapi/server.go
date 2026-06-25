@@ -2982,6 +2982,11 @@ func (s *Server) listPermissionPackageApprovalRequests(w http.ResponseWriter, r 
 	}
 	var rows []domain.PermissionPackageApprovalRequest
 	if reviewer != "" {
+		reviewer, err = reviewerFromRequest(reviewer, r)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
 		rows, err = s.listPermissionPackageApprovalRequestsForReviewer(r.Context(), filter, reviewer, limit)
 	} else {
 		rows, err = s.repo.ListPermissionPackageApprovalRequests(r.Context(), filter)

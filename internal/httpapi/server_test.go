@@ -719,6 +719,14 @@ func newRouterWithRepoAndAdminIdentities(repo store.Repository, identities []htt
 	return httpapi.New(repo, httpapi.WithAdminIdentities(identities)).Router()
 }
 
+func newRouterWithRepoAdminIdentitiesAndApprovalReviewers(repo store.Repository, identities []httpapi.AdminIdentity, reviewers []domain.PermissionPackageApprovalReviewer) http.Handler {
+	return httpapi.New(
+		repo,
+		httpapi.WithAdminIdentities(identities),
+		httpapi.WithPermissionPackageApprovalReviewers(reviewers),
+	).Router()
+}
+
 func newRouterWithPrivateUpstreams() http.Handler {
 	return httpapi.New(
 		store.NewMemory(),
@@ -5526,6 +5534,108 @@ func TestPermissionPackageApprovalReviewerUsesAuthenticatedAdminIdentity(t *test
 	approved := decodeData[permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", nil, "", "security-key"))
 	if approved.Status != "approved" || approved.ReviewedBy != "security" {
 		t.Fatalf("approval should use authenticated reviewer identity, got %#v", approved)
+	}
+}
+
+func TestPermissionPackageApprovalReviewerQueueUsesAuthenticatedAdminIdentity(t *testing.T) {
+	repo := store.NewMemory()
+	now := time.Date(2026, 6, 6, 10, 30, 0, 0, time.UTC)
+	eastSupport := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-auth-east-support", "tenant-east", "ws-support", now)
+	router := newRouterWithRepoAdminIdentitiesAndApprovalReviewers(repo, []httpapi.AdminIdentity{
+		{Actor: "requester", Key: "requester-key"},
+		{Actor: "security", Key: "security-key"},
+	}, []domain.PermissionPackageApprovalReviewer{
+		{Reviewer: "security", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+
+	impersonatedQueue := requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?status=pending&reviewer=security&limit=10", nil, "", "requester-key")
+	if impersonatedQueue.Code != http.StatusForbidden || !strings.Contains(impersonatedQueue.Body.String(), "authenticated admin identity") {
+		t.Fatalf("reviewer queue impersonation should be rejected, status=%d body=%s", impersonatedQueue.Code, impersonatedQueue.Body.String())
+	}
+
+	securityQueue := decodeData[[]permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?status=pending&reviewer=security&limit=10", nil, "", "security-key"))
+	if len(securityQueue) != 1 || securityQueue[0].ID != eastSupport.ID {
+		t.Fatalf("authenticated reviewer should see routed queue, got %#v", securityQueue)
+	}
+}
+
+func TestManagementMCPApprovalReviewerUsesAuthenticatedAdminIdentity(t *testing.T) {
+	repo := store.NewMemory()
+	now := time.Date(2026, 6, 6, 10, 45, 0, 0, time.UTC)
+	eastSupport := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-mcp-auth-east-support", "tenant-east", "ws-support", now)
+	router := newRouterWithRepoAdminIdentitiesAndApprovalReviewers(repo, []httpapi.AdminIdentity{
+		{Actor: "requester", Key: "requester-key"},
+		{Actor: "security", Key: "security-key"},
+	}, []domain.PermissionPackageApprovalReviewer{
+		{Reviewer: "security", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+
+	impersonatedList := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-list-impersonation",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_permission_package_approval_requests",
+			"arguments": map[string]any{
+				"reviewer": "security",
+				"status":   "pending",
+				"limit":    10,
+			},
+		},
+	}, "", "requester-key")
+	var impersonatedListEnvelope mcpEnvelopeResponse
+	if err := json.Unmarshal(impersonatedList.Body.Bytes(), &impersonatedListEnvelope); err != nil {
+		t.Fatalf("decode impersonated MCP list envelope: %v body=%s", err, impersonatedList.Body.String())
+	}
+	if impersonatedListEnvelope.Error == nil || !strings.Contains(impersonatedListEnvelope.Error.Message, "authenticated admin identity") {
+		t.Fatalf("expected MCP reviewer list impersonation rejection, got %#v body=%s", impersonatedListEnvelope, impersonatedList.Body.String())
+	}
+
+	impersonatedApprove := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-approve-impersonation",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "approve_permission_package_approval_request",
+			"arguments": map[string]any{
+				"id":       eastSupport.ID,
+				"reviewer": "security",
+			},
+		},
+	}, "", "requester-key")
+	var impersonatedApproveEnvelope mcpEnvelopeResponse
+	if err := json.Unmarshal(impersonatedApprove.Body.Bytes(), &impersonatedApproveEnvelope); err != nil {
+		t.Fatalf("decode impersonated MCP approve envelope: %v body=%s", err, impersonatedApprove.Body.String())
+	}
+	if impersonatedApproveEnvelope.Error == nil || !strings.Contains(impersonatedApproveEnvelope.Error.Message, "authenticated admin identity") {
+		t.Fatalf("expected MCP reviewer approve impersonation rejection, got %#v body=%s", impersonatedApproveEnvelope, impersonatedApprove.Body.String())
+	}
+	stillPending, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), eastSupport.ID)
+	if err != nil || !ok {
+		t.Fatalf("get approval after MCP impersonation attempts: ok=%v err=%v", ok, err)
+	}
+	if stillPending.Status != domain.PermissionPackageApprovalStatusPending || stillPending.ReviewedBy != "" {
+		t.Fatalf("MCP reviewer impersonation should not mutate approval request: %#v", stillPending)
+	}
+
+	approveCall := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-approve-authenticated",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "approve_permission_package_approval_request",
+			"arguments": map[string]any{
+				"reviewer": "security",
+				"id":       eastSupport.ID,
+			},
+		},
+	}, "", "security-key"))
+	var approved permissionPackageApprovalRequestResponse
+	if err := json.Unmarshal(approveCall.Result.StructuredContent, &approved); err != nil {
+		t.Fatalf("decode authenticated MCP approval: %v", err)
+	}
+	if approved.Status != "approved" || approved.ReviewedBy != "security" {
+		t.Fatalf("authenticated MCP reviewer should approve as themselves, got %#v", approved)
 	}
 }
 

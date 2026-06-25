@@ -426,39 +426,68 @@ func productionApprovalReviewersCheck(env map[string]string) deploymentConfigChe
 	if check.Status == "failed" || len(reviewers) == 0 {
 		return check
 	}
-	adminRoles, ok := bootstrapAdminRolesForApprovalPreflight(env)
+	adminIdentities, ok := bootstrapAdminIdentitiesForApprovalPreflight(env)
 	if !ok {
 		return check
 	}
 	for _, reviewer := range reviewers {
-		role, exists := adminRoles[strings.TrimSpace(reviewer.Reviewer)]
+		identity, exists := adminIdentities[strings.TrimSpace(reviewer.Reviewer)]
 		if !exists {
 			check.Status = "failed"
 			check.Message = fmt.Sprintf("AGENT_HARBOR_APPROVAL_REVIEWERS reviewer %q must match an AGENT_HARBOR_ADMIN_IDENTITIES actor or admin-key", reviewer.Reviewer)
 			return check
 		}
+		role := identity.Role
 		if role != string(domain.AdminIdentityRoleSecurityReviewer) && role != string(domain.AdminIdentityRolePlatformAdmin) {
 			check.Status = "failed"
 			check.Message = fmt.Sprintf("AGENT_HARBOR_APPROVAL_REVIEWERS reviewer %q must use role=security_reviewer or role=platform_admin, got role=%s", reviewer.Reviewer, role)
+			return check
+		}
+		if !approvalReviewerRouteWithinAdminIdentityScope(reviewer, identity) {
+			check.Status = "failed"
+			check.Message = fmt.Sprintf("AGENT_HARBOR_APPROVAL_REVIEWERS reviewer %q route must stay within its AGENT_HARBOR_ADMIN_IDENTITIES tenant/workspace scope", reviewer.Reviewer)
 			return check
 		}
 	}
 	return check
 }
 
-func bootstrapAdminRolesForApprovalPreflight(env map[string]string) (map[string]string, bool) {
-	roles := map[string]string{}
+func bootstrapAdminIdentitiesForApprovalPreflight(env map[string]string) (map[string]httpapi.AdminIdentity, bool) {
+	identitiesByActor := map[string]httpapi.AdminIdentity{}
 	if strings.TrimSpace(env["AGENT_HARBOR_ADMIN_KEY"]) != "" {
-		roles["admin-key"] = string(domain.AdminIdentityRolePlatformAdmin)
+		identitiesByActor["admin-key"] = httpapi.AdminIdentity{
+			Actor: "admin-key",
+			Role:  string(domain.AdminIdentityRolePlatformAdmin),
+		}
 	}
 	identities, err := adminIdentitiesFromRaw(env["AGENT_HARBOR_ADMIN_IDENTITIES"])
 	if err != nil {
-		return roles, false
+		return identitiesByActor, false
 	}
 	for _, identity := range identities {
-		roles[strings.TrimSpace(identity.Actor)] = identity.Role
+		identitiesByActor[strings.TrimSpace(identity.Actor)] = identity
 	}
-	return roles, true
+	return identitiesByActor, true
+}
+
+func approvalReviewerRouteWithinAdminIdentityScope(reviewer domain.PermissionPackageApprovalReviewer, identity httpapi.AdminIdentity) bool {
+	if identity.Role == string(domain.AdminIdentityRolePlatformAdmin) {
+		return true
+	}
+	identityTenantID := strings.TrimSpace(identity.TenantID)
+	identityWorkspaceID := strings.TrimSpace(identity.WorkspaceID)
+	reviewerTenantID := strings.TrimSpace(reviewer.TenantID)
+	reviewerWorkspaceID := strings.TrimSpace(reviewer.WorkspaceID)
+	if identityTenantID == "" || reviewerTenantID == "" || reviewerTenantID == "*" {
+		return false
+	}
+	if reviewerTenantID != identityTenantID {
+		return false
+	}
+	if identityWorkspaceID == "" {
+		return true
+	}
+	return reviewerWorkspaceID == identityWorkspaceID
 }
 
 func weakProductionSecretValue(secret string, minLength int) bool {

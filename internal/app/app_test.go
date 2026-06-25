@@ -398,6 +398,46 @@ func TestDeploymentConfigPreflightBlocksApprovalReviewerWithoutReviewerRole(t *t
 	}
 }
 
+func TestDeploymentConfigPreflightBlocksApprovalReviewerOutsideAdminTenantScope(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":    "production",
+		"AGENT_HARBOR_ADMIN_IDENTITIES":   "platform=" + strongProductionAdminKey + "|role=platform_admin;security-east=security-east-production-key-32|role=security_reviewer|tenant=tenant-west|workspace=ws-support",
+		"AGENT_HARBOR_SESSION_SECRET":     strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":       "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":     strongProductionCredentialKey,
+		"AGENT_HARBOR_APPROVAL_REVIEWERS": "security-east=tenant-east/ws-support",
+	})
+	if err == nil {
+		t.Fatalf("expected approval reviewer route outside admin tenant scope to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "security-east") || !strings.Contains(got, "tenant/workspace scope") {
+		t.Fatalf("expected production config error to explain reviewer tenant scope mismatch, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "approval_reviewers_valid", "blocking", "failed") {
+		t.Fatalf("expected approval reviewer validation failure, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightBlocksApprovalReviewerWiderThanAdminWorkspaceScope(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":    "production",
+		"AGENT_HARBOR_ADMIN_IDENTITIES":   "platform=" + strongProductionAdminKey + "|role=platform_admin;security-east=security-east-production-key-32|role=security_reviewer|tenant=tenant-east|workspace=ws-support",
+		"AGENT_HARBOR_SESSION_SECRET":     strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":       "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":     strongProductionCredentialKey,
+		"AGENT_HARBOR_APPROVAL_REVIEWERS": "security-east=tenant-east/*",
+	})
+	if err == nil {
+		t.Fatalf("expected approval reviewer route wider than admin workspace scope to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "security-east") || !strings.Contains(got, "tenant/workspace scope") {
+		t.Fatalf("expected production config error to explain reviewer workspace scope mismatch, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "approval_reviewers_valid", "blocking", "failed") {
+		t.Fatalf("expected approval reviewer validation failure, got %#v", checks)
+	}
+}
+
 func TestDeploymentConfigPreflightBlocksMalformedProductionAdminIdentities(t *testing.T) {
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE":  "production",

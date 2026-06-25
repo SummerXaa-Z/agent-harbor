@@ -299,6 +299,10 @@ if port_in_use "$((UNAUTH_API_PORT + 14))"; then
 	echo "production unbound approval reviewer check API port $((UNAUTH_API_PORT + 14)) is already in use" >&2
 	exit 1
 fi
+if port_in_use "$((UNAUTH_API_PORT + 15))"; then
+	echo "production oversized approval reviewer route check API port $((UNAUTH_API_PORT + 15)) is already in use" >&2
+	exit 1
+fi
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT_DIR"
@@ -580,6 +584,41 @@ if grep -q "super-secret" "$LOG_DIR/api-prod-unbound-approval-reviewer.log"; the
 	exit 1
 fi
 echo "production deployment preflight rejects approval reviewer routes without matching admin identities"
+
+AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 15))" \
+AGENT_HARBOR_DEPLOYMENT_MODE=production \
+AGENT_HARBOR_ADMIN_IDENTITIES="platform=${ADMIN_KEY}|role=platform_admin;security-east=security-east-production-key-32|role=security_reviewer|tenant=tenant-east|workspace=ws-support" \
+AGENT_HARBOR_SESSION_SECRET=production-hardening-session-secret \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL="postgres://agent_harbor:super-secret@127.0.0.1:bad/agent_harbor" \
+AGENT_HARBOR_CREDENTIAL_KEY=AgentHarborCredentialKey-2026!!! \
+AGENT_HARBOR_APPROVAL_REVIEWERS="security-east=tenant-east/*" \
+	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-oversized-approval-reviewer-route.log" 2>&1 && {
+	echo "expected production mode to reject approval reviewer route wider than admin identity scope before storage initialization" >&2
+	show_logs
+	exit 1
+}
+if ! grep -q "security-east" "$LOG_DIR/api-prod-oversized-approval-reviewer-route.log"; then
+	echo "production oversized approval reviewer route failure did not mention reviewer actor" >&2
+	show_logs
+	exit 1
+fi
+if ! grep -q "tenant/workspace scope" "$LOG_DIR/api-prod-oversized-approval-reviewer-route.log"; then
+	echo "production oversized approval reviewer route failure did not mention tenant/workspace scope" >&2
+	show_logs
+	exit 1
+fi
+if grep -q "connect postgres" "$LOG_DIR/api-prod-oversized-approval-reviewer-route.log"; then
+	echo "production oversized approval reviewer route check attempted PostgreSQL before failing config preflight" >&2
+	show_logs
+	exit 1
+fi
+if grep -q "super-secret" "$LOG_DIR/api-prod-oversized-approval-reviewer-route.log"; then
+	echo "production oversized approval reviewer route failure leaked database credentials" >&2
+	show_logs
+	exit 1
+fi
+echo "production deployment preflight rejects approval reviewer routes wider than admin identity scope"
 
 AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 11))" \
 AGENT_HARBOR_DEPLOYMENT_MODE=production \

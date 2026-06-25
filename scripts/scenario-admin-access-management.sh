@@ -441,7 +441,7 @@ request_with_managed_session POST "/api/v1/agents" "$(json_body agent "$EAST_TEN
 expect_status 401 "old managed admin session rejected after rotation"
 echo "verified managed admin key rotation invalidates existing browser sessions"
 
-request POST "/api/v1/auth/login" none "$(json_body login "$ROTATED_KEY")"
+request_managed_login_session "$ROTATED_KEY"
 expect_status 200 "rotated managed admin key login"
 assert_login_session "$MANAGED_ACTOR" "tenant_admin" "$EAST_TENANT_ID" "$EAST_WORKSPACE_ID"
 
@@ -455,6 +455,10 @@ expect_status 200 "disable managed admin identity"
 
 request POST "/api/v1/auth/login" none "$(json_body login "$ROTATED_KEY")"
 expect_status 401 "disabled managed admin key rejected"
+
+request_with_managed_session POST "/api/v1/agents" "$(json_body agent "$EAST_TENANT_ID" "$EAST_WORKSPACE_ID" "Disabled managed session denied agent")"
+expect_status 401 "disabled managed admin session rejected"
+echo "verified managed admin disable invalidates existing browser sessions"
 
 request GET "/api/v1/audit/events?resourceType=admin_identity" platform
 expect_status 200 "admin identity audit events"

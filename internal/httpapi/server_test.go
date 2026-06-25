@@ -1273,6 +1273,15 @@ func TestManagedAdminIdentityLifecycleAndScopedLogin(t *testing.T) {
 	if newLogin.Code != http.StatusOK {
 		t.Fatalf("rotated key should log in, got %d body=%s", newLogin.Code, newLogin.Body.String())
 	}
+	rotatedSession := decodeData[map[string]any](t, newLogin)
+	rotatedCSRFToken, ok := rotatedSession["csrfToken"].(string)
+	if !ok || rotatedCSRFToken == "" {
+		t.Fatalf("rotated managed login should return csrf token, got %#v", rotatedSession)
+	}
+	rotatedCookies := newLogin.Result().Cookies()
+	if len(rotatedCookies) != 1 {
+		t.Fatalf("expected rotated managed login session cookie, got %#v", rotatedCookies)
+	}
 
 	disabled := decodeData[adminIdentityResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities/"+create.Identity.ID+":disable", nil, "", "platform-key"))
 	if disabled.Status != "disabled" {
@@ -1281,6 +1290,16 @@ func TestManagedAdminIdentityLifecycleAndScopedLogin(t *testing.T) {
 	disabledLogin := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": rotate.Key}, "")
 	if disabledLogin.Code != http.StatusUnauthorized {
 		t.Fatalf("disabled admin key must be invalid, got %d body=%s", disabledLogin.Code, disabledLogin.Body.String())
+	}
+	disabledSessionWrite := requestWithCookieAndCSRF(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Disabled Managed Session Caller",
+		"tenantId":    "tenant-east",
+		"workspaceId": "ws-support",
+		"channelType": "local",
+		"status":      "active",
+	}, rotatedCookies[0], rotatedCSRFToken)
+	if disabledSessionWrite.Code != http.StatusUnauthorized {
+		t.Fatalf("disabled managed session must be invalid, got %d body=%s", disabledSessionWrite.Code, disabledSessionWrite.Body.String())
 	}
 
 	events := decodeData[[]auditEventResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/audit/events?resourceType=admin_identity", nil, "", "platform-key"))

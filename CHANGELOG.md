@@ -34,6 +34,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 引导管理员和托管管理员的 actor 现在必须使用 1-80 位字母、数字、点、下划线、连字符或 at 符号，避免不安全身份名称进入审计、审批路由或操作人会话。
 - Managed administrator key rotation now invalidates browser sessions issued before the rotation, closing stale console sessions after key containment.
 - 托管管理员密钥轮换现在会让轮换前签发的浏览器会话失效，在密钥止损后同步关闭旧控制台会话。
+- Managed administrator disablement now has explicit lifecycle coverage for invalidating existing browser sessions, making disablement a verified containment action.
+- 托管管理员禁用现在明确覆盖已有浏览器会话失效路径，使禁用动作成为可验证的即时止损手段。
 - Production deployment mode now requires `AGENT_HARBOR_DATABASE_URL`, blocking in-memory production startup before tenant, grant, credential, or audit state can be lost on restart.
 - 生产部署模式现在要求配置 `AGENT_HARBOR_DATABASE_URL`，会在租户、授权、凭据或审计状态可能因重启丢失前阻断内存存储生产启动。
 - Production deployment mode now validates `AGENT_HARBOR_CREDENTIAL_KEY` before PostgreSQL initialization when persistent storage is configured, blocking missing or weak credential encryption keys before database connection or migration.

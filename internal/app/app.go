@@ -127,6 +127,7 @@ func deploymentEnvFromOS() map[string]string {
 		"AGENT_HARBOR_SESSION_SECRET",
 		"AGENT_HARBOR_DATABASE_URL",
 		"AGENT_HARBOR_CREDENTIAL_KEY",
+		"AGENT_HARBOR_APPROVAL_REVIEWERS",
 		"AGENT_HARBOR_CORS_ORIGINS",
 	}
 	env := make(map[string]string, len(keys))
@@ -205,6 +206,7 @@ func validateDeploymentConfig(mode string, env map[string]string) []deploymentCo
 		),
 		productionAdminKeyStrengthCheck(env),
 		productionAdminKeyUniquenessCheck(env),
+		productionApprovalReviewersCheck(env),
 		productionCORSOriginsCheck(env),
 	)
 
@@ -361,6 +363,20 @@ func productionDatabaseURLCheck(env map[string]string) deploymentConfigCheck {
 	if _, err := pgxpool.ParseConfig(strings.TrimSpace(env["AGENT_HARBOR_DATABASE_URL"])); err != nil {
 		check.Status = "failed"
 		check.Message = "AGENT_HARBOR_DATABASE_URL must be a valid PostgreSQL connection string"
+	}
+	return check
+}
+
+func productionApprovalReviewersCheck(env map[string]string) deploymentConfigCheck {
+	check := deploymentConfigCheck{
+		Code:     "approval_reviewers_valid",
+		Severity: "blocking",
+		Status:   "passed",
+		Message:  "approval reviewer routing is valid",
+	}
+	if _, err := approvalReviewersFromRaw(env["AGENT_HARBOR_APPROVAL_REVIEWERS"]); err != nil {
+		check.Status = "failed"
+		check.Message = err.Error()
 	}
 	return check
 }
@@ -569,7 +585,11 @@ func adminIdentitiesFromEnv() ([]httpapi.AdminIdentity, error) {
 }
 
 func approvalReviewersFromEnv() ([]domain.PermissionPackageApprovalReviewer, error) {
-	raw := strings.TrimSpace(os.Getenv("AGENT_HARBOR_APPROVAL_REVIEWERS"))
+	return approvalReviewersFromRaw(os.Getenv("AGENT_HARBOR_APPROVAL_REVIEWERS"))
+}
+
+func approvalReviewersFromRaw(raw string) ([]domain.PermissionPackageApprovalReviewer, error) {
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, nil
 	}

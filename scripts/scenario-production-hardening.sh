@@ -279,6 +279,10 @@ if port_in_use "$((UNAUTH_API_PORT + 9))"; then
 	echo "production invalid database URL check API port $((UNAUTH_API_PORT + 9)) is already in use" >&2
 	exit 1
 fi
+if port_in_use "$((UNAUTH_API_PORT + 10))"; then
+	echo "production malformed approval reviewer check API port $((UNAUTH_API_PORT + 10)) is already in use" >&2
+	exit 1
+fi
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT_DIR"
@@ -495,6 +499,36 @@ if grep -q "super-secret" "$LOG_DIR/api-prod-invalid-database-url.log"; then
 	exit 1
 fi
 echo "production deployment preflight rejects invalid database URLs without leaking credentials"
+
+AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 10))" \
+AGENT_HARBOR_DEPLOYMENT_MODE=production \
+AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \
+AGENT_HARBOR_SESSION_SECRET=production-hardening-session-secret \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL="postgres://agent_harbor:super-secret@127.0.0.1:bad/agent_harbor" \
+AGENT_HARBOR_CREDENTIAL_KEY=AgentHarborCredentialKey-2026!!! \
+AGENT_HARBOR_APPROVAL_REVIEWERS="security-root=tenant-root" \
+	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-malformed-approval-reviewers.log" 2>&1 && {
+	echo "expected production mode to reject malformed AGENT_HARBOR_APPROVAL_REVIEWERS before storage initialization" >&2
+	show_logs
+	exit 1
+}
+if ! grep -q "AGENT_HARBOR_APPROVAL_REVIEWERS" "$LOG_DIR/api-prod-malformed-approval-reviewers.log"; then
+	echo "production malformed approval reviewers failure did not mention AGENT_HARBOR_APPROVAL_REVIEWERS" >&2
+	show_logs
+	exit 1
+fi
+if grep -q "connect postgres" "$LOG_DIR/api-prod-malformed-approval-reviewers.log"; then
+	echo "production malformed approval reviewers check attempted PostgreSQL before failing config preflight" >&2
+	show_logs
+	exit 1
+fi
+if grep -q "super-secret" "$LOG_DIR/api-prod-malformed-approval-reviewers.log"; then
+	echo "production malformed approval reviewers failure leaked database credentials" >&2
+	show_logs
+	exit 1
+fi
+echo "production deployment preflight rejects malformed approval reviewer routing before storage initialization"
 
 AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 4))" \
 AGENT_HARBOR_DEPLOYMENT_MODE=production \

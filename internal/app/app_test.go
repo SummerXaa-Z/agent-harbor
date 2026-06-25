@@ -297,6 +297,43 @@ func TestApprovalReviewersFromEnvRejectsMalformedRules(t *testing.T) {
 	}
 }
 
+func TestDeploymentConfigPreflightBlocksMalformedProductionApprovalReviewers(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":    "production",
+		"AGENT_HARBOR_ADMIN_KEY":          strongProductionAdminKey,
+		"AGENT_HARBOR_SESSION_SECRET":     strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":       "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":     strongProductionCredentialKey,
+		"AGENT_HARBOR_APPROVAL_REVIEWERS": "security-root=tenant-root",
+	})
+	if err == nil {
+		t.Fatalf("expected malformed production approval reviewers to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_APPROVAL_REVIEWERS") {
+		t.Fatalf("expected production config error to name approval reviewers, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "approval_reviewers_valid", "blocking", "failed") {
+		t.Fatalf("expected approval reviewer validation failure, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightAcceptsProductionApprovalReviewers(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":    "production",
+		"AGENT_HARBOR_ADMIN_KEY":          strongProductionAdminKey,
+		"AGENT_HARBOR_SESSION_SECRET":     strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":       "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":     strongProductionCredentialKey,
+		"AGENT_HARBOR_APPROVAL_REVIEWERS": "security-root=tenant-root/*;security-east=tenant-east/ws-support",
+	})
+	if err != nil {
+		t.Fatalf("valid production approval reviewers should pass preflight: %v", err)
+	}
+	if !hasDeploymentCheck(checks, "approval_reviewers_valid", "blocking", "passed") {
+		t.Fatalf("expected approval reviewer validation pass, got %#v", checks)
+	}
+}
+
 func TestDeploymentConfigPreflightBlocksUnsafeProductionFlags(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
 	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
@@ -409,6 +446,26 @@ func TestNewRunsDatabaseURLPreflightBeforeStorageInitialization(t *testing.T) {
 	}
 	if got := err.Error(); strings.Contains(got, "connect postgres") || strings.Contains(got, "super-secret") {
 		t.Fatalf("database URL preflight should fail before PostgreSQL connection without leaking credentials, got %q", got)
+	}
+}
+
+func TestNewRunsApprovalReviewerPreflightBeforeStorageInitialization(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
+	t.Setenv("AGENT_HARBOR_DATABASE_URL", "postgres://agent_harbor:super-secret@127.0.0.1:bad/agent_harbor")
+	t.Setenv("AGENT_HARBOR_CREDENTIAL_KEY", strongProductionCredentialKey)
+	t.Setenv("AGENT_HARBOR_APPROVAL_REVIEWERS", "security-root=tenant-root")
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatalf("expected production approval reviewer preflight to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_APPROVAL_REVIEWERS") {
+		t.Fatalf("expected approval reviewer preflight error before storage initialization, got %q", got)
+	}
+	if got := err.Error(); strings.Contains(got, "connect postgres") || strings.Contains(got, "super-secret") {
+		t.Fatalf("approval reviewer preflight should fail before PostgreSQL connection without leaking credentials, got %q", got)
 	}
 }
 

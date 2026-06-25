@@ -381,6 +381,42 @@ func TestDeploymentConfigPreflightAcceptsProductionAdminIdentities(t *testing.T)
 	}
 }
 
+func TestDeploymentConfigPreflightRequiresProductionBootstrapPlatformAdmin(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":  "production",
+		"AGENT_HARBOR_ADMIN_IDENTITIES": "east=tenant-admin-production-key-32|role=tenant_admin|tenant=tenant-east|workspace=ws-support",
+		"AGENT_HARBOR_SESSION_SECRET":   strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":     "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":   strongProductionCredentialKey,
+	})
+	if err == nil {
+		t.Fatalf("expected production config without bootstrap platform admin to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ADMIN_KEY") || !strings.Contains(got, "platform_admin") {
+		t.Fatalf("expected production config error to name platform admin recovery config, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "platform_admin_configured", "blocking", "failed") {
+		t.Fatalf("expected platform admin validation failure, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightAcceptsProductionScopedAdminsWithSharedAdminKey(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":  "production",
+		"AGENT_HARBOR_ADMIN_KEY":        strongProductionAdminKey,
+		"AGENT_HARBOR_ADMIN_IDENTITIES": "east=tenant-admin-production-key-32|role=tenant_admin|tenant=tenant-east|workspace=ws-support",
+		"AGENT_HARBOR_SESSION_SECRET":   strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":     "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":   strongProductionCredentialKey,
+	})
+	if err != nil {
+		t.Fatalf("shared admin key should satisfy production platform admin preflight: %v", err)
+	}
+	if !hasDeploymentCheck(checks, "platform_admin_configured", "blocking", "passed") {
+		t.Fatalf("expected platform admin validation pass, got %#v", checks)
+	}
+}
+
 func TestDeploymentConfigPreflightBlocksUnsafeProductionFlags(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
 	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
@@ -532,6 +568,25 @@ func TestNewRunsAdminIdentitiesPreflightBeforeStorageInitialization(t *testing.T
 	}
 	if got := err.Error(); strings.Contains(got, "connect postgres") || strings.Contains(got, "super-secret") {
 		t.Fatalf("admin identity preflight should fail before PostgreSQL connection without leaking credentials, got %q", got)
+	}
+}
+
+func TestNewRunsPlatformAdminPreflightBeforeStorageInitialization(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
+	t.Setenv("AGENT_HARBOR_ADMIN_IDENTITIES", "east=tenant-admin-production-key-32|role=tenant_admin|tenant=tenant-east|workspace=ws-support")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
+	t.Setenv("AGENT_HARBOR_DATABASE_URL", "postgres://agent_harbor:super-secret@127.0.0.1:bad/agent_harbor")
+	t.Setenv("AGENT_HARBOR_CREDENTIAL_KEY", strongProductionCredentialKey)
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatalf("expected production platform admin preflight to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "platform_admin") {
+		t.Fatalf("expected platform admin preflight error before storage initialization, got %q", got)
+	}
+	if got := err.Error(); strings.Contains(got, "connect postgres") || strings.Contains(got, "super-secret") {
+		t.Fatalf("platform admin preflight should fail before PostgreSQL connection without leaking credentials, got %q", got)
 	}
 }
 

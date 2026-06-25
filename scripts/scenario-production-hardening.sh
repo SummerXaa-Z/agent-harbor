@@ -287,6 +287,10 @@ if port_in_use "$((UNAUTH_API_PORT + 11))"; then
 	echo "production malformed admin identities check API port $((UNAUTH_API_PORT + 11)) is already in use" >&2
 	exit 1
 fi
+if port_in_use "$((UNAUTH_API_PORT + 12))"; then
+	echo "production missing platform admin check API port $((UNAUTH_API_PORT + 12)) is already in use" >&2
+	exit 1
+fi
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT_DIR"
@@ -567,6 +571,35 @@ if grep -q "$ADMIN_KEY" "$LOG_DIR/api-prod-malformed-admin-identities.log"; then
 	exit 1
 fi
 echo "production deployment preflight rejects malformed admin identities before storage initialization"
+
+AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 12))" \
+AGENT_HARBOR_DEPLOYMENT_MODE=production \
+AGENT_HARBOR_ADMIN_IDENTITIES="east=tenant-admin-production-key-32|role=tenant_admin|tenant=tenant-east|workspace=ws-support" \
+AGENT_HARBOR_SESSION_SECRET=production-hardening-session-secret \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL="postgres://agent_harbor:super-secret@127.0.0.1:bad/agent_harbor" \
+AGENT_HARBOR_CREDENTIAL_KEY=AgentHarborCredentialKey-2026!!! \
+	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-missing-platform-admin.log" 2>&1 && {
+	echo "expected production mode to reject missing bootstrap platform administrator before storage initialization" >&2
+	show_logs
+	exit 1
+}
+if ! grep -q "platform_admin" "$LOG_DIR/api-prod-missing-platform-admin.log"; then
+	echo "production missing platform admin failure did not mention platform_admin" >&2
+	show_logs
+	exit 1
+fi
+if grep -q "connect postgres" "$LOG_DIR/api-prod-missing-platform-admin.log"; then
+	echo "production missing platform admin check attempted PostgreSQL before failing config preflight" >&2
+	show_logs
+	exit 1
+fi
+if grep -q "super-secret" "$LOG_DIR/api-prod-missing-platform-admin.log"; then
+	echo "production missing platform admin failure leaked database credentials" >&2
+	show_logs
+	exit 1
+fi
+echo "production deployment preflight requires bootstrap platform administrator before storage initialization"
 
 AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 4))" \
 AGENT_HARBOR_DEPLOYMENT_MODE=production \

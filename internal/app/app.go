@@ -205,6 +205,7 @@ func validateDeploymentConfig(mode string, env map[string]string) []deploymentCo
 			"admin authentication is configured",
 		),
 		productionAdminIdentitiesCheck(env),
+		productionPlatformAdminCheck(env),
 		productionAdminKeyStrengthCheck(env),
 		productionAdminKeyUniquenessCheck(env),
 		productionApprovalReviewersCheck(env),
@@ -327,6 +328,34 @@ func productionAdminIdentitiesCheck(env map[string]string) deploymentConfigCheck
 		check.Status = "failed"
 		check.Message = err.Error()
 	}
+	return check
+}
+
+func productionPlatformAdminCheck(env map[string]string) deploymentConfigCheck {
+	check := deploymentConfigCheck{
+		Code:     "platform_admin_configured",
+		Severity: "blocking",
+		Status:   "passed",
+		Message:  "bootstrap platform administrator is configured",
+	}
+	if strings.TrimSpace(env["AGENT_HARBOR_ADMIN_KEY"]) != "" {
+		return check
+	}
+	raw := strings.TrimSpace(env["AGENT_HARBOR_ADMIN_IDENTITIES"])
+	if raw == "" {
+		return check
+	}
+	identities, err := adminIdentitiesFromRaw(raw)
+	if err != nil {
+		return check
+	}
+	for _, identity := range identities {
+		if identity.Role == string(domain.AdminIdentityRolePlatformAdmin) {
+			return check
+		}
+	}
+	check.Status = "failed"
+	check.Message = "AGENT_HARBOR_ADMIN_KEY or an AGENT_HARBOR_ADMIN_IDENTITIES role=platform_admin entry is required in production for recovery administration"
 	return check
 }
 

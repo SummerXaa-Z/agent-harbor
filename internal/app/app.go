@@ -625,6 +625,9 @@ func adminIdentitiesFromRaw(raw string) ([]httpapi.AdminIdentity, error) {
 		if !validAdminIdentityRole(identity.Role) {
 			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES role must be platform_admin, tenant_admin, or security_reviewer")
 		}
+		if identity.Role == string(domain.AdminIdentityRolePlatformAdmin) && (identity.TenantID != "" || identity.WorkspaceID != "") {
+			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES platform_admin entries must not include tenant or workspace")
+		}
 		if identity.Role != string(domain.AdminIdentityRolePlatformAdmin) && identity.TenantID == "" {
 			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES scoped admin roles must include tenant")
 		}

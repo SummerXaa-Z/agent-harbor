@@ -300,6 +300,18 @@ func TestAdminIdentitiesFromEnvRejectsUnknownRole(t *testing.T) {
 	}
 }
 
+func TestAdminIdentitiesFromEnvRejectsScopedPlatformAdmin(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_ADMIN_IDENTITIES", "platform=platform-key|role=platform_admin|tenant=tenant-east|workspace=ws-support")
+
+	_, err := adminIdentitiesFromEnv()
+	if err == nil {
+		t.Fatalf("expected scoped platform admin identity to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "platform_admin") || !strings.Contains(got, "must not include tenant or workspace") {
+		t.Fatalf("expected platform admin scope validation error, got %q", got)
+	}
+}
+
 func TestApprovalReviewersFromEnvRejectsMalformedRules(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_APPROVAL_REVIEWERS", "security-root=tenant-root")
 
@@ -359,6 +371,25 @@ func TestDeploymentConfigPreflightBlocksMalformedProductionAdminIdentities(t *te
 	}
 	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ADMIN_IDENTITIES") {
 		t.Fatalf("expected production config error to name admin identities, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "admin_identities_valid", "blocking", "failed") {
+		t.Fatalf("expected admin identity validation failure, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightBlocksScopedProductionPlatformAdminIdentity(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":  "production",
+		"AGENT_HARBOR_ADMIN_IDENTITIES": "platform=" + strongProductionAdminKey + "|role=platform_admin|tenant=tenant-east|workspace=ws-support",
+		"AGENT_HARBOR_SESSION_SECRET":   strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":     "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":   strongProductionCredentialKey,
+	})
+	if err == nil {
+		t.Fatalf("expected scoped production platform admin identity to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "platform_admin") || !strings.Contains(got, "must not include tenant or workspace") {
+		t.Fatalf("expected production config error to explain platform admin scope mismatch, got %q", got)
 	}
 	if !hasDeploymentCheck(checks, "admin_identities_valid", "blocking", "failed") {
 		t.Fatalf("expected admin identity validation failure, got %#v", checks)

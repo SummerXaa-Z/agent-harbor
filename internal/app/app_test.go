@@ -12,6 +12,7 @@ import (
 
 const strongProductionAdminKey = "test-production-admin-key-32"
 const strongProductionSessionSecret = "test-production-session-secret-32-bytes"
+const strongProductionCredentialKey = "AgentHarborCredentialKey-2026!!!"
 
 func TestPostgresCredentialKeyFromEnvRequiresKey(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_CREDENTIAL_KEY", "")
@@ -173,6 +174,7 @@ func TestDeploymentConfigPreflightAllowsExplicitProductionCORSOrigins(t *testing
 		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
 		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
 		"AGENT_HARBOR_DATABASE_URL":    "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":  strongProductionCredentialKey,
 		"AGENT_HARBOR_CORS_ORIGINS":    "https://console.example.com",
 	})
 	if err != nil {
@@ -361,6 +363,7 @@ func TestNewRunsProductionPreflightBeforeStorageInitialization(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_ADMIN_KEY", "short-key")
 	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
 	t.Setenv("AGENT_HARBOR_DATABASE_URL", "://invalid-postgres-url")
+	t.Setenv("AGENT_HARBOR_CREDENTIAL_KEY", strongProductionCredentialKey)
 
 	_, err := New(context.Background())
 	if err == nil {
@@ -368,6 +371,25 @@ func TestNewRunsProductionPreflightBeforeStorageInitialization(t *testing.T) {
 	}
 	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ADMIN_KEY") {
 		t.Fatalf("expected production preflight error before storage initialization, got %q", got)
+	}
+}
+
+func TestNewRunsCredentialKeyPreflightBeforeStorageInitialization(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
+	t.Setenv("AGENT_HARBOR_DATABASE_URL", "://invalid-postgres-url")
+	t.Setenv("AGENT_HARBOR_CREDENTIAL_KEY", "")
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatalf("expected production credential key preflight to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_CREDENTIAL_KEY") {
+		t.Fatalf("expected credential key preflight error before storage initialization, got %q", got)
+	}
+	if got := err.Error(); strings.Contains(got, "connect postgres") {
+		t.Fatalf("credential key preflight should fail before PostgreSQL connection, got %q", got)
 	}
 }
 
@@ -429,6 +451,7 @@ func TestDeploymentConfigPreflightAllowsSafeProductionConfig(t *testing.T) {
 		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
 		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
 		"AGENT_HARBOR_DATABASE_URL":    "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":  strongProductionCredentialKey,
 	})
 	if err != nil {
 		t.Fatalf("safe production config should pass preflight: %v", err)
@@ -529,12 +552,50 @@ func TestDeploymentConfigPreflightAcceptsProductionDatabaseStorage(t *testing.T)
 		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
 		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
 		"AGENT_HARBOR_DATABASE_URL":    "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":  strongProductionCredentialKey,
 	})
 	if err != nil {
 		t.Fatalf("preflight should accept database storage: %v", err)
 	}
 	if !hasDeploymentCheck(checks, "persistent_storage_configured", "blocking", "passed") {
 		t.Fatalf("expected persistent storage pass, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightRequiresProductionCredentialKey(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
+		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":    "postgres://agent-harbor.example.invalid/agent_harbor",
+	})
+	if err == nil {
+		t.Fatalf("expected missing production credential key to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_CREDENTIAL_KEY") {
+		t.Fatalf("expected production config error to name missing credential key, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "credential_key_configured", "blocking", "failed") {
+		t.Fatalf("expected credential key failure, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightBlocksWeakProductionCredentialKey(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
+		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":    "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	})
+	if err == nil {
+		t.Fatalf("expected weak production credential key to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_CREDENTIAL_KEY") {
+		t.Fatalf("expected production config error to name weak credential key, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "credential_key_configured", "blocking", "failed") {
+		t.Fatalf("expected credential key failure, got %#v", checks)
 	}
 }
 

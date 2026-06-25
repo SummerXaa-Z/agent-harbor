@@ -74,6 +74,11 @@ func New(ctx context.Context) (*App, error) {
 
 	repo := store.Repository(store.NewMemory())
 	if databaseURL := os.Getenv("AGENT_HARBOR_DATABASE_URL"); databaseURL != "" {
+		credentialKey, err := postgresCredentialKeyFromEnv()
+		if err != nil {
+			closeFn()
+			return nil, fmt.Errorf("parse credential key: %w", err)
+		}
 		pool, err := pgxpool.New(ctx, databaseURL)
 		if err != nil {
 			closeFn()
@@ -83,12 +88,6 @@ func New(ctx context.Context) (*App, error) {
 			pool.Close()
 			closeFn()
 			return nil, err
-		}
-		credentialKey, err := postgresCredentialKeyFromEnv()
-		if err != nil {
-			pool.Close()
-			closeFn()
-			return nil, fmt.Errorf("parse credential key: %w", err)
 		}
 		repo = store.NewPostgresWithCredentialKey(pool, credentialKey)
 		closeFn = pool.Close
@@ -127,6 +126,7 @@ func deploymentEnvFromOS() map[string]string {
 		"AGENT_HARBOR_ADMIN_IDENTITIES",
 		"AGENT_HARBOR_SESSION_SECRET",
 		"AGENT_HARBOR_DATABASE_URL",
+		"AGENT_HARBOR_CREDENTIAL_KEY",
 		"AGENT_HARBOR_CORS_ORIGINS",
 	}
 	env := make(map[string]string, len(keys))
@@ -238,6 +238,7 @@ func validateDeploymentConfig(mode string, env map[string]string) []deploymentCo
 			Status:   "passed",
 			Message:  "persistent database storage is configured",
 		})
+		checks = append(checks, productionCredentialKeyCheck(env))
 	}
 	return checks
 }
@@ -325,6 +326,26 @@ func productionSessionSecretStrengthCheck(env map[string]string) deploymentConfi
 	if weakProductionSecretValue(env["AGENT_HARBOR_SESSION_SECRET"], minProductionSessionSecretLength) {
 		check.Status = "failed"
 		check.Message = "AGENT_HARBOR_SESSION_SECRET must be at least 32 characters and not a common weak value"
+	}
+	return check
+}
+
+func productionCredentialKeyCheck(env map[string]string) deploymentConfigCheck {
+	raw := strings.TrimSpace(env["AGENT_HARBOR_CREDENTIAL_KEY"])
+	check := deploymentConfigCheck{
+		Code:     "credential_key_configured",
+		Severity: "blocking",
+		Status:   "passed",
+		Message:  "credential encryption key is configured",
+	}
+	if raw == "" {
+		check.Status = "failed"
+		check.Message = "AGENT_HARBOR_CREDENTIAL_KEY is required in production when AGENT_HARBOR_DATABASE_URL is set"
+		return check
+	}
+	if _, err := security.ParseCredentialKey(raw); err != nil {
+		check.Status = "failed"
+		check.Message = "AGENT_HARBOR_CREDENTIAL_KEY " + err.Error()
 	}
 	return check
 }

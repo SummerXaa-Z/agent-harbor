@@ -288,6 +288,22 @@ func TestAdminIdentitiesFromEnvRejectsDuplicateKeys(t *testing.T) {
 	}
 }
 
+func TestAdminIdentitiesFromEnvRejectsReservedActors(t *testing.T) {
+	for _, actor := range []string{"admin-key", "local-dev"} {
+		t.Run(actor, func(t *testing.T) {
+			t.Setenv("AGENT_HARBOR_ADMIN_IDENTITIES", actor+"=reserved-actor-key|role=platform_admin")
+
+			_, err := adminIdentitiesFromEnv()
+			if err == nil {
+				t.Fatalf("expected reserved admin identity actor %q to fail", actor)
+			}
+			if got := err.Error(); !strings.Contains(got, "reserved actor") || !strings.Contains(got, actor) {
+				t.Fatalf("expected reserved actor error, got %q", got)
+			}
+		})
+	}
+}
+
 func TestAdminIdentitiesFromEnvRejectsUnknownRole(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_ADMIN_IDENTITIES", "platform=platform-key|role=owner|tenant=tenant-east")
 
@@ -451,6 +467,25 @@ func TestDeploymentConfigPreflightBlocksMalformedProductionAdminIdentities(t *te
 	}
 	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ADMIN_IDENTITIES") {
 		t.Fatalf("expected production config error to name admin identities, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "admin_identities_valid", "blocking", "failed") {
+		t.Fatalf("expected admin identity validation failure, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightBlocksReservedProductionAdminIdentityActor(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":  "production",
+		"AGENT_HARBOR_ADMIN_IDENTITIES": "admin-key=" + strongProductionAdminKey + "|role=platform_admin",
+		"AGENT_HARBOR_SESSION_SECRET":   strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":     "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":   strongProductionCredentialKey,
+	})
+	if err == nil {
+		t.Fatalf("expected reserved production admin identity actor to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "reserved actor") || !strings.Contains(got, "admin-key") {
+		t.Fatalf("expected production config error to explain reserved actor, got %q", got)
 	}
 	if !hasDeploymentCheck(checks, "admin_identities_valid", "blocking", "failed") {
 		t.Fatalf("expected admin identity validation failure, got %#v", checks)

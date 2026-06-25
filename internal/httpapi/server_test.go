@@ -5559,6 +5559,31 @@ func TestPermissionPackageApprovalReviewerQueueUsesAuthenticatedAdminIdentity(t 
 	}
 }
 
+func TestPermissionPackageApprovalReviewerQueueDefaultsToAuthenticatedReviewer(t *testing.T) {
+	repo := store.NewMemory()
+	now := time.Date(2026, 6, 6, 10, 40, 0, 0, time.UTC)
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	eastSupport := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-default-east-support", "tenant-east", "ws-support", now)
+	createDirectPermissionPackageApprovalRequest(t, repo, "ppar-default-east-finance", "tenant-east", "ws-finance", now.Add(time.Minute))
+	router := newRouterWithRepoAdminIdentitiesAndApprovalReviewers(repo, []httpapi.AdminIdentity{
+		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+		{Actor: "security", Key: "security-key", Role: "security_reviewer", TenantID: "tenant-east"},
+	}, []domain.PermissionPackageApprovalReviewer{
+		{Reviewer: "security", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+
+	securityQueue := decodeData[[]permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?status=pending&limit=10", nil, "", "security-key"))
+	if len(securityQueue) != 1 || securityQueue[0].ID != eastSupport.ID {
+		t.Fatalf("authenticated reviewer default queue should be routed, got %#v", securityQueue)
+	}
+
+	platformQueue := decodeData[[]permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?status=pending&limit=10", nil, "", "platform-key"))
+	if len(platformQueue) != 2 {
+		t.Fatalf("platform admin should keep all-queue visibility when reviewer is omitted, got %#v", platformQueue)
+	}
+}
+
 func TestManagementMCPApprovalReviewerUsesAuthenticatedAdminIdentity(t *testing.T) {
 	repo := store.NewMemory()
 	now := time.Date(2026, 6, 6, 10, 45, 0, 0, time.UTC)
@@ -5636,6 +5661,61 @@ func TestManagementMCPApprovalReviewerUsesAuthenticatedAdminIdentity(t *testing.
 	}
 	if approved.Status != "approved" || approved.ReviewedBy != "security" {
 		t.Fatalf("authenticated MCP reviewer should approve as themselves, got %#v", approved)
+	}
+}
+
+func TestManagementMCPApprovalReviewerQueueDefaultsToAuthenticatedReviewer(t *testing.T) {
+	repo := store.NewMemory()
+	now := time.Date(2026, 6, 6, 10, 50, 0, 0, time.UTC)
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	eastSupport := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-mcp-default-east-support", "tenant-east", "ws-support", now)
+	createDirectPermissionPackageApprovalRequest(t, repo, "ppar-mcp-default-east-finance", "tenant-east", "ws-finance", now.Add(time.Minute))
+	router := newRouterWithRepoAdminIdentitiesAndApprovalReviewers(repo, []httpapi.AdminIdentity{
+		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+		{Actor: "security", Key: "security-key", Role: "security_reviewer", TenantID: "tenant-east"},
+	}, []domain.PermissionPackageApprovalReviewer{
+		{Reviewer: "security", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+
+	securityCall := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-list-default-reviewer",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_permission_package_approval_requests",
+			"arguments": map[string]any{
+				"status": "pending",
+				"limit":  10,
+			},
+		},
+	}, "", "security-key"))
+	var securityQueue []permissionPackageApprovalRequestResponse
+	if err := json.Unmarshal(securityCall.Result.StructuredContent, &securityQueue); err != nil {
+		t.Fatalf("decode authenticated MCP default reviewer queue: %v", err)
+	}
+	if len(securityQueue) != 1 || securityQueue[0].ID != eastSupport.ID {
+		t.Fatalf("authenticated MCP reviewer default queue should be routed, got %#v", securityQueue)
+	}
+
+	platformCall := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-list-default-platform",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_permission_package_approval_requests",
+			"arguments": map[string]any{
+				"status": "pending",
+				"limit":  10,
+			},
+		},
+	}, "", "platform-key"))
+	var platformQueue []permissionPackageApprovalRequestResponse
+	if err := json.Unmarshal(platformCall.Result.StructuredContent, &platformQueue); err != nil {
+		t.Fatalf("decode platform MCP default approval queue: %v", err)
+	}
+	if len(platformQueue) != 2 {
+		t.Fatalf("platform admin should keep all-queue MCP visibility when reviewer is omitted, got %#v", platformQueue)
 	}
 }
 

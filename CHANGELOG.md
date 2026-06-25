@@ -34,6 +34,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 生产部署模式现在会在存储初始化前校验已配置的 `AGENT_HARBOR_APPROVAL_REVIEWERS` 审批人路由，阻断格式错误的审批范围，避免审批链路带着错误路由启动。
 - Approval reviewer queue filtering and management MCP approval resolution now bind any supplied `reviewer` to the authenticated administrator identity, closing reviewer impersonation on read and agent-driven approval paths.
 - 审批人队列过滤和管理 MCP 审批处理现在会把传入的 `reviewer` 绑定到已认证的管理员身份，关闭读取队列和 Agent 驱动审批路径上的审批人冒充。
+- Approval request list APIs now default non-platform administrators to their authenticated reviewer queue when approval routing is configured and `reviewer` is omitted, while platform administrators keep all-queue visibility.
+- 配置审批人路由后，审批请求列表 API 在非平台管理员省略 `reviewer` 时会默认限定到其认证身份对应的审批队列；平台管理员仍保留全局队列可见性。
 - Production deployment mode now disables default local development CORS origins; browser origins must be explicitly set through `AGENT_HARBOR_CORS_ORIGINS`.
 - 生产部署模式现在会关闭默认本地开发 CORS 来源；浏览器来源必须通过 `AGENT_HARBOR_CORS_ORIGINS` 显式配置。
 - Bootstrap administrator identities now reject duplicate actors or duplicate keys during startup configuration parsing, preventing ambiguous audit actors and tenant/workspace boundaries.

@@ -2980,17 +2980,7 @@ func (s *Server) listPermissionPackageApprovalRequests(w http.ResponseWriter, r 
 		Status:           status,
 		Limit:            limit,
 	}
-	var rows []domain.PermissionPackageApprovalRequest
-	if reviewer != "" {
-		reviewer, err = reviewerFromRequest(reviewer, r)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		rows, err = s.listPermissionPackageApprovalRequestsForReviewer(r.Context(), filter, reviewer, limit)
-	} else {
-		rows, err = s.repo.ListPermissionPackageApprovalRequests(r.Context(), filter)
-	}
+	rows, err := s.listPermissionPackageApprovalRequestsForRequest(r.Context(), r, filter, reviewer, limit)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -5506,6 +5496,35 @@ func (s *Server) listPermissionPackageApprovalRequestsForReviewer(ctx context.Co
 	}
 	sortPermissionPackageApprovalRequests(rows)
 	return limitPermissionPackageApprovalRequests(rows, limit), nil
+}
+
+func (s *Server) listPermissionPackageApprovalRequestsForRequest(ctx context.Context, r *http.Request, filter store.PermissionPackageApprovalRequestFilter, reviewer string, limit int) ([]domain.PermissionPackageApprovalRequest, error) {
+	reviewer, scoped, err := s.permissionPackageApprovalListReviewer(r, reviewer)
+	if err != nil {
+		return nil, err
+	}
+	if scoped {
+		return s.listPermissionPackageApprovalRequestsForReviewer(ctx, filter, reviewer, limit)
+	}
+	filter.Limit = limit
+	return s.repo.ListPermissionPackageApprovalRequests(ctx, filter)
+}
+
+func (s *Server) permissionPackageApprovalListReviewer(r *http.Request, reviewer string) (string, bool, error) {
+	reviewer = strings.TrimSpace(reviewer)
+	if reviewer != "" {
+		resolved, err := reviewerFromRequest(reviewer, r)
+		return resolved, true, err
+	}
+	if len(s.approvalReviewers) == 0 {
+		return "", false, nil
+	}
+	principal, ok := requestAdminPrincipal(r)
+	if !ok || principal.Role == adminRolePlatformAdmin {
+		return "", false, nil
+	}
+	resolved, err := reviewerFromRequest("", r)
+	return resolved, true, err
 }
 
 func (s *Server) permissionPackageApprovalReviewerListFilter(ctx context.Context, filter store.PermissionPackageApprovalRequestFilter, rule domain.PermissionPackageApprovalReviewer, limit int) (store.PermissionPackageApprovalRequestFilter, bool, error) {

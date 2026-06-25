@@ -325,17 +325,7 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
-		reviewer := strings.TrimSpace(args.Reviewer)
-		var rows []domain.PermissionPackageApprovalRequest
-		if reviewer != "" {
-			reviewer, err = reviewerFromRequest(reviewer, r)
-			if err != nil {
-				return managementMCPCallResult{}, err
-			}
-			rows, err = s.listPermissionPackageApprovalRequestsForReviewer(r.Context(), filter, reviewer, filter.Limit)
-		} else {
-			rows, err = s.repo.ListPermissionPackageApprovalRequests(r.Context(), filter)
-		}
+		rows, err := s.listPermissionPackageApprovalRequestsForRequest(r.Context(), r, filter, args.Reviewer, filter.Limit)
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}

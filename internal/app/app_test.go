@@ -393,6 +393,25 @@ func TestNewRunsCredentialKeyPreflightBeforeStorageInitialization(t *testing.T) 
 	}
 }
 
+func TestNewRunsDatabaseURLPreflightBeforeStorageInitialization(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
+	t.Setenv("AGENT_HARBOR_ADMIN_KEY", strongProductionAdminKey)
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
+	t.Setenv("AGENT_HARBOR_DATABASE_URL", "postgres://agent_harbor:super-secret@127.0.0.1:bad/agent_harbor")
+	t.Setenv("AGENT_HARBOR_CREDENTIAL_KEY", strongProductionCredentialKey)
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatalf("expected production database URL preflight to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_DATABASE_URL") {
+		t.Fatalf("expected database URL preflight error before storage initialization, got %q", got)
+	}
+	if got := err.Error(); strings.Contains(got, "connect postgres") || strings.Contains(got, "super-secret") {
+		t.Fatalf("database URL preflight should fail before PostgreSQL connection without leaking credentials, got %q", got)
+	}
+}
+
 func TestDeploymentConfigPreflightBlocksCommonProductionAdminKey(t *testing.T) {
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
@@ -559,6 +578,31 @@ func TestDeploymentConfigPreflightAcceptsProductionDatabaseStorage(t *testing.T)
 	}
 	if !hasDeploymentCheck(checks, "persistent_storage_configured", "blocking", "passed") {
 		t.Fatalf("expected persistent storage pass, got %#v", checks)
+	}
+	if !hasDeploymentCheck(checks, "database_url_valid", "blocking", "passed") {
+		t.Fatalf("expected database URL validation pass, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightBlocksInvalidProductionDatabaseURL(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE": "production",
+		"AGENT_HARBOR_ADMIN_KEY":       strongProductionAdminKey,
+		"AGENT_HARBOR_SESSION_SECRET":  strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":    "postgres://agent_harbor:super-secret@127.0.0.1:bad/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":  strongProductionCredentialKey,
+	})
+	if err == nil {
+		t.Fatalf("expected invalid production database URL to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_DATABASE_URL") {
+		t.Fatalf("expected production config error to name database URL, got %q", got)
+	}
+	if got := err.Error(); strings.Contains(got, "super-secret") {
+		t.Fatalf("database URL preflight should not leak credentials, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "database_url_valid", "blocking", "failed") {
+		t.Fatalf("expected database URL validation failure, got %#v", checks)
 	}
 }
 

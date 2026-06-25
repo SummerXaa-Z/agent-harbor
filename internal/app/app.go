@@ -238,6 +238,7 @@ func validateDeploymentConfig(mode string, env map[string]string) []deploymentCo
 			Status:   "passed",
 			Message:  "persistent database storage is configured",
 		})
+		checks = append(checks, productionDatabaseURLCheck(env))
 		checks = append(checks, productionCredentialKeyCheck(env))
 	}
 	return checks
@@ -346,6 +347,20 @@ func productionCredentialKeyCheck(env map[string]string) deploymentConfigCheck {
 	if _, err := security.ParseCredentialKey(raw); err != nil {
 		check.Status = "failed"
 		check.Message = "AGENT_HARBOR_CREDENTIAL_KEY " + err.Error()
+	}
+	return check
+}
+
+func productionDatabaseURLCheck(env map[string]string) deploymentConfigCheck {
+	check := deploymentConfigCheck{
+		Code:     "database_url_valid",
+		Severity: "blocking",
+		Status:   "passed",
+		Message:  "database URL is parseable",
+	}
+	if _, err := pgxpool.ParseConfig(strings.TrimSpace(env["AGENT_HARBOR_DATABASE_URL"])); err != nil {
+		check.Status = "failed"
+		check.Message = "AGENT_HARBOR_DATABASE_URL must be a valid PostgreSQL connection string"
 	}
 	return check
 }

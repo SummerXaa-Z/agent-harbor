@@ -26,6 +26,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 生产部署模式现在要求配置 `AGENT_HARBOR_DATABASE_URL`，会在租户、授权、凭据或审计状态可能因重启丢失前阻断内存存储生产启动。
 - Production deployment mode now validates `AGENT_HARBOR_CREDENTIAL_KEY` before PostgreSQL initialization when persistent storage is configured, blocking missing or weak credential encryption keys before database connection or migration.
 - 生产部署模式现在会在配置持久化存储时先校验 `AGENT_HARBOR_CREDENTIAL_KEY`，在数据库连接或迁移前阻断缺失或弱值凭据加密密钥。
+- Production deployment mode now validates `AGENT_HARBOR_DATABASE_URL` syntax before PostgreSQL initialization and reports a redacted startup error for invalid connection strings.
+- 生产部署模式现在会在 PostgreSQL 初始化前校验 `AGENT_HARBOR_DATABASE_URL` 格式，并对无效连接串返回脱敏启动错误。
 - Production deployment mode now disables default local development CORS origins; browser origins must be explicitly set through `AGENT_HARBOR_CORS_ORIGINS`.
 - 生产部署模式现在会关闭默认本地开发 CORS 来源；浏览器来源必须通过 `AGENT_HARBOR_CORS_ORIGINS` 显式配置。
 - Bootstrap administrator identities now reject duplicate actors or duplicate keys during startup configuration parsing, preventing ambiguous audit actors and tenant/workspace boundaries.

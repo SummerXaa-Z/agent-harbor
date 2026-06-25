@@ -204,6 +204,7 @@ func validateDeploymentConfig(mode string, env map[string]string) []deploymentCo
 			"AGENT_HARBOR_ADMIN_KEY or AGENT_HARBOR_ADMIN_IDENTITIES is required in production",
 			"admin authentication is configured",
 		),
+		productionAdminIdentitiesCheck(env),
 		productionAdminKeyStrengthCheck(env),
 		productionAdminKeyUniquenessCheck(env),
 		productionApprovalReviewersCheck(env),
@@ -311,6 +312,20 @@ func productionAdminKeyUniquenessCheck(env map[string]string) deploymentConfigCh
 			check.Message = "AGENT_HARBOR_ADMIN_KEY must not match any AGENT_HARBOR_ADMIN_IDENTITIES key"
 			return check
 		}
+	}
+	return check
+}
+
+func productionAdminIdentitiesCheck(env map[string]string) deploymentConfigCheck {
+	check := deploymentConfigCheck{
+		Code:     "admin_identities_valid",
+		Severity: "blocking",
+		Status:   "passed",
+		Message:  "named bootstrap admin identities are valid",
+	}
+	if _, err := adminIdentitiesFromRaw(env["AGENT_HARBOR_ADMIN_IDENTITIES"]); err != nil {
+		check.Status = "failed"
+		check.Message = err.Error()
 	}
 	return check
 }
@@ -521,7 +536,11 @@ func validateCORSOrigin(origin string) error {
 }
 
 func adminIdentitiesFromEnv() ([]httpapi.AdminIdentity, error) {
-	raw := strings.TrimSpace(os.Getenv("AGENT_HARBOR_ADMIN_IDENTITIES"))
+	return adminIdentitiesFromRaw(os.Getenv("AGENT_HARBOR_ADMIN_IDENTITIES"))
+}
+
+func adminIdentitiesFromRaw(raw string) ([]httpapi.AdminIdentity, error) {
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, nil
 	}
@@ -544,7 +563,7 @@ func adminIdentitiesFromEnv() ([]httpapi.AdminIdentity, error) {
 		identity := httpapi.AdminIdentity{
 			Actor: strings.TrimSpace(actor),
 			Key:   strings.TrimSpace(parts[0]),
-			Role:  "platform_admin",
+			Role:  string(domain.AdminIdentityRolePlatformAdmin),
 		}
 		for _, part := range parts[1:] {
 			name, value, ok := strings.Cut(strings.TrimSpace(part), "=")
@@ -572,9 +591,12 @@ func adminIdentitiesFromEnv() ([]httpapi.AdminIdentity, error) {
 			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES duplicate key for actor %q", identity.Actor)
 		}
 		if identity.Role == "" {
-			identity.Role = "platform_admin"
+			identity.Role = string(domain.AdminIdentityRolePlatformAdmin)
 		}
-		if identity.Role != "platform_admin" && identity.TenantID == "" {
+		if !validAdminIdentityRole(identity.Role) {
+			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES role must be platform_admin, tenant_admin, or security_reviewer")
+		}
+		if identity.Role != string(domain.AdminIdentityRolePlatformAdmin) && identity.TenantID == "" {
 			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES scoped admin roles must include tenant")
 		}
 		seenActors[identity.Actor] = struct{}{}
@@ -582,6 +604,17 @@ func adminIdentitiesFromEnv() ([]httpapi.AdminIdentity, error) {
 		identities = append(identities, identity)
 	}
 	return identities, nil
+}
+
+func validAdminIdentityRole(role string) bool {
+	switch role {
+	case string(domain.AdminIdentityRolePlatformAdmin),
+		string(domain.AdminIdentityRoleTenantAdmin),
+		string(domain.AdminIdentityRoleSecurityReviewer):
+		return true
+	default:
+		return false
+	}
 }
 
 func approvalReviewersFromEnv() ([]domain.PermissionPackageApprovalReviewer, error) {

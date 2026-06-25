@@ -288,6 +288,18 @@ func TestAdminIdentitiesFromEnvRejectsDuplicateKeys(t *testing.T) {
 	}
 }
 
+func TestAdminIdentitiesFromEnvRejectsUnknownRole(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_ADMIN_IDENTITIES", "platform=platform-key|role=owner|tenant=tenant-east")
+
+	_, err := adminIdentitiesFromEnv()
+	if err == nil {
+		t.Fatalf("expected unknown admin identity role to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "role must be platform_admin, tenant_admin, or security_reviewer") {
+		t.Fatalf("expected role validation error, got %q", got)
+	}
+}
+
 func TestApprovalReviewersFromEnvRejectsMalformedRules(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_APPROVAL_REVIEWERS", "security-root=tenant-root")
 
@@ -331,6 +343,41 @@ func TestDeploymentConfigPreflightAcceptsProductionApprovalReviewers(t *testing.
 	}
 	if !hasDeploymentCheck(checks, "approval_reviewers_valid", "blocking", "passed") {
 		t.Fatalf("expected approval reviewer validation pass, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightBlocksMalformedProductionAdminIdentities(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":  "production",
+		"AGENT_HARBOR_ADMIN_IDENTITIES": "platform=" + strongProductionAdminKey + "|role=owner|tenant=tenant-east",
+		"AGENT_HARBOR_SESSION_SECRET":   strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":     "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":   strongProductionCredentialKey,
+	})
+	if err == nil {
+		t.Fatalf("expected malformed production admin identities to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ADMIN_IDENTITIES") {
+		t.Fatalf("expected production config error to name admin identities, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "admin_identities_valid", "blocking", "failed") {
+		t.Fatalf("expected admin identity validation failure, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightAcceptsProductionAdminIdentities(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":  "production",
+		"AGENT_HARBOR_ADMIN_IDENTITIES": "platform=" + strongProductionAdminKey + "|role=platform_admin;east=tenant-admin-production-key-32|role=tenant_admin|tenant=tenant-east|workspace=ws-support",
+		"AGENT_HARBOR_SESSION_SECRET":   strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":     "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":   strongProductionCredentialKey,
+	})
+	if err != nil {
+		t.Fatalf("valid production admin identities should pass preflight: %v", err)
+	}
+	if !hasDeploymentCheck(checks, "admin_identities_valid", "blocking", "passed") {
+		t.Fatalf("expected admin identity validation pass, got %#v", checks)
 	}
 }
 
@@ -466,6 +513,25 @@ func TestNewRunsApprovalReviewerPreflightBeforeStorageInitialization(t *testing.
 	}
 	if got := err.Error(); strings.Contains(got, "connect postgres") || strings.Contains(got, "super-secret") {
 		t.Fatalf("approval reviewer preflight should fail before PostgreSQL connection without leaking credentials, got %q", got)
+	}
+}
+
+func TestNewRunsAdminIdentitiesPreflightBeforeStorageInitialization(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_DEPLOYMENT_MODE", "production")
+	t.Setenv("AGENT_HARBOR_ADMIN_IDENTITIES", "platform="+strongProductionAdminKey+"|role=owner|tenant=tenant-east")
+	t.Setenv("AGENT_HARBOR_SESSION_SECRET", strongProductionSessionSecret)
+	t.Setenv("AGENT_HARBOR_DATABASE_URL", "postgres://agent_harbor:super-secret@127.0.0.1:bad/agent_harbor")
+	t.Setenv("AGENT_HARBOR_CREDENTIAL_KEY", strongProductionCredentialKey)
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatalf("expected production admin identity preflight to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "AGENT_HARBOR_ADMIN_IDENTITIES") {
+		t.Fatalf("expected admin identity preflight error before storage initialization, got %q", got)
+	}
+	if got := err.Error(); strings.Contains(got, "connect postgres") || strings.Contains(got, "super-secret") {
+		t.Fatalf("admin identity preflight should fail before PostgreSQL connection without leaking credentials, got %q", got)
 	}
 }
 

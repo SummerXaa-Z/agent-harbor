@@ -22,6 +22,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 生产部署模式现在会阻断通过 `AGENT_HARBOR_ADMIN_KEY` 或 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置的过短或常见弱值引导管理员密钥。
 - Production deployment mode now blocks `AGENT_HARBOR_ADMIN_KEY` when it matches any `AGENT_HARBOR_ADMIN_IDENTITIES` key, preventing ambiguous bootstrap administrator identity resolution.
 - 生产部署模式现在会阻断 `AGENT_HARBOR_ADMIN_KEY` 与任一 `AGENT_HARBOR_ADMIN_IDENTITIES` key 相同的配置，避免引导管理员身份解析产生歧义。
+- Production deployment mode now validates the full `AGENT_HARBOR_ADMIN_IDENTITIES` syntax before storage initialization, blocking malformed actors, scoped attributes, duplicate identities, unknown roles, or missing scoped tenants before the admin path can start with broken boundaries.
+- 生产部署模式现在会在存储初始化前完整校验 `AGENT_HARBOR_ADMIN_IDENTITIES` 语法，阻断格式错误的 actor、范围属性、重复身份、未知角色或缺失范围租户，避免管理链路带着错误边界启动。
 - Production deployment mode now requires `AGENT_HARBOR_DATABASE_URL`, blocking in-memory production startup before tenant, grant, credential, or audit state can be lost on restart.
 - 生产部署模式现在要求配置 `AGENT_HARBOR_DATABASE_URL`，会在租户、授权、凭据或审计状态可能因重启丢失前阻断内存存储生产启动。
 - Production deployment mode now validates `AGENT_HARBOR_CREDENTIAL_KEY` before PostgreSQL initialization when persistent storage is configured, blocking missing or weak credential encryption keys before database connection or migration.

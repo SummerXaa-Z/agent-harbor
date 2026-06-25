@@ -418,11 +418,47 @@ func productionApprovalReviewersCheck(env map[string]string) deploymentConfigChe
 		Status:   "passed",
 		Message:  "approval reviewer routing is valid",
 	}
-	if _, err := approvalReviewersFromRaw(env["AGENT_HARBOR_APPROVAL_REVIEWERS"]); err != nil {
+	reviewers, err := approvalReviewersFromRaw(env["AGENT_HARBOR_APPROVAL_REVIEWERS"])
+	if err != nil {
 		check.Status = "failed"
 		check.Message = err.Error()
 	}
+	if check.Status == "failed" || len(reviewers) == 0 {
+		return check
+	}
+	adminRoles, ok := bootstrapAdminRolesForApprovalPreflight(env)
+	if !ok {
+		return check
+	}
+	for _, reviewer := range reviewers {
+		role, exists := adminRoles[strings.TrimSpace(reviewer.Reviewer)]
+		if !exists {
+			check.Status = "failed"
+			check.Message = fmt.Sprintf("AGENT_HARBOR_APPROVAL_REVIEWERS reviewer %q must match an AGENT_HARBOR_ADMIN_IDENTITIES actor or admin-key", reviewer.Reviewer)
+			return check
+		}
+		if role != string(domain.AdminIdentityRoleSecurityReviewer) && role != string(domain.AdminIdentityRolePlatformAdmin) {
+			check.Status = "failed"
+			check.Message = fmt.Sprintf("AGENT_HARBOR_APPROVAL_REVIEWERS reviewer %q must use role=security_reviewer or role=platform_admin, got role=%s", reviewer.Reviewer, role)
+			return check
+		}
+	}
 	return check
+}
+
+func bootstrapAdminRolesForApprovalPreflight(env map[string]string) (map[string]string, bool) {
+	roles := map[string]string{}
+	if strings.TrimSpace(env["AGENT_HARBOR_ADMIN_KEY"]) != "" {
+		roles["admin-key"] = string(domain.AdminIdentityRolePlatformAdmin)
+	}
+	identities, err := adminIdentitiesFromRaw(env["AGENT_HARBOR_ADMIN_IDENTITIES"])
+	if err != nil {
+		return roles, false
+	}
+	for _, identity := range identities {
+		roles[strings.TrimSpace(identity.Actor)] = identity.Role
+	}
+	return roles, true
 }
 
 func weakProductionSecretValue(secret string, minLength int) bool {

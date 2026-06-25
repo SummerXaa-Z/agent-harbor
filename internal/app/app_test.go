@@ -344,7 +344,7 @@ func TestDeploymentConfigPreflightBlocksMalformedProductionApprovalReviewers(t *
 func TestDeploymentConfigPreflightAcceptsProductionApprovalReviewers(t *testing.T) {
 	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
 		"AGENT_HARBOR_DEPLOYMENT_MODE":    "production",
-		"AGENT_HARBOR_ADMIN_KEY":          strongProductionAdminKey,
+		"AGENT_HARBOR_ADMIN_IDENTITIES":   "platform=" + strongProductionAdminKey + "|role=platform_admin;security-root=security-root-production-key-32|role=security_reviewer|tenant=tenant-root;security-east=security-east-production-key-32|role=security_reviewer|tenant=tenant-east|workspace=ws-support",
 		"AGENT_HARBOR_SESSION_SECRET":     strongProductionSessionSecret,
 		"AGENT_HARBOR_DATABASE_URL":       "postgres://agent-harbor.example.invalid/agent_harbor",
 		"AGENT_HARBOR_CREDENTIAL_KEY":     strongProductionCredentialKey,
@@ -355,6 +355,46 @@ func TestDeploymentConfigPreflightAcceptsProductionApprovalReviewers(t *testing.
 	}
 	if !hasDeploymentCheck(checks, "approval_reviewers_valid", "blocking", "passed") {
 		t.Fatalf("expected approval reviewer validation pass, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightBlocksApprovalReviewerWithoutAdminIdentity(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":    "production",
+		"AGENT_HARBOR_ADMIN_IDENTITIES":   "platform=" + strongProductionAdminKey + "|role=platform_admin",
+		"AGENT_HARBOR_SESSION_SECRET":     strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":       "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":     strongProductionCredentialKey,
+		"AGENT_HARBOR_APPROVAL_REVIEWERS": "security-east=tenant-east/ws-support",
+	})
+	if err == nil {
+		t.Fatalf("expected approval reviewer without admin identity to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "security-east") || !strings.Contains(got, "AGENT_HARBOR_ADMIN_IDENTITIES") {
+		t.Fatalf("expected production config error to explain missing reviewer identity, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "approval_reviewers_valid", "blocking", "failed") {
+		t.Fatalf("expected approval reviewer validation failure, got %#v", checks)
+	}
+}
+
+func TestDeploymentConfigPreflightBlocksApprovalReviewerWithoutReviewerRole(t *testing.T) {
+	checks, err := deploymentConfigPreflightFromEnv(map[string]string{
+		"AGENT_HARBOR_DEPLOYMENT_MODE":    "production",
+		"AGENT_HARBOR_ADMIN_IDENTITIES":   "platform=" + strongProductionAdminKey + "|role=platform_admin;east=tenant-admin-production-key-32|role=tenant_admin|tenant=tenant-east|workspace=ws-support",
+		"AGENT_HARBOR_SESSION_SECRET":     strongProductionSessionSecret,
+		"AGENT_HARBOR_DATABASE_URL":       "postgres://agent-harbor.example.invalid/agent_harbor",
+		"AGENT_HARBOR_CREDENTIAL_KEY":     strongProductionCredentialKey,
+		"AGENT_HARBOR_APPROVAL_REVIEWERS": "east=tenant-east/ws-support",
+	})
+	if err == nil {
+		t.Fatalf("expected approval reviewer with tenant_admin role to fail")
+	}
+	if got := err.Error(); !strings.Contains(got, "east") || !strings.Contains(got, "security_reviewer") {
+		t.Fatalf("expected production config error to explain reviewer role requirement, got %q", got)
+	}
+	if !hasDeploymentCheck(checks, "approval_reviewers_valid", "blocking", "failed") {
+		t.Fatalf("expected approval reviewer validation failure, got %#v", checks)
 	}
 }
 

@@ -295,6 +295,10 @@ if port_in_use "$((UNAUTH_API_PORT + 13))"; then
 	echo "production scoped platform admin check API port $((UNAUTH_API_PORT + 13)) is already in use" >&2
 	exit 1
 fi
+if port_in_use "$((UNAUTH_API_PORT + 14))"; then
+	echo "production unbound approval reviewer check API port $((UNAUTH_API_PORT + 14)) is already in use" >&2
+	exit 1
+fi
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT_DIR"
@@ -541,6 +545,41 @@ if grep -q "super-secret" "$LOG_DIR/api-prod-malformed-approval-reviewers.log"; 
 	exit 1
 fi
 echo "production deployment preflight rejects malformed approval reviewer routing before storage initialization"
+
+AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 14))" \
+AGENT_HARBOR_DEPLOYMENT_MODE=production \
+AGENT_HARBOR_ADMIN_IDENTITIES="platform=${ADMIN_KEY}|role=platform_admin" \
+AGENT_HARBOR_SESSION_SECRET=production-hardening-session-secret \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL="postgres://agent_harbor:super-secret@127.0.0.1:bad/agent_harbor" \
+AGENT_HARBOR_CREDENTIAL_KEY=AgentHarborCredentialKey-2026!!! \
+AGENT_HARBOR_APPROVAL_REVIEWERS="security-east=tenant-east/ws-support" \
+	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-unbound-approval-reviewer.log" 2>&1 && {
+	echo "expected production mode to reject approval reviewer without admin identity before storage initialization" >&2
+	show_logs
+	exit 1
+}
+if ! grep -q "security-east" "$LOG_DIR/api-prod-unbound-approval-reviewer.log"; then
+	echo "production unbound approval reviewer failure did not mention reviewer actor" >&2
+	show_logs
+	exit 1
+fi
+if ! grep -q "AGENT_HARBOR_ADMIN_IDENTITIES" "$LOG_DIR/api-prod-unbound-approval-reviewer.log"; then
+	echo "production unbound approval reviewer failure did not mention admin identities" >&2
+	show_logs
+	exit 1
+fi
+if grep -q "connect postgres" "$LOG_DIR/api-prod-unbound-approval-reviewer.log"; then
+	echo "production unbound approval reviewer check attempted PostgreSQL before failing config preflight" >&2
+	show_logs
+	exit 1
+fi
+if grep -q "super-secret" "$LOG_DIR/api-prod-unbound-approval-reviewer.log"; then
+	echo "production unbound approval reviewer failure leaked database credentials" >&2
+	show_logs
+	exit 1
+fi
+echo "production deployment preflight rejects approval reviewer routes without matching admin identities"
 
 AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 11))" \
 AGENT_HARBOR_DEPLOYMENT_MODE=production \

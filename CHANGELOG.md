@@ -36,6 +36,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 生产部署模式现在会在 PostgreSQL 初始化前校验 `AGENT_HARBOR_DATABASE_URL` 格式，并对无效连接串返回脱敏启动错误。
 - Production deployment mode now validates configured `AGENT_HARBOR_APPROVAL_REVIEWERS` routing before storage initialization, blocking malformed reviewer scopes before the approval path can start with broken routing.
 - 生产部署模式现在会在存储初始化前校验已配置的 `AGENT_HARBOR_APPROVAL_REVIEWERS` 审批人路由，阻断格式错误的审批范围，避免审批链路带着错误路由启动。
+- Production deployment mode now requires configured approval reviewers to match a bootstrap `security_reviewer` or `platform_admin` identity, preventing approval routes that no authenticated reviewer can operate.
+- 生产部署模式现在要求已配置的审批人路由匹配一个引导 `security_reviewer` 或 `platform_admin` 身份，避免审批路由上线后没有可认证审批人可以处理。
 - Approval reviewer queue filtering and management MCP approval resolution now bind any supplied `reviewer` to the authenticated administrator identity, closing reviewer impersonation on read and agent-driven approval paths.
 - 审批人队列过滤和管理 MCP 审批处理现在会把传入的 `reviewer` 绑定到已认证的管理员身份，关闭读取队列和 Agent 驱动审批路径上的审批人冒充。
 - Approval request list APIs now default non-platform administrators to their authenticated reviewer queue when approval routing is configured and `reviewer` is omitted, while platform administrators keep all-queue visibility.

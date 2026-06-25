@@ -379,6 +379,15 @@ wait_http "API" "$BASE_URL/healthz"
 request GET "/healthz" none
 expect_status 200 "health check"
 
+request POST "/api/v1/admin-identities" platform "$(json_body admin "platform" "Duplicate Bootstrap Actor" "$EAST_TENANT_ID" "$EAST_WORKSPACE_ID")"
+expect_status 400 "managed admin actor cannot reuse bootstrap actor"
+if [[ "$HTTP_BODY" != *"actor already exists"* ]]; then
+  echo "expected duplicate bootstrap actor rejection to explain actor collision" >&2
+  echo "$HTTP_BODY" >&2
+  exit 1
+fi
+echo "verified managed admin actor cannot reuse bootstrap actor"
+
 request POST "/api/v1/admin-identities" platform "$(json_body admin "$MANAGED_ACTOR" "Managed East Administrator" "$EAST_TENANT_ID" "$EAST_WORKSPACE_ID")"
 expect_status 201 "create managed tenant admin"
 MANAGED_ID="$(json_get data.identity.id)"

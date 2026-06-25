@@ -1472,6 +1472,26 @@ func TestManagedAdminIdentityRejectsReservedActors(t *testing.T) {
 	}
 }
 
+func TestManagedAdminIdentityRejectsBootstrapActorReuse(t *testing.T) {
+	router := newRouterWithRepoAndAdminIdentities(store.NewMemory(), []httpapi.AdminIdentity{
+		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+	})
+
+	res := requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities", map[string]any{
+		"actor":       "platform",
+		"displayName": "Duplicate Bootstrap Actor",
+		"role":        "tenant_admin",
+		"tenantId":    "tenant-east",
+		"workspaceId": "ws-support",
+	}, "", "platform-key")
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("managed admin actor should not reuse bootstrap actor, got %d body=%s", res.Code, res.Body.String())
+	}
+	if body := res.Body.String(); !strings.Contains(body, "actor already exists") {
+		t.Fatalf("expected duplicate actor message, got body=%s", body)
+	}
+}
+
 func TestAdminIdentityLifecycleRejectsBootstrapAndSelfDisable(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{

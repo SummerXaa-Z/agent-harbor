@@ -277,6 +277,12 @@ func normalizeManagedAdminIdentityRequest(req domain.CreateAdminIdentityRequest)
 	if req.Actor == "" {
 		return req, domain.BadRequest("VALIDATION_FAILED", "actor is required")
 	}
+	if domain.ReservedAdminIdentityActor(req.Actor) {
+		return req, domain.BadRequest("VALIDATION_FAILED", "actor is reserved and cannot be used for a managed administrator")
+	}
+	if !domain.ValidAdminIdentityActor(req.Actor) {
+		return req, domain.BadRequest("VALIDATION_FAILED", domain.AdminIdentityActorSyntaxMessage)
+	}
 	if req.DisplayName == "" {
 		req.DisplayName = req.Actor
 	}

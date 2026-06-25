@@ -307,6 +307,10 @@ if port_in_use "$((UNAUTH_API_PORT + 16))"; then
 	echo "production reserved admin identity actor check API port $((UNAUTH_API_PORT + 16)) is already in use" >&2
 	exit 1
 fi
+if port_in_use "$((UNAUTH_API_PORT + 17))"; then
+	echo "production invalid admin identity actor format check API port $((UNAUTH_API_PORT + 17)) is already in use" >&2
+	exit 1
+fi
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT_DIR"
@@ -744,6 +748,35 @@ if grep -q "super-secret" "$LOG_DIR/api-prod-reserved-admin-actor.log"; then
 	exit 1
 fi
 echo "production deployment preflight rejects reserved admin identity actors before storage initialization"
+
+AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 17))" \
+AGENT_HARBOR_DEPLOYMENT_MODE=production \
+AGENT_HARBOR_ADMIN_IDENTITIES="security reviewer=${ADMIN_KEY}|role=platform_admin" \
+AGENT_HARBOR_SESSION_SECRET=production-hardening-session-secret \
+AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
+AGENT_HARBOR_DATABASE_URL="postgres://agent_harbor:super-secret@127.0.0.1:bad/agent_harbor" \
+AGENT_HARBOR_CREDENTIAL_KEY=AgentHarborCredentialKey-2026!!! \
+	go run ./cmd/agent-harbor > "$LOG_DIR/api-prod-invalid-admin-actor-format.log" 2>&1 && {
+	echo "expected production mode to reject invalid admin identity actor format before storage initialization" >&2
+	show_logs
+	exit 1
+}
+if ! grep -q "letters, numbers" "$LOG_DIR/api-prod-invalid-admin-actor-format.log"; then
+	echo "production invalid admin identity actor format failure did not explain actor syntax" >&2
+	show_logs
+	exit 1
+fi
+if grep -q "connect postgres" "$LOG_DIR/api-prod-invalid-admin-actor-format.log"; then
+	echo "production invalid admin identity actor format check attempted PostgreSQL before failing config preflight" >&2
+	show_logs
+	exit 1
+fi
+if grep -q "super-secret" "$LOG_DIR/api-prod-invalid-admin-actor-format.log"; then
+	echo "production invalid admin identity actor format failure leaked database credentials" >&2
+	show_logs
+	exit 1
+fi
+echo "production deployment preflight rejects invalid admin identity actor format before storage initialization"
 
 AGENT_HARBOR_ADDR="${API_HOST}:$((UNAUTH_API_PORT + 4))" \
 AGENT_HARBOR_DEPLOYMENT_MODE=production \

@@ -1390,6 +1390,51 @@ func TestManagementMCPAdminIdentityTools(t *testing.T) {
 	}
 }
 
+func TestManagedAdminIdentityRejectsInvalidActorSyntax(t *testing.T) {
+	router := newRouterWithRepoAndAdminIdentities(store.NewMemory(), []httpapi.AdminIdentity{
+		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+	})
+
+	for _, actor := range []string{"security reviewer", "security/reviewer", "security|reviewer", strings.Repeat("a", 81)} {
+		t.Run(actor, func(t *testing.T) {
+			res := requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities", map[string]any{
+				"actor":       actor,
+				"displayName": "Invalid Security Reviewer",
+				"role":        "security_reviewer",
+				"tenantId":    "tenant-east",
+			}, "", "platform-key")
+			if res.Code != http.StatusBadRequest {
+				t.Fatalf("invalid managed admin actor should be rejected, got %d body=%s", res.Code, res.Body.String())
+			}
+			if body := res.Body.String(); !strings.Contains(body, "actor") || !strings.Contains(body, "letters, numbers") {
+				t.Fatalf("expected actor syntax message, got body=%s", body)
+			}
+		})
+	}
+}
+
+func TestManagedAdminIdentityRejectsReservedActors(t *testing.T) {
+	router := newRouterWithRepoAndAdminIdentities(store.NewMemory(), []httpapi.AdminIdentity{
+		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+	})
+
+	for _, actor := range []string{"admin-key", "local-dev"} {
+		t.Run(actor, func(t *testing.T) {
+			res := requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities", map[string]any{
+				"actor":       actor,
+				"displayName": "Reserved Actor",
+				"role":        "platform_admin",
+			}, "", "platform-key")
+			if res.Code != http.StatusBadRequest {
+				t.Fatalf("reserved managed admin actor should be rejected, got %d body=%s", res.Code, res.Body.String())
+			}
+			if body := res.Body.String(); !strings.Contains(body, "actor") || !strings.Contains(body, "reserved") {
+				t.Fatalf("expected reserved actor message, got body=%s", body)
+			}
+		})
+	}
+}
+
 func TestAdminIdentityLifecycleRejectsBootstrapAndSelfDisable(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{

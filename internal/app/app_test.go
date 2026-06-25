@@ -304,6 +304,34 @@ func TestAdminIdentitiesFromEnvRejectsReservedActors(t *testing.T) {
 	}
 }
 
+func TestAdminIdentitiesFromEnvRejectsInvalidActorSyntax(t *testing.T) {
+	for _, actor := range []string{"security reviewer", "security/reviewer", "security|reviewer", strings.Repeat("a", 81)} {
+		t.Run(actor, func(t *testing.T) {
+			t.Setenv("AGENT_HARBOR_ADMIN_IDENTITIES", actor+"=invalid-actor-key|role=platform_admin")
+
+			_, err := adminIdentitiesFromEnv()
+			if err == nil {
+				t.Fatalf("expected invalid admin identity actor %q to fail", actor)
+			}
+			if got := err.Error(); !strings.Contains(got, "actor") || !strings.Contains(got, "letters, numbers") {
+				t.Fatalf("expected actor syntax error, got %q", got)
+			}
+		})
+	}
+}
+
+func TestAdminIdentitiesFromEnvAcceptsEmailStyleActor(t *testing.T) {
+	t.Setenv("AGENT_HARBOR_ADMIN_IDENTITIES", "security.reviewer@example.com=security-reviewer-production-key-32|role=security_reviewer|tenant=tenant-east")
+
+	identities, err := adminIdentitiesFromEnv()
+	if err != nil {
+		t.Fatalf("expected email-style actor to pass: %v", err)
+	}
+	if len(identities) != 1 || identities[0].Actor != "security.reviewer@example.com" {
+		t.Fatalf("unexpected identities: %#v", identities)
+	}
+}
+
 func TestAdminIdentitiesFromEnvRejectsUnknownRole(t *testing.T) {
 	t.Setenv("AGENT_HARBOR_ADMIN_IDENTITIES", "platform=platform-key|role=owner|tenant=tenant-east")
 

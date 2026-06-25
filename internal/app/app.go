@@ -678,8 +678,11 @@ func adminIdentitiesFromRaw(raw string) ([]httpapi.AdminIdentity, error) {
 		if identity.Actor == "" || identity.Key == "" {
 			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES entries must include actor and key")
 		}
-		if reservedAdminIdentityActor(identity.Actor) {
+		if domain.ReservedAdminIdentityActor(identity.Actor) {
 			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES actor %q is a reserved actor and cannot be used as a named admin identity", identity.Actor)
+		}
+		if !domain.ValidAdminIdentityActor(identity.Actor) {
+			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES %s", domain.AdminIdentityActorSyntaxMessage)
 		}
 		if _, ok := seenActors[identity.Actor]; ok {
 			return nil, fmt.Errorf("AGENT_HARBOR_ADMIN_IDENTITIES duplicate actor %q", identity.Actor)
@@ -704,15 +707,6 @@ func adminIdentitiesFromRaw(raw string) ([]httpapi.AdminIdentity, error) {
 		identities = append(identities, identity)
 	}
 	return identities, nil
-}
-
-func reservedAdminIdentityActor(actor string) bool {
-	switch strings.TrimSpace(actor) {
-	case "admin-key", "local-dev":
-		return true
-	default:
-		return false
-	}
 }
 
 func validAdminIdentityRole(role string) bool {

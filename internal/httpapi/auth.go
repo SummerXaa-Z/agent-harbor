@@ -24,6 +24,7 @@ type consoleSessionPayload struct {
 	Role        string `json:"role,omitempty"`
 	TenantID    string `json:"tenantId,omitempty"`
 	WorkspaceID string `json:"workspaceId,omitempty"`
+	IssuedAt    int64  `json:"issuedAt,omitempty"`
 	ExpiresAt   int64  `json:"expiresAt"`
 }
 
@@ -83,8 +84,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.clearConsoleLoginFailures(r)
-	expiresAt := s.now().Add(defaultConsoleSessionTTL).UTC()
-	token, err := s.signConsoleSession(principal, expiresAt)
+	issuedAt := s.now().UTC()
+	expiresAt := issuedAt.Add(defaultConsoleSessionTTL).UTC()
+	token, err := s.signConsoleSession(principal, issuedAt, expiresAt)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -187,13 +189,14 @@ func (s *Server) consoleSessionCookie(value string, expiresAt time.Time, clear b
 	return cookie
 }
 
-func (s *Server) signConsoleSession(principal adminPrincipal, expiresAt time.Time) (string, error) {
+func (s *Server) signConsoleSession(principal adminPrincipal, issuedAt time.Time, expiresAt time.Time) (string, error) {
 	principal = normalizeAdminPrincipal(principal)
 	payload, err := json.Marshal(consoleSessionPayload{
 		Actor:       principal.Actor,
 		Role:        principal.Role,
 		TenantID:    principal.TenantID,
 		WorkspaceID: principal.WorkspaceID,
+		IssuedAt:    issuedAt.UTC().Unix(),
 		ExpiresAt:   expiresAt.Unix(),
 	})
 	if err != nil {
@@ -223,14 +226,47 @@ func (s *Server) verifyConsoleSession(ctx context.Context, token string) (adminP
 	}
 	actor := strings.TrimSpace(payload.Actor)
 	expiresAt := time.Unix(payload.ExpiresAt, 0).UTC()
+	issuedAt := time.Unix(payload.IssuedAt, 0).UTC()
+	if payload.IssuedAt <= 0 {
+		issuedAt = expiresAt.Add(-defaultConsoleSessionTTL).UTC()
+	}
 	if actor == "" || !expiresAt.After(s.now()) {
 		return adminPrincipal{}, time.Time{}, false
 	}
-	principal, ok := s.adminPrincipalForActor(ctx, actor)
+	principal, ok := s.adminPrincipalForActorSession(ctx, actor, issuedAt)
 	if !ok {
 		return adminPrincipal{}, time.Time{}, false
 	}
 	return principal, expiresAt, true
+}
+
+func (s *Server) adminPrincipalForActorSession(ctx context.Context, actor string, issuedAt time.Time) (adminPrincipal, bool) {
+	actor = strings.TrimSpace(actor)
+	if actor == "" {
+		return adminPrincipal{}, false
+	}
+	managed, ok, err := s.repo.GetAdminIdentityByActor(ctx, actor)
+	if err == nil && ok {
+		if managed.Status != domain.AdminIdentityStatusActive {
+			return adminPrincipal{}, false
+		}
+		if !managed.RotatedAt.IsZero() && managed.RotatedAt.After(issuedAt) {
+			return adminPrincipal{}, false
+		}
+		return adminPrincipalFromManagedIdentity(managed), true
+	}
+	for _, identity := range s.adminIdentities {
+		if identity.Actor == actor {
+			return identity.principal(), true
+		}
+	}
+	if actor == "admin-key" && s.adminKey != "" {
+		return platformAdminPrincipal("admin-key"), true
+	}
+	if actor == developmentAdminActor && s.developmentAdminBypassActive() {
+		return platformAdminPrincipal(developmentAdminActor), true
+	}
+	return adminPrincipal{}, false
 }
 
 func (s *Server) consoleSessionSignature(encodedPayload string) string {

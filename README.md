@@ -66,11 +66,11 @@ The **Tenant Permission Center** turns each registered tenant into a governance 
 
 ### Administrator Identity Management
 
-Bootstrap administrator identities from `AGENT_HARBOR_ADMIN_KEY` and `AGENT_HARBOR_ADMIN_IDENTITIES` are read-only in the product and should be kept as production break-glass access. Day-to-day administrators should be managed in the web console under **Administrators & Boundaries**: platform administrators can create managed identities, scope them to a role, tenant, and workspace, rotate their keys, disable them, and review lifecycle audit records. Managed administrator keys are shown once on create or rotate and are never returned by list or audit APIs. Tenant administrators cannot manage administrator identities; they can only operate inside their assigned tenant/workspace boundary. For production recovery, keep at least one bootstrap platform administrator configured outside the product.
+Bootstrap administrator identities from `AGENT_HARBOR_ADMIN_KEY` and `AGENT_HARBOR_ADMIN_IDENTITIES` are read-only in the product and should be kept as production break-glass access. Day-to-day administrators should be managed in the web console under **Administrators & Boundaries**: platform administrators can create managed identities, scope them to a role, tenant, and workspace, rotate their keys, disable them, and review lifecycle audit records. Managed administrator keys are shown once on create or rotate and are never returned by list or audit APIs. Rotating a managed administrator key also invalidates browser sessions issued before the rotation, so key rotation can be used as an immediate containment step. Tenant administrators cannot manage administrator identities; they can only operate inside their assigned tenant/workspace boundary. For production recovery, keep at least one bootstrap platform administrator configured outside the product.
 
 ### 管理员身份管理
 
-通过 `AGENT_HARBOR_ADMIN_KEY` 和 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置的引导管理员在产品内是只读身份，应保留为生产 break-glass 入口。日常管理员建议在 Web 控制台的 **管理员与边界** 中管理：平台管理员可以创建托管身份，按角色、租户和工作区设定范围，轮换密钥，禁用身份，并查看生命周期审计记录。托管管理员密钥只会在创建或轮换时展示一次，列表和审计 API 不会再次返回明文。租户管理员不能管理管理员身份，只能在被分配的租户/工作区边界内操作。生产恢复路径上，应至少保留一个产品外配置的引导平台管理员。
+通过 `AGENT_HARBOR_ADMIN_KEY` 和 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置的引导管理员在产品内是只读身份，应保留为生产 break-glass 入口。日常管理员建议在 Web 控制台的 **管理员与边界** 中管理：平台管理员可以创建托管身份，按角色、租户和工作区设定范围，轮换密钥，禁用身份，并查看生命周期审计记录。托管管理员密钥只会在创建或轮换时展示一次，列表和审计 API 不会再次返回明文；轮换托管管理员密钥也会让轮换前签发的浏览器会话失效，因此可作为即时止损动作。租户管理员不能管理管理员身份，只能在被分配的租户/工作区边界内操作。生产恢复路径上，应至少保留一个产品外配置的引导平台管理员。
 
 ## Quick Start
 

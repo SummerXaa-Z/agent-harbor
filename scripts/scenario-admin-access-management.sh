@@ -15,6 +15,8 @@ WEST_WORKSPACE_ID="ws-finance-${RUN_ID}"
 MANAGED_ACTOR="managed-east-admin-${RUN_ID}"
 MANAGED_ID=""
 MANAGED_KEY=""
+MANAGED_SESSION_COOKIE=""
+MANAGED_SESSION_CSRF=""
 ROTATED_KEY=""
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
@@ -131,6 +133,66 @@ request() {
   if ! HTTP_STATUS="$(curl "${args[@]}")"; then
     rm -f "$tmp"
     echo "curl failed for $method $path" >&2
+    show_logs
+    exit 1
+  fi
+  HTTP_BODY="$(<"$tmp")"
+  rm -f "$tmp"
+}
+
+request_managed_login_session() {
+  local key="$1"
+  local tmp
+  local headers
+  tmp="$(mktemp)"
+  headers="$(mktemp)"
+
+  if ! HTTP_STATUS="$(curl -sS -D "$headers" -o "$tmp" -w "%{http_code}" \
+    -X POST "$BASE_URL/api/v1/auth/login" \
+    -H "Content-Type: application/json" \
+    -d "$(json_body login "$key")")"; then
+    rm -f "$tmp" "$headers"
+    echo "curl failed for managed console login" >&2
+    show_logs
+    exit 1
+  fi
+  HTTP_BODY="$(<"$tmp")"
+  MANAGED_SESSION_COOKIE="$(tr -d '\r' < "$headers" | sed -n 's/^Set-Cookie: \(agent_harbor_session=[^;]*\).*/\1/p' | head -n 1)"
+  MANAGED_SESSION_CSRF="$(json_get data.csrfToken)"
+  rm -f "$tmp" "$headers"
+  if [[ -z "$MANAGED_SESSION_COOKIE" || -z "$MANAGED_SESSION_CSRF" ]]; then
+    echo "managed console login did not return session cookie and CSRF token" >&2
+    echo "$HTTP_BODY" >&2
+    show_logs
+    exit 1
+  fi
+}
+
+request_with_managed_session() {
+  local method="$1"
+  local path="$2"
+  local body="${3:-}"
+  local tmp
+  tmp="$(mktemp)"
+
+  local args=(
+    -sS
+    -o "$tmp"
+    -w "%{http_code}"
+    -X "$method"
+    "$BASE_URL$path"
+    -H "Content-Type: application/json"
+    -H "Cookie: $MANAGED_SESSION_COOKIE"
+    -H "X-AgentHarbor-CSRF: $MANAGED_SESSION_CSRF"
+  )
+
+  if [[ -n "$body" ]]; then
+    args+=(-d "$body")
+  fi
+
+  if ! HTTP_STATUS="$(curl "${args[@]}")"; then
+    rm -f "$tmp"
+    echo "curl failed for managed session $method $path" >&2
     show_logs
     exit 1
   fi
@@ -323,7 +385,7 @@ MANAGED_ID="$(json_get data.identity.id)"
 MANAGED_KEY="$(json_get data.key)"
 echo "created managed admin identity: $MANAGED_ID"
 
-request POST "/api/v1/auth/login" none "$(json_body login "$MANAGED_KEY")"
+request_managed_login_session "$MANAGED_KEY"
 expect_status 200 "managed tenant admin login"
 assert_login_session "$MANAGED_ACTOR" "tenant_admin" "$EAST_TENANT_ID" "$EAST_WORKSPACE_ID"
 
@@ -374,6 +436,10 @@ fi
 
 request POST "/api/v1/auth/login" none "$(json_body login "$MANAGED_KEY")"
 expect_status 401 "old managed admin key rejected after rotation"
+
+request_with_managed_session POST "/api/v1/agents" "$(json_body agent "$EAST_TENANT_ID" "$EAST_WORKSPACE_ID" "Stale managed session denied agent")"
+expect_status 401 "old managed admin session rejected after rotation"
+echo "verified managed admin key rotation invalidates existing browser sessions"
 
 request POST "/api/v1/auth/login" none "$(json_body login "$ROTATED_KEY")"
 expect_status 200 "rotated managed admin key login"

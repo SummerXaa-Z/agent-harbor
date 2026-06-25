@@ -1242,6 +1242,14 @@ func TestManagedAdminIdentityLifecycleAndScopedLogin(t *testing.T) {
 	if session["actor"] != "east-admin" || session["role"] != "tenant_admin" || session["tenantId"] != "tenant-east" || session["workspaceId"] != "ws-support" {
 		t.Fatalf("unexpected managed session: %#v", session)
 	}
+	csrfToken, ok := session["csrfToken"].(string)
+	if !ok || csrfToken == "" {
+		t.Fatalf("managed login should return csrf token, got %#v", session)
+	}
+	managedCookies := login.Result().Cookies()
+	if len(managedCookies) != 1 {
+		t.Fatalf("expected managed login session cookie, got %#v", managedCookies)
+	}
 
 	rotate := decodeData[rotateAdminIdentityKeyResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities/"+create.Identity.ID+"/key:rotate", nil, "", "platform-key"))
 	if rotate.Key == "" || rotate.Key == create.Key || rotate.Identity.KeyPrefix == create.Identity.KeyPrefix {
@@ -1250,6 +1258,16 @@ func TestManagedAdminIdentityLifecycleAndScopedLogin(t *testing.T) {
 	oldLogin := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": create.Key}, "")
 	if oldLogin.Code != http.StatusUnauthorized {
 		t.Fatalf("old key must be invalid after rotation, got %d body=%s", oldLogin.Code, oldLogin.Body.String())
+	}
+	staleSessionWrite := requestWithCookieAndCSRF(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "Stale Managed Session Caller",
+		"tenantId":    "tenant-east",
+		"workspaceId": "ws-support",
+		"channelType": "local",
+		"status":      "active",
+	}, managedCookies[0], csrfToken)
+	if staleSessionWrite.Code != http.StatusUnauthorized {
+		t.Fatalf("old managed session must be invalid after key rotation, got %d body=%s", staleSessionWrite.Code, staleSessionWrite.Body.String())
 	}
 	newLogin := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": rotate.Key}, "")
 	if newLogin.Code != http.StatusOK {

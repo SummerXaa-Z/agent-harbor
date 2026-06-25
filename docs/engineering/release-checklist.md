@@ -23,6 +23,7 @@ This covers:
 - `go vet` via `make vet`
 - Go package build via `make build`
 - production safety baseline via `make production-hardening`
+- managed administrator lifecycle via `make scenario-admin-access-management`
 - web console production journey smoke gate via `make web-console-production-journey`
 - frontend unit tests via `make frontend-test`
 - frontend production build via `make frontend-build`
@@ -32,6 +33,10 @@ This covers:
 The production safety baseline starts a local API with `AGENT_HARBOR_ADMIN_KEY` set and private upstreams disabled. It must prove that health remains public, management APIs reject missing or wrong admin keys, management routes fail closed when no admin authentication is configured, `AGENT_HARBOR_DEPLOYMENT_MODE=production` rejects development-only admin bypass, private-upstream flags, malformed, invalid-actor, weak, conflicting, reserved-actor, scoped-platform-admin, or platform-admin-missing bootstrap admin identities, malformed, unbound, or oversized approval reviewer routing, missing or weak session secrets, missing or invalid persistent storage, missing credential encryption keys, and invalid CORS origins before startup or storage initialization, permission-package and management MCP endpoints use the same admin-key protection, loopback/private MCP upstreams are rejected by default, and public HTTPS MCP targets remain registrable.
 
 生产安全基线还必须验证 `AGENT_HARBOR_DEPLOYMENT_MODE=production` 会在启动或存储初始化前阻断开发专用的管理绕过、私有上游开关、格式错误、actor 格式无效、弱值、冲突、使用保留 actor、平台管理员携带租户范围或缺少平台管理员的引导管理员身份、格式错误、未绑定认证身份或范围过宽的审批人路由、缺失或弱值会话密钥、缺失或无效的持久化存储、缺失凭据加密密钥和无效 CORS 来源。
+
+The managed administrator lifecycle gate must prove platform-created administrator identities can log in with scoped boundaries, cannot manage administrators as tenant admins, cannot escape tenant/workspace scope, do not expose one-time key material in lists or audit records, invalidate pre-rotation browser sessions when keys rotate, reject old and disabled keys, and record lifecycle audit actions.
+
+托管管理员生命周期门禁必须验证平台创建的管理员身份可按范围登录、租户管理员不能管理管理员、租户/工作区边界不能被扩大、列表和审计记录不会暴露一次性密钥材料、密钥轮换会让轮换前浏览器会话失效、旧密钥和已禁用密钥会被拒绝，并记录生命周期审计动作。
 
 The web console production journey gate starts an isolated local API, the official SDK MCP demo service, and the web console. It must prove the console is served, primary journey routes are reachable, and the production journey, language, and navigation regression tests pass without adding browser automation dependencies.
 

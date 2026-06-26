@@ -496,8 +496,12 @@ func (p *Postgres) HasGrant(ctx context.Context, callerID string, targetID strin
 		select exists(
 			select 1
 			from access_grants
-			where caller_agent_id=$1
-				and target_agent_id=$2
+			join agents c on c.id = access_grants.caller_agent_id
+			join agents t on t.id = access_grants.target_agent_id
+			where access_grants.caller_agent_id=$1
+				and access_grants.target_agent_id=$2
+				and t.tenant_id = c.tenant_id
+				and t.workspace_id = c.workspace_id
 				and revoked_at is null
 				and (expires_at is null or expires_at > $5)
 				and (route_type='' or route_type=$3)

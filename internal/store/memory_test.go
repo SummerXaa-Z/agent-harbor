@@ -184,6 +184,41 @@ func TestMemoryCapabilityAssignmentEvaluation(t *testing.T) {
 	}
 }
 
+func TestMemoryEvaluateRouteAccessIgnoresCrossScopeLegacyGrant(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	caller := domain.Agent{ID: "agt_caller", TenantID: "tenant-a", WorkspaceID: "ws-support", Name: "Caller", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	target := domain.Agent{ID: "agt_mcp", TenantID: "tenant-b", WorkspaceID: "ws-finance", Name: "External MCP", ChannelType: "mcp", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(ctx, caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	if _, err := repo.CreateAgent(ctx, target); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+	if _, err := repo.CreateAccessGrant(ctx, domain.AccessGrant{
+		ID:        "grt_cross_scope",
+		CallerID:  caller.ID,
+		TargetID:  target.ID,
+		RouteType: "mcp",
+		RouteKey:  "tools/call",
+		CreatedAt: now,
+	}); err != nil {
+		t.Fatalf("create legacy grant: %v", err)
+	}
+
+	if repo.HasGrant(ctx, caller.ID, target.ID, "mcp", "tools/call", now) {
+		t.Fatalf("cross-scope legacy grant should not authorize direct grant checks")
+	}
+	decision, err := repo.EvaluateRouteAccess(ctx, caller.ID, target.ID, "mcp", "tools/call", now)
+	if err != nil {
+		t.Fatalf("evaluate route access: %v", err)
+	}
+	if decision.Allowed {
+		t.Fatalf("cross-scope legacy grant should not authorize data-plane access: %#v", decision)
+	}
+}
+
 func TestMemoryPermissionPackageApplicationRoundTrip(t *testing.T) {
 	repo := NewMemory()
 	ctx := t.Context()

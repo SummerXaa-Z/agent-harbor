@@ -1043,6 +1043,11 @@ func (m *Memory) EvaluateRouteAccess(_ context.Context, callerID string, targetI
 }
 
 func (m *Memory) hasGrantLocked(callerID string, targetID string, routeType string, routeKey string, now time.Time) bool {
+	caller, callerOK := m.agents[callerID]
+	target, targetOK := m.agents[targetID]
+	if !callerOK || !targetOK || caller.TenantID != target.TenantID || caller.WorkspaceID != target.WorkspaceID {
+		return false
+	}
 	for _, grant := range m.grants {
 		if grant.CallerID != callerID || grant.TargetID != targetID {
 			continue

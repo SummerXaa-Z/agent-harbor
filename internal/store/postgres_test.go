@@ -239,6 +239,27 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	if decision.Allowed {
 		t.Fatalf("cross-scope route policy should be ignored, got %#v", decision)
 	}
+	crossScopeGrant := domain.AccessGrant{
+		ID:        security.NewID("grt"),
+		CallerID:  caller.ID,
+		TargetID:  crossScopeTarget.ID,
+		RouteType: "mcp",
+		RouteKey:  "tools/call",
+		CreatedAt: now,
+	}
+	if _, err := repo.CreateAccessGrant(ctx, crossScopeGrant); err != nil {
+		t.Fatalf("create cross-scope legacy grant: %v", err)
+	}
+	if repo.HasGrant(ctx, caller.ID, crossScopeTarget.ID, "mcp", "tools/call", now) {
+		t.Fatalf("cross-scope legacy grant should not authorize direct grant checks")
+	}
+	decision, err = repo.EvaluateRouteAccess(ctx, caller.ID, crossScopeTarget.ID, "mcp", "tools/call", now)
+	if err != nil {
+		t.Fatalf("evaluate cross-scope legacy grant: %v", err)
+	}
+	if decision.Allowed {
+		t.Fatalf("cross-scope legacy grant should not authorize data-plane access, got %#v", decision)
+	}
 	if _, ok, err := repo.DisableRoutePolicy(ctx, denyPolicy.ID, now.Add(time.Minute)); err != nil {
 		t.Fatalf("disable route policy: %v", err)
 	} else if !ok {

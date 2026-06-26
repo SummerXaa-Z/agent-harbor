@@ -1308,6 +1308,10 @@ func TestManagedAdminIdentityLifecycleAndScopedLogin(t *testing.T) {
 	if rotateDisabled.Code != http.StatusConflict || !strings.Contains(rotateDisabled.Body.String(), "ADMIN_IDENTITY_DISABLED") {
 		t.Fatalf("disabled managed admin key rotation should be rejected, got %d body=%s", rotateDisabled.Code, rotateDisabled.Body.String())
 	}
+	disableAgain := requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities/"+create.Identity.ID+":disable", nil, "", "platform-key")
+	if disableAgain.Code != http.StatusConflict || !strings.Contains(disableAgain.Body.String(), "ADMIN_IDENTITY_DISABLED") {
+		t.Fatalf("disabled managed admin disable retry should be rejected, got %d body=%s", disableAgain.Code, disableAgain.Body.String())
+	}
 
 	events := decodeData[[]auditEventResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/audit/events?resourceType=admin_identity", nil, "", "platform-key"))
 	if got := auditActions(events); !reflect.DeepEqual(got, []string{"admin_identity.created", "admin_identity.key_rotated", "admin_identity.disabled"}) {

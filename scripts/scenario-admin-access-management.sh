@@ -485,6 +485,11 @@ expect_status 409 "disabled managed admin key rotation rejected"
 assert_body_contains "ADMIN_IDENTITY_DISABLED" "disabled managed admin key rotation"
 echo "verified disabled managed admin identities cannot rotate keys"
 
+request POST "/api/v1/admin-identities/${MANAGED_ID}:disable" platform
+expect_status 409 "disabled managed admin disable retry rejected"
+assert_body_contains "ADMIN_IDENTITY_DISABLED" "disabled managed admin disable retry"
+echo "verified disabled managed admin identities cannot be disabled twice"
+
 request GET "/api/v1/audit/events?resourceType=admin_identity" platform
 expect_status 200 "admin identity audit events"
 assert_admin_audit_actions

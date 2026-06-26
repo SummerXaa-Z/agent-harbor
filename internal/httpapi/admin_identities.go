@@ -165,6 +165,9 @@ func (s *Server) disableManagedAdminIdentity(r *http.Request, id string) (domain
 	if err != nil {
 		return domain.AdminIdentity{}, err
 	}
+	if identity.Status != domain.AdminIdentityStatusActive {
+		return domain.AdminIdentity{}, domain.Conflict("ADMIN_IDENTITY_DISABLED", "disabled administrator identities cannot be disabled again")
+	}
 	if identity.Actor == principal.Actor {
 		return domain.AdminIdentity{}, domain.PermissionDenied("cannot disable the current administrator identity")
 	}

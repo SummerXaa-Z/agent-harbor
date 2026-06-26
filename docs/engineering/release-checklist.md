@@ -34,9 +34,9 @@ The production safety baseline starts a local API with `AGENT_HARBOR_ADMIN_KEY` 
 
 生产安全基线还必须验证 `AGENT_HARBOR_DEPLOYMENT_MODE=production` 会在启动或存储初始化前阻断开发专用的管理绕过、私有上游开关、格式错误、actor 格式无效、弱值、冲突、使用保留 actor、平台管理员携带租户范围或缺少平台管理员的引导管理员身份、格式错误、未绑定认证身份或范围过宽的审批人路由、缺失或弱值会话密钥、缺失或无效的持久化存储、缺失凭据加密密钥和无效 CORS 来源。
 
-The managed administrator lifecycle gate must prove platform-created administrator identities cannot reuse bootstrap administrator actors, can log in with scoped boundaries, cannot manage administrators as tenant admins, cannot escape tenant/workspace scope, do not expose one-time key material in lists or audit records, invalidate pre-rotation browser sessions when keys rotate, invalidate existing browser sessions when identities are disabled, reject old and disabled keys, reject key rotation for disabled identities, and record lifecycle audit actions.
+The managed administrator lifecycle gate must prove platform-created administrator identities cannot reuse bootstrap administrator actors, can log in with scoped boundaries, cannot manage administrators as tenant admins, cannot escape tenant/workspace scope, do not expose one-time key material in lists or audit records, invalidate pre-rotation browser sessions when keys rotate, invalidate existing browser sessions when identities are disabled, reject old and disabled keys, reject key rotation for disabled identities, reject repeated disablement without adding duplicate lifecycle audit events, and record lifecycle audit actions.
 
-托管管理员生命周期门禁必须验证平台创建的管理员身份不能复用引导管理员 actor、可按范围登录、租户管理员不能管理管理员、租户/工作区边界不能被扩大、列表和审计记录不会暴露一次性密钥材料、密钥轮换会让轮换前浏览器会话失效、禁用身份会让已有浏览器会话失效、旧密钥和已禁用密钥会被拒绝、已禁用身份不能再轮换密钥，并记录生命周期审计动作。
+托管管理员生命周期门禁必须验证平台创建的管理员身份不能复用引导管理员 actor、可按范围登录、租户管理员不能管理管理员、租户/工作区边界不能被扩大、列表和审计记录不会暴露一次性密钥材料、密钥轮换会让轮换前浏览器会话失效、禁用身份会让已有浏览器会话失效、旧密钥和已禁用密钥会被拒绝、已禁用身份不能再轮换密钥、重复禁用不会追加重复生命周期审计事件，并记录生命周期审计动作。
 
 The web console production journey gate starts an isolated local API, the official SDK MCP demo service, and the web console. It must prove the console is served, primary journey routes are reachable, and the production journey, language, and navigation regression tests pass without adding browser automation dependencies.
 

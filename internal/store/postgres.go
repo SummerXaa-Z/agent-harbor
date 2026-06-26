@@ -1886,9 +1886,27 @@ func (p *Postgres) createAdminIdentity(ctx context.Context, exec sqlExecutor, id
 		nullTime(identity.LastUsedAt), nullTime(identity.RotatedAt), nullTime(identity.DisabledAt),
 		identity.CreatedBy, identity.UpdatedBy, identity.DisabledBy)
 	if err != nil {
+		if conflict := adminIdentityInsertConflict(err); conflict != nil {
+			return domain.AdminIdentity{}, conflict
+		}
 		return domain.AdminIdentity{}, fmt.Errorf("insert admin identity: %w", err)
 	}
 	return identity, nil
+}
+
+func adminIdentityInsertConflict(err error) error {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
+		return nil
+	}
+	switch pgErr.ConstraintName {
+	case "admin_identities_actor_key":
+		return domain.Conflict("ADMIN_IDENTITY_ACTOR_EXISTS", "admin identity actor already exists")
+	case "admin_identities_pkey":
+		return domain.Conflict("ADMIN_IDENTITY_EXISTS", "admin identity already exists")
+	default:
+		return nil
+	}
 }
 
 func (p *Postgres) RotateAdminIdentityKeyWithAudit(ctx context.Context, id string, keyHash string, keyPrefix string, now time.Time, actor string, build AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error) {

@@ -240,6 +240,16 @@ func (s *Server) accessProfileGrant(
 	if err != nil {
 		return tenantAccessProfileGrant{}, err
 	}
+	if target != nil {
+		allowedTenant, err := s.tenantCanReceiveTargetEntitlement(ctx, target.TenantID, entitlement.TenantID)
+		if err != nil {
+			return tenantAccessProfileGrant{}, err
+		}
+		if !allowedTenant || (query.WorkspaceID != "" && target.WorkspaceID != query.WorkspaceID) {
+			target = nil
+			capability = nil
+		}
+	}
 	grant := tenantAccessProfileGrant{
 		TenantEntitlement:    entitlement,
 		Target:               target,

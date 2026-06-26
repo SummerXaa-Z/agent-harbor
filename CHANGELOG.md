@@ -572,6 +572,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- Scoped access-profile, permission-application impact, and permission-application health responses now avoid hydrating out-of-scope Agent or capability details from stale or dirty references, while keeping the underlying records unchanged.
+- 范围化管理员读取访问画像、权限变更影响分析和落地健康状态时，如果历史或脏引用指向范围外 Agent 或能力，响应不再展开这些对象详情，同时不修改底层记录。
 - Scoped administrators can no longer use production readiness or report queries with an in-scope tenant/workspace but an out-of-scope caller or target; those reads now fail before draft, profile, runtime, or application metadata is expanded.
 - 范围化管理员现在不能再用合法租户/工作区搭配范围外调用方或目标查询上线状态或报告；系统会在草稿、画像、运行和落地元数据展开前直接拒绝。
 - Web console production journey smoke gate now explicitly cleans up its API, MCP, and frontend test servers after completion, preventing `make release-check` from hanging on local service processes.

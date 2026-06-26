@@ -1988,6 +1988,29 @@ func TestTenantAccessProfileHonorsScopedAdminBoundary(t *testing.T) {
 	}
 }
 
+func TestTenantAccessProfileRedactsOutOfScopeHydratedObjects(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	financeTarget := createDirectAgent(t, repo, "Finance MCP", "tenant-east", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	financeCapability := createDirectCapabilityWithAction(t, repo, financeTarget.ID, "export_invoices", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	entitlement := createDirectTenantEntitlement(t, repo, "tenant-east", financeTarget.ID, financeCapability.ID, []domain.DataScope{{DataDomain: "finance", Dataset: "invoices", Region: "eu-west"}}, now)
+	createDirectWorkspaceAssignment(t, repo, entitlement.ID, "tenant-east", "ws-support", []domain.DataScope{{DataDomain: "finance", Dataset: "invoices", Region: "eu-west"}}, now)
+
+	resp := requestWithAdmin(t, router, http.MethodGet, "/api/v1/tenants/tenant-east/access-profile", nil, "", "support-key")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read own access profile, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	body := resp.Body.String()
+	if strings.Contains(body, "Finance MCP") || strings.Contains(body, "export_invoices") {
+		t.Fatalf("scoped access profile leaked hydrated out-of-scope object details: %s", body)
+	}
+}
+
 func TestExplainAccessDecisionHonorsScopedAdminBoundary(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
@@ -5598,6 +5621,55 @@ func TestPermissionPackageApplicationImpactReportsDriftBlockers(t *testing.T) {
 	for _, action := range impact.RemediationPlan.Actions {
 		if !action.ReadOnly {
 			t.Fatalf("expected drift remediation actions to remain read-only, got %#v", action)
+		}
+	}
+}
+
+func TestPermissionPackageApplicationImpactRedactsOutOfScopeCapabilityHydration(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	supportTarget := createDirectAgent(t, repo, "Support MCP", "tenant-east", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	supportCaller := createDirectAgent(t, repo, "Support caller", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	financeTarget := createDirectAgent(t, repo, "Finance MCP", "tenant-east", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	financeCapability := createDirectCapabilityWithAction(t, repo, financeTarget.ID, "export_invoices", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	application, err := repo.CreatePermissionPackageApplication(t.Context(), domain.PermissionPackageApplication{
+		ID:                    "ppa-cross-capability",
+		DraftID:               "draft-cross-capability",
+		TemplateID:            "support-ticket-triage",
+		TemplateVersion:       1,
+		TenantID:              "tenant-east",
+		WorkspaceID:           "ws-support",
+		TargetID:              supportTarget.ID,
+		CallerInstanceID:      supportCaller.ID,
+		SubjectSelector:       "role:support",
+		RequestText:           "dirty application review",
+		Region:                "us-east",
+		DataScopes:            []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		AllowedCapabilityIDs:  []string{financeCapability.ID},
+		AllowedCapabilityKeys: []string{"export_invoices"},
+		AppliedAt:             now,
+	})
+	if err != nil {
+		t.Fatalf("create dirty application: %v", err)
+	}
+
+	impact := requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/applications/"+application.ID+"/impact?tenantId=tenant-east&workspaceId=ws-support", nil, "", "support-key")
+	if impact.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read own application impact, got %d body=%s", impact.Code, impact.Body.String())
+	}
+	health := requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/applications/health?tenantId=tenant-east&workspaceId=ws-support&limit=10", nil, "", "support-key")
+	if health.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read own application health, got %d body=%s", health.Code, health.Body.String())
+	}
+	for _, resp := range []*httptest.ResponseRecorder{impact, health} {
+		body := resp.Body.String()
+		if strings.Contains(body, "export_invoices") || strings.Contains(body, "Finance MCP") {
+			t.Fatalf("scoped application response leaked out-of-scope hydrated capability details: %s", body)
 		}
 	}
 }

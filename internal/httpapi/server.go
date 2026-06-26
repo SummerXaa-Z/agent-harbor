@@ -1642,7 +1642,7 @@ func (s *Server) listPermissionPackageApplicationHealth(w http.ResponseWriter, r
 			response.Summary.NeedsReview++
 		}
 		response.Applications = append(response.Applications, permissionPackageApplicationHealthRow{
-			Application:        application,
+			Application:        impact.Application,
 			Status:             status,
 			BlockerCodes:       append([]string{}, impact.RollbackReview.BlockerCodes...),
 			CreatedObjectCount: impact.Summary.CreatedObjectCount,
@@ -2687,10 +2687,11 @@ func (s *Server) permissionPackageApplicationImpact(ctx context.Context, applica
 	if err != nil {
 		return permissionPackageApplicationImpactResponse{}, err
 	}
-	capabilityReviews, err := s.permissionPackageApplicationImpactCapabilities(ctx, application)
+	capabilityReviews, visibleCapabilityIDs, visibleCapabilityKeys, err := s.permissionPackageApplicationImpactCapabilities(ctx, application)
 	if err != nil {
 		return permissionPackageApplicationImpactResponse{}, err
 	}
+	application = permissionPackageApplicationWithVisibleCapabilities(application, visibleCapabilityIDs, visibleCapabilityKeys)
 	summary := permissionPackageApplicationImpactSummaryFor(createdObjects)
 	rollbackReview := permissionPackageApplicationRollbackReviewFor(application, summary)
 	return permissionPackageApplicationImpactResponse{
@@ -2823,34 +2824,39 @@ func (s *Server) permissionPackageApplicationImpactObjects(ctx context.Context, 
 	return objects, nil
 }
 
-func (s *Server) permissionPackageApplicationImpactCapabilities(ctx context.Context, application domain.PermissionPackageApplication) ([]permissionPackageApplicationImpactCapability, error) {
+func (s *Server) permissionPackageApplicationImpactCapabilities(ctx context.Context, application domain.PermissionPackageApplication) ([]permissionPackageApplicationImpactCapability, []string, []string, error) {
 	rows := make([]permissionPackageApplicationImpactCapability, 0, len(application.AllowedCapabilityIDs))
-	for index, id := range application.AllowedCapabilityIDs {
+	visibleCapabilityIDs := []string{}
+	visibleCapabilityKeys := []string{}
+	for _, id := range application.AllowedCapabilityIDs {
 		capability, ok, err := s.repo.GetCapability(ctx, id)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
-		if ok {
+		if ok && capability.TargetID == application.TargetID {
 			rows = append(rows, permissionPackageApplicationImpactCapability{
 				ID:             capability.ID,
 				Key:            capability.Key,
 				CurrentStatus:  string(capability.DiscoveryStatus),
 				RollbackAction: "manual_review",
 			})
+			visibleCapabilityIDs = append(visibleCapabilityIDs, capability.ID)
+			visibleCapabilityKeys = append(visibleCapabilityKeys, capability.Key)
 			continue
-		}
-		key := ""
-		if index < len(application.AllowedCapabilityKeys) {
-			key = application.AllowedCapabilityKeys[index]
 		}
 		rows = append(rows, permissionPackageApplicationImpactCapability{
 			ID:             id,
-			Key:            key,
 			CurrentStatus:  "missing",
 			RollbackAction: "investigate",
 		})
 	}
-	return rows, nil
+	return rows, visibleCapabilityIDs, visibleCapabilityKeys, nil
+}
+
+func permissionPackageApplicationWithVisibleCapabilities(application domain.PermissionPackageApplication, capabilityIDs []string, capabilityKeys []string) domain.PermissionPackageApplication {
+	application.AllowedCapabilityIDs = append([]string(nil), capabilityIDs...)
+	application.AllowedCapabilityKeys = append([]string(nil), capabilityKeys...)
+	return application
 }
 
 func permissionPackageImpactObjectFromGrant(objectType string, id string, currentStatus string, dataScopes []domain.DataScope) permissionPackageApplicationImpactObject {

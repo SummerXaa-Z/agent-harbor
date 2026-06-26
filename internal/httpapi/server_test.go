@@ -2176,13 +2176,15 @@ func TestScopedAdminIdentityCannotGrantPermissionPackageToOutsideTarget(t *testi
 		name   string
 		path   string
 		method string
-		body   map[string]any
+		body   any
 	}{
 		{name: "draft", method: http.MethodPost, path: "/api/v1/permission-packages/drafts", body: input},
 		{name: "preflight", method: http.MethodPost, path: "/api/v1/permission-packages:preflight", body: input},
 		{name: "apply", method: http.MethodPost, path: "/api/v1/permission-packages:apply", body: input},
 		{name: "approval", method: http.MethodPost, path: "/api/v1/permission-packages/approval-requests", body: input},
 		{name: "workbench", method: http.MethodPost, path: "/api/v1/permission-packages/workbench:preview", body: input},
+		{name: "production readiness", method: http.MethodGet, path: permissionPackageProductionReadinessPath(input, "", "role:support"), body: nil},
+		{name: "production report", method: http.MethodGet, path: permissionPackageProductionEvidenceReportPath(input, "", "role:support"), body: nil},
 		{name: "tenant entitlement", method: http.MethodPost, path: "/api/v1/tenant-entitlements", body: map[string]any{
 			"tenantId":     "tenant-east",
 			"targetId":     financeTarget.ID,
@@ -2193,7 +2195,9 @@ func TestScopedAdminIdentityCannotGrantPermissionPackageToOutsideTarget(t *testi
 		}},
 	} {
 		resp := requestWithAdmin(t, router, tc.method, tc.path, tc.body, "", "east-key")
-		if resp.Code != http.StatusForbidden {
+		if resp.Code != http.StatusForbidden || strings.Contains(resp.Body.String(), financeTarget.ID) ||
+			strings.Contains(resp.Body.String(), financeCapability.ID) || strings.Contains(resp.Body.String(), "Finance MCP") ||
+			strings.Contains(resp.Body.String(), "search_customer") {
 			t.Fatalf("%s should reject outside target capability, got %d body=%s", tc.name, resp.Code, resp.Body.String())
 		}
 	}

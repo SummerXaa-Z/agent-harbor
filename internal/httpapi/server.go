@@ -5445,7 +5445,12 @@ func (s *Server) requirePermissionPackageDraftScope(r *http.Request, req domain.
 }
 
 func (s *Server) requirePermissionPackageQueryScope(r *http.Request, query permissionPackageProductionReadinessQuery) error {
-	return s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID})
+	return s.requirePermissionPackageDraftScope(r, domain.PermissionPackageDraftRequest{
+		CallerInstanceID: query.CallerInstanceID,
+		TargetID:         query.TargetID,
+		TenantID:         query.TenantID,
+		WorkspaceID:      query.WorkspaceID,
+	})
 }
 
 func (s *Server) requirePermissionPackageApprovalRequestScope(r *http.Request, approval domain.PermissionPackageApprovalRequest) error {

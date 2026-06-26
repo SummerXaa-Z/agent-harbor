@@ -572,6 +572,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- Scoped administrators can no longer use production readiness or report queries with an in-scope tenant/workspace but an out-of-scope caller or target; those reads now fail before draft, profile, runtime, or application metadata is expanded.
+- 范围化管理员现在不能再用合法租户/工作区搭配范围外调用方或目标查询上线状态或报告；系统会在草稿、画像、运行和落地元数据展开前直接拒绝。
 - Web console production journey smoke gate now explicitly cleans up its API, MCP, and frontend test servers after completion, preventing `make release-check` from hanging on local service processes.
 - Web 控制台生产旅程 smoke 门禁现在会在完成后显式清理 API、MCP 和前端测试服务，避免 `make release-check` 因本地服务进程残留而挂起。
 - Getting Started no longer treats fallback sample tenants, Agents, capabilities, grants, traces, or evidence as completed setup progress; sample mode now shows one page-level read-only notice and keeps the real first step focused on connecting the backend API.

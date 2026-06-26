@@ -135,6 +135,9 @@ func (s *Server) rotateManagedAdminIdentityKey(r *http.Request, id string) (doma
 	if err != nil {
 		return domain.RotateAdminIdentityKeyResponse{}, err
 	}
+	if identity.Status != domain.AdminIdentityStatusActive {
+		return domain.RotateAdminIdentityKeyResponse{}, domain.Conflict("ADMIN_IDENTITY_DISABLED", "disabled administrator identities cannot rotate keys")
+	}
 	if identity.Role == domain.AdminIdentityRolePlatformAdmin && identity.Status == domain.AdminIdentityStatusActive {
 		if err := s.ensureAnotherPlatformAdmin(r.Context(), identity); err != nil {
 			return domain.RotateAdminIdentityKeyResponse{}, err

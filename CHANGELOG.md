@@ -38,6 +38,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 托管管理员浏览器会话现在会保留亚秒级签发精度，因此密钥轮换后立即创建的新会话不会被误判为旧会话；旧的秒级精度会话 token 仍保持兼容。
 - Managed administrator disablement now has explicit lifecycle coverage for invalidating existing browser sessions, making disablement a verified containment action.
 - 托管管理员禁用现在明确覆盖已有浏览器会话失效路径，使禁用动作成为可验证的即时止损手段。
+- Managed administrator key rotation now rejects disabled identities with a stable conflict instead of returning a one-time key that cannot authenticate.
+- 托管管理员密钥轮换现在会对已禁用身份返回稳定冲突错误，不再返回无法登录的一次性密钥。
 - Managed administrator creation now has explicit coverage rejecting actors that reuse bootstrap administrator actors, keeping sessions, audit rows, and approval routing unambiguous.
 - 托管管理员创建现在明确覆盖拒绝复用引导管理员 actor，避免会话主体、审计记录和审批路由含混。
 - PostgreSQL-backed managed administrator creation now maps duplicate actor or id constraint races to stable 409 conflict errors instead of generic internal errors.

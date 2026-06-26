@@ -211,6 +211,17 @@ expect_status() {
   fi
 }
 
+assert_body_contains() {
+  local expected="$1"
+  local label="$2"
+  if [[ "$HTTP_BODY" != *"$expected"* ]]; then
+    echo "expected $label body to contain $expected" >&2
+    echo "$HTTP_BODY" >&2
+    show_logs
+    exit 1
+  fi
+}
+
 json_body() {
   python3 - "$@" <<'PY'
 import json
@@ -468,6 +479,11 @@ expect_status 401 "disabled managed admin key rejected"
 request_with_managed_session POST "/api/v1/agents" "$(json_body agent "$EAST_TENANT_ID" "$EAST_WORKSPACE_ID" "Disabled managed session denied agent")"
 expect_status 401 "disabled managed admin session rejected"
 echo "verified managed admin disable invalidates existing browser sessions"
+
+request POST "/api/v1/admin-identities/${MANAGED_ID}/key:rotate" platform
+expect_status 409 "disabled managed admin key rotation rejected"
+assert_body_contains "ADMIN_IDENTITY_DISABLED" "disabled managed admin key rotation"
+echo "verified disabled managed admin identities cannot rotate keys"
 
 request GET "/api/v1/audit/events?resourceType=admin_identity" platform
 expect_status 200 "admin identity audit events"

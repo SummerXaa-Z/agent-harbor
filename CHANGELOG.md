@@ -572,6 +572,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- Scoped tenant-permission-center capability summaries now avoid hydrating out-of-scope target and capability names from stale or dirty entitlement references.
+- 范围化管理员查看租户权限中心时，如果历史或脏授权引用了范围外目标或能力，能力摘要不再展开这些目标和能力名称。
 - Scoped access-profile, permission-application impact, and permission-application health responses now avoid hydrating out-of-scope Agent or capability details from stale or dirty references, while keeping the underlying records unchanged.
 - 范围化管理员读取访问画像、权限变更影响分析和落地健康状态时，如果历史或脏引用指向范围外 Agent 或能力，响应不再展开这些对象详情，同时不修改底层记录。
 - Scoped administrators can no longer use production readiness or report queries with an in-scope tenant/workspace but an out-of-scope caller or target; those reads now fail before draft, profile, runtime, or application metadata is expanded.

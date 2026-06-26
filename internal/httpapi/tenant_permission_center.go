@@ -149,7 +149,7 @@ func (s *Server) buildTenantPermissionCenter(ctx context.Context, tenant domain.
 	if err != nil {
 		return tenantPermissionCenterResponse{}, err
 	}
-	capabilities, err := s.tenantPermissionCenterCapabilities(ctx, visibleEntitlements, assignments)
+	capabilities, err := s.tenantPermissionCenterCapabilities(ctx, visibleEntitlements, assignments, workspaceID)
 	if err != nil {
 		return tenantPermissionCenterResponse{}, err
 	}
@@ -312,7 +312,7 @@ func (s *Server) tenantPermissionCenterPackages(applications []domain.Permission
 	return rows
 }
 
-func (s *Server) tenantPermissionCenterCapabilities(ctx context.Context, entitlements []domain.TenantEntitlement, assignments []domain.WorkspaceAssignment) ([]tenantPermissionCenterCapability, error) {
+func (s *Server) tenantPermissionCenterCapabilities(ctx context.Context, entitlements []domain.TenantEntitlement, assignments []domain.WorkspaceAssignment, workspaceID string) ([]tenantPermissionCenterCapability, error) {
 	workspaceIDsByEntitlement := map[string][]string{}
 	for _, assignment := range assignments {
 		workspaceIDsByEntitlement[assignment.TenantEntitlementID] = appendUniqueString(workspaceIDsByEntitlement[assignment.TenantEntitlementID], assignment.WorkspaceID)
@@ -324,7 +324,14 @@ func (s *Server) tenantPermissionCenterCapabilities(ctx context.Context, entitle
 		if err != nil {
 			return nil, err
 		}
-		if ok && strings.TrimSpace(target.Name) != "" {
+		targetVisible := false
+		if ok {
+			targetVisible, err = s.tenantPermissionCenterTargetVisible(ctx, target, entitlement.TenantID, workspaceID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if targetVisible && strings.TrimSpace(target.Name) != "" {
 			targetName = target.Name
 		}
 		capabilityName := entitlement.CapabilityID
@@ -332,7 +339,7 @@ func (s *Server) tenantPermissionCenterCapabilities(ctx context.Context, entitle
 		if err != nil {
 			return nil, err
 		}
-		if ok && strings.TrimSpace(capability.DisplayName) != "" {
+		if targetVisible && ok && capability.TargetID == entitlement.TargetID && strings.TrimSpace(capability.DisplayName) != "" {
 			capabilityName = capability.DisplayName
 		}
 		rows = append(rows, tenantPermissionCenterCapability{
@@ -352,6 +359,20 @@ func (s *Server) tenantPermissionCenterCapabilities(ctx context.Context, entitle
 		return rows[i].TargetName < rows[j].TargetName
 	})
 	return rows, nil
+}
+
+func (s *Server) tenantPermissionCenterTargetVisible(ctx context.Context, target domain.Agent, tenantID string, workspaceID string) (bool, error) {
+	allowedTenant, err := s.tenantCanReceiveTargetEntitlement(ctx, target.TenantID, tenantID)
+	if err != nil {
+		return false, err
+	}
+	if !allowedTenant {
+		return false, nil
+	}
+	if strings.TrimSpace(workspaceID) != "" && target.WorkspaceID != strings.TrimSpace(workspaceID) {
+		return false, nil
+	}
+	return true, nil
 }
 
 func tenantPermissionCenterNextActions(center tenantPermissionCenterResponse) []tenantPermissionCenterNextAction {

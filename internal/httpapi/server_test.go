@@ -1790,6 +1790,28 @@ func TestTenantPermissionCenterFiltersCapabilitiesToScopedWorkspace(t *testing.T
 	}
 }
 
+func TestTenantPermissionCenterRedactsOutOfScopeHydratedObjects(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-child-center", WorkspaceID: "ws-support-center"},
+	})
+	tenantID, _, _, _, _ := seedTenantPermissionCenterFixture(t, repo)
+	now := time.Now().UTC()
+	financeTarget := createDirectAgent(t, repo, "Finance Export Service", tenantID, "ws-finance-center", "mcp", domain.AgentStatusActive, nil)
+	financeCapability := createDirectCapabilityWithAction(t, repo, financeTarget.ID, "export_invoices", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	financeEntitlement := createDirectTenantEntitlement(t, repo, tenantID, financeTarget.ID, financeCapability.ID, []domain.DataScope{{DataDomain: "finance", Dataset: "invoices", Region: "eu-west"}}, now)
+	createDirectWorkspaceAssignment(t, repo, financeEntitlement.ID, tenantID, "ws-support-center", []domain.DataScope{{DataDomain: "finance", Dataset: "invoices", Region: "eu-west"}}, now)
+
+	resp := requestWithAdmin(t, router, http.MethodGet, "/api/v1/tenants/"+tenantID+"/permission-center", nil, "", "support-key")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read tenant permission center, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	body := resp.Body.String()
+	if strings.Contains(body, "Finance Export Service") || strings.Contains(body, "export_invoices") {
+		t.Fatalf("tenant permission center leaked hydrated out-of-scope object details: %s", body)
+	}
+}
+
 func TestTenantPermissionCenterRequiresRegisteredTenant(t *testing.T) {
 	router := newRouterWithRepoAndAdminIdentities(store.NewMemory(), []httpapi.AdminIdentity{
 		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},

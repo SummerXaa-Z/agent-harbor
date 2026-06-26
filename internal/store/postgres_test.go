@@ -331,6 +331,37 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	if _, err := repo.AppendTrace(ctx, crossScopeTrace); err != nil {
 		t.Fatalf("append cross-scope trace: %v", err)
 	}
+	crossScopeCapability := domain.Capability{
+		ID:              security.NewID("cap"),
+		TargetID:        crossScopeTarget.ID,
+		Type:            domain.CapabilityTypeMCPTool,
+		Key:             "export_finance",
+		DisplayName:     "Export finance",
+		Description:     "Export finance",
+		Action:          domain.CapabilityActionExport,
+		Sensitivity:     domain.CapabilitySensitivityConfidential,
+		RiskLevel:       domain.CapabilityRiskHigh,
+		EnforcementMode: domain.CapabilityEnforcementGateway,
+		DiscoveryStatus: domain.CapabilityDiscoveryApproved,
+		Version:         1,
+		DiscoveredAt:    now,
+		UpdatedAt:       now,
+	}
+	if _, err := repo.UpsertCapability(ctx, crossScopeCapability); err != nil {
+		t.Fatalf("create cross-scope capability: %v", err)
+	}
+	crossScopeCapabilityTrace := trace
+	crossScopeCapabilityTrace.ID = security.NewID("trc")
+	crossScopeCapabilityTrace.TargetID = crossScopeTarget.ID
+	crossScopeCapabilityTrace.TenantID = caller.TenantID
+	crossScopeCapabilityTrace.WorkspaceID = caller.WorkspaceID
+	crossScopeCapabilityTrace.CallerInstanceID = caller.ID
+	crossScopeCapabilityTrace.CapabilityID = crossScopeCapability.ID
+	crossScopeCapabilityTrace.CapabilityVersion = crossScopeCapability.Version
+	crossScopeCapabilityTrace.CreatedAt = now.Add(2 * time.Second)
+	if _, err := repo.AppendTrace(ctx, crossScopeCapabilityTrace); err != nil {
+		t.Fatalf("append cross-scope capability trace: %v", err)
+	}
 	traces, err := repo.ListTraces(ctx, store.TraceFilter{
 		RunID:    "pg-run",
 		Decision: domain.TraceDecisionAllowed,

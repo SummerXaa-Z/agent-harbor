@@ -1305,7 +1305,7 @@ func (m *Memory) traceMatchesScope(trace domain.TraceEvent, scope ManagementScop
 			}
 		}
 		if trace.CapabilityID != "" || trace.EntitlementID != "" || trace.WorkspaceAssignmentID != "" || trace.InstanceAssignmentID != "" {
-			return true
+			return m.traceCapabilityEvidenceMatchesScope(trace, scope, tenantIDs)
 		}
 		if trace.CallerID == "" && trace.TargetID == "" {
 			return true
@@ -1320,6 +1320,107 @@ func (m *Memory) traceMatchesScope(trace domain.TraceEvent, scope ManagementScop
 		return true
 	}
 	return false
+}
+
+func (m *Memory) traceCapabilityEvidenceMatchesScope(trace domain.TraceEvent, scope ManagementScope, tenantIDs map[string]struct{}) bool {
+	hasAuthorizationEvidence := trace.EntitlementID != "" || trace.WorkspaceAssignmentID != "" || trace.InstanceAssignmentID != ""
+	if trace.TargetID != "" {
+		target, ok := m.agents[trace.TargetID]
+		if !ok {
+			return false
+		}
+		if !hasAuthorizationEvidence && !traceAgentMatchesScopeOrWorkspace(target, trace, scope, tenantIDs) {
+			return false
+		}
+	}
+	if trace.CapabilityID != "" {
+		capability, ok := m.capabilities[trace.CapabilityID]
+		if !ok {
+			return false
+		}
+		target, ok := m.agents[capability.TargetID]
+		if !ok {
+			return false
+		}
+		if trace.TargetID != "" && capability.TargetID != trace.TargetID {
+			return false
+		}
+		if !hasAuthorizationEvidence && !traceAgentMatchesScopeOrWorkspace(target, trace, scope, tenantIDs) {
+			return false
+		}
+	}
+	if trace.EntitlementID != "" && !m.traceTenantEntitlementMatchesScope(trace.EntitlementID, trace, scope, tenantIDs) {
+		return false
+	}
+	if trace.WorkspaceAssignmentID != "" && !m.traceWorkspaceAssignmentMatchesScope(trace.WorkspaceAssignmentID, trace, scope, tenantIDs) {
+		return false
+	}
+	if trace.InstanceAssignmentID != "" && !m.traceInstanceAssignmentMatchesScope(trace.InstanceAssignmentID, trace, scope, tenantIDs) {
+		return false
+	}
+	return true
+}
+
+func (m *Memory) traceTenantEntitlementMatchesScope(id string, trace domain.TraceEvent, scope ManagementScope, tenantIDs map[string]struct{}) bool {
+	entitlement, ok := m.entitlements[id]
+	if !ok {
+		return false
+	}
+	if !tenantIDMatchesScope(entitlement.TenantID, scope.TenantID, tenantIDs) {
+		return false
+	}
+	if _, ok := m.agents[entitlement.TargetID]; !ok {
+		return false
+	}
+	if trace.TargetID != "" && entitlement.TargetID != trace.TargetID {
+		return false
+	}
+	if trace.CapabilityID != "" && entitlement.CapabilityID != trace.CapabilityID {
+		return false
+	}
+	return true
+}
+
+func traceAgentMatchesScopeOrWorkspace(agent domain.Agent, trace domain.TraceEvent, scope ManagementScope, tenantIDs map[string]struct{}) bool {
+	if agentMatchesScope(agent, scope, tenantIDs) {
+		return true
+	}
+	return trace.WorkspaceID != "" && agent.WorkspaceID == trace.WorkspaceID
+}
+
+func (m *Memory) traceWorkspaceAssignmentMatchesScope(id string, trace domain.TraceEvent, scope ManagementScope, tenantIDs map[string]struct{}) bool {
+	assignment, ok := m.workspaceAssignments[id]
+	if !ok {
+		return false
+	}
+	if !tenantIDMatchesScope(assignment.TenantID, scope.TenantID, tenantIDs) {
+		return false
+	}
+	if scope.WorkspaceID != "" && assignment.WorkspaceID != scope.WorkspaceID {
+		return false
+	}
+	return m.traceTenantEntitlementMatchesScope(assignment.TenantEntitlementID, trace, scope, tenantIDs)
+}
+
+func (m *Memory) traceInstanceAssignmentMatchesScope(id string, trace domain.TraceEvent, scope ManagementScope, tenantIDs map[string]struct{}) bool {
+	assignment, ok := m.instanceAssignments[id]
+	if !ok {
+		return false
+	}
+	if !tenantIDMatchesScope(assignment.TenantID, scope.TenantID, tenantIDs) {
+		return false
+	}
+	if scope.WorkspaceID != "" && assignment.WorkspaceID != scope.WorkspaceID {
+		return false
+	}
+	caller, ok := m.agents[assignment.CallerInstanceID]
+	if !ok || !agentMatchesScope(caller, scope, tenantIDs) {
+		return false
+	}
+	if trace.CallerInstanceID != "" && assignment.CallerInstanceID != trace.CallerInstanceID {
+		return false
+	}
+	return m.traceWorkspaceAssignmentMatchesScope(assignment.WorkspaceAssignmentID, trace, scope, tenantIDs)
 }
 
 func (m *Memory) capabilityMatchesFilter(capability domain.Capability, filter CapabilityFilter, tenantIDs map[string]struct{}) bool {

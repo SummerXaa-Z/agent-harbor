@@ -56,8 +56,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 历史导入或直接写入的访问授权现在不能再放行调用方和目标 Agent 不在同一租户工作区的数据面调用。
 - Scoped administrators can no longer revoke or infer access-grant records whose caller and target are not both inside their authenticated management scope.
 - 范围化管理员现在不能再撤销或推断调用方与目标并未同时位于其认证管理范围内的访问授权记录。
-- Scoped runtime trace lists now require route traces to keep caller and target agents inside scope, while tenant-governed capability traces must match the caller instance and authorization scope.
-- 范围化运行追踪列表现在要求路由追踪的调用方和目标 Agent 同时位于范围内；租户治理下的能力追踪则必须匹配调用实例和授权范围。
+- Scoped runtime trace lists now require route traces to keep caller and target agents inside scope, while tenant-governed capability traces must either resolve direct target/capability evidence inside the scoped runtime workspace or match a scoped entitlement, workspace assignment, and caller assignment chain.
+- 范围化运行追踪列表现在要求路由追踪的调用方和目标 Agent 同时位于范围内；租户治理下的能力追踪必须满足两者之一：直接目标/能力证据位于当前运行记录的范围化工作区内，或匹配当前范围内的租户授权、工作区分配和调用实例分配链。
 - Scoped permission-package application reads now hide dirty applications whose caller or target no longer belongs to the current management workspace, and redact out-of-scope capability IDs and keys from REST, management MCP, production readiness, and production report responses.
 - 范围化权限包应用读取现在会隐藏调用方或目标已不属于当前管理工作区的脏应用记录，并在 REST、Management MCP、状态检查和上线报告响应中脱敏范围外能力 ID 与能力键。
 - Managed administrator creation now has explicit coverage rejecting actors that reuse bootstrap administrator actors, keeping sessions, audit rows, and approval routing unambiguous.

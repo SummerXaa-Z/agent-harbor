@@ -1517,6 +1517,8 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 			}
 		}
 		workspaceID := strings.TrimSpace(filter.WorkspaceID)
+		tenantArgIndex := 0
+		workspaceArgIndex := 0
 		direct := []string{"(trace_events.tenant_id <> '' or trace_events.workspace_id <> '')"}
 		caller := []string{}
 		target := []string{}
@@ -1524,6 +1526,7 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 		if tenantIDs != nil {
 			args = append(args, tenantIDs)
 			idx := len(args)
+			tenantArgIndex = idx
 			direct = append(direct, fmt.Sprintf("trace_events.tenant_id = any($%d)", idx))
 			caller = append(caller, fmt.Sprintf("c.tenant_id = any($%d)", idx))
 			target = append(target, fmt.Sprintf("t.tenant_id = any($%d)", idx))
@@ -1532,10 +1535,37 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 		if workspaceID != "" {
 			args = append(args, workspaceID)
 			idx := len(args)
+			workspaceArgIndex = idx
 			direct = append(direct, fmt.Sprintf("trace_events.workspace_id=$%d", idx))
 			caller = append(caller, fmt.Sprintf("c.workspace_id=$%d", idx))
 			target = append(target, fmt.Sprintf("t.workspace_id=$%d", idx))
 			callerInstance = append(callerInstance, fmt.Sprintf("ci.workspace_id=$%d", idx))
+		}
+		scopedAgent := func(alias string) string {
+			conditions := []string{}
+			if tenantArgIndex > 0 {
+				conditions = append(conditions, fmt.Sprintf("%s.tenant_id = any($%d)", alias, tenantArgIndex))
+			}
+			if workspaceArgIndex > 0 {
+				conditions = append(conditions, fmt.Sprintf("%s.workspace_id=$%d", alias, workspaceArgIndex))
+			}
+			return strings.Join(conditions, " and ")
+		}
+		scopedTenantWorkspace := func(tenantColumn string, workspaceColumn string) string {
+			conditions := []string{}
+			if tenantArgIndex > 0 {
+				conditions = append(conditions, fmt.Sprintf("%s = any($%d)", tenantColumn, tenantArgIndex))
+			}
+			if workspaceArgIndex > 0 {
+				conditions = append(conditions, fmt.Sprintf("%s=$%d", workspaceColumn, workspaceArgIndex))
+			}
+			return strings.Join(conditions, " and ")
+		}
+		scopedTenant := func(tenantColumn string) string {
+			if tenantArgIndex == 0 {
+				return "true"
+			}
+			return fmt.Sprintf("%s = any($%d)", tenantColumn, tenantArgIndex)
 		}
 		query += fmt.Sprintf(`
 			and (
@@ -1559,6 +1589,77 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 						)
 					)
 					and (
+						trace_events.target_agent_id = ''
+						or trace_events.entitlement_id <> ''
+						or trace_events.workspace_assignment_id <> ''
+						or trace_events.instance_assignment_id <> ''
+						or exists (
+							select 1
+							from agents dt
+							where dt.id = trace_events.target_agent_id
+								and (%s or (trace_events.workspace_id <> '' and dt.workspace_id = trace_events.workspace_id))
+						)
+					)
+					and (
+						trace_events.capability_id = ''
+						or exists (
+							select 1
+							from capabilities dc
+							join agents dct on dct.id = dc.target_agent_id
+							where dc.id = trace_events.capability_id
+								and (trace_events.target_agent_id = '' or dc.target_agent_id = trace_events.target_agent_id)
+								and (
+									trace_events.entitlement_id <> ''
+									or trace_events.workspace_assignment_id <> ''
+									or trace_events.instance_assignment_id <> ''
+									or %s
+									or (trace_events.workspace_id <> '' and dct.workspace_id = trace_events.workspace_id)
+								)
+						)
+					)
+					and (
+						trace_events.entitlement_id = ''
+						or exists (
+							select 1
+							from tenant_entitlements de
+							join agents det on det.id = de.target_agent_id
+							where de.id = trace_events.entitlement_id
+								and (trace_events.target_agent_id = '' or de.target_agent_id = trace_events.target_agent_id)
+								and (trace_events.capability_id = '' or de.capability_id = trace_events.capability_id)
+								and %s
+						)
+					)
+					and (
+						trace_events.workspace_assignment_id = ''
+						or exists (
+							select 1
+							from workspace_assignments dwa
+							join tenant_entitlements dwe on dwe.id = dwa.tenant_entitlement_id
+							join agents dwt on dwt.id = dwe.target_agent_id
+							where dwa.id = trace_events.workspace_assignment_id
+								and (trace_events.target_agent_id = '' or dwe.target_agent_id = trace_events.target_agent_id)
+								and (trace_events.capability_id = '' or dwe.capability_id = trace_events.capability_id)
+								and %s
+						)
+					)
+					and (
+						trace_events.instance_assignment_id = ''
+						or exists (
+							select 1
+							from instance_assignments dia
+							join agents dici on dici.id = dia.caller_instance_id
+							join workspace_assignments diw on diw.id = dia.workspace_assignment_id
+							join tenant_entitlements die on die.id = diw.tenant_entitlement_id
+							join agents dit on dit.id = die.target_agent_id
+							where dia.id = trace_events.instance_assignment_id
+								and (trace_events.caller_instance_id = '' or dia.caller_instance_id = trace_events.caller_instance_id)
+								and (trace_events.target_agent_id = '' or die.target_agent_id = trace_events.target_agent_id)
+								and (trace_events.capability_id = '' or die.capability_id = trace_events.capability_id)
+								and %s
+								and %s
+						)
+					)
+					and (
 						trace_events.capability_id <> ''
 						or trace_events.entitlement_id <> ''
 						or trace_events.workspace_assignment_id <> ''
@@ -1567,7 +1668,18 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 					)
 				)
 			)
-		`, strings.Join(caller, " and "), strings.Join(target, " and "), strings.Join(direct, " and "), strings.Join(callerInstance, " and "))
+		`,
+			strings.Join(caller, " and "),
+			strings.Join(target, " and "),
+			strings.Join(direct, " and "),
+			strings.Join(callerInstance, " and "),
+			scopedAgent("dt"),
+			scopedAgent("dct"),
+			scopedTenant("de.tenant_id"),
+			scopedTenantWorkspace("dwa.tenant_id", "dwa.workspace_id"),
+			scopedTenantWorkspace("dia.tenant_id", "dia.workspace_id"),
+			scopedAgent("dici"),
+		)
 	}
 	if filter.Limit > 0 {
 		args = append(args, filter.Limit)

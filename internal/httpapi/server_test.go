@@ -3080,6 +3080,24 @@ func TestManagementScopeFiltersLists(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("append excluded trace: %v", err)
 	}
+	crossWorkspaceCapability := createDirectCapabilityWithAction(t, repo, sameTenantOtherWorkspace.ID, "export_finance", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	if _, err := repo.AppendTrace(t.Context(), domain.TraceEvent{
+		ID:                security.NewID("trc"),
+		RunID:             "scope-run",
+		CallerID:          inScope.ID,
+		TargetID:          sameTenantOtherWorkspace.ID,
+		RouteType:         "mcp",
+		RouteKey:          "tools/call",
+		TenantID:          inScope.TenantID,
+		WorkspaceID:       inScope.WorkspaceID,
+		CallerInstanceID:  inScope.ID,
+		CapabilityID:      crossWorkspaceCapability.ID,
+		CapabilityVersion: crossWorkspaceCapability.Version,
+		Decision:          domain.TraceDecisionAllowed,
+		CreatedAt:         now.Add(3 * time.Second),
+	}); err != nil {
+		t.Fatalf("append cross-workspace capability trace: %v", err)
+	}
 
 	scopeQuery := "?tenantId=tenant-a&workspaceId=ws-a"
 	agents := decodeData[[]agentResponse](t, request(t, router, http.MethodGet, "/api/v1/agents"+scopeQuery, nil, ""))

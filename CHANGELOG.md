@@ -54,6 +54,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 范围化管理员的访问授权列表现在只返回调用方和目标都位于认证管理范围内的授权关系。
 - Legacy or imported access grants no longer authorize data-plane calls when caller and target agents are outside the same tenant workspace.
 - 历史导入或直接写入的访问授权现在不能再放行调用方和目标 Agent 不在同一租户工作区的数据面调用。
+- Scoped administrators can no longer revoke or infer access-grant records whose caller and target are not both inside their authenticated management scope.
+- 范围化管理员现在不能再撤销或推断调用方与目标并未同时位于其认证管理范围内的访问授权记录。
 - Managed administrator creation now has explicit coverage rejecting actors that reuse bootstrap administrator actors, keeping sessions, audit rows, and approval routing unambiguous.
 - 托管管理员创建现在明确覆盖拒绝复用引导管理员 actor，避免会话主体、审计记录和审批路由含混。
 - PostgreSQL-backed managed administrator creation now maps duplicate actor or id constraint races to stable 409 conflict errors instead of generic internal errors.

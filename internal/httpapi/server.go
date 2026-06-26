@@ -1143,8 +1143,13 @@ func (s *Server) listAccessGrants(w http.ResponseWriter, r *http.Request) {
 func (s *Server) revokeAccessGrant(w http.ResponseWriter, r *http.Request) {
 	grantID := chi.URLParam(r, "id")
 	tenantID, workspaceID := "", ""
+	scope, err := s.effectiveManagementScopeFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	foundForAudit := false
-	grants, err := s.repo.ListAccessGrants(r.Context(), store.ManagementScope{})
+	grants, err := s.repo.ListAccessGrants(r.Context(), scope)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -1165,10 +1170,6 @@ func (s *Server) revokeAccessGrant(w http.ResponseWriter, r *http.Request) {
 	}
 	if !foundForAudit {
 		writeError(w, domain.NotFound("access grant not found"))
-		return
-	}
-	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: tenantID, WorkspaceID: workspaceID}); err != nil {
-		writeError(w, err)
 		return
 	}
 	now := s.now()

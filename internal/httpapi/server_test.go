@@ -1912,6 +1912,45 @@ func TestScopedAdminIdentityAccessGrantListHidesCrossScopeRelations(t *testing.T
 	}
 }
 
+func TestScopedAdminIdentityCannotRevokeCrossScopeAccessGrant(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	createDirectTenant(t, repo, "tenant-west", "tenant-root", "West tenant", now)
+	supportCaller := createDirectAgent(t, repo, "Support caller", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	westTarget := createDirectAgent(t, repo, "West MCP", "tenant-west", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	crossGrant, err := repo.CreateAccessGrant(t.Context(), domain.AccessGrant{
+		ID:        security.NewID("grt"),
+		CallerID:  supportCaller.ID,
+		TargetID:  westTarget.ID,
+		RouteType: "mcp",
+		RouteKey:  "tools/call",
+		CreatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("create cross-scope grant: %v", err)
+	}
+
+	resp := requestWithAdmin(t, router, http.MethodDelete, "/api/v1/access-grants/"+crossGrant.ID, nil, "", "support-key")
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("cross-scope revoke should look not found, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if body := resp.Body.String(); strings.Contains(body, crossGrant.ID) || strings.Contains(body, westTarget.ID) {
+		t.Fatalf("cross-scope revoke leaked inaccessible grant details: %s", body)
+	}
+	grants, err := repo.ListAccessGrants(t.Context(), store.ManagementScope{})
+	if err != nil {
+		t.Fatalf("list grants: %v", err)
+	}
+	if len(grants) != 1 || grants[0].ID != crossGrant.ID || !grants[0].RevokedAt.IsZero() {
+		t.Fatalf("cross-scope grant should remain unchanged, got %#v", grants)
+	}
+}
+
 func TestTenantAccessProfileHonorsScopedAdminBoundary(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{

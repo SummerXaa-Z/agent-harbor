@@ -64,7 +64,7 @@ help:
 
 check: gofmt-check test vet build makefile-targets-test frontend-test frontend-build scenario-scripts-lint github-config-lint
 
-release-check: gofmt-check test-fresh vet build production-hardening web-console-production-journey scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center makefile-targets-test frontend-test frontend-build scenario-scripts-lint github-config-lint
+release-check: gofmt-check test-fresh vet build production-hardening scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center makefile-targets-test frontend-test frontend-build scenario-scripts-lint github-config-lint
 
 fmt:
 	gofmt -w $(GO_FILES)
@@ -133,7 +133,58 @@ core-journey:
 	bash scripts/scenario-core-journey.sh
 
 scenario-permission-package-approval:
-	bash scripts/scenario-permission-package-approval.sh
+	@if [[ -n "$${BASE_URL:-}" ]]; then \
+		bash scripts/scenario-permission-package-approval.sh; \
+	else \
+		run_id="permission-package-approval-$$(date +%Y%m%d%H%M%S)"; \
+		api_host="$${AGENT_HARBOR_PERMISSION_PACKAGE_API_HOST:-127.0.0.1}"; \
+		api_port="$${AGENT_HARBOR_PERMISSION_PACKAGE_API_PORT:-9197}"; \
+		api_addr="$${AGENT_HARBOR_PERMISSION_PACKAGE_API_ADDR:-$${api_host}:$${api_port}}"; \
+		base_url="http://$${api_host}:$${api_port}"; \
+		mcp_port="$${MOCK_MCP_PORT:-8797}"; \
+		log_dir="$${TMPDIR:-/tmp}/agent-harbor-permission-package-approval-$${run_id}"; \
+		requester_key="permission-package-requester-key-$${run_id}"; \
+		reviewer_key="permission-package-reviewer-key-$${run_id}"; \
+		if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$${api_port}" -sTCP:LISTEN >/dev/null 2>&1; then \
+			echo "API port $${api_port} is already in use; set BASE_URL to test an existing API or AGENT_HARBOR_PERMISSION_PACKAGE_API_PORT for an isolated local gate" >&2; \
+			exit 1; \
+		fi; \
+		if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$${mcp_port}" -sTCP:LISTEN >/dev/null 2>&1; then \
+			echo "MCP port $${mcp_port} is already in use; set MOCK_MCP_PORT for an isolated local gate" >&2; \
+			exit 1; \
+		fi; \
+		mkdir -p "$$log_dir"; \
+		cleanup() { \
+			if [[ -n "$${api_pid:-}" ]]; then \
+				kill "$$api_pid" >/dev/null 2>&1 || true; \
+				wait "$$api_pid" >/dev/null 2>&1 || true; \
+			fi; \
+		}; \
+		trap cleanup EXIT; \
+		AGENT_HARBOR_ADDR="$$api_addr" \
+		AGENT_HARBOR_ADMIN_IDENTITIES="requester=$$requester_key;security-reviewer=$$reviewer_key" \
+		AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true \
+			go run ./cmd/agent-harbor >"$$log_dir/api.log" 2>&1 & \
+		api_pid="$$!"; \
+		for _ in $$(seq 1 80); do \
+			if curl -fsS "$$base_url/healthz" >/dev/null 2>&1; then \
+				break; \
+			fi; \
+			sleep 0.25; \
+		done; \
+		if ! curl -fsS "$$base_url/healthz" >/dev/null 2>&1; then \
+			echo "AgentHarbor API did not become ready for scenario-permission-package-approval" >&2; \
+			tail -80 "$$log_dir/api.log" >&2 || true; \
+			exit 1; \
+		fi; \
+		BASE_URL="$$base_url" \
+		REQUESTER_ADMIN_KEY="$$requester_key" \
+		REVIEWER_ADMIN_KEY="$$reviewer_key" \
+		ADMIN_KEY="$$requester_key" \
+		RUN_ID="$$run_id" \
+		MOCK_MCP_PORT="$$mcp_port" \
+			bash scripts/scenario-permission-package-approval.sh; \
+	fi
 
 ai-admin-browser-journey: frontend-deps
 	bash scripts/scenario-ai-admin-browser-journey.sh

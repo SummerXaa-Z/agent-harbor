@@ -23,7 +23,11 @@ This covers:
 - `go vet` via `make vet`
 - Go package build via `make build`
 - production safety baseline via `make production-hardening`
+- approval-required permission package journey via `make scenario-permission-package-approval`
+- browser-facing AI Admin approval journey via `make ai-admin-browser-journey`
+- scoped administrator tenant/workspace boundary via `make scenario-admin-tenant-boundary`
 - managed administrator lifecycle via `make scenario-admin-access-management`
+- tenant permission center projection via `make scenario-tenant-permission-center`
 - web console production journey smoke gate via `make web-console-production-journey`
 - frontend unit tests via `make frontend-test`
 - frontend production build via `make frontend-build`
@@ -33,6 +37,14 @@ This covers:
 The production safety baseline starts a local API with `AGENT_HARBOR_ADMIN_KEY` set and private upstreams disabled. It must prove that health remains public, management APIs reject missing or wrong admin keys, management routes fail closed when no admin authentication is configured, `AGENT_HARBOR_DEPLOYMENT_MODE=production` rejects development-only admin bypass, private-upstream flags, malformed, invalid-actor, weak, conflicting, reserved-actor, scoped-platform-admin, or platform-admin-missing bootstrap admin identities, malformed, unbound, or oversized approval reviewer routing, missing or weak session secrets, missing or invalid persistent storage, missing credential encryption keys, and invalid CORS origins before startup or storage initialization, permission-package and management MCP endpoints use the same admin-key protection, loopback/private MCP upstreams are rejected by default, and public HTTPS MCP targets remain registrable.
 
 生产安全基线还必须验证 `AGENT_HARBOR_DEPLOYMENT_MODE=production` 会在启动或存储初始化前阻断开发专用的管理绕过、私有上游开关、格式错误、actor 格式无效、弱值、冲突、使用保留 actor、平台管理员携带租户范围或缺少平台管理员的引导管理员身份、格式错误、未绑定认证身份或范围过宽的审批人路由、缺失或弱值会话密钥、缺失或无效的持久化存储、缺失凭据加密密钥和无效 CORS 来源。
+
+The approval-required permission package journey gate starts an isolated local API and mock MCP service when `BASE_URL` is not provided. It must prove draft, approval request, withdrawal, approval expiry metadata, approved preflight, approved apply, atomic one-time approval consumption, consumed-approval reuse rejection, runtime allow/deny, tenant access-profile, permission package application, impact review, readiness report, and applied audit records without adding browser automation dependencies.
+
+需审批权限包旅程门禁在未提供 `BASE_URL` 时会启动隔离端口的本地 API 和 mock MCP 服务；它必须验证草稿、审批请求、撤回、审批过期元数据、已审批预检、已审批应用、审批一次性原子消费、已消费审批复用拒绝、运行时允许/拒绝、租户访问画像、权限包应用、影响复核、上线状态报告和应用审计记录，且不新增浏览器自动化依赖。
+
+The browser-facing AI Admin approval journey gate starts the API, MCP tool service, and web console on isolated ports. It must prove the browser origin is served, the subject-id header is accepted by CORS, and the same approval-required permission package journey completes while the console server is live.
+
+浏览器侧 AI Admin 旅程门禁会在隔离端口启动 API、MCP 工具服务和 Web 控制台；它必须验证浏览器来源可访问、subject-id 请求头通过 CORS，并在控制台服务运行时完成同一条需审批权限包旅程。
 
 The managed administrator lifecycle gate must prove platform-created administrator identities cannot reuse bootstrap administrator actors, can log in with scoped boundaries, cannot manage administrators as tenant admins, cannot escape tenant/workspace scope, do not expose one-time key material in lists or audit records, invalidate pre-rotation browser sessions when keys rotate, invalidate existing browser sessions when identities are disabled, reject old and disabled keys, reject key rotation for disabled identities, reject repeated disablement without adding duplicate lifecycle audit events, expose structured application error data through management MCP tool errors, and record lifecycle audit actions.
 
@@ -89,14 +101,14 @@ MOCK_MCP_PORT=18787 \
 
 如果默认本地端口已被开发服务占用，可以使用上面的隔离端口运行同一个浏览器门禁。
 
-Before declaring v0.2.0 permission-package work or a permission-package release candidate ready, also run the approval-required journey against a local API with private upstreams enabled:
+Before declaring v0.2.0 permission-package work or a permission-package release candidate ready, `make release-check` must include the dependency-free approval-required journey. When you need SDK-service parity evidence, run the same journey against a local API with private upstreams enabled:
 
 ```bash
 AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
-MCP_SERVER_MODE=real make scenario-permission-package-approval
+BASE_URL=http://127.0.0.1:9090 MCP_SERVER_MODE=real make scenario-permission-package-approval
 ```
 
-This scenario must prove draft, approval request, approval expiry metadata, approved apply, atomic one-time approval consumption, consumed-approval reuse rejection, runtime allow/deny, tenant access-profile, permission package application, and applied audit records.
+This scenario must prove draft, approval request, withdrawal, approval expiry metadata, approved preflight, approved apply, atomic one-time approval consumption, consumed-approval reuse rejection, runtime allow/deny, tenant access-profile, permission package application, impact review, readiness report, and applied audit records.
 
 ## GitHub Checks
 

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  buildProductionAcceptanceCenter
+  buildProductionAcceptanceCenter,
+  productionAcceptanceReportFilename
 } from "../src/productionAcceptance.ts";
 
 function productionSummary(overrides = {}) {
@@ -127,4 +128,23 @@ test("production acceptance center blocks fallback data from production actions"
   assert.equal(center.status, "blocked");
   assert.equal(center.primaryAction, "run_diagnostics");
   assert.equal(center.blockers[0]?.labelKey, "productionAcceptance.blocker.liveData");
+});
+
+test("production acceptance report filename uses go-live status wording", () => {
+  const filename = productionAcceptanceReportFilename({
+    generatedAt: "2026-06-15T10:00:00Z",
+    scope: {
+      callerInstanceId: "agt-caller",
+      targetId: "agt-target",
+      templateId: "sales-readonly",
+      tenantId: "tenant-support",
+      workspaceId: "ws-support"
+    },
+    status: "ready"
+  });
+
+  assert.match(filename, /^agentharbor-go-live-status-/);
+  assert.match(filename, /-ready-/);
+  assert.match(filename, /\.json$/);
+  assert.doesNotMatch(filename, /evidence/i);
 });

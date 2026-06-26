@@ -787,7 +787,7 @@ func (s *Server) managementMCPAccessProfile(r *http.Request, args managementMCPA
 		}
 		traceLimit = *args.TraceLimit
 	}
-	return s.buildTenantAccessProfile(r.Context(), strings.TrimSpace(args.TenantID), accessProfileQuery{
+	return s.buildTenantAccessProfileForRequest(r, strings.TrimSpace(args.TenantID), accessProfileQuery{
 		WorkspaceID:      strings.TrimSpace(args.WorkspaceID),
 		TargetID:         strings.TrimSpace(args.TargetID),
 		CapabilityID:     strings.TrimSpace(args.CapabilityID),
@@ -905,6 +905,12 @@ func (s *Server) explainManagementMCPAccessDecision(r *http.Request, args manage
 	if err := validateManagementMCPExplainAccessArgs(args); err != nil {
 		return managementMCPExplainAccessResult{}, err
 	}
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: args.TenantID, WorkspaceID: args.WorkspaceID}); err != nil {
+		return managementMCPExplainAccessResult{}, err
+	}
+	if err := s.requireAccessDecisionResourceScope(r, args); err != nil {
+		return managementMCPExplainAccessResult{}, err
+	}
 	decision, err := s.repo.EvaluateCapabilityAccess(r.Context(), store.CapabilityAccessRequest{
 		TenantID:         args.TenantID,
 		WorkspaceID:      args.WorkspaceID,
@@ -934,6 +940,61 @@ func (s *Server) explainManagementMCPAccessDecision(r *http.Request, args manage
 		DataScopes:  decision.DataScopes,
 		NextActions: managementMCPAccessNextActions(decision),
 	}, nil
+}
+
+func (s *Server) requireAccessDecisionResourceScope(r *http.Request, args managementMCPExplainAccessArgs) error {
+	principal, ok := requestAdminPrincipal(r)
+	if !ok {
+		return nil
+	}
+	principal = normalizeAdminPrincipal(principal)
+	if principal.Role == adminRolePlatformAdmin || principal.TenantID == "" {
+		return nil
+	}
+
+	caller, ok, err := s.repo.GetAgent(r.Context(), args.CallerInstanceID)
+	if err != nil {
+		return err
+	}
+	if ok {
+		if !agentInRequestedScope(caller, args.TenantID, args.WorkspaceID) {
+			return domain.PermissionDenied("access decision resource is outside requested scope")
+		}
+		if err := s.requireAgentManagementScope(r, caller); err != nil {
+			return err
+		}
+	}
+
+	target, ok, err := s.repo.GetAgent(r.Context(), args.TargetID)
+	if err != nil {
+		return err
+	}
+	if ok {
+		if !agentInRequestedScope(target, args.TenantID, args.WorkspaceID) {
+			return domain.PermissionDenied("access decision resource is outside requested scope")
+		}
+		if err := s.requireAgentManagementScope(r, target); err != nil {
+			return err
+		}
+	}
+
+	capability, ok, err := s.repo.GetCapability(r.Context(), args.CapabilityID)
+	if err != nil {
+		return err
+	}
+	if ok {
+		if capability.TargetID != args.TargetID {
+			return domain.PermissionDenied("access decision resource is outside requested scope")
+		}
+		if err := s.requireCapabilityManagementScope(r, capability); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func agentInRequestedScope(agent domain.Agent, tenantID string, workspaceID string) bool {
+	return agent.TenantID == strings.TrimSpace(tenantID) && agent.WorkspaceID == strings.TrimSpace(workspaceID)
 }
 
 func trimManagementMCPExplainAccessArgs(args managementMCPExplainAccessArgs) managementMCPExplainAccessArgs {

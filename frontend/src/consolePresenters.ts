@@ -1,4 +1,5 @@
 import type { MetricTone } from "./consoleMetrics";
+import type { Language } from "./i18n";
 import type {
   AccessDecisionExplainResult,
   Agent,
@@ -45,6 +46,20 @@ export function accessDecisionEvidenceTone(status: string): Tone {
   if (status === "blocking" || status === "missing" || status === "mismatch") return "danger";
   if (status === "not_approved" || status === "inactive") return "warning";
   return "neutral";
+}
+
+export function formatConsoleTime(
+  value: Date,
+  language: Language,
+  options: Intl.DateTimeFormatOptions = {}
+) {
+  return value.toLocaleTimeString(language === "zh-CN" ? "zh-CN" : "en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    ...options,
+    hour12: language === "en"
+  });
 }
 
 export function formatDate(value: string) {

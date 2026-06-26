@@ -88,13 +88,21 @@ Then open `http://127.0.0.1:5174/`. The demo command starts the API in explicit 
 
 The web console opens on **Getting Started** when the live system is not configured yet, then defaults back to **Permission Changes** once tenant, Agent, capability, and grant-chain setup is complete. Confirm the runtime checks are ready, then run the validation journey. The **Self-Check** workspace remains available for the lower-level `6/6` core permission loop validation.
 
-Use the local release gate when you want to verify the repository rather than run the browser demo:
+Use the local development check when you want to verify backend, frontend, and static gate wiring without running the longer scenario gates:
 
 ```bash
 make check
 ```
 
 `make check` installs the pinned frontend dependencies from `frontend/pnpm-lock.yaml` before running frontend tests and builds.
+
+Use the uncached release gate before merge or release handoff:
+
+```bash
+make release-check
+```
+
+`make release-check` runs uncached Go tests and the release scenario gates, including the production safety baseline, approval-required permission package journey, browser-facing AI Admin journey gate, scoped admin tenant boundary gate, managed administrator lifecycle gate, tenant permission center gate, and web console production journey smoke gate.
 
 Use the production safety gate when you want to verify conservative runtime defaults:
 
@@ -226,9 +234,9 @@ For release-candidate validation of production defaults, run:
 make production-hardening
 ```
 
-`make release-check` also includes the production safety baseline, scoped admin tenant boundary gate, and the web console production journey smoke gate.
+`make release-check` also includes the production safety baseline, approval-required permission package journey, browser-facing AI Admin journey gate, scoped admin tenant boundary gate, managed administrator lifecycle gate, tenant permission center gate, and the web console production journey smoke gate.
 
-`make release-check` 同时包含生产安全基线、范围化管理员租户边界门禁和 Web 控制台生产旅程 smoke gate。
+`make release-check` 同时包含生产安全基线、需审批权限包旅程、浏览器侧 AI Admin 旅程门禁、范围化管理员租户边界门禁、托管管理员生命周期门禁、租户权限中心门禁和 Web 控制台生产旅程 smoke gate。
 
 ## Web Console
 
@@ -367,11 +375,11 @@ AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREA
 make core-journey
 ```
 
-The approval-required permission package journey can run against the official SDK MCP demo service:
+The approval-required permission package journey is part of `make release-check`. By default, `make scenario-permission-package-approval` starts an isolated local API plus the dependency-free mock MCP server. To run the same journey against an already running API and the official SDK MCP demo service, set `BASE_URL` and `MCP_SERVER_MODE=real`:
 
 ```bash
 AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
-MCP_SERVER_MODE=real make scenario-permission-package-approval
+BASE_URL=http://127.0.0.1:9090 MCP_SERVER_MODE=real make scenario-permission-package-approval
 ```
 
 This scenario verifies approval expiry metadata and one-time approval consumption in addition to the runtime allow/deny checks.

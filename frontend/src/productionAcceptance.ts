@@ -1,6 +1,7 @@
 import type { ConnectionDiagnosticStatus } from "./connectionDiagnostics";
 import type { AiAdminProductionConsoleSummary } from "./aiAdminProductionConsole";
 import type {
+  PermissionPackageProductionEvidenceReport,
   PermissionPackageProductionReadiness,
   PermissionPackageProductionReadinessCheck
 } from "./permissionPackages";
@@ -267,6 +268,28 @@ function headlineKey(status: ProductionAcceptanceStatus) {
   if (status === "blocked") return "productionAcceptance.headline.blocked";
   if (status === "attention") return "productionAcceptance.headline.attention";
   return "productionAcceptance.headline.pending";
+}
+
+export function productionAcceptanceReportFilename(
+  report: Pick<PermissionPackageProductionEvidenceReport, "generatedAt" | "scope" | "status">
+) {
+  const generated = safeFilenameSegment(report.generatedAt || new Date().toISOString());
+  return [
+    "agentharbor-go-live-status",
+    safeFilenameSegment(report.scope.tenantId),
+    safeFilenameSegment(report.scope.workspaceId),
+    safeFilenameSegment(report.scope.templateId),
+    safeFilenameSegment(report.status),
+    generated
+  ].filter(Boolean).join("-") + ".json";
+}
+
+function safeFilenameSegment(value: string | undefined) {
+  return (value ?? "")
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
 }
 
 function capitalizeProductionStatus(status: PermissionPackageProductionReadiness["status"]) {

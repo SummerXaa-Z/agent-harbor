@@ -2,14 +2,14 @@
 set -euo pipefail
 
 API_HOST="${AGENT_HARBOR_BROWSER_GATE_API_HOST:-127.0.0.1}"
-API_PORT="${AGENT_HARBOR_BROWSER_GATE_API_PORT:-9090}"
+API_PORT="${AGENT_HARBOR_BROWSER_GATE_API_PORT:-9198}"
 API_ADDR="${AGENT_HARBOR_ADDR:-${API_HOST}:${API_PORT}}"
 BASE_URL="${BASE_URL:-http://${API_HOST}:${API_PORT}}"
 FRONTEND_HOST="${AGENT_HARBOR_BROWSER_GATE_FRONTEND_HOST:-127.0.0.1}"
-FRONTEND_PORT="${AGENT_HARBOR_BROWSER_GATE_FRONTEND_PORT:-5174}"
+FRONTEND_PORT="${AGENT_HARBOR_BROWSER_GATE_FRONTEND_PORT:-5184}"
 FRONTEND_ORIGIN="${FRONTEND_ORIGIN:-http://${FRONTEND_HOST}:${FRONTEND_PORT}}"
 MOCK_MCP_HOST="${MOCK_MCP_HOST:-127.0.0.1}"
-MOCK_MCP_PORT="${MOCK_MCP_PORT:-8787}"
+MOCK_MCP_PORT="${MOCK_MCP_PORT:-8798}"
 MCP_SERVER_MODE="${AGENT_HARBOR_BROWSER_GATE_MCP_MODE:-real}"
 REQUESTER_ACTOR="${AGENT_HARBOR_BROWSER_GATE_REQUESTER_ACTOR:-requester}"
 REVIEWER_ACTOR="${AGENT_HARBOR_BROWSER_GATE_REVIEWER_ACTOR:-security-reviewer}"
@@ -27,7 +27,15 @@ cleanup() {
   for pid in "${PIDS[@]:-}"; do
     kill "$pid" >/dev/null 2>&1 || true
   done
-  wait >/dev/null 2>&1 || true
+  sleep 0.5
+  for pid in "${PIDS[@]:-}"; do
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill -KILL "$pid" >/dev/null 2>&1 || true
+    fi
+  done
+  for pid in "${PIDS[@]:-}"; do
+    wait "$pid" >/dev/null 2>&1 || true
+  done
 }
 trap cleanup EXIT
 trap 'exit 130' INT

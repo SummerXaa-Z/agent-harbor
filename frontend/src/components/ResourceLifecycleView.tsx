@@ -9,7 +9,8 @@ import {
   ShieldCheck
 } from "lucide-react";
 
-import { permissionEntityDisplayName, type Tone, type Translator } from "../consolePresenters";
+import { formatConsoleTime, permissionEntityDisplayName, type Tone, type Translator } from "../consolePresenters";
+import type { Language } from "../i18n";
 import type { ManagementMutationRefreshState } from "../managementMutationRefresh";
 import type {
   ResourceLifecycleItem,
@@ -23,6 +24,7 @@ import { Badge } from "./ui";
 export function ResourceLifecycleView({
   formatTenantName = (tenantId) => tenantId,
   formatWorkspaceName = (workspaceId) => workspaceId,
+  language = "en",
   lastRefreshedAt,
   onCreateAgent,
   onResourceAction,
@@ -35,6 +37,7 @@ export function ResourceLifecycleView({
 }: {
   formatTenantName?: (tenantId: string) => string;
   formatWorkspaceName?: (workspaceId: string) => string;
+  language?: Language;
   lastRefreshedAt?: Date;
   onCreateAgent?: (kind: ResourceLifecycleSetupGapKind) => void;
   onResourceAction?: (item: ResourceLifecycleItem) => void;
@@ -110,6 +113,7 @@ export function ResourceLifecycleView({
             <ResourceLifecycleSetupGaps gaps={summary.setupGaps} onCreateAgent={onCreateAgent} t={t} />
           ) : null}
           <ResourceLifecycleRefreshStatus
+            language={language}
             lastRefreshedAt={lastRefreshedAt}
             onRefresh={onRefresh}
             refreshState={refreshState}
@@ -214,11 +218,13 @@ function ResourceLifecycleSetupGaps({
 }
 
 function ResourceLifecycleRefreshStatus({
+  language,
   lastRefreshedAt,
   onRefresh,
   refreshState,
   t
 }: {
+  language: Language;
   lastRefreshedAt?: Date;
   onRefresh?: () => void;
   refreshState: ManagementMutationRefreshState;
@@ -230,7 +236,7 @@ function ResourceLifecycleRefreshStatus({
   const detail = stale
     ? refreshState.errorMessage || t("resource.refreshStatus.staleDetail")
     : refreshedAt
-      ? tx(t, "resource.refreshStatus.detail", { time: formatRefreshTime(refreshedAt) })
+      ? tx(t, "resource.refreshStatus.detail", { time: formatConsoleTime(refreshedAt, language) })
       : t("resource.refreshStatus.idleDetail");
   const title = refreshing
     ? t("resource.refreshStatus.refreshing")
@@ -388,10 +394,6 @@ function statusTone(status: ResourceLifecycleStatus): Tone {
   if (status === "needs_runtime") return "info";
   if (status === "needs_credentials") return "warning";
   return "danger";
-}
-
-function formatRefreshTime(value: Date) {
-  return value.toLocaleTimeString("zh-CN", { hour12: false });
 }
 
 function tx(t: Translator, key: string, values: Record<string, string | number>) {

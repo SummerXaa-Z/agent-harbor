@@ -60,6 +60,7 @@ import {
 import type { ConnectionDiagnosticRow } from "./connectionDiagnostics";
 import {
   capabilityDisplayName,
+  formatConsoleTime,
   permissionEntityDisplayName,
   readableIdentifierLabel,
   type Translator
@@ -105,6 +106,9 @@ import { setupGapAgentDraft } from "./resourceSetupGapAgentDraft";
 import {
   deriveProductionJourney
 } from "./productionJourney";
+import {
+  productionAcceptanceReportFilename
+} from "./productionAcceptance";
 import {
   defaultNavKey,
   navHashFor,
@@ -156,7 +160,6 @@ import {
   type PermissionPackageApprovalRequest,
   type PermissionPackageDraft,
   type PermissionPackageDraftInput,
-  type PermissionPackageProductionEvidenceReport,
   type PermissionPackageProductionReadiness,
   type PermissionPackageProductionReadinessFilter,
   type PermissionPackageTemplate,
@@ -1068,7 +1071,7 @@ export function ConsoleController() {
         aiAdminProductionReadinessFilter(formInput),
         adminKey
       );
-      downloadJson(report, productionEvidenceReportFilename(report));
+      downloadJson(report, productionAcceptanceReportFilename(report));
       setAiAdminMessage({ key: "message.productionEvidenceExported" });
       return report;
     } catch (error) {
@@ -2384,6 +2387,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         <ResourceLifecycleView
           formatTenantName={(tenantId) => permissionTenantPathLabel(tenantId, tenants, t).primary}
           formatWorkspaceName={(workspaceId) => permissionWorkspaceDisplayName(workspaceId, agents, t)}
+          language={language}
           lastRefreshedAt={lastRefresh}
           onCreateAgent={openSetupGapCreateAgent}
           onResourceAction={handleResourceLifecycleAction}
@@ -2964,7 +2968,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
                     {connectionDiagnostics.checkedAt ? (
                       <span className="connection-diagnostics-time">
                         {tx(t, "connectionDiagnostics.checkedAt", {
-                          time: connectionDiagnostics.checkedAt.toLocaleTimeString("zh-CN", { hour12: false })
+                          time: formatConsoleTime(connectionDiagnostics.checkedAt, language)
                         })}
                       </span>
                     ) : null}
@@ -2991,7 +2995,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
               </div>
               <div>
                 <span>{t("status.lastRefresh")}</span>
-                <strong>{lastRefresh.toLocaleTimeString("zh-CN", { hour12: false })}</strong>
+                <strong>{formatConsoleTime(lastRefresh, language)}</strong>
               </div>
               <div className="scope-control">
                 <span>{t("status.scope")}</span>
@@ -3140,26 +3144,6 @@ function permissionPolicyGateMessages(policyGate: PermissionPackageDraft["policy
   return policyGate.reasons.length > 0
     ? policyGate.reasons.map((reason) => permissionPolicyReasonMessage(reason, t))
     : [t("text.policyGateApprovalDetail")];
-}
-
-function productionEvidenceReportFilename(report: PermissionPackageProductionEvidenceReport) {
-  const generated = safeFilenameSegment(report.generatedAt || new Date().toISOString());
-  return [
-    "agentharbor-production-evidence",
-    safeFilenameSegment(report.scope.tenantId),
-    safeFilenameSegment(report.scope.workspaceId),
-    safeFilenameSegment(report.scope.templateId),
-    safeFilenameSegment(report.status),
-    generated
-  ].filter(Boolean).join("-") + ".json";
-}
-
-function safeFilenameSegment(value: string | undefined) {
-  return (value ?? "")
-    .trim()
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
 }
 
 function downloadJson(value: unknown, filename: string) {

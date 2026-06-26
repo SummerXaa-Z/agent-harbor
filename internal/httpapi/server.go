@@ -602,6 +602,10 @@ func (s *Server) getTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("tenant not found"))
 		return
 	}
+	if err := s.requireTenantManagementScope(r, tenant.ID); err != nil {
+		writeError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, tenant)
 }
 
@@ -757,6 +761,10 @@ func (s *Server) getAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ok {
 		writeError(w, domain.NotFound("agent not found"))
+		return
+	}
+	if err := s.requireAgentManagementScope(r, agent); err != nil {
+		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, agent)
@@ -3639,6 +3647,10 @@ func (s *Server) createTenantEntitlement(w http.ResponseWriter, r *http.Request)
 		writeError(w, domain.NotFound("target agent not found"))
 		return
 	}
+	if err := s.requireAgentManagementScope(r, target); err != nil {
+		writeError(w, err)
+		return
+	}
 	allowedTenant, err := s.tenantCanReceiveTargetEntitlement(r.Context(), target.TenantID, req.TenantID)
 	if err != nil {
 		writeError(w, err)
@@ -3655,6 +3667,10 @@ func (s *Server) createTenantEntitlement(w http.ResponseWriter, r *http.Request)
 	}
 	if !ok || capability.TargetID != target.ID {
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "capabilityId must belong to targetId"))
+		return
+	}
+	if err := s.requireCapabilityManagementScope(r, capability); err != nil {
+		writeError(w, err)
 		return
 	}
 	if err := s.requireTenantManagementScope(r, req.TenantID); err != nil {
@@ -5369,7 +5385,34 @@ func (s *Server) effectiveManagementScopeForRequest(r *http.Request, requested s
 
 func (s *Server) requirePermissionPackageDraftScope(r *http.Request, req domain.PermissionPackageDraftRequest) error {
 	req = trimPermissionPackageDraftRequest(req)
-	return s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: req.TenantID, WorkspaceID: req.WorkspaceID})
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: req.TenantID, WorkspaceID: req.WorkspaceID}); err != nil {
+		return err
+	}
+	if req.CallerInstanceID != "" {
+		caller, ok, err := s.repo.GetAgent(r.Context(), req.CallerInstanceID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return domain.NotFound("caller instance not found")
+		}
+		if err := s.requireAgentManagementScope(r, caller); err != nil {
+			return err
+		}
+	}
+	if req.TargetID != "" {
+		target, ok, err := s.repo.GetAgent(r.Context(), req.TargetID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return domain.NotFound("target agent not found")
+		}
+		if err := s.requireAgentManagementScope(r, target); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Server) requirePermissionPackageQueryScope(r *http.Request, query permissionPackageProductionReadinessQuery) error {

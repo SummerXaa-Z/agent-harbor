@@ -81,7 +81,7 @@ func (s *Server) getTenantAccessProfile(w http.ResponseWriter, r *http.Request) 
 		writeError(w, err)
 		return
 	}
-	profile, err := s.buildTenantAccessProfile(r.Context(), strings.TrimSpace(chi.URLParam(r, "id")), query)
+	profile, err := s.buildTenantAccessProfileForRequest(r, strings.TrimSpace(chi.URLParam(r, "id")), query)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -106,6 +106,23 @@ func accessProfileQueryFromRequest(r *http.Request) (accessProfileQuery, error) 
 		query.TraceLimit = limit
 	}
 	return query, nil
+}
+
+func (s *Server) buildTenantAccessProfileForRequest(r *http.Request, tenantID string, query accessProfileQuery) (tenantAccessProfileResponse, error) {
+	tenantID = strings.TrimSpace(tenantID)
+	requested := store.ManagementScope{
+		TenantID:    tenantID,
+		WorkspaceID: strings.TrimSpace(query.WorkspaceID),
+	}
+	effective, err := s.effectiveManagementScopeForRequest(r, requested)
+	if err != nil {
+		return tenantAccessProfileResponse{}, err
+	}
+	if tenantID != "" && effective.TenantID != tenantID {
+		return tenantAccessProfileResponse{}, domain.PermissionDenied("resource tenant is outside authenticated admin scope")
+	}
+	query.WorkspaceID = effective.WorkspaceID
+	return s.buildTenantAccessProfile(r.Context(), tenantID, query)
 }
 
 func (s *Server) buildTenantAccessProfile(ctx context.Context, tenantID string, query accessProfileQuery) (tenantAccessProfileResponse, error) {

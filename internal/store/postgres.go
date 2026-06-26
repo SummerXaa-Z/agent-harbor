@@ -458,7 +458,7 @@ func (p *Postgres) ListAccessGrants(ctx context.Context, scope ManagementScope) 
 			caller = append(caller, fmt.Sprintf("c.workspace_id=$%d", idx))
 			target = append(target, fmt.Sprintf("t.workspace_id=$%d", idx))
 		}
-		query += fmt.Sprintf(" and ((%s) or (%s))", strings.Join(caller, " and "), strings.Join(target, " and "))
+		query += fmt.Sprintf(" and (%s) and (%s)", strings.Join(caller, " and "), strings.Join(target, " and "))
 	}
 	query += " order by g.created_at asc, g.id asc"
 	rows, err := p.pool.Query(ctx, query, args...)

@@ -1279,7 +1279,7 @@ func (m *Memory) grantMatchesScope(grant domain.AccessGrant, scope ManagementSco
 	}
 	caller, callerOK := m.agents[grant.CallerID]
 	target, targetOK := m.agents[grant.TargetID]
-	return (callerOK && agentMatchesScope(caller, scope, tenantIDs)) || (targetOK && agentMatchesScope(target, scope, tenantIDs))
+	return callerOK && targetOK && agentMatchesScope(caller, scope, tenantIDs) && agentMatchesScope(target, scope, tenantIDs)
 }
 
 func (m *Memory) traceMatchesScope(trace domain.TraceEvent, scope ManagementScope, tenantIDs map[string]struct{}) bool {

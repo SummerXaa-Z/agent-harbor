@@ -1863,6 +1863,55 @@ func TestScopedAdminIdentityCannotReadOutsideScopeByID(t *testing.T) {
 	}
 }
 
+func TestScopedAdminIdentityAccessGrantListHidesCrossScopeRelations(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	createDirectTenant(t, repo, "tenant-west", "tenant-root", "West tenant", now)
+	supportCaller := createDirectAgent(t, repo, "Support caller", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	supportTarget := createDirectAgent(t, repo, "Support MCP", "tenant-east", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	westCaller := createDirectAgent(t, repo, "West caller", "tenant-west", "ws-finance", "local", domain.AgentStatusActive, nil)
+
+	supportGrant, err := repo.CreateAccessGrant(t.Context(), domain.AccessGrant{
+		ID:        security.NewID("grt"),
+		CallerID:  supportCaller.ID,
+		TargetID:  supportTarget.ID,
+		RouteType: "mcp",
+		RouteKey:  "tools/call",
+		CreatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("create support grant: %v", err)
+	}
+	crossGrant, err := repo.CreateAccessGrant(t.Context(), domain.AccessGrant{
+		ID:        security.NewID("grt"),
+		CallerID:  westCaller.ID,
+		TargetID:  supportTarget.ID,
+		RouteType: "mcp",
+		RouteKey:  "tools/call",
+		CreatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("create cross-scope grant: %v", err)
+	}
+
+	resp := requestWithAdmin(t, router, http.MethodGet, "/api/v1/access-grants", nil, "", "support-key")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list access grants failed: %d body=%s", resp.Code, resp.Body.String())
+	}
+	grants := decodeData[[]domain.AccessGrant](t, resp)
+	if len(grants) != 1 || grants[0].ID != supportGrant.ID {
+		t.Fatalf("scoped admin should only see same-scope grant %s, got %#v", supportGrant.ID, grants)
+	}
+	if body := resp.Body.String(); strings.Contains(body, crossGrant.ID) || strings.Contains(body, westCaller.ID) {
+		t.Fatalf("scoped access grant list leaked cross-scope relation: %s", body)
+	}
+}
+
 func TestTenantAccessProfileHonorsScopedAdminBoundary(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
@@ -2889,10 +2938,16 @@ func TestManagementScopeFiltersLists(t *testing.T) {
 	}
 	includedGrant := decodeData[grantResponse](t, request(t, router, http.MethodPost, "/api/v1/access-grants", map[string]any{
 		"callerAgentId": inScope.ID,
-		"targetAgentId": sameTenantOtherWorkspace.ID,
+		"targetAgentId": inScope.ID,
 		"routeType":     "mcp",
 		"routeKey":      "tools/call",
 	}, ""))
+	request(t, router, http.MethodPost, "/api/v1/access-grants", map[string]any{
+		"callerAgentId": inScope.ID,
+		"targetAgentId": sameTenantOtherWorkspace.ID,
+		"routeType":     "mcp",
+		"routeKey":      "tools/call",
+	}, "")
 	request(t, router, http.MethodPost, "/api/v1/access-grants", map[string]any{
 		"callerAgentId": sameTenantOtherWorkspace.ID,
 		"targetAgentId": otherTenantSameWorkspace.ID,
@@ -2942,7 +2997,7 @@ func TestManagementScopeFiltersLists(t *testing.T) {
 	}
 	grants := decodeData[[]grantResponse](t, request(t, router, http.MethodGet, "/api/v1/access-grants"+scopeQuery, nil, ""))
 	if len(grants) != 1 || grants[0].ID != includedGrant.ID {
-		t.Fatalf("expected scoped grants to match caller or target in scope, got %#v", grants)
+		t.Fatalf("expected scoped grants to require caller and target in scope, got %#v", grants)
 	}
 	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces"+scopeQuery+"&runId=scope-run", nil, ""))
 	if len(traces) != 1 || traces[0].CallerID != inScope.ID {

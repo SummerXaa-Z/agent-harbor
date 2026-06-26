@@ -1298,11 +1298,28 @@ func (m *Memory) traceMatchesScope(trace domain.TraceEvent, scope ManagementScop
 		if scope.WorkspaceID != "" && trace.WorkspaceID != scope.WorkspaceID {
 			return false
 		}
+		if trace.CallerInstanceID != "" {
+			callerInstance, ok := m.agents[trace.CallerInstanceID]
+			if !ok || !agentMatchesScope(callerInstance, scope, tenantIDs) {
+				return false
+			}
+		}
+		if trace.CapabilityID != "" || trace.EntitlementID != "" || trace.WorkspaceAssignmentID != "" || trace.InstanceAssignmentID != "" {
+			return true
+		}
+		if trace.CallerID == "" && trace.TargetID == "" {
+			return true
+		}
+	}
+	if trace.CallerID != "" || trace.TargetID != "" {
+		caller, callerOK := m.agents[trace.CallerID]
+		target, targetOK := m.agents[trace.TargetID]
+		return callerOK && targetOK && agentMatchesScope(caller, scope, tenantIDs) && agentMatchesScope(target, scope, tenantIDs)
+	}
+	if trace.TenantID != "" || trace.WorkspaceID != "" {
 		return true
 	}
-	caller, callerOK := m.agents[trace.CallerID]
-	target, targetOK := m.agents[trace.TargetID]
-	return (callerOK && agentMatchesScope(caller, scope, tenantIDs)) || (targetOK && agentMatchesScope(target, scope, tenantIDs))
+	return false
 }
 
 func (m *Memory) capabilityMatchesFilter(capability domain.Capability, filter CapabilityFilter, tenantIDs map[string]struct{}) bool {

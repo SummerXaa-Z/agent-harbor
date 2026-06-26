@@ -1518,30 +1518,56 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 		}
 		workspaceID := strings.TrimSpace(filter.WorkspaceID)
 		direct := []string{"(trace_events.tenant_id <> '' or trace_events.workspace_id <> '')"}
-		agent := []string{}
+		caller := []string{}
+		target := []string{}
+		callerInstance := []string{}
 		if tenantIDs != nil {
 			args = append(args, tenantIDs)
 			idx := len(args)
 			direct = append(direct, fmt.Sprintf("trace_events.tenant_id = any($%d)", idx))
-			agent = append(agent, fmt.Sprintf("scoped.tenant_id = any($%d)", idx))
+			caller = append(caller, fmt.Sprintf("c.tenant_id = any($%d)", idx))
+			target = append(target, fmt.Sprintf("t.tenant_id = any($%d)", idx))
+			callerInstance = append(callerInstance, fmt.Sprintf("ci.tenant_id = any($%d)", idx))
 		}
 		if workspaceID != "" {
 			args = append(args, workspaceID)
 			idx := len(args)
 			direct = append(direct, fmt.Sprintf("trace_events.workspace_id=$%d", idx))
-			agent = append(agent, fmt.Sprintf("scoped.workspace_id=$%d", idx))
+			caller = append(caller, fmt.Sprintf("c.workspace_id=$%d", idx))
+			target = append(target, fmt.Sprintf("t.workspace_id=$%d", idx))
+			callerInstance = append(callerInstance, fmt.Sprintf("ci.workspace_id=$%d", idx))
 		}
 		query += fmt.Sprintf(`
 			and (
-				(%s)
-				or exists (
+				exists (
 					select 1
-					from agents scoped
-					where scoped.id in (trace_events.caller_agent_id, trace_events.target_agent_id)
+					from agents c
+					join agents t on t.id = trace_events.target_agent_id
+					where c.id = trace_events.caller_agent_id
+						and %s
 						and %s
 				)
+				or (
+					%s
+					and (
+						trace_events.caller_instance_id = ''
+						or exists (
+							select 1
+							from agents ci
+							where ci.id = trace_events.caller_instance_id
+								and %s
+						)
+					)
+					and (
+						trace_events.capability_id <> ''
+						or trace_events.entitlement_id <> ''
+						or trace_events.workspace_assignment_id <> ''
+						or trace_events.instance_assignment_id <> ''
+						or (trace_events.caller_agent_id = '' and trace_events.target_agent_id = '')
+					)
+				)
 			)
-		`, strings.Join(direct, " and "), strings.Join(agent, " and "))
+		`, strings.Join(caller, " and "), strings.Join(target, " and "), strings.Join(direct, " and "), strings.Join(callerInstance, " and "))
 	}
 	if filter.Limit > 0 {
 		args = append(args, filter.Limit)

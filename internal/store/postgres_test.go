@@ -322,6 +322,15 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	if _, err := repo.AppendTrace(ctx, trace); err != nil {
 		t.Fatalf("append trace: %v", err)
 	}
+	crossScopeTrace := trace
+	crossScopeTrace.ID = security.NewID("trc")
+	crossScopeTrace.TargetID = crossScopeTarget.ID
+	crossScopeTrace.TenantID = caller.TenantID
+	crossScopeTrace.WorkspaceID = caller.WorkspaceID
+	crossScopeTrace.CreatedAt = now.Add(time.Second)
+	if _, err := repo.AppendTrace(ctx, crossScopeTrace); err != nil {
+		t.Fatalf("append cross-scope trace: %v", err)
+	}
 	traces, err := repo.ListTraces(ctx, store.TraceFilter{
 		RunID:    "pg-run",
 		Decision: domain.TraceDecisionAllowed,
@@ -339,6 +348,19 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 		traces[0].UpstreamStatus != trace.UpstreamStatus ||
 		traces[0].UpstreamError != trace.UpstreamError {
 		t.Fatalf("unexpected trace metrics: %#v", traces[0])
+	}
+	scopedTraces, err := repo.ListTraces(ctx, store.TraceFilter{
+		RunID: "pg-run",
+		ManagementScope: store.ManagementScope{
+			TenantID:    caller.TenantID,
+			WorkspaceID: caller.WorkspaceID,
+		},
+	})
+	if err != nil {
+		t.Fatalf("list scoped traces: %v", err)
+	}
+	if len(scopedTraces) != 1 || scopedTraces[0].ID != trace.ID {
+		t.Fatalf("scoped traces should require caller and target in scope, got %#v", scopedTraces)
 	}
 	audit := domain.AuditEvent{
 		ID:           security.NewID("aud"),

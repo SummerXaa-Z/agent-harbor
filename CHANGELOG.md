@@ -56,6 +56,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 历史导入或直接写入的访问授权现在不能再放行调用方和目标 Agent 不在同一租户工作区的数据面调用。
 - Scoped administrators can no longer revoke or infer access-grant records whose caller and target are not both inside their authenticated management scope.
 - 范围化管理员现在不能再撤销或推断调用方与目标并未同时位于其认证管理范围内的访问授权记录。
+- Scoped runtime trace lists now require route traces to keep caller and target agents inside scope, while tenant-governed capability traces must match the caller instance and authorization scope.
+- 范围化运行追踪列表现在要求路由追踪的调用方和目标 Agent 同时位于范围内；租户治理下的能力追踪则必须匹配调用实例和授权范围。
 - Managed administrator creation now has explicit coverage rejecting actors that reuse bootstrap administrator actors, keeping sessions, audit rows, and approval routing unambiguous.
 - 托管管理员创建现在明确覆盖拒绝复用引导管理员 actor，避免会话主体、审计记录和审批路由含混。
 - PostgreSQL-backed managed administrator creation now maps duplicate actor or id constraint races to stable 409 conflict errors instead of generic internal errors.

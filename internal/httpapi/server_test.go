@@ -2999,7 +2999,7 @@ func TestManagementScopeFiltersLists(t *testing.T) {
 		ID:        security.NewID("trc"),
 		RunID:     "scope-run",
 		CallerID:  inScope.ID,
-		TargetID:  sameTenantOtherWorkspace.ID,
+		TargetID:  inScope.ID,
 		RouteType: "mcp",
 		RouteKey:  "tools/call",
 		Decision:  domain.TraceDecisionAllowed,
@@ -3010,12 +3010,24 @@ func TestManagementScopeFiltersLists(t *testing.T) {
 	if _, err := repo.AppendTrace(t.Context(), domain.TraceEvent{
 		ID:        security.NewID("trc"),
 		RunID:     "scope-run",
+		CallerID:  inScope.ID,
+		TargetID:  sameTenantOtherWorkspace.ID,
+		RouteType: "mcp",
+		RouteKey:  "tools/call",
+		Decision:  domain.TraceDecisionAllowed,
+		CreatedAt: now.Add(time.Second),
+	}); err != nil {
+		t.Fatalf("append caller-only trace: %v", err)
+	}
+	if _, err := repo.AppendTrace(t.Context(), domain.TraceEvent{
+		ID:        security.NewID("trc"),
+		RunID:     "scope-run",
 		CallerID:  sameTenantOtherWorkspace.ID,
 		TargetID:  otherTenantSameWorkspace.ID,
 		RouteType: "mcp",
 		RouteKey:  "tools/call",
 		Decision:  domain.TraceDecisionAllowed,
-		CreatedAt: now.Add(time.Second),
+		CreatedAt: now.Add(2 * time.Second),
 	}); err != nil {
 		t.Fatalf("append excluded trace: %v", err)
 	}
@@ -3040,7 +3052,7 @@ func TestManagementScopeFiltersLists(t *testing.T) {
 	}
 	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces"+scopeQuery+"&runId=scope-run", nil, ""))
 	if len(traces) != 1 || traces[0].CallerID != inScope.ID {
-		t.Fatalf("expected scoped traces to match caller or target in scope, got %#v", traces)
+		t.Fatalf("expected scoped traces to require caller and target in scope, got %#v", traces)
 	}
 }
 

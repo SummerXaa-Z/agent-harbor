@@ -5696,6 +5696,151 @@ func TestPermissionPackageApplicationImpactRedactsOutOfScopeCapabilityHydration(
 	}
 }
 
+func TestPermissionPackageApplicationReadsRedactDirtyApplicationCapabilityScope(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	supportTarget := createDirectAgent(t, repo, "Support MCP", "tenant-east", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	supportCaller := createDirectAgent(t, repo, "Support caller", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	financeTarget := createDirectAgent(t, repo, "Finance Export Service", "tenant-east", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	financeCapability := createDirectCapabilityWithAction(t, repo, financeTarget.ID, "export_invoices", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	dirtyCapabilityApplication, err := repo.CreatePermissionPackageApplication(t.Context(), domain.PermissionPackageApplication{
+		ID:                    "ppa-dirty-capability",
+		DraftID:               "draft-dirty-capability",
+		TemplateID:            "support-ticket-triage",
+		TemplateVersion:       1,
+		TenantID:              "tenant-east",
+		WorkspaceID:           "ws-support",
+		TargetID:              supportTarget.ID,
+		CallerInstanceID:      supportCaller.ID,
+		SubjectSelector:       "role:support",
+		RequestText:           "dirty capability application",
+		Region:                "us-east",
+		DataScopes:            []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		AllowedCapabilityIDs:  []string{financeCapability.ID},
+		AllowedCapabilityKeys: []string{financeCapability.Key},
+		AppliedAt:             now,
+	})
+	if err != nil {
+		t.Fatalf("create dirty capability application: %v", err)
+	}
+	dirtyTargetApplication, err := repo.CreatePermissionPackageApplication(t.Context(), domain.PermissionPackageApplication{
+		ID:                    "ppa-dirty-target",
+		DraftID:               "draft-dirty-target",
+		TemplateID:            "support-ticket-triage",
+		TemplateVersion:       1,
+		TenantID:              "tenant-east",
+		WorkspaceID:           "ws-support",
+		TargetID:              financeTarget.ID,
+		CallerInstanceID:      supportCaller.ID,
+		SubjectSelector:       "role:support",
+		RequestText:           "dirty target application",
+		Region:                "us-east",
+		DataScopes:            []domain.DataScope{{DataDomain: "finance", Region: "eu-west"}},
+		AllowedCapabilityIDs:  []string{financeCapability.ID},
+		AllowedCapabilityKeys: []string{financeCapability.Key},
+		AppliedAt:             now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("create dirty target application: %v", err)
+	}
+
+	leaks := []string{financeTarget.ID, financeTarget.Name, financeCapability.ID, financeCapability.Key, "ws-finance"}
+	listPath := "/api/v1/permission-packages/applications?tenantId=tenant-east&workspaceId=ws-support&templateId=support-ticket-triage&targetId=" + supportTarget.ID + "&callerInstanceId=" + supportCaller.ID + "&limit=10"
+	listResp := requestWithAdmin(t, router, http.MethodGet, listPath, nil, "", "support-key")
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read in-scope application list, got %d body=%s", listResp.Code, listResp.Body.String())
+	}
+	assertResponseDoesNotContain(t, listResp.Body.String(), leaks...)
+	applications := decodeData[[]permissionPackageApplicationResponse](t, listResp)
+	if len(applications) != 1 || applications[0].ID != dirtyCapabilityApplication.ID {
+		t.Fatalf("expected scoped application list to keep the in-scope application only, got %#v", applications)
+	}
+	if len(applications[0].AllowedCapabilityIDs) != 0 || len(applications[0].AllowedCapabilityKeys) != 0 {
+		t.Fatalf("expected dirty out-of-scope capabilities to be redacted from application list, got %#v", applications[0])
+	}
+
+	mcpList := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "dirty-application-list",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_permission_package_applications",
+			"arguments": map[string]any{
+				"callerInstanceId": supportCaller.ID,
+				"limit":            10,
+				"targetId":         supportTarget.ID,
+				"templateId":       "support-ticket-triage",
+				"tenantId":         "tenant-east",
+				"workspaceId":      "ws-support",
+			},
+		},
+	}, "", "support-key"))
+	assertResponseDoesNotContain(t, string(mcpList.Result.StructuredContent), leaks...)
+	var mcpApplications []permissionPackageApplicationResponse
+	if err := json.Unmarshal(mcpList.Result.StructuredContent, &mcpApplications); err != nil {
+		t.Fatalf("decode management MCP application list: %v", err)
+	}
+	if len(mcpApplications) != 1 || mcpApplications[0].ID != dirtyCapabilityApplication.ID ||
+		len(mcpApplications[0].AllowedCapabilityIDs) != 0 || len(mcpApplications[0].AllowedCapabilityKeys) != 0 {
+		t.Fatalf("expected MCP application list to redact dirty out-of-scope capabilities, got %#v", mcpApplications)
+	}
+
+	healthResp := requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/applications/health?tenantId=tenant-east&workspaceId=ws-support&limit=10", nil, "", "support-key")
+	if healthResp.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read application health, got %d body=%s", healthResp.Code, healthResp.Body.String())
+	}
+	assertResponseDoesNotContain(t, healthResp.Body.String(), append(leaks, dirtyTargetApplication.ID)...)
+	health := decodeData[permissionPackageApplicationHealthResponse](t, healthResp)
+	if health.Summary.Total != 1 || len(health.Applications) != 1 || health.Applications[0].Application.ID != dirtyCapabilityApplication.ID {
+		t.Fatalf("expected application health to hide dirty target applications, got %#v", health)
+	}
+
+	input := map[string]any{
+		"callerInstanceId": supportCaller.ID,
+		"region":           "us-east",
+		"requestText":      "validate support package status",
+		"subjectSelector":  "role:support",
+		"targetId":         supportTarget.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	readinessResp := requestWithAdmin(t, router, http.MethodGet, permissionPackageProductionReadinessPath(input, "", "user:support-001"), nil, "", "support-key")
+	if readinessResp.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read production readiness, got %d body=%s", readinessResp.Code, readinessResp.Body.String())
+	}
+	assertResponseDoesNotContain(t, readinessResp.Body.String(), leaks...)
+	readiness := decodeData[permissionPackageProductionReadinessResponse](t, readinessResp)
+	if readiness.LatestApplication == nil || readiness.LatestApplication.ID != dirtyCapabilityApplication.ID {
+		t.Fatalf("expected readiness to keep the in-scope latest application, got %#v", readiness.LatestApplication)
+	}
+	if len(readiness.LatestApplication.AllowedCapabilityIDs) != 0 || len(readiness.LatestApplication.AllowedCapabilityKeys) != 0 {
+		t.Fatalf("expected readiness latest application to redact out-of-scope capabilities, got %#v", readiness.LatestApplication)
+	}
+
+	reportResp := requestWithAdmin(t, router, http.MethodGet, permissionPackageProductionEvidenceReportPath(input, "", "user:support-001"), nil, "", "support-key")
+	if reportResp.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read production report, got %d body=%s", reportResp.Code, reportResp.Body.String())
+	}
+	assertResponseDoesNotContain(t, reportResp.Body.String(), leaks...)
+	report := decodeData[permissionPackageProductionEvidenceReportResponse](t, reportResp)
+	if report.Evidence.Application.ID != dirtyCapabilityApplication.ID || len(report.Evidence.Application.AllowedCapabilityIDs) != 0 {
+		t.Fatalf("expected production report application evidence to redact out-of-scope capabilities, got %#v", report.Evidence.Application)
+	}
+
+	targetImpactResp := requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/applications/"+dirtyTargetApplication.ID+"/impact?tenantId=tenant-east&workspaceId=ws-support", nil, "", "support-key")
+	if targetImpactResp.Code != http.StatusNotFound || strings.Contains(targetImpactResp.Body.String(), financeTarget.ID) ||
+		strings.Contains(targetImpactResp.Body.String(), financeCapability.ID) || strings.Contains(targetImpactResp.Body.String(), financeCapability.Key) {
+		t.Fatalf("dirty target application impact should be hidden without leaking finance details, got %d body=%s", targetImpactResp.Code, targetImpactResp.Body.String())
+	}
+}
+
 func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -7722,6 +7867,18 @@ func containsString(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func assertResponseDoesNotContain(t *testing.T, body string, forbidden ...string) {
+	t.Helper()
+	for _, value := range forbidden {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		if strings.Contains(body, value) {
+			t.Fatalf("response leaked forbidden value %q: %s", value, body)
+		}
+	}
 }
 
 func permissionPackagePreflightHasCheck(checks []permissionPackageApplyPreflightCheck, code string, severity string) bool {

@@ -383,6 +383,10 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
+		rows, err = s.visiblePermissionPackageApplications(r.Context(), rows, filter.ManagementScope)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
 		return managementMCPResult(rows), nil
 	case "check_permission_package_production_readiness":
 		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageProductionReadinessArgs](req.Params.Arguments)

@@ -1576,6 +1576,11 @@ func (s *Server) listPermissionPackageApplications(w http.ResponseWriter, r *htt
 		writeError(w, err)
 		return
 	}
+	rows, err = s.visiblePermissionPackageApplications(r.Context(), rows, scope)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, rows)
 }
 
@@ -1619,6 +1624,11 @@ func (s *Server) listPermissionPackageApplicationHealth(w http.ResponseWriter, r
 		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
 		Limit:            limit,
 	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	applications, err = s.visiblePermissionPackageApplications(r.Context(), applications, scope)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -2226,6 +2236,17 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 		return permissionPackageProductionReadinessResponse{}, err
 	}
 	if len(applications) > 0 {
+		visibleApplications, err := s.visiblePermissionPackageApplications(ctx, applications, store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID})
+		if err != nil {
+			return permissionPackageProductionReadinessResponse{}, err
+		}
+		if len(visibleApplications) == 0 {
+			applications = nil
+		} else {
+			applications = visibleApplications
+		}
+	}
+	if len(applications) > 0 {
 		latest := applications[0]
 		result.LatestApplication = &latest
 		query = permissionPackageProductionReadinessQueryWithApplicationDefaults(query, latest)
@@ -2671,6 +2692,15 @@ func (s *Server) getPermissionPackageApplicationImpact(w http.ResponseWriter, r 
 		writeError(w, domain.NotFound("permission package application not found"))
 		return
 	}
+	rows, err = s.visiblePermissionPackageApplications(r.Context(), rows, scope)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if len(rows) == 0 {
+		writeError(w, domain.NotFound("permission package application not found"))
+		return
+	}
 	impact, err := s.permissionPackageApplicationImpact(r.Context(), rows[0])
 	if err != nil {
 		writeError(w, err)
@@ -2851,6 +2881,95 @@ func (s *Server) permissionPackageApplicationImpactCapabilities(ctx context.Cont
 		})
 	}
 	return rows, visibleCapabilityIDs, visibleCapabilityKeys, nil
+}
+
+func (s *Server) visiblePermissionPackageApplications(ctx context.Context, applications []domain.PermissionPackageApplication, scope store.ManagementScope) ([]domain.PermissionPackageApplication, error) {
+	if len(applications) == 0 {
+		return []domain.PermissionPackageApplication{}, nil
+	}
+	rows := make([]domain.PermissionPackageApplication, 0, len(applications))
+	for _, application := range applications {
+		visible, err := s.permissionPackageApplicationVisible(ctx, application, scope)
+		if err != nil {
+			return nil, err
+		}
+		if !visible {
+			continue
+		}
+		sanitized, err := s.permissionPackageApplicationWithVisibleCapabilities(ctx, application)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, sanitized)
+	}
+	return rows, nil
+}
+
+func (s *Server) permissionPackageApplicationVisible(ctx context.Context, application domain.PermissionPackageApplication, scope store.ManagementScope) (bool, error) {
+	if strings.TrimSpace(scope.TenantID) != "" {
+		inScope, err := s.tenantCanReceiveTargetEntitlement(ctx, scope.TenantID, application.TenantID)
+		if err != nil || !inScope {
+			return false, err
+		}
+	}
+	if strings.TrimSpace(scope.WorkspaceID) != "" && application.WorkspaceID != strings.TrimSpace(scope.WorkspaceID) {
+		return false, nil
+	}
+
+	caller, ok, err := s.repo.GetAgent(ctx, application.CallerInstanceID)
+	if err != nil || !ok {
+		return false, err
+	}
+	if caller.TenantID != application.TenantID || caller.WorkspaceID != application.WorkspaceID {
+		return false, nil
+	}
+	callerInScope, err := s.permissionPackageApplicationAgentInScope(ctx, caller, scope)
+	if err != nil || !callerInScope {
+		return false, err
+	}
+
+	target, ok, err := s.repo.GetAgent(ctx, application.TargetID)
+	if err != nil || !ok {
+		return false, err
+	}
+	allowedTenant, err := s.tenantCanReceiveTargetEntitlement(ctx, target.TenantID, application.TenantID)
+	if err != nil || !allowedTenant {
+		return false, err
+	}
+	if application.WorkspaceID != "" && target.WorkspaceID != application.WorkspaceID {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (s *Server) permissionPackageApplicationAgentInScope(ctx context.Context, agent domain.Agent, scope store.ManagementScope) (bool, error) {
+	if strings.TrimSpace(scope.TenantID) != "" {
+		inScope, err := s.tenantCanReceiveTargetEntitlement(ctx, scope.TenantID, agent.TenantID)
+		if err != nil || !inScope {
+			return false, err
+		}
+	}
+	if strings.TrimSpace(scope.WorkspaceID) != "" && agent.WorkspaceID != strings.TrimSpace(scope.WorkspaceID) {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (s *Server) permissionPackageApplicationWithVisibleCapabilities(ctx context.Context, application domain.PermissionPackageApplication) (domain.PermissionPackageApplication, error) {
+	visibleCapabilityIDs := []string{}
+	visibleCapabilityKeys := []string{}
+	for _, id := range application.AllowedCapabilityIDs {
+		capability, ok, err := s.repo.GetCapability(ctx, id)
+		if err != nil {
+			return domain.PermissionPackageApplication{}, err
+		}
+		if !ok || capability.TargetID != application.TargetID {
+			continue
+		}
+		visibleCapabilityIDs = append(visibleCapabilityIDs, capability.ID)
+		visibleCapabilityKeys = append(visibleCapabilityKeys, capability.Key)
+	}
+	return permissionPackageApplicationWithVisibleCapabilities(application, visibleCapabilityIDs, visibleCapabilityKeys), nil
 }
 
 func permissionPackageApplicationWithVisibleCapabilities(application domain.PermissionPackageApplication, capabilityIDs []string, capabilityKeys []string) domain.PermissionPackageApplication {

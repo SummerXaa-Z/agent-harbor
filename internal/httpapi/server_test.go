@@ -2111,6 +2111,48 @@ func TestScopedAdminIdentityCannotGrantPermissionPackageToOutsideTarget(t *testi
 	}
 }
 
+func TestScopedAdminIdentityCannotUseOutsideAssignments(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	supportCaller := createDirectAgent(t, repo, "Support caller", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	financeCaller := createDirectAgent(t, repo, "Finance caller", "tenant-east", "ws-finance", "local", domain.AgentStatusActive, nil)
+	financeTarget := createDirectAgent(t, repo, "Finance MCP", "tenant-east", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	financeCapability := createDirectCapabilityWithAction(t, repo, financeTarget.ID, "export_invoices", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	financeScopes := []domain.DataScope{{DataDomain: "finance", Dataset: "invoices", Region: "eu-west"}}
+	financeEntitlement := createDirectTenantEntitlement(t, repo, "tenant-east", financeTarget.ID, financeCapability.ID, financeScopes, now)
+	financeWorkspace := createDirectWorkspaceAssignment(t, repo, financeEntitlement.ID, "tenant-east", "ws-finance", financeScopes, now)
+	createDirectInstanceAssignment(t, repo, financeWorkspace.ID, "tenant-east", "ws-finance", financeCaller.ID, financeScopes, now)
+
+	workspaceResp := requestWithAdmin(t, router, http.MethodPost, "/api/v1/workspace-assignments", map[string]any{
+		"tenantEntitlementId": financeEntitlement.ID,
+		"workspaceId":         "ws-support",
+		"effect":              "allow",
+		"status":              "enabled",
+		"dataScopes":          financeScopes,
+	}, "", "support-key")
+	if workspaceResp.Code != http.StatusForbidden || strings.Contains(workspaceResp.Body.String(), "Finance") || strings.Contains(workspaceResp.Body.String(), "export_invoices") {
+		t.Fatalf("scoped admin should not attach outside target entitlement, got %d body=%s", workspaceResp.Code, workspaceResp.Body.String())
+	}
+
+	instanceResp := requestWithAdmin(t, router, http.MethodPost, "/api/v1/instance-assignments", map[string]any{
+		"workspaceAssignmentId": financeWorkspace.ID,
+		"callerInstanceId":      supportCaller.ID,
+		"subjectSelector":       "role:support",
+		"effect":                "allow",
+		"status":                "enabled",
+		"dataScopes":            financeScopes,
+	}, "", "support-key")
+	if instanceResp.Code != http.StatusForbidden || strings.Contains(instanceResp.Body.String(), "caller instance must match") ||
+		strings.Contains(instanceResp.Body.String(), "Finance") || strings.Contains(instanceResp.Body.String(), "export_invoices") {
+		t.Fatalf("scoped admin should not inspect outside workspace assignment, got %d body=%s", instanceResp.Code, instanceResp.Body.String())
+	}
+}
+
 func TestManagementMCPInheritsScopedAdminBoundary(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{

@@ -3731,6 +3731,30 @@ func (s *Server) listTenantEntitlements(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, rows)
 }
 
+func (s *Server) requireTenantEntitlementManagementScope(r *http.Request, entitlement domain.TenantEntitlement) (domain.Agent, domain.Capability, error) {
+	if err := s.requireTenantManagementScope(r, entitlement.TenantID); err != nil {
+		return domain.Agent{}, domain.Capability{}, err
+	}
+	target, ok, err := s.repo.GetAgent(r.Context(), entitlement.TargetID)
+	if err != nil {
+		return domain.Agent{}, domain.Capability{}, err
+	}
+	if !ok {
+		return domain.Agent{}, domain.Capability{}, domain.NotFound("target agent not found")
+	}
+	if err := s.requireAgentManagementScope(r, target); err != nil {
+		return domain.Agent{}, domain.Capability{}, err
+	}
+	capability, ok, err := s.repo.GetCapability(r.Context(), entitlement.CapabilityID)
+	if err != nil {
+		return domain.Agent{}, domain.Capability{}, err
+	}
+	if !ok || capability.TargetID != entitlement.TargetID {
+		return domain.Agent{}, domain.Capability{}, domain.BadRequest("VALIDATION_FAILED", "tenant entitlement capability is not registered for target")
+	}
+	return target, capability, nil
+}
+
 func (s *Server) createWorkspaceAssignment(w http.ResponseWriter, r *http.Request) {
 	var req domain.CreateWorkspaceAssignmentRequest
 	if err := decodeJSON(r, &req); err != nil {
@@ -3763,13 +3787,9 @@ func (s *Server) createWorkspaceAssignment(w http.ResponseWriter, r *http.Reques
 		writeError(w, domain.NotFound("tenant entitlement not found"))
 		return
 	}
-	target, ok, err := s.repo.GetAgent(r.Context(), entitlement.TargetID)
+	target, _, err := s.requireTenantEntitlementManagementScope(r, entitlement)
 	if err != nil {
 		writeError(w, err)
-		return
-	}
-	if !ok {
-		writeError(w, domain.NotFound("target agent not found"))
 		return
 	}
 	entitlementScopes, err := s.effectiveTenantEntitlementDataScopes(r.Context(), entitlement)
@@ -3869,6 +3889,10 @@ func (s *Server) createInstanceAssignment(w http.ResponseWriter, r *http.Request
 		writeError(w, domain.NotFound("workspace assignment not found"))
 		return
 	}
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: workspaceAssignment.TenantID, WorkspaceID: workspaceAssignment.WorkspaceID}); err != nil {
+		writeError(w, err)
+		return
+	}
 	entitlements, err := s.repo.ListTenantEntitlements(r.Context(), store.EntitlementFilter{})
 	if err != nil {
 		writeError(w, err)
@@ -3877,6 +3901,10 @@ func (s *Server) createInstanceAssignment(w http.ResponseWriter, r *http.Request
 	entitlement, ok := findTenantEntitlement(entitlements, workspaceAssignment.TenantEntitlementID)
 	if !ok {
 		writeError(w, domain.NotFound("tenant entitlement not found"))
+		return
+	}
+	if _, _, err := s.requireTenantEntitlementManagementScope(r, entitlement); err != nil {
+		writeError(w, err)
 		return
 	}
 	workspaceScopes, err := s.effectiveWorkspaceAssignmentDataScopes(r.Context(), entitlement, workspaceAssignment)

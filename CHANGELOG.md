@@ -48,6 +48,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Management MCP 工具错误现在包含结构化业务错误数据，便于管理 Agent 区分已禁用管理员身份等生命周期冲突和可重试故障。
 - Scoped administrators can no longer read out-of-scope tenant, Agent, access-profile, or access-decision metadata through direct object reads, HTTP explain, or management MCP explain paths.
 - 范围化管理员现在不能再通过对象详情、HTTP 访问判定说明或 Management MCP 访问判定说明读取范围外租户、Agent、访问画像或访问判定元数据。
+- Scoped administrators can no longer attach out-of-scope tenant entitlements or workspace assignments through direct assignment creation.
+- 范围化管理员现在不能再通过直接创建分配，把范围外的租户授权或工作区分配接入当前工作区。
 - Managed administrator creation now has explicit coverage rejecting actors that reuse bootstrap administrator actors, keeping sessions, audit rows, and approval routing unambiguous.
 - 托管管理员创建现在明确覆盖拒绝复用引导管理员 actor，避免会话主体、审计记录和审批路由含混。
 - PostgreSQL-backed managed administrator creation now maps duplicate actor or id constraint races to stable 409 conflict errors instead of generic internal errors.

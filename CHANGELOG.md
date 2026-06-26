@@ -34,6 +34,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 引导管理员和托管管理员的 actor 现在必须使用 1-80 位字母、数字、点、下划线、连字符或 at 符号，避免不安全身份名称进入审计、审批路由或操作人会话。
 - Managed administrator key rotation now invalidates browser sessions issued before the rotation, closing stale console sessions after key containment.
 - 托管管理员密钥轮换现在会让轮换前签发的浏览器会话失效，在密钥止损后同步关闭旧控制台会话。
+- Managed administrator browser sessions now preserve subsecond issue precision, so a session created immediately after key rotation is not rejected as stale; legacy second-precision session tokens remain accepted.
+- 托管管理员浏览器会话现在会保留亚秒级签发精度，因此密钥轮换后立即创建的新会话不会被误判为旧会话；旧的秒级精度会话 token 仍保持兼容。
 - Managed administrator disablement now has explicit lifecycle coverage for invalidating existing browser sessions, making disablement a verified containment action.
 - 托管管理员禁用现在明确覆盖已有浏览器会话失效路径，使禁用动作成为可验证的即时止损手段。
 - Managed administrator creation now has explicit coverage rejecting actors that reuse bootstrap administrator actors, keeping sessions, audit rows, and approval routing unambiguous.

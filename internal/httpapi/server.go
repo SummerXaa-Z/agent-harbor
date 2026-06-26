@@ -130,6 +130,14 @@ func WithSessionSecret(secret string) Option {
 	}
 }
 
+func WithClock(now func() time.Time) Option {
+	return func(s *Server) {
+		if now != nil {
+			s.now = func() time.Time { return now().UTC() }
+		}
+	}
+}
+
 func WithUnauthenticatedAdminAllowed(allowed bool) Option {
 	return func(s *Server) {
 		s.allowUnauthenticatedAdmin = allowed

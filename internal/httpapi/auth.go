@@ -196,7 +196,7 @@ func (s *Server) signConsoleSession(principal adminPrincipal, issuedAt time.Time
 		Role:        principal.Role,
 		TenantID:    principal.TenantID,
 		WorkspaceID: principal.WorkspaceID,
-		IssuedAt:    issuedAt.UTC().Unix(),
+		IssuedAt:    issuedAt.UTC().UnixNano(),
 		ExpiresAt:   expiresAt.Unix(),
 	})
 	if err != nil {
@@ -226,10 +226,7 @@ func (s *Server) verifyConsoleSession(ctx context.Context, token string) (adminP
 	}
 	actor := strings.TrimSpace(payload.Actor)
 	expiresAt := time.Unix(payload.ExpiresAt, 0).UTC()
-	issuedAt := time.Unix(payload.IssuedAt, 0).UTC()
-	if payload.IssuedAt <= 0 {
-		issuedAt = expiresAt.Add(-defaultConsoleSessionTTL).UTC()
-	}
+	issuedAt := consoleSessionIssuedAt(payload.IssuedAt, expiresAt)
 	if actor == "" || !expiresAt.After(s.now()) {
 		return adminPrincipal{}, time.Time{}, false
 	}
@@ -238,6 +235,16 @@ func (s *Server) verifyConsoleSession(ctx context.Context, token string) (adminP
 		return adminPrincipal{}, time.Time{}, false
 	}
 	return principal, expiresAt, true
+}
+
+func consoleSessionIssuedAt(value int64, expiresAt time.Time) time.Time {
+	if value <= 0 {
+		return expiresAt.Add(-defaultConsoleSessionTTL).UTC()
+	}
+	if value > 1_000_000_000_000 {
+		return time.Unix(0, value).UTC()
+	}
+	return time.Unix(value, 0).UTC()
 }
 
 func (s *Server) adminPrincipalForActorSession(ctx context.Context, actor string, issuedAt time.Time) (adminPrincipal, bool) {

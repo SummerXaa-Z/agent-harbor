@@ -3,10 +3,13 @@ package httpapi_test
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -1311,6 +1314,86 @@ func TestManagedAdminIdentityLifecycleAndScopedLogin(t *testing.T) {
 		if bytes.Contains(raw, []byte(create.Key)) || bytes.Contains(raw, []byte(rotate.Key)) || bytes.Contains(raw, []byte("keyHash")) {
 			t.Fatalf("audit event must not expose admin key material: %s", raw)
 		}
+	}
+}
+
+func TestManagedAdminSessionIssuedAfterRotationInSameSecondStaysValid(t *testing.T) {
+	repo := store.NewMemory()
+	now := time.Date(2026, 6, 26, 10, 0, 0, 100*int(time.Millisecond), time.UTC)
+	router := httpapi.New(
+		repo,
+		httpapi.WithAdminIdentities([]httpapi.AdminIdentity{
+			{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+		}),
+		httpapi.WithClock(func() time.Time { return now }),
+	).Router()
+
+	create := decodeData[createAdminIdentityResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities", map[string]any{
+		"actor":       "same-second-admin",
+		"displayName": "Same Second Admin",
+		"role":        "tenant_admin",
+		"tenantId":    "tenant-east",
+		"workspaceId": "ws-support",
+	}, "", "platform-key"))
+
+	now = time.Date(2026, 6, 26, 10, 0, 0, 200*int(time.Millisecond), time.UTC)
+	rotate := decodeData[rotateAdminIdentityKeyResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities/"+create.Identity.ID+"/key:rotate", nil, "", "platform-key"))
+
+	now = time.Date(2026, 6, 26, 10, 0, 0, 300*int(time.Millisecond), time.UTC)
+	login := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": rotate.Key}, "")
+	if login.Code != http.StatusOK {
+		t.Fatalf("rotated key should log in inside the rotation second, got %d body=%s", login.Code, login.Body.String())
+	}
+	cookies := login.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected rotated login cookie, got %#v", cookies)
+	}
+
+	now = time.Date(2026, 6, 26, 10, 0, 0, 400*int(time.Millisecond), time.UTC)
+	session := requestWithCookie(t, router, http.MethodGet, "/api/v1/auth/session", nil, cookies[0])
+	if session.Code != http.StatusOK {
+		t.Fatalf("same-second post-rotation session should stay valid, got %d body=%s", session.Code, session.Body.String())
+	}
+}
+
+func TestManagedAdminSessionAcceptsLegacySecondIssuedAt(t *testing.T) {
+	repo := store.NewMemory()
+	now := time.Date(2026, 6, 26, 11, 0, 0, 100*int(time.Millisecond), time.UTC)
+	sessionSecret := "legacy-session-secret-0123456789"
+	router := httpapi.New(
+		repo,
+		httpapi.WithAdminIdentities([]httpapi.AdminIdentity{
+			{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+		}),
+		httpapi.WithClock(func() time.Time { return now }),
+		httpapi.WithSessionSecret(sessionSecret),
+	).Router()
+
+	create := decodeData[createAdminIdentityResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities", map[string]any{
+		"actor":       "legacy-session-admin",
+		"displayName": "Legacy Session Admin",
+		"role":        "tenant_admin",
+		"tenantId":    "tenant-east",
+		"workspaceId": "ws-support",
+	}, "", "platform-key"))
+
+	now = time.Date(2026, 6, 26, 11, 0, 0, 200*int(time.Millisecond), time.UTC)
+	_ = decodeData[rotateAdminIdentityKeyResponse](t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/admin-identities/"+create.Identity.ID+"/key:rotate", nil, "", "platform-key"))
+
+	issuedAt := time.Date(2026, 6, 26, 11, 0, 1, 0, time.UTC)
+	expiresAt := now.Add(time.Hour)
+	token := legacyConsoleSessionToken(t, sessionSecret, map[string]any{
+		"actor":       "legacy-session-admin",
+		"role":        "tenant_admin",
+		"tenantId":    "tenant-east",
+		"workspaceId": "ws-support",
+		"issuedAt":    issuedAt.Unix(),
+		"expiresAt":   expiresAt.Unix(),
+	})
+	now = time.Date(2026, 6, 26, 11, 0, 1, 100*int(time.Millisecond), time.UTC)
+	session := requestWithCookie(t, router, http.MethodGet, "/api/v1/auth/session", nil, &http.Cookie{Name: "agent_harbor_session", Value: token})
+	if session.Code != http.StatusOK {
+		t.Fatalf("legacy second-issued session should stay valid, got %d body=%s", session.Code, session.Body.String())
 	}
 }
 
@@ -7345,6 +7428,19 @@ func requestWithCookieAndCSRF(t *testing.T, router http.Handler, method string, 
 	}
 	router.ServeHTTP(rec, req)
 	return rec
+}
+
+func legacyConsoleSessionToken(t *testing.T, secret string, payload map[string]any) string {
+	t.Helper()
+	rawPayload, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal legacy session payload: %v", err)
+	}
+	encodedPayload := base64.RawURLEncoding.EncodeToString(rawPayload)
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(encodedPayload))
+	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return fmt.Sprintf("v1.%s.%s", encodedPayload, signature)
 }
 
 func requestWithRunIDAndAdmin(t *testing.T, router http.Handler, method string, path string, body any, bearer string, runID string, adminKey string) *httptest.ResponseRecorder {

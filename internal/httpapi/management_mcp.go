@@ -33,8 +33,14 @@ type managementMCPResponse struct {
 }
 
 type managementMCPError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int                     `json:"code"`
+	Message string                  `json:"message"`
+	Data    *managementMCPErrorData `json:"data,omitempty"`
+}
+
+type managementMCPErrorData struct {
+	AppCode    string `json:"appCode,omitempty"`
+	HTTPStatus int    `json:"httpStatus,omitempty"`
 }
 
 type managementMCPToolsListResult struct {
@@ -1111,19 +1117,24 @@ func writeManagementMCPResult(w http.ResponseWriter, id json.RawMessage, result 
 func writeManagementMCPAppError(w http.ResponseWriter, id json.RawMessage, err error) {
 	var appErr domain.AppError
 	if errors.As(err, &appErr) {
-		writeManagementMCPError(w, id, -32602, appErr.Message)
+		writeManagementMCPErrorWithData(w, id, -32602, appErr.Message, &managementMCPErrorData{AppCode: appErr.Code, HTTPStatus: appErr.Status})
 		return
 	}
 	writeManagementMCPError(w, id, -32603, "internal server error")
 }
 
 func writeManagementMCPError(w http.ResponseWriter, id json.RawMessage, code int, message string) {
+	writeManagementMCPErrorWithData(w, id, code, message, nil)
+}
+
+func writeManagementMCPErrorWithData(w http.ResponseWriter, id json.RawMessage, code int, message string, data *managementMCPErrorData) {
 	writeManagementMCPResponse(w, managementMCPResponse{
 		JSONRPC: "2.0",
 		ID:      managementMCPResponseID(id),
 		Error: &managementMCPError{
 			Code:    code,
 			Message: message,
+			Data:    data,
 		},
 	})
 }

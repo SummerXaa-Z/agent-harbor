@@ -42,6 +42,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 托管管理员密钥轮换现在会对已禁用身份返回稳定冲突错误，不再返回无法登录的一次性密钥。
 - Managed administrator disablement now rejects already-disabled identities with a stable conflict instead of recording duplicate lifecycle audit events.
 - 托管管理员禁用现在会对已禁用身份返回稳定冲突错误，不再记录重复的生命周期审计事件。
+- Management MCP tool errors now include structured application error data, so admin agents can distinguish lifecycle conflicts such as disabled administrator identities from retryable failures.
+- Management MCP 工具错误现在包含结构化业务错误数据，便于管理 Agent 区分已禁用管理员身份等生命周期冲突和可重试故障。
 - Managed administrator creation now has explicit coverage rejecting actors that reuse bootstrap administrator actors, keeping sessions, audit rows, and approval routing unambiguous.
 - 托管管理员创建现在明确覆盖拒绝复用引导管理员 actor，避免会话主体、审计记录和审批路由含混。
 - PostgreSQL-backed managed administrator creation now maps duplicate actor or id constraint races to stable 409 conflict errors instead of generic internal errors.

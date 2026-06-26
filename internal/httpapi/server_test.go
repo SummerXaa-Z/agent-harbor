@@ -547,6 +547,10 @@ type mcpEnvelopeResponse struct {
 	Error   *struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
+		Data    *struct {
+			AppCode    string `json:"appCode"`
+			HTTPStatus int    `json:"httpStatus"`
+		} `json:"data"`
 	} `json:"error"`
 }
 
@@ -1495,6 +1499,50 @@ func TestManagementMCPAdminIdentityTools(t *testing.T) {
 	}
 	if disabled.Status != "disabled" {
 		t.Fatalf("unexpected disable_admin_identity result: %#v", disabled)
+	}
+
+	rotateDisabled := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "rotate-disabled-admin",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "rotate_admin_identity_key",
+			"arguments": map[string]any{"id": created.Identity.ID},
+		},
+	}, "", "platform-key")
+	if rotateDisabled.Code != http.StatusOK {
+		t.Fatalf("expected MCP HTTP 200 for disabled rotation tool error, got %d body=%s", rotateDisabled.Code, rotateDisabled.Body.String())
+	}
+	var rotateDisabledPayload mcpEnvelopeResponse
+	if err := json.Unmarshal(rotateDisabled.Body.Bytes(), &rotateDisabledPayload); err != nil {
+		t.Fatalf("decode disabled rotation MCP response: %v body=%s", err, rotateDisabled.Body.String())
+	}
+	if rotateDisabledPayload.Error == nil || rotateDisabledPayload.Error.Data == nil ||
+		rotateDisabledPayload.Error.Data.AppCode != "ADMIN_IDENTITY_DISABLED" ||
+		rotateDisabledPayload.Error.Data.HTTPStatus != http.StatusConflict {
+		t.Fatalf("disabled admin rotation MCP error should include app code and status, got %#v body=%s", rotateDisabledPayload, rotateDisabled.Body.String())
+	}
+
+	disableAgain := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "disable-disabled-admin",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "disable_admin_identity",
+			"arguments": map[string]any{"id": created.Identity.ID},
+		},
+	}, "", "platform-key")
+	if disableAgain.Code != http.StatusOK {
+		t.Fatalf("expected MCP HTTP 200 for disabled disable tool error, got %d body=%s", disableAgain.Code, disableAgain.Body.String())
+	}
+	var disableAgainPayload mcpEnvelopeResponse
+	if err := json.Unmarshal(disableAgain.Body.Bytes(), &disableAgainPayload); err != nil {
+		t.Fatalf("decode disabled disable MCP response: %v body=%s", err, disableAgain.Body.String())
+	}
+	if disableAgainPayload.Error == nil || disableAgainPayload.Error.Data == nil ||
+		disableAgainPayload.Error.Data.AppCode != "ADMIN_IDENTITY_DISABLED" ||
+		disableAgainPayload.Error.Data.HTTPStatus != http.StatusConflict {
+		t.Fatalf("disabled admin disable MCP error should include app code and status, got %#v body=%s", disableAgainPayload, disableAgain.Body.String())
 	}
 
 	forbidden := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{

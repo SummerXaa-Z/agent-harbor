@@ -940,7 +940,7 @@ func (m *Memory) ListRoutePolicies(_ context.Context, scope ManagementScope) ([]
 	tenantIDs := m.tenantIDsForScopeLocked(scope.TenantID)
 	rows := make([]domain.RoutePolicy, 0, len(m.policies))
 	for _, policy := range m.policies {
-		if !routePolicyMatchesScope(policy, scope, tenantIDs) {
+		if !m.routePolicyMatchesScopeLocked(policy, scope, tenantIDs) {
 			continue
 		}
 		rows = append(rows, policy)
@@ -1633,14 +1633,22 @@ func subjectSelectorMatches(selector string, subjectID string) bool {
 	return false
 }
 
-func routePolicyMatchesScope(policy domain.RoutePolicy, scope ManagementScope, tenantIDs map[string]struct{}) bool {
+func (m *Memory) routePolicyMatchesScopeLocked(policy domain.RoutePolicy, scope ManagementScope, tenantIDs map[string]struct{}) bool {
 	if !tenantIDMatchesScope(policy.TenantID, scope.TenantID, tenantIDs) {
 		return false
 	}
 	if scope.WorkspaceID != "" && policy.WorkspaceID != scope.WorkspaceID {
 		return false
 	}
-	return true
+	caller, callerOK := m.agents[policy.CallerID]
+	target, targetOK := m.agents[policy.TargetID]
+	if !callerOK || !targetOK {
+		return false
+	}
+	return caller.TenantID == policy.TenantID &&
+		target.TenantID == policy.TenantID &&
+		caller.WorkspaceID == policy.WorkspaceID &&
+		target.WorkspaceID == policy.WorkspaceID
 }
 
 func routePolicyMatches(policy domain.RoutePolicy, caller domain.Agent, target domain.Agent, routeType string, routeKey string) bool {

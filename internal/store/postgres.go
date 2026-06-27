@@ -1314,10 +1314,16 @@ func (p *Postgres) createRoutePolicy(ctx context.Context, exec sqlExecutor, poli
 
 func (p *Postgres) ListRoutePolicies(ctx context.Context, scope ManagementScope) ([]domain.RoutePolicy, error) {
 	query := `
-		select id, tenant_id, workspace_id, name, caller_agent_id, target_agent_id,
-			route_type, route_key, effect, status, priority, retry, created_at, updated_at
-		from route_policies
+		select rp.id, rp.tenant_id, rp.workspace_id, rp.name, rp.caller_agent_id, rp.target_agent_id,
+			rp.route_type, rp.route_key, rp.effect, rp.status, rp.priority, rp.retry, rp.created_at, rp.updated_at
+		from route_policies rp
+		join agents c on c.id = rp.caller_agent_id
+		join agents t on t.id = rp.target_agent_id
 		where 1=1
+			and c.tenant_id = rp.tenant_id
+			and t.tenant_id = rp.tenant_id
+			and c.workspace_id = rp.workspace_id
+			and t.workspace_id = rp.workspace_id
 	`
 	args := []any{}
 	add := func(sql string, value any) {
@@ -1329,12 +1335,12 @@ func (p *Postgres) ListRoutePolicies(ctx context.Context, scope ManagementScope)
 		if err != nil {
 			return nil, err
 		}
-		add("tenant_id = any($%d)", tenantIDs)
+		add("rp.tenant_id = any($%d)", tenantIDs)
 	}
 	if strings.TrimSpace(scope.WorkspaceID) != "" {
-		add("workspace_id=$%d", strings.TrimSpace(scope.WorkspaceID))
+		add("rp.workspace_id=$%d", strings.TrimSpace(scope.WorkspaceID))
 	}
-	query += " order by created_at asc, id asc"
+	query += " order by rp.created_at asc, rp.id asc"
 	rows, err := p.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list route policies: %w", err)

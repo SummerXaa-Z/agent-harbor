@@ -232,6 +232,13 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	if _, err := repo.CreateRoutePolicy(ctx, crossScopePolicy); err != nil {
 		t.Fatalf("create cross-scope route policy: %v", err)
 	}
+	policies, err = repo.ListRoutePolicies(ctx, store.ManagementScope{TenantID: caller.TenantID, WorkspaceID: caller.WorkspaceID})
+	if err != nil {
+		t.Fatalf("list route policies after cross-scope policy: %v", err)
+	}
+	if len(policies) != 1 || policies[0].ID != denyPolicy.ID {
+		t.Fatalf("cross-scope route policy should be hidden from scoped list, got %#v", policies)
+	}
 	decision, err = repo.EvaluateRouteAccess(ctx, caller.ID, crossScopeTarget.ID, "mcp", "tools/call", now)
 	if err != nil {
 		t.Fatalf("evaluate cross-scope route policy: %v", err)

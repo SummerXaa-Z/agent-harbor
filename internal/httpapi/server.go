@@ -1305,6 +1305,31 @@ func (s *Server) listRoutePolicies(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rows)
 }
 
+func (s *Server) requireRoutePolicyManagementScope(r *http.Request, policy domain.RoutePolicy) error {
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: policy.TenantID, WorkspaceID: policy.WorkspaceID}); err != nil {
+		return err
+	}
+	caller, ok, err := s.repo.GetAgent(r.Context(), policy.CallerID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return domain.NotFound("route policy not found")
+	}
+	target, ok, err := s.repo.GetAgent(r.Context(), policy.TargetID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return domain.NotFound("route policy not found")
+	}
+	if caller.TenantID != policy.TenantID || target.TenantID != policy.TenantID ||
+		caller.WorkspaceID != policy.WorkspaceID || target.WorkspaceID != policy.WorkspaceID {
+		return domain.NotFound("route policy not found")
+	}
+	return nil
+}
+
 func (s *Server) updateRoutePolicy(w http.ResponseWriter, r *http.Request) {
 	policyID := chi.URLParam(r, "id")
 	existing, ok, err := s.repo.GetRoutePolicy(r.Context(), policyID)
@@ -1316,7 +1341,7 @@ func (s *Server) updateRoutePolicy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("route policy not found"))
 		return
 	}
-	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: existing.TenantID, WorkspaceID: existing.WorkspaceID}); err != nil {
+	if err := s.requireRoutePolicyManagementScope(r, existing); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -1398,7 +1423,7 @@ func (s *Server) disableRoutePolicy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("route policy not found"))
 		return
 	}
-	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: existing.TenantID, WorkspaceID: existing.WorkspaceID}); err != nil {
+	if err := s.requireRoutePolicyManagementScope(r, existing); err != nil {
 		writeError(w, err)
 		return
 	}

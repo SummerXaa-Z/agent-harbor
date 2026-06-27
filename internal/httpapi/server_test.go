@@ -1973,6 +1973,71 @@ func TestScopedAdminIdentityCannotRevokeCrossScopeAccessGrant(t *testing.T) {
 	}
 }
 
+func TestScopedAdminIdentityCannotOperateDirtyRoutePolicy(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	createDirectTenant(t, repo, "tenant-west", "tenant-root", "West tenant", now)
+	supportCaller := createDirectAgent(t, repo, "Support caller", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	westTarget := createDirectAgent(t, repo, "West MCP", "tenant-west", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	dirtyPolicy := domain.RoutePolicy{
+		ID:          security.NewID("rpl"),
+		TenantID:    supportCaller.TenantID,
+		WorkspaceID: supportCaller.WorkspaceID,
+		Name:        "Dirty cross scope allow",
+		CallerID:    supportCaller.ID,
+		TargetID:    westTarget.ID,
+		RouteType:   "mcp",
+		RouteKey:    "tools/call",
+		Effect:      domain.RoutePolicyEffectAllow,
+		Status:      domain.RoutePolicyStatusEnabled,
+		Priority:    100,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if _, err := repo.CreateRoutePolicy(t.Context(), dirtyPolicy); err != nil {
+		t.Fatalf("create dirty route policy: %v", err)
+	}
+
+	listResp := requestWithAdmin(t, router, http.MethodGet, "/api/v1/route-policies?tenantId=tenant-east&workspaceId=ws-support", nil, "", "support-key")
+	policies := decodeData[[]routePolicyResponse](t, listResp)
+	if len(policies) != 0 {
+		t.Fatalf("dirty route policy should not be visible to scoped admin, got %#v", policies)
+	}
+	if body := listResp.Body.String(); strings.Contains(body, dirtyPolicy.ID) || strings.Contains(body, westTarget.ID) {
+		t.Fatalf("dirty route policy list leaked inaccessible details: %s", body)
+	}
+
+	patchResp := requestWithAdmin(t, router, http.MethodPatch, "/api/v1/route-policies/"+dirtyPolicy.ID, map[string]any{
+		"name": "Patched dirty route policy",
+	}, "", "support-key")
+	if patchResp.Code != http.StatusNotFound {
+		t.Fatalf("dirty route policy patch should look not found, got %d body=%s", patchResp.Code, patchResp.Body.String())
+	}
+	if body := patchResp.Body.String(); strings.Contains(body, dirtyPolicy.ID) || strings.Contains(body, westTarget.ID) {
+		t.Fatalf("dirty route policy patch leaked inaccessible details: %s", body)
+	}
+
+	deleteResp := requestWithAdmin(t, router, http.MethodDelete, "/api/v1/route-policies/"+dirtyPolicy.ID, nil, "", "support-key")
+	if deleteResp.Code != http.StatusNotFound {
+		t.Fatalf("dirty route policy delete should look not found, got %d body=%s", deleteResp.Code, deleteResp.Body.String())
+	}
+	if body := deleteResp.Body.String(); strings.Contains(body, dirtyPolicy.ID) || strings.Contains(body, westTarget.ID) {
+		t.Fatalf("dirty route policy delete leaked inaccessible details: %s", body)
+	}
+	loaded, ok, err := repo.GetRoutePolicy(t.Context(), dirtyPolicy.ID)
+	if err != nil || !ok {
+		t.Fatalf("dirty route policy should remain stored: ok=%v err=%v", ok, err)
+	}
+	if loaded.Name != dirtyPolicy.Name || loaded.Status != domain.RoutePolicyStatusEnabled {
+		t.Fatalf("dirty route policy should remain unchanged, got %#v", loaded)
+	}
+}
+
 func TestTenantAccessProfileHonorsScopedAdminBoundary(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
@@ -2840,6 +2905,11 @@ func TestDirectCrossScopeRoutePolicyIsIgnoredByDataPlane(t *testing.T) {
 		UpdatedAt:   now,
 	}); err != nil {
 		t.Fatalf("create direct cross-scope route policy: %v", err)
+	}
+
+	policies := decodeData[[]routePolicyResponse](t, request(t, router, http.MethodGet, "/api/v1/route-policies?tenantId=tenant-a&workspaceId=ws-a", nil, ""))
+	if len(policies) != 0 {
+		t.Fatalf("direct cross-scope route policy should not be visible in scoped management list, got %#v", policies)
 	}
 
 	resp := request(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{

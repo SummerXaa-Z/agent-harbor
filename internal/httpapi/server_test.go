@@ -6091,6 +6091,75 @@ func TestPermissionPackageApprovalAuditMetadataRedactsDirtyScope(t *testing.T) {
 	}
 }
 
+func TestPermissionPackageApprovalListRedactsDirtyCapabilityScope(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	supportTarget := createDirectAgent(t, repo, "Support MCP", "tenant-east", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	supportCaller := createDirectAgent(t, repo, "Support caller", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	financeTarget := createDirectAgent(t, repo, "Finance Export Service", "tenant-east", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	financeCapability := createDirectCapabilityWithAction(t, repo, financeTarget.ID, "export_invoices", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	approval, err := repo.CreatePermissionPackageApprovalRequest(t.Context(), domain.PermissionPackageApprovalRequest{
+		ID:                    "ppar-dirty-list",
+		DraftID:               "draft-dirty-list",
+		TemplateID:            "support-ticket-triage",
+		TemplateVersion:       1,
+		PolicyVersion:         1,
+		TenantID:              "tenant-east",
+		WorkspaceID:           "ws-support",
+		TargetID:              supportTarget.ID,
+		CallerInstanceID:      supportCaller.ID,
+		SubjectSelector:       "role:support",
+		RequestText:           "approve support ticket updates",
+		Region:                "us-east",
+		DataScopes:            []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		AllowedCapabilityIDs:  []string{financeCapability.ID},
+		AllowedCapabilityKeys: []string{financeCapability.Key},
+		PolicyGate: domain.PermissionPackagePolicyGate{
+			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
+			CanApplyDirectly: false,
+			PolicyVersion:    1,
+			Reasons: []domain.PermissionPackagePolicyReason{{
+				ID:            "policy:dirty-list",
+				CapabilityID:  financeCapability.ID,
+				CapabilityKey: financeCapability.Key,
+				Severity:      "high",
+				Message:       "Approval is required.",
+				ReasonKey:     "permissionPolicy.actionApprovalRequired",
+			}},
+			NextActions: []string{"Review approval scope."},
+		},
+		Status:      domain.PermissionPackageApprovalStatusPending,
+		RequestedBy: "support-admin",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		ExpiresAt:   now.Add(24 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("create dirty approval request: %v", err)
+	}
+
+	listResp := requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?tenantId=tenant-east&workspaceId=ws-support&status=pending", nil, "", "support-key")
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read approval request list, got %d body=%s", listResp.Code, listResp.Body.String())
+	}
+	assertResponseDoesNotContain(t, listResp.Body.String(), financeTarget.ID, financeTarget.Name, financeCapability.ID, financeCapability.Key, "ws-finance")
+	approvals := decodeData[[]permissionPackageApprovalRequestResponse](t, listResp)
+	if len(approvals) != 1 || approvals[0].ID != approval.ID {
+		t.Fatalf("expected one scoped approval request, got %#v", approvals)
+	}
+	if len(approvals[0].AllowedCapabilityIDs) != 0 || len(approvals[0].AllowedCapabilityKeys) != 0 {
+		t.Fatalf("expected dirty approval capabilities to be redacted, got ids=%#v keys=%#v", approvals[0].AllowedCapabilityIDs, approvals[0].AllowedCapabilityKeys)
+	}
+	if len(approvals[0].PolicyGate.Reasons) != 0 {
+		t.Fatalf("expected dirty approval policy reasons to be redacted, got %#v", approvals[0].PolicyGate.Reasons)
+	}
+}
+
 func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)

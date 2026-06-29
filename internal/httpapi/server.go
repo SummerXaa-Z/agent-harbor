@@ -3188,6 +3188,124 @@ func (s *Server) permissionPackageApprovalAuditMetadataForVisibleRequest(ctx con
 	}, nil
 }
 
+func (s *Server) visiblePermissionPackageApprovalRequests(ctx context.Context, approvals []domain.PermissionPackageApprovalRequest, scope store.ManagementScope) ([]domain.PermissionPackageApprovalRequest, error) {
+	if len(approvals) == 0 {
+		return []domain.PermissionPackageApprovalRequest{}, nil
+	}
+	rows := make([]domain.PermissionPackageApprovalRequest, 0, len(approvals))
+	for _, approval := range approvals {
+		visible, err := s.permissionPackageApprovalRequestListVisible(ctx, approval, scope)
+		if err != nil {
+			return nil, err
+		}
+		if !visible {
+			continue
+		}
+		sanitized, err := s.permissionPackageApprovalRequestWithVisibleCapabilities(ctx, approval)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, sanitized)
+	}
+	return rows, nil
+}
+
+func (s *Server) permissionPackageApprovalRequestListVisible(ctx context.Context, approval domain.PermissionPackageApprovalRequest, scope store.ManagementScope) (bool, error) {
+	if strings.TrimSpace(scope.TenantID) != "" {
+		inScope, err := s.tenantCanReceiveTargetEntitlement(ctx, scope.TenantID, approval.TenantID)
+		if err != nil || !inScope {
+			return false, err
+		}
+	}
+	if strings.TrimSpace(scope.WorkspaceID) != "" && approval.WorkspaceID != strings.TrimSpace(scope.WorkspaceID) {
+		return false, nil
+	}
+
+	caller, ok, err := s.repo.GetAgent(ctx, approval.CallerInstanceID)
+	if err != nil {
+		return false, err
+	}
+	if ok {
+		if caller.TenantID != approval.TenantID || caller.WorkspaceID != approval.WorkspaceID {
+			return false, nil
+		}
+		callerInScope, err := s.permissionPackageApplicationAgentInScope(ctx, caller, scope)
+		if err != nil || !callerInScope {
+			return false, err
+		}
+	}
+
+	target, ok, err := s.repo.GetAgent(ctx, approval.TargetID)
+	if err != nil {
+		return false, err
+	}
+	if ok {
+		allowedTenant, err := s.tenantCanReceiveTargetEntitlement(ctx, target.TenantID, approval.TenantID)
+		if err != nil || !allowedTenant {
+			return false, err
+		}
+		if approval.WorkspaceID != "" && target.WorkspaceID != approval.WorkspaceID {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func (s *Server) permissionPackageApprovalRequestWithVisibleCapabilities(ctx context.Context, approval domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, error) {
+	visibleCapabilities := []domain.Capability{}
+	for _, id := range approval.AllowedCapabilityIDs {
+		capability, ok, err := s.repo.GetCapability(ctx, id)
+		if err != nil {
+			return domain.PermissionPackageApprovalRequest{}, err
+		}
+		if !ok || capability.TargetID != approval.TargetID {
+			continue
+		}
+		visibleCapabilities = append(visibleCapabilities, capability)
+	}
+	allowedCapabilityIDs, allowedCapabilityKeys := permissionPackageCapabilityIDsAndKeys(visibleCapabilities)
+	approval.AllowedCapabilityIDs = allowedCapabilityIDs
+	approval.AllowedCapabilityKeys = allowedCapabilityKeys
+	approval.AllowedCapabilityFingerprints = permissionPackageCapabilityFingerprints(visibleCapabilities)
+	approval.PolicyGate = permissionPackagePolicyGateWithVisibleCapabilities(approval.PolicyGate, visibleCapabilities)
+	return approval, nil
+}
+
+func permissionPackagePolicyGateWithVisibleCapabilities(gate domain.PermissionPackagePolicyGate, capabilities []domain.Capability) domain.PermissionPackagePolicyGate {
+	visibleByID := make(map[string]domain.Capability, len(capabilities))
+	for _, capability := range capabilities {
+		visibleByID[capability.ID] = capability
+	}
+	gate.NextActions = append([]string(nil), gate.NextActions...)
+	gate.Reasons = make([]domain.PermissionPackagePolicyReason, 0, len(gate.Reasons))
+	for _, reason := range gate.Reasons {
+		reason.ReasonValues = cloneStringMap(reason.ReasonValues)
+		if strings.TrimSpace(reason.CapabilityID) == "" {
+			gate.Reasons = append(gate.Reasons, reason)
+			continue
+		}
+		capability, ok := visibleByID[reason.CapabilityID]
+		if !ok {
+			continue
+		}
+		reason.CapabilityID = capability.ID
+		reason.CapabilityKey = capability.Key
+		gate.Reasons = append(gate.Reasons, reason)
+	}
+	return gate
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
 func auditMetadataStrings(values []string) []string {
 	if len(values) == 0 {
 		return []string{}
@@ -5935,11 +6053,17 @@ func (s *Server) listPermissionPackageApprovalRequestsForRequest(ctx context.Con
 	if err != nil {
 		return nil, err
 	}
+	var rows []domain.PermissionPackageApprovalRequest
 	if scoped {
-		return s.listPermissionPackageApprovalRequestsForReviewer(ctx, filter, reviewer, limit)
+		rows, err = s.listPermissionPackageApprovalRequestsForReviewer(ctx, filter, reviewer, limit)
+	} else {
+		filter.Limit = limit
+		rows, err = s.repo.ListPermissionPackageApprovalRequests(ctx, filter)
 	}
-	filter.Limit = limit
-	return s.repo.ListPermissionPackageApprovalRequests(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	return s.visiblePermissionPackageApprovalRequests(ctx, rows, filter.ManagementScope)
 }
 
 func (s *Server) permissionPackageApprovalListReviewer(r *http.Request, reviewer string) (string, bool, error) {

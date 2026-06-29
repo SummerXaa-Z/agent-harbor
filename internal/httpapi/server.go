@@ -2401,6 +2401,10 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 		if err != nil {
 			return permissionPackageProductionReadinessResponse{}, err
 		}
+		events, err = s.visibleAuditEvents(ctx, events, store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID})
+		if err != nil {
+			return permissionPackageProductionReadinessResponse{}, err
+		}
 		if len(events) > 0 {
 			appliedEvent := events[0]
 			result.AuditEvidence.AppliedEvent = &appliedEvent
@@ -3001,6 +3005,86 @@ func permissionPackageApplicationWithVisibleCapabilities(application domain.Perm
 	application.AllowedCapabilityIDs = append([]string(nil), capabilityIDs...)
 	application.AllowedCapabilityKeys = append([]string(nil), capabilityKeys...)
 	return application
+}
+
+func (s *Server) visibleAuditEvents(ctx context.Context, events []domain.AuditEvent, scope store.ManagementScope) ([]domain.AuditEvent, error) {
+	rows := make([]domain.AuditEvent, 0, len(events))
+	for _, event := range events {
+		visible, ok, err := s.visibleAuditEvent(ctx, event, scope)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		rows = append(rows, visible)
+	}
+	return rows, nil
+}
+
+func (s *Server) visibleAuditEvent(ctx context.Context, event domain.AuditEvent, scope store.ManagementScope) (domain.AuditEvent, bool, error) {
+	if event.Action != "permission_package.applied" || event.ResourceType != "permission_package" {
+		event.Metadata = cloneAuditMetadata(event.Metadata)
+		return event, true, nil
+	}
+	applications, err := s.repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
+		ManagementScope: scope,
+		ID:              event.ResourceID,
+		Limit:           1,
+	})
+	if err != nil {
+		return domain.AuditEvent{}, false, err
+	}
+	applications, err = s.visiblePermissionPackageApplications(ctx, applications, scope)
+	if err != nil {
+		return domain.AuditEvent{}, false, err
+	}
+	if len(applications) == 0 {
+		return domain.AuditEvent{}, false, nil
+	}
+	event.Metadata = permissionPackageAppliedAuditMetadataForVisibleApplication(applications[0], event.Metadata)
+	return event, true, nil
+}
+
+func cloneAuditMetadata(metadata map[string]any) map[string]any {
+	if metadata == nil {
+		return map[string]any{}
+	}
+	cloned := make(map[string]any, len(metadata))
+	for key, value := range metadata {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func permissionPackageAppliedAuditMetadataForVisibleApplication(application domain.PermissionPackageApplication, original map[string]any) map[string]any {
+	metadata := map[string]any{
+		"applicationId":          application.ID,
+		"draftId":                application.DraftID,
+		"templateId":             application.TemplateID,
+		"templateVersion":        application.TemplateVersion,
+		"targetId":               application.TargetID,
+		"callerInstanceId":       application.CallerInstanceID,
+		"subjectSelector":        application.SubjectSelector,
+		"allowedCapabilityIds":   auditMetadataStrings(application.AllowedCapabilityIDs),
+		"allowedCapabilityKeys":  auditMetadataStrings(application.AllowedCapabilityKeys),
+		"tenantEntitlementIds":   auditMetadataStrings(application.TenantEntitlementIDs),
+		"workspaceAssignmentIds": auditMetadataStrings(application.WorkspaceAssignmentIDs),
+		"instanceAssignmentIds":  auditMetadataStrings(application.InstanceAssignmentIDs),
+	}
+	for _, key := range []string{"approvalRequestId", "approvalExpiresAt", "approvalConsumedAt", "approvalConsumedByApplicationId"} {
+		if value, ok := original[key]; ok {
+			metadata[key] = value
+		}
+	}
+	return metadata
+}
+
+func auditMetadataStrings(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return append([]string(nil), values...)
 }
 
 func permissionPackageImpactObjectFromGrant(objectType string, id string, currentStatus string, dataScopes []domain.DataScope) permissionPackageApplicationImpactObject {
@@ -5399,6 +5483,11 @@ func (s *Server) listAuditEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	filter.Limit = limit
 	rows, err := s.repo.ListAuditEvents(r.Context(), filter)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	rows, err = s.visibleAuditEvents(r.Context(), rows, scope)
 	if err != nil {
 		writeError(w, err)
 		return

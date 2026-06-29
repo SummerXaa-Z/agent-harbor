@@ -5837,6 +5837,33 @@ func TestPermissionPackageApplicationReadsRedactDirtyApplicationCapabilityScope(
 	if err != nil {
 		t.Fatalf("create dirty target application: %v", err)
 	}
+	if _, err := repo.AppendAuditEvent(t.Context(), domain.AuditEvent{
+		ID:           "aud-dirty-application",
+		TenantID:     "tenant-east",
+		WorkspaceID:  "ws-support",
+		Actor:        "platform",
+		Action:       "permission_package.applied",
+		ResourceType: "permission_package",
+		ResourceID:   dirtyCapabilityApplication.ID,
+		Summary:      "Permission package applied",
+		Metadata: map[string]any{
+			"applicationId":          dirtyCapabilityApplication.ID,
+			"draftId":                dirtyCapabilityApplication.DraftID,
+			"templateId":             dirtyCapabilityApplication.TemplateID,
+			"templateVersion":        dirtyCapabilityApplication.TemplateVersion,
+			"targetId":               financeTarget.ID,
+			"callerInstanceId":       supportCaller.ID,
+			"subjectSelector":        dirtyCapabilityApplication.SubjectSelector,
+			"allowedCapabilityIds":   []string{financeCapability.ID},
+			"allowedCapabilityKeys":  []string{financeCapability.Key},
+			"tenantEntitlementIds":   []string{"tte-cross-scope"},
+			"workspaceAssignmentIds": []string{"wsa-cross-scope"},
+			"instanceAssignmentIds":  []string{"ias-cross-scope"},
+		},
+		CreatedAt: now,
+	}); err != nil {
+		t.Fatalf("append dirty applied audit event: %v", err)
+	}
 
 	leaks := []string{financeTarget.ID, financeTarget.Name, financeCapability.ID, financeCapability.Key, "ws-finance"}
 	listPath := "/api/v1/permission-packages/applications?tenantId=tenant-east&workspaceId=ws-support&templateId=support-ticket-triage&targetId=" + supportTarget.ID + "&callerInstanceId=" + supportCaller.ID + "&limit=10"
@@ -5921,6 +5948,44 @@ func TestPermissionPackageApplicationReadsRedactDirtyApplicationCapabilityScope(
 	if report.Evidence.Application.ID != dirtyCapabilityApplication.ID || len(report.Evidence.Application.AllowedCapabilityIDs) != 0 {
 		t.Fatalf("expected production report application evidence to redact out-of-scope capabilities, got %#v", report.Evidence.Application)
 	}
+
+	auditResp := requestWithAdmin(t, router, http.MethodGet, "/api/v1/audit/events?tenantId=tenant-east&workspaceId=ws-support&action=permission_package.applied&resourceId="+dirtyCapabilityApplication.ID, nil, "", "support-key")
+	if auditResp.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read applied audit event, got %d body=%s", auditResp.Code, auditResp.Body.String())
+	}
+	assertResponseDoesNotContain(t, auditResp.Body.String(), leaks...)
+	auditEvents := decodeData[[]auditEventResponse](t, auditResp)
+	if len(auditEvents) != 1 {
+		t.Fatalf("expected one scoped applied audit event, got %#v", auditEvents)
+	}
+	if auditEvents[0].Metadata["targetId"] != supportTarget.ID || auditEvents[0].Metadata["callerInstanceId"] != supportCaller.ID {
+		t.Fatalf("expected applied audit metadata to be rebuilt from visible application scope, got %#v", auditEvents[0].Metadata)
+	}
+	if raw, ok := auditEvents[0].Metadata["allowedCapabilityIds"].([]any); !ok || len(raw) != 0 {
+		t.Fatalf("expected applied audit metadata to redact out-of-scope capability ids, got %#v", auditEvents[0].Metadata)
+	}
+	if raw, ok := auditEvents[0].Metadata["allowedCapabilityKeys"].([]any); !ok || len(raw) != 0 {
+		t.Fatalf("expected applied audit metadata to redact out-of-scope capability keys, got %#v", auditEvents[0].Metadata)
+	}
+	if readiness.AuditEvidence.AppliedEvent == nil {
+		t.Fatalf("expected readiness to include scoped applied audit event")
+	}
+	if readiness.AuditEvidence.AppliedEvent.Metadata["targetId"] != supportTarget.ID {
+		t.Fatalf("expected readiness applied audit event to use visible target, got %#v", readiness.AuditEvidence.AppliedEvent.Metadata)
+	}
+	if raw, ok := readiness.AuditEvidence.AppliedEvent.Metadata["allowedCapabilityIds"].([]any); !ok || len(raw) != 0 {
+		t.Fatalf("expected readiness applied audit event to redact out-of-scope capability ids, got %#v", readiness.AuditEvidence.AppliedEvent.Metadata)
+	}
+	mcpReadiness := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "dirty-production-readiness",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "check_permission_package_production_readiness",
+			"arguments": input,
+		},
+	}, "", "support-key"))
+	assertResponseDoesNotContain(t, string(mcpReadiness.Result.StructuredContent), leaks...)
 
 	targetImpactResp := requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/applications/"+dirtyTargetApplication.ID+"/impact?tenantId=tenant-east&workspaceId=ws-support", nil, "", "support-key")
 	if targetImpactResp.Code != http.StatusNotFound || strings.Contains(targetImpactResp.Body.String(), financeTarget.ID) ||

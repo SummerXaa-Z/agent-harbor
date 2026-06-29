@@ -62,6 +62,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 范围化运行追踪列表现在要求路由追踪的调用方和目标 Agent 同时位于范围内；租户治理下的能力追踪必须满足两者之一：直接目标/能力证据位于当前运行记录的范围化工作区内，或匹配当前范围内的租户授权、工作区分配和调用实例分配链。
 - Scoped permission-package application reads now hide dirty applications whose caller or target no longer belongs to the current management workspace, and redact out-of-scope capability IDs and keys from REST, management MCP, production readiness, and production report responses.
 - 范围化权限包应用读取现在会隐藏调用方或目标已不属于当前管理工作区的脏应用记录，并在 REST、Management MCP、状态检查和上线报告响应中脱敏范围外能力 ID 与能力键。
+- Scoped permission-package applied audit metadata is now rebuilt from the visible application record before REST, production readiness, or management MCP responses are returned, preventing dirty audit metadata from leaking out-of-scope targets or capabilities.
+- 范围化权限包应用审计元数据现在会在 REST、状态检查或 Management MCP 响应返回前，基于可见应用记录重新生成，避免脏审计元数据泄露范围外目标或能力。
 - Managed administrator creation now has explicit coverage rejecting actors that reuse bootstrap administrator actors, keeping sessions, audit rows, and approval routing unambiguous.
 - 托管管理员创建现在明确覆盖拒绝复用引导管理员 actor，避免会话主体、审计记录和审批路由含混。
 - PostgreSQL-backed managed administrator creation now maps duplicate actor or id constraint races to stable 409 conflict errors instead of generic internal errors.

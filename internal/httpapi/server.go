@@ -3023,10 +3023,17 @@ func (s *Server) visibleAuditEvents(ctx context.Context, events []domain.AuditEv
 }
 
 func (s *Server) visibleAuditEvent(ctx context.Context, event domain.AuditEvent, scope store.ManagementScope) (domain.AuditEvent, bool, error) {
-	if event.Action != "permission_package.applied" || event.ResourceType != "permission_package" {
-		event.Metadata = cloneAuditMetadata(event.Metadata)
-		return event, true, nil
+	if isPermissionPackageAppliedAuditEvent(event) {
+		return s.visiblePermissionPackageAppliedAuditEvent(ctx, event, scope)
 	}
+	if isPermissionPackageApprovalAuditEvent(event) {
+		return s.visiblePermissionPackageApprovalAuditEvent(ctx, event, scope)
+	}
+	event.Metadata = cloneAuditMetadata(event.Metadata)
+	return event, true, nil
+}
+
+func (s *Server) visiblePermissionPackageAppliedAuditEvent(ctx context.Context, event domain.AuditEvent, scope store.ManagementScope) (domain.AuditEvent, bool, error) {
 	applications, err := s.repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
 		ManagementScope: scope,
 		ID:              event.ResourceID,
@@ -3044,6 +3051,39 @@ func (s *Server) visibleAuditEvent(ctx context.Context, event domain.AuditEvent,
 	}
 	event.Metadata = permissionPackageAppliedAuditMetadataForVisibleApplication(applications[0], event.Metadata)
 	return event, true, nil
+}
+
+func (s *Server) visiblePermissionPackageApprovalAuditEvent(ctx context.Context, event domain.AuditEvent, scope store.ManagementScope) (domain.AuditEvent, bool, error) {
+	approval, ok, err := s.repo.GetPermissionPackageApprovalRequest(ctx, event.ResourceID)
+	if err != nil || !ok {
+		return domain.AuditEvent{}, false, err
+	}
+	visible, err := s.permissionPackageApprovalRequestVisible(ctx, approval, scope)
+	if err != nil || !visible {
+		return domain.AuditEvent{}, false, err
+	}
+	metadata, err := s.permissionPackageApprovalAuditMetadataForVisibleRequest(ctx, approval)
+	if err != nil {
+		return domain.AuditEvent{}, false, err
+	}
+	event.Metadata = metadata
+	return event, true, nil
+}
+
+func isPermissionPackageAppliedAuditEvent(event domain.AuditEvent) bool {
+	return event.Action == "permission_package.applied" && event.ResourceType == "permission_package"
+}
+
+func isPermissionPackageApprovalAuditEvent(event domain.AuditEvent) bool {
+	if event.ResourceType != "permission_package_approval_request" {
+		return false
+	}
+	switch event.Action {
+	case "permission_package.approval_requested", "permission_package.approval_approved", "permission_package.approval_rejected", "permission_package.approval_withdrawn":
+		return true
+	default:
+		return false
+	}
 }
 
 func cloneAuditMetadata(metadata map[string]any) map[string]any {
@@ -3080,8 +3120,76 @@ func permissionPackageAppliedAuditMetadataForVisibleApplication(application doma
 	return metadata
 }
 
+func (s *Server) permissionPackageApprovalRequestVisible(ctx context.Context, approval domain.PermissionPackageApprovalRequest, scope store.ManagementScope) (bool, error) {
+	if strings.TrimSpace(scope.TenantID) != "" {
+		inScope, err := s.tenantCanReceiveTargetEntitlement(ctx, scope.TenantID, approval.TenantID)
+		if err != nil || !inScope {
+			return false, err
+		}
+	}
+	if strings.TrimSpace(scope.WorkspaceID) != "" && approval.WorkspaceID != strings.TrimSpace(scope.WorkspaceID) {
+		return false, nil
+	}
+
+	caller, ok, err := s.repo.GetAgent(ctx, approval.CallerInstanceID)
+	if err != nil || !ok {
+		return false, err
+	}
+	if caller.TenantID != approval.TenantID || caller.WorkspaceID != approval.WorkspaceID {
+		return false, nil
+	}
+	callerInScope, err := s.permissionPackageApplicationAgentInScope(ctx, caller, scope)
+	if err != nil || !callerInScope {
+		return false, err
+	}
+
+	target, ok, err := s.repo.GetAgent(ctx, approval.TargetID)
+	if err != nil || !ok {
+		return false, err
+	}
+	allowedTenant, err := s.tenantCanReceiveTargetEntitlement(ctx, target.TenantID, approval.TenantID)
+	if err != nil || !allowedTenant {
+		return false, err
+	}
+	if approval.WorkspaceID != "" && target.WorkspaceID != approval.WorkspaceID {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (s *Server) permissionPackageApprovalAuditMetadataForVisibleRequest(ctx context.Context, approval domain.PermissionPackageApprovalRequest) (map[string]any, error) {
+	allowedCapabilityIDs := []string{}
+	for _, id := range approval.AllowedCapabilityIDs {
+		capability, ok, err := s.repo.GetCapability(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if !ok || capability.TargetID != approval.TargetID {
+			continue
+		}
+		allowedCapabilityIDs = append(allowedCapabilityIDs, capability.ID)
+	}
+	return map[string]any{
+		"approvalRequestId":       approval.ID,
+		"draftId":                 approval.DraftID,
+		"templateId":              approval.TemplateID,
+		"templateVersion":         approval.TemplateVersion,
+		"policyVersion":           approval.PolicyVersion,
+		"targetId":                approval.TargetID,
+		"callerInstanceId":        approval.CallerInstanceID,
+		"status":                  approval.Status,
+		"requestedBy":             approval.RequestedBy,
+		"reviewedBy":              approval.ReviewedBy,
+		"reasonCount":             len(approval.PolicyGate.Reasons),
+		"allowedCapabilityIds":    auditMetadataStrings(allowedCapabilityIDs),
+		"expiresAt":               approval.ExpiresAt,
+		"consumedAt":              approval.ConsumedAt,
+		"consumedByApplicationId": approval.ConsumedByApplicationID,
+	}, nil
+}
+
 func auditMetadataStrings(values []string) []string {
-	if values == nil {
+	if len(values) == 0 {
 		return []string{}
 	}
 	return append([]string(nil), values...)

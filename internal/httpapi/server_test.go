@@ -5994,6 +5994,103 @@ func TestPermissionPackageApplicationReadsRedactDirtyApplicationCapabilityScope(
 	}
 }
 
+func TestPermissionPackageApprovalAuditMetadataRedactsDirtyScope(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	supportTarget := createDirectAgent(t, repo, "Support MCP", "tenant-east", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	supportCaller := createDirectAgent(t, repo, "Support caller", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	financeTarget := createDirectAgent(t, repo, "Finance Export Service", "tenant-east", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	financeCapability := createDirectCapabilityWithAction(t, repo, financeTarget.ID, "export_invoices", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	approval, err := repo.CreatePermissionPackageApprovalRequest(t.Context(), domain.PermissionPackageApprovalRequest{
+		ID:                    "ppar-dirty-audit",
+		DraftID:               "draft-dirty-approval",
+		TemplateID:            "support-ticket-triage",
+		TemplateVersion:       1,
+		PolicyVersion:         1,
+		TenantID:              "tenant-east",
+		WorkspaceID:           "ws-support",
+		TargetID:              supportTarget.ID,
+		CallerInstanceID:      supportCaller.ID,
+		SubjectSelector:       "role:support",
+		RequestText:           "approve support ticket updates",
+		Region:                "us-east",
+		DataScopes:            []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		AllowedCapabilityIDs:  []string{financeCapability.ID},
+		AllowedCapabilityKeys: []string{financeCapability.Key},
+		PolicyGate: domain.PermissionPackagePolicyGate{
+			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
+			CanApplyDirectly: false,
+			PolicyVersion:    1,
+			Reasons: []domain.PermissionPackagePolicyReason{{
+				ID:            "policy:dirty-audit",
+				CapabilityID:  financeCapability.ID,
+				CapabilityKey: financeCapability.Key,
+				Severity:      "high",
+				Message:       "Approval is required.",
+				ReasonKey:     "permissionPolicy.actionApprovalRequired",
+			}},
+		},
+		Status:      domain.PermissionPackageApprovalStatusPending,
+		RequestedBy: "support-admin",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		ExpiresAt:   now.Add(24 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("create dirty approval request: %v", err)
+	}
+	if _, err := repo.AppendAuditEvent(t.Context(), domain.AuditEvent{
+		ID:           "aud-dirty-approval-request",
+		TenantID:     "tenant-east",
+		WorkspaceID:  "ws-support",
+		Actor:        "support-admin",
+		Action:       "permission_package.approval_requested",
+		ResourceType: "permission_package_approval_request",
+		ResourceID:   approval.ID,
+		Summary:      "Permission package approval requested",
+		Metadata: map[string]any{
+			"approvalRequestId":    approval.ID,
+			"draftId":              approval.DraftID,
+			"templateId":           approval.TemplateID,
+			"templateVersion":      approval.TemplateVersion,
+			"policyVersion":        approval.PolicyVersion,
+			"targetId":             financeTarget.ID,
+			"callerInstanceId":     supportCaller.ID,
+			"status":               approval.Status,
+			"requestedBy":          approval.RequestedBy,
+			"reviewedBy":           approval.ReviewedBy,
+			"reasonCount":          1,
+			"allowedCapabilityIds": []string{financeCapability.ID},
+			"expiresAt":            approval.ExpiresAt,
+		},
+		CreatedAt: now,
+	}); err != nil {
+		t.Fatalf("append dirty approval audit event: %v", err)
+	}
+
+	leaks := []string{financeTarget.ID, financeTarget.Name, financeCapability.ID, financeCapability.Key, "ws-finance"}
+	auditResp := requestWithAdmin(t, router, http.MethodGet, "/api/v1/audit/events?tenantId=tenant-east&workspaceId=ws-support&action=permission_package.approval_requested&resourceId="+approval.ID, nil, "", "support-key")
+	if auditResp.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read approval audit event, got %d body=%s", auditResp.Code, auditResp.Body.String())
+	}
+	assertResponseDoesNotContain(t, auditResp.Body.String(), leaks...)
+	auditEvents := decodeData[[]auditEventResponse](t, auditResp)
+	if len(auditEvents) != 1 {
+		t.Fatalf("expected one scoped approval audit event, got %#v", auditEvents)
+	}
+	if auditEvents[0].Metadata["targetId"] != supportTarget.ID || auditEvents[0].Metadata["callerInstanceId"] != supportCaller.ID {
+		t.Fatalf("expected approval audit metadata to be rebuilt from visible approval request scope, got %#v", auditEvents[0].Metadata)
+	}
+	if raw, ok := auditEvents[0].Metadata["allowedCapabilityIds"].([]any); !ok || len(raw) != 0 {
+		t.Fatalf("expected approval audit metadata to redact out-of-scope capability ids, got %#v", auditEvents[0].Metadata)
+	}
+}
+
 func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)

@@ -6236,6 +6236,74 @@ func TestScopedAdminCannotResolveDirtyPermissionPackageApprovalRequest(t *testin
 	}
 }
 
+func TestApprovalResolutionRequiresExistingApprovalResources(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	approval, err := repo.CreatePermissionPackageApprovalRequest(t.Context(), domain.PermissionPackageApprovalRequest{
+		ID:               "ppar-missing-resolution",
+		DraftID:          "draft-missing-resolution",
+		TemplateID:       "support-ticket-triage",
+		TemplateVersion:  1,
+		PolicyVersion:    1,
+		TenantID:         "tenant-east",
+		WorkspaceID:      "ws-support",
+		TargetID:         "agt_missing_target",
+		CallerInstanceID: "agt_missing_caller",
+		SubjectSelector:  "role:support",
+		RequestText:      "approve support ticket updates",
+		Region:           "us-east",
+		DataScopes:       []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		PolicyGate: domain.PermissionPackagePolicyGate{
+			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
+			CanApplyDirectly: false,
+			PolicyVersion:    1,
+		},
+		Status:      domain.PermissionPackageApprovalStatusPending,
+		RequestedBy: "requester",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		ExpiresAt:   now.Add(24 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("create missing-resource approval request: %v", err)
+	}
+
+	approveResp := requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", nil, "", "support-key")
+	if approveResp.Code != http.StatusNotFound || !strings.Contains(approveResp.Body.String(), "caller not found") {
+		t.Fatalf("missing-resource approval request should be rejected, got %d body=%s", approveResp.Code, approveResp.Body.String())
+	}
+	mcpApprove := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "missing-approval-approve",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "approve_permission_package_approval_request",
+			"arguments": map[string]any{
+				"id": approval.ID,
+			},
+		},
+	}, "", "support-key")
+	var envelope mcpEnvelopeResponse
+	if err := json.Unmarshal(mcpApprove.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode MCP missing-resource approval envelope: %v body=%s", err, mcpApprove.Body.String())
+	}
+	if envelope.Error == nil || !strings.Contains(envelope.Error.Message, "caller not found") {
+		t.Fatalf("missing-resource MCP approval request should be rejected, got %#v body=%s", envelope, mcpApprove.Body.String())
+	}
+	stored, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), approval.ID)
+	if err != nil || !ok {
+		t.Fatalf("get missing-resource approval request after rejected operations: ok=%v err=%v", ok, err)
+	}
+	if stored.Status != domain.PermissionPackageApprovalStatusPending || stored.ReviewedBy != "" || !stored.ResolvedAt.IsZero() {
+		t.Fatalf("missing-resource approval request must remain pending after rejected operations, got %#v", stored)
+	}
+}
+
 func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -8151,6 +8219,52 @@ func createDirectCapabilityWithActionAndScopes(t *testing.T, repo store.Reposito
 
 func createDirectPermissionPackageApprovalRequest(t *testing.T, repo store.Repository, id string, tenantID string, workspaceID string, now time.Time) domain.PermissionPackageApprovalRequest {
 	t.Helper()
+	targetID := "agt_target_" + id
+	callerID := "agt_caller_" + id
+	capabilityID := "cap_" + id
+	if _, err := repo.CreateAgent(t.Context(), domain.Agent{
+		ID:          callerID,
+		TenantID:    tenantID,
+		WorkspaceID: workspaceID,
+		Name:        "Caller " + id,
+		ChannelType: "local",
+		Status:      domain.AgentStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}); err != nil {
+		t.Fatalf("create approval request caller %s: %v", id, err)
+	}
+	if _, err := repo.CreateAgent(t.Context(), domain.Agent{
+		ID:          targetID,
+		TenantID:    tenantID,
+		WorkspaceID: workspaceID,
+		Name:        "Target " + id,
+		ChannelType: "mcp",
+		Status:      domain.AgentStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}); err != nil {
+		t.Fatalf("create approval request target %s: %v", id, err)
+	}
+	if _, err := repo.UpsertCapability(t.Context(), domain.Capability{
+		ID:              capabilityID,
+		TargetID:        targetID,
+		Type:            domain.CapabilityTypeMCPTool,
+		Key:             "update_ticket",
+		DisplayName:     "update_ticket",
+		Description:     "update_ticket",
+		Action:          domain.CapabilityActionWrite,
+		DataDomains:     []string{"support"},
+		Sensitivity:     domain.CapabilitySensitivityConfidential,
+		RiskLevel:       domain.CapabilityRiskHigh,
+		EnforcementMode: domain.CapabilityEnforcementGateway,
+		DiscoveryStatus: domain.CapabilityDiscoveryApproved,
+		Version:         1,
+		DiscoveredAt:    now,
+		UpdatedAt:       now,
+	}); err != nil {
+		t.Fatalf("create approval request capability %s: %v", id, err)
+	}
 	request := domain.PermissionPackageApprovalRequest{
 		ID:                    id,
 		DraftID:               "ppd_" + id,
@@ -8159,13 +8273,13 @@ func createDirectPermissionPackageApprovalRequest(t *testing.T, repo store.Repos
 		PolicyVersion:         1,
 		TenantID:              tenantID,
 		WorkspaceID:           workspaceID,
-		TargetID:              "agt_target_" + id,
-		CallerInstanceID:      "agt_caller_" + id,
+		TargetID:              targetID,
+		CallerInstanceID:      callerID,
 		SubjectSelector:       "user:support-*",
 		RequestText:           "Allow support triage updates.",
 		Region:                "us-east",
 		DataScopes:            []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
-		AllowedCapabilityIDs:  []string{"cap_" + id},
+		AllowedCapabilityIDs:  []string{capabilityID},
 		AllowedCapabilityKeys: []string{"update_ticket"},
 		PolicyGate: domain.PermissionPackagePolicyGate{
 			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
@@ -8173,7 +8287,7 @@ func createDirectPermissionPackageApprovalRequest(t *testing.T, repo store.Repos
 			PolicyVersion:    1,
 			Reasons: []domain.PermissionPackagePolicyReason{{
 				ID:            "policy:" + id,
-				CapabilityID:  "cap_" + id,
+				CapabilityID:  capabilityID,
 				CapabilityKey: "update_ticket",
 				Severity:      "high",
 				Message:       "Approval is required.",

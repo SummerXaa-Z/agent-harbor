@@ -70,6 +70,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 范围化权限包审批请求列表现在会隐藏调用方或目标已不属于当前管理工作区的脏请求，并在可见请求中脱敏范围外能力 ID、能力键、指纹和策略原因。
 - Scoped administrators can no longer approve, reject, or withdraw dirty permission-package approval requests whose existing caller or target agents are outside the request workspace or authenticated management scope.
 - 范围化管理员现在不能再批准、拒绝或撤回调用方或目标 Agent 已经不在请求工作区或认证管理范围内的脏权限包审批请求。
+- Permission-package approval resolution and withdrawal now require the referenced caller and target agents to still exist, preventing stale approval rows from moving into an approved or withdrawn state.
+- 权限包审批处理和撤回现在要求引用的调用方与目标 Agent 仍然存在，避免陈旧审批记录继续进入已批准或已撤回状态。
 - Managed administrator creation now has explicit coverage rejecting actors that reuse bootstrap administrator actors, keeping sessions, audit rows, and approval routing unambiguous.
 - 托管管理员创建现在明确覆盖拒绝复用引导管理员 actor，避免会话主体、审计记录和审批路由含混。
 - PostgreSQL-backed managed administrator creation now maps duplicate actor or id constraint races to stable 409 conflict errors instead of generic internal errors.

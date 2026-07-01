@@ -5931,13 +5931,14 @@ func (s *Server) requirePermissionPackageApprovalRequestResourceScope(r *http.Re
 		if err != nil {
 			return err
 		}
-		if ok {
-			if caller.TenantID != approval.TenantID || caller.WorkspaceID != approval.WorkspaceID {
-				return domain.PermissionDenied("approval request caller is outside authenticated admin scope")
-			}
-			if err := s.requireAgentManagementScope(r, caller); err != nil {
-				return err
-			}
+		if !ok {
+			return domain.NotFound("approval request caller not found")
+		}
+		if caller.TenantID != approval.TenantID || caller.WorkspaceID != approval.WorkspaceID {
+			return domain.PermissionDenied("approval request caller is outside authenticated admin scope")
+		}
+		if err := s.requireAgentManagementScope(r, caller); err != nil {
+			return err
 		}
 	}
 	if strings.TrimSpace(approval.TargetID) != "" {
@@ -5945,17 +5946,18 @@ func (s *Server) requirePermissionPackageApprovalRequestResourceScope(r *http.Re
 		if err != nil {
 			return err
 		}
-		if ok {
-			allowedTenant, err := s.tenantCanReceiveTargetEntitlement(r.Context(), target.TenantID, approval.TenantID)
-			if err != nil {
-				return err
-			}
-			if !allowedTenant || (approval.WorkspaceID != "" && target.WorkspaceID != approval.WorkspaceID) {
-				return domain.PermissionDenied("approval request target is outside authenticated admin scope")
-			}
-			if err := s.requireAgentManagementScope(r, target); err != nil {
-				return err
-			}
+		if !ok {
+			return domain.NotFound("approval request target not found")
+		}
+		allowedTenant, err := s.tenantCanReceiveTargetEntitlement(r.Context(), target.TenantID, approval.TenantID)
+		if err != nil {
+			return err
+		}
+		if !allowedTenant || (approval.WorkspaceID != "" && target.WorkspaceID != approval.WorkspaceID) {
+			return domain.PermissionDenied("approval request target is outside authenticated admin scope")
+		}
+		if err := s.requireAgentManagementScope(r, target); err != nil {
+			return err
 		}
 	}
 	return nil

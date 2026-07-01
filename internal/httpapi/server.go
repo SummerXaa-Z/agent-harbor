@@ -6264,6 +6264,9 @@ func (s *Server) resolvePermissionPackageApprovalRequestRecord(ctx context.Conte
 	if existing.Status != domain.PermissionPackageApprovalStatusPending {
 		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "approval request is already resolved")
 	}
+	if !existing.ExpiresAt.IsZero() && !now.Before(existing.ExpiresAt) {
+		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "approval request has expired")
+	}
 	if strings.TrimSpace(existing.RequestedBy) != "" && strings.TrimSpace(reviewer) == strings.TrimSpace(existing.RequestedBy) {
 		return domain.PermissionPackageApprovalRequest{}, domain.PermissionDenied("reviewer cannot resolve their own permission package approval request")
 	}

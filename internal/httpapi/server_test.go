@@ -6304,6 +6304,53 @@ func TestApprovalResolutionRequiresExistingApprovalResources(t *testing.T) {
 	}
 }
 
+func TestApprovalResolutionRejectsExpiredApprovalRequest(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "security", Key: "security-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	approval := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-expired-resolution", "tenant-east", "ws-support", now)
+	approval.ExpiresAt = now.Add(-time.Minute)
+	approval.UpdatedAt = approval.ExpiresAt
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(t.Context(), approval); err != nil || !ok {
+		t.Fatalf("expire approval request: ok=%v err=%v", ok, err)
+	}
+
+	approveResp := requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", nil, "", "security-key")
+	if approveResp.Code != http.StatusBadRequest || !strings.Contains(approveResp.Body.String(), "expired") {
+		t.Fatalf("expired approval request approve should be rejected, got %d body=%s", approveResp.Code, approveResp.Body.String())
+	}
+	mcpReject := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "expired-approval-reject",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "reject_permission_package_approval_request",
+			"arguments": map[string]any{
+				"id":      approval.ID,
+				"comment": "expired",
+			},
+		},
+	}, "", "security-key")
+	var envelope mcpEnvelopeResponse
+	if err := json.Unmarshal(mcpReject.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode MCP expired approval envelope: %v body=%s", err, mcpReject.Body.String())
+	}
+	if envelope.Error == nil || !strings.Contains(envelope.Error.Message, "expired") {
+		t.Fatalf("expired MCP approval request resolution should be rejected, got %#v body=%s", envelope, mcpReject.Body.String())
+	}
+	stored, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), approval.ID)
+	if err != nil || !ok {
+		t.Fatalf("get expired approval request after rejected operations: ok=%v err=%v", ok, err)
+	}
+	if stored.Status != domain.PermissionPackageApprovalStatusPending || stored.ReviewedBy != "" || !stored.ResolvedAt.IsZero() {
+		t.Fatalf("expired approval request must remain pending after rejected operations, got %#v", stored)
+	}
+}
+
 func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
@@ -8222,6 +8269,10 @@ func createDirectPermissionPackageApprovalRequest(t *testing.T, repo store.Repos
 	targetID := "agt_target_" + id
 	callerID := "agt_caller_" + id
 	capabilityID := "cap_" + id
+	expiresAt := now.Add(24 * time.Hour)
+	if !expiresAt.After(time.Now().UTC()) {
+		expiresAt = time.Now().UTC().Add(24 * time.Hour)
+	}
 	if _, err := repo.CreateAgent(t.Context(), domain.Agent{
 		ID:          callerID,
 		TenantID:    tenantID,
@@ -8300,7 +8351,7 @@ func createDirectPermissionPackageApprovalRequest(t *testing.T, repo store.Repos
 		RequestedBy: "admin-key",
 		CreatedAt:   now,
 		UpdatedAt:   now,
-		ExpiresAt:   now.Add(24 * time.Hour),
+		ExpiresAt:   expiresAt,
 	}
 	created, err := repo.CreatePermissionPackageApprovalRequest(t.Context(), request)
 	if err != nil {

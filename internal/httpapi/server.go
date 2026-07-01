@@ -2028,6 +2028,7 @@ func (s *Server) permissionPackageWorkbenchApprovalRequest(ctx context.Context, 
 	if draft.PolicyGate.CanApplyDirectly || !draft.Readiness.CanApply {
 		return nil, nil
 	}
+	now := s.now()
 	if approvalRequestID != "" {
 		approval, ok, err := s.repo.GetPermissionPackageApprovalRequest(ctx, approvalRequestID)
 		if err != nil {
@@ -2038,6 +2039,9 @@ func (s *Server) permissionPackageWorkbenchApprovalRequest(ctx context.Context, 
 		}
 		if !permissionPackageApprovalRequestMatchesDraftSnapshot(approval, draft) {
 			return nil, domain.BadRequest("VALIDATION_FAILED", "approval request does not match current permission request")
+		}
+		if permissionPackageApprovalRequestExpired(approval, now) {
+			return nil, nil
 		}
 		return &approval, nil
 	}
@@ -2057,8 +2061,12 @@ func (s *Server) permissionPackageWorkbenchApprovalRequest(ctx context.Context, 
 		if !permissionPackageApprovalRequestMatchesDraftSnapshot(row, draft) {
 			continue
 		}
+		if (row.Status == domain.PermissionPackageApprovalStatusPending || row.Status == domain.PermissionPackageApprovalStatusApproved) &&
+			permissionPackageApprovalRequestExpired(row, now) {
+			continue
+		}
 		if row.Status == domain.PermissionPackageApprovalStatusApproved &&
-			validatePermissionPackageApprovalForDraft(row, draft, s.now()) != nil {
+			validatePermissionPackageApprovalForDraft(row, draft, now) != nil {
 			continue
 		}
 		candidate := row
@@ -6264,7 +6272,7 @@ func (s *Server) resolvePermissionPackageApprovalRequestRecord(ctx context.Conte
 	if existing.Status != domain.PermissionPackageApprovalStatusPending {
 		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "approval request is already resolved")
 	}
-	if !existing.ExpiresAt.IsZero() && !now.Before(existing.ExpiresAt) {
+	if permissionPackageApprovalRequestExpired(existing, now) {
 		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "approval request has expired")
 	}
 	if strings.TrimSpace(existing.RequestedBy) != "" && strings.TrimSpace(reviewer) == strings.TrimSpace(existing.RequestedBy) {
@@ -6293,7 +6301,7 @@ func (s *Server) withdrawPermissionPackageApprovalRequestRecord(ctx context.Cont
 	if !existing.ConsumedAt.IsZero() || strings.TrimSpace(existing.ConsumedByApplicationID) != "" {
 		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "approval request is already consumed")
 	}
-	if !existing.ExpiresAt.IsZero() && !now.Before(existing.ExpiresAt) {
+	if permissionPackageApprovalRequestExpired(existing, now) {
 		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "approval request has expired")
 	}
 	requester = strings.TrimSpace(requester)
@@ -6345,6 +6353,10 @@ func permissionPackageApprovalRequestFromDraft(draft domain.PermissionPackageDra
 	}
 }
 
+func permissionPackageApprovalRequestExpired(approval domain.PermissionPackageApprovalRequest, now time.Time) bool {
+	return !approval.ExpiresAt.IsZero() && !now.Before(approval.ExpiresAt)
+}
+
 func validatePermissionPackageApprovalForDraft(approval domain.PermissionPackageApprovalRequest, draft domain.PermissionPackageDraft, now time.Time) error {
 	if approval.Status != domain.PermissionPackageApprovalStatusApproved {
 		return domain.BadRequest("VALIDATION_FAILED", "permission package approval request must be approved before apply")
@@ -6352,7 +6364,7 @@ func validatePermissionPackageApprovalForDraft(approval domain.PermissionPackage
 	if !approval.ConsumedAt.IsZero() {
 		return permissionPackageApprovalAlreadyConsumedError()
 	}
-	if !approval.ExpiresAt.IsZero() && !now.Before(approval.ExpiresAt) {
+	if permissionPackageApprovalRequestExpired(approval, now) {
 		return domain.BadRequest("VALIDATION_FAILED", "permission package approval request has expired")
 	}
 	allowedCapabilityIDs, allowedCapabilityKeys := permissionPackageCapabilityIDsAndKeys(draft.AllowedCapabilities)

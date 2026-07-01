@@ -5400,6 +5400,53 @@ func TestPermissionPackageWorkbenchPreviewSummarizesPrimaryJourney(t *testing.T)
 	}
 }
 
+func TestPermissionPackageWorkbenchIgnoresExpiredPendingApprovalRequest(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow support triage updates for this tenant.",
+		"subjectSelector":  "user:support-*",
+		"targetId":         target.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
+	expired, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), approval.ID)
+	if err != nil || !ok {
+		t.Fatalf("get approval for expiry: ok=%v err=%v", ok, err)
+	}
+	expired.ExpiresAt = now.Add(-time.Minute)
+	expired.UpdatedAt = expired.ExpiresAt
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(t.Context(), expired); err != nil || !ok {
+		t.Fatalf("expire approval request: ok=%v err=%v", ok, err)
+	}
+
+	preview := decodeData[permissionPackageWorkbenchPreviewResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/workbench:preview", input, ""))
+	if preview.ApprovalRequest != nil {
+		t.Fatalf("expected expired pending approval to be ignored, got %#v", preview.ApprovalRequest)
+	}
+	if preview.Summary.Status != "awaiting_approval" || preview.Summary.PrimaryActionCode != "create_approval_request" ||
+		preview.Summary.CanApply || preview.Summary.Applied || preview.Summary.ProductionReady {
+		t.Fatalf("expected workbench to ask for a fresh approval request, got %#v", preview.Summary)
+	}
+	if !permissionPackageWorkbenchHasStep(preview.Summary.Steps, "approval", "current", "approval_required") {
+		t.Fatalf("expected approval step to request a fresh approval, got %#v", preview.Summary.Steps)
+	}
+}
+
 func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvidence(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)

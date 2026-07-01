@@ -6160,6 +6160,82 @@ func TestPermissionPackageApprovalListRedactsDirtyCapabilityScope(t *testing.T) 
 	}
 }
 
+func TestScopedAdminCannotResolveDirtyPermissionPackageApprovalRequest(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	supportCaller := createDirectAgent(t, repo, "Support caller", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	financeTarget := createDirectAgent(t, repo, "Finance Export Service", "tenant-east", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	approval, err := repo.CreatePermissionPackageApprovalRequest(t.Context(), domain.PermissionPackageApprovalRequest{
+		ID:               "ppar-dirty-resolution",
+		DraftID:          "draft-dirty-resolution",
+		TemplateID:       "support-ticket-triage",
+		TemplateVersion:  1,
+		PolicyVersion:    1,
+		TenantID:         "tenant-east",
+		WorkspaceID:      "ws-support",
+		TargetID:         financeTarget.ID,
+		CallerInstanceID: supportCaller.ID,
+		SubjectSelector:  "role:support",
+		RequestText:      "approve support ticket updates",
+		Region:           "us-east",
+		DataScopes:       []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		PolicyGate: domain.PermissionPackagePolicyGate{
+			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
+			CanApplyDirectly: false,
+			PolicyVersion:    1,
+		},
+		Status:      domain.PermissionPackageApprovalStatusPending,
+		RequestedBy: "requester",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		ExpiresAt:   now.Add(24 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("create dirty approval request: %v", err)
+	}
+
+	approveResp := requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", nil, "", "support-key")
+	if approveResp.Code != http.StatusForbidden {
+		t.Fatalf("dirty approval request resolution should be forbidden, got %d body=%s", approveResp.Code, approveResp.Body.String())
+	}
+	withdrawResp := requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/withdraw", map[string]any{
+		"comment": "withdraw dirty request",
+	}, "", "support-key")
+	if withdrawResp.Code != http.StatusForbidden {
+		t.Fatalf("dirty approval request withdraw should be forbidden, got %d body=%s", withdrawResp.Code, withdrawResp.Body.String())
+	}
+	mcpApprove := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "dirty-approval-approve",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "approve_permission_package_approval_request",
+			"arguments": map[string]any{
+				"id": approval.ID,
+			},
+		},
+	}, "", "support-key")
+	var envelope mcpEnvelopeResponse
+	if err := json.Unmarshal(mcpApprove.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode MCP dirty approval envelope: %v body=%s", err, mcpApprove.Body.String())
+	}
+	if envelope.Error == nil || !strings.Contains(envelope.Error.Message, "outside authenticated admin scope") {
+		t.Fatalf("dirty MCP approval request resolution should be rejected, got %#v body=%s", envelope, mcpApprove.Body.String())
+	}
+	stored, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), approval.ID)
+	if err != nil || !ok {
+		t.Fatalf("get dirty approval request after rejected operations: ok=%v err=%v", ok, err)
+	}
+	if stored.Status != domain.PermissionPackageApprovalStatusPending || stored.ReviewedBy != "" || !stored.ResolvedAt.IsZero() {
+		t.Fatalf("dirty approval request must remain pending after rejected operations, got %#v", stored)
+	}
+}
+
 func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)

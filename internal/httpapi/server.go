@@ -5919,7 +5919,46 @@ func (s *Server) requirePermissionPackageQueryScope(r *http.Request, query permi
 }
 
 func (s *Server) requirePermissionPackageApprovalRequestScope(r *http.Request, approval domain.PermissionPackageApprovalRequest) error {
-	return s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: approval.TenantID, WorkspaceID: approval.WorkspaceID})
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: approval.TenantID, WorkspaceID: approval.WorkspaceID}); err != nil {
+		return err
+	}
+	return s.requirePermissionPackageApprovalRequestResourceScope(r, approval)
+}
+
+func (s *Server) requirePermissionPackageApprovalRequestResourceScope(r *http.Request, approval domain.PermissionPackageApprovalRequest) error {
+	if strings.TrimSpace(approval.CallerInstanceID) != "" {
+		caller, ok, err := s.repo.GetAgent(r.Context(), approval.CallerInstanceID)
+		if err != nil {
+			return err
+		}
+		if ok {
+			if caller.TenantID != approval.TenantID || caller.WorkspaceID != approval.WorkspaceID {
+				return domain.PermissionDenied("approval request caller is outside authenticated admin scope")
+			}
+			if err := s.requireAgentManagementScope(r, caller); err != nil {
+				return err
+			}
+		}
+	}
+	if strings.TrimSpace(approval.TargetID) != "" {
+		target, ok, err := s.repo.GetAgent(r.Context(), approval.TargetID)
+		if err != nil {
+			return err
+		}
+		if ok {
+			allowedTenant, err := s.tenantCanReceiveTargetEntitlement(r.Context(), target.TenantID, approval.TenantID)
+			if err != nil {
+				return err
+			}
+			if !allowedTenant || (approval.WorkspaceID != "" && target.WorkspaceID != approval.WorkspaceID) {
+				return domain.PermissionDenied("approval request target is outside authenticated admin scope")
+			}
+			if err := s.requireAgentManagementScope(r, target); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func auditLimitFromRequest(r *http.Request) (int, error) {

@@ -1715,6 +1715,10 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       setAiAdminProductionReadinessMessage(null);
       setAiAdminMessage({ key: "message.permissionApprovalCreated", params: { id: request.id } });
     } catch (error) {
+      if (error instanceof ApiRequestError && error.code === "PERMISSION_PACKAGE_APPROVAL_ALREADY_PENDING") {
+        setAiAdminMessage({ key: "message.permissionApprovalAlreadyPending" });
+        return;
+      }
       setAiAdminMessage(localizedErrorMessageState(error, "error.createApprovalRequest"));
     } finally {
       approvalCreateInFlightRef.current = false;

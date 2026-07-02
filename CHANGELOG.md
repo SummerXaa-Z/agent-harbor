@@ -80,6 +80,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 待处理权限包审批队列现在会先过滤已过期请求再应用返回数量限制，避免陈旧审批在 REST 和 Management MCP 列表中挤掉仍可处理的审批。
 - Permission-package approval responses now expose an `effectiveStatus` and `isExpired` flag for expired pending or approved requests, so REST, management MCP, and the console do not treat stale approvals as actionable.
 - 权限包审批响应现在会为已过期的待审批或已批准请求返回 `effectiveStatus` 和 `isExpired`，确保 REST、Management MCP 和控制台不会把陈旧审批当作仍可处理的请求。
+- Permission-package approval request creation now rejects duplicate active pending requests with stable `PERMISSION_PACKAGE_APPROVAL_ALREADY_PENDING` conflicts across REST and management MCP, while allowing a fresh request after the previous pending approval expires.
+- 权限包审批请求创建现在会在 REST 和 Management MCP 中用稳定的 `PERMISSION_PACKAGE_APPROVAL_ALREADY_PENDING` 冲突错误拒绝重复的有效待审批请求，同时允许过期后重新发起新请求。
 - Managed administrator creation now has explicit coverage rejecting actors that reuse bootstrap administrator actors, keeping sessions, audit rows, and approval routing unambiguous.
 - 托管管理员创建现在明确覆盖拒绝复用引导管理员 actor，避免会话主体、审计记录和审批路由含混。
 - PostgreSQL-backed managed administrator creation now maps duplicate actor or id constraint races to stable 409 conflict errors instead of generic internal errors.

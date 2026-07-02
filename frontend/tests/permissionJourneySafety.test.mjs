@@ -64,6 +64,8 @@ test("approval request creation blocks blank and duplicate submissions before th
   assert.ok(pendingIndex >= 0 && pendingIndex < actionIndex, "pending duplicate guard must run before action state");
   assert.match(block, /message\.permissionApprovalRequestTextRequired/);
   assert.match(block, /message\.permissionApprovalAlreadyPending/);
+  assert.match(block, /error instanceof ApiRequestError && error\.code === "PERMISSION_PACKAGE_APPROVAL_ALREADY_PENDING"/);
+  assert.match(block, /setAiAdminMessage\(\{ key: "message\.permissionApprovalAlreadyPending" \}\)/);
   assert.match(block, /createPermissionPackageApprovalRequest\(aiAdminForm, adminKey\)/);
 });
 

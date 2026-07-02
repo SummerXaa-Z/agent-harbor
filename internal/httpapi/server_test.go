@@ -6555,6 +6555,31 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 	if firstApproval.ExpiresAt.IsZero() || !firstApproval.ExpiresAt.After(firstApproval.CreatedAt) {
 		t.Fatalf("approval request should expose a future expiry: %#v", firstApproval)
 	}
+	duplicateApprovalResp := request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, "")
+	if duplicateApprovalResp.Code != http.StatusConflict {
+		t.Fatalf("duplicate pending approval request should be rejected, status=%d body=%s", duplicateApprovalResp.Code, duplicateApprovalResp.Body.String())
+	}
+	var duplicateApprovalErr apiEnvelope
+	if err := json.Unmarshal(duplicateApprovalResp.Body.Bytes(), &duplicateApprovalErr); err != nil {
+		t.Fatalf("decode duplicate approval error: %v body=%s", err, duplicateApprovalResp.Body.String())
+	}
+	if duplicateApprovalErr.Error != "PERMISSION_PACKAGE_APPROVAL_ALREADY_PENDING" {
+		t.Fatalf("duplicate approval should return stable app code, got %#v", duplicateApprovalErr)
+	}
+	expiredPending, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), firstApproval.ID)
+	if err != nil || !ok {
+		t.Fatalf("get pending approval for duplicate expiry test: ok=%v err=%v", ok, err)
+	}
+	expiredPending.ExpiresAt = time.Now().UTC().Add(-time.Minute)
+	expiredPending.UpdatedAt = expiredPending.ExpiresAt
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(t.Context(), expiredPending); err != nil || !ok {
+		t.Fatalf("expire pending approval request: ok=%v err=%v", ok, err)
+	}
+	replacementApproval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
+	if replacementApproval.ID == firstApproval.ID || replacementApproval.Status != "pending" {
+		t.Fatalf("expired pending approval should allow a fresh request, old=%#v new=%#v", firstApproval, replacementApproval)
+	}
+	firstApproval = replacementApproval
 	listedApprovals := decodeData[[]permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?tenantId=tenant-root&workspaceId=ws-support&templateId=support-ticket-triage&targetId="+target.ID+"&callerInstanceId="+caller.ID+"&status=pending&limit=1", nil, ""))
 	if len(listedApprovals) != 1 || listedApprovals[0].ID != firstApproval.ID {
 		t.Fatalf("expected listed pending approval request, got %#v", listedApprovals)
@@ -7613,6 +7638,27 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		len(approval.AllowedCapabilityIDs) != 1 || approval.AllowedCapabilityIDs[0] != updateTicket.ID {
 		t.Fatalf("unexpected management MCP approval request: %#v", approval)
 	}
+	duplicateCreateCall := request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-create-duplicate",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "create_permission_package_approval_request",
+			"arguments": args,
+		},
+	}, "")
+	if duplicateCreateCall.Code != http.StatusOK {
+		t.Fatalf("expected MCP HTTP 200 for duplicate approval tool error, got %d body=%s", duplicateCreateCall.Code, duplicateCreateCall.Body.String())
+	}
+	var duplicateCreatePayload mcpEnvelopeResponse
+	if err := json.Unmarshal(duplicateCreateCall.Body.Bytes(), &duplicateCreatePayload); err != nil {
+		t.Fatalf("decode duplicate approval MCP response: %v body=%s", err, duplicateCreateCall.Body.String())
+	}
+	if duplicateCreatePayload.Error == nil || duplicateCreatePayload.Error.Data == nil ||
+		duplicateCreatePayload.Error.Data.AppCode != "PERMISSION_PACKAGE_APPROVAL_ALREADY_PENDING" ||
+		duplicateCreatePayload.Error.Data.HTTPStatus != http.StatusConflict {
+		t.Fatalf("duplicate approval MCP error should include app code and status, got %#v body=%s", duplicateCreatePayload, duplicateCreateCall.Body.String())
+	}
 
 	listCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
 		"jsonrpc": "2.0",
@@ -7639,13 +7685,18 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		t.Fatalf("unexpected management MCP approval request list: %#v", approvals)
 	}
 
+	withdrawArgs := map[string]any{}
+	for key, value := range args {
+		withdrawArgs[key] = value
+	}
+	withdrawArgs["requestText"] = "Allow replacement support triage updates for this tenant."
 	withdrawCreateCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "approval-create-withdraw",
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "create_permission_package_approval_request",
-			"arguments": args,
+			"arguments": withdrawArgs,
 		},
 	}, ""))
 	var withdrawApproval permissionPackageApprovalRequestResponse

@@ -6291,8 +6291,33 @@ func (s *Server) createPermissionPackageApprovalRequestRecord(ctx context.Contex
 	if draft.PolicyGate.CanApplyDirectly {
 		return domain.PermissionPackageApprovalRequest{}, domain.BadRequest("VALIDATION_FAILED", "permission package does not require approval")
 	}
+	if err := s.rejectDuplicateActivePermissionPackageApprovalRequest(ctx, draft, now); err != nil {
+		return domain.PermissionPackageApprovalRequest{}, err
+	}
 	approval := permissionPackageApprovalRequestFromDraft(draft, requestedBy, now)
 	return s.repo.CreatePermissionPackageApprovalRequest(ctx, approval)
+}
+
+func (s *Server) rejectDuplicateActivePermissionPackageApprovalRequest(ctx context.Context, draft domain.PermissionPackageDraft, now time.Time) error {
+	rows, err := s.repo.ListPermissionPackageApprovalRequests(ctx, store.PermissionPackageApprovalRequestFilter{
+		ManagementScope:  store.ManagementScope{TenantID: draft.Input.TenantID, WorkspaceID: draft.Input.WorkspaceID},
+		TemplateID:       draft.Template.ID,
+		TargetID:         draft.Input.TargetID,
+		CallerInstanceID: draft.Input.CallerInstanceID,
+		Status:           domain.PermissionPackageApprovalStatusPending,
+	})
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if permissionPackageApprovalRequestExpired(row, now) {
+			continue
+		}
+		if permissionPackageApprovalRequestMatchesDraftSnapshot(row, draft) {
+			return domain.Conflict("PERMISSION_PACKAGE_APPROVAL_ALREADY_PENDING", "a matching permission package approval request is already pending")
+		}
+	}
+	return nil
 }
 
 func (s *Server) resolvePermissionPackageApprovalRequestRecord(ctx context.Context, existing domain.PermissionPackageApprovalRequest, status domain.PermissionPackageApprovalStatus, reviewer string, comment string, now time.Time) (domain.PermissionPackageApprovalRequest, error) {

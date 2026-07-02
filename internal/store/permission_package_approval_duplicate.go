@@ -25,6 +25,12 @@ func permissionPackageApprovalRequestActivePendingAt(request domain.PermissionPa
 	return request.ExpiresAt.IsZero() || now.Before(request.ExpiresAt)
 }
 
+func permissionPackageApprovalRequestCanTransition(request domain.PermissionPackageApprovalRequest, now time.Time) bool {
+	return permissionPackageApprovalRequestActivePendingAt(request, now) &&
+		request.ConsumedAt.IsZero() &&
+		request.ConsumedByApplicationID == ""
+}
+
 func permissionPackageApprovalRequestsShareDuplicateKey(left domain.PermissionPackageApprovalRequest, right domain.PermissionPackageApprovalRequest) bool {
 	return left.DraftID == right.DraftID &&
 		left.TemplateID == right.TemplateID &&

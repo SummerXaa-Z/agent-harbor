@@ -55,6 +55,7 @@ type Repository interface {
 	ListPermissionPackageApprovalRequests(context.Context, PermissionPackageApprovalRequestFilter) ([]domain.PermissionPackageApprovalRequest, error)
 	GetPermissionPackageApprovalRequest(context.Context, string) (domain.PermissionPackageApprovalRequest, bool, error)
 	UpdatePermissionPackageApprovalRequest(context.Context, domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, bool, error)
+	TransitionPermissionPackageApprovalRequest(context.Context, domain.PermissionPackageApprovalRequest, time.Time) (domain.PermissionPackageApprovalRequest, bool, error)
 	EvaluateCapabilityAccess(context.Context, CapabilityAccessRequest) (domain.CapabilityAccessDecision, error)
 	CreateRoutePolicy(context.Context, domain.RoutePolicy) (domain.RoutePolicy, error)
 	CreateRoutePolicyWithAudit(context.Context, domain.RoutePolicy, RoutePolicyAuditBuilder) (domain.RoutePolicy, error)
@@ -868,6 +869,21 @@ func (m *Memory) UpdatePermissionPackageApprovalRequest(_ context.Context, reque
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.packageApprovals[request.ID]; !ok {
+		return domain.PermissionPackageApprovalRequest{}, false, nil
+	}
+	request = clonePermissionPackageApprovalRequest(request)
+	m.packageApprovals[request.ID] = request
+	return clonePermissionPackageApprovalRequest(request), true, nil
+}
+
+func (m *Memory) TransitionPermissionPackageApprovalRequest(_ context.Context, request domain.PermissionPackageApprovalRequest, now time.Time) (domain.PermissionPackageApprovalRequest, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	existing, ok := m.packageApprovals[request.ID]
+	if !ok {
+		return domain.PermissionPackageApprovalRequest{}, false, nil
+	}
+	if !permissionPackageApprovalRequestCanTransition(existing, now) {
 		return domain.PermissionPackageApprovalRequest{}, false, nil
 	}
 	request = clonePermissionPackageApprovalRequest(request)

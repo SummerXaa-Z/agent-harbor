@@ -1179,6 +1179,48 @@ func (p *Postgres) UpdatePermissionPackageApprovalRequest(ctx context.Context, r
 	return updated, true, nil
 }
 
+func (p *Postgres) TransitionPermissionPackageApprovalRequest(ctx context.Context, request domain.PermissionPackageApprovalRequest, now time.Time) (domain.PermissionPackageApprovalRequest, bool, error) {
+	dataScopes, allowedCapabilityIDs, allowedCapabilityKeys, allowedCapabilityFingerprints, policyGate, err := marshalPermissionPackageApprovalRequestPayloads(request)
+	if err != nil {
+		return domain.PermissionPackageApprovalRequest{}, false, err
+	}
+	row := p.pool.QueryRow(ctx, `
+		update permission_package_approval_requests
+		set draft_id=$2, template_id=$3, template_version=$4, policy_version=$5, tenant_id=$6,
+			workspace_id=$7, target_agent_id=$8, caller_instance_id=$9, subject_selector=$10,
+			request_text=$11, region=$12, data_scopes=$13, allowed_capability_ids=$14,
+			allowed_capability_keys=$15, allowed_capability_fingerprints=$16, policy_gate=$17,
+			status=$18, requested_by=$19, reviewed_by=$20, review_comment=$21, created_at=$22,
+			updated_at=$23, resolved_at=$24, expires_at=$25, consumed_at=$26,
+			consumed_by_application_id=$27
+		where id=$1
+			and status=$28
+			and consumed_at is null
+			and consumed_by_application_id=''
+			and expires_at > $29
+		returning id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
+			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
+			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
+			policy_gate, status, requested_by,
+			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
+			consumed_at, consumed_by_application_id
+	`, request.ID, request.DraftID, request.TemplateID, request.TemplateVersion, request.PolicyVersion,
+		request.TenantID, request.WorkspaceID, request.TargetID, request.CallerInstanceID,
+		request.SubjectSelector, request.RequestText, request.Region, dataScopes, allowedCapabilityIDs,
+		allowedCapabilityKeys, allowedCapabilityFingerprints, policyGate, string(request.Status),
+		request.RequestedBy, request.ReviewedBy, request.ReviewComment, request.CreatedAt, request.UpdatedAt,
+		nullTime(request.ResolvedAt), request.ExpiresAt, nullTime(request.ConsumedAt),
+		request.ConsumedByApplicationID, string(domain.PermissionPackageApprovalStatusPending), now)
+	updated, err := scanPermissionPackageApprovalRequest(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.PermissionPackageApprovalRequest{}, false, nil
+	}
+	if err != nil {
+		return domain.PermissionPackageApprovalRequest{}, false, fmt.Errorf("transition permission package approval request: %w", err)
+	}
+	return updated, true, nil
+}
+
 func (p *Postgres) consumePermissionPackageApprovalRequest(ctx context.Context, exec sqlExecutor, request domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, error) {
 	row := exec.QueryRow(ctx, `
 		update permission_package_approval_requests

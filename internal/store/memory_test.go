@@ -467,6 +467,61 @@ func TestMemoryPermissionPackageApprovalRequestRejectsDuplicateActivePending(t *
 	}
 }
 
+func TestMemoryTransitionPermissionPackageApprovalRequestRejectsStaleState(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	now := time.Date(2026, 6, 5, 10, 0, 0, 0, time.UTC)
+	request := domain.PermissionPackageApprovalRequest{
+		ID:                    "ppar_transition",
+		DraftID:               "ppd_transition",
+		TemplateID:            "support-ticket-triage",
+		TemplateVersion:       1,
+		PolicyVersion:         1,
+		TenantID:              "tenant-east",
+		WorkspaceID:           "ws-support",
+		TargetID:              "agt_mcp",
+		CallerInstanceID:      "agt_caller",
+		SubjectSelector:       "user:support-*",
+		RequestText:           "grant support access",
+		Region:                "us-east",
+		AllowedCapabilityIDs:  []string{"cap_update"},
+		AllowedCapabilityKeys: []string{"update_ticket"},
+		Status:                domain.PermissionPackageApprovalStatusPending,
+		RequestedBy:           "requester",
+		CreatedAt:             now,
+		UpdatedAt:             now,
+		ExpiresAt:             now.Add(24 * time.Hour),
+	}
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, request); err != nil {
+		t.Fatalf("create approval request: %v", err)
+	}
+
+	approved := request
+	approved.Status = domain.PermissionPackageApprovalStatusApproved
+	approved.ReviewedBy = "security-one"
+	approved.UpdatedAt = now.Add(time.Minute)
+	approved.ResolvedAt = now.Add(time.Minute)
+	if saved, ok, err := repo.TransitionPermissionPackageApprovalRequest(ctx, approved, approved.UpdatedAt); err != nil || !ok || saved.Status != domain.PermissionPackageApprovalStatusApproved {
+		t.Fatalf("approve transition: ok=%v saved=%#v err=%v", ok, saved, err)
+	}
+
+	staleReject := request
+	staleReject.Status = domain.PermissionPackageApprovalStatusRejected
+	staleReject.ReviewedBy = "security-two"
+	staleReject.UpdatedAt = now.Add(2 * time.Minute)
+	staleReject.ResolvedAt = now.Add(2 * time.Minute)
+	if saved, ok, err := repo.TransitionPermissionPackageApprovalRequest(ctx, staleReject, staleReject.UpdatedAt); err != nil || ok {
+		t.Fatalf("stale reject should not transition: ok=%v saved=%#v err=%v", ok, saved, err)
+	}
+	loaded, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, request.ID)
+	if err != nil || !ok {
+		t.Fatalf("get approval request: ok=%v err=%v", ok, err)
+	}
+	if loaded.Status != domain.PermissionPackageApprovalStatusApproved || loaded.ReviewedBy != "security-one" {
+		t.Fatalf("stale transition overwrote first resolution: %#v", loaded)
+	}
+}
+
 func TestMemoryPermissionPackageApplyConsumesApprovalOnce(t *testing.T) {
 	repo := NewMemory()
 	ctx := t.Context()

@@ -6344,12 +6344,12 @@ func (s *Server) resolvePermissionPackageApprovalRequestRecord(ctx context.Conte
 	updated.ReviewComment = strings.TrimSpace(comment)
 	updated.UpdatedAt = now
 	updated.ResolvedAt = now
-	saved, ok, err := s.repo.UpdatePermissionPackageApprovalRequest(ctx, updated)
+	saved, ok, err := s.repo.TransitionPermissionPackageApprovalRequest(ctx, updated, now)
 	if err != nil {
 		return domain.PermissionPackageApprovalRequest{}, err
 	}
 	if !ok {
-		return domain.PermissionPackageApprovalRequest{}, domain.NotFound("approval request not found")
+		return domain.PermissionPackageApprovalRequest{}, s.permissionPackageApprovalTransitionUnavailableError(ctx, existing.ID, now)
 	}
 	return saved, nil
 }
@@ -6374,14 +6374,34 @@ func (s *Server) withdrawPermissionPackageApprovalRequestRecord(ctx context.Cont
 	updated.ReviewComment = strings.TrimSpace(comment)
 	updated.UpdatedAt = now
 	updated.ResolvedAt = now
-	saved, ok, err := s.repo.UpdatePermissionPackageApprovalRequest(ctx, updated)
+	saved, ok, err := s.repo.TransitionPermissionPackageApprovalRequest(ctx, updated, now)
 	if err != nil {
 		return domain.PermissionPackageApprovalRequest{}, err
 	}
 	if !ok {
-		return domain.PermissionPackageApprovalRequest{}, domain.NotFound("approval request not found")
+		return domain.PermissionPackageApprovalRequest{}, s.permissionPackageApprovalTransitionUnavailableError(ctx, existing.ID, now)
 	}
 	return saved, nil
+}
+
+func (s *Server) permissionPackageApprovalTransitionUnavailableError(ctx context.Context, id string, now time.Time) error {
+	current, ok, err := s.repo.GetPermissionPackageApprovalRequest(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return domain.NotFound("approval request not found")
+	}
+	if current.Status != domain.PermissionPackageApprovalStatusPending {
+		return domain.BadRequest("VALIDATION_FAILED", "approval request is already resolved")
+	}
+	if !current.ConsumedAt.IsZero() || strings.TrimSpace(current.ConsumedByApplicationID) != "" {
+		return domain.BadRequest("VALIDATION_FAILED", "approval request is already consumed")
+	}
+	if permissionPackageApprovalRequestExpired(current, now) {
+		return domain.BadRequest("VALIDATION_FAILED", "approval request has expired")
+	}
+	return domain.BadRequest("VALIDATION_FAILED", "permission package approval request is no longer available")
 }
 
 func permissionPackageApprovalRequestFromDraft(draft domain.PermissionPackageDraft, requestedBy string, now time.Time) domain.PermissionPackageApprovalRequest {

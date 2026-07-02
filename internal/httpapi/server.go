@@ -6055,19 +6055,20 @@ func (s *Server) validatePermissionPackageApprovalReviewer(ctx context.Context, 
 func (s *Server) listPermissionPackageApprovalRequestsForReviewer(ctx context.Context, filter store.PermissionPackageApprovalRequestFilter, reviewer string, limit int) ([]domain.PermissionPackageApprovalRequest, error) {
 	reviewer = strings.TrimSpace(reviewer)
 	if len(s.approvalReviewers) == 0 {
-		filter.Limit = limit
+		filter.Limit = permissionPackageApprovalRequestRepositoryLimit(filter.Status, limit)
 		return s.repo.ListPermissionPackageApprovalRequests(ctx, filter)
 	}
 	if reviewer == "" {
 		return nil, nil
 	}
+	repoLimit := permissionPackageApprovalRequestRepositoryLimit(filter.Status, limit)
 	seen := map[string]struct{}{}
 	rows := []domain.PermissionPackageApprovalRequest{}
 	for _, rule := range s.approvalReviewers {
 		if strings.TrimSpace(rule.Reviewer) != reviewer {
 			continue
 		}
-		ruleFilter, ok, err := s.permissionPackageApprovalReviewerListFilter(ctx, filter, rule, limit)
+		ruleFilter, ok, err := s.permissionPackageApprovalReviewerListFilter(ctx, filter, rule, repoLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -6094,7 +6095,7 @@ func (s *Server) listPermissionPackageApprovalRequestsForReviewer(ctx context.Co
 		}
 	}
 	sortPermissionPackageApprovalRequests(rows)
-	return limitPermissionPackageApprovalRequests(rows, limit), nil
+	return rows, nil
 }
 
 func (s *Server) listPermissionPackageApprovalRequestsForRequest(ctx context.Context, r *http.Request, filter store.PermissionPackageApprovalRequestFilter, reviewer string, limit int) ([]domain.PermissionPackageApprovalRequest, error) {
@@ -6106,13 +6107,18 @@ func (s *Server) listPermissionPackageApprovalRequestsForRequest(ctx context.Con
 	if scoped {
 		rows, err = s.listPermissionPackageApprovalRequestsForReviewer(ctx, filter, reviewer, limit)
 	} else {
-		filter.Limit = limit
+		filter.Limit = permissionPackageApprovalRequestRepositoryLimit(filter.Status, limit)
 		rows, err = s.repo.ListPermissionPackageApprovalRequests(ctx, filter)
 	}
 	if err != nil {
 		return nil, err
 	}
-	return s.visiblePermissionPackageApprovalRequests(ctx, rows, filter.ManagementScope)
+	rows, err = s.visiblePermissionPackageApprovalRequests(ctx, rows, filter.ManagementScope)
+	if err != nil {
+		return nil, err
+	}
+	rows = permissionPackageApprovalRequestsWithoutExpiredPending(rows, filter.Status, s.now())
+	return limitPermissionPackageApprovalRequests(rows, limit), nil
 }
 
 func (s *Server) permissionPackageApprovalListReviewer(r *http.Request, reviewer string) (string, bool, error) {
@@ -6251,6 +6257,27 @@ func limitPermissionPackageApprovalRequests(rows []domain.PermissionPackageAppro
 		return rows[:limit]
 	}
 	return rows
+}
+
+func permissionPackageApprovalRequestRepositoryLimit(status domain.PermissionPackageApprovalStatus, limit int) int {
+	if status == domain.PermissionPackageApprovalStatusPending {
+		return 0
+	}
+	return limit
+}
+
+func permissionPackageApprovalRequestsWithoutExpiredPending(rows []domain.PermissionPackageApprovalRequest, status domain.PermissionPackageApprovalStatus, now time.Time) []domain.PermissionPackageApprovalRequest {
+	if status != domain.PermissionPackageApprovalStatusPending || len(rows) == 0 {
+		return rows
+	}
+	filtered := rows[:0]
+	for _, row := range rows {
+		if permissionPackageApprovalRequestExpired(row, now) {
+			continue
+		}
+		filtered = append(filtered, row)
+	}
+	return filtered
 }
 
 func (s *Server) createPermissionPackageApprovalRequestRecord(ctx context.Context, req domain.PermissionPackageDraftRequest, requestedBy string, now time.Time) (domain.PermissionPackageApprovalRequest, error) {

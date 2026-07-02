@@ -6398,6 +6398,26 @@ func TestApprovalResolutionRejectsExpiredApprovalRequest(t *testing.T) {
 	}
 }
 
+func TestApprovalPendingListSkipsExpiredRequestsBeforeLimit(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	active := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-active-pending-list", "tenant-east", "ws-support", now)
+	expired := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-expired-pending-list", "tenant-east", "ws-support", now.Add(time.Minute))
+	expired.ExpiresAt = now.Add(-time.Minute)
+	expired.UpdatedAt = expired.ExpiresAt
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(t.Context(), expired); err != nil || !ok {
+		t.Fatalf("expire approval request: ok=%v err=%v", ok, err)
+	}
+
+	rows := decodeData[[]permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?tenantId=tenant-east&workspaceId=ws-support&status=pending&limit=1", nil, ""))
+	if len(rows) != 1 || rows[0].ID != active.ID {
+		t.Fatalf("expected pending queue to skip expired request before limit, got %#v", rows)
+	}
+}
+
 func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)

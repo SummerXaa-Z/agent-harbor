@@ -9,6 +9,7 @@ import type {
   PermissionPackageApplyPreflightCheck,
   PermissionPackageApplicationHealthRow,
   PermissionPackageApplicationHealthStatus,
+  PermissionPackageApprovalEffectiveStatus,
   PermissionPackageApprovalRequest,
   PermissionPackageDraft,
   PermissionPackageProductionReadinessCheck,
@@ -251,6 +252,7 @@ export function resolvePermissionJourneyStatus(args: {
   productionStatus: AiAdminProductionConsoleStatus;
   workbenchStatus?: PermissionPackageWorkbenchPreview["summary"]["status"];
 }): { labelKey: string; detailKey: string; tone: Tone; nextActionKey: string } {
+  const approvalStatus = args.approvalRequest ? approvalEffectiveStatus(args.approvalRequest) : null;
   if (args.goLiveReady) {
     return {
       detailKey: "permissionJourney.statusDetail.ready",
@@ -259,7 +261,7 @@ export function resolvePermissionJourneyStatus(args: {
       tone: "success"
     };
   }
-  if (args.approvalRequest?.status === "pending") {
+  if (approvalStatus === "pending") {
     return {
       detailKey: "permissionJourney.statusDetail.awaitingApproval",
       labelKey: "permissionJourney.status.awaitingApproval",
@@ -267,12 +269,20 @@ export function resolvePermissionJourneyStatus(args: {
       tone: "warning"
     };
   }
-  if (args.approvalRequest?.status === "rejected") {
+  if (approvalStatus === "rejected") {
     return {
       detailKey: "permissionJourney.statusDetail.rejected",
       labelKey: "permissionJourney.status.rejected",
       nextActionKey: "action.startPermissionApproval",
       tone: "danger"
+    };
+  }
+  if (approvalStatus === "expired") {
+    return {
+      detailKey: "permissionJourney.statusDetail.needsApproval",
+      labelKey: "permissionJourney.status.needsApproval",
+      nextActionKey: "action.startPermissionApproval",
+      tone: "warning"
     };
   }
   if (args.canApply) {
@@ -307,6 +317,10 @@ export function resolvePermissionJourneyStatus(args: {
   };
 }
 
+function approvalEffectiveStatus(request: PermissionPackageApprovalRequest): PermissionPackageApprovalEffectiveStatus {
+  return request.effectiveStatus ?? request.status;
+}
+
 export function permissionDraftStatus(draft: PermissionPackageDraft): { labelKey: string; tone: Tone } {
   if (!draft.readiness.canApply) {
     return { labelKey: "status.needsReview", tone: "warning" };
@@ -319,26 +333,29 @@ export function permissionDraftStatus(draft: PermissionPackageDraft): { labelKey
 
 export function permissionPolicyGateDetailKey(
   canApplyDirectly: boolean,
-  approvalStatus: PermissionPackageApprovalRequest["status"] | null,
+  approvalStatus: PermissionPackageApprovalEffectiveStatus | null,
 ) {
   if (canApplyDirectly) return "text.policyGateDirectDetail";
   if (approvalStatus === "approved") return "text.policyGateApprovedDetail";
   if (approvalStatus === "rejected") return "text.policyGateRejectedDetail";
   if (approvalStatus === "withdrawn") return "text.policyGateWithdrawnDetail";
+  if (approvalStatus === "expired") return "text.policyGateApprovalDetail";
   return "text.policyGateApprovalDetail";
 }
 
-export function permissionApprovalStatusLabel(status: PermissionPackageApprovalRequest["status"], t: Translator) {
+export function permissionApprovalStatusLabel(status: PermissionPackageApprovalEffectiveStatus, t: Translator) {
   if (status === "approved") return t("status.approvalApproved");
   if (status === "rejected") return t("status.approvalRejected");
   if (status === "withdrawn") return t("status.approvalWithdrawn");
+  if (status === "expired") return t("status.approvalExpired");
   return t("status.approvalPending");
 }
 
-export function permissionApprovalStatusTone(status: PermissionPackageApprovalRequest["status"]): Tone {
+export function permissionApprovalStatusTone(status: PermissionPackageApprovalEffectiveStatus): Tone {
   if (status === "approved") return "success";
   if (status === "rejected") return "danger";
   if (status === "withdrawn") return "warning";
+  if (status === "expired") return "warning";
   return "warning";
 }
 
@@ -546,7 +563,7 @@ export function permissionWorkbenchStepDisplayDetailCode(
   },
   args: {
     approvalRequired: boolean;
-    approvalStatus: PermissionPackageApprovalRequest["status"] | null;
+    approvalStatus: PermissionPackageApprovalEffectiveStatus | null;
     applicationReady: boolean;
     goLiveReady: boolean;
     runtimeValidationReady: boolean;

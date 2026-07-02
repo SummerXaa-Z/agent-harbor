@@ -1,5 +1,6 @@
 import type {
   PermissionPackageApplication,
+  PermissionPackageApprovalEffectiveStatus,
   PermissionPackageApprovalRequest,
   PermissionPackageDraft,
   PermissionPackageProductionReadiness
@@ -26,16 +27,21 @@ export function currentPermissionRequestWizardStep({
   draft,
   productionReadiness
 }: PermissionRequestWizardStateInput): PermissionRequestWizardStep {
+  const approvalStatus = approvalRequest ? approvalEffectiveStatus(approvalRequest) : null;
   if (!draft.readiness.canApply) {
     return draft.readiness.missingFields.length > 0 ? "scope" : "template";
   }
-  if (!draft.policyGate.canApplyDirectly && approvalRequest?.status !== "approved") {
+  if (!draft.policyGate.canApplyDirectly && approvalStatus !== "approved") {
     return "approval";
   }
   if (!application || productionReadiness?.nextActionCode === "apply_permission_package") {
     return "apply";
   }
   return "goLive";
+}
+
+function approvalEffectiveStatus(request: PermissionPackageApprovalRequest): PermissionPackageApprovalEffectiveStatus {
+  return request.effectiveStatus ?? request.status;
 }
 
 export function permissionRequestProcessStepStatuses<TStep extends PermissionRequestProcessStepInput>(

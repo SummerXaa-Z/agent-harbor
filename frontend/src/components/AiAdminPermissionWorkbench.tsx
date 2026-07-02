@@ -68,17 +68,18 @@ import {
   type Tone,
   type Translator
 } from "../permissionWorkbenchPresenters";
-import type {
-  PermissionPackageApplyPreflight,
-  PermissionPackageApplication,
-  PermissionPackageApplicationHealth,
-  PermissionPackageApplicationImpact,
-  PermissionPackageApprovalRequest,
-  PermissionPackageDraft,
-  PermissionPackageDraftInput,
-  PermissionPackageProductionReadiness,
-  PermissionPackageTemplate,
-  PermissionPackageWorkbenchPreview
+import {
+  permissionPackageApprovalEffectiveStatus,
+  type PermissionPackageApplyPreflight,
+  type PermissionPackageApplication,
+  type PermissionPackageApplicationHealth,
+  type PermissionPackageApplicationImpact,
+  type PermissionPackageApprovalRequest,
+  type PermissionPackageDraft,
+  type PermissionPackageDraftInput,
+  type PermissionPackageProductionReadiness,
+  type PermissionPackageTemplate,
+  type PermissionPackageWorkbenchPreview
 } from "../permissionPackages";
 import type {
   AccessDecisionExplainResult,
@@ -282,9 +283,10 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     value: template.id,
     label: permissionPackageTemplateName(template, t)
   }));
-  const hasApprovedRequest = approvalRequest?.status === "approved";
+  const approvalRequestEffectiveStatus = approvalRequest ? permissionPackageApprovalEffectiveStatus(approvalRequest) : null;
+  const hasApprovedRequest = approvalRequestEffectiveStatus === "approved";
   const canApply = draft.readiness.canApply && (draft.policyGate.canApplyDirectly || hasApprovedRequest);
-  const reviewerQueueRequests = approvalRequests.filter((request) => request.status === "pending");
+  const reviewerQueueRequests = approvalRequests.filter((request) => permissionPackageApprovalEffectiveStatus(request) === "pending");
   const goLiveReadiness = summarizeAiAdminGoLiveReadiness(approvalJourneyEvaluation);
   const productionReady = productionReadiness?.status === "ready"
     || Boolean(workbenchPreview?.summary.productionReady)
@@ -292,8 +294,8 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const goLiveReady = productionReady || goLiveReadiness.status === "ready";
   const requestFormLocked = Boolean(application)
     || goLiveReady
-    || approvalRequest?.status === "pending"
-    || approvalRequest?.status === "approved";
+    || approvalRequestEffectiveStatus === "pending"
+    || approvalRequestEffectiveStatus === "approved";
   const requestFormActiveLocked = Boolean(application) || goLiveReady;
   const requestFormLockedDetailKey = requestFormActiveLocked
     ? "text.permissionRequestLockedActiveDetail"
@@ -306,10 +308,10 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const runtimeValidationReady = Boolean(approvalJourneyResult) || goLiveReady;
   const goLivePrerequisitesReady = Boolean(application) || goLiveReady;
   const approvalEffectivelyResolved = !draft.policyGate.canApplyDirectly
-    && (approvalRequest?.status === "approved" || Boolean(application) || goLiveReady);
-  const approvalDisplayStatus: PermissionPackageApprovalRequest["status"] | null = approvalEffectivelyResolved
+    && (approvalRequestEffectiveStatus === "approved" || Boolean(application) || goLiveReady);
+  const approvalDisplayStatus = approvalEffectivelyResolved
     ? "approved"
-    : approvalRequest?.status ?? null;
+    : approvalRequestEffectiveStatus;
   const approvalDisplayTone = draft.policyGate.canApplyDirectly
     ? "success"
     : approvalDisplayStatus ? permissionApprovalStatusTone(approvalDisplayStatus) : "warning";
@@ -320,8 +322,8 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const showPolicyGateReasons = !draft.policyGate.canApplyDirectly
     && (!approvalDisplayStatus || approvalDisplayStatus === "pending");
   const showCreateApprovalAction = !application && !goLiveReady
-    && (!approvalRequest || (approvalRequest.status !== "pending" && approvalRequest.status !== "approved"));
-  const showPendingApprovalActions = !application && !goLiveReady && approvalRequest?.status === "pending";
+    && (!approvalRequest || (approvalRequestEffectiveStatus !== "pending" && approvalRequestEffectiveStatus !== "approved"));
+  const showPendingApprovalActions = !application && !goLiveReady && approvalRequestEffectiveStatus === "pending";
   const currentWizardStep = currentPermissionRequestWizardStep({
     application,
     approvalRequest,
@@ -447,10 +449,10 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       labelKey: "section.permissionWizardTemplate"
     },
     {
-      complete: draft.policyGate.canApplyDirectly || approvalRequest?.status === "approved",
+      complete: draft.policyGate.canApplyDirectly || approvalRequestEffectiveStatus === "approved",
       detail: draft.policyGate.canApplyDirectly
         ? t("status.directApplyAllowed")
-        : approvalRequest ? permissionApprovalStatusLabel(approvalRequest.status, t) : t("status.approvalNotRequested"),
+        : approvalRequestEffectiveStatus ? permissionApprovalStatusLabel(approvalRequestEffectiveStatus, t) : t("status.approvalNotRequested"),
       key: "approval",
       labelKey: "section.permissionWizardApproval"
     },
@@ -479,7 +481,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     if (step.key === "approval") {
       return draft.policyGate.canApplyDirectly
         ? t("productionConsole.approvalNotRequired")
-        : approvalRequest ? permissionApprovalStatusLabel(approvalRequest.status, t) : t("status.approvalNotRequested");
+        : approvalRequestEffectiveStatus ? permissionApprovalStatusLabel(approvalRequestEffectiveStatus, t) : t("status.approvalNotRequested");
     }
     if (step.key === "application") {
       return application ? t("status.stepComplete") : t("status.stepMissing");

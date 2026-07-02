@@ -1,5 +1,6 @@
 import type {
   PermissionPackageApplication,
+  PermissionPackageApprovalEffectiveStatus,
   PermissionPackageApprovalRequest,
   PermissionPackageDraft,
   PermissionPackageProductionReadiness
@@ -46,7 +47,8 @@ export function buildAiAdminProductionConsoleSummary({
 }: AiAdminProductionConsoleInput): AiAdminProductionConsoleSummary {
   const approvalRequired = !draft.policyGate.canApplyDirectly;
   const approvalSatisfiedByEvidence = approvalRequired && (Boolean(application) || productionReadiness?.status === "ready");
-  const approved = !approvalRequired || approvalRequest?.status === "approved" || approvalSatisfiedByEvidence;
+  const approvalRequestEffectiveStatus = approvalRequest ? approvalEffectiveStatus(approvalRequest) : null;
+  const approved = !approvalRequired || approvalRequestEffectiveStatus === "approved" || approvalSatisfiedByEvidence;
   const runtimeEvidenceCount = productionReadiness
     ? Number(Boolean(productionReadiness.runtimeEvidence.allowedTrace)) + Number(Boolean(productionReadiness.runtimeEvidence.deniedTrace))
     : 0;
@@ -71,7 +73,7 @@ export function buildAiAdminProductionConsoleSummary({
         ? approvalSatisfiedByEvidence
           ? "productionConsole.approvalSatisfied"
           : approvalRequest
-          ? `status.approval${capitalize(approvalRequest.status)}`
+          ? `status.approval${capitalize(approvalRequestEffectiveStatus ?? approvalRequest.status)}`
           : "status.approvalNotRequested"
         : "productionConsole.approvalNotRequired",
       metric: approvalRequest?.reviewedBy || approvalRequest?.requestedBy || undefined
@@ -116,8 +118,9 @@ export function buildAiAdminProductionConsoleSummary({
 function approvalStatus(request: PermissionPackageApprovalRequest | null, satisfiedByEvidence = false): AiAdminProductionConsoleStatus {
   if (satisfiedByEvidence) return "ready";
   if (!request) return "pending";
-  if (request.status === "approved") return "ready";
-  if (request.status === "pending") return "pending";
+  const effectiveStatus = approvalEffectiveStatus(request);
+  if (effectiveStatus === "approved") return "ready";
+  if (effectiveStatus === "pending" || effectiveStatus === "expired") return "pending";
   return "blocked";
 }
 
@@ -126,6 +129,10 @@ function productionReadinessStatus(readiness: PermissionPackageProductionReadine
   if (readiness.status === "ready") return "ready";
   if (readiness.status === "needs_review") return "needs_review";
   return "blocked";
+}
+
+function approvalEffectiveStatus(request: PermissionPackageApprovalRequest): PermissionPackageApprovalEffectiveStatus {
+  return request.effectiveStatus ?? request.status;
 }
 
 function capabilitySummary(draft: PermissionPackageDraft) {

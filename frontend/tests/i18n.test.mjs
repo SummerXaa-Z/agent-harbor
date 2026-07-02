@@ -580,6 +580,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
     "审批已被使用。请先刷新状态检查或查看当前权限变更，确认是否已应用；不要重复提交。"
   );
   assert.equal(t("status.approvalWithdrawn"), "已撤回");
+  assert.equal(t("status.approvalExpired"), "已过期");
   assert.equal(t("permissionSimulation.guardrailFinance"), "销售只读权限包不包含财务字段访问。");
   assert.equal(t("permissionPolicy.riskApprovalRequired"), "{capability} 是 {risk} 风险能力，需要先审批。");
   assert.equal(t("message.permissionPackageApprovalRequired"), "该申请需要先审批：{detail}。");

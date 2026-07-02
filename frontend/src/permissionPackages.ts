@@ -416,6 +416,8 @@ export interface PermissionPackageRemediationAction {
   readOnly: boolean;
 }
 
+export type PermissionPackageApprovalEffectiveStatus = PermissionPackageApprovalStatus | "expired";
+
 export interface PermissionPackageApprovalRequest {
   id: string;
   draftId: string;
@@ -435,6 +437,8 @@ export interface PermissionPackageApprovalRequest {
   allowedCapabilityFingerprints: string[];
   policyGate: PermissionPackagePolicyGate;
   status: PermissionPackageApprovalStatus;
+  effectiveStatus?: PermissionPackageApprovalEffectiveStatus;
+  isExpired?: boolean;
   requestedBy?: string;
   reviewedBy?: string;
   reviewComment?: string;
@@ -444,6 +448,12 @@ export interface PermissionPackageApprovalRequest {
   expiresAt: string;
   consumedAt?: string;
   consumedByApplicationId?: string;
+}
+
+export function permissionPackageApprovalEffectiveStatus(
+  request: PermissionPackageApprovalRequest
+): PermissionPackageApprovalEffectiveStatus {
+  return request.effectiveStatus ?? request.status;
 }
 
 export interface PermissionPackageReadiness {

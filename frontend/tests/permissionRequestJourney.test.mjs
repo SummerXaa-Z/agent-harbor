@@ -100,6 +100,15 @@ test("permission request journey points to apply after approval", () => {
   }), "apply");
 });
 
+test("permission request journey returns to approval when stored approval has expired", () => {
+  assert.equal(currentPermissionRequestWizardStep({
+    application: null,
+    approvalRequest: { ...approvedRequest, effectiveStatus: "expired", isExpired: true },
+    draft: baseDraft,
+    productionReadiness: null
+  }), "approval");
+});
+
 test("permission request journey points to go-live after application", () => {
   assert.equal(currentPermissionRequestWizardStep({
     application,

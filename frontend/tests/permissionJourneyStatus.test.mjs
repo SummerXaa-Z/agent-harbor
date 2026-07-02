@@ -16,7 +16,7 @@ test("permission journey asks operators to complete configuration before approva
 });
 
 test("permission journey still sends complete requests to approval after configuration is ready", () => {
-  const fallbackStart = presenter.indexOf('labelKey: "permissionJourney.status.needsApproval"');
+  const fallbackStart = presenter.lastIndexOf('labelKey: "permissionJourney.status.needsApproval"');
   assert.notEqual(fallbackStart, -1);
   const fallback = presenter.slice(fallbackStart, fallbackStart + 240);
 

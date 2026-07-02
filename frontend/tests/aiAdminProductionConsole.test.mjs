@@ -108,6 +108,20 @@ test("production console summary stays pending before approval and application e
   );
 });
 
+test("production console summary treats expired stored approvals as not approved", () => {
+  const summary = buildAiAdminProductionConsoleSummary({
+    application: null,
+    approvalRequest: { ...approvedRequest, effectiveStatus: "expired", isExpired: true },
+    draft: baseDraft,
+    productionReadiness: null
+  });
+
+  assert.equal(summary.status, "pending");
+  assert.equal(summary.primaryActionKey, "action.createApprovalRequest");
+  assert.equal(summary.steps.find((step) => step.key === "approval")?.status, "pending");
+  assert.equal(summary.steps.find((step) => step.key === "approval")?.detailKey, "status.approvalExpired");
+});
+
 test("production console summary reports ready after approval application and runtime evidence", () => {
   const summary = buildAiAdminProductionConsoleSummary({
     application,

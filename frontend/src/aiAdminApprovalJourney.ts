@@ -8,6 +8,7 @@ import type {
 } from "./types";
 import type {
   PermissionPackageApplication,
+  PermissionPackageApprovalEffectiveStatus,
   PermissionPackageApprovalRequest,
 } from "./permissionPackages";
 
@@ -115,6 +116,7 @@ export function evaluateAiAdminApprovalJourney({
   data: ConsoleData | null;
   result: AiAdminApprovalJourneyResult | null;
 }): AiAdminApprovalJourneyEvaluation {
+  const approvalRequestEffectiveStatus = approvalRequest ? approvalEffectiveStatus(approvalRequest) : null;
   const agents = data?.agents ?? [];
   const caller = agents.find(
     (agent) =>
@@ -205,8 +207,8 @@ export function evaluateAiAdminApprovalJourney({
     {
       detail: approvalRequest?.id ?? config.templateId,
       key: "approvalRequest",
-      metric: approvalRequest?.status ?? "0",
-      status: approvalRequest?.status === "approved" ? "complete" : approvalRequest ? "partial" : "missing",
+      metric: approvalRequestEffectiveStatus ?? "0",
+      status: approvalRequestEffectiveStatus === "approved" ? "complete" : approvalRequest ? "partial" : "missing",
     },
     {
       detail: application?.id ?? config.templateId,
@@ -291,6 +293,10 @@ function runtimeEvidenceState(
       accessProfile?.summary.recentDeniedTraceCount ?? 0,
     ),
   };
+}
+
+function approvalEffectiveStatus(request: PermissionPackageApprovalRequest): PermissionPackageApprovalEffectiveStatus {
+  return request.effectiveStatus ?? request.status;
 }
 
 function endpointFor(agent: Agent) {

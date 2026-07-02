@@ -317,7 +317,7 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, created.TenantID, created.WorkspaceID, "permission_package.approval_requested", "permission_package_approval_request", created.ID, "Permission package approval requested", permissionPackageApprovalAuditMetadata(created))); err != nil {
 			return managementMCPCallResult{}, err
 		}
-		return managementMCPResult(created), nil
+		return managementMCPResult(permissionPackageApprovalRequestResponse(created, s.now())), nil
 	case "list_permission_package_approval_requests":
 		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageApprovalRequestArgs](req.Params.Arguments)
 		if err != nil {
@@ -335,7 +335,7 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
-		return managementMCPResult(rows), nil
+		return managementMCPResult(permissionPackageApprovalRequestResponses(rows, s.now())), nil
 	case "approve_permission_package_approval_request":
 		args, err := decodeManagementMCPArguments[managementMCPApprovalResolutionArgs](req.Params.Arguments)
 		if err != nil {
@@ -345,7 +345,7 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
-		return managementMCPResult(approved), nil
+		return managementMCPResult(permissionPackageApprovalRequestResponse(approved, s.now())), nil
 	case "reject_permission_package_approval_request":
 		args, err := decodeManagementMCPArguments[managementMCPApprovalResolutionArgs](req.Params.Arguments)
 		if err != nil {
@@ -355,7 +355,7 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
-		return managementMCPResult(rejected), nil
+		return managementMCPResult(permissionPackageApprovalRequestResponse(rejected, s.now())), nil
 	case "withdraw_permission_package_approval_request":
 		args, err := decodeManagementMCPArguments[managementMCPApprovalResolutionArgs](req.Params.Arguments)
 		if err != nil {
@@ -365,7 +365,7 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
-		return managementMCPResult(withdrawn), nil
+		return managementMCPResult(permissionPackageApprovalRequestResponse(withdrawn, s.now())), nil
 	case "list_permission_package_applications":
 		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageApplicationArgs](req.Params.Arguments)
 		if err != nil {

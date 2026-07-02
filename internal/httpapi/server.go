@@ -3470,7 +3470,7 @@ func (s *Server) listPermissionPackageApprovalRequests(w http.ResponseWriter, r 
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, rows)
+	writeJSON(w, http.StatusOK, permissionPackageApprovalRequestResponses(rows, s.now()))
 }
 
 func (s *Server) createPermissionPackageDraft(w http.ResponseWriter, r *http.Request) {
@@ -3619,7 +3619,7 @@ func (s *Server) createPermissionPackageApprovalRequest(w http.ResponseWriter, r
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, created)
+	writeJSON(w, http.StatusCreated, permissionPackageApprovalRequestResponse(created, s.now()))
 }
 
 func (s *Server) approvePermissionPackageApprovalRequest(w http.ResponseWriter, r *http.Request) {
@@ -3666,7 +3666,7 @@ func (s *Server) withdrawPermissionPackageApprovalRequest(w http.ResponseWriter,
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, saved)
+	writeJSON(w, http.StatusOK, permissionPackageApprovalRequestResponse(saved, s.now()))
 }
 
 func (s *Server) resolvePermissionPackageApprovalRequest(w http.ResponseWriter, r *http.Request, status domain.PermissionPackageApprovalStatus) {
@@ -3720,7 +3720,7 @@ func (s *Server) resolvePermissionPackageApprovalRequest(w http.ResponseWriter, 
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, saved)
+	writeJSON(w, http.StatusOK, permissionPackageApprovalRequestResponse(saved, s.now()))
 }
 
 func (s *Server) applyPermissionPackage(w http.ResponseWriter, r *http.Request) {
@@ -6382,6 +6382,45 @@ func permissionPackageApprovalRequestFromDraft(draft domain.PermissionPackageDra
 
 func permissionPackageApprovalRequestExpired(approval domain.PermissionPackageApprovalRequest, now time.Time) bool {
 	return !approval.ExpiresAt.IsZero() && !now.Before(approval.ExpiresAt)
+}
+
+type permissionPackageApprovalRequestAPIResponse struct {
+	domain.PermissionPackageApprovalRequest
+	EffectiveStatus string `json:"effectiveStatus"`
+	IsExpired       bool   `json:"isExpired"`
+}
+
+func permissionPackageApprovalRequestResponse(approval domain.PermissionPackageApprovalRequest, now time.Time) permissionPackageApprovalRequestAPIResponse {
+	effectiveStatus := string(approval.Status)
+	isExpired := permissionPackageApprovalRequestEffectivelyExpired(approval, now)
+	if isExpired {
+		effectiveStatus = "expired"
+	}
+	return permissionPackageApprovalRequestAPIResponse{
+		PermissionPackageApprovalRequest: approval,
+		EffectiveStatus:                  effectiveStatus,
+		IsExpired:                        isExpired,
+	}
+}
+
+func permissionPackageApprovalRequestResponses(rows []domain.PermissionPackageApprovalRequest, now time.Time) []permissionPackageApprovalRequestAPIResponse {
+	out := make([]permissionPackageApprovalRequestAPIResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, permissionPackageApprovalRequestResponse(row, now))
+	}
+	return out
+}
+
+func permissionPackageApprovalRequestEffectivelyExpired(approval domain.PermissionPackageApprovalRequest, now time.Time) bool {
+	if !permissionPackageApprovalRequestExpired(approval, now) {
+		return false
+	}
+	switch approval.Status {
+	case domain.PermissionPackageApprovalStatusPending, domain.PermissionPackageApprovalStatusApproved:
+		return true
+	default:
+		return false
+	}
 }
 
 func validatePermissionPackageApprovalForDraft(approval domain.PermissionPackageApprovalRequest, draft domain.PermissionPackageDraft, now time.Time) error {

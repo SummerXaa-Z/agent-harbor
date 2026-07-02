@@ -8,6 +8,7 @@ const baseStyles = readFileSync(new URL("../src/styles.css", import.meta.url), "
 const workbenchStyles = readFileSync(new URL("../src/styles/permission-workbench.css", import.meta.url), "utf8");
 const styles = `${baseStyles}\n${workbenchStyles}`;
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
+const permissionPackages = readFileSync(new URL("../src/permissionPackages.ts", import.meta.url), "utf8");
 const permissionWorkbenchPresenters = readFileSync(new URL("../src/permissionWorkbenchPresenters.ts", import.meta.url), "utf8");
 const permissionWorkbenchParts = readFileSync(new URL("../src/components/PermissionWorkbenchParts.tsx", import.meta.url), "utf8");
 const permissionApprovalDecisionHook = readFileSync(new URL("../src/hooks/usePermissionApprovalDecision.ts", import.meta.url), "utf8");
@@ -623,11 +624,26 @@ test("permission request can withdraw a pending approval request", () => {
   assert.match(workbench, /action\.withdrawPermissionRequest/);
   assert.match(workbench, /action\.confirmWithdrawPermissionRequest/);
   assert.match(workbench, /text\.approvalWithdrawHelp/);
-  assert.match(workbench, /approvalRequest\.status !== "pending" && approvalRequest\.status !== "approved"/);
-  assert.match(workbench, /permissionApprovalStatusLabel\(approvalRequest\.status, t\)/);
+  assert.match(workbench, /approvalRequestEffectiveStatus !== "pending" && approvalRequestEffectiveStatus !== "approved"/);
+  assert.match(workbench, /permissionApprovalStatusLabel\(approvalRequestEffectiveStatus, t\)/);
   assert.match(i18n, /"status\.approvalWithdrawn"/);
   assert.match(i18n, /"message\.permissionApprovalWithdrawn"/);
   assert.match(app, /async function withdrawAiAdminApprovalRequest\(comment\?: string\)/);
+});
+
+test("permission request uses effective approval status for expired requests", () => {
+  assert.match(permissionPackages, /export type PermissionPackageApprovalEffectiveStatus = PermissionPackageApprovalStatus \| "expired"/);
+  assert.match(permissionPackages, /effectiveStatus\?: PermissionPackageApprovalEffectiveStatus/);
+  assert.match(permissionPackages, /isExpired\?: boolean/);
+  assert.match(permissionPackages, /function permissionPackageApprovalEffectiveStatus/);
+  assert.match(workbench, /const approvalRequestEffectiveStatus = approvalRequest \? permissionPackageApprovalEffectiveStatus\(approvalRequest\) : null/);
+  assert.match(workbench, /approvalRequests\.filter\(\(request\) => permissionPackageApprovalEffectiveStatus\(request\) === "pending"\)/);
+  assert.match(workbench, /approvalRequestEffectiveStatus === "pending"/);
+  assert.match(workbench, /approvalRequestEffectiveStatus === "approved"/);
+  assert.match(app, /permissionPackageApprovalEffectiveStatus\(request\) === "approved"/);
+  assert.match(app, /permissionPackageApprovalEffectiveStatus\(request\) === "expired"/);
+  assert.match(permissionWorkbenchPresenters, /status === "expired"/);
+  assert.match(i18n, /"status\.approvalExpired"/);
 });
 
 test("permission request primary operations share one busy guard", () => {
@@ -650,7 +666,7 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /workbenchPreview\?\.summary\.productionReady/);
   assert.match(workbench, /productionSummary\.status === "ready"/);
   assert.match(workbench, /const approvalEffectivelyResolved = !draft\.policyGate\.canApplyDirectly/);
-  assert.match(workbench, /approvalRequest\?\.status === "approved" \|\| Boolean\(application\) \|\| goLiveReady/);
+  assert.match(workbench, /approvalRequestEffectiveStatus === "approved" \|\| Boolean\(application\) \|\| goLiveReady/);
   assert.match(workbench, /const runtimeValidationReady = Boolean\(approvalJourneyResult\) \|\| goLiveReady/);
   assert.match(workbench, /const runtimeValidationText = runtimeValidationReady/);
   assert.match(workbench, /<span>\{runtimeValidationText\}<\/span>/);
@@ -661,8 +677,8 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /disabled=\{liveDataBlocked \|\| permissionRequestBusy \|\| !canApply\}/);
   assert.match(styles, /\.approval-action-status\s*\{/);
   assert.match(styles, /\.approval-action-status\.is-complete\s*\{/);
-  assert.match(workbench, /approvalDisplayStatus: PermissionPackageApprovalRequest\["status"\] \| null/);
-  assert.match(workbench, /const showPendingApprovalActions = !application && !goLiveReady && approvalRequest\?\.status === "pending"/);
+  assert.match(workbench, /const approvalDisplayStatus = approvalEffectivelyResolved/);
+  assert.match(workbench, /const showPendingApprovalActions = !application && !goLiveReady && approvalRequestEffectiveStatus === "pending"/);
   assert.match(workbench, /permissionPolicyGateDetailKey\(draft\.policyGate\.canApplyDirectly, approvalDisplayStatus\)/);
   assert.match(workbench, /showPolicyGateReasons && draft\.policyGate\.reasons\.length > 0/);
   assert.doesNotMatch(workbench, /<Badge tone=\{draft\.policyGate\.canApplyDirectly \? "success" : approvalRequest \? approvalStatusTone : "warning"\}>/);
@@ -879,8 +895,8 @@ test("permission request freezes configuration after approval or apply", () => {
   const advancedForm = permissionWorkbenchParts.slice(advancedStart, advancedEnd);
 
   assert.match(workbench, /const requestFormLocked = Boolean\(application\)/);
-  assert.match(workbench, /approvalRequest\?\.status === "pending"/);
-  assert.match(workbench, /approvalRequest\?\.status === "approved"/);
+  assert.match(workbench, /approvalRequestEffectiveStatus === "pending"/);
+  assert.match(workbench, /approvalRequestEffectiveStatus === "approved"/);
   assert.match(workbench, /const requestFormActiveLocked = Boolean\(application\) \|\| goLiveReady/);
   assert.match(workbench, /const requestFormLockedDetailKey = requestFormActiveLocked\s*\?\s*"text\.permissionRequestLockedActiveDetail"\s*:\s*"text\.permissionRequestLockedApprovalDetail"/);
   assert.match(workbench, /const requestFormTitleKey = requestFormLocked \? "section\.permissionRequestReview" : "section\.permissionRequestForm"/);

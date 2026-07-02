@@ -149,6 +149,7 @@ import {
 import {
   createPermissionPackageDraft,
   defaultPermissionPackageDraftInput,
+  permissionPackageApprovalEffectiveStatus,
   permissionPackageTemplates,
   subjectIdExampleFromSelector,
   type PermissionPackageApplyResult,
@@ -3170,10 +3171,11 @@ function matchingPermissionPackageApprovalRequest(
   draft: PermissionPackageDraft
 ) {
   const matching = requests.filter((request) => permissionPackageApprovalRequestMatchesDraft(request, draft));
-  return matching.find((request) => request.status === "approved")
-    ?? matching.find((request) => request.status === "pending")
-    ?? matching.find((request) => request.status === "rejected")
-    ?? matching.find((request) => request.status === "withdrawn")
+  return matching.find((request) => permissionPackageApprovalEffectiveStatus(request) === "approved")
+    ?? matching.find((request) => permissionPackageApprovalEffectiveStatus(request) === "pending")
+    ?? matching.find((request) => permissionPackageApprovalEffectiveStatus(request) === "rejected")
+    ?? matching.find((request) => permissionPackageApprovalEffectiveStatus(request) === "withdrawn")
+    ?? matching.find((request) => permissionPackageApprovalEffectiveStatus(request) === "expired")
     ?? null;
 }
 

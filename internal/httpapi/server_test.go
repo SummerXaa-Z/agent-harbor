@@ -529,6 +529,8 @@ type permissionPackageApprovalRequestResponse struct {
 	AllowedCapabilityKeys   []string                            `json:"allowedCapabilityKeys"`
 	PolicyGate              permissionPackagePolicyGateResponse `json:"policyGate"`
 	Status                  string                              `json:"status"`
+	EffectiveStatus         string                              `json:"effectiveStatus"`
+	IsExpired               bool                                `json:"isExpired"`
 	RequestedBy             string                              `json:"requestedBy"`
 	ReviewedBy              string                              `json:"reviewedBy"`
 	ReviewComment           string                              `json:"reviewComment"`
@@ -6415,6 +6417,61 @@ func TestApprovalPendingListSkipsExpiredRequestsBeforeLimit(t *testing.T) {
 	rows := decodeData[[]permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?tenantId=tenant-east&workspaceId=ws-support&status=pending&limit=1", nil, ""))
 	if len(rows) != 1 || rows[0].ID != active.ID {
 		t.Fatalf("expected pending queue to skip expired request before limit, got %#v", rows)
+	}
+}
+
+func TestApprovalRequestResponsesExposeExpiredEffectiveStatus(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	active := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-active-effective-status", "tenant-east", "ws-support", now)
+	expired := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-expired-effective-status", "tenant-east", "ws-support", now.Add(time.Minute))
+	expired.ExpiresAt = now.Add(-time.Minute)
+	expired.UpdatedAt = expired.ExpiresAt
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(t.Context(), expired); err != nil || !ok {
+		t.Fatalf("expire approval request: ok=%v err=%v", ok, err)
+	}
+
+	rows := decodeData[[]permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?tenantId=tenant-east&workspaceId=ws-support&limit=10", nil, ""))
+	byID := map[string]permissionPackageApprovalRequestResponse{}
+	for _, row := range rows {
+		byID[row.ID] = row
+	}
+	expiredRow := byID[expired.ID]
+	if expiredRow.Status != "pending" || expiredRow.EffectiveStatus != "expired" || !expiredRow.IsExpired {
+		t.Fatalf("expired approval response should preserve status and expose effective expiry, got %#v", expiredRow)
+	}
+	activeRow := byID[active.ID]
+	if activeRow.Status != "pending" || activeRow.EffectiveStatus != "pending" || activeRow.IsExpired {
+		t.Fatalf("active approval response should remain pending, got %#v", activeRow)
+	}
+
+	call := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-list-effective-status",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_permission_package_approval_requests",
+			"arguments": map[string]any{
+				"tenantId":    "tenant-east",
+				"workspaceId": "ws-support",
+				"limit":       10,
+			},
+		},
+	}, ""))
+	var mcpRows []permissionPackageApprovalRequestResponse
+	if err := json.Unmarshal(call.Result.StructuredContent, &mcpRows); err != nil {
+		t.Fatalf("decode MCP approval responses: %v", err)
+	}
+	mcpByID := map[string]permissionPackageApprovalRequestResponse{}
+	for _, row := range mcpRows {
+		mcpByID[row.ID] = row
+	}
+	mcpExpiredRow := mcpByID[expired.ID]
+	if mcpExpiredRow.Status != "pending" || mcpExpiredRow.EffectiveStatus != "expired" || !mcpExpiredRow.IsExpired {
+		t.Fatalf("MCP expired approval response should preserve status and expose effective expiry, got %#v", mcpExpiredRow)
 	}
 }
 

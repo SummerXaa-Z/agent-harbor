@@ -7088,6 +7088,45 @@ func TestManagementMCPApprovalReviewerQueueDefaultsToAuthenticatedReviewer(t *te
 	}
 }
 
+func TestManagementMCPApprovalPendingListSkipsExpiredRequestsBeforeLimit(t *testing.T) {
+	repo := store.NewMemory()
+	now := time.Date(2026, 6, 6, 10, 55, 0, 0, time.UTC)
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	active := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-mcp-active-pending-list", "tenant-east", "ws-support", now)
+	expired := createDirectPermissionPackageApprovalRequest(t, repo, "ppar-mcp-expired-pending-list", "tenant-east", "ws-support", now.Add(time.Minute))
+	expired.ExpiresAt = now.Add(-time.Minute)
+	expired.UpdatedAt = expired.ExpiresAt
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(t.Context(), expired); err != nil || !ok {
+		t.Fatalf("expire MCP approval request: ok=%v err=%v", ok, err)
+	}
+	router := newRouterWithRepoAdminIdentitiesAndApprovalReviewers(repo, []httpapi.AdminIdentity{
+		{Actor: "security", Key: "security-key", Role: "security_reviewer", TenantID: "tenant-east"},
+	}, []domain.PermissionPackageApprovalReviewer{
+		{Reviewer: "security", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+
+	call := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "approval-list-expiry-filter",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_permission_package_approval_requests",
+			"arguments": map[string]any{
+				"status": "pending",
+				"limit":  1,
+			},
+		},
+	}, "", "security-key"))
+	var approvals []permissionPackageApprovalRequestResponse
+	if err := json.Unmarshal(call.Result.StructuredContent, &approvals); err != nil {
+		t.Fatalf("decode MCP expiry-filtered approvals structured content: %v", err)
+	}
+	if len(approvals) != 1 || approvals[0].ID != active.ID {
+		t.Fatalf("MCP pending queue should skip expired request before limit, got %#v", approvals)
+	}
+}
+
 func TestPermissionPackageApprovalReviewerRouting(t *testing.T) {
 	repo := store.NewMemory()
 	now := time.Date(2026, 6, 6, 10, 0, 0, 0, time.UTC)

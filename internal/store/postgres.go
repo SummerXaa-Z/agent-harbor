@@ -992,7 +992,11 @@ func (p *Postgres) CreatePermissionPackageApprovalRequest(ctx context.Context, r
 	if err != nil {
 		return domain.PermissionPackageApprovalRequest{}, err
 	}
-	_, err = p.pool.Exec(ctx, `
+	err = p.withTx(ctx, func(tx pgx.Tx) error {
+		if err := p.rejectDuplicateActivePermissionPackageApprovalRequest(ctx, tx, request); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `
 		insert into permission_package_approval_requests (
 			id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
 			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
@@ -1002,16 +1006,67 @@ func (p *Postgres) CreatePermissionPackageApprovalRequest(ctx context.Context, r
 			consumed_at, consumed_by_application_id
 		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
 	`, request.ID, request.DraftID, request.TemplateID, request.TemplateVersion, request.PolicyVersion,
-		request.TenantID, request.WorkspaceID, request.TargetID, request.CallerInstanceID,
-		request.SubjectSelector, request.RequestText, request.Region, dataScopes, allowedCapabilityIDs,
-		allowedCapabilityKeys, allowedCapabilityFingerprints, policyGate, string(request.Status),
-		request.RequestedBy, request.ReviewedBy, request.ReviewComment, request.CreatedAt, request.UpdatedAt,
-		nullTime(request.ResolvedAt), request.ExpiresAt, nullTime(request.ConsumedAt),
-		request.ConsumedByApplicationID)
+			request.TenantID, request.WorkspaceID, request.TargetID, request.CallerInstanceID,
+			request.SubjectSelector, request.RequestText, request.Region, dataScopes, allowedCapabilityIDs,
+			allowedCapabilityKeys, allowedCapabilityFingerprints, policyGate, string(request.Status),
+			request.RequestedBy, request.ReviewedBy, request.ReviewComment, request.CreatedAt, request.UpdatedAt,
+			nullTime(request.ResolvedAt), request.ExpiresAt, nullTime(request.ConsumedAt),
+			request.ConsumedByApplicationID)
+		return err
+	})
 	if err != nil {
 		return domain.PermissionPackageApprovalRequest{}, fmt.Errorf("insert permission package approval request: %w", err)
 	}
 	return request, nil
+}
+
+func (p *Postgres) rejectDuplicateActivePermissionPackageApprovalRequest(ctx context.Context, tx pgx.Tx, request domain.PermissionPackageApprovalRequest) error {
+	if request.Status != domain.PermissionPackageApprovalStatusPending {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1::text, 0::bigint))`, permissionPackageApprovalRequestDuplicateLockKey(request)); err != nil {
+		return fmt.Errorf("lock duplicate permission package approval request: %w", err)
+	}
+	referenceTime := permissionPackageApprovalRequestDuplicateReferenceTime(request)
+	rows, err := tx.Query(ctx, `
+		select id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
+			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
+			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
+			policy_gate, status, requested_by,
+			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
+			consumed_at, consumed_by_application_id
+		from permission_package_approval_requests
+		where status=$1
+			and draft_id=$2
+			and template_id=$3
+			and template_version=$4
+			and policy_version=$5
+			and tenant_id=$6
+			and workspace_id=$7
+			and target_agent_id=$8
+			and caller_instance_id=$9
+			and subject_selector=$10
+			and request_text=$11
+			and region=$12
+			and expires_at > $13
+	`, string(domain.PermissionPackageApprovalStatusPending), request.DraftID, request.TemplateID,
+		request.TemplateVersion, request.PolicyVersion, request.TenantID, request.WorkspaceID,
+		request.TargetID, request.CallerInstanceID, request.SubjectSelector, request.RequestText,
+		request.Region, referenceTime)
+	if err != nil {
+		return fmt.Errorf("list duplicate permission package approval requests: %w", err)
+	}
+	defer rows.Close()
+	candidates, err := scanPermissionPackageApprovalRequests(rows)
+	if err != nil {
+		return fmt.Errorf("scan duplicate permission package approval requests: %w", err)
+	}
+	for _, candidate := range candidates {
+		if permissionPackageApprovalRequestsShareDuplicateKey(candidate, request) {
+			return ErrPermissionPackageApprovalAlreadyPending
+		}
+	}
+	return nil
 }
 
 func (p *Postgres) ListPermissionPackageApprovalRequests(ctx context.Context, filter PermissionPackageApprovalRequestFilter) ([]domain.PermissionPackageApprovalRequest, error) {

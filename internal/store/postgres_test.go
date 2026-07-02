@@ -17,6 +17,95 @@ import (
 	"github.com/SummerXaa-Z/agent-harbor/internal/store"
 )
 
+func TestPostgresPermissionPackageApprovalRequestRejectsDuplicateActivePending(t *testing.T) {
+	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set AGENT_HARBOR_TEST_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	defer pool.Close()
+	if err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	repo := store.NewPostgresWithCredentialKey(pool, []byte("0123456789abcdef0123456789abcdef"))
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	caller := domain.Agent{
+		ID:          security.NewID("agt"),
+		TenantID:    "tenant-pg-approval-duplicate",
+		WorkspaceID: "ws-pg-approval-duplicate",
+		Name:        "Approval Duplicate Caller",
+		ChannelType: "local",
+		Status:      domain.AgentStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	target := domain.Agent{
+		ID:          security.NewID("agt"),
+		TenantID:    caller.TenantID,
+		WorkspaceID: caller.WorkspaceID,
+		Name:        "Approval Duplicate Target",
+		ChannelType: "mcp",
+		Status:      domain.AgentStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if _, err := repo.CreateAgent(ctx, caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	if _, err := repo.CreateAgent(ctx, target); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	request := domain.PermissionPackageApprovalRequest{
+		ID:                            security.NewID("ppar"),
+		DraftID:                       security.NewID("ppd"),
+		TemplateID:                    "support-ticket-triage",
+		TemplateVersion:               1,
+		PolicyVersion:                 1,
+		TenantID:                      caller.TenantID,
+		WorkspaceID:                   caller.WorkspaceID,
+		TargetID:                      target.ID,
+		CallerInstanceID:              caller.ID,
+		SubjectSelector:               "role:support",
+		RequestText:                   "grant support access",
+		Region:                        "us-east",
+		DataScopes:                    []domain.DataScope{{DataDomain: "support", Dataset: "tickets", Region: "us-east"}},
+		AllowedCapabilityIDs:          []string{"cap_update"},
+		AllowedCapabilityKeys:         []string{"update_ticket"},
+		AllowedCapabilityFingerprints: []string{"fp_update_ticket"},
+		Status:                        domain.PermissionPackageApprovalStatusPending,
+		RequestedBy:                   "admin-key",
+		CreatedAt:                     now,
+		UpdatedAt:                     now,
+		ExpiresAt:                     now.Add(24 * time.Hour),
+	}
+	created, err := repo.CreatePermissionPackageApprovalRequest(ctx, request)
+	if err != nil {
+		t.Fatalf("create original approval request: %v", err)
+	}
+
+	duplicate := request
+	duplicate.ID = security.NewID("ppar")
+	duplicate.CreatedAt = now.Add(time.Minute)
+	duplicate.UpdatedAt = now.Add(time.Minute)
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, duplicate); !errors.Is(err, store.ErrPermissionPackageApprovalAlreadyPending) {
+		t.Fatalf("expected duplicate pending approval error, got %v", err)
+	}
+
+	created.ExpiresAt = now.Add(-time.Second)
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(ctx, created); err != nil || !ok {
+		t.Fatalf("expire original approval request: ok=%v err=%v", ok, err)
+	}
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, duplicate); err != nil {
+		t.Fatalf("create duplicate after original expired: %v", err)
+	}
+}
+
 func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
 	if databaseURL == "" {

@@ -87,6 +87,7 @@ type TenantAuditBuilder func(domain.Tenant) domain.AuditEvent
 type AdminIdentityAuditBuilder func(domain.AdminIdentity) domain.AuditEvent
 
 var ErrPermissionPackageApprovalNotConsumable = errors.New("permission package approval request is not consumable")
+var ErrPermissionPackageApprovalAlreadyPending = errors.New("matching permission package approval request already pending")
 
 type PermissionPackageApplyMutation struct {
 	Capabilities         []domain.Capability
@@ -815,6 +816,17 @@ func (m *Memory) CreatePermissionPackageApprovalRequest(_ context.Context, reque
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	request = clonePermissionPackageApprovalRequest(request)
+	referenceTime := permissionPackageApprovalRequestDuplicateReferenceTime(request)
+	if request.Status == domain.PermissionPackageApprovalStatusPending {
+		for _, existing := range m.packageApprovals {
+			if !permissionPackageApprovalRequestActivePendingAt(existing, referenceTime) {
+				continue
+			}
+			if permissionPackageApprovalRequestsShareDuplicateKey(existing, request) {
+				return domain.PermissionPackageApprovalRequest{}, ErrPermissionPackageApprovalAlreadyPending
+			}
+		}
+	}
 	m.packageApprovals[request.ID] = request
 	return clonePermissionPackageApprovalRequest(request), nil
 }

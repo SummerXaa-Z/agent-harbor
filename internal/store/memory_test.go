@@ -418,6 +418,55 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 	}
 }
 
+func TestMemoryPermissionPackageApprovalRequestRejectsDuplicateActivePending(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	now := time.Date(2026, 6, 5, 10, 0, 0, 0, time.UTC)
+	request := domain.PermissionPackageApprovalRequest{
+		ID:                            "ppar_original",
+		DraftID:                       "ppd_duplicate",
+		TemplateID:                    "support-ticket-triage",
+		TemplateVersion:               1,
+		PolicyVersion:                 1,
+		TenantID:                      "tenant-east",
+		WorkspaceID:                   "ws-support",
+		TargetID:                      "agt_mcp",
+		CallerInstanceID:              "agt_caller",
+		SubjectSelector:               "user:support-*",
+		RequestText:                   "grant support access",
+		Region:                        "us-east",
+		DataScopes:                    []domain.DataScope{{DataDomain: "support", Dataset: "tickets", Region: "us-east"}},
+		AllowedCapabilityIDs:          []string{"cap_update"},
+		AllowedCapabilityKeys:         []string{"update_ticket"},
+		AllowedCapabilityFingerprints: []string{"fp_update_ticket"},
+		Status:                        domain.PermissionPackageApprovalStatusPending,
+		RequestedBy:                   "admin-key",
+		CreatedAt:                     now,
+		UpdatedAt:                     now,
+		ExpiresAt:                     now.Add(24 * time.Hour),
+	}
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, request); err != nil {
+		t.Fatalf("create original approval request: %v", err)
+	}
+
+	duplicate := request
+	duplicate.ID = "ppar_duplicate"
+	duplicate.CreatedAt = now.Add(time.Minute)
+	duplicate.UpdatedAt = now.Add(time.Minute)
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, duplicate); !errors.Is(err, ErrPermissionPackageApprovalAlreadyPending) {
+		t.Fatalf("expected duplicate pending approval error, got %v", err)
+	}
+
+	expired := request
+	expired.ExpiresAt = now.Add(-time.Second)
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(ctx, expired); err != nil || !ok {
+		t.Fatalf("expire original approval request: ok=%v err=%v", ok, err)
+	}
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, duplicate); err != nil {
+		t.Fatalf("create duplicate after original expired: %v", err)
+	}
+}
+
 func TestMemoryPermissionPackageApplyConsumesApprovalOnce(t *testing.T) {
 	repo := NewMemory()
 	ctx := t.Context()

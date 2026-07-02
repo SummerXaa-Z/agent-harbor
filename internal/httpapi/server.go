@@ -6295,7 +6295,11 @@ func (s *Server) createPermissionPackageApprovalRequestRecord(ctx context.Contex
 		return domain.PermissionPackageApprovalRequest{}, err
 	}
 	approval := permissionPackageApprovalRequestFromDraft(draft, requestedBy, now)
-	return s.repo.CreatePermissionPackageApprovalRequest(ctx, approval)
+	created, err := s.repo.CreatePermissionPackageApprovalRequest(ctx, approval)
+	if errors.Is(err, store.ErrPermissionPackageApprovalAlreadyPending) {
+		return domain.PermissionPackageApprovalRequest{}, permissionPackageApprovalAlreadyPendingError()
+	}
+	return created, err
 }
 
 func (s *Server) rejectDuplicateActivePermissionPackageApprovalRequest(ctx context.Context, draft domain.PermissionPackageDraft, now time.Time) error {
@@ -6314,10 +6318,14 @@ func (s *Server) rejectDuplicateActivePermissionPackageApprovalRequest(ctx conte
 			continue
 		}
 		if permissionPackageApprovalRequestMatchesDraftSnapshot(row, draft) {
-			return domain.Conflict("PERMISSION_PACKAGE_APPROVAL_ALREADY_PENDING", "a matching permission package approval request is already pending")
+			return permissionPackageApprovalAlreadyPendingError()
 		}
 	}
 	return nil
+}
+
+func permissionPackageApprovalAlreadyPendingError() domain.AppError {
+	return domain.Conflict("PERMISSION_PACKAGE_APPROVAL_ALREADY_PENDING", "a matching permission package approval request is already pending")
 }
 
 func (s *Server) resolvePermissionPackageApprovalRequestRecord(ctx context.Context, existing domain.PermissionPackageApprovalRequest, status domain.PermissionPackageApprovalStatus, reviewer string, comment string, now time.Time) (domain.PermissionPackageApprovalRequest, error) {

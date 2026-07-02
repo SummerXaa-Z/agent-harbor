@@ -89,6 +89,7 @@ type AdminIdentityAuditBuilder func(domain.AdminIdentity) domain.AuditEvent
 
 var ErrPermissionPackageApprovalNotConsumable = errors.New("permission package approval request is not consumable")
 var ErrPermissionPackageApprovalAlreadyPending = errors.New("matching permission package approval request already pending")
+var ErrPermissionPackageApplicationAlreadyApplied = errors.New("matching permission package application already applied")
 
 type PermissionPackageApplyMutation struct {
 	Capabilities         []domain.Capability
@@ -762,6 +763,14 @@ func (m *Memory) ApplyPermissionPackage(_ context.Context, mutation PermissionPa
 		TenantEntitlements:   make([]domain.TenantEntitlement, 0, len(mutation.TenantEntitlements)),
 		WorkspaceAssignments: make([]domain.WorkspaceAssignment, 0, len(mutation.WorkspaceAssignments)),
 		InstanceAssignments:  make([]domain.InstanceAssignment, 0, len(mutation.InstanceAssignments)),
+	}
+
+	if mutation.ApprovalRequest == nil {
+		for _, existing := range m.packageApplications {
+			if permissionPackageApplicationsShareDuplicateKey(existing, mutation.Application) {
+				return PermissionPackageApplyMutationResult{}, ErrPermissionPackageApplicationAlreadyApplied
+			}
+		}
 	}
 
 	if mutation.ApprovalRequest != nil {

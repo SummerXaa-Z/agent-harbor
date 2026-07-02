@@ -242,6 +242,17 @@ test("permission apply consumed approval retry shows recovery guidance", () => {
   assert.match(block, /message\.permissionApprovalAlreadyConsumedRecovery/);
 });
 
+test("permission apply duplicate direct retry shows recovery guidance", () => {
+  const block = functionBlock("applyAiAdminPermissionPackage");
+
+  assert.match(app, /function isPermissionPackageAlreadyAppliedError\(error: unknown\)/);
+  assert.match(app, /PERMISSION_PACKAGE_ALREADY_APPLIED/);
+  assert.match(block, /if \(isPermissionPackageAlreadyAppliedError\(error\)\)/);
+  assert.match(block, /refreshAiAdminApplicationHealth\(aiAdminForm, \{ requireLiveApi: false \}\)/);
+  assert.match(block, /refreshAiAdminProductionReadiness\(aiAdminForm, \{ requireLiveApi: false \}\)/);
+  assert.match(block, /message\.permissionPackageAlreadyAppliedRecovery/);
+});
+
 test("permission journey mutation handlers require live API before network writes", () => {
   [
     ["runAiAdminApprovalJourney", "message.fallbackDataModeActionBlocked", "createTenant("],

@@ -202,6 +202,197 @@ func TestPostgresTransitionPermissionPackageApprovalRequestRejectsStaleState(t *
 	}
 }
 
+func TestPostgresPermissionPackageApplyRejectsDuplicateApplication(t *testing.T) {
+	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set AGENT_HARBOR_TEST_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	defer pool.Close()
+	if err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	repo := store.NewPostgresWithCredentialKey(pool, []byte("0123456789abcdef0123456789abcdef"))
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	tenantID := security.NewID("tenant")
+	workspaceID := security.NewID("ws")
+	caller := domain.Agent{
+		ID:          security.NewID("agt"),
+		TenantID:    tenantID,
+		WorkspaceID: workspaceID,
+		Name:        "Direct Apply Caller",
+		ChannelType: "local",
+		Status:      domain.AgentStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	target := domain.Agent{
+		ID:          security.NewID("agt"),
+		TenantID:    tenantID,
+		WorkspaceID: workspaceID,
+		Name:        "Direct Apply Target",
+		ChannelType: "mcp",
+		Status:      domain.AgentStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if _, err := repo.CreateAgent(ctx, caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	if _, err := repo.CreateAgent(ctx, target); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+	capability := domain.Capability{
+		ID:              security.NewID("cap"),
+		TargetID:        target.ID,
+		Type:            domain.CapabilityTypeMCPTool,
+		Key:             "update_ticket",
+		DisplayName:     "Update ticket",
+		Action:          domain.CapabilityActionWrite,
+		DataScopes:      []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		Sensitivity:     domain.CapabilitySensitivityConfidential,
+		RiskLevel:       domain.CapabilityRiskHigh,
+		DiscoveryStatus: domain.CapabilityDiscoveryPendingReview,
+		Version:         1,
+		DiscoveredAt:    now,
+		UpdatedAt:       now,
+	}
+	if _, err := repo.UpsertCapability(ctx, capability); err != nil {
+		t.Fatalf("upsert capability: %v", err)
+	}
+
+	appliedAt := now.Add(time.Minute)
+	application := domain.PermissionPackageApplication{
+		ID:                     security.NewID("ppa"),
+		DraftID:                "ppd_pg_direct_apply",
+		TemplateID:             "support-ticket-triage",
+		TemplateVersion:        1,
+		TenantID:               tenantID,
+		WorkspaceID:            workspaceID,
+		TargetID:               target.ID,
+		CallerInstanceID:       caller.ID,
+		SubjectSelector:        "user:support-*",
+		RequestText:            "grant support write access",
+		Region:                 "us-east",
+		DataScopes:             []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		AllowedCapabilityIDs:   []string{capability.ID},
+		AllowedCapabilityKeys:  []string{capability.Key},
+		TenantEntitlementIDs:   []string{security.NewID("ent")},
+		WorkspaceAssignmentIDs: []string{security.NewID("wsa")},
+		InstanceAssignmentIDs:  []string{security.NewID("ina")},
+		AppliedAt:              appliedAt,
+	}
+	mutation := store.PermissionPackageApplyMutation{
+		Capabilities: []domain.Capability{{
+			ID:              capability.ID,
+			TargetID:        capability.TargetID,
+			Type:            capability.Type,
+			Key:             capability.Key,
+			DisplayName:     capability.DisplayName,
+			Action:          capability.Action,
+			DataScopes:      application.DataScopes,
+			Sensitivity:     capability.Sensitivity,
+			RiskLevel:       capability.RiskLevel,
+			DiscoveryStatus: domain.CapabilityDiscoveryApproved,
+			Version:         capability.Version,
+			DiscoveredAt:    capability.DiscoveredAt,
+			UpdatedAt:       appliedAt,
+		}},
+		TenantEntitlements: []domain.TenantEntitlement{{
+			ID:           application.TenantEntitlementIDs[0],
+			TenantID:     application.TenantID,
+			TargetID:     application.TargetID,
+			CapabilityID: capability.ID,
+			Effect:       domain.PolicyEffectAllow,
+			DataScopes:   application.DataScopes,
+			Status:       domain.PolicyStatusEnabled,
+			Priority:     40,
+			CreatedAt:    appliedAt,
+			UpdatedAt:    appliedAt,
+		}},
+		WorkspaceAssignments: []domain.WorkspaceAssignment{{
+			ID:                  application.WorkspaceAssignmentIDs[0],
+			TenantEntitlementID: application.TenantEntitlementIDs[0],
+			TenantID:            application.TenantID,
+			WorkspaceID:         application.WorkspaceID,
+			Effect:              domain.PolicyEffectAllow,
+			DataScopes:          application.DataScopes,
+			Status:              domain.PolicyStatusEnabled,
+			CreatedAt:           appliedAt,
+			UpdatedAt:           appliedAt,
+		}},
+		InstanceAssignments: []domain.InstanceAssignment{{
+			ID:                    application.InstanceAssignmentIDs[0],
+			WorkspaceAssignmentID: application.WorkspaceAssignmentIDs[0],
+			TenantID:              application.TenantID,
+			WorkspaceID:           application.WorkspaceID,
+			CallerInstanceID:      application.CallerInstanceID,
+			SubjectSelector:       application.SubjectSelector,
+			Effect:                domain.PolicyEffectAllow,
+			DataScopes:            application.DataScopes,
+			Status:                domain.PolicyStatusEnabled,
+			CreatedAt:             appliedAt,
+			UpdatedAt:             appliedAt,
+		}},
+		Application: application,
+		AuditEvent: domain.AuditEvent{
+			ID:           security.NewID("aud"),
+			TenantID:     application.TenantID,
+			WorkspaceID:  application.WorkspaceID,
+			Actor:        "admin",
+			Action:       "permission_package.applied",
+			ResourceType: "permission_package",
+			ResourceID:   application.ID,
+			Summary:      "Permission package applied",
+			CreatedAt:    appliedAt,
+		},
+	}
+	if _, err := repo.ApplyPermissionPackage(ctx, mutation); err != nil {
+		t.Fatalf("apply permission package mutation: %v", err)
+	}
+	retry := mutation
+	retry.Application.ID = security.NewID("ppa")
+	retry.Application.TenantEntitlementIDs = []string{security.NewID("ent")}
+	retry.Application.WorkspaceAssignmentIDs = []string{security.NewID("wsa")}
+	retry.Application.InstanceAssignmentIDs = []string{security.NewID("ina")}
+	retry.Application.AppliedAt = now.Add(2 * time.Minute)
+	retry.TenantEntitlements[0].ID = retry.Application.TenantEntitlementIDs[0]
+	retry.TenantEntitlements[0].CreatedAt = retry.Application.AppliedAt
+	retry.TenantEntitlements[0].UpdatedAt = retry.Application.AppliedAt
+	retry.WorkspaceAssignments[0].ID = retry.Application.WorkspaceAssignmentIDs[0]
+	retry.WorkspaceAssignments[0].TenantEntitlementID = retry.Application.TenantEntitlementIDs[0]
+	retry.WorkspaceAssignments[0].CreatedAt = retry.Application.AppliedAt
+	retry.WorkspaceAssignments[0].UpdatedAt = retry.Application.AppliedAt
+	retry.InstanceAssignments[0].ID = retry.Application.InstanceAssignmentIDs[0]
+	retry.InstanceAssignments[0].WorkspaceAssignmentID = retry.Application.WorkspaceAssignmentIDs[0]
+	retry.InstanceAssignments[0].CreatedAt = retry.Application.AppliedAt
+	retry.InstanceAssignments[0].UpdatedAt = retry.Application.AppliedAt
+	retry.AuditEvent.ID = security.NewID("aud")
+	retry.AuditEvent.ResourceID = retry.Application.ID
+	retry.AuditEvent.CreatedAt = retry.Application.AppliedAt
+	if _, err := repo.ApplyPermissionPackage(ctx, retry); !errors.Is(err, store.ErrPermissionPackageApplicationAlreadyApplied) {
+		t.Fatalf("expected duplicate application error on retry, got %v", err)
+	}
+	applications, err := repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
+		ManagementScope:  store.ManagementScope{TenantID: tenantID, WorkspaceID: workspaceID},
+		TemplateID:       application.TemplateID,
+		TargetID:         target.ID,
+		CallerInstanceID: caller.ID,
+	})
+	if err != nil || len(applications) != 1 || applications[0].ID != application.ID {
+		t.Fatalf("retry should not create duplicate applications, applications=%#v err=%v", applications, err)
+	}
+	events, err := repo.ListAuditEvents(ctx, store.AuditEventFilter{Action: "permission_package.applied", ResourceType: "permission_package"})
+	if err != nil || len(events) != 1 || events[0].ResourceID != application.ID {
+		t.Fatalf("retry should not create duplicate audit events, events=%#v err=%v", events, err)
+	}
+}
+
 func TestPostgresRepositoryRoundTrip(t *testing.T) {
 	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
 	if databaseURL == "" {

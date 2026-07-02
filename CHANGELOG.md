@@ -86,6 +86,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 权限包审批请求存储现在会在内存和 PostgreSQL 中原子执行同一套有效待审批防重规则，关闭 REST 或 Management MCP 并发创建时的竞争窗口。
 - Permission-package approval approve, reject, and withdraw operations now use storage-level atomic pending-state transitions, preventing stale concurrent reviewers from overwriting an already resolved or consumed approval request.
 - 权限包审批的批准、拒绝和撤回现在使用存储层原子待处理状态转移，避免并发下的陈旧审批操作覆盖已经处理或已消费的审批请求。
+- Direct permission-package apply now rejects duplicate same-scope application retries with stable `PERMISSION_PACKAGE_ALREADY_APPLIED` conflicts, preventing repeated grant chains or audit rows after client timeouts.
+- 无需审批的权限包直接应用现在会用稳定的 `PERMISSION_PACKAGE_ALREADY_APPLIED` 冲突错误拒绝同范围重复提交，避免客户端超时重试后重复创建授权链或审计记录。
 - Managed administrator creation now has explicit coverage rejecting actors that reuse bootstrap administrator actors, keeping sessions, audit rows, and approval routing unambiguous.
 - 托管管理员创建现在明确覆盖拒绝复用引导管理员 actor，避免会话主体、审计记录和审批路由含混。
 - PostgreSQL-backed managed administrator creation now maps duplicate actor or id constraint races to stable 409 conflict errors instead of generic internal errors.

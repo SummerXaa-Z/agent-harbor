@@ -696,6 +696,148 @@ func TestMemoryPermissionPackageApplyConsumesApprovalOnce(t *testing.T) {
 	}
 }
 
+func TestMemoryPermissionPackageApplyRejectsDuplicateApplication(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	now := time.Date(2026, 6, 5, 11, 0, 0, 0, time.UTC)
+	capability := domain.Capability{
+		ID:              "cap_direct_update",
+		TargetID:        "agt_direct_mcp",
+		Type:            domain.CapabilityTypeMCPTool,
+		Key:             "update_ticket",
+		DisplayName:     "Update ticket",
+		Action:          domain.CapabilityActionWrite,
+		DataScopes:      []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		Sensitivity:     domain.CapabilitySensitivityConfidential,
+		RiskLevel:       domain.CapabilityRiskHigh,
+		DiscoveryStatus: domain.CapabilityDiscoveryPendingReview,
+		Version:         1,
+		DiscoveredAt:    now,
+		UpdatedAt:       now,
+	}
+	if _, err := repo.UpsertCapability(ctx, capability); err != nil {
+		t.Fatalf("upsert capability: %v", err)
+	}
+	application := domain.PermissionPackageApplication{
+		ID:                     "ppa_direct_apply",
+		DraftID:                "ppd_direct_apply",
+		TemplateID:             "support-ticket-triage",
+		TemplateVersion:        1,
+		TenantID:               "tenant-east",
+		WorkspaceID:            "ws-support",
+		TargetID:               capability.TargetID,
+		CallerInstanceID:       "agt_direct_caller",
+		SubjectSelector:        "user:support-*",
+		RequestText:            "grant support write access",
+		Region:                 "us-east",
+		DataScopes:             []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		AllowedCapabilityIDs:   []string{capability.ID},
+		AllowedCapabilityKeys:  []string{capability.Key},
+		TenantEntitlementIDs:   []string{"ent_direct_update"},
+		WorkspaceAssignmentIDs: []string{"wsa_direct_update"},
+		InstanceAssignmentIDs:  []string{"ina_direct_update"},
+		AppliedAt:              now.Add(time.Minute),
+	}
+	mutation := PermissionPackageApplyMutation{
+		Capabilities: []domain.Capability{{
+			ID:              capability.ID,
+			TargetID:        capability.TargetID,
+			Type:            capability.Type,
+			Key:             capability.Key,
+			DisplayName:     capability.DisplayName,
+			Action:          capability.Action,
+			DataScopes:      application.DataScopes,
+			Sensitivity:     capability.Sensitivity,
+			RiskLevel:       capability.RiskLevel,
+			DiscoveryStatus: domain.CapabilityDiscoveryApproved,
+			Version:         capability.Version,
+			DiscoveredAt:    capability.DiscoveredAt,
+			UpdatedAt:       application.AppliedAt,
+		}},
+		TenantEntitlements: []domain.TenantEntitlement{{
+			ID:           application.TenantEntitlementIDs[0],
+			TenantID:     application.TenantID,
+			TargetID:     application.TargetID,
+			CapabilityID: capability.ID,
+			Effect:       domain.PolicyEffectAllow,
+			DataScopes:   application.DataScopes,
+			Status:       domain.PolicyStatusEnabled,
+			Priority:     40,
+			CreatedAt:    application.AppliedAt,
+			UpdatedAt:    application.AppliedAt,
+		}},
+		WorkspaceAssignments: []domain.WorkspaceAssignment{{
+			ID:                  application.WorkspaceAssignmentIDs[0],
+			TenantEntitlementID: application.TenantEntitlementIDs[0],
+			TenantID:            application.TenantID,
+			WorkspaceID:         application.WorkspaceID,
+			Effect:              domain.PolicyEffectAllow,
+			DataScopes:          application.DataScopes,
+			Status:              domain.PolicyStatusEnabled,
+			CreatedAt:           application.AppliedAt,
+			UpdatedAt:           application.AppliedAt,
+		}},
+		InstanceAssignments: []domain.InstanceAssignment{{
+			ID:                    application.InstanceAssignmentIDs[0],
+			WorkspaceAssignmentID: application.WorkspaceAssignmentIDs[0],
+			TenantID:              application.TenantID,
+			WorkspaceID:           application.WorkspaceID,
+			CallerInstanceID:      application.CallerInstanceID,
+			SubjectSelector:       application.SubjectSelector,
+			Effect:                domain.PolicyEffectAllow,
+			DataScopes:            application.DataScopes,
+			Status:                domain.PolicyStatusEnabled,
+			CreatedAt:             application.AppliedAt,
+			UpdatedAt:             application.AppliedAt,
+		}},
+		Application: application,
+		AuditEvent: domain.AuditEvent{
+			ID:           "aud_direct_apply",
+			TenantID:     application.TenantID,
+			WorkspaceID:  application.WorkspaceID,
+			Actor:        "admin-key",
+			Action:       "permission_package.applied",
+			ResourceType: "permission_package",
+			ResourceID:   application.ID,
+			CreatedAt:    application.AppliedAt,
+		},
+	}
+	if _, err := repo.ApplyPermissionPackage(ctx, mutation); err != nil {
+		t.Fatalf("apply permission package: %v", err)
+	}
+	retry := mutation
+	retry.Application.ID = "ppa_direct_apply_retry"
+	retry.Application.TenantEntitlementIDs = []string{"ent_direct_update_retry"}
+	retry.Application.WorkspaceAssignmentIDs = []string{"wsa_direct_update_retry"}
+	retry.Application.InstanceAssignmentIDs = []string{"ina_direct_update_retry"}
+	retry.Application.AppliedAt = now.Add(2 * time.Minute)
+	retry.TenantEntitlements[0].ID = retry.Application.TenantEntitlementIDs[0]
+	retry.TenantEntitlements[0].CreatedAt = retry.Application.AppliedAt
+	retry.TenantEntitlements[0].UpdatedAt = retry.Application.AppliedAt
+	retry.WorkspaceAssignments[0].ID = retry.Application.WorkspaceAssignmentIDs[0]
+	retry.WorkspaceAssignments[0].TenantEntitlementID = retry.Application.TenantEntitlementIDs[0]
+	retry.WorkspaceAssignments[0].CreatedAt = retry.Application.AppliedAt
+	retry.WorkspaceAssignments[0].UpdatedAt = retry.Application.AppliedAt
+	retry.InstanceAssignments[0].ID = retry.Application.InstanceAssignmentIDs[0]
+	retry.InstanceAssignments[0].WorkspaceAssignmentID = retry.Application.WorkspaceAssignmentIDs[0]
+	retry.InstanceAssignments[0].CreatedAt = retry.Application.AppliedAt
+	retry.InstanceAssignments[0].UpdatedAt = retry.Application.AppliedAt
+	retry.AuditEvent.ID = "aud_direct_apply_retry"
+	retry.AuditEvent.ResourceID = retry.Application.ID
+	retry.AuditEvent.CreatedAt = retry.Application.AppliedAt
+	if _, err := repo.ApplyPermissionPackage(ctx, retry); !errors.Is(err, ErrPermissionPackageApplicationAlreadyApplied) {
+		t.Fatalf("expected duplicate application error on retry, got %v", err)
+	}
+	applications, err := repo.ListPermissionPackageApplications(ctx, PermissionPackageApplicationFilter{})
+	if err != nil || len(applications) != 1 || applications[0].ID != application.ID {
+		t.Fatalf("retry should not create duplicate applications, applications=%#v err=%v", applications, err)
+	}
+	events, err := repo.ListAuditEvents(ctx, AuditEventFilter{Action: "permission_package.applied"})
+	if err != nil || len(events) != 1 || events[0].ID != mutation.AuditEvent.ID {
+		t.Fatalf("retry should not create duplicate audit events, events=%#v err=%v", events, err)
+	}
+}
+
 func TestMemoryCapabilityAssignmentRejectsStoredDataScopeExpansion(t *testing.T) {
 	repo := NewMemory()
 	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)

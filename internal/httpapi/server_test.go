@@ -5021,6 +5021,25 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	if len(applications) != 1 || applications[0].ID != applied.Application.ID || applications[0].DraftID != applied.Draft.ID {
 		t.Fatalf("expected listed application record, got %#v", applications)
 	}
+	duplicateApply := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", input, "")
+	if duplicateApply.Code != http.StatusConflict {
+		t.Fatalf("duplicate direct apply should be rejected, status=%d body=%s", duplicateApply.Code, duplicateApply.Body.String())
+	}
+	var duplicateApplyErr apiEnvelope
+	if err := json.Unmarshal(duplicateApply.Body.Bytes(), &duplicateApplyErr); err != nil {
+		t.Fatalf("decode duplicate apply error: %v body=%s", err, duplicateApply.Body.String())
+	}
+	if duplicateApplyErr.Error != "PERMISSION_PACKAGE_ALREADY_APPLIED" {
+		t.Fatalf("duplicate direct apply should return stable app code, got %#v", duplicateApplyErr)
+	}
+	applicationsAfterDuplicate := decodeData[[]permissionPackageApplicationResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications?tenantId=tenant-root&workspaceId=ws-sales&templateId=sales-readonly&targetId="+target.ID+"&callerInstanceId="+caller.ID, nil, ""))
+	if len(applicationsAfterDuplicate) != 1 || applicationsAfterDuplicate[0].ID != applied.Application.ID {
+		t.Fatalf("duplicate direct apply should not create another application, got %#v", applicationsAfterDuplicate)
+	}
+	appliedEvents, err := repo.ListAuditEvents(t.Context(), store.AuditEventFilter{Action: "permission_package.applied"})
+	if err != nil || len(appliedEvents) != 1 || appliedEvents[0].ResourceID != applied.Application.ID {
+		t.Fatalf("duplicate direct apply should not create another audit event, events=%#v err=%v", appliedEvents, err)
+	}
 	health := decodeData[permissionPackageApplicationHealthResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications/health?tenantId=tenant-root&workspaceId=ws-sales&templateId=sales-readonly&targetId="+target.ID+"&callerInstanceId="+caller.ID+"&limit=10", nil, ""))
 	if health.Summary.Total != 1 || health.Summary.Ready != 1 || health.Summary.Drifted != 0 || health.Summary.NeedsReview != 0 {
 		t.Fatalf("expected ready application health summary, got %#v", health.Summary)

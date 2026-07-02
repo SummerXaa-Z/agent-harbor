@@ -3908,6 +3908,9 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		if errors.Is(err, store.ErrPermissionPackageApprovalNotConsumable) {
 			return domain.PermissionPackageApplyResponse{}, s.permissionPackageApprovalNotConsumableError(r.Context(), approvalRequestID, draft, now)
 		}
+		if errors.Is(err, store.ErrPermissionPackageApplicationAlreadyApplied) {
+			return domain.PermissionPackageApplyResponse{}, permissionPackageApplicationAlreadyAppliedError()
+		}
 		return domain.PermissionPackageApplyResponse{}, err
 	}
 	result.TenantEntitlements = applyResult.TenantEntitlements
@@ -6527,6 +6530,10 @@ func (s *Server) permissionPackageApprovalNotConsumableError(ctx context.Context
 
 func permissionPackageApprovalAlreadyConsumedError() domain.AppError {
 	return domain.BadRequest("PERMISSION_PACKAGE_APPROVAL_ALREADY_CONSUMED", "permission package approval request is already consumed")
+}
+
+func permissionPackageApplicationAlreadyAppliedError() domain.AppError {
+	return domain.Conflict("PERMISSION_PACKAGE_ALREADY_APPLIED", "a matching permission package application has already been applied")
 }
 
 func permissionPackageCapabilityIDsAndKeys(capabilities []domain.Capability) ([]string, []string) {

@@ -423,6 +423,10 @@ function isConsumedApprovalRetryError(error: unknown) {
   return error instanceof ApiRequestError && error.code === "PERMISSION_PACKAGE_APPROVAL_ALREADY_CONSUMED";
 }
 
+function isPermissionPackageAlreadyAppliedError(error: unknown) {
+  return error instanceof ApiRequestError && error.code === "PERMISSION_PACKAGE_ALREADY_APPLIED";
+}
+
 function permissionPackagePreflightMessageState(preflight: PermissionPackageApplyPreflight): LocalizedMessage {
   if (preflight.summary.canApply) {
     return { key: "message.permissionPackagePreflightReady" };
@@ -1976,6 +1980,14 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           loadAiAdminApprovalRequestsForDraft(aiAdminDraft)
         ]);
         setAiAdminMessage({ key: "message.permissionApprovalAlreadyConsumedRecovery" });
+        return;
+      }
+      if (isPermissionPackageAlreadyAppliedError(error)) {
+        await Promise.allSettled([
+          refreshAiAdminApplicationHealth(aiAdminForm, { requireLiveApi: false }),
+          refreshAiAdminProductionReadiness(aiAdminForm, { requireLiveApi: false })
+        ]);
+        setAiAdminMessage({ key: "message.permissionPackageAlreadyAppliedRecovery" });
         return;
       }
       setAiAdminMessage(localizedErrorMessageState(error, "error.applyPermissionPackage"));

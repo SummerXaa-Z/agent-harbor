@@ -934,6 +934,12 @@ func (p *Postgres) ApplyPermissionPackage(ctx context.Context, mutation Permissi
 			InstanceAssignments:  make([]domain.InstanceAssignment, 0, len(mutation.InstanceAssignments)),
 		}
 
+		if mutation.ApprovalRequest == nil {
+			if err := p.rejectDuplicatePermissionPackageApplication(ctx, tx, mutation.Application); err != nil {
+				return err
+			}
+		}
+
 		if mutation.ApprovalRequest != nil {
 			approval, err := p.consumePermissionPackageApprovalRequest(ctx, tx, *mutation.ApprovalRequest)
 			if err != nil {
@@ -985,6 +991,44 @@ func (p *Postgres) ApplyPermissionPackage(ctx context.Context, mutation Permissi
 		return nil
 	})
 	return result, err
+}
+
+func (p *Postgres) rejectDuplicatePermissionPackageApplication(ctx context.Context, tx pgx.Tx, application domain.PermissionPackageApplication) error {
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1::text, 0::bigint))`, permissionPackageApplicationDuplicateLockKey(application)); err != nil {
+		return fmt.Errorf("lock duplicate permission package application: %w", err)
+	}
+	rows, err := tx.Query(ctx, `
+		select id, draft_id, template_id, template_version, tenant_id, workspace_id, target_agent_id,
+			caller_instance_id, subject_selector, request_text, region, data_scopes,
+			allowed_capability_ids, allowed_capability_keys, tenant_entitlement_ids,
+			workspace_assignment_ids, instance_assignment_ids, applied_at
+		from permission_package_applications
+		where draft_id=$1
+			and template_id=$2
+			and template_version=$3
+			and tenant_id=$4
+			and workspace_id=$5
+			and target_agent_id=$6
+			and caller_instance_id=$7
+			and subject_selector=$8
+			and region=$9
+	`, application.DraftID, application.TemplateID, application.TemplateVersion, application.TenantID,
+		application.WorkspaceID, application.TargetID, application.CallerInstanceID, application.SubjectSelector,
+		application.Region)
+	if err != nil {
+		return fmt.Errorf("list duplicate permission package applications: %w", err)
+	}
+	defer rows.Close()
+	candidates, err := scanPermissionPackageApplications(rows)
+	if err != nil {
+		return fmt.Errorf("scan duplicate permission package applications: %w", err)
+	}
+	for _, candidate := range candidates {
+		if permissionPackageApplicationsShareDuplicateKey(candidate, application) {
+			return ErrPermissionPackageApplicationAlreadyApplied
+		}
+	}
+	return nil
 }
 
 func (p *Postgres) CreatePermissionPackageApprovalRequest(ctx context.Context, request domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, error) {

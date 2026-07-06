@@ -40,7 +40,6 @@ assert_file_contains() {
 
 assert_target_depends_on "frontend-test" "frontend-deps"
 assert_target_depends_on "frontend-build" "frontend-deps"
-assert_target_depends_on "demo" "frontend-deps"
 assert_target_depends_on "ai-admin-browser-journey" "frontend-deps"
 assert_target_depends_on "release-check" "production-hardening"
 assert_target_depends_on "release-check" "ai-admin-browser-journey"
@@ -57,6 +56,7 @@ assert_target_exists "scenario-tenant-permission-center"
 assert_target_depends_on "release-check" "scenario-tenant-permission-center"
 
 assert_file_contains "Makefile" "scripts/scenario-tenant-permission-center.sh"
+assert_file_contains "Makefile" "demo: scripts/demo.sh"
 assert_file_contains "Makefile" "scripts/lib/ports.sh"
 assert_file_contains "Makefile" "assert_port_free \"API\""
 assert_file_contains "Makefile" "assert_port_free \"MCP\""

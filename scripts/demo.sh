@@ -100,6 +100,8 @@ assert_port_free "frontend" "$FRONTEND_PORT"
 
 cd "$ROOT_DIR"
 
+pnpm --dir frontend install --frozen-lockfile
+
 echo "Starting AgentHarbor demo..."
 echo "API:       ${API_BASE_URL}"
 echo "MCP:       http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/mcp (${MCP_SERVER_MODE})"

@@ -129,7 +129,7 @@ mock-mcp:
 real-mcp: real-mcp-deps
 	pnpm --dir scripts/real-mcp start
 
-demo: frontend-deps real-mcp-deps scripts/demo.sh
+demo: scripts/demo.sh
 	scripts/demo.sh
 
 core-journey:

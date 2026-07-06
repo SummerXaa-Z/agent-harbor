@@ -28,3 +28,12 @@ test("demo script wires isolated ports without hidden frontend variables", () =>
   assert.match(demoScript, /AGENT_HARBOR_CORS_ORIGINS="\$\{AGENT_HARBOR_CORS_ORIGINS:-\$FRONTEND_ORIGIN\}"/);
   assert.match(demoScript, /VITE_API_BASE="\$\{VITE_API_BASE:-\$API_BASE_URL\}"/);
 });
+
+test("demo script checks ports before installing dependencies", () => {
+  const portPreflight = demoScript.indexOf('assert_port_free "API" "$API_PORT"');
+  const frontendInstall = demoScript.indexOf("pnpm --dir frontend install --frozen-lockfile");
+  const realMcpInstall = demoScript.indexOf("pnpm --dir scripts/real-mcp install --frozen-lockfile");
+  assert.ok(portPreflight >= 0);
+  assert.ok(frontendInstall > portPreflight);
+  assert.ok(realMcpInstall > portPreflight);
+});

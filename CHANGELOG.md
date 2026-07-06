@@ -640,6 +640,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 发布场景遇到 API、MCP 或前端端口冲突时，现在会输出占用监听进程的 PID 和命令，并覆盖 Makefile 内联的审批门禁和租户权限中心场景，便于无人值守的 `make release-check` 失败后快速恢复，而不需要猜测哪个本地进程挡住门禁。
 - `make demo` now uses the same port-owner diagnostics as release gates, so first-run evaluators can see the blocking API, MCP, or frontend process instead of a generic port-in-use failure.
 - `make demo` 现在复用发布门禁同一套端口占用诊断；首次试用者遇到 API、MCP 或前端端口冲突时，可以直接看到阻塞进程，而不是只看到泛泛的端口占用失败。
+- `make demo` now performs port preflight before installing frontend or real-MCP dependencies, so occupied local ports fail fast without wasting first-run time on dependency work.
+- `make demo` 现在会先做端口预检，再安装前端或 real-MCP 依赖；本地端口被占用时会快速失败，不再浪费首次试用时间做依赖安装。
 - Scoped tenant-permission-center capability summaries now avoid hydrating out-of-scope target and capability names from stale or dirty entitlement references.
 - 范围化管理员查看租户权限中心时，如果历史或脏授权引用了范围外目标或能力，能力摘要不再展开这些目标和能力名称。
 - Scoped access-profile, permission-application impact, and permission-application health responses now avoid hydrating out-of-scope Agent or capability details from stale or dirty references, while keeping the underlying records unchanged.

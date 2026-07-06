@@ -38,7 +38,7 @@ Open-source timing is intentionally secondary to production hardening. Before an
 - **Capability governance / 能力治理**: discover target tools, approve capabilities, and grant them through tenant, workspace, and caller-instance assignments. 发现目标工具，审批能力，并通过租户、工作区和调用方实例分配进行授权。
 - **Data permission enforcement / 数据权限控制**: narrow `dataScopes` across capability, tenant entitlement, workspace assignment, and instance assignment boundaries. 在能力、租户授权、工作区分配和实例分配边界上逐层收敛 `dataScopes`。
 - **AI-friendly permission operations / AI 友好的权限运营**: draft tenant-scoped permission package changes from administrator intent, preview allow/deny outcomes, run apply preflight, run approval-required packages, apply them through the grant chain, and review structured application health and impact. 从管理员意图生成租户范围的权限包草案，预览允许/拒绝结果，运行应用前预检，运行需审批权限包，通过授权链落地，并查看结构化落地状态与影响复核。
-- **Approval and audit trail / 审批与审计**: route approval queues to configured approvers, expire and consume approval requests, record applied package evidence, review active or missing created objects, and keep audit trails for every privileged permission change. 将审批队列路由给已配置审批人，对审批请求设置过期和一次性消费，记录权限包应用记录，复核已创建对象是否仍有效，并为高风险权限变更保留审计链。
+- **Approval and audit trail / 审批与审计**: route approval queues to configured approvers, expire and consume approval requests, record applied package records, review active or missing created objects, and keep audit trails for every privileged permission change. 将审批队列路由给已配置审批人，对审批请求设置过期和一次性消费，记录权限包应用记录，复核已创建对象是否仍有效，并为高风险权限变更保留审计链。
 - **Runtime records / 运行记录**: record traces, audit events, metrics, upstream attempts, effective data scopes, and deny reasons. 记录 trace、审计事件、指标、上游尝试、有效数据范围和拒绝原因。
 - **Access Profile / 权限画像**: inspect each tenant's effective access profile, grant chain, invalid scope rows, and recent trace records. 查看每个租户的有效访问画像、授权链、无效范围行和近期运行记录。
 
@@ -494,7 +494,7 @@ MCP capabilities must be approved before they can be granted. Tenant entitlement
 
 `dataScopes` are hierarchical OR alternatives. A child assignment may fill an empty parent dimension, but it cannot change a fixed parent dimension such as `region` or `tenantFilter`. Runtime traces record the effective inherited scope list, and governed MCP `tools/call` forwards the same list in `X-AgentHarbor-Context`. Caller-supplied, static target, and credential-backed values for `X-AgentHarbor-Context` are reserved and not forwarded.
 
-The tenant access profile endpoint is read-only. It returns configured grants, effective scope calculations, invalid historical scope evidence, and recent trace records for a registered tenant subtree. `traceLimit=0` disables recent traces.
+The tenant access profile endpoint is read-only. It returns configured grants, effective scope calculations, invalid historical scope records, and recent trace records for a registered tenant subtree. `traceLimit=0` disables recent traces.
 
 ## Project Docs
 

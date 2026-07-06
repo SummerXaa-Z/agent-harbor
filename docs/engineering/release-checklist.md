@@ -101,7 +101,7 @@ MOCK_MCP_PORT=18787 \
 
 如果默认本地端口已被开发服务占用，可以使用上面的隔离端口运行同一个浏览器门禁。
 
-Before declaring v0.2.0 permission-package work or a permission-package release candidate ready, `make release-check` must include the dependency-free approval-required journey. When you need SDK-service parity evidence, run the same journey against a local API with private upstreams enabled:
+Before declaring v0.2.0 permission-package work or a permission-package release candidate ready, `make release-check` must include the dependency-free approval-required journey. When you need SDK-service parity records, run the same journey against a local API with private upstreams enabled:
 
 ```bash
 AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
@@ -132,7 +132,7 @@ For a tagged release or downstream handoff, summarize:
 - behavior changes and compatibility notes
 - schema or migration changes
 - security and credential handling changes
-- verification evidence, including PostgreSQL and scenario coverage when relevant
+- verification records, including PostgreSQL and scenario coverage when relevant
 - known follow-ups that should not block the release
 
 Keep release notes short, factual, and tied to merged commits or PRs.

@@ -4,6 +4,16 @@ import test from "node:test";
 
 const readme = readFileSync(new URL("../../README.md", import.meta.url), "utf8");
 const demoScript = readFileSync(new URL("../../scripts/demo.sh", import.meta.url), "utf8");
+const productJourney = readFileSync(new URL("../../docs/product/0.2.0-ai-admin-permission-journey.md", import.meta.url), "utf8");
+const releaseChecklist = readFileSync(new URL("../../docs/engineering/release-checklist.md", import.meta.url), "utf8");
+const changelog = readFileSync(new URL("../../CHANGELOG.md", import.meta.url), "utf8");
+
+function proseWithoutCode(text) {
+  return text
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/`[^`]*`/g, "")
+    .replace(/\[[^\]]+\]\([^)]+\)/g, "");
+}
 
 test("permission changes README quickstart is split into actionable bilingual steps", () => {
   const start = readme.indexOf("## Try the Permission Changes Console");
@@ -36,4 +46,9 @@ test("demo script checks ports before installing dependencies", () => {
   assert.ok(portPreflight >= 0);
   assert.ok(frontendInstall > portPreflight);
   assert.ok(realMcpInstall > portPreflight);
+});
+
+test("public product docs use records wording instead of forensic-style prose", () => {
+  const publicProse = proseWithoutCode([readme, productJourney, releaseChecklist, changelog].join("\n"));
+  assert.doesNotMatch(publicProse, /\bEvidence\b|\bevidence\b|证据/);
 });

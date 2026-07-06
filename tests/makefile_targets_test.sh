@@ -90,3 +90,4 @@ assert_file_contains "scripts/scenario-admin-access-management.sh" "scripts/lib/
 assert_file_contains "scripts/scenario-admin-access-management.sh" "assert_port_free"
 assert_file_contains "scripts/scenario-tenant-permission-center.sh" "scripts/lib/ports.sh"
 assert_file_contains "scripts/scenario-tenant-permission-center.sh" "assert_port_free"
+assert_file_contains "scripts/demo.sh" "scripts/lib/ports.sh"

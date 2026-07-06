@@ -66,6 +66,7 @@ test("API health check verifies the system compatibility contract", () => {
   assert.match(apiSource, /requiredConsoleCapabilities/);
   assert.match(apiSource, /permission_package_approval_withdraw/);
   assert.match(apiSource, /permission_package_consumed_approval_recovery/);
+  assert.match(apiSource, /management_mcp_tools_metadata_v1/);
   assert.match(apiSource, /api_contract_unavailable/);
   assert.match(apiSource, /api_contract_incompatible/);
 });

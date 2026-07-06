@@ -120,6 +120,7 @@ export const requiredConsoleCapabilities = [
   'permission_package_application_impact',
   'permission_package_production_readiness',
   'permission_package_consumed_approval_recovery',
+  'management_mcp_tools_metadata_v1',
 ]
 
 export const defaultMockMcpHealthUrl = 'http://127.0.0.1:8787/healthz'

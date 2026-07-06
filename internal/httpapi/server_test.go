@@ -825,6 +825,7 @@ func TestSystemInfoIncludesConsoleCompatibilityContract(t *testing.T) {
 		"permission_package_application_impact",
 		"permission_package_production_readiness",
 		"permission_package_consumed_approval_recovery",
+		"management_mcp_tools_metadata_v1",
 	} {
 		if !capabilities[capability] {
 			t.Fatalf("system info missing required console capability %q: %#v", capability, info.Capabilities)

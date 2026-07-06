@@ -223,7 +223,8 @@ type permissionPackagePolicyGateResponse struct {
 		ReasonKey     string            `json:"reasonKey"`
 		ReasonValues  map[string]string `json:"reasonValues"`
 	} `json:"reasons"`
-	NextActions []string `json:"nextActions"`
+	NextActionCodes []string `json:"nextActionCodes"`
+	NextActions     []string `json:"nextActions"`
 }
 
 type permissionPackageApplyResponse struct {
@@ -6597,6 +6598,9 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 	if draft.PolicyGate.Decision != "approval_required" || draft.PolicyGate.CanApplyDirectly || len(draft.PolicyGate.Reasons) == 0 {
 		t.Fatalf("expected approval-required policy gate, got %#v", draft.PolicyGate)
 	}
+	if !slices.Contains(draft.PolicyGate.NextActionCodes, "create_approval_request") {
+		t.Fatalf("expected approval policy next action code, got %#v", draft.PolicyGate.NextActionCodes)
+	}
 
 	applyResp := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", input, "")
 	if applyResp.Code != http.StatusBadRequest {
@@ -8065,6 +8069,9 @@ func TestManagementMCPExplainPermissionPackageDraftRequiresApproval(t *testing.T
 	}
 	if explanation.PolicyGate.Decision != "approval_required" || explanation.PolicyGate.CanApplyDirectly || len(explanation.PolicyGate.Reasons) == 0 {
 		t.Fatalf("expected policy gate in MCP explanation, got %#v", explanation.PolicyGate)
+	}
+	if !slices.Contains(explanation.PolicyGate.NextActionCodes, "create_approval_request") {
+		t.Fatalf("expected policy gate next action code in MCP explanation, got %#v", explanation.PolicyGate.NextActionCodes)
 	}
 	if !strings.Contains(explanation.Summary, "requires approval") {
 		t.Fatalf("expected approval summary, got %q", explanation.Summary)

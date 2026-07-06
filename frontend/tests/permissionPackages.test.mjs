@@ -180,6 +180,7 @@ test("support ticket triage package requires approval for risky allowed writes",
   assert.equal(draft.policyGate.canApplyDirectly, false);
   assert.equal(draft.policyGate.policyVersion, 1);
   assert.equal(draft.policyGate.reasons.some((reason) => reason.capabilityKey === "update_ticket"), true);
+  assert.deepEqual(draft.policyGate.nextActionCodes, ["create_approval_request"]);
   assert.match(draft.policyGate.nextActions.join(" "), /approval/i);
 });
 

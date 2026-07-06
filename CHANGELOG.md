@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Permission-package policy gates now include stable `nextActionCodes` for approval-required drafts, so admin agents and fallback console logic can route approval setup without parsing English `nextActions`.
+- 权限包策略门禁现在会为需审批草案返回稳定的 `nextActionCodes`，让管理 Agent 和控制台兜底逻辑无需解析英文 `nextActions` 也能进入审批配置。
 - Permission-package apply preflight responses now include stable `nextActionCodes` alongside legacy `nextActions`, and the web console renders preflight follow-up guidance from codes first while preserving fallback compatibility.
 - 权限包应用前预检现在会在旧版 `nextActions` 之外返回稳定的 `nextActionCodes`；Web 控制台会优先按代码渲染预检下一步，同时保留旧响应兼容。
 - Release readiness now includes `make scenario-permission-package-approval` and `make ai-admin-browser-journey`, proving the v0.2.0 approval-required permission package journey in `make release-check` across API, MCP, CORS, and live web-console serving.

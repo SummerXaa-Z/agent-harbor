@@ -534,12 +534,19 @@ type PermissionPackageReadiness struct {
 }
 
 type PermissionPackagePolicyGate struct {
-	Decision         PermissionPackagePolicyDecision `json:"decision"`
-	CanApplyDirectly bool                            `json:"canApplyDirectly"`
-	PolicyVersion    int                             `json:"policyVersion"`
-	Reasons          []PermissionPackagePolicyReason `json:"reasons"`
-	NextActions      []string                        `json:"nextActions"`
+	Decision         PermissionPackagePolicyDecision         `json:"decision"`
+	CanApplyDirectly bool                                    `json:"canApplyDirectly"`
+	PolicyVersion    int                                     `json:"policyVersion"`
+	Reasons          []PermissionPackagePolicyReason         `json:"reasons"`
+	NextActionCodes  []PermissionPackagePolicyNextActionCode `json:"nextActionCodes"`
+	NextActions      []string                                `json:"nextActions"`
 }
+
+type PermissionPackagePolicyNextActionCode string
+
+const (
+	PermissionPackagePolicyNextCreateApproval PermissionPackagePolicyNextActionCode = "create_approval_request"
+)
 
 type PermissionPackagePolicyReason struct {
 	ID            string            `json:"id"`

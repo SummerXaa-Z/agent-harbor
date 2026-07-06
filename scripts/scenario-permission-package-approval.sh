@@ -289,6 +289,11 @@ if draft["readiness"]["canApply"] is not True:
 policy = draft["policyGate"]
 if policy["decision"] != "approval_required" or policy["canApplyDirectly"] is not False:
     raise SystemExit(f"draft should require approval: {policy}")
+next_action_codes = policy.get("nextActionCodes") or []
+if "create_approval_request" not in next_action_codes:
+    raise SystemExit(
+        f"approval-required draft missing policy gate nextActionCodes={next_action_codes!r}: {policy}"
+    )
 if not policy.get("reasons"):
     raise SystemExit(f"approval-required draft should include policy reasons: {policy}")
 allowed = {capability["key"] for capability in draft["allowedCapabilities"]}
@@ -544,6 +549,11 @@ doc = json.loads(os.environ["RESPONSE_BODY"])["data"]
 approval_request_id, read_tool, write_tool = sys.argv[1:4]
 if doc["draft"]["policyGate"]["decision"] != "approval_required":
     raise SystemExit(f"applied draft should preserve policy gate: {doc['draft']['policyGate']}")
+next_action_codes = doc["draft"]["policyGate"].get("nextActionCodes") or []
+if "create_approval_request" not in next_action_codes:
+    raise SystemExit(
+        f"applied draft should preserve policy gate nextActionCodes={next_action_codes!r}: {doc['draft']['policyGate']}"
+    )
 application = doc.get("application")
 if not application:
     raise SystemExit(f"apply response missing application: {doc}")

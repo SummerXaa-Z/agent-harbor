@@ -1,6 +1,7 @@
 package permissionpack
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -57,6 +58,9 @@ func TestBuildDraftPolicyGateRequiresApprovalForRiskyAllowedCapability(t *testin
 	}
 	if len(draft.PolicyGate.NextActions) == 0 {
 		t.Fatalf("expected policy gate next actions")
+	}
+	if !slices.Contains(draft.PolicyGate.NextActionCodes, domain.PermissionPackagePolicyNextCreateApproval) {
+		t.Fatalf("expected policy gate next action code, got %#v", draft.PolicyGate.NextActionCodes)
 	}
 }
 

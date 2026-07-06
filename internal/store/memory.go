@@ -1833,8 +1833,16 @@ func clonePermissionPackageApprovalRequest(request domain.PermissionPackageAppro
 
 func clonePermissionPackagePolicyGate(gate domain.PermissionPackagePolicyGate) domain.PermissionPackagePolicyGate {
 	gate.Reasons = clonePermissionPackagePolicyReasons(gate.Reasons)
+	gate.NextActionCodes = clonePermissionPackagePolicyNextActionCodes(gate.NextActionCodes)
 	gate.NextActions = cloneStrings(gate.NextActions)
 	return gate
+}
+
+func clonePermissionPackagePolicyNextActionCodes(codes []domain.PermissionPackagePolicyNextActionCode) []domain.PermissionPackagePolicyNextActionCode {
+	if codes == nil {
+		return nil
+	}
+	return append([]domain.PermissionPackagePolicyNextActionCode(nil), codes...)
 }
 
 func clonePermissionPackagePolicyReasons(reasons []domain.PermissionPackagePolicyReason) []domain.PermissionPackagePolicyReason {

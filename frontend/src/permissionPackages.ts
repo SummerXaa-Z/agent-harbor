@@ -15,6 +15,7 @@ import type {
 export type PermissionPackageDecision = "allow" | "deny";
 export type PermissionPackagePolicyDecision = "allow" | "approval_required";
 export type PermissionPackageApprovalStatus = "pending" | "approved" | "rejected" | "withdrawn";
+export type PermissionPackagePolicyNextActionCode = "create_approval_request";
 
 export interface PermissionPackageTemplate {
   id: string;
@@ -477,6 +478,7 @@ export interface PermissionPackagePolicyGate {
   canApplyDirectly: boolean;
   policyVersion: number;
   reasons: PermissionPackagePolicyReason[];
+  nextActionCodes?: PermissionPackagePolicyNextActionCode[];
   nextActions: string[];
 }
 
@@ -690,6 +692,7 @@ function buildPolicyGate(allowedCapabilities: Capability[]): PermissionPackagePo
     return {
       canApplyDirectly: true,
       decision: "allow",
+      nextActionCodes: [],
       nextActions: [],
       policyVersion: policyGateVersion,
       reasons,
@@ -698,6 +701,7 @@ function buildPolicyGate(allowedCapabilities: Capability[]): PermissionPackagePo
   return {
     canApplyDirectly: false,
     decision: "approval_required",
+    nextActionCodes: ["create_approval_request"],
     nextActions: ["Request approval before applying this permission request."],
     policyVersion: policyGateVersion,
     reasons,

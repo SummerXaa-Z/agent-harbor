@@ -305,6 +305,7 @@ func buildPolicyGate(allowedCapabilities []domain.Capability) domain.PermissionP
 	if len(reasons) > 0 {
 		gate.Decision = domain.PermissionPackagePolicyDecisionApprovalRequired
 		gate.CanApplyDirectly = false
+		gate.NextActionCodes = []domain.PermissionPackagePolicyNextActionCode{domain.PermissionPackagePolicyNextCreateApproval}
 		gate.NextActions = []string{"Request approval before applying this permission request."}
 	}
 	return gate

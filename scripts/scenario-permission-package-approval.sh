@@ -422,9 +422,12 @@ import json
 import os
 
 doc = json.loads(os.environ["RESPONSE_BODY"])
+result = doc.get("result", {})
+if result.get("metadataVersion") != 1:
+    raise SystemExit(f"management MCP tools/list metadataVersion={result.get('metadataVersion')!r} want 1")
 tools_by_name = {
     tool.get("name"): tool
-    for tool in doc.get("result", {}).get("tools", [])
+    for tool in result.get("tools", [])
 }
 required_safety = {
     "explain_access_decision": {"operationType": "read", "readOnly": True, "mutatesState": False, "approvalMode": "none"},
@@ -452,7 +455,7 @@ for name, tool in tools_by_name.items():
         raise SystemExit(f"management MCP tool {name!r} has incomplete safety metadata: {safety!r}")
     if access.get("requiredRole") in ("", "unspecified", None) or access.get("scopeBoundary") in ("", "unspecified", None):
         raise SystemExit(f"management MCP tool {name!r} has incomplete access metadata: {access!r}")
-print("management MCP tool safety and access metadata verified")
+print("management MCP tool catalog metadata verified")
 PY
 }
 

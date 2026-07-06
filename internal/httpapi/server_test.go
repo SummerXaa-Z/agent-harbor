@@ -559,6 +559,7 @@ type mcpEnvelopeResponse struct {
 }
 
 type mcpResultPayload struct {
+	MetadataVersion   int               `json:"metadataVersion"`
 	Tools             []mcpToolResponse `json:"tools"`
 	Content           []mcpContentItem  `json:"content"`
 	StructuredContent json.RawMessage   `json:"structuredContent"`
@@ -7513,6 +7514,9 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		"id":      "tools-list",
 		"method":  "tools/list",
 	}, ""))
+	if tools.Result.MetadataVersion != 1 {
+		t.Fatalf("management MCP tools/list metadataVersion=%d want 1", tools.Result.MetadataVersion)
+	}
 	if !mcpToolNamesContain(tools.Result.Tools, "draft_permission_package") ||
 		!mcpToolNamesContain(tools.Result.Tools, "preflight_permission_package") ||
 		!mcpToolNamesContain(tools.Result.Tools, "apply_permission_package") ||

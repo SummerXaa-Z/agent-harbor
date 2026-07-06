@@ -44,7 +44,8 @@ type managementMCPErrorData struct {
 }
 
 type managementMCPToolsListResult struct {
-	Tools []managementMCPTool `json:"tools"`
+	MetadataVersion int                 `json:"metadataVersion"`
+	Tools           []managementMCPTool `json:"tools"`
 }
 
 type managementMCPTool struct {
@@ -201,7 +202,10 @@ func (s *Server) managementMCP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch req.Method {
 	case "tools/list":
-		writeManagementMCPResult(w, req.ID, managementMCPToolsListResult{Tools: managementMCPTools()})
+		writeManagementMCPResult(w, req.ID, managementMCPToolsListResult{
+			MetadataVersion: 1,
+			Tools:           managementMCPTools(),
+		})
 	case "tools/call":
 		result, err := s.callManagementMCPTool(r, req)
 		if err != nil {

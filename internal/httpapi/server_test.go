@@ -592,12 +592,13 @@ type managementMCPExplainPermissionPackageResponse struct {
 }
 
 type managementMCPExplainAccessResponse struct {
-	Outcome     string                          `json:"outcome"`
-	Summary     string                          `json:"summary"`
-	Decision    domain.CapabilityAccessDecision `json:"decision"`
-	Evidence    []managementMCPExplainEvidence  `json:"evidence"`
-	DataScopes  []domain.DataScope              `json:"dataScopes"`
-	NextActions []string                        `json:"nextActions"`
+	Outcome         string                          `json:"outcome"`
+	Summary         string                          `json:"summary"`
+	Decision        domain.CapabilityAccessDecision `json:"decision"`
+	Evidence        []managementMCPExplainEvidence  `json:"evidence"`
+	DataScopes      []domain.DataScope              `json:"dataScopes"`
+	NextActionCodes []string                        `json:"nextActionCodes"`
+	NextActions     []string                        `json:"nextActions"`
 }
 
 type managementMCPExplainEvidence struct {
@@ -8139,6 +8140,12 @@ func TestManagementMCPExplainAccessDecision(t *testing.T) {
 	if !strings.Contains(strings.Join(denied.NextActions, " "), "permission package") {
 		t.Fatalf("expected permission package next action, got %#v", denied.NextActions)
 	}
+	if !slices.Contains(denied.NextActionCodes, "use_permission_package") {
+		t.Fatalf("expected permission package next action code, got %#v", denied.NextActionCodes)
+	}
+	if slices.Contains(denied.NextActionCodes, "no_change_required") {
+		t.Fatalf("denied decision should not suggest no-change code, got %#v", denied.NextActionCodes)
+	}
 
 	packageArgs := map[string]any{
 		"callerInstanceId": caller.ID,
@@ -8176,6 +8183,9 @@ func TestManagementMCPExplainAccessDecision(t *testing.T) {
 	if allowed.Outcome != "allowed" || !allowed.Decision.Allowed || len(allowed.DataScopes) == 0 {
 		t.Fatalf("unexpected allowed explanation: %#v", allowed)
 	}
+	if !slices.Contains(allowed.NextActionCodes, "no_change_required") {
+		t.Fatalf("expected no-change next action code, got %#v", allowed.NextActionCodes)
+	}
 	if !explainEvidenceContains(allowed.Evidence, "tenant_entitlement") ||
 		!explainEvidenceContains(allowed.Evidence, "workspace_assignment") ||
 		!explainEvidenceContains(allowed.Evidence, "instance_assignment") {
@@ -8209,6 +8219,9 @@ func TestAccessDecisionExplain(t *testing.T) {
 	if !strings.Contains(strings.Join(denied.NextActions, " "), "permission package") {
 		t.Fatalf("expected permission package next action, got %#v", denied.NextActions)
 	}
+	if !slices.Contains(denied.NextActionCodes, "use_permission_package") {
+		t.Fatalf("expected permission package next action code, got %#v", denied.NextActionCodes)
+	}
 
 	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", map[string]any{
 		"callerInstanceId": caller.ID,
@@ -8227,6 +8240,9 @@ func TestAccessDecisionExplain(t *testing.T) {
 	allowed := decodeData[managementMCPExplainAccessResponse](t, request(t, router, http.MethodGet, explainPath, nil, ""))
 	if allowed.Outcome != "allowed" || !allowed.Decision.Allowed || len(allowed.DataScopes) == 0 {
 		t.Fatalf("unexpected allowed explanation: %#v", allowed)
+	}
+	if !slices.Contains(allowed.NextActionCodes, "no_change_required") {
+		t.Fatalf("expected no-change next action code, got %#v", allowed.NextActionCodes)
 	}
 	if !explainEvidenceContains(allowed.Evidence, "tenant_entitlement") ||
 		!explainEvidenceContains(allowed.Evidence, "workspace_assignment") ||

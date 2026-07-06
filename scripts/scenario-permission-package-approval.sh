@@ -198,6 +198,24 @@ elif kind == "mcp-explain-permission-package":
             },
         },
     }
+elif kind == "mcp-explain-access-decision":
+    caller_id, capability_id, subject_id, target_id, tenant_id, workspace_id = sys.argv[2:8]
+    body = {
+        "jsonrpc": "2.0",
+        "id": "explain-access-decision",
+        "method": "tools/call",
+        "params": {
+            "name": "explain_access_decision",
+            "arguments": {
+                "callerInstanceId": caller_id,
+                "capabilityId": capability_id,
+                "subjectId": subject_id,
+                "targetId": target_id,
+                "tenantId": tenant_id,
+                "workspaceId": workspace_id,
+            },
+        },
+    }
 elif kind == "tools-call":
     tool = sys.argv[2]
     body = {
@@ -226,6 +244,11 @@ permission_package_body() {
 
 mcp_explain_permission_package_body() {
   json_body mcp-explain-permission-package "$CALLER_ID" "$REGION" "$REQUEST_TEXT" "$SUBJECT_SELECTOR" "$TARGET_ID" "$TEMPLATE_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID"
+}
+
+mcp_explain_access_decision_body() {
+  local capability_id="$1"
+  json_body mcp-explain-access-decision "$CALLER_ID" "$capability_id" "$SUBJECT_ID" "$TARGET_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID"
 }
 
 production_readiness_path() {
@@ -358,6 +381,38 @@ policy_codes = structured.get("policyGate", {}).get("nextActionCodes") or []
 if "create_approval_request" not in policy_codes:
     raise SystemExit(f"MCP explanation policy gate codes missing create_approval_request: {structured}")
 print("management MCP permission package explanation verified")
+PY
+}
+
+assert_mcp_access_explain() {
+  local expected_outcome="$1"
+  local expected_code="$2"
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_outcome" "$expected_code" <<'PY'
+import json
+import os
+import sys
+
+expected_outcome, expected_code = sys.argv[1:3]
+doc = json.loads(os.environ["RESPONSE_BODY"])
+structured = doc.get("result", {}).get("structuredContent")
+if not isinstance(structured, dict):
+    raise SystemExit(f"missing structuredContent: {doc}")
+if structured.get("outcome") != expected_outcome:
+    raise SystemExit(f"expected {expected_outcome!r} access explanation: {structured}")
+next_action_codes = structured.get("nextActionCodes") or []
+if expected_code not in next_action_codes:
+    raise SystemExit(
+        f"access explanation nextActionCodes={next_action_codes!r} missing {expected_code!r}: {structured}"
+    )
+if expected_outcome == "denied" and "no_change_required" in next_action_codes:
+    raise SystemExit(f"denied access explanation should not suggest no-change code: {structured}")
+if expected_outcome == "allowed":
+    decision = structured.get("decision") or {}
+    if decision.get("allowed") is not True:
+        raise SystemExit(f"allowed access explanation should include allowed decision: {structured}")
+    if not structured.get("dataScopes"):
+        raise SystemExit(f"allowed access explanation should include effective data scopes: {structured}")
+print(f"management MCP access explanation verified: {expected_outcome}")
 PY
 }
 
@@ -1010,6 +1065,10 @@ request POST "/api/v1/management/mcp" "$(mcp_explain_permission_package_body)"
 expect_status 200 "explain approval-required permission package through management MCP"
 assert_mcp_permission_package_explain
 
+request POST "/api/v1/management/mcp" "$(mcp_explain_access_decision_body "$READ_CAPABILITY_ID")"
+expect_status 200 "explain denied access through management MCP before permission package apply"
+assert_mcp_access_explain "denied" "approve_capability"
+
 request POST "/api/v1/permission-packages:preflight" "$(permission_package_body)"
 expect_status 200 "preflight approval-required package without approval"
 assert_permission_package_preflight "false" "approval_request_missing"
@@ -1084,6 +1143,10 @@ assert_consumed_approval
 request POST "/api/v1/permission-packages:preflight" "$(permission_package_body)"
 expect_status 200 "preflight already-applied permission package"
 assert_permission_package_preflight "false" "application_already_applied"
+
+request POST "/api/v1/management/mcp" "$(mcp_explain_access_decision_body "$READ_CAPABILITY_ID")"
+expect_status 200 "explain allowed access through management MCP after permission package apply"
+assert_mcp_access_explain "allowed" "no_change_required"
 
 request POST "/api/v1/permission-packages:apply" "$(permission_package_body "$APPROVAL_REQUEST_ID")"
 expect_status 400 "reject consumed approval request"

@@ -168,13 +168,14 @@ type managementMCPExplainPermissionPackageResult struct {
 }
 
 type managementMCPExplainAccessResult struct {
-	Outcome     string                          `json:"outcome"`
-	Summary     string                          `json:"summary"`
-	Request     managementMCPExplainAccessArgs  `json:"request"`
-	Decision    domain.CapabilityAccessDecision `json:"decision"`
-	Evidence    []managementMCPExplainEvidence  `json:"evidence"`
-	DataScopes  []domain.DataScope              `json:"dataScopes,omitempty"`
-	NextActions []string                        `json:"nextActions"`
+	Outcome         string                          `json:"outcome"`
+	Summary         string                          `json:"summary"`
+	Request         managementMCPExplainAccessArgs  `json:"request"`
+	Decision        domain.CapabilityAccessDecision `json:"decision"`
+	Evidence        []managementMCPExplainEvidence  `json:"evidence"`
+	DataScopes      []domain.DataScope              `json:"dataScopes,omitempty"`
+	NextActionCodes []string                        `json:"nextActionCodes"`
+	NextActions     []string                        `json:"nextActions"`
 }
 
 func (s *Server) managementMCP(w http.ResponseWriter, r *http.Request) {
@@ -972,13 +973,14 @@ func (s *Server) explainManagementMCPAccessDecision(r *http.Request, args manage
 		outcome = "allowed"
 	}
 	return managementMCPExplainAccessResult{
-		Outcome:     outcome,
-		Summary:     managementMCPAccessSummary(decision),
-		Request:     args,
-		Decision:    decision,
-		Evidence:    evidence,
-		DataScopes:  decision.DataScopes,
-		NextActions: managementMCPAccessNextActions(decision),
+		Outcome:         outcome,
+		Summary:         managementMCPAccessSummary(decision),
+		Request:         args,
+		Decision:        decision,
+		Evidence:        evidence,
+		DataScopes:      decision.DataScopes,
+		NextActionCodes: managementMCPAccessNextActionCodes(decision),
+		NextActions:     managementMCPAccessNextActions(decision),
 	}, nil
 }
 
@@ -1164,6 +1166,31 @@ func managementMCPAccessNextActions(decision domain.CapabilityAccessDecision) []
 		return []string{"Review the deny effect on the matching entitlement or assignment before granting broader access."}
 	default:
 		return []string{"Inspect get_tenant_access_profile for this tenant/workspace/caller/capability and repair the first missing decision layer."}
+	}
+}
+
+func managementMCPAccessNextActionCodes(decision domain.CapabilityAccessDecision) []string {
+	if decision.Allowed {
+		return []string{"no_change_required"}
+	}
+	reason := strings.ToLower(decision.Reason)
+	switch {
+	case strings.Contains(reason, "not registered"):
+		return []string{"refresh_capabilities"}
+	case strings.Contains(reason, "not approved"):
+		return []string{"approve_capability"}
+	case strings.Contains(reason, "tenant has no entitlement"):
+		return []string{"use_permission_package"}
+	case strings.Contains(reason, "workspace has no assignment"):
+		return []string{"create_workspace_assignment"}
+	case strings.Contains(reason, "caller instance has no assignment"):
+		return []string{"create_caller_assignment"}
+	case strings.Contains(reason, "data scopes exceed"):
+		return []string{"narrow_data_scope"}
+	case strings.Contains(reason, "denies"):
+		return []string{"review_deny"}
+	default:
+		return []string{"inspect_access_profile"}
 	}
 }
 

@@ -2,8 +2,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${ROOT_DIR}/scripts/lib/ports.sh"
+
 BASE_URL="${BASE_URL:-http://127.0.0.1:9196}"
 API_ADDR="${BASE_URL#http://}"
+API_PORT="${API_ADDR##*:}"
 MOCK_MCP_HOST="${MOCK_MCP_HOST:-127.0.0.1}"
 MOCK_MCP_PORT="${MOCK_MCP_PORT:-8796}"
 MCP_ENDPOINT="http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/mcp"
@@ -51,6 +54,11 @@ echo "AgentHarbor tenant permission center scenario"
 echo "BASE_URL=${BASE_URL}"
 echo "MCP_ENDPOINT=${MCP_ENDPOINT}"
 echo "RUN_ID=${RUN_ID}"
+
+if [[ "${API_PORT}" =~ ^[0-9]+$ ]]; then
+  assert_port_free "API" "${API_PORT}"
+fi
+assert_port_free "MCP" "${MOCK_MCP_PORT}"
 
 python3 "${ROOT_DIR}/scripts/mock-mcp-server.py" --host "${MOCK_MCP_HOST}" --port "${MOCK_MCP_PORT}" >/tmp/agent-harbor-tenant-center-mcp-${RUN_ID}.log 2>&1 &
 PIDS+=("$!")

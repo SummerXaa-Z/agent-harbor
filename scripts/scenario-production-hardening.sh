@@ -21,6 +21,9 @@ PIDS=()
 HTTP_STATUS=""
 HTTP_BODY=""
 
+# shellcheck source=scripts/lib/ports.sh
+source "$ROOT_DIR/scripts/lib/ports.sh"
+
 cleanup() {
   local pid
   for pid in "${PIDS[@]:-}"; do
@@ -37,28 +40,6 @@ need() {
     echo "missing dependency: $1" >&2
     exit 1
   fi
-}
-
-port_in_use() {
-  local port="$1"
-  if command -v lsof >/dev/null 2>&1; then
-    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
-    return
-  fi
-  python3 - "$port" <<'PY'
-import socket
-import sys
-
-port = int(sys.argv[1])
-sock = socket.socket()
-try:
-    sock.bind(("127.0.0.1", port))
-except OSError:
-    raise SystemExit(0)
-finally:
-    sock.close()
-raise SystemExit(1)
-PY
 }
 
 show_logs() {
@@ -235,82 +216,25 @@ need curl
 need go
 need python3
 
-if port_in_use "$API_PORT"; then
-	echo "API port $API_PORT is already in use" >&2
-	exit 1
-fi
-if port_in_use "$UNAUTH_API_PORT"; then
-	echo "unauthenticated admin check API port $UNAUTH_API_PORT is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 1))"; then
-	echo "production unsafe config check API port $((UNAUTH_API_PORT + 1)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 2))"; then
-	echo "production weak session secret check API port $((UNAUTH_API_PORT + 2)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 3))"; then
-	echo "production invalid CORS check API port $((UNAUTH_API_PORT + 3)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 4))"; then
-	echo "production missing database check API port $((UNAUTH_API_PORT + 4)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 5))"; then
-	echo "production preflight before storage check API port $((UNAUTH_API_PORT + 5)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 6))"; then
-	echo "production admin key conflict check API port $((UNAUTH_API_PORT + 6)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 7))"; then
-	echo "production missing session secret check API port $((UNAUTH_API_PORT + 7)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 8))"; then
-	echo "production missing credential key check API port $((UNAUTH_API_PORT + 8)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 9))"; then
-	echo "production invalid database URL check API port $((UNAUTH_API_PORT + 9)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 10))"; then
-	echo "production malformed approval reviewer check API port $((UNAUTH_API_PORT + 10)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 11))"; then
-	echo "production malformed admin identities check API port $((UNAUTH_API_PORT + 11)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 12))"; then
-	echo "production missing platform admin check API port $((UNAUTH_API_PORT + 12)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 13))"; then
-	echo "production scoped platform admin check API port $((UNAUTH_API_PORT + 13)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 14))"; then
-	echo "production unbound approval reviewer check API port $((UNAUTH_API_PORT + 14)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 15))"; then
-	echo "production oversized approval reviewer route check API port $((UNAUTH_API_PORT + 15)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 16))"; then
-	echo "production reserved admin identity actor check API port $((UNAUTH_API_PORT + 16)) is already in use" >&2
-	exit 1
-fi
-if port_in_use "$((UNAUTH_API_PORT + 17))"; then
-	echo "production invalid admin identity actor format check API port $((UNAUTH_API_PORT + 17)) is already in use" >&2
-	exit 1
-fi
+assert_port_free "API" "$API_PORT"
+assert_port_free "unauthenticated admin check API" "$UNAUTH_API_PORT"
+assert_port_free "production unsafe config check API" "$((UNAUTH_API_PORT + 1))"
+assert_port_free "production weak session secret check API" "$((UNAUTH_API_PORT + 2))"
+assert_port_free "production invalid CORS check API" "$((UNAUTH_API_PORT + 3))"
+assert_port_free "production missing database check API" "$((UNAUTH_API_PORT + 4))"
+assert_port_free "production preflight before storage check API" "$((UNAUTH_API_PORT + 5))"
+assert_port_free "production admin key conflict check API" "$((UNAUTH_API_PORT + 6))"
+assert_port_free "production missing session secret check API" "$((UNAUTH_API_PORT + 7))"
+assert_port_free "production missing credential key check API" "$((UNAUTH_API_PORT + 8))"
+assert_port_free "production invalid database URL check API" "$((UNAUTH_API_PORT + 9))"
+assert_port_free "production malformed approval reviewer check API" "$((UNAUTH_API_PORT + 10))"
+assert_port_free "production malformed admin identities check API" "$((UNAUTH_API_PORT + 11))"
+assert_port_free "production missing platform admin check API" "$((UNAUTH_API_PORT + 12))"
+assert_port_free "production scoped platform admin check API" "$((UNAUTH_API_PORT + 13))"
+assert_port_free "production unbound approval reviewer check API" "$((UNAUTH_API_PORT + 14))"
+assert_port_free "production oversized approval reviewer route check API" "$((UNAUTH_API_PORT + 15))"
+assert_port_free "production reserved admin identity actor check API" "$((UNAUTH_API_PORT + 16))"
+assert_port_free "production invalid admin identity actor format check API" "$((UNAUTH_API_PORT + 17))"
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT_DIR"

@@ -22,6 +22,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="${TMPDIR:-/tmp}/agent-harbor-browser-gate-${RUN_ID}"
 PIDS=()
 
+# shellcheck source=scripts/lib/ports.sh
+source "$ROOT_DIR/scripts/lib/ports.sh"
+
 cleanup() {
   local pid
   for pid in "${PIDS[@]:-}"; do
@@ -44,37 +47,6 @@ trap 'exit 143' TERM
 need() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "missing dependency: $1" >&2
-    exit 1
-  fi
-}
-
-port_in_use() {
-  local port="$1"
-  if command -v lsof >/dev/null 2>&1; then
-    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
-    return
-  fi
-  python3 - "$port" <<'PY'
-import socket
-import sys
-
-port = int(sys.argv[1])
-sock = socket.socket()
-try:
-    sock.bind(("127.0.0.1", port))
-except OSError:
-    raise SystemExit(0)
-finally:
-    sock.close()
-raise SystemExit(1)
-PY
-}
-
-assert_port_free() {
-  local label="$1"
-  local port="$2"
-  if port_in_use "$port"; then
-    echo "$label port $port is already in use" >&2
     exit 1
   fi
 }

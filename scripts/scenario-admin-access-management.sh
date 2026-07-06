@@ -25,6 +25,9 @@ PIDS=()
 HTTP_STATUS=""
 HTTP_BODY=""
 
+# shellcheck source=scripts/lib/ports.sh
+source "$ROOT_DIR/scripts/lib/ports.sh"
+
 cleanup() {
   local pid
   for pid in "${PIDS[@]:-}"; do
@@ -41,28 +44,6 @@ need() {
     echo "missing dependency: $1" >&2
     exit 1
   fi
-}
-
-port_in_use() {
-  local port="$1"
-  if command -v lsof >/dev/null 2>&1; then
-    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
-    return
-  fi
-  python3 - "$port" <<'PY'
-import socket
-import sys
-
-port = int(sys.argv[1])
-sock = socket.socket()
-try:
-    sock.bind(("127.0.0.1", port))
-except OSError:
-    raise SystemExit(0)
-finally:
-    sock.close()
-raise SystemExit(1)
-PY
 }
 
 show_logs() {
@@ -363,10 +344,7 @@ need curl
 need go
 need python3
 
-if port_in_use "$API_PORT"; then
-  echo "API port $API_PORT is already in use" >&2
-  exit 1
-fi
+assert_port_free "API" "$API_PORT"
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT_DIR"

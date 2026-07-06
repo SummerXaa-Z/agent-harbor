@@ -28,6 +28,9 @@ SCENARIO_SCRIPTS := \
 	scripts/demo.sh \
 	scripts/scenario-tenant-access-profile.sh
 
+SCENARIO_SCRIPT_LIBS := \
+	scripts/lib/ports.sh
+
 .PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
 
 help:
@@ -105,7 +108,7 @@ makefile-targets-test:
 	bash tests/makefile_targets_test.sh
 
 scenario-scripts-lint:
-	bash -n $(SCENARIO_SCRIPTS) scripts/scenario-all.sh
+	bash -n $(SCENARIO_SCRIPTS) $(SCENARIO_SCRIPT_LIBS) scripts/scenario-all.sh
 
 github-config-lint:
 	ruby -e 'require "yaml"; Dir[".github/**/*.yml"].sort.each { |file| YAML.load_file(file); puts "#{file} ok" }'
@@ -136,6 +139,7 @@ scenario-permission-package-approval:
 	@if [[ -n "$${BASE_URL:-}" ]]; then \
 		bash scripts/scenario-permission-package-approval.sh; \
 	else \
+		source scripts/lib/ports.sh; \
 		run_id="permission-package-approval-$$(date +%Y%m%d%H%M%S)"; \
 		api_host="$${AGENT_HARBOR_PERMISSION_PACKAGE_API_HOST:-127.0.0.1}"; \
 		api_port="$${AGENT_HARBOR_PERMISSION_PACKAGE_API_PORT:-9197}"; \
@@ -145,14 +149,8 @@ scenario-permission-package-approval:
 		log_dir="$${TMPDIR:-/tmp}/agent-harbor-permission-package-approval-$${run_id}"; \
 		requester_key="permission-package-requester-key-$${run_id}"; \
 		reviewer_key="permission-package-reviewer-key-$${run_id}"; \
-		if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$${api_port}" -sTCP:LISTEN >/dev/null 2>&1; then \
-			echo "API port $${api_port} is already in use; set BASE_URL to test an existing API or AGENT_HARBOR_PERMISSION_PACKAGE_API_PORT for an isolated local gate" >&2; \
-			exit 1; \
-		fi; \
-		if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$${mcp_port}" -sTCP:LISTEN >/dev/null 2>&1; then \
-			echo "MCP port $${mcp_port} is already in use; set MOCK_MCP_PORT for an isolated local gate" >&2; \
-			exit 1; \
-		fi; \
+		assert_port_free "API" "$$api_port"; \
+		assert_port_free "MCP" "$$mcp_port"; \
 		mkdir -p "$$log_dir"; \
 		cleanup() { \
 			if [[ -n "$${api_pid:-}" ]]; then \

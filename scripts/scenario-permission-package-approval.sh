@@ -416,6 +416,33 @@ print(f"management MCP access explanation verified: {expected_outcome}")
 PY
 }
 
+assert_management_mcp_tool_safety() {
+  RESPONSE_BODY="$HTTP_BODY" python3 <<'PY'
+import json
+import os
+
+doc = json.loads(os.environ["RESPONSE_BODY"])
+tools = {
+    tool.get("name"): tool.get("safety") or {}
+    for tool in doc.get("result", {}).get("tools", [])
+}
+required = {
+    "explain_access_decision": {"operationType": "read", "readOnly": True, "mutatesState": False, "approvalMode": "none"},
+    "draft_permission_package": {"operationType": "preview", "readOnly": True, "mutatesState": False, "approvalMode": "none"},
+    "apply_permission_package": {"operationType": "write", "readOnly": False, "mutatesState": True, "approvalMode": "conditional"},
+    "approve_permission_package_approval_request": {"operationType": "write", "readOnly": False, "mutatesState": True, "approvalMode": "reviewer"},
+}
+for name, expected in required.items():
+    safety = tools.get(name)
+    if safety != expected:
+        raise SystemExit(f"management MCP tool {name!r} safety={safety!r} want {expected!r}")
+for name, safety in tools.items():
+    if safety.get("operationType") in ("", "unspecified", None) or safety.get("approvalMode") in ("", "unspecified", None):
+        raise SystemExit(f"management MCP tool {name!r} has incomplete safety metadata: {safety!r}")
+print("management MCP tool safety metadata verified")
+PY
+}
+
 assert_approval_request() {
   local expected_status="$1"
   local expected_id="${2:-}"
@@ -1028,6 +1055,10 @@ start_mcp_server
 
 request GET "/healthz"
 expect_status 200 "AgentHarbor health check"
+
+request POST "/api/v1/management/mcp" "$(json_body tools-list)"
+expect_status 200 "list management MCP tools with safety metadata"
+assert_management_mcp_tool_safety
 
 request POST "/api/v1/tenants" "$(json_body tenant "$ROOT_TENANT_ID" "" "Permission Package Approval Root")"
 expect_status 201 "create root tenant"

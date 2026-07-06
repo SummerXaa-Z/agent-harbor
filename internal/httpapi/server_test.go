@@ -568,6 +568,14 @@ type mcpToolResponse struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
+	Safety      mcpToolSafety  `json:"safety"`
+}
+
+type mcpToolSafety struct {
+	OperationType string `json:"operationType"`
+	ReadOnly      bool   `json:"readOnly"`
+	MutatesState  bool   `json:"mutatesState"`
+	ApprovalMode  string `json:"approvalMode"`
 }
 
 type mcpContentItem struct {
@@ -7511,6 +7519,36 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		!mcpToolNamesContain(tools.Result.Tools, "export_permission_package_production_evidence") {
 		t.Fatalf("management MCP tools missing permission package tools: %#v", tools.Result.Tools)
 	}
+	for _, tool := range tools.Result.Tools {
+		if tool.Safety.OperationType == "" || tool.Safety.OperationType == "unspecified" ||
+			tool.Safety.ApprovalMode == "" || tool.Safety.ApprovalMode == "unspecified" {
+			t.Fatalf("management MCP tool %q missing safety metadata: %#v", tool.Name, tool)
+		}
+	}
+	assertMCPToolSafety(t, tools.Result.Tools, "explain_access_decision", mcpToolSafety{
+		OperationType: "read",
+		ReadOnly:      true,
+		MutatesState:  false,
+		ApprovalMode:  "none",
+	})
+	assertMCPToolSafety(t, tools.Result.Tools, "draft_permission_package", mcpToolSafety{
+		OperationType: "preview",
+		ReadOnly:      true,
+		MutatesState:  false,
+		ApprovalMode:  "none",
+	})
+	assertMCPToolSafety(t, tools.Result.Tools, "apply_permission_package", mcpToolSafety{
+		OperationType: "write",
+		ReadOnly:      false,
+		MutatesState:  true,
+		ApprovalMode:  "conditional",
+	})
+	assertMCPToolSafety(t, tools.Result.Tools, "approve_permission_package_approval_request", mcpToolSafety{
+		OperationType: "write",
+		ReadOnly:      false,
+		MutatesState:  true,
+		ApprovalMode:  "reviewer",
+	})
 
 	args := map[string]any{
 		"callerInstanceId": caller.ID,
@@ -8760,6 +8798,20 @@ func mcpToolNamesContain(tools []mcpToolResponse, name string) bool {
 		}
 	}
 	return false
+}
+
+func assertMCPToolSafety(t *testing.T, tools []mcpToolResponse, name string, want mcpToolSafety) {
+	t.Helper()
+	for _, tool := range tools {
+		if tool.Name != name {
+			continue
+		}
+		if tool.Safety != want {
+			t.Fatalf("tool %q safety=%#v want %#v", name, tool.Safety, want)
+		}
+		return
+	}
+	t.Fatalf("tool %q missing from tools/list", name)
 }
 
 func containsString(values []string, want string) bool {

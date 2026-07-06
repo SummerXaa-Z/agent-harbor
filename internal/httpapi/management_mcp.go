@@ -48,9 +48,17 @@ type managementMCPToolsListResult struct {
 }
 
 type managementMCPTool struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	InputSchema map[string]any `json:"inputSchema"`
+	Name        string                  `json:"name"`
+	Description string                  `json:"description"`
+	InputSchema map[string]any          `json:"inputSchema"`
+	Safety      managementMCPToolSafety `json:"safety"`
+}
+
+type managementMCPToolSafety struct {
+	OperationType string `json:"operationType"`
+	ReadOnly      bool   `json:"readOnly"`
+	MutatesState  bool   `json:"mutatesState"`
+	ApprovalMode  string `json:"approvalMode"`
 }
 
 type managementMCPCallResult struct {
@@ -510,7 +518,7 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 }
 
 func managementMCPTools() []managementMCPTool {
-	return []managementMCPTool{
+	tools := []managementMCPTool{
 		{
 			Name:        "list_admin_identities",
 			Description: "List bootstrap and managed administrator identities, including roles, status, and tenant/workspace boundaries. Requires platform administrator.",
@@ -638,6 +646,71 @@ func managementMCPTools() []managementMCPTool {
 				"status":      map[string]any{"type": "string", "enum": []string{"pending_review", "approved", "deprecated", "removed"}, "description": "Optional discovery status filter."},
 			}, []string{}),
 		},
+	}
+	return managementMCPToolsWithSafety(tools)
+}
+
+func managementMCPToolsWithSafety(tools []managementMCPTool) []managementMCPTool {
+	safetyByName := map[string]managementMCPToolSafety{
+		"list_admin_identities":                         readManagementMCPToolSafety(),
+		"create_admin_identity":                         writeManagementMCPToolSafety("none"),
+		"rotate_admin_identity_key":                     writeManagementMCPToolSafety("none"),
+		"disable_admin_identity":                        writeManagementMCPToolSafety("none"),
+		"list_permission_package_templates":             readManagementMCPToolSafety(),
+		"draft_permission_package":                      previewManagementMCPToolSafety(),
+		"preflight_permission_package":                  previewManagementMCPToolSafety(),
+		"apply_permission_package":                      writeManagementMCPToolSafety("conditional"),
+		"create_permission_package_approval_request":    writeManagementMCPToolSafety("requester"),
+		"list_permission_package_approval_requests":     readManagementMCPToolSafety(),
+		"approve_permission_package_approval_request":   writeManagementMCPToolSafety("reviewer"),
+		"reject_permission_package_approval_request":    writeManagementMCPToolSafety("reviewer"),
+		"withdraw_permission_package_approval_request":  writeManagementMCPToolSafety("requester"),
+		"list_permission_package_applications":          readManagementMCPToolSafety(),
+		"check_permission_package_production_readiness": readManagementMCPToolSafety(),
+		"export_permission_package_production_evidence": readManagementMCPToolSafety(),
+		"explain_permission_package_draft":              previewManagementMCPToolSafety(),
+		"explain_access_decision":                       readManagementMCPToolSafety(),
+		"get_tenant_access_profile":                     readManagementMCPToolSafety(),
+		"list_agents":                                   readManagementMCPToolSafety(),
+		"list_capabilities":                             readManagementMCPToolSafety(),
+	}
+	for i := range tools {
+		safety, ok := safetyByName[tools[i].Name]
+		if !ok {
+			safety = managementMCPToolSafety{
+				OperationType: "unspecified",
+				ApprovalMode:  "unspecified",
+			}
+		}
+		tools[i].Safety = safety
+	}
+	return tools
+}
+
+func readManagementMCPToolSafety() managementMCPToolSafety {
+	return managementMCPToolSafety{
+		OperationType: "read",
+		ReadOnly:      true,
+		MutatesState:  false,
+		ApprovalMode:  "none",
+	}
+}
+
+func previewManagementMCPToolSafety() managementMCPToolSafety {
+	return managementMCPToolSafety{
+		OperationType: "preview",
+		ReadOnly:      true,
+		MutatesState:  false,
+		ApprovalMode:  "none",
+	}
+}
+
+func writeManagementMCPToolSafety(approvalMode string) managementMCPToolSafety {
+	return managementMCPToolSafety{
+		OperationType: "write",
+		ReadOnly:      false,
+		MutatesState:  true,
+		ApprovalMode:  approvalMode,
 	}
 }
 

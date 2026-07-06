@@ -57,6 +57,15 @@ test("English product copy uses acceptance and records wording", () => {
     t("message.apiContractIncompatibleManagementCatalog"),
     "Management MCP catalog metadata is incompatible with this console. Upgrade the AgentHarbor API before continuing."
   );
+  assert.equal(t("systemCapability.permissionPackageApprovalRequests"), "Permission approval queue");
+  assert.equal(t("systemCapability.permissionPackageApprovalWithdraw"), "Approval withdrawal");
+  assert.equal(t("systemCapability.permissionPackageApplyPreflight"), "Apply preflight");
+  assert.equal(t("systemCapability.permissionPackageApplications"), "Permission application records");
+  assert.equal(t("systemCapability.permissionPackageApplicationHealth"), "Application status checks");
+  assert.equal(t("systemCapability.permissionPackageApplicationImpact"), "Application impact review");
+  assert.equal(t("systemCapability.permissionPackageProductionReadiness"), "Go-live status checks");
+  assert.equal(t("systemCapability.permissionPackageConsumedApprovalRecovery"), "Used approval recovery guidance");
+  assert.equal(t("systemCapability.managementMcpToolsMetadataV1"), "Management MCP tool metadata");
   assert.equal(t("connectionDiagnostics.action"), "Run diagnostics");
   assert.equal(t("connectionDiagnostics.title"), "Connection diagnostics");
   assert.equal(t("connectionDiagnostics.summaryOk"), "Ready for the production journey.");
@@ -458,6 +467,15 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("message.apiContractUnavailable"), "无法读取 API 兼容信息。请先升级 AgentHarbor API，再继续使用当前控制台。");
   assert.equal(t("message.apiContractIncompatible"), "API 缺少当前控制台需要的能力：{capabilities}。请先升级 AgentHarbor API。");
   assert.equal(t("message.apiContractIncompatibleManagementCatalog"), "Management MCP 目录元数据与当前控制台不兼容。请先升级 AgentHarbor API。");
+  assert.equal(t("systemCapability.permissionPackageApprovalRequests"), "权限审批队列");
+  assert.equal(t("systemCapability.permissionPackageApprovalWithdraw"), "审批撤回");
+  assert.equal(t("systemCapability.permissionPackageApplyPreflight"), "应用前预检");
+  assert.equal(t("systemCapability.permissionPackageApplications"), "权限应用记录");
+  assert.equal(t("systemCapability.permissionPackageApplicationHealth"), "落地状态检查");
+  assert.equal(t("systemCapability.permissionPackageApplicationImpact"), "影响复核");
+  assert.equal(t("systemCapability.permissionPackageProductionReadiness"), "上线状态检查");
+  assert.equal(t("systemCapability.permissionPackageConsumedApprovalRecovery"), "已使用审批恢复提示");
+  assert.equal(t("systemCapability.managementMcpToolsMetadataV1"), "Management MCP 工具元数据");
   assert.equal(t("connectionDiagnostics.action"), "运行诊断");
   assert.equal(t("connectionDiagnostics.title"), "连接诊断");
   assert.equal(t("connectionDiagnostics.summaryOk"), "可以继续生产主流程。");

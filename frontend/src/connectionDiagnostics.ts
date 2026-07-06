@@ -1,4 +1,5 @@
 import type { HealthCheckResult } from "./api";
+import type { Translator } from "./consolePresenters";
 import type { ConsoleSession } from "./types";
 
 export type ConnectionDiagnosticKey = "session" | "api" | "dataSource" | "mcp" | "mcpCatalog";
@@ -37,6 +38,7 @@ export interface ConnectionDiagnosticRow {
   status: ConnectionDiagnosticStatus;
   titleKey: string;
   detailKey: string;
+  detailParamKeys?: Record<string, string[]>;
   detailParams?: Record<string, string | number>;
 }
 
@@ -63,6 +65,15 @@ export function connectionDiagnosticsSummaryStatus(rows: ConnectionDiagnosticRow
   if (rows.some((row) => row.status === "error")) return "error";
   if (rows.some((row) => row.status === "warning")) return "warning";
   return "ok";
+}
+
+export function connectionDiagnosticDetail(row: ConnectionDiagnosticRow | undefined, t: Translator) {
+  if (!row) return "";
+  const detailParams: Record<string, string | number> = { ...(row.detailParams ?? {}) };
+  for (const [name, keys] of Object.entries(row.detailParamKeys ?? {})) {
+    detailParams[name] = keys.map((key) => t(key)).join(", ");
+  }
+  return Object.keys(detailParams).length > 0 ? tx(t, row.detailKey, detailParams) : t(row.detailKey);
 }
 
 export function managementMcpCatalogDiagnosticFromResult(
@@ -162,6 +173,18 @@ function apiDiagnosticRow(apiHealth: HealthCheckResult): ConnectionDiagnosticRow
     if (hasOnlyManagementMcpCatalogContractIssues(apiHealth.contractIssues, apiHealth.missingCapabilities)) {
       return {
         detailKey: "message.apiContractIncompatibleManagementCatalog",
+        key: "api",
+        status: "error",
+        titleKey: "connectionDiagnostics.api.title"
+      };
+    }
+    const capabilityLabelKeys = systemCapabilityLabelKeys(apiHealth.missingCapabilities);
+    if (capabilityLabelKeys.length > 0) {
+      return {
+        detailKey: "message.apiContractIncompatible",
+        detailParamKeys: {
+          capabilities: capabilityLabelKeys
+        },
         key: "api",
         status: "error",
         titleKey: "connectionDiagnostics.api.title"
@@ -271,4 +294,28 @@ function hasOnlyManagementMcpCatalogContractIssues(
     issue === "managementMcpToolCatalog.metadataVersion" ||
     issue.startsWith("managementMcpToolCatalog.requiredMetadata.")
   ));
+}
+
+function systemCapabilityLabelKeys(capabilities: string[] | undefined): string[] {
+  if (!Array.isArray(capabilities)) return [];
+  return capabilities.map((capability) => systemCapabilityLabelKeyByName[capability]).filter(Boolean);
+}
+
+const systemCapabilityLabelKeyByName: Record<string, string> = {
+  management_mcp_tools_metadata_v1: "systemCapability.managementMcpToolsMetadataV1",
+  permission_package_applications: "systemCapability.permissionPackageApplications",
+  permission_package_application_health: "systemCapability.permissionPackageApplicationHealth",
+  permission_package_application_impact: "systemCapability.permissionPackageApplicationImpact",
+  permission_package_apply_preflight: "systemCapability.permissionPackageApplyPreflight",
+  permission_package_approval_requests: "systemCapability.permissionPackageApprovalRequests",
+  permission_package_approval_withdraw: "systemCapability.permissionPackageApprovalWithdraw",
+  permission_package_consumed_approval_recovery: "systemCapability.permissionPackageConsumedApprovalRecovery",
+  permission_package_production_readiness: "systemCapability.permissionPackageProductionReadiness"
+};
+
+function tx(t: Translator, key: string, values: Record<string, string | number>) {
+  return Object.entries(values).reduce(
+    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
+    t(key)
+  );
 }

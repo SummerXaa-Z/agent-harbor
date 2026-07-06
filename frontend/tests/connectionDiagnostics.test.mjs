@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildConnectionDiagnosticRows,
+  connectionDiagnosticDetail,
   connectionDiagnosticsSummaryStatus,
   managementMcpCatalogDiagnosticFromResult
 } from "../src/connectionDiagnostics.ts";
@@ -50,10 +51,19 @@ test("connection diagnostics blocks old API or expired session before production
 
   assert.equal(connectionDiagnosticsSummaryStatus(rows), "error");
   assert.equal(rows.find((row) => row.key === "session")?.detailKey, "connectionDiagnostics.session.signIn");
-  assert.equal(rows.find((row) => row.key === "api")?.detailKey, "message.apiContractIncompatible");
-  assert.deepEqual(rows.find((row) => row.key === "api")?.detailParams, {
-    capabilities: "permission_package_approval_withdraw"
+  const apiRow = rows.find((row) => row.key === "api");
+  assert.equal(apiRow?.detailKey, "message.apiContractIncompatible");
+  assert.deepEqual(apiRow?.detailParamKeys, {
+    capabilities: ["systemCapability.permissionPackageApprovalWithdraw"]
   });
+  assert.equal(apiRow?.detailParams, undefined);
+  assert.equal(
+    connectionDiagnosticDetail(apiRow, (key) => ({
+      "message.apiContractIncompatible": "API is missing capabilities: {capabilities}.",
+      "systemCapability.permissionPackageApprovalWithdraw": "Approval withdrawal"
+    }[key] ?? key)),
+    "API is missing capabilities: Approval withdrawal."
+  );
   assert.equal(rows.find((row) => row.key === "dataSource")?.status, "warning");
 });
 

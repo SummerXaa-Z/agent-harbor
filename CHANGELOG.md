@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- API compatibility failures now render missing console capabilities as localized operator-readable module names instead of raw `permission_package_*` or Management MCP capability keys.
+- API 兼容失败现在会把缺失控制台能力展示为本地化的模块名称，不再向管理员暴露原始 `permission_package_*` 或 Management MCP 能力键。
 - API compatibility failures caused only by Management MCP catalog metadata mismatches now use a dedicated localized operator message instead of exposing raw contract field names in diagnostics or preflight panels.
 - 仅由 Management MCP 目录元数据不兼容导致的 API 兼容失败，现在会展示专门的本地化管理员提示，不再在诊断或预检面板中暴露原始契约字段名。
 - The web console now validates the `managementMcpToolCatalog` system-info summary during API compatibility checks, blocking admin-agent workflows when a backend misstates or omits the Management MCP catalog metadata contract.

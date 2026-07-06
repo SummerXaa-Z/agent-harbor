@@ -57,7 +57,7 @@ import {
 import {
   runtimeEvidenceMetric
 } from "./consoleMetrics";
-import type { ConnectionDiagnosticRow } from "./connectionDiagnostics";
+import { connectionDiagnosticDetail } from "./connectionDiagnostics";
 import {
   capabilityDisplayName,
   formatConsoleTime,
@@ -403,10 +403,6 @@ function sessionScopeLabel(session: ConsoleSession | null, t: Translator) {
     return tx(t, "auth.scope.tenantWorkspace", { tenantId, workspaceId });
   }
   return tenantId || workspaceId || t("auth.scope.allTenants");
-}
-
-function connectionDiagnosticDetail(row: ConnectionDiagnosticRow, t: Translator) {
-  return row.detailParams ? tx(t, row.detailKey, row.detailParams) : t(row.detailKey);
 }
 
 function connectionDiagnosticSummaryLabel(status: "ok" | "warning" | "error", t: Translator) {

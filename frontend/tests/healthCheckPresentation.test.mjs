@@ -7,7 +7,9 @@ function t(key) {
   const messages = {
     "message.apiContractIncompatible": "API is missing capabilities: {capabilities}.",
     "message.apiContractIncompatibleManagementCatalog": "Management MCP catalog contract is incompatible.",
-    "message.apiContractUnavailable": "API compatibility check is unavailable."
+    "message.apiContractUnavailable": "API compatibility check is unavailable.",
+    "systemCapability.permissionPackageApprovalRequests": "Approval queue",
+    "systemCapability.permissionPackageApplyPreflight": "Apply preflight"
   };
   return messages[key] ?? key;
 }
@@ -22,4 +24,16 @@ test("health check presentation hides raw management MCP catalog contract issue 
   });
 
   assert.equal(detail, "Management MCP catalog contract is incompatible.");
+});
+
+test("health check presentation renders missing API capabilities as readable labels", () => {
+  const detail = healthCheckFailureDetail(t, "API", {
+    code: "api_contract_incompatible",
+    message: "missing capabilities: permission_package_approval_requests, permission_package_apply_preflight",
+    missingCapabilities: ["permission_package_approval_requests", "permission_package_apply_preflight"],
+    status: "error"
+  });
+
+  assert.equal(detail, "API is missing capabilities: Approval queue, Apply preflight.");
+  assert.doesNotMatch(detail, /permission_package_/);
 });

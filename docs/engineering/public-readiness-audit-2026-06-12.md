@@ -98,7 +98,7 @@ After applying the fixes, the audit branch was verified with:
 
 ## Post-Audit Follow-Up Status
 
-- The frontend production build chunk-size warning has been addressed after the audit. Vite now splits stable vendor dependencies into dedicated `react-vendor` and `icons-vendor` production chunks. The latest local build emitted `index` at `427.09 kB`, `react-vendor` at `189.63 kB`, and `icons-vendor` at `9.18 kB`, with no chunk-size warning.
+- The frontend production build chunk-size warning has been addressed after the audit. Vite now splits stable vendor dependencies and lazy-loaded workspace panels into dedicated production chunks. The latest local build emitted `index` at `484.29 kB`, `react-vendor` at `189.63 kB`, `AiAdminPermissionWorkbench` at `38.63 kB`, `TenantOrganizationView` at `22.29 kB`, `CapabilityGovernanceView` at `15.23 kB`, and `icons-vendor` at `10.05 kB`, with no chunk-size warning.
 - Dependabot PRs #72 and #73 were merged after this audit and `main` release gates passed after those merges.
 
 ## Remaining Non-Blocking Follow-Ups

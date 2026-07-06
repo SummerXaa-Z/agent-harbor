@@ -105,7 +105,7 @@ test("ai admin workbench has a growth guard while controller hooks are split", (
     workbench.split("\n").length <= 1300,
     "AiAdminPermissionWorkbench should delegate approval decision state before adding more UI"
   );
-  assert.match(app, /from "\.\/components\/AiAdminPermissionWorkbench"/);
+  assert.match(app, /const AiAdminPermissionWorkbench = lazy\(\(\) => import\("\.\/components\/AiAdminPermissionWorkbench"\)/);
   assert.match(workbench, /from "\.\.\/hooks\/usePermissionApprovalDecision"/);
   assert.match(workbench, /from "\.\.\/permissionWorkbenchPresenters"/);
   assert.match(workbench, /from "\.\/PermissionWorkbenchParts"/);
@@ -532,7 +532,8 @@ test("sidebar navigation shows grouped task labels with descriptions", () => {
 });
 
 test("tenant organization workspace is a first-class resource entry", () => {
-  assert.match(app, /import \{ TenantOrganizationView, type TenantWorkspaceContext \} from "\.\/components\/TenantOrganizationView"/);
+  assert.match(app, /import type \{ TenantWorkspaceContext \} from "\.\/components\/TenantOrganizationView"/);
+  assert.match(app, /const TenantOrganizationView = lazy\(\(\) => import\("\.\/components\/TenantOrganizationView"\)/);
   assert.match(app, /case "tenants":/);
   assert.match(app, /<TenantsView tenantOrganizationPanel=\{tenantOrganizationPanel\} \/>/);
   assert.match(app, /function openTenantPermissionChange\(context: PermissionChangeHandoffContext\)/);

@@ -942,7 +942,8 @@ test("permission request chooses access objects instead of raw subject selectors
 
 test("access profile and capability governance are split from the app shell", () => {
   assert.match(app, /import \{ TenantAccessProfileView \} from "\.\/components\/TenantAccessProfileView"/);
-  assert.match(app, /import \{ CapabilityGovernanceView, type CapabilityGrantForm \} from "\.\/components\/CapabilityGovernanceView"/);
+  assert.match(app, /import type \{ CapabilityGrantForm \} from "\.\/components\/CapabilityGovernanceView"/);
+  assert.match(app, /const CapabilityGovernanceView = lazy\(\(\) => import\("\.\/components\/CapabilityGovernanceView"\)/);
   assert.match(capabilityGovernanceHook, /import type \{ CapabilityGrantForm \} from "\.\.\/components\/CapabilityGovernanceView"/);
   assert.doesNotMatch(app, /function TenantAccessProfileView\(/);
   assert.doesNotMatch(app, /function CapabilityGovernanceView\(/);

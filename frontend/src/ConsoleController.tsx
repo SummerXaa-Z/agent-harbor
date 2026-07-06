@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   Building2,
   Boxes,
@@ -171,8 +171,7 @@ import {
   currentPermissionRequestWizardStep,
   type PermissionRequestWizardStep
 } from "./permissionRequestJourney";
-import { AiAdminPermissionWorkbench } from "./components/AiAdminPermissionWorkbench";
-import { CapabilityGovernanceView, type CapabilityGrantForm } from "./components/CapabilityGovernanceView";
+import type { CapabilityGrantForm } from "./components/CapabilityGovernanceView";
 import { ActionModalButton, Panel } from "./components/ConsolePrimitives";
 import { ProductionJourneyCheckpoint } from "./components/ProductionJourneyCheckpoint";
 import {
@@ -217,7 +216,7 @@ import {
 } from "./components/RuntimeEvidenceViews";
 import { TechnicalId } from "./components/TechnicalId";
 import { TenantAccessProfileView } from "./components/TenantAccessProfileView";
-import { TenantOrganizationView, type TenantWorkspaceContext } from "./components/TenantOrganizationView";
+import type { TenantWorkspaceContext } from "./components/TenantOrganizationView";
 import { Badge } from "./components/ui";
 import { useAccessProfileController } from "./hooks/useAccessProfileController";
 import { useAdminAccessController } from "./hooks/useAdminAccessController";
@@ -257,6 +256,16 @@ import type {
   TraceFilters,
   WorkspaceAssignment
 } from "./types";
+
+const AiAdminPermissionWorkbench = lazy(() => import("./components/AiAdminPermissionWorkbench").then((module) => ({
+  default: module.AiAdminPermissionWorkbench
+})));
+const CapabilityGovernanceView = lazy(() => import("./components/CapabilityGovernanceView").then((module) => ({
+  default: module.CapabilityGovernanceView
+})));
+const TenantOrganizationView = lazy(() => import("./components/TenantOrganizationView").then((module) => ({
+  default: module.TenantOrganizationView
+})));
 
 const emptyAccessProfileSummary: AccessProfileSummary = {
   tenantCount: 0,
@@ -3056,7 +3065,23 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
               <span />
             </div>
           </section>
-        ) : viewContent}
+        ) : (
+          <Suspense fallback={(
+            <section className="workspace-loading" role="status" aria-live="polite">
+              <div className="workspace-loading-copy">
+                <strong>{t("status.loadingConsole")}</strong>
+                <span>{t("text.loadingConsoleDetail")}</span>
+              </div>
+              <div className="workspace-loading-skeleton" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+            </section>
+          )}>
+            {viewContent}
+          </Suspense>
+        )}
       </main>
     </div>
   );

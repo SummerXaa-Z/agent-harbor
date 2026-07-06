@@ -88,6 +88,27 @@ test("connection diagnostics hides raw management MCP catalog contract issue key
   assert.equal(apiRow?.detailParams, undefined);
 });
 
+test("connection diagnostics hides unknown raw API contract issue keys", () => {
+  const rows = buildConnectionDiagnosticRows({
+    apiHealth: {
+      code: "api_contract_incompatible",
+      contractIssues: ["futureContract.requiredField"],
+      message: "system info contract issues: futureContract.requiredField",
+      missingCapabilities: [],
+      status: "error"
+    },
+    liveDataLoaded: true,
+    loadError: "",
+    mcpCatalog: { metadataVersion: 1, status: "ok", toolsWithAccess: 12, toolsWithSafety: 12 },
+    mcpHealth: { status: "ok", message: "ok" },
+    session: { actor: "admin-key", authenticated: true, requiresLogin: true }
+  });
+
+  const apiRow = rows.find((row) => row.key === "api");
+  assert.equal(apiRow?.detailKey, "message.apiContractIncompatibleUnknown");
+  assert.equal(apiRow?.detailParams, undefined);
+});
+
 test("connection diagnostics treats fallback data as warning and MCP failure as error", () => {
   const rows = buildConnectionDiagnosticRows({
     apiHealth: { status: "ok", message: "ok" },

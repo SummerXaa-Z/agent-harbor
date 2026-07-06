@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Unknown API compatibility contract failures now fall back to a localized upgrade prompt instead of echoing raw `system info contract issues` messages into diagnostics or preflight panels.
+- 未知 API 兼容契约失败现在会回退为本地化升级提示，不再把原始 `system info contract issues` 信息回显到诊断或预检面板。
 - API compatibility failures now render missing console capabilities as localized operator-readable module names instead of raw `permission_package_*` or Management MCP capability keys.
 - API 兼容失败现在会把缺失控制台能力展示为本地化的模块名称，不再向管理员暴露原始 `permission_package_*` 或 Management MCP 能力键。
 - API compatibility failures caused only by Management MCP catalog metadata mismatches now use a dedicated localized operator message instead of exposing raw contract field names in diagnostics or preflight panels.

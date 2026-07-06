@@ -16,8 +16,12 @@ export function healthCheckFailureDetail(t: Translator, label: string, result: H
     if (hasOnlyManagementMcpCatalogContractIssues(result.contractIssues, result.missingCapabilities)) {
       return t("message.apiContractIncompatibleManagementCatalog");
     }
+    const capabilityLabels = systemCapabilityLabels(result.missingCapabilities, t);
+    if (capabilityLabels.length === 0) {
+      return t("message.apiContractIncompatibleUnknown");
+    }
     return tx(t, "message.apiContractIncompatible", {
-      capabilities: systemCapabilityLabels(result.missingCapabilities, t).join(", ") || result.message
+      capabilities: capabilityLabels.join(", ")
     });
   }
   return `${label}: ${result.message}`;
@@ -36,11 +40,9 @@ function hasOnlyManagementMcpCatalogContractIssues(
 }
 
 function systemCapabilityLabels(capabilities: string[] | undefined, t: Translator): string[] {
-  if (!Array.isArray(capabilities)) return [];
-  return capabilities.map((capability) => {
-    const key = systemCapabilityLabelKeyByName[capability];
-    return key ? t(key) : capability;
-  });
+  if (!Array.isArray(capabilities) || capabilities.length === 0) return [];
+  const keys = capabilities.map((capability) => systemCapabilityLabelKeyByName[capability]);
+  return keys.every(isDefinedString) ? keys.map((key) => t(key)) : [];
 }
 
 const systemCapabilityLabelKeyByName: Record<string, string> = {
@@ -54,3 +56,7 @@ const systemCapabilityLabelKeyByName: Record<string, string> = {
   permission_package_consumed_approval_recovery: "systemCapability.permissionPackageConsumedApprovalRecovery",
   permission_package_production_readiness: "systemCapability.permissionPackageProductionReadiness"
 };
+
+function isDefinedString(value: string | undefined): value is string {
+  return Boolean(value);
+}

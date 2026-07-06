@@ -191,10 +191,7 @@ function apiDiagnosticRow(apiHealth: HealthCheckResult): ConnectionDiagnosticRow
       };
     }
     return {
-      detailKey: "message.apiContractIncompatible",
-      detailParams: {
-        capabilities: apiHealth.missingCapabilities?.join(", ") || apiHealth.message
-      },
+      detailKey: "message.apiContractIncompatibleUnknown",
       key: "api",
       status: "error",
       titleKey: "connectionDiagnostics.api.title"
@@ -297,8 +294,9 @@ function hasOnlyManagementMcpCatalogContractIssues(
 }
 
 function systemCapabilityLabelKeys(capabilities: string[] | undefined): string[] {
-  if (!Array.isArray(capabilities)) return [];
-  return capabilities.map((capability) => systemCapabilityLabelKeyByName[capability]).filter(Boolean);
+  if (!Array.isArray(capabilities) || capabilities.length === 0) return [];
+  const keys = capabilities.map((capability) => systemCapabilityLabelKeyByName[capability]);
+  return keys.every(isDefinedString) ? keys : [];
 }
 
 const systemCapabilityLabelKeyByName: Record<string, string> = {
@@ -318,4 +316,8 @@ function tx(t: Translator, key: string, values: Record<string, string | number>)
     (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
     t(key)
   );
+}
+
+function isDefinedString(value: string | undefined): value is string {
+  return Boolean(value);
 }

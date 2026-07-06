@@ -7,6 +7,7 @@ function t(key) {
   const messages = {
     "message.apiContractIncompatible": "API is missing capabilities: {capabilities}.",
     "message.apiContractIncompatibleManagementCatalog": "Management MCP catalog contract is incompatible.",
+    "message.apiContractIncompatibleUnknown": "API compatibility contract is incompatible.",
     "message.apiContractUnavailable": "API compatibility check is unavailable.",
     "systemCapability.permissionPackageApprovalRequests": "Approval queue",
     "systemCapability.permissionPackageApplyPreflight": "Apply preflight"
@@ -36,4 +37,17 @@ test("health check presentation renders missing API capabilities as readable lab
 
   assert.equal(detail, "API is missing capabilities: Approval queue, Apply preflight.");
   assert.doesNotMatch(detail, /permission_package_/);
+});
+
+test("health check presentation hides unknown raw API contract issue keys", () => {
+  const detail = healthCheckFailureDetail(t, "API", {
+    code: "api_contract_incompatible",
+    contractIssues: ["futureContract.requiredField"],
+    message: "system info contract issues: futureContract.requiredField",
+    missingCapabilities: [],
+    status: "error"
+  });
+
+  assert.equal(detail, "API compatibility contract is incompatible.");
+  assert.doesNotMatch(detail, /futureContract/);
 });

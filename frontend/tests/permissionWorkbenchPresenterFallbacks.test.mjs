@@ -39,6 +39,8 @@ test("permission preflight and policy fallbacks do not expose raw service wordin
   assert.match(preflightBlock, /knownLabel\(t, `permissionPreflight\.detail\.\$\{check\.code\}`, "permissionPreflight\.detail\.unknown"\)/);
   assert.doesNotMatch(preflightBlock, /check\.message/);
   assert.match(nextActionBlock, /t\("permissionPreflight\.next\.unknown"\)/);
+  assert.match(nextActionBlock, /Review the latest permission request status before applying the same permission request again\./);
+  assert.match(nextActionBlock, /permissionPreflight\.next\.reviewAlreadyApplied/);
   assert.doesNotMatch(nextActionBlock, /: action/);
   assert.match(policyBlock, /if \(!reason\.reasonKey\) return t\("permissionPolicy\.unknownReason"\)/);
   assert.doesNotMatch(policyBlock, /return reason\.message/);

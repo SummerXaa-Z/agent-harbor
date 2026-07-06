@@ -78,6 +78,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 权限包工作台预览现在会在选择当前操作步骤时忽略已过期的待审批或已批准审批请求，让操作人回到新建审批，而不是停留在陈旧审批上。
 - Pending permission-package approval queues now filter expired requests before applying response limits, preventing stale approvals from hiding actionable pending approvals in REST and management MCP lists.
 - 待处理权限包审批队列现在会先过滤已过期请求再应用返回数量限制，避免陈旧审批在 REST 和 Management MCP 列表中挤掉仍可处理的审批。
+- Permission-package apply preflight now blocks same-scope permission changes that have already been applied, while production readiness treats that blocker as the expected post-apply state when a matching application record exists.
+- 权限包应用前预检现在会阻断同范围、已应用过的权限变更；当存在匹配的应用记录时，状态检查会把该阻断识别为已应用后的正常状态。
 - Permission-package approval responses now expose an `effectiveStatus` and `isExpired` flag for expired pending or approved requests, so REST, management MCP, and the console do not treat stale approvals as actionable.
 - 权限包审批响应现在会为已过期的待审批或已批准请求返回 `effectiveStatus` 和 `isExpired`，确保 REST、Management MCP 和控制台不会把陈旧审批当作仍可处理的请求。
 - Permission-package approval request creation now rejects duplicate active pending requests with stable `PERMISSION_PACKAGE_APPROVAL_ALREADY_PENDING` conflicts across REST and management MCP, while allowing a fresh request after the previous pending approval expires.

@@ -2539,6 +2539,9 @@ func permissionPackageProductionPreflightReady(preflight domain.PermissionPackag
 		if check.Code == "approval_request_missing" || check.Code == "approval_request_invalid" {
 			continue
 		}
+		if check.Code == "application_already_applied" {
+			continue
+		}
 		return false
 	}
 	return true
@@ -3591,6 +3594,14 @@ func (s *Server) preflightPermissionPackageRequest(ctx context.Context, req doma
 	if dataScopeConflictCount == 0 {
 		result.Checks = append(result.Checks, permissionPackagePreflightCheck("data_scope_fit", domain.PermissionPackagePreflightPassed, "Permission package dataScopes fit all allowed capability boundaries.", "", ""))
 	}
+	alreadyApplied, err := s.permissionPackagePreflightAlreadyAppliedApplications(ctx, draft)
+	if err != nil {
+		return domain.PermissionPackageApplyPreflightResponse{}, err
+	}
+	if len(alreadyApplied) > 0 {
+		result.Checks = append(result.Checks, permissionPackagePreflightCheck("application_already_applied", domain.PermissionPackagePreflightBlocking, "A matching permission request has already been applied.", "", ""))
+		result.NextActions = appendUniqueString(result.NextActions, "Review the latest permission request status before applying the same permission request again.")
+	}
 	result.Checks = append(result.Checks, permissionPackagePreflightCheck("planned_changes", domain.PermissionPackagePreflightInfo, "Preflight planned grant objects without writing them.", "", ""))
 
 	result.Summary = permissionPackagePreflightSummary(result, requiresApproval, approvalReady)
@@ -3991,6 +4002,52 @@ func permissionPackagePreflightPlannedGrantChain(draft domain.PermissionPackageD
 			DataScopes:            append([]domain.DataScope(nil), dataScopes...),
 			Status:                domain.PolicyStatusEnabled,
 		}
+}
+
+func (s *Server) permissionPackagePreflightAlreadyAppliedApplications(ctx context.Context, draft domain.PermissionPackageDraft) ([]domain.PermissionPackageApplication, error) {
+	candidate := permissionPackagePreflightApplicationCandidate(draft)
+	applications, err := s.repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
+		ManagementScope: store.ManagementScope{
+			TenantID:    draft.Input.TenantID,
+			WorkspaceID: draft.Input.WorkspaceID,
+		},
+		TemplateID:       draft.Template.ID,
+		TargetID:         draft.Input.TargetID,
+		CallerInstanceID: draft.Input.CallerInstanceID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	matches := []domain.PermissionPackageApplication{}
+	for _, application := range applications {
+		if store.PermissionPackageApplicationsShareDuplicateKey(application, candidate) {
+			matches = append(matches, application)
+		}
+	}
+	return matches, nil
+}
+
+func permissionPackagePreflightApplicationCandidate(draft domain.PermissionPackageDraft) domain.PermissionPackageApplication {
+	allowedCapabilityIDs := make([]string, 0, len(draft.AllowedCapabilities))
+	allowedCapabilityKeys := make([]string, 0, len(draft.AllowedCapabilities))
+	for _, capability := range draft.AllowedCapabilities {
+		allowedCapabilityIDs = append(allowedCapabilityIDs, capability.ID)
+		allowedCapabilityKeys = append(allowedCapabilityKeys, capability.Key)
+	}
+	return domain.PermissionPackageApplication{
+		DraftID:               draft.ID,
+		TemplateID:            draft.Template.ID,
+		TemplateVersion:       draft.Template.Version,
+		TenantID:              draft.Input.TenantID,
+		WorkspaceID:           draft.Input.WorkspaceID,
+		TargetID:              draft.Input.TargetID,
+		CallerInstanceID:      draft.Input.CallerInstanceID,
+		SubjectSelector:       draft.Input.SubjectSelector,
+		Region:                draft.Input.Region,
+		DataScopes:            draft.DataScopes,
+		AllowedCapabilityIDs:  allowedCapabilityIDs,
+		AllowedCapabilityKeys: allowedCapabilityKeys,
+	}
 }
 
 func (s *Server) permissionPackagePreflightExistingGrants(ctx context.Context, draft domain.PermissionPackageDraft, capability domain.Capability) ([]domain.PermissionPackageApplyPreflightExistingGrant, error) {

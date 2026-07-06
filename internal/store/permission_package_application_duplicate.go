@@ -23,6 +23,12 @@ type permissionPackageApplicationDuplicatePayload struct {
 }
 
 func permissionPackageApplicationsShareDuplicateKey(left domain.PermissionPackageApplication, right domain.PermissionPackageApplication) bool {
+	return PermissionPackageApplicationsShareDuplicateKey(left, right)
+}
+
+// PermissionPackageApplicationsShareDuplicateKey reports whether two application records
+// represent the same semantic permission-package apply request.
+func PermissionPackageApplicationsShareDuplicateKey(left domain.PermissionPackageApplication, right domain.PermissionPackageApplication) bool {
 	return left.DraftID == right.DraftID &&
 		left.TemplateID == right.TemplateID &&
 		left.TemplateVersion == right.TemplateVersion &&

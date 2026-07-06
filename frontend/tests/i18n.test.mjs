@@ -60,6 +60,24 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("connectionDiagnostics.mcp.error"), "Tool service check failed: {detail}");
 });
 
+test("permission preflight already-applied copy is bilingual", () => {
+  const en = createTranslator("en");
+  const zh = createTranslator("zh-CN");
+
+  assert.equal(en("permissionPreflight.application_already_applied"), "Already applied");
+  assert.equal(
+    en("permissionPreflight.detail.application_already_applied"),
+    "A matching permission change has already been applied. Review status before retrying."
+  );
+  assert.equal(en("permissionPreflight.next.reviewAlreadyApplied"), "Review current application status before retrying.");
+  assert.equal(zh("permissionPreflight.application_already_applied"), "已应用");
+  assert.equal(
+    zh("permissionPreflight.detail.application_already_applied"),
+    "匹配的权限变更已经应用。请先查看当前状态，不要重复提交。"
+  );
+  assert.equal(zh("permissionPreflight.next.reviewAlreadyApplied"), "先查看当前落地状态，再决定是否重试。");
+});
+
 test("administrator boundary workspace has complete bilingual copy", () => {
   const keys = [
     "page.adminAccess",

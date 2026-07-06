@@ -493,6 +493,7 @@ export function permissionApplyPreflightNextAction(action: string, t: Translator
     "Fix draft readiness blockers before applying this permission request.": "permissionPreflight.next.fixDraft",
     "Narrow region or data scopes so the package stays inside every capability boundary.": "permissionPreflight.next.narrowScope",
     "Refresh approval or create a new approval request for the current draft.": "permissionPreflight.next.refreshApproval",
+    "Review the latest permission request status before applying the same permission request again.": "permissionPreflight.next.reviewAlreadyApplied",
     "Review existing grant chains before applying another permission package for the same caller and capability.": "permissionPreflight.next.reviewExistingGrants",
     "Review existing grant chains before applying another permission request for the same caller and capability.": "permissionPreflight.next.reviewExistingGrants",
     "Use an approved approvalRequestId that matches the current draft.": "permissionPreflight.next.useApprovedRequest"

@@ -5021,6 +5021,15 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	if len(applications) != 1 || applications[0].ID != applied.Application.ID || applications[0].DraftID != applied.Draft.ID {
 		t.Fatalf("expected listed application record, got %#v", applications)
 	}
+	preflightAfterApply := decodeData[permissionPackageApplyPreflightResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:preflight", input, ""))
+	if preflightAfterApply.Summary.CanApply || preflightAfterApply.Summary.BlockingCount == 0 ||
+		!permissionPackagePreflightHasCheck(preflightAfterApply.Checks, "application_already_applied", "blocking") {
+		t.Fatalf("expected already-applied preflight to block direct reapply, got %#v", preflightAfterApply)
+	}
+	applicationsAfterPreflight := decodeData[[]permissionPackageApplicationResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications?tenantId=tenant-root&workspaceId=ws-sales&templateId=sales-readonly&targetId="+target.ID+"&callerInstanceId="+caller.ID, nil, ""))
+	if len(applicationsAfterPreflight) != 1 || applicationsAfterPreflight[0].ID != applied.Application.ID {
+		t.Fatalf("already-applied preflight must not create another application, got %#v", applicationsAfterPreflight)
+	}
 	duplicateApply := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", input, "")
 	if duplicateApply.Code != http.StatusConflict {
 		t.Fatalf("duplicate direct apply should be rejected, status=%d body=%s", duplicateApply.Code, duplicateApply.Body.String())
@@ -5656,25 +5665,70 @@ func TestPermissionPackagePreflightWarnsAboutExistingGrantChain(t *testing.T) {
 		"tenantId":         "tenant-east",
 		"workspaceId":      "ws-sales",
 	}
-	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", input, ""))
-	if len(applied.TenantEntitlements) != 1 || applied.Application == nil {
-		t.Fatalf("expected seed apply to create a grant chain, got %#v", applied)
+	entitlement, err := repo.CreateTenantEntitlement(t.Context(), domain.TenantEntitlement{
+		ID:           security.NewID("ent"),
+		TenantID:     "tenant-east",
+		TargetID:     target.ID,
+		CapabilityID: search.ID,
+		Effect:       domain.PolicyEffectAllow,
+		DataScopes: []domain.DataScope{{
+			DataDomain:   "crm",
+			Region:       "华东",
+			TenantFilter: "tenant_id = 'tenant-east'",
+		}},
+		Status:    domain.PolicyStatusEnabled,
+		Priority:  40,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("create entitlement: %v", err)
+	}
+	workspaceAssignment, err := repo.CreateWorkspaceAssignment(t.Context(), domain.WorkspaceAssignment{
+		ID:                  security.NewID("wsa"),
+		TenantEntitlementID: entitlement.ID,
+		TenantID:            "tenant-east",
+		WorkspaceID:         "ws-sales",
+		Effect:              domain.PolicyEffectAllow,
+		DataScopes:          entitlement.DataScopes,
+		Status:              domain.PolicyStatusEnabled,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	})
+	if err != nil {
+		t.Fatalf("create workspace assignment: %v", err)
+	}
+	instanceAssignment, err := repo.CreateInstanceAssignment(t.Context(), domain.InstanceAssignment{
+		ID:                    security.NewID("ina"),
+		WorkspaceAssignmentID: workspaceAssignment.ID,
+		TenantID:              "tenant-east",
+		WorkspaceID:           "ws-sales",
+		CallerInstanceID:      caller.ID,
+		SubjectSelector:       "user:sales-*",
+		Effect:                domain.PolicyEffectAllow,
+		DataScopes:            entitlement.DataScopes,
+		Status:                domain.PolicyStatusEnabled,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	})
+	if err != nil {
+		t.Fatalf("create instance assignment: %v", err)
 	}
 	preflight := decodeData[permissionPackageApplyPreflightResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:preflight", input, ""))
 	if !preflight.Summary.CanApply || preflight.Summary.WarningCount == 0 || preflight.Summary.ExistingGrantCount != 1 ||
 		!permissionPackagePreflightHasCheck(preflight.Checks, "existing_grant_chain", "warning") ||
 		len(preflight.ExistingGrants) != 1 || preflight.ExistingGrants[0].CapabilityID != search.ID ||
-		preflight.ExistingGrants[0].TenantEntitlementID != applied.TenantEntitlements[0].ID ||
-		preflight.ExistingGrants[0].WorkspaceAssignmentID != applied.WorkspaceAssignments[0].ID ||
-		preflight.ExistingGrants[0].InstanceAssignmentID != applied.InstanceAssignments[0].ID {
+		preflight.ExistingGrants[0].TenantEntitlementID != entitlement.ID ||
+		preflight.ExistingGrants[0].WorkspaceAssignmentID != workspaceAssignment.ID ||
+		preflight.ExistingGrants[0].InstanceAssignmentID != instanceAssignment.ID {
 		t.Fatalf("expected existing grant warning, got %#v", preflight)
 	}
 	applications, err := repo.ListPermissionPackageApplications(t.Context(), store.PermissionPackageApplicationFilter{})
 	if err != nil {
 		t.Fatalf("list applications: %v", err)
 	}
-	if len(applications) != 1 {
-		t.Fatalf("preflight should not create another application, got %#v", applications)
+	if len(applications) != 0 {
+		t.Fatalf("preflight should not create an application, got %#v", applications)
 	}
 }
 

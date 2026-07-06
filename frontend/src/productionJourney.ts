@@ -1,4 +1,4 @@
-import type { NavKey } from "./consoleNavigation";
+import { navHashFor, type NavKey } from "./consoleNavigation.ts";
 import type { ConsoleData } from "./types";
 
 export type ProductionJourneyStageKey =
@@ -84,7 +84,7 @@ export function deriveProductionJourney(input: ProductionJourneyInput): Producti
     return {
       completedStageKeys: ["setup", "resources", "access_query", "permission_change"],
       currentStageKey: "go_live_status",
-      nextActionHash: "#evidence",
+      nextActionHash: navHashFor("evidence"),
       nextActionKey: "productionJourney.next.confirmGoLive",
       state: "ready"
     };

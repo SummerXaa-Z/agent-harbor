@@ -128,7 +128,7 @@ test("default navigation opens answer-first access query", () => {
   assert.equal(viewForNav("unknown").key, defaultNavKey);
 });
 
-test("go-live evidence navigation points to the acceptance workflow", () => {
+test("go-live status navigation points to the acceptance workflow", () => {
   assert.equal(viewForNav("evidence").primaryPanelKey, "goLiveAcceptance");
 });
 
@@ -145,12 +145,14 @@ test("production journey acceptance keeps existing primary routes", () => {
 });
 
 test("navigation hash preserves the current workspace across reloads", () => {
-  assert.equal(navHashFor("evidence"), "#evidence");
+  assert.equal(navHashFor("evidence"), "#go-live");
   assert.equal(navHashFor("tenants"), "#tenants");
   assert.equal(navHashFor("getting-started"), "#getting-started");
+  assert.equal(navKeyFromHash("#go-live"), "evidence");
   assert.equal(navKeyFromHash("#evidence"), "evidence");
   assert.equal(navKeyFromHash("#tenants"), "tenants");
   assert.equal(navKeyFromHash("#getting-started"), "getting-started");
+  assert.equal(navKeyFromHash("go-live"), "evidence");
   assert.equal(navKeyFromHash("evidence"), "evidence");
   assert.equal(navKeyFromHash("#unknown"), null);
 });

@@ -154,7 +154,7 @@ test("ready permission changes point to go-live status and handoff", () => {
 
   assert.equal(journey.state, "ready");
   assert.equal(journey.currentStageKey, "go_live_status");
-  assert.equal(journey.nextActionHash, "#evidence");
+  assert.equal(journey.nextActionHash, "#go-live");
   assert.equal(journey.nextActionKey, "productionJourney.next.confirmGoLive");
   assert.deepEqual(journey.completedStageKeys, ["setup", "resources", "access_query", "permission_change"]);
 });

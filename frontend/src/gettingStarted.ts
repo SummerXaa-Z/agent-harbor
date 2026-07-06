@@ -1,4 +1,5 @@
 import type { ConsoleData } from "./types";
+import { navHashFor } from "./consoleNavigation.ts";
 
 export type GettingStartedStepKey =
   | "connect-api"
@@ -46,7 +47,7 @@ export function gettingStartedSteps(data: ConsoleData): GettingStartedStep[] {
     {
       done: data.loadedFromApi && data.evidenceRuns.length > 0,
       key: "review-evidence",
-      targetHash: "#evidence"
+      targetHash: navHashFor("evidence")
     }
   ];
 }

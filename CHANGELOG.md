@@ -523,6 +523,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- The web console now writes `#go-live` for the go-live status workspace while still accepting legacy `#evidence` links for compatibility.
+- Web 控制台现在将上线状态工作区写入为 `#go-live`，同时继续兼容旧的 `#evidence` 链接。
 - Public product docs now use records, acceptance report, and go-live material wording instead of forensic-style prose, while keeping stable API and tool names unchanged.
 - 公开产品文档现在统一使用记录、验收报告和上线材料等表述，不再在可读正文中使用带侦查感的说法，同时保留稳定 API 和工具名称不变。
 - The web console now lazy-loads heavy workspace panels for AI Admin, Capability Governance, and Tenant Organization, keeping the main production entry under Vite's default chunk warning budget without raising the limit.
@@ -593,10 +595,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 上线验收页现在会本地化管理审计的操作、资源类型、操作者和摘要，并把原始资源 ID 收进可展开的技术详情。
 - Go-live Acceptance now opens with a go-live acceptance workflow that shows current permission-change context, readiness status, next actions, and progress before historical record tables.
 - 上线验收页现在先展示上线验收工作台，明确当前权限变更上下文、就绪状态、下一步动作和进度，再展示历史记录表。
-- Workspace navigation now writes the active workspace to the URL hash, so refreshing or reopening `#evidence` keeps operators in the same go-live acceptance context.
-- 工作区导航现在会把当前工作区写入 URL hash，刷新或重新打开 `#evidence` 时仍停留在同一个上线验收上下文。
-- Go-live Acceptance now loads the full Permission Changes catalog when opened directly from `#evidence`, reuses the generated permission draft as the context source, and avoids showing unknown caller/target placeholders to operators.
-- 上线验收现在支持直接打开 `#evidence` 时加载完整权限变更目录，并以已生成的权限草稿作为上下文来源，避免向操作员展示未知调用方/目标占位。
+- Workspace navigation now writes the active workspace to the URL hash, so refreshing or reopening `#go-live` keeps operators in the same go-live acceptance context.
+- 工作区导航现在会把当前工作区写入 URL hash，刷新或重新打开 `#go-live` 时仍停留在同一个上线验收上下文。
+- Go-live Acceptance now loads the full Permission Changes catalog when opened directly from `#go-live`, reuses the generated permission draft as the context source, and avoids showing unknown caller/target placeholders to operators.
+- 上线验收现在支持直接打开 `#go-live` 时加载完整权限变更目录，并以已生成的权限草稿作为上下文来源，避免向操作员展示未知调用方/目标占位。
 - Permission Changes now presents one guided go-live primary action at a time: run validation before records exist, check readiness after runtime records exist, and export a report only after the change is ready.
 - 权限变更现在一次只展示一个上线主动作：缺少运行记录时执行运行验证，运行记录已具备后检查上线就绪，真正可上线后才导出验收报告。
 - Permission Changes now renames the folded expert record area from Advanced Checks to Acceptance Details and clarifies that runtime validation records support the main operator flow.

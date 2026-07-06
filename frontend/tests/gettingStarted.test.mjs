@@ -117,7 +117,7 @@ test("getting started progress reports an empty live system as not configured", 
     ["discover-capabilities", false, "#capabilities"],
     ["create-grant-chain", false, "#ai-admin"],
     ["run-decision", false, "#traces"],
-    ["review-evidence", false, "#evidence"]
+    ["review-evidence", false, "#go-live"]
   ]);
   assert.equal(isSetupComplete(data), false);
 });

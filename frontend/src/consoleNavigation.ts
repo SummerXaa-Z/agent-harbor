@@ -30,6 +30,10 @@ export interface ConsoleView {
 
 export const defaultNavKey: NavKey = "getting-started"
 const navHashPrefix = "#"
+const navHashAliases: Record<string, NavKey> = {
+  "go-live": "evidence",
+  evidence: "evidence",
+}
 
 export const navGroups: Array<{ key: NavGroupKey; labelKey: string }> = [
   { key: "onboarding", labelKey: "navGroup.onboarding" },
@@ -132,9 +136,15 @@ export function isNavKey(key: string): key is NavKey {
 
 export function navKeyFromHash(hash: string): NavKey | null {
   const normalized = hash.trim().replace(/^#\/?/, "")
+  if (normalized in navHashAliases) {
+    return navHashAliases[normalized]
+  }
   return isNavKey(normalized) ? normalized : null
 }
 
 export function navHashFor(key: NavKey): string {
+  if (key === "evidence") {
+    return `${navHashPrefix}go-live`
+  }
   return `${navHashPrefix}${key}`
 }

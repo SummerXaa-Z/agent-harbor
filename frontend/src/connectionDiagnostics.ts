@@ -1,5 +1,6 @@
 import type { HealthCheckResult } from "./api";
 import type { Translator } from "./consolePresenters";
+import { systemCapabilityLabelKeys } from "./systemCapabilityLabels.ts";
 import type { ConsoleSession } from "./types";
 
 export type ConnectionDiagnosticKey = "session" | "api" | "dataSource" | "mcp" | "mcpCatalog";
@@ -293,31 +294,9 @@ function hasOnlyManagementMcpCatalogContractIssues(
   ));
 }
 
-function systemCapabilityLabelKeys(capabilities: string[] | undefined): string[] {
-  if (!Array.isArray(capabilities) || capabilities.length === 0) return [];
-  const keys = capabilities.map((capability) => systemCapabilityLabelKeyByName[capability]);
-  return keys.every(isDefinedString) ? keys : [];
-}
-
-const systemCapabilityLabelKeyByName: Record<string, string> = {
-  management_mcp_tools_metadata_v1: "systemCapability.managementMcpToolsMetadataV1",
-  permission_package_applications: "systemCapability.permissionPackageApplications",
-  permission_package_application_health: "systemCapability.permissionPackageApplicationHealth",
-  permission_package_application_impact: "systemCapability.permissionPackageApplicationImpact",
-  permission_package_apply_preflight: "systemCapability.permissionPackageApplyPreflight",
-  permission_package_approval_requests: "systemCapability.permissionPackageApprovalRequests",
-  permission_package_approval_withdraw: "systemCapability.permissionPackageApprovalWithdraw",
-  permission_package_consumed_approval_recovery: "systemCapability.permissionPackageConsumedApprovalRecovery",
-  permission_package_production_readiness: "systemCapability.permissionPackageProductionReadiness"
-};
-
 function tx(t: Translator, key: string, values: Record<string, string | number>) {
   return Object.entries(values).reduce(
     (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
     t(key)
   );
-}
-
-function isDefinedString(value: string | undefined): value is string {
-  return Boolean(value);
 }

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Frontend API compatibility labels now use one shared coverage-checked map, so every required console capability must have an English and Simplified Chinese operator label before it can appear in diagnostics.
+- 前端 API 兼容能力标签现在使用一份带覆盖测试的共享映射，确保每个控制台必需能力在进入诊断前都具备英文和简体中文的操作员可读标签。
 - Unknown API compatibility contract failures now fall back to a localized upgrade prompt instead of echoing raw `system info contract issues` messages into diagnostics or preflight panels.
 - 未知 API 兼容契约失败现在会回退为本地化升级提示，不再把原始 `system info contract issues` 信息回显到诊断或预检面板。
 - API compatibility failures now render missing console capabilities as localized operator-readable module names instead of raw `permission_package_*` or Management MCP capability keys.

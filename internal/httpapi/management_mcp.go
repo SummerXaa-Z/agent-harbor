@@ -163,6 +163,7 @@ type managementMCPExplainPermissionPackageResult struct {
 	BlockedCapabilityCount int                                     `json:"blockedCapabilityCount"`
 	BlockedSimulationRows  []domain.PermissionPackageSimulationRow `json:"blockedSimulationRows"`
 	DataScopes             []domain.DataScope                      `json:"dataScopes,omitempty"`
+	NextActionCodes        []string                                `json:"nextActionCodes"`
 	NextActions            []string                                `json:"nextActions"`
 }
 
@@ -841,6 +842,7 @@ func (s *Server) explainManagementMCPPermissionPackageDraft(r *http.Request, arg
 		BlockedCapabilityCount: len(draft.BlockedCapabilities),
 		BlockedSimulationRows:  blockedRows,
 		DataScopes:             draft.DataScopes,
+		NextActionCodes:        managementMCPPermissionPackageNextActionCodes(draft, blockedRows),
 		NextActions:            managementMCPPermissionPackageNextActions(draft, blockedRows),
 	}
 	return result, nil
@@ -902,6 +904,40 @@ func managementMCPPermissionPackageNextActions(draft domain.PermissionPackageDra
 		actions = append(actions, "Apply the permission package after the administrator confirms the preview.")
 	}
 	return dedupeStrings(actions)
+}
+
+func managementMCPPermissionPackageNextActionCodes(draft domain.PermissionPackageDraft, blockedRows []domain.PermissionPackageSimulationRow) []string {
+	codes := []string{}
+	if len(draft.Readiness.MissingFields) > 0 {
+		codes = append(codes, "fix_draft_readiness")
+	}
+	for _, warning := range draft.Readiness.Warnings {
+		lower := strings.ToLower(warning)
+		switch {
+		case strings.Contains(lower, "no matching allowed capabilities"):
+			codes = append(codes, "refresh_capabilities")
+		case strings.Contains(lower, "data scopes exceed"):
+			codes = append(codes, "narrow_data_scope")
+		default:
+			codes = append(codes, "fix_draft_readiness")
+		}
+	}
+	if draft.Readiness.CanApply && !draft.PolicyGate.CanApplyDirectly {
+		if len(draft.PolicyGate.NextActionCodes) > 0 {
+			for _, code := range draft.PolicyGate.NextActionCodes {
+				codes = append(codes, string(code))
+			}
+		} else {
+			codes = append(codes, "create_approval_request")
+		}
+	}
+	if len(blockedRows) > 0 {
+		codes = append(codes, "review_blocked_simulation_rows")
+	}
+	if len(codes) == 0 {
+		codes = append(codes, "apply_permission_package")
+	}
+	return dedupeStrings(codes)
 }
 
 func (s *Server) explainManagementMCPAccessDecision(r *http.Request, args managementMCPExplainAccessArgs) (managementMCPExplainAccessResult, error) {

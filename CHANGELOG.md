@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Management MCP `explain_permission_package_draft` now returns top-level `nextActionCodes` for draft readiness, policy-gate approval, blocked simulation rows, and direct apply guidance, so admin agents can follow structured actions without parsing prose.
+- Management MCP 的 `explain_permission_package_draft` 现在会返回顶层 `nextActionCodes`，覆盖草案就绪、策略门禁审批、阻断模拟行和直接应用提示，让管理 Agent 无需解析自然语言也能执行结构化下一步。
 - The web console now renders permission-package policy-gate follow-up guidance from stable `nextActionCodes` first, keeping approval-required prompts localized and free of backend prose fallbacks.
 - Web 控制台现在会优先用稳定的 `nextActionCodes` 渲染权限包策略门禁的下一步提示，让需审批提示保持本地化，并避免回退展示后端自然语言。
 - Permission-package policy gates now include stable `nextActionCodes` for approval-required drafts, so admin agents and fallback console logic can route approval setup without parsing English `nextActions`.

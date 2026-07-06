@@ -178,6 +178,26 @@ elif kind == "approval-resolution":
     body = {"reviewer": reviewer, "comment": comment}
 elif kind == "tools-list":
     body = {"jsonrpc": "2.0", "id": "tools-list", "method": "tools/list"}
+elif kind == "mcp-explain-permission-package":
+    caller_id, region, request_text, subject_selector, target_id, template_id, tenant_id, workspace_id = sys.argv[2:10]
+    body = {
+        "jsonrpc": "2.0",
+        "id": "explain-permission-package",
+        "method": "tools/call",
+        "params": {
+            "name": "explain_permission_package_draft",
+            "arguments": {
+                "callerInstanceId": caller_id,
+                "region": region,
+                "requestText": request_text,
+                "subjectSelector": subject_selector,
+                "targetId": target_id,
+                "templateId": template_id,
+                "tenantId": tenant_id,
+                "workspaceId": workspace_id,
+            },
+        },
+    }
 elif kind == "tools-call":
     tool = sys.argv[2]
     body = {
@@ -202,6 +222,10 @@ PY
 permission_package_body() {
   local approval_request_id="${1:-}"
   json_body permission-package "$CALLER_ID" "$REGION" "$REQUEST_TEXT" "$SUBJECT_SELECTOR" "$TARGET_ID" "$TEMPLATE_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID" "$approval_request_id"
+}
+
+mcp_explain_permission_package_body() {
+  json_body mcp-explain-permission-package "$CALLER_ID" "$REGION" "$REQUEST_TEXT" "$SUBJECT_SELECTOR" "$TARGET_ID" "$TEMPLATE_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID"
 }
 
 production_readiness_path() {
@@ -309,6 +333,31 @@ scope = draft["dataScopes"][0]
 if scope.get("dataDomain") != "support" or scope.get("region") != "us-east":
     raise SystemExit(f"unexpected package data scope: {scope}")
 print("approval-required permission package draft verified")
+PY
+}
+
+assert_mcp_permission_package_explain() {
+  RESPONSE_BODY="$HTTP_BODY" python3 <<'PY'
+import json
+import os
+
+doc = json.loads(os.environ["RESPONSE_BODY"])
+structured = doc.get("result", {}).get("structuredContent")
+if not isinstance(structured, dict):
+    raise SystemExit(f"missing structuredContent: {doc}")
+if structured.get("outcome") != "approval_required":
+    raise SystemExit(f"expected approval_required explanation: {structured}")
+next_action_codes = structured.get("nextActionCodes") or []
+if "create_approval_request" not in next_action_codes:
+    raise SystemExit(
+        f"MCP explanation nextActionCodes={next_action_codes!r} missing create_approval_request: {structured}"
+    )
+if "apply_permission_package" in next_action_codes:
+    raise SystemExit(f"MCP explanation should not suggest direct apply code: {structured}")
+policy_codes = structured.get("policyGate", {}).get("nextActionCodes") or []
+if "create_approval_request" not in policy_codes:
+    raise SystemExit(f"MCP explanation policy gate codes missing create_approval_request: {structured}")
+print("management MCP permission package explanation verified")
 PY
 }
 
@@ -956,6 +1005,10 @@ echo "discovered capabilities: read=$READ_CAPABILITY_ID write=$WRITE_CAPABILITY_
 request POST "/api/v1/permission-packages/drafts" "$(permission_package_body)"
 expect_status 200 "draft approval-required permission package"
 assert_approval_required_draft
+
+request POST "/api/v1/management/mcp" "$(mcp_explain_permission_package_body)"
+expect_status 200 "explain approval-required permission package through management MCP"
+assert_mcp_permission_package_explain
 
 request POST "/api/v1/permission-packages:preflight" "$(permission_package_body)"
 expect_status 200 "preflight approval-required package without approval"

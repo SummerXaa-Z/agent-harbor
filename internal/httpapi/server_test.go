@@ -587,7 +587,8 @@ type managementMCPExplainPermissionPackageResponse struct {
 		CapabilityKey    string `json:"capabilityKey"`
 		ExpectedDecision string `json:"expectedDecision"`
 	} `json:"blockedSimulationRows"`
-	NextActions []string `json:"nextActions"`
+	NextActionCodes []string `json:"nextActionCodes"`
+	NextActions     []string `json:"nextActions"`
 }
 
 type managementMCPExplainAccessResponse struct {
@@ -8027,6 +8028,9 @@ func TestManagementMCPExplainPermissionPackageDraft(t *testing.T) {
 	if len(explanation.BlockedSimulationRows) == 0 || len(explanation.NextActions) == 0 || explanation.Summary == "" {
 		t.Fatalf("expected blocked rows, next actions, and summary, got %#v", explanation)
 	}
+	if !slices.Contains(explanation.NextActionCodes, "narrow_data_scope") {
+		t.Fatalf("expected narrow data-scope next action code, got %#v", explanation.NextActionCodes)
+	}
 }
 
 func TestManagementMCPExplainPermissionPackageDraftRequiresApproval(t *testing.T) {
@@ -8078,6 +8082,12 @@ func TestManagementMCPExplainPermissionPackageDraftRequiresApproval(t *testing.T
 	}
 	if !strings.Contains(strings.Join(explanation.NextActions, " "), "approval") {
 		t.Fatalf("expected approval next action, got %#v", explanation.NextActions)
+	}
+	if !slices.Contains(explanation.NextActionCodes, "create_approval_request") {
+		t.Fatalf("expected approval next action code, got %#v", explanation.NextActionCodes)
+	}
+	if slices.Contains(explanation.NextActionCodes, "apply_permission_package") {
+		t.Fatalf("approval-required draft should not suggest direct apply code, got %#v", explanation.NextActionCodes)
 	}
 	if strings.Contains(strings.Join(explanation.NextActions, " "), "Apply the permission package") {
 		t.Fatalf("approval-required draft should not suggest direct apply, got %#v", explanation.NextActions)

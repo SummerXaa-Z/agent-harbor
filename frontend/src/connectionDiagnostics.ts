@@ -159,6 +159,14 @@ function apiDiagnosticRow(apiHealth: HealthCheckResult): ConnectionDiagnosticRow
     };
   }
   if (apiHealth.code === "api_contract_incompatible") {
+    if (hasOnlyManagementMcpCatalogContractIssues(apiHealth.contractIssues, apiHealth.missingCapabilities)) {
+      return {
+        detailKey: "message.apiContractIncompatibleManagementCatalog",
+        key: "api",
+        status: "error",
+        titleKey: "connectionDiagnostics.api.title"
+      };
+    }
     return {
       detailKey: "message.apiContractIncompatible",
       detailParams: {
@@ -251,4 +259,16 @@ function mcpCatalogDiagnosticRow(catalog: ManagementMcpCatalogDiagnostic): Conne
     status: "error",
     titleKey: "connectionDiagnostics.mcpCatalog.title"
   };
+}
+
+function hasOnlyManagementMcpCatalogContractIssues(
+  contractIssues: string[] | undefined,
+  missingCapabilities: string[] | undefined
+): boolean {
+  const issues = Array.isArray(contractIssues) ? contractIssues : [];
+  const capabilities = Array.isArray(missingCapabilities) ? missingCapabilities : [];
+  return capabilities.length === 0 && issues.length > 0 && issues.every((issue) => (
+    issue === "managementMcpToolCatalog.metadataVersion" ||
+    issue.startsWith("managementMcpToolCatalog.requiredMetadata.")
+  ));
 }

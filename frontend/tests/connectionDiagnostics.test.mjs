@@ -57,6 +57,27 @@ test("connection diagnostics blocks old API or expired session before production
   assert.equal(rows.find((row) => row.key === "dataSource")?.status, "warning");
 });
 
+test("connection diagnostics hides raw management MCP catalog contract issue keys", () => {
+  const rows = buildConnectionDiagnosticRows({
+    apiHealth: {
+      code: "api_contract_incompatible",
+      contractIssues: ["managementMcpToolCatalog.requiredMetadata.access"],
+      message: "system info contract issues: managementMcpToolCatalog.requiredMetadata.access",
+      missingCapabilities: [],
+      status: "error"
+    },
+    liveDataLoaded: true,
+    loadError: "",
+    mcpCatalog: { metadataVersion: 1, status: "ok", toolsWithAccess: 12, toolsWithSafety: 12 },
+    mcpHealth: { status: "ok", message: "ok" },
+    session: { actor: "admin-key", authenticated: true, requiresLogin: true }
+  });
+
+  const apiRow = rows.find((row) => row.key === "api");
+  assert.equal(apiRow?.detailKey, "message.apiContractIncompatibleManagementCatalog");
+  assert.equal(apiRow?.detailParams, undefined);
+});
+
 test("connection diagnostics treats fallback data as warning and MCP failure as error", () => {
   const rows = buildConnectionDiagnosticRows({
     apiHealth: { status: "ok", message: "ok" },

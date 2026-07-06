@@ -13,9 +13,24 @@ export function healthCheckFailureDetail(t: Translator, label: string, result: H
     return t("message.apiContractUnavailable");
   }
   if (result.code === "api_contract_incompatible") {
+    if (hasOnlyManagementMcpCatalogContractIssues(result.contractIssues, result.missingCapabilities)) {
+      return t("message.apiContractIncompatibleManagementCatalog");
+    }
     return tx(t, "message.apiContractIncompatible", {
       capabilities: result.missingCapabilities?.join(", ") || result.message
     });
   }
   return `${label}: ${result.message}`;
+}
+
+function hasOnlyManagementMcpCatalogContractIssues(
+  contractIssues: string[] | undefined,
+  missingCapabilities: string[] | undefined
+): boolean {
+  const issues = Array.isArray(contractIssues) ? contractIssues : [];
+  const capabilities = Array.isArray(missingCapabilities) ? missingCapabilities : [];
+  return capabilities.length === 0 && issues.length > 0 && issues.every((issue) => (
+    issue === "managementMcpToolCatalog.metadataVersion" ||
+    issue.startsWith("managementMcpToolCatalog.requiredMetadata.")
+  ));
 }

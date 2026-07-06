@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- API compatibility failures caused only by Management MCP catalog metadata mismatches now use a dedicated localized operator message instead of exposing raw contract field names in diagnostics or preflight panels.
+- 仅由 Management MCP 目录元数据不兼容导致的 API 兼容失败，现在会展示专门的本地化管理员提示，不再在诊断或预检面板中暴露原始契约字段名。
 - The web console now validates the `managementMcpToolCatalog` system-info summary during API compatibility checks, blocking admin-agent workflows when a backend misstates or omits the Management MCP catalog metadata contract.
 - Web 控制台现在会在 API 兼容检查中验证 `managementMcpToolCatalog` 系统信息摘要；当后端误声明或缺失 Management MCP 目录元数据契约时，会阻断管理 Agent 工作流。
 - `GET /api/v1/system/info` now includes a `managementMcpToolCatalog` contract summary with metadata version and required metadata fields, giving admin agents a public compatibility hint without exposing live management tools.

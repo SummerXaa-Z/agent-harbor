@@ -235,12 +235,13 @@ type permissionPackageApplyResponse struct {
 }
 
 type permissionPackageApplyPreflightResponse struct {
-	Draft          permissionPackageDraftResponse                 `json:"draft"`
-	Summary        permissionPackageApplyPreflightSummary         `json:"summary"`
-	Checks         []permissionPackageApplyPreflightCheck         `json:"checks"`
-	Planned        permissionPackageApplyPreflightPlannedChanges  `json:"planned"`
-	ExistingGrants []permissionPackageApplyPreflightExistingGrant `json:"existingGrants"`
-	NextActions    []string                                       `json:"nextActions"`
+	Draft           permissionPackageDraftResponse                 `json:"draft"`
+	Summary         permissionPackageApplyPreflightSummary         `json:"summary"`
+	Checks          []permissionPackageApplyPreflightCheck         `json:"checks"`
+	Planned         permissionPackageApplyPreflightPlannedChanges  `json:"planned"`
+	ExistingGrants  []permissionPackageApplyPreflightExistingGrant `json:"existingGrants"`
+	NextActionCodes []string                                       `json:"nextActionCodes"`
+	NextActions     []string                                       `json:"nextActions"`
 }
 
 type permissionPackageApplyPreflightSummary struct {
@@ -5026,6 +5027,9 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 		!permissionPackagePreflightHasCheck(preflightAfterApply.Checks, "application_already_applied", "blocking") {
 		t.Fatalf("expected already-applied preflight to block direct reapply, got %#v", preflightAfterApply)
 	}
+	if !slices.Contains(preflightAfterApply.NextActionCodes, "review_current_application") {
+		t.Fatalf("expected already-applied preflight next action code, got %#v", preflightAfterApply.NextActionCodes)
+	}
 	applicationsAfterPreflight := decodeData[[]permissionPackageApplicationResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications?tenantId=tenant-root&workspaceId=ws-sales&templateId=sales-readonly&targetId="+target.ID+"&callerInstanceId="+caller.ID, nil, ""))
 	if len(applicationsAfterPreflight) != 1 || applicationsAfterPreflight[0].ID != applied.Application.ID {
 		t.Fatalf("already-applied preflight must not create another application, got %#v", applicationsAfterPreflight)
@@ -5277,6 +5281,9 @@ func TestPermissionPackagePreflightApprovalRequiredStates(t *testing.T) {
 		missingApproval.Summary.ApprovalReady || !permissionPackagePreflightHasCheck(missingApproval.Checks, "approval_request_missing", "blocking") {
 		t.Fatalf("expected missing approval to block preflight, got %#v", missingApproval)
 	}
+	if !slices.Contains(missingApproval.NextActionCodes, "create_approval_request") {
+		t.Fatalf("expected missing approval next action code, got %#v", missingApproval.NextActionCodes)
+	}
 
 	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
 	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", map[string]any{
@@ -5302,6 +5309,9 @@ func TestPermissionPackagePreflightApprovalRequiredStates(t *testing.T) {
 		!permissionPackagePreflightHasCheck(approvedPreflight.Checks, "approval_request_ready", "passed") ||
 		len(approvedPreflight.Planned.Capabilities) != 1 || approvedPreflight.Planned.Capabilities[0].ID != updateTicket.ID {
 		t.Fatalf("expected approved preflight to be ready, got %#v", approvedPreflight)
+	}
+	if !slices.Contains(approvedPreflight.NextActionCodes, "apply_permission_package") {
+		t.Fatalf("expected approved preflight next action code, got %#v", approvedPreflight.NextActionCodes)
 	}
 	loadedApproval, ok, err := repo.GetPermissionPackageApprovalRequest(t.Context(), approved.ID)
 	if err != nil || !ok {
@@ -5332,6 +5342,9 @@ func TestPermissionPackagePreflightApprovalRequiredStates(t *testing.T) {
 	mismatched := decodeData[permissionPackageApplyPreflightResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:preflight", mismatchedInput, ""))
 	if mismatched.Summary.CanApply || !permissionPackagePreflightHasCheck(mismatched.Checks, "approval_request_invalid", "blocking") {
 		t.Fatalf("expected mismatched approval to block preflight, got %#v", mismatched)
+	}
+	if !slices.Contains(mismatched.NextActionCodes, "refresh_approval_request") {
+		t.Fatalf("expected mismatched approval next action code, got %#v", mismatched.NextActionCodes)
 	}
 }
 
@@ -5640,6 +5653,9 @@ func TestPermissionPackagePreflightDetectsDataScopeConflict(t *testing.T) {
 		!permissionPackagePreflightHasCheck(preflight.Checks, "data_scope_fit", "blocking") {
 		t.Fatalf("expected data-scope conflict to block preflight, got %#v", preflight)
 	}
+	if !slices.Contains(preflight.NextActionCodes, "narrow_data_scope") {
+		t.Fatalf("expected data-scope next action code, got %#v", preflight.NextActionCodes)
+	}
 }
 
 func TestPermissionPackagePreflightWarnsAboutExistingGrantChain(t *testing.T) {
@@ -5722,6 +5738,9 @@ func TestPermissionPackagePreflightWarnsAboutExistingGrantChain(t *testing.T) {
 		preflight.ExistingGrants[0].WorkspaceAssignmentID != workspaceAssignment.ID ||
 		preflight.ExistingGrants[0].InstanceAssignmentID != instanceAssignment.ID {
 		t.Fatalf("expected existing grant warning, got %#v", preflight)
+	}
+	if !slices.Contains(preflight.NextActionCodes, "review_existing_grants") {
+		t.Fatalf("expected existing grant next action code, got %#v", preflight.NextActionCodes)
 	}
 	applications, err := repo.ListPermissionPackageApplications(t.Context(), store.PermissionPackageApplicationFilter{})
 	if err != nil {
@@ -7530,6 +7549,9 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 	if !preflight.Summary.CanApply || preflight.Summary.BlockingCount != 0 ||
 		!permissionPackagePreflightHasCheck(preflight.Checks, "planned_changes", "info") {
 		t.Fatalf("unexpected management MCP preflight: %#v", preflight)
+	}
+	if !slices.Contains(preflight.NextActionCodes, "apply_permission_package") {
+		t.Fatalf("expected management MCP preflight next action code, got %#v", preflight.NextActionCodes)
 	}
 	entitlements, err := repo.ListTenantEntitlements(t.Context(), store.EntitlementFilter{})
 	if err != nil {

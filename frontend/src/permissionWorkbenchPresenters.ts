@@ -7,6 +7,7 @@ import type { PermissionRequestWizardStep } from "./permissionRequestJourney";
 import type {
   PermissionPackageApplyPreflight,
   PermissionPackageApplyPreflightCheck,
+  PermissionPackageApplyPreflightNextActionCode,
   PermissionPackageApplicationHealthRow,
   PermissionPackageApplicationHealthStatus,
   PermissionPackageApprovalEffectiveStatus,
@@ -483,7 +484,24 @@ export function permissionApplyPreflightCheckMessage(check: PermissionPackageApp
   return knownLabel(t, `permissionPreflight.detail.${check.code}`, "permissionPreflight.detail.unknown");
 }
 
-export function permissionApplyPreflightNextAction(action: string, t: Translator) {
+export function permissionApplyPreflightNextActionByCode(code: string, t: Translator) {
+  const keyByCode: Record<PermissionPackageApplyPreflightNextActionCode, string> = {
+    apply_permission_package: "permissionPreflight.next.applyWhenReady",
+    create_approval_request: "permissionPreflight.next.createApproval",
+    fix_draft_readiness: "permissionPreflight.next.fixDraft",
+    narrow_data_scope: "permissionPreflight.next.narrowScope",
+    refresh_approval_request: "permissionPreflight.next.refreshApproval",
+    review_current_application: "permissionPreflight.next.reviewAlreadyApplied",
+    review_existing_grants: "permissionPreflight.next.reviewExistingGrants",
+    use_approved_request: "permissionPreflight.next.useApprovedRequest"
+  };
+  return Object.prototype.hasOwnProperty.call(keyByCode, code)
+    ? t(keyByCode[code as PermissionPackageApplyPreflightNextActionCode])
+    : t("permissionPreflight.next.unknown");
+}
+
+export function permissionApplyPreflightNextAction(action: string, t: Translator, code?: string) {
+  if (code) return permissionApplyPreflightNextActionByCode(code, t);
   const keyByAction: Record<string, string> = {
     "Apply this permission package when the reviewer is ready.": "permissionPreflight.next.applyWhenReady",
     "Apply this permission request when the reviewer is ready.": "permissionPreflight.next.applyWhenReady",

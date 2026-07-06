@@ -977,6 +977,17 @@
   background: var(--surface-subtle);
 }
 
+.approval-next-line.compact {
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--surface);
+}
+
+.approval-next-line.compact strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .approval-package-preview strong,
 .approval-decision strong,
 .approval-reviewer-context span,

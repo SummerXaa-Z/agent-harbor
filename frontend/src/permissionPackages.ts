@@ -72,6 +72,15 @@ export interface PermissionPackageApplyResult {
 }
 
 export type PermissionPackageApplyPreflightSeverity = "passed" | "info" | "warning" | "blocking";
+export type PermissionPackageApplyPreflightNextActionCode =
+  | "fix_draft_readiness"
+  | "create_approval_request"
+  | "use_approved_request"
+  | "refresh_approval_request"
+  | "narrow_data_scope"
+  | "review_existing_grants"
+  | "review_current_application"
+  | "apply_permission_package";
 
 export interface PermissionPackageApplyPreflight {
   draft: PermissionPackageDraft;
@@ -79,6 +88,7 @@ export interface PermissionPackageApplyPreflight {
   checks: PermissionPackageApplyPreflightCheck[];
   planned: PermissionPackageApplyPreflightPlannedChanges;
   existingGrants: PermissionPackageApplyPreflightExistingGrant[];
+  nextActionCodes?: PermissionPackageApplyPreflightNextActionCode[];
   nextActions: string[];
 }
 

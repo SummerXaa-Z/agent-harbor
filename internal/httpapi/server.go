@@ -3528,15 +3528,16 @@ func (s *Server) preflightPermissionPackageRequest(ctx context.Context, req doma
 			WorkspaceAssignments: []domain.WorkspaceAssignment{},
 			InstanceAssignments:  []domain.InstanceAssignment{},
 		},
-		ExistingGrants: []domain.PermissionPackageApplyPreflightExistingGrant{},
-		NextActions:    []string{},
+		ExistingGrants:  []domain.PermissionPackageApplyPreflightExistingGrant{},
+		NextActionCodes: []domain.PermissionPackagePreflightNextActionCode{},
+		NextActions:     []string{},
 	}
 
 	if draft.Readiness.CanApply {
 		result.Checks = append(result.Checks, permissionPackagePreflightCheck("draft_ready", domain.PermissionPackagePreflightPassed, "Permission package draft is ready to evaluate.", "", ""))
 	} else {
 		result.Checks = append(result.Checks, permissionPackagePreflightCheck("draft_not_ready", domain.PermissionPackagePreflightBlocking, "Permission package draft is not ready to apply.", "", ""))
-		result.NextActions = appendUniqueString(result.NextActions, "Fix draft readiness blockers before applying this permission request.")
+		permissionPackagePreflightAddNextAction(&result, domain.PermissionPackagePreflightNextFixDraftReadiness, "Fix draft readiness blockers before applying this permission request.")
 	}
 
 	requiresApproval := !draft.PolicyGate.CanApplyDirectly
@@ -3545,7 +3546,7 @@ func (s *Server) preflightPermissionPackageRequest(ctx context.Context, req doma
 		result.Checks = append(result.Checks, permissionPackagePreflightCheck("policy_gate", domain.PermissionPackagePreflightInfo, "Policy gate requires an approved permission package approval request.", "", ""))
 		if req.ApprovalRequestID == "" {
 			result.Checks = append(result.Checks, permissionPackagePreflightCheck("approval_request_missing", domain.PermissionPackagePreflightBlocking, "Permission package requires approval before apply.", "", ""))
-			result.NextActions = appendUniqueString(result.NextActions, "Create and approve an approval request for this permission request, then preflight again with approvalRequestId.")
+			permissionPackagePreflightAddNextAction(&result, domain.PermissionPackagePreflightNextCreateApproval, "Create and approve an approval request for this permission request, then preflight again with approvalRequestId.")
 		} else {
 			approval, ok, err := s.repo.GetPermissionPackageApprovalRequest(ctx, req.ApprovalRequestID)
 			if err != nil {
@@ -3553,10 +3554,10 @@ func (s *Server) preflightPermissionPackageRequest(ctx context.Context, req doma
 			}
 			if !ok {
 				result.Checks = append(result.Checks, permissionPackagePreflightCheck("approval_request_invalid", domain.PermissionPackagePreflightBlocking, "Approval request was not found.", "", ""))
-				result.NextActions = appendUniqueString(result.NextActions, "Use an approved approvalRequestId that matches the current draft.")
+				permissionPackagePreflightAddNextAction(&result, domain.PermissionPackagePreflightNextUseApprovedRequest, "Use an approved approvalRequestId that matches the current draft.")
 			} else if err := validatePermissionPackageApprovalForDraft(approval, draft, s.now()); err != nil {
 				result.Checks = append(result.Checks, permissionPackagePreflightCheck("approval_request_invalid", domain.PermissionPackagePreflightBlocking, err.Error(), "", ""))
-				result.NextActions = appendUniqueString(result.NextActions, "Refresh approval or create a new approval request for the current draft.")
+				permissionPackagePreflightAddNextAction(&result, domain.PermissionPackagePreflightNextRefreshApproval, "Refresh approval or create a new approval request for the current draft.")
 			} else {
 				approvalReady = true
 				result.Checks = append(result.Checks, permissionPackagePreflightCheck("approval_request_ready", domain.PermissionPackagePreflightPassed, "Approval request is approved and matches the current draft.", "", ""))
@@ -3572,7 +3573,7 @@ func (s *Server) preflightPermissionPackageRequest(ctx context.Context, req doma
 		if !ok {
 			dataScopeConflictCount++
 			result.Checks = append(result.Checks, permissionPackagePreflightCheck("data_scope_fit", domain.PermissionPackagePreflightBlocking, "Permission package dataScopes exceed capability dataScopes.", capability.ID, capability.Key))
-			result.NextActions = appendUniqueString(result.NextActions, "Narrow region or data scopes so the package stays inside every capability boundary.")
+			permissionPackagePreflightAddNextAction(&result, domain.PermissionPackagePreflightNextNarrowDataScope, "Narrow region or data scopes so the package stays inside every capability boundary.")
 			continue
 		}
 		result.Planned.Capabilities = append(result.Planned.Capabilities, permissionPackagePreflightPlannedCapability(capability, effectiveScopes))
@@ -3588,7 +3589,7 @@ func (s *Server) preflightPermissionPackageRequest(ctx context.Context, req doma
 		for _, existing := range existingGrants {
 			result.ExistingGrants = append(result.ExistingGrants, existing)
 			result.Checks = append(result.Checks, permissionPackagePreflightCheck("existing_grant_chain", domain.PermissionPackagePreflightWarning, "An enabled grant chain already exists for this tenant, workspace, caller, and capability.", capability.ID, capability.Key))
-			result.NextActions = appendUniqueString(result.NextActions, "Review existing grant chains before applying another permission request for the same caller and capability.")
+			permissionPackagePreflightAddNextAction(&result, domain.PermissionPackagePreflightNextReviewExistingGrants, "Review existing grant chains before applying another permission request for the same caller and capability.")
 		}
 	}
 	if dataScopeConflictCount == 0 {
@@ -3600,13 +3601,13 @@ func (s *Server) preflightPermissionPackageRequest(ctx context.Context, req doma
 	}
 	if len(alreadyApplied) > 0 {
 		result.Checks = append(result.Checks, permissionPackagePreflightCheck("application_already_applied", domain.PermissionPackagePreflightBlocking, "A matching permission request has already been applied.", "", ""))
-		result.NextActions = appendUniqueString(result.NextActions, "Review the latest permission request status before applying the same permission request again.")
+		permissionPackagePreflightAddNextAction(&result, domain.PermissionPackagePreflightNextReviewCurrentApplication, "Review the latest permission request status before applying the same permission request again.")
 	}
 	result.Checks = append(result.Checks, permissionPackagePreflightCheck("planned_changes", domain.PermissionPackagePreflightInfo, "Preflight planned grant objects without writing them.", "", ""))
 
 	result.Summary = permissionPackagePreflightSummary(result, requiresApproval, approvalReady)
 	if result.Summary.CanApply {
-		result.NextActions = appendUniqueString(result.NextActions, "Apply this permission request when the reviewer is ready.")
+		permissionPackagePreflightAddNextAction(&result, domain.PermissionPackagePreflightNextApplyPermissionPackage, "Apply this permission request when the reviewer is ready.")
 	}
 	return result, nil
 }
@@ -3939,6 +3940,17 @@ func permissionPackagePreflightCheck(code string, severity domain.PermissionPack
 		CapabilityID:  capabilityID,
 		CapabilityKey: capabilityKey,
 	}
+}
+
+func permissionPackagePreflightAddNextAction(result *domain.PermissionPackageApplyPreflightResponse, code domain.PermissionPackagePreflightNextActionCode, message string) {
+	for _, existing := range result.NextActionCodes {
+		if existing == code {
+			result.NextActions = appendUniqueString(result.NextActions, message)
+			return
+		}
+	}
+	result.NextActionCodes = append(result.NextActionCodes, code)
+	result.NextActions = appendUniqueString(result.NextActions, message)
 }
 
 func permissionPackagePreflightSummary(result domain.PermissionPackageApplyPreflightResponse, requiresApproval bool, approvalReady bool) domain.PermissionPackageApplyPreflightSummary {

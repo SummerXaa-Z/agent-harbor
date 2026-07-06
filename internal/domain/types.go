@@ -579,13 +579,27 @@ const (
 )
 
 type PermissionPackageApplyPreflightResponse struct {
-	Draft          PermissionPackageDraft                         `json:"draft"`
-	Summary        PermissionPackageApplyPreflightSummary         `json:"summary"`
-	Checks         []PermissionPackageApplyPreflightCheck         `json:"checks"`
-	Planned        PermissionPackageApplyPreflightPlannedChanges  `json:"planned"`
-	ExistingGrants []PermissionPackageApplyPreflightExistingGrant `json:"existingGrants"`
-	NextActions    []string                                       `json:"nextActions"`
+	Draft           PermissionPackageDraft                         `json:"draft"`
+	Summary         PermissionPackageApplyPreflightSummary         `json:"summary"`
+	Checks          []PermissionPackageApplyPreflightCheck         `json:"checks"`
+	Planned         PermissionPackageApplyPreflightPlannedChanges  `json:"planned"`
+	ExistingGrants  []PermissionPackageApplyPreflightExistingGrant `json:"existingGrants"`
+	NextActionCodes []PermissionPackagePreflightNextActionCode     `json:"nextActionCodes"`
+	NextActions     []string                                       `json:"nextActions"`
 }
+
+type PermissionPackagePreflightNextActionCode string
+
+const (
+	PermissionPackagePreflightNextFixDraftReadiness        PermissionPackagePreflightNextActionCode = "fix_draft_readiness"
+	PermissionPackagePreflightNextCreateApproval           PermissionPackagePreflightNextActionCode = "create_approval_request"
+	PermissionPackagePreflightNextUseApprovedRequest       PermissionPackagePreflightNextActionCode = "use_approved_request"
+	PermissionPackagePreflightNextRefreshApproval          PermissionPackagePreflightNextActionCode = "refresh_approval_request"
+	PermissionPackagePreflightNextNarrowDataScope          PermissionPackagePreflightNextActionCode = "narrow_data_scope"
+	PermissionPackagePreflightNextReviewExistingGrants     PermissionPackagePreflightNextActionCode = "review_existing_grants"
+	PermissionPackagePreflightNextReviewCurrentApplication PermissionPackagePreflightNextActionCode = "review_current_application"
+	PermissionPackagePreflightNextApplyPermissionPackage   PermissionPackagePreflightNextActionCode = "apply_permission_package"
+)
 
 type PermissionPackageApplyPreflightSummary struct {
 	CanApply                        bool `json:"canApply"`

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Permission-package apply preflight responses now include stable `nextActionCodes` alongside legacy `nextActions`, and the web console renders preflight follow-up guidance from codes first while preserving fallback compatibility.
+- 权限包应用前预检现在会在旧版 `nextActions` 之外返回稳定的 `nextActionCodes`；Web 控制台会优先按代码渲染预检下一步，同时保留旧响应兼容。
 - Release readiness now includes `make scenario-permission-package-approval` and `make ai-admin-browser-journey`, proving the v0.2.0 approval-required permission package journey in `make release-check` across API, MCP, CORS, and live web-console serving.
 - 发布验收现在包含 `make scenario-permission-package-approval` 和 `make ai-admin-browser-journey`，在 `make release-check` 中覆盖 API、MCP、CORS 和 Web 控制台运行时的 v0.2.0 需审批权限包主旅程。
 - Production deployment preflight now runs before PostgreSQL storage initialization, so invalid production configuration fails before migrations, credential-key parsing, or database connection attempts.

@@ -350,6 +350,17 @@ if summary.get("canApply") is not expected_can_apply:
 codes = {check.get("code"): check for check in preflight.get("checks", [])}
 if expected_check not in codes:
     raise SystemExit(f"preflight missing check {expected_check!r}: {codes}")
+expected_next_actions = {
+    "approval_request_missing": "create_approval_request",
+    "approval_request_ready": "apply_permission_package",
+    "application_already_applied": "review_current_application",
+}
+expected_next_action = expected_next_actions.get(expected_check)
+next_action_codes = preflight.get("nextActionCodes") or []
+if expected_next_action and expected_next_action not in next_action_codes:
+    raise SystemExit(
+        f"preflight nextActionCodes={next_action_codes!r} missing {expected_next_action!r}: {preflight}"
+    )
 if expected_can_apply:
     if summary.get("blockingCount") != 0:
         raise SystemExit(f"ready preflight should have zero blockers: {summary}")

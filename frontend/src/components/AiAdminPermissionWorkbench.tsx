@@ -43,6 +43,7 @@ import {
   permissionApprovalStatusLabel,
   permissionApprovalStatusTone,
   permissionEntityDisplayName,
+  permissionApplyPreflightNextAction,
   permissionInlineMessageTone,
   permissionPackageTemplateName,
   permissionPackageTemplateSummary,
@@ -339,6 +340,11 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const messageTone = permissionInlineMessageTone(message);
   const approvalReadinessMessageTone = permissionInlineMessageTone(approvalReadinessMessage);
   const applyPreflightMessageTone = permissionInlineMessageTone(applyPreflightMessage);
+  const applyPreflightNextAction = applyPreflight?.nextActionCodes?.[0]
+    ? permissionApplyPreflightNextAction(applyPreflight.nextActions[0] ?? "", t, applyPreflight.nextActionCodes[0])
+    : applyPreflight?.nextActions[0]
+    ? permissionApplyPreflightNextAction(applyPreflight.nextActions[0], t)
+    : "";
   const reviewerQueueMessageTone = permissionInlineMessageTone(reviewerQueueMessage);
   const productionReadinessMessageTone = permissionInlineMessageTone(productionReadinessMessage);
   const accessDecisionExplanationMessageTone = permissionInlineMessageTone(accessDecisionExplanationMessage);
@@ -1008,6 +1014,12 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                 </strong>
               </div>
             </div>
+            {applyPreflightNextAction ? (
+              <div className="approval-next-line compact">
+                <span>{t("text.nextActions")}</span>
+                <strong>{applyPreflightNextAction}</strong>
+              </div>
+            ) : null}
           </section>
 
           <section className="approval-reviewer-queue">

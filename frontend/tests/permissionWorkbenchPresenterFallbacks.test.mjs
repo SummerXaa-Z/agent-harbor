@@ -32,12 +32,16 @@ test("production readiness fallback copy does not expose raw backend check messa
 
 test("permission preflight and policy fallbacks do not expose raw service wording", () => {
   const preflightBlock = functionBlock("permissionApplyPreflightCheckMessage");
+  const nextActionCodeBlock = functionBlock("permissionApplyPreflightNextActionByCode");
   const nextActionBlock = functionBlock("permissionApplyPreflightNextAction");
   const policyBlock = functionBlock("permissionPolicyReasonMessage");
   const readinessBlock = functionBlock("permissionReadinessMessages");
 
   assert.match(preflightBlock, /knownLabel\(t, `permissionPreflight\.detail\.\$\{check\.code\}`, "permissionPreflight\.detail\.unknown"\)/);
   assert.doesNotMatch(preflightBlock, /check\.message/);
+  assert.match(nextActionCodeBlock, /review_current_application: "permissionPreflight\.next\.reviewAlreadyApplied"/);
+  assert.match(nextActionCodeBlock, /apply_permission_package: "permissionPreflight\.next\.applyWhenReady"/);
+  assert.match(nextActionBlock, /if \(code\) return permissionApplyPreflightNextActionByCode\(code, t\)/);
   assert.match(nextActionBlock, /t\("permissionPreflight\.next\.unknown"\)/);
   assert.match(nextActionBlock, /Review the latest permission request status before applying the same permission request again\./);
   assert.match(nextActionBlock, /permissionPreflight\.next\.reviewAlreadyApplied/);

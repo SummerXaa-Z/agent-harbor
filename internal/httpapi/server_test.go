@@ -569,6 +569,7 @@ type mcpToolResponse struct {
 	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
 	Safety      mcpToolSafety  `json:"safety"`
+	Access      mcpToolAccess  `json:"access"`
 }
 
 type mcpToolSafety struct {
@@ -576,6 +577,12 @@ type mcpToolSafety struct {
 	ReadOnly      bool   `json:"readOnly"`
 	MutatesState  bool   `json:"mutatesState"`
 	ApprovalMode  string `json:"approvalMode"`
+}
+
+type mcpToolAccess struct {
+	RequiredRole  string `json:"requiredRole"`
+	ScopeBoundary string `json:"scopeBoundary"`
+	ReviewerBound bool   `json:"reviewerBound"`
 }
 
 type mcpContentItem struct {
@@ -7524,6 +7531,10 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 			tool.Safety.ApprovalMode == "" || tool.Safety.ApprovalMode == "unspecified" {
 			t.Fatalf("management MCP tool %q missing safety metadata: %#v", tool.Name, tool)
 		}
+		if tool.Access.RequiredRole == "" || tool.Access.RequiredRole == "unspecified" ||
+			tool.Access.ScopeBoundary == "" || tool.Access.ScopeBoundary == "unspecified" {
+			t.Fatalf("management MCP tool %q missing access metadata: %#v", tool.Name, tool)
+		}
 	}
 	assertMCPToolSafety(t, tools.Result.Tools, "explain_access_decision", mcpToolSafety{
 		OperationType: "read",
@@ -7548,6 +7559,21 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		ReadOnly:      false,
 		MutatesState:  true,
 		ApprovalMode:  "reviewer",
+	})
+	assertMCPToolAccess(t, tools.Result.Tools, "list_admin_identities", mcpToolAccess{
+		RequiredRole:  "platform_admin",
+		ScopeBoundary: "platform",
+		ReviewerBound: false,
+	})
+	assertMCPToolAccess(t, tools.Result.Tools, "draft_permission_package", mcpToolAccess{
+		RequiredRole:  "authenticated_admin",
+		ScopeBoundary: "requested_scope",
+		ReviewerBound: false,
+	})
+	assertMCPToolAccess(t, tools.Result.Tools, "approve_permission_package_approval_request", mcpToolAccess{
+		RequiredRole:  "authenticated_admin",
+		ScopeBoundary: "reviewer_route",
+		ReviewerBound: true,
 	})
 
 	args := map[string]any{
@@ -8808,6 +8834,20 @@ func assertMCPToolSafety(t *testing.T, tools []mcpToolResponse, name string, wan
 		}
 		if tool.Safety != want {
 			t.Fatalf("tool %q safety=%#v want %#v", name, tool.Safety, want)
+		}
+		return
+	}
+	t.Fatalf("tool %q missing from tools/list", name)
+}
+
+func assertMCPToolAccess(t *testing.T, tools []mcpToolResponse, name string, want mcpToolAccess) {
+	t.Helper()
+	for _, tool := range tools {
+		if tool.Name != name {
+			continue
+		}
+		if tool.Access != want {
+			t.Fatalf("tool %q access=%#v want %#v", name, tool.Access, want)
 		}
 		return
 	}

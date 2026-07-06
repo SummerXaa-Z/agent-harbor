@@ -52,6 +52,7 @@ type managementMCPTool struct {
 	Description string                  `json:"description"`
 	InputSchema map[string]any          `json:"inputSchema"`
 	Safety      managementMCPToolSafety `json:"safety"`
+	Access      managementMCPToolAccess `json:"access"`
 }
 
 type managementMCPToolSafety struct {
@@ -59,6 +60,12 @@ type managementMCPToolSafety struct {
 	ReadOnly      bool   `json:"readOnly"`
 	MutatesState  bool   `json:"mutatesState"`
 	ApprovalMode  string `json:"approvalMode"`
+}
+
+type managementMCPToolAccess struct {
+	RequiredRole  string `json:"requiredRole"`
+	ScopeBoundary string `json:"scopeBoundary"`
+	ReviewerBound bool   `json:"reviewerBound"`
 }
 
 type managementMCPCallResult struct {
@@ -647,7 +654,7 @@ func managementMCPTools() []managementMCPTool {
 			}, []string{}),
 		},
 	}
-	return managementMCPToolsWithSafety(tools)
+	return managementMCPToolsWithAccess(managementMCPToolsWithSafety(tools))
 }
 
 func managementMCPToolsWithSafety(tools []managementMCPTool) []managementMCPTool {
@@ -711,6 +718,75 @@ func writeManagementMCPToolSafety(approvalMode string) managementMCPToolSafety {
 		ReadOnly:      false,
 		MutatesState:  true,
 		ApprovalMode:  approvalMode,
+	}
+}
+
+func managementMCPToolsWithAccess(tools []managementMCPTool) []managementMCPTool {
+	accessByName := map[string]managementMCPToolAccess{
+		"list_admin_identities":                         platformManagementMCPToolAccess(),
+		"create_admin_identity":                         platformManagementMCPToolAccess(),
+		"rotate_admin_identity_key":                     platformManagementMCPToolAccess(),
+		"disable_admin_identity":                        platformManagementMCPToolAccess(),
+		"list_permission_package_templates":             globalManagementMCPToolAccess(),
+		"draft_permission_package":                      scopedManagementMCPToolAccess(),
+		"preflight_permission_package":                  scopedManagementMCPToolAccess(),
+		"apply_permission_package":                      scopedManagementMCPToolAccess(),
+		"create_permission_package_approval_request":    scopedManagementMCPToolAccess(),
+		"list_permission_package_approval_requests":     scopedManagementMCPToolAccess(),
+		"approve_permission_package_approval_request":   reviewerManagementMCPToolAccess(),
+		"reject_permission_package_approval_request":    reviewerManagementMCPToolAccess(),
+		"withdraw_permission_package_approval_request":  scopedManagementMCPToolAccess(),
+		"list_permission_package_applications":          scopedManagementMCPToolAccess(),
+		"check_permission_package_production_readiness": scopedManagementMCPToolAccess(),
+		"export_permission_package_production_evidence": scopedManagementMCPToolAccess(),
+		"explain_permission_package_draft":              scopedManagementMCPToolAccess(),
+		"explain_access_decision":                       scopedManagementMCPToolAccess(),
+		"get_tenant_access_profile":                     scopedManagementMCPToolAccess(),
+		"list_agents":                                   scopedManagementMCPToolAccess(),
+		"list_capabilities":                             scopedManagementMCPToolAccess(),
+	}
+	for i := range tools {
+		access, ok := accessByName[tools[i].Name]
+		if !ok {
+			access = managementMCPToolAccess{
+				RequiredRole:  "unspecified",
+				ScopeBoundary: "unspecified",
+			}
+		}
+		tools[i].Access = access
+	}
+	return tools
+}
+
+func platformManagementMCPToolAccess() managementMCPToolAccess {
+	return managementMCPToolAccess{
+		RequiredRole:  "platform_admin",
+		ScopeBoundary: "platform",
+		ReviewerBound: false,
+	}
+}
+
+func globalManagementMCPToolAccess() managementMCPToolAccess {
+	return managementMCPToolAccess{
+		RequiredRole:  "authenticated_admin",
+		ScopeBoundary: "global",
+		ReviewerBound: false,
+	}
+}
+
+func scopedManagementMCPToolAccess() managementMCPToolAccess {
+	return managementMCPToolAccess{
+		RequiredRole:  "authenticated_admin",
+		ScopeBoundary: "requested_scope",
+		ReviewerBound: false,
+	}
+}
+
+func reviewerManagementMCPToolAccess() managementMCPToolAccess {
+	return managementMCPToolAccess{
+		RequiredRole:  "authenticated_admin",
+		ScopeBoundary: "reviewer_route",
+		ReviewerBound: true,
 	}
 }
 

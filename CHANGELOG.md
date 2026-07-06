@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Management MCP `tools/list` now returns `access` metadata for every admin tool, including required role, scope boundary, and reviewer binding, so admin agents can route calls without parsing descriptions.
+- Management MCP 的 `tools/list` 现在会为每个管理工具返回 `access` 元数据，包括所需角色、范围边界和审批人绑定，让管理 Agent 无需解析描述文案也能判断调用边界。
 - Management MCP `tools/list` now returns `safety` metadata for every admin tool, including operation type, read-only status, mutation status, and approval mode, so admin agents can avoid accidental writes.
 - Management MCP 的 `tools/list` 现在会为每个管理工具返回 `safety` 元数据，包括操作类型、只读状态、是否写入状态和审批模式，让管理 Agent 避免误触发写操作。
 - Management MCP `explain_access_decision` now returns stable `nextActionCodes` for denied and allowed access explanations, so admin agents can repair missing grant layers without parsing English `nextActions`.

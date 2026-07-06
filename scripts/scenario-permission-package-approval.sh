@@ -422,24 +422,37 @@ import json
 import os
 
 doc = json.loads(os.environ["RESPONSE_BODY"])
-tools = {
-    tool.get("name"): tool.get("safety") or {}
+tools_by_name = {
+    tool.get("name"): tool
     for tool in doc.get("result", {}).get("tools", [])
 }
-required = {
+required_safety = {
     "explain_access_decision": {"operationType": "read", "readOnly": True, "mutatesState": False, "approvalMode": "none"},
     "draft_permission_package": {"operationType": "preview", "readOnly": True, "mutatesState": False, "approvalMode": "none"},
     "apply_permission_package": {"operationType": "write", "readOnly": False, "mutatesState": True, "approvalMode": "conditional"},
     "approve_permission_package_approval_request": {"operationType": "write", "readOnly": False, "mutatesState": True, "approvalMode": "reviewer"},
 }
-for name, expected in required.items():
-    safety = tools.get(name)
+required_access = {
+    "list_admin_identities": {"requiredRole": "platform_admin", "scopeBoundary": "platform", "reviewerBound": False},
+    "draft_permission_package": {"requiredRole": "authenticated_admin", "scopeBoundary": "requested_scope", "reviewerBound": False},
+    "approve_permission_package_approval_request": {"requiredRole": "authenticated_admin", "scopeBoundary": "reviewer_route", "reviewerBound": True},
+}
+for name, expected in required_safety.items():
+    safety = (tools_by_name.get(name) or {}).get("safety")
     if safety != expected:
         raise SystemExit(f"management MCP tool {name!r} safety={safety!r} want {expected!r}")
-for name, safety in tools.items():
+for name, expected in required_access.items():
+    access = (tools_by_name.get(name) or {}).get("access")
+    if access != expected:
+        raise SystemExit(f"management MCP tool {name!r} access={access!r} want {expected!r}")
+for name, tool in tools_by_name.items():
+    safety = tool.get("safety") or {}
+    access = tool.get("access") or {}
     if safety.get("operationType") in ("", "unspecified", None) or safety.get("approvalMode") in ("", "unspecified", None):
         raise SystemExit(f"management MCP tool {name!r} has incomplete safety metadata: {safety!r}")
-print("management MCP tool safety metadata verified")
+    if access.get("requiredRole") in ("", "unspecified", None) or access.get("scopeBoundary") in ("", "unspecified", None):
+        raise SystemExit(f"management MCP tool {name!r} has incomplete access metadata: {access!r}")
+print("management MCP tool safety and access metadata verified")
 PY
 }
 

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- `GET /api/v1/system/info` now includes a `managementMcpToolCatalog` contract summary with metadata version and required metadata fields, giving admin agents a public compatibility hint without exposing live management tools.
+- `GET /api/v1/system/info` 现在包含 `managementMcpToolCatalog` 契约摘要，声明元数据版本和必需元数据字段，让管理 Agent 可在不暴露实时管理工具的前提下进行公开兼容判断。
 - `GET /api/v1/system/info` now advertises `management_mcp_tools_metadata_v1`, and the web console requires it during API compatibility checks before running management MCP catalog diagnostics.
 - `GET /api/v1/system/info` 现在会声明 `management_mcp_tools_metadata_v1`，Web 控制台会在运行 Management MCP 工具目录诊断前先把它纳入 API 兼容检查。
 - Connection diagnostics now checks the management MCP `tools/list` catalog contract, including `metadataVersion`, `safety`, and `access`, so operators can catch incompatible admin-agent tooling before automated writes.

@@ -474,10 +474,16 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 }
 
 type systemInfoResponse struct {
-	Name         string   `json:"name"`
-	APIVersion   string   `json:"apiVersion"`
-	AuthRequired bool     `json:"authRequired"`
-	Capabilities []string `json:"capabilities"`
+	Name                     string                                 `json:"name"`
+	APIVersion               string                                 `json:"apiVersion"`
+	AuthRequired             bool                                   `json:"authRequired"`
+	Capabilities             []string                               `json:"capabilities"`
+	ManagementMcpToolCatalog systemInfoManagementMcpToolCatalogInfo `json:"managementMcpToolCatalog"`
+}
+
+type systemInfoManagementMcpToolCatalogInfo struct {
+	MetadataVersion  int      `json:"metadataVersion"`
+	RequiredMetadata []string `json:"requiredMetadata"`
 }
 
 func (s *Server) systemInfo(w http.ResponseWriter, _ *http.Request) {
@@ -486,6 +492,13 @@ func (s *Server) systemInfo(w http.ResponseWriter, _ *http.Request) {
 		APIVersion:   systemAPIVersion,
 		AuthRequired: !s.developmentAdminBypassActive(),
 		Capabilities: append([]string(nil), systemCapabilities...),
+		ManagementMcpToolCatalog: systemInfoManagementMcpToolCatalogInfo{
+			MetadataVersion: managementMCPToolsMetadataVersion,
+			RequiredMetadata: []string{
+				"safety",
+				"access",
+			},
+		},
 	})
 }
 

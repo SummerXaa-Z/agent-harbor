@@ -61,6 +61,7 @@ test("console auth API exposes session login and logout endpoints", () => {
 test("API health check verifies the system compatibility contract", () => {
   assert.match(apiSource, /interface SystemInfo/);
   assert.match(apiSource, /authRequired: boolean/);
+  assert.match(apiSource, /managementMcpToolCatalog:\s*\{\s*metadataVersion: number\s*requiredMetadata: string\[\]\s*\}/);
   assert.match(apiSource, /function fetchSystemInfo\(/);
   assert.match(apiSource, /\/api\/v1\/system\/info/);
   assert.match(apiSource, /requiredConsoleCapabilities/);

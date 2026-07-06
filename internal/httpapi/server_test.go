@@ -37,10 +37,14 @@ type apiEnvelope struct {
 }
 
 type systemInfoResponse struct {
-	Name         string   `json:"name"`
-	APIVersion   string   `json:"apiVersion"`
-	AuthRequired bool     `json:"authRequired"`
-	Capabilities []string `json:"capabilities"`
+	Name                     string   `json:"name"`
+	APIVersion               string   `json:"apiVersion"`
+	AuthRequired             bool     `json:"authRequired"`
+	Capabilities             []string `json:"capabilities"`
+	ManagementMcpToolCatalog struct {
+		MetadataVersion  int      `json:"metadataVersion"`
+		RequiredMetadata []string `json:"requiredMetadata"`
+	} `json:"managementMcpToolCatalog"`
 }
 
 type agentResponse struct {
@@ -829,6 +833,18 @@ func TestSystemInfoIncludesConsoleCompatibilityContract(t *testing.T) {
 	} {
 		if !capabilities[capability] {
 			t.Fatalf("system info missing required console capability %q: %#v", capability, info.Capabilities)
+		}
+	}
+	if info.ManagementMcpToolCatalog.MetadataVersion != 1 {
+		t.Fatalf("management MCP catalog metadata version = %d, want 1", info.ManagementMcpToolCatalog.MetadataVersion)
+	}
+	requiredMetadata := make(map[string]bool, len(info.ManagementMcpToolCatalog.RequiredMetadata))
+	for _, field := range info.ManagementMcpToolCatalog.RequiredMetadata {
+		requiredMetadata[field] = true
+	}
+	for _, field := range []string{"safety", "access"} {
+		if !requiredMetadata[field] {
+			t.Fatalf("management MCP catalog required metadata missing %q: %#v", field, info.ManagementMcpToolCatalog.RequiredMetadata)
 		}
 	}
 }

@@ -109,6 +109,10 @@ export interface SystemInfo {
   apiVersion: string
   authRequired: boolean
   capabilities: string[]
+  managementMcpToolCatalog: {
+    metadataVersion: number
+    requiredMetadata: string[]
+  }
 }
 
 export const requiredConsoleCapabilities = [

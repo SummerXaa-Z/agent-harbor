@@ -18,6 +18,7 @@ import {
   systemMetrics,
 } from './data'
 import { normalizeAccessProfileFilters } from './accessProfile'
+import type { ManagementMcpToolsListResult } from './connectionDiagnostics'
 import {
   accessDecisionExplainPath,
   permissionPackageApplicationHealthPath,
@@ -298,6 +299,33 @@ export async function fetchConsoleSession(signal?: AbortSignal): Promise<Console
   const session = await request<ConsoleSession>('/api/v1/auth/session', { signal })
   setConsoleCsrfToken(session.csrfToken)
   return session
+}
+
+interface ManagementMcpEnvelope {
+  error?: {
+    code?: number
+    message?: string
+  }
+  result?: ManagementMcpToolsListResult
+}
+
+export async function fetchManagementMcpToolsCatalog(signal?: AbortSignal): Promise<ManagementMcpToolsListResult> {
+  const response = await request<ManagementMcpEnvelope>('/api/v1/management/mcp', {
+    body: {
+      id: 'connection-diagnostics-tools-list',
+      jsonrpc: '2.0',
+      method: 'tools/list',
+    },
+    method: 'POST',
+    signal,
+  })
+  if (response.error) {
+    throw new Error(response.error.message || `management MCP error ${response.error.code ?? 'unknown'}`)
+  }
+  if (!response.result) {
+    throw new Error('management MCP tools/list did not include a result')
+  }
+  return response.result
 }
 
 export async function loginConsole(adminKey: string, signal?: AbortSignal): Promise<ConsoleSession> {

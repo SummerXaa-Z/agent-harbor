@@ -58,6 +58,11 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("connectionDiagnostics.summaryOk"), "Ready for the production journey.");
   assert.equal(t("connectionDiagnostics.session.title"), "Console session");
   assert.equal(t("connectionDiagnostics.mcp.error"), "Tool service check failed: {detail}");
+  assert.equal(t("connectionDiagnostics.mcpCatalog.title"), "Management tool catalog");
+  assert.equal(
+    t("connectionDiagnostics.mcpCatalog.versionWarning"),
+    "Management tool catalog metadata v{version} needs compatibility review before automated writes."
+  );
 });
 
 test("permission preflight already-applied copy is bilingual", () => {
@@ -453,6 +458,8 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("connectionDiagnostics.summaryOk"), "可以继续生产主流程。");
   assert.equal(t("connectionDiagnostics.session.title"), "控制台会话");
   assert.equal(t("connectionDiagnostics.mcp.error"), "工具服务检查失败：{detail}");
+  assert.equal(t("connectionDiagnostics.mcpCatalog.title"), "管理工具目录");
+  assert.equal(t("connectionDiagnostics.mcpCatalog.error"), "管理工具目录检查失败：{detail}");
   assert.equal(t("readiness.aiAdmin.mockMcp.title"), "工具服务连接");
   assert.equal(t("readiness.aiAdmin.subjectHeader.title"), "浏览器身份可用");
   assert.equal(t("readiness.aiAdmin.privateUpstreams.title"), "本地演示连接");

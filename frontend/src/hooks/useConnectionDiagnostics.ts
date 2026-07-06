@@ -3,13 +3,16 @@ import {
   checkApiHealth,
   checkMockMcpHealth,
   defaultMockMcpHealthUrl,
-  fetchConsoleSession
+  fetchConsoleSession,
+  fetchManagementMcpToolsCatalog
 } from "../api";
 import {
   buildConnectionDiagnosticRows,
   connectionDiagnosticsSummaryStatus,
+  managementMcpCatalogDiagnosticFromResult,
   type ConnectionDiagnosticRow,
-  type ConnectionDiagnosticStatus
+  type ConnectionDiagnosticStatus,
+  type ManagementMcpCatalogDiagnostic
 } from "../connectionDiagnostics";
 
 interface UseConnectionDiagnosticsArgs {
@@ -38,15 +41,22 @@ export function useConnectionDiagnostics({
   async function run() {
     setChecking(true);
     try {
-      const [session, apiHealth, mcpHealth] = await Promise.all([
-        fetchConsoleSession().catch(() => null),
+      const session = await fetchConsoleSession().catch(() => null);
+      const [apiHealth, mcpHealth, mcpCatalog] = await Promise.all([
         checkApiHealth(),
-        checkMockMcpHealth(mockMcpHealthUrlFromEndpoint(mcpEndpoint))
+        checkMockMcpHealth(mockMcpHealthUrlFromEndpoint(mcpEndpoint)),
+        fetchManagementMcpToolsCatalog()
+          .then(managementMcpCatalogDiagnosticFromResult)
+          .catch((error): ManagementMcpCatalogDiagnostic => ({
+            message: error instanceof Error ? error.message : "management MCP tool catalog unavailable",
+            status: "error"
+          }))
       ]);
       setRows(buildConnectionDiagnosticRows({
         apiHealth,
         liveDataLoaded,
         loadError,
+        mcpCatalog,
         mcpHealth,
         session
       }));

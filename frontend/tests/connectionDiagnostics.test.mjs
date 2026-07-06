@@ -3,14 +3,22 @@ import test from "node:test";
 
 import {
   buildConnectionDiagnosticRows,
-  connectionDiagnosticsSummaryStatus
+  connectionDiagnosticsSummaryStatus,
+  managementMcpCatalogDiagnosticFromResult
 } from "../src/connectionDiagnostics.ts";
+
+const catalogTool = {
+  access: { requiredRole: "authenticated_admin", reviewerBound: false, scopeBoundary: "requested_scope" },
+  name: "draft_permission_package",
+  safety: { approvalMode: "none", mutatesState: false, operationType: "preview", readOnly: true }
+};
 
 test("connection diagnostics reports ready when session, API, live data, and MCP are ready", () => {
   const rows = buildConnectionDiagnosticRows({
     apiHealth: { status: "ok", message: "ok" },
     liveDataLoaded: true,
     loadError: "",
+    mcpCatalog: { metadataVersion: 1, status: "ok", toolsWithAccess: 12, toolsWithSafety: 12 },
     mcpHealth: { status: "ok", message: "ok" },
     session: { actor: "admin-key", authenticated: true, requiresLogin: true }
   });
@@ -19,7 +27,8 @@ test("connection diagnostics reports ready when session, API, live data, and MCP
     ["session", "ok"],
     ["api", "ok"],
     ["dataSource", "ok"],
-    ["mcp", "ok"]
+    ["mcp", "ok"],
+    ["mcpCatalog", "ok"]
   ]);
   assert.equal(connectionDiagnosticsSummaryStatus(rows), "ok");
 });
@@ -34,6 +43,7 @@ test("connection diagnostics blocks old API or expired session before production
     },
     liveDataLoaded: false,
     loadError: "",
+    mcpCatalog: { metadataVersion: 1, status: "ok", toolsWithAccess: 12, toolsWithSafety: 12 },
     mcpHealth: { status: "ok", message: "ok" },
     session: { authenticated: false, requiresLogin: true }
   });
@@ -52,6 +62,7 @@ test("connection diagnostics treats fallback data as warning and MCP failure as 
     apiHealth: { status: "ok", message: "ok" },
     liveDataLoaded: false,
     loadError: "API unavailable",
+    mcpCatalog: { message: "HTTP 503", status: "error" },
     mcpHealth: { status: "error", message: "HTTP 503" },
     session: { actor: "local-dev", authenticated: true, requiresLogin: false }
   });
@@ -60,4 +71,55 @@ test("connection diagnostics treats fallback data as warning and MCP failure as 
   assert.equal(rows.find((row) => row.key === "dataSource")?.status, "warning");
   assert.equal(rows.find((row) => row.key === "dataSource")?.detailKey, "connectionDiagnostics.dataSource.error");
   assert.deepEqual(rows.find((row) => row.key === "mcp")?.detailParams, { detail: "HTTP 503" });
+  assert.equal(rows.find((row) => row.key === "mcpCatalog")?.status, "error");
+  assert.deepEqual(rows.find((row) => row.key === "mcpCatalog")?.detailParams, { detail: "HTTP 503" });
+});
+
+test("connection diagnostics warns on unknown management MCP catalog metadata version", () => {
+  const rows = buildConnectionDiagnosticRows({
+    apiHealth: { status: "ok", message: "ok" },
+    liveDataLoaded: true,
+    loadError: "",
+    mcpCatalog: { metadataVersion: 2, status: "warning", toolsWithAccess: 12, toolsWithSafety: 12 },
+    mcpHealth: { status: "ok", message: "ok" },
+    session: { actor: "admin-key", authenticated: true, requiresLogin: true }
+  });
+
+  assert.equal(connectionDiagnosticsSummaryStatus(rows), "warning");
+  assert.equal(rows.find((row) => row.key === "mcpCatalog")?.detailKey, "connectionDiagnostics.mcpCatalog.versionWarning");
+  assert.deepEqual(rows.find((row) => row.key === "mcpCatalog")?.detailParams, { version: 2 });
+});
+
+test("connection diagnostics blocks missing management MCP catalog metadata", () => {
+  const rows = buildConnectionDiagnosticRows({
+    apiHealth: { status: "ok", message: "ok" },
+    liveDataLoaded: true,
+    loadError: "",
+    mcpCatalog: { message: "missing safety metadata", status: "error" },
+    mcpHealth: { status: "ok", message: "ok" },
+    session: { actor: "admin-key", authenticated: true, requiresLogin: true }
+  });
+
+  assert.equal(connectionDiagnosticsSummaryStatus(rows), "error");
+  assert.equal(rows.find((row) => row.key === "mcpCatalog")?.detailKey, "connectionDiagnostics.mcpCatalog.error");
+  assert.deepEqual(rows.find((row) => row.key === "mcpCatalog")?.detailParams, { detail: "missing safety metadata" });
+});
+
+test("management MCP catalog diagnostic accepts versioned safety and access metadata", () => {
+  assert.deepEqual(
+    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 1, tools: [catalogTool] }),
+    { metadataVersion: 1, status: "ok", toolsWithAccess: 1, toolsWithSafety: 1 }
+  );
+});
+
+test("management MCP catalog diagnostic flags incomplete or unknown metadata contracts", () => {
+  assert.deepEqual(
+    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 2, tools: [catalogTool] }),
+    { metadataVersion: 2, status: "warning" }
+  );
+  assert.equal(
+    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 1, tools: [{ ...catalogTool, access: undefined }] }).status,
+    "error"
+  );
+  assert.equal(managementMcpCatalogDiagnosticFromResult({ tools: [catalogTool] }).message, "missing metadataVersion");
 });

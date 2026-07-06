@@ -48,6 +48,8 @@ type managementMCPToolsListResult struct {
 	Tools           []managementMCPTool `json:"tools"`
 }
 
+const managementMCPToolsMetadataVersion = 1
+
 type managementMCPTool struct {
 	Name        string                  `json:"name"`
 	Description string                  `json:"description"`
@@ -203,7 +205,7 @@ func (s *Server) managementMCP(w http.ResponseWriter, r *http.Request) {
 	switch req.Method {
 	case "tools/list":
 		writeManagementMCPResult(w, req.ID, managementMCPToolsListResult{
-			MetadataVersion: 1,
+			MetadataVersion: managementMCPToolsMetadataVersion,
 			Tools:           managementMCPTools(),
 		})
 	case "tools/call":

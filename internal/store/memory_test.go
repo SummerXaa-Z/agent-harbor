@@ -340,7 +340,8 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 				ReasonKey:     "permissionPolicy.actionApprovalRequired",
 				ReasonValues:  map[string]string{"capability": "update_ticket", "action": "write"},
 			}},
-			NextActions: []string{"Request approval before applying this permission request."},
+			NextActionCodes: []domain.PermissionPackagePolicyNextActionCode{domain.PermissionPackagePolicyNextCreateApproval},
+			NextActions:     []string{"Request approval before applying this permission request."},
 		},
 		Status:      domain.PermissionPackageApprovalStatusPending,
 		RequestedBy: "admin-key",
@@ -384,6 +385,7 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 		t.Fatalf("expected newest approved request, got %#v", rows)
 	}
 	rows[0].AllowedCapabilityIDs[0] = "mutated"
+	rows[0].PolicyGate.NextActionCodes[0] = "mutated"
 	rows[0].PolicyGate.Reasons[0].ReasonValues["capability"] = "mutated"
 
 	again, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, older.ID)
@@ -413,6 +415,7 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 		t.Fatalf("list rejected approval requests: %v", err)
 	}
 	if len(finalRows) != 1 || finalRows[0].ID != older.ID || finalRows[0].AllowedCapabilityIDs[0] != "cap_update" ||
+		finalRows[0].PolicyGate.NextActionCodes[0] != domain.PermissionPackagePolicyNextCreateApproval ||
 		finalRows[0].PolicyGate.Reasons[0].ReasonValues["capability"] != "update_ticket" {
 		t.Fatalf("expected cloned rejected request, got %#v", finalRows)
 	}

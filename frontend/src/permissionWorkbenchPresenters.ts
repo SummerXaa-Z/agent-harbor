@@ -13,6 +13,7 @@ import type {
   PermissionPackageApprovalEffectiveStatus,
   PermissionPackageApprovalRequest,
   PermissionPackageDraft,
+  PermissionPackagePolicyNextActionCode,
   PermissionPackageProductionReadinessCheck,
   PermissionPackageProductionReadinessStatus,
   PermissionPackageTemplate,
@@ -342,6 +343,28 @@ export function permissionPolicyGateDetailKey(
   if (approvalStatus === "withdrawn") return "text.policyGateWithdrawnDetail";
   if (approvalStatus === "expired") return "text.policyGateApprovalDetail";
   return "text.policyGateApprovalDetail";
+}
+
+export function permissionPolicyGateNextActionByCode(code: string, t: Translator) {
+  const keyByCode: Record<PermissionPackagePolicyNextActionCode, string> = {
+    create_approval_request: "permissionPolicy.next.createApproval"
+  };
+  return Object.prototype.hasOwnProperty.call(keyByCode, code)
+    ? t(keyByCode[code as PermissionPackagePolicyNextActionCode])
+    : t("permissionPolicy.next.unknown");
+}
+
+export function permissionPolicyGateMessages(policyGate: PermissionPackageDraft["policyGate"], t: Translator) {
+  if (policyGate.canApplyDirectly) {
+    return [t("text.policyGateDirectDetail")];
+  }
+  const nextActionCode = policyGate.nextActionCodes?.[0];
+  const messages = policyGate.reasons.length > 0
+    ? policyGate.reasons.map((reason) => permissionPolicyReasonMessage(reason, t))
+    : [t("text.policyGateApprovalDetail")];
+  return nextActionCode
+    ? [...messages, permissionPolicyGateNextActionByCode(nextActionCode, t)]
+    : messages;
 }
 
 export function permissionApprovalStatusLabel(status: PermissionPackageApprovalEffectiveStatus, t: Translator) {

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- The web console now renders permission-package policy-gate follow-up guidance from stable `nextActionCodes` first, keeping approval-required prompts localized and free of backend prose fallbacks.
+- Web 控制台现在会优先用稳定的 `nextActionCodes` 渲染权限包策略门禁的下一步提示，让需审批提示保持本地化，并避免回退展示后端自然语言。
 - Permission-package policy gates now include stable `nextActionCodes` for approval-required drafts, so admin agents and fallback console logic can route approval setup without parsing English `nextActions`.
 - 权限包策略门禁现在会为需审批草案返回稳定的 `nextActionCodes`，让管理 Agent 和控制台兜底逻辑无需解析英文 `nextActions` 也能进入审批配置。
 - Permission-package apply preflight responses now include stable `nextActionCodes` alongside legacy `nextActions`, and the web console renders preflight follow-up guidance from codes first while preserving fallback compatibility.

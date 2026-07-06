@@ -88,7 +88,7 @@ import {
 import {
   firstBlockingApplyPreflightCheck,
   permissionApplyPreflightCheckMessage,
-  permissionPolicyReasonMessage,
+  permissionPolicyGateMessages,
   permissionReadinessMessages,
   resourcePermissionIntent
 } from "./permissionWorkbenchPresenters";
@@ -3152,15 +3152,6 @@ function uniquePermissionEntityOptions<T extends { id: string }>(
   }
 
   return options;
-}
-
-function permissionPolicyGateMessages(policyGate: PermissionPackageDraft["policyGate"], t: Translator) {
-  if (policyGate.canApplyDirectly) {
-    return [t("text.policyGateDirectDetail")];
-  }
-  return policyGate.reasons.length > 0
-    ? policyGate.reasons.map((reason) => permissionPolicyReasonMessage(reason, t))
-    : [t("text.policyGateApprovalDetail")];
 }
 
 function downloadJson(value: unknown, filename: string) {

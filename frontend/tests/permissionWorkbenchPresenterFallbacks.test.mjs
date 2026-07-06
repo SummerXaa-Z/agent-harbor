@@ -34,6 +34,8 @@ test("permission preflight and policy fallbacks do not expose raw service wordin
   const preflightBlock = functionBlock("permissionApplyPreflightCheckMessage");
   const nextActionCodeBlock = functionBlock("permissionApplyPreflightNextActionByCode");
   const nextActionBlock = functionBlock("permissionApplyPreflightNextAction");
+  const policyGateBlock = functionBlock("permissionPolicyGateMessages");
+  const policyGateNextActionBlock = functionBlock("permissionPolicyGateNextActionByCode");
   const policyBlock = functionBlock("permissionPolicyReasonMessage");
   const readinessBlock = functionBlock("permissionReadinessMessages");
 
@@ -46,6 +48,11 @@ test("permission preflight and policy fallbacks do not expose raw service wordin
   assert.match(nextActionBlock, /Review the latest permission request status before applying the same permission request again\./);
   assert.match(nextActionBlock, /permissionPreflight\.next\.reviewAlreadyApplied/);
   assert.doesNotMatch(nextActionBlock, /: action/);
+  assert.match(policyGateNextActionBlock, /create_approval_request: "permissionPolicy\.next\.createApproval"/);
+  assert.match(policyGateNextActionBlock, /t\("permissionPolicy\.next\.unknown"\)/);
+  assert.match(policyGateBlock, /policyGate\.nextActionCodes\?\.\[0\]/);
+  assert.match(policyGateBlock, /permissionPolicyGateNextActionByCode\(nextActionCode, t\)/);
+  assert.doesNotMatch(policyGateBlock, /nextActions/);
   assert.match(policyBlock, /if \(!reason\.reasonKey\) return t\("permissionPolicy\.unknownReason"\)/);
   assert.doesNotMatch(policyBlock, /return reason\.message/);
   assert.match(readinessBlock, /t\("message\.permissionPackageReadinessWarning"\)/);

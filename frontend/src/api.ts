@@ -20,6 +20,11 @@ import {
 import { normalizeAccessProfileFilters } from './accessProfile'
 import type { ManagementMcpToolsListResult } from './connectionDiagnostics'
 import {
+  missingConsoleCapabilities,
+  systemInfoContractIssues,
+  type SystemInfo,
+} from './systemInfoContract'
+import {
   accessDecisionExplainPath,
   permissionPackageApplicationHealthPath,
   permissionPackageApplicationImpactPath,
@@ -92,6 +97,13 @@ import type {
   WorkspaceAssignment,
 } from './types'
 
+export {
+  missingConsoleCapabilities,
+  requiredConsoleCapabilities,
+  systemInfoContractIssues,
+  type SystemInfo,
+} from './systemInfoContract'
+
 const DEFAULT_API_BASE = 'http://127.0.0.1:9090'
 
 export type HealthCheckStatus = 'ok' | 'error'
@@ -99,33 +111,11 @@ export type HealthCheckCode = 'api_contract_unavailable' | 'api_contract_incompa
 
 export interface HealthCheckResult {
   code?: HealthCheckCode
+  contractIssues?: string[]
   missingCapabilities?: string[]
   status: HealthCheckStatus
   message: string
 }
-
-export interface SystemInfo {
-  name: string
-  apiVersion: string
-  authRequired: boolean
-  capabilities: string[]
-  managementMcpToolCatalog: {
-    metadataVersion: number
-    requiredMetadata: string[]
-  }
-}
-
-export const requiredConsoleCapabilities = [
-  'permission_package_approval_requests',
-  'permission_package_approval_withdraw',
-  'permission_package_apply_preflight',
-  'permission_package_applications',
-  'permission_package_application_health',
-  'permission_package_application_impact',
-  'permission_package_production_readiness',
-  'permission_package_consumed_approval_recovery',
-  'management_mcp_tools_metadata_v1',
-]
 
 export const defaultMockMcpHealthUrl = 'http://127.0.0.1:8787/healthz'
 
@@ -274,12 +264,13 @@ export async function checkApiHealth(signal?: AbortSignal): Promise<HealthCheckR
   if (health.status !== 'ok') return health
   try {
     const systemInfo = await fetchSystemInfo(signal)
-    const missingCapabilities = missingConsoleCapabilities(systemInfo)
-    if (missingCapabilities.length > 0) {
+    const contractIssues = systemInfoContractIssues(systemInfo)
+    if (contractIssues.length > 0) {
       return {
         code: 'api_contract_incompatible',
-        message: `missing capabilities: ${missingCapabilities.join(', ')}`,
-        missingCapabilities,
+        contractIssues,
+        message: `system info contract issues: ${contractIssues.join(', ')}`,
+        missingCapabilities: missingConsoleCapabilities(systemInfo),
         status: 'error',
       }
     }
@@ -350,11 +341,6 @@ export async function logoutConsole(signal?: AbortSignal): Promise<ConsoleSessio
 
 export async function fetchSystemInfo(signal?: AbortSignal): Promise<SystemInfo> {
   return request<SystemInfo>('/api/v1/system/info', { signal })
-}
-
-export function missingConsoleCapabilities(systemInfo: SystemInfo): string[] {
-  const available = new Set(Array.isArray(systemInfo.capabilities) ? systemInfo.capabilities : [])
-  return requiredConsoleCapabilities.filter((capability) => !available.has(capability))
 }
 
 export async function checkSubjectHeaderCors(signal?: AbortSignal): Promise<HealthCheckResult> {

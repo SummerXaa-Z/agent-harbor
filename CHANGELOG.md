@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- The web console now validates the `managementMcpToolCatalog` system-info summary during API compatibility checks, blocking admin-agent workflows when a backend misstates or omits the Management MCP catalog metadata contract.
+- Web 控制台现在会在 API 兼容检查中验证 `managementMcpToolCatalog` 系统信息摘要；当后端误声明或缺失 Management MCP 目录元数据契约时，会阻断管理 Agent 工作流。
 - `GET /api/v1/system/info` now includes a `managementMcpToolCatalog` contract summary with metadata version and required metadata fields, giving admin agents a public compatibility hint without exposing live management tools.
 - `GET /api/v1/system/info` 现在包含 `managementMcpToolCatalog` 契约摘要，声明元数据版本和必需元数据字段，让管理 Agent 可在不暴露实时管理工具的前提下进行公开兼容判断。
 - `GET /api/v1/system/info` now advertises `management_mcp_tools_metadata_v1`, and the web console requires it during API compatibility checks before running management MCP catalog diagnostics.

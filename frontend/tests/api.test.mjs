@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  requiredConsoleCapabilities,
+  systemInfoContractIssues,
+} from "../src/systemInfoContract.ts";
+import {
   accessDecisionExplainPath,
   permissionPackageApplicationHealthPath,
   permissionPackageApplicationImpactPath,
@@ -12,6 +16,7 @@ import {
 } from "../src/apiPaths.ts";
 
 const apiSource = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
+const systemInfoContractSource = readFileSync(new URL("../src/systemInfoContract.ts", import.meta.url), "utf8");
 const typesSource = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
 
 test("permission package workbench preview posts the request body instead of query text", () => {
@@ -59,17 +64,58 @@ test("console auth API exposes session login and logout endpoints", () => {
 });
 
 test("API health check verifies the system compatibility contract", () => {
-  assert.match(apiSource, /interface SystemInfo/);
-  assert.match(apiSource, /authRequired: boolean/);
-  assert.match(apiSource, /managementMcpToolCatalog:\s*\{\s*metadataVersion: number\s*requiredMetadata: string\[\]\s*\}/);
+  assert.match(systemInfoContractSource, /interface SystemInfo/);
+  assert.match(systemInfoContractSource, /authRequired: boolean/);
+  assert.match(systemInfoContractSource, /managementMcpToolCatalog:\s*\{\s*metadataVersion: number\s*requiredMetadata: string\[\]\s*\}/);
   assert.match(apiSource, /function fetchSystemInfo\(/);
   assert.match(apiSource, /\/api\/v1\/system\/info/);
-  assert.match(apiSource, /requiredConsoleCapabilities/);
-  assert.match(apiSource, /permission_package_approval_withdraw/);
-  assert.match(apiSource, /permission_package_consumed_approval_recovery/);
-  assert.match(apiSource, /management_mcp_tools_metadata_v1/);
+  assert.match(apiSource, /systemInfoContractIssues\(systemInfo\)/);
+  assert.match(systemInfoContractSource, /requiredConsoleCapabilities/);
+  assert.match(systemInfoContractSource, /permission_package_approval_withdraw/);
+  assert.match(systemInfoContractSource, /permission_package_consumed_approval_recovery/);
+  assert.match(systemInfoContractSource, /management_mcp_tools_metadata_v1/);
   assert.match(apiSource, /api_contract_unavailable/);
   assert.match(apiSource, /api_contract_incompatible/);
+});
+
+test("system info contract issues validate the management MCP catalog summary", () => {
+  const compatibleInfo = {
+    apiVersion: "2026-06-15",
+    authRequired: true,
+    capabilities: requiredConsoleCapabilities,
+    managementMcpToolCatalog: {
+      metadataVersion: 1,
+      requiredMetadata: ["safety", "access"],
+    },
+    name: "AgentHarbor",
+  };
+
+  assert.deepEqual(systemInfoContractIssues(compatibleInfo), []);
+  assert.deepEqual(
+    systemInfoContractIssues({
+      ...compatibleInfo,
+      managementMcpToolCatalog: { metadataVersion: 2, requiredMetadata: ["safety", "access"] },
+    }),
+    ["managementMcpToolCatalog.metadataVersion"],
+  );
+  assert.deepEqual(
+    systemInfoContractIssues({
+      ...compatibleInfo,
+      managementMcpToolCatalog: { metadataVersion: 1, requiredMetadata: ["safety"] },
+    }),
+    ["managementMcpToolCatalog.requiredMetadata.access"],
+  );
+  assert.deepEqual(
+    systemInfoContractIssues({
+      ...compatibleInfo,
+      managementMcpToolCatalog: undefined,
+    }),
+    [
+      "managementMcpToolCatalog.metadataVersion",
+      "managementMcpToolCatalog.requiredMetadata.safety",
+      "managementMcpToolCatalog.requiredMetadata.access",
+    ],
+  );
 });
 
 test("permissionPackageApprovalRequestsPath includes reviewer routing query", () => {

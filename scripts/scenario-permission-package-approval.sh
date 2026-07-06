@@ -1007,6 +1007,10 @@ request GET "/api/v1/permission-packages/approval-requests?tenantId=$ROOT_TENANT
 expect_status 200 "list consumed approval request"
 assert_consumed_approval
 
+request POST "/api/v1/permission-packages:preflight" "$(permission_package_body)"
+expect_status 200 "preflight already-applied permission package"
+assert_permission_package_preflight "false" "application_already_applied"
+
 request POST "/api/v1/permission-packages:apply" "$(permission_package_body "$APPROVAL_REQUEST_ID")"
 expect_status 400 "reject consumed approval request"
 assert_body_contains "PERMISSION_PACKAGE_APPROVAL_ALREADY_CONSUMED" "consumed approval retry error code"

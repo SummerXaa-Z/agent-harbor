@@ -642,6 +642,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - `make demo` 现在复用发布门禁同一套端口占用诊断；首次试用者遇到 API、MCP 或前端端口冲突时，可以直接看到阻塞进程，而不是只看到泛泛的端口占用失败。
 - `make demo` now performs port preflight before installing frontend or real-MCP dependencies, so occupied local ports fail fast without wasting first-run time on dependency work.
 - `make demo` 现在会先做端口预检，再安装前端或 real-MCP 依赖；本地端口被占用时会快速失败，不再浪费首次试用时间做依赖安装。
+- Frontend tooling now supports Node 24 through 26 and the GitHub frontend job verifies both Node 24 and Node 26, reducing local engine warning noise without making untested runtime claims.
+- 前端工具链现在支持 Node 24 到 26，GitHub 前端任务会同时验证 Node 24 和 Node 26，减少本地 engine warning 噪音，同时不做未经测试的运行时承诺。
 - Scoped tenant-permission-center capability summaries now avoid hydrating out-of-scope target and capability names from stale or dirty entitlement references.
 - 范围化管理员查看租户权限中心时，如果历史或脏授权引用了范围外目标或能力，能力摘要不再展开这些目标和能力名称。
 - Scoped access-profile, permission-application impact, and permission-application health responses now avoid hydrating out-of-scope Agent or capability details from stale or dirty references, while keeping the underlying records unchanged.

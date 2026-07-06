@@ -77,7 +77,7 @@ Bootstrap administrator identities from `AGENT_HARBOR_ADMIN_KEY` and `AGENT_HARB
 Use the repository toolchain pins before running local commands:
 
 - Go version comes from `go.mod`.
-- Node major version comes from `.node-version`.
+- Node major version defaults to `.node-version`; the frontend supports Node 24 through 26, and CI verifies Node 24 and Node 26.
 - Frontend package manager comes from `frontend/package.json`.
 
 ```bash

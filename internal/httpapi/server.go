@@ -6748,6 +6748,10 @@ func (s *Server) managementAuditEvent(r *http.Request, tenantID string, workspac
 	if metadata == nil {
 		metadata = map[string]any{}
 	}
+	if confirmation, ok := managementMCPWriteConfirmationFromContext(r.Context()); ok {
+		metadata["managementMcpTool"] = confirmation.ToolName
+		metadata["managementMcpConfirmationReason"] = confirmation.Reason
+	}
 	return domain.AuditEvent{
 		ID:           security.NewID("aud"),
 		TenantID:     tenantID,

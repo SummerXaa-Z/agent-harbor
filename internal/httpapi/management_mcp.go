@@ -171,6 +171,13 @@ type managementMCPWriteConfirmationArgs struct {
 	Confirmation managementMCPWriteConfirmation `json:"confirmation"`
 }
 
+type managementMCPWriteConfirmationAuditContext struct {
+	ToolName string
+	Reason   string
+}
+
+type managementMCPWriteConfirmationContextKey struct{}
+
 type managementMCPAccessProfileArgs struct {
 	TenantID         string `json:"tenantId"`
 	WorkspaceID      string `json:"workspaceId"`
@@ -270,8 +277,12 @@ func managementMCPRequestFromHTTP(r *http.Request) (managementMCPRequest, error)
 }
 
 func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest) (managementMCPCallResult, error) {
-	if err := requireManagementMCPWriteConfirmation(req); err != nil {
+	confirmation, confirmed, err := managementMCPWriteConfirmationForRequest(req)
+	if err != nil {
 		return managementMCPCallResult{}, err
+	}
+	if confirmed {
+		r = r.WithContext(context.WithValue(r.Context(), managementMCPWriteConfirmationContextKey{}, confirmation))
 	}
 	switch req.Params.Name {
 	case "list_admin_identities":
@@ -912,20 +923,34 @@ func managementMCPToolExecutionForName(name string) managementMCPToolExecution {
 }
 
 func requireManagementMCPWriteConfirmation(req managementMCPRequest) error {
+	_, _, err := managementMCPWriteConfirmationForRequest(req)
+	return err
+}
+
+func managementMCPWriteConfirmationForRequest(req managementMCPRequest) (managementMCPWriteConfirmationAuditContext, bool, error) {
 	if !managementMCPToolRequiresConfirmation(req.Params.Name) {
-		return nil
+		return managementMCPWriteConfirmationAuditContext{}, false, nil
 	}
 	var args managementMCPWriteConfirmationArgs
 	if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
-		return domain.BadRequest("VALIDATION_FAILED", "arguments must include confirmation for this write tool")
+		return managementMCPWriteConfirmationAuditContext{}, true, domain.BadRequest("VALIDATION_FAILED", "arguments must include confirmation for this write tool")
 	}
-	if !args.Confirmation.Confirmed || strings.TrimSpace(args.Confirmation.Reason) == "" {
-		return domain.BadRequest("VALIDATION_FAILED", "confirmation.confirmed must be true and confirmation.reason is required for this write tool")
+	reason := strings.TrimSpace(args.Confirmation.Reason)
+	if !args.Confirmation.Confirmed || reason == "" {
+		return managementMCPWriteConfirmationAuditContext{}, true, domain.BadRequest("VALIDATION_FAILED", "confirmation.confirmed must be true and confirmation.reason is required for this write tool")
 	}
-	if utf8.RuneCountInString(args.Confirmation.Reason) > maxManagementMCPWriteConfirmationReasonRunes {
-		return domain.BadRequest("VALIDATION_FAILED", "confirmation.reason must be at most 500 characters for this write tool")
+	if utf8.RuneCountInString(reason) > maxManagementMCPWriteConfirmationReasonRunes {
+		return managementMCPWriteConfirmationAuditContext{}, true, domain.BadRequest("VALIDATION_FAILED", "confirmation.reason must be at most 500 characters for this write tool")
 	}
-	return nil
+	return managementMCPWriteConfirmationAuditContext{
+		ToolName: req.Params.Name,
+		Reason:   reason,
+	}, true, nil
+}
+
+func managementMCPWriteConfirmationFromContext(ctx context.Context) (managementMCPWriteConfirmationAuditContext, bool) {
+	confirmation, ok := ctx.Value(managementMCPWriteConfirmationContextKey{}).(managementMCPWriteConfirmationAuditContext)
+	return confirmation, ok
 }
 
 func managementMCPToolRequiresConfirmation(name string) bool {

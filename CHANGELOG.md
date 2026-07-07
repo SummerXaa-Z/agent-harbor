@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Management MCP confirmed write calls now stamp the existing mutation audit event with the invoked tool name and trimmed confirmation reason, giving operators a durable handoff trail without adding duplicate audit rows.
+- Management MCP 已确认的写调用现在会把被调用工具名和裁剪后的确认说明写入原有变更审计事件，为管理员保留可追溯的交接记录，同时避免重复审计行。
 - Management MCP write confirmations now cap `confirmation.reason` at 500 characters, rejecting oversized operator handoff text before write tools mutate state.
 - Management MCP 写操作确认现在会将 `confirmation.reason` 限制在 500 个字符以内，超长操作确认说明会在写工具修改状态前被拒绝。
 - Management MCP write confirmation now fails closed from tool safety metadata, so mutating tools still require confirmation if future execution metadata is incomplete.

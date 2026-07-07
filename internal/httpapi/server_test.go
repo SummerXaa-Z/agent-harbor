@@ -7372,6 +7372,17 @@ func TestManagementMCPWriteToolsRequireConfirmation(t *testing.T) {
 	if confirmed.Error != nil {
 		t.Fatalf("confirmed write tool should pass confirmation gate: %#v", confirmed.Error)
 	}
+
+	adminEvents := decodeData[[]auditEventResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/audit/events?action=admin_identity.created", nil, "", "platform-key"))
+	if len(adminEvents) != 1 {
+		t.Fatalf("expected one admin identity audit event, got %#v", adminEvents)
+	}
+	event := adminEvents[0]
+	if event.Actor != "platform" || event.ResourceType != "admin_identity" ||
+		event.Metadata["managementMcpTool"] != "create_admin_identity" ||
+		event.Metadata["managementMcpConfirmationReason"] != "Create scoped tenant admin for the MCP write gate test." {
+		t.Fatalf("unexpected management MCP confirmation audit event: %#v", event)
+	}
 }
 
 func TestManagementMCPApprovalReviewerQueueDefaultsToAuthenticatedReviewer(t *testing.T) {

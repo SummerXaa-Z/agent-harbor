@@ -484,6 +484,7 @@ type systemInfoResponse struct {
 type systemInfoManagementMcpToolCatalogInfo struct {
 	MetadataVersion             int      `json:"metadataVersion"`
 	RequiredMetadata            []string `json:"requiredMetadata"`
+	CatalogDigest               string   `json:"catalogDigest"`
 	ToolCount                   int      `json:"toolCount"`
 	ConfirmationRequiredTools   int      `json:"confirmationRequiredTools"`
 	ToolsWithConfirmationSchema int      `json:"toolsWithConfirmationSchema"`
@@ -500,18 +501,19 @@ func (s *Server) systemInfo(w http.ResponseWriter, _ *http.Request) {
 }
 
 func systemInfoManagementMcpToolCatalogSummary() systemInfoManagementMcpToolCatalogInfo {
-	tools := managementMCPTools()
+	catalog := managementMCPToolsCatalogResult()
 	summary := systemInfoManagementMcpToolCatalogInfo{
-		MetadataVersion: managementMCPToolsMetadataVersion,
+		MetadataVersion: catalog.MetadataVersion,
 		RequiredMetadata: []string{
 			"safety",
 			"access",
 			"lifecycle",
 			"execution",
 		},
-		ToolCount: len(tools),
+		CatalogDigest: catalog.CatalogDigest,
+		ToolCount:     len(catalog.Tools),
 	}
-	for _, tool := range tools {
+	for _, tool := range catalog.Tools {
 		if !managementMCPToolRequiresConfirmation(tool.Name) {
 			continue
 		}

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- `/api/v1/system/info` and Management MCP `tools/list` now expose the same stable `catalogDigest`, letting admin agents and release scenarios detect catalog drift even when summary counts still match.
+- `/api/v1/system/info` 和 Management MCP `tools/list` 现在会暴露同一个稳定 `catalogDigest`，让管理 Agent 和发布场景在摘要计数相同但目录内容漂移时也能发现问题。
 - `/api/v1/system/info` now includes Management MCP tool-catalog summary counts for total tools, confirmation-required write tools, and write tools with confirmation input schemas, and the release scenario cross-checks the summary against live `tools/list`.
 - `/api/v1/system/info` 现在会返回 Management MCP 工具目录摘要计数，包括工具总数、需要确认的写工具数和已暴露确认 input schema 的写工具数；发布场景会将摘要与真实 `tools/list` 交叉校验。
 - Management MCP tool-catalog metadata is now version `4`, and `/api/v1/system/info` advertises `management_mcp_tools_metadata_v4` to mark the confirmation-schema contract for write tools.

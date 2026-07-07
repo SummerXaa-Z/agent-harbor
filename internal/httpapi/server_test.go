@@ -44,6 +44,7 @@ type systemInfoResponse struct {
 	ManagementMcpToolCatalog struct {
 		MetadataVersion             int      `json:"metadataVersion"`
 		RequiredMetadata            []string `json:"requiredMetadata"`
+		CatalogDigest               string   `json:"catalogDigest"`
 		ToolCount                   int      `json:"toolCount"`
 		ConfirmationRequiredTools   int      `json:"confirmationRequiredTools"`
 		ToolsWithConfirmationSchema int      `json:"toolsWithConfirmationSchema"`
@@ -567,6 +568,7 @@ type mcpEnvelopeResponse struct {
 
 type mcpResultPayload struct {
 	MetadataVersion   int               `json:"metadataVersion"`
+	CatalogDigest     string            `json:"catalogDigest"`
 	Tools             []mcpToolResponse `json:"tools"`
 	Content           []mcpContentItem  `json:"content"`
 	StructuredContent json.RawMessage   `json:"structuredContent"`
@@ -864,6 +866,9 @@ func TestSystemInfoIncludesConsoleCompatibilityContract(t *testing.T) {
 	}
 	if info.ManagementMcpToolCatalog.ToolsWithConfirmationSchema != info.ManagementMcpToolCatalog.ConfirmationRequiredTools {
 		t.Fatalf("management MCP catalog confirmation schema summary mismatch: %#v", info.ManagementMcpToolCatalog)
+	}
+	if len(info.ManagementMcpToolCatalog.CatalogDigest) != 64 {
+		t.Fatalf("management MCP catalog digest should be a sha256 hex digest: %#v", info.ManagementMcpToolCatalog)
 	}
 	requiredMetadata := make(map[string]bool, len(info.ManagementMcpToolCatalog.RequiredMetadata))
 	for _, field := range info.ManagementMcpToolCatalog.RequiredMetadata {
@@ -7724,6 +7729,13 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 	}, ""))
 	if tools.Result.MetadataVersion != 4 {
 		t.Fatalf("management MCP tools/list metadataVersion=%d want 4", tools.Result.MetadataVersion)
+	}
+	if len(tools.Result.CatalogDigest) != 64 {
+		t.Fatalf("management MCP tools/list should include catalog digest, got %q", tools.Result.CatalogDigest)
+	}
+	info := decodeData[systemInfoResponse](t, request(t, router, http.MethodGet, "/api/v1/system/info", nil, ""))
+	if info.ManagementMcpToolCatalog.CatalogDigest != tools.Result.CatalogDigest {
+		t.Fatalf("system info catalog digest %q does not match tools/list digest %q", info.ManagementMcpToolCatalog.CatalogDigest, tools.Result.CatalogDigest)
 	}
 	if !mcpToolNamesContain(tools.Result.Tools, "draft_permission_package") ||
 		!mcpToolNamesContain(tools.Result.Tools, "preflight_permission_package") ||

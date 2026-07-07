@@ -125,9 +125,10 @@ test("connection diagnostics hides raw management MCP catalog contract issue key
       code: "api_contract_incompatible",
       contractIssues: [
         "managementMcpToolCatalog.requiredMetadata.access",
+        "managementMcpToolCatalog.catalogDigest",
         "managementMcpToolCatalog.toolsWithConfirmationSchema"
       ],
-      message: "system info contract issues: managementMcpToolCatalog.requiredMetadata.access, managementMcpToolCatalog.toolsWithConfirmationSchema",
+      message: "system info contract issues: managementMcpToolCatalog.requiredMetadata.access, managementMcpToolCatalog.catalogDigest, managementMcpToolCatalog.toolsWithConfirmationSchema",
       missingCapabilities: [],
       status: "error"
     },

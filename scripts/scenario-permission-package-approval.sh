@@ -531,6 +531,7 @@ assert_management_mcp_tool_safety() {
   RESPONSE_BODY="$HTTP_BODY" SYSTEM_INFO_BODY="$SYSTEM_INFO_BODY" python3 <<'PY'
 import json
 import os
+import re
 
 doc = json.loads(os.environ["RESPONSE_BODY"])
 result = doc.get("result", {})
@@ -610,6 +611,10 @@ if system_info_body:
     catalog = system_info.get("managementMcpToolCatalog") or {}
     if catalog.get("metadataVersion") != result.get("metadataVersion"):
         raise SystemExit(f"system info metadataVersion={catalog.get('metadataVersion')!r} does not match tools/list {result.get('metadataVersion')!r}")
+    if not re.fullmatch(r"[a-f0-9]{64}", str(catalog.get("catalogDigest", ""))):
+        raise SystemExit(f"system info catalogDigest should be a sha256 hex digest: {catalog}")
+    if catalog.get("catalogDigest") != result.get("catalogDigest"):
+        raise SystemExit(f"system info catalogDigest={catalog.get('catalogDigest')!r} does not match tools/list {result.get('catalogDigest')!r}")
     required_metadata = catalog.get("requiredMetadata")
     if required_metadata != ["safety", "access", "lifecycle", "execution"]:
         raise SystemExit(f"system info requiredMetadata={required_metadata!r} is not the v4 contract")

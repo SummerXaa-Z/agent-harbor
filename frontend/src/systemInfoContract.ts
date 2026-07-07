@@ -6,6 +6,7 @@ export interface SystemInfo {
   managementMcpToolCatalog: {
     metadataVersion: number
     requiredMetadata: string[]
+    catalogDigest: string
     toolCount: number
     confirmationRequiredTools: number
     toolsWithConfirmationSchema: number
@@ -29,6 +30,7 @@ export const requiredManagementMcpToolCatalogMetadata = ['safety', 'access', 'li
 export function isManagementMcpToolCatalogContractIssue(issue: string): boolean {
   return (
     issue === 'managementMcpToolCatalog.metadataVersion' ||
+    issue === 'managementMcpToolCatalog.catalogDigest' ||
     issue === 'managementMcpToolCatalog.toolCount' ||
     issue === 'managementMcpToolCatalog.confirmationRequiredTools' ||
     issue === 'managementMcpToolCatalog.toolsWithConfirmationSchema' ||
@@ -60,6 +62,9 @@ export function systemInfoContractIssues(systemInfo: Partial<SystemInfo>): strin
 
   if (!Number.isFinite(catalog?.toolCount) || Number(catalog?.toolCount) <= 0) {
     issues.push('managementMcpToolCatalog.toolCount')
+  }
+  if (!/^[a-f0-9]{64}$/.test(catalog?.catalogDigest ?? '')) {
+    issues.push('managementMcpToolCatalog.catalogDigest')
   }
   if (
     !Number.isFinite(catalog?.confirmationRequiredTools) ||

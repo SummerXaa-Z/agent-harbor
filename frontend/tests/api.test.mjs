@@ -66,7 +66,7 @@ test("console auth API exposes session login and logout endpoints", () => {
 test("API health check verifies the system compatibility contract", () => {
   assert.match(systemInfoContractSource, /interface SystemInfo/);
   assert.match(systemInfoContractSource, /authRequired: boolean/);
-  assert.match(systemInfoContractSource, /managementMcpToolCatalog:\s*\{\s*metadataVersion: number\s*requiredMetadata: string\[\]\s*toolCount: number\s*confirmationRequiredTools: number\s*toolsWithConfirmationSchema: number\s*\}/);
+  assert.match(systemInfoContractSource, /managementMcpToolCatalog:\s*\{\s*metadataVersion: number\s*requiredMetadata: string\[\]\s*catalogDigest: string\s*toolCount: number\s*confirmationRequiredTools: number\s*toolsWithConfirmationSchema: number\s*\}/);
   assert.match(apiSource, /function fetchSystemInfo\(/);
   assert.match(apiSource, /\/api\/v1\/system\/info/);
   assert.match(apiSource, /systemInfoContractIssues\(systemInfo\)/);
@@ -86,6 +86,7 @@ test("system info contract issues validate the management MCP catalog summary", 
     managementMcpToolCatalog: {
       metadataVersion: 4,
       requiredMetadata: ["safety", "access", "lifecycle", "execution"],
+      catalogDigest: "a".repeat(64),
       toolCount: 22,
       confirmationRequiredTools: 8,
       toolsWithConfirmationSchema: 8,
@@ -113,6 +114,16 @@ test("system info contract issues validate the management MCP catalog summary", 
       ...compatibleInfo,
       managementMcpToolCatalog: {
         ...compatibleInfo.managementMcpToolCatalog,
+        catalogDigest: "not-a-digest",
+      },
+    }),
+    ["managementMcpToolCatalog.catalogDigest"],
+  );
+  assert.deepEqual(
+    systemInfoContractIssues({
+      ...compatibleInfo,
+      managementMcpToolCatalog: {
+        ...compatibleInfo.managementMcpToolCatalog,
         toolsWithConfirmationSchema: 7,
       },
     }),
@@ -130,6 +141,7 @@ test("system info contract issues validate the management MCP catalog summary", 
       "managementMcpToolCatalog.requiredMetadata.lifecycle",
       "managementMcpToolCatalog.requiredMetadata.execution",
       "managementMcpToolCatalog.toolCount",
+      "managementMcpToolCatalog.catalogDigest",
       "managementMcpToolCatalog.confirmationRequiredTools",
       "managementMcpToolCatalog.toolsWithConfirmationSchema",
     ],

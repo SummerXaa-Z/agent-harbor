@@ -3,6 +3,8 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,6 +58,7 @@ type managementMCPErrorData struct {
 
 type managementMCPToolsListResult struct {
 	MetadataVersion int                 `json:"metadataVersion"`
+	CatalogDigest   string              `json:"catalogDigest"`
 	Tools           []managementMCPTool `json:"tools"`
 }
 
@@ -246,10 +249,7 @@ func (s *Server) managementMCP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch req.Method {
 	case "tools/list":
-		writeManagementMCPResult(w, req.ID, managementMCPToolsListResult{
-			MetadataVersion: managementMCPToolsMetadataVersion,
-			Tools:           managementMCPTools(),
-		})
+		writeManagementMCPResult(w, req.ID, managementMCPToolsCatalogResult())
 	case "tools/call":
 		result, err := s.callManagementMCPTool(r, req)
 		if err != nil {
@@ -715,6 +715,31 @@ func managementMCPTools() []managementMCPTool {
 		},
 	}
 	return managementMCPToolsWithConfirmationSchemas(managementMCPToolsWithExecution(managementMCPToolsWithLifecycle(managementMCPToolsWithAccess(managementMCPToolsWithSafety(tools)))))
+}
+
+func managementMCPToolsCatalogResult() managementMCPToolsListResult {
+	tools := managementMCPTools()
+	return managementMCPToolsListResult{
+		MetadataVersion: managementMCPToolsMetadataVersion,
+		CatalogDigest:   managementMCPToolsCatalogDigest(managementMCPToolsMetadataVersion, tools),
+		Tools:           tools,
+	}
+}
+
+func managementMCPToolsCatalogDigest(metadataVersion int, tools []managementMCPTool) string {
+	payload := struct {
+		MetadataVersion int                 `json:"metadataVersion"`
+		Tools           []managementMCPTool `json:"tools"`
+	}{
+		MetadataVersion: metadataVersion,
+		Tools:           tools,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
 }
 
 func managementMCPToolsWithSafety(tools []managementMCPTool) []managementMCPTool {

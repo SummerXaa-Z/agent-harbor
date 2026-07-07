@@ -13,6 +13,14 @@ import (
 	"github.com/SummerXaa-Z/agent-harbor/internal/app"
 )
 
+const (
+	defaultReadHeaderTimeout = 5 * time.Second
+	defaultReadTimeout       = 15 * time.Second
+	defaultWriteTimeout      = 35 * time.Second
+	defaultIdleTimeout       = 60 * time.Second
+	defaultMaxHeaderBytes    = 1 << 20
+)
+
 func main() {
 	addr := env("AGENT_HARBOR_ADDR", ":9090")
 	ctx, cancel := context.WithCancel(context.Background())
@@ -23,11 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer application.Close()
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           application.Router(),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	server := newHTTPServer(addr, application.Router())
 
 	errs := make(chan error, 1)
 	go func() {
@@ -53,6 +57,18 @@ func main() {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)
+	}
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: defaultReadHeaderTimeout,
+		ReadTimeout:       defaultReadTimeout,
+		WriteTimeout:      defaultWriteTimeout,
+		IdleTimeout:       defaultIdleTimeout,
+		MaxHeaderBytes:    defaultMaxHeaderBytes,
 	}
 }
 

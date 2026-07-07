@@ -118,6 +118,10 @@ The API listens on `:9090` by default. Override it with:
 AGENT_HARBOR_ADDR=:9091 go run ./cmd/agent-harbor
 ```
 
+The default binary HTTP server uses bounded connection settings: 5s read-header timeout, 15s read timeout, 35s write timeout, 60s idle timeout, and a 1 MiB request-header limit.
+
+默认二进制启动的 HTTP Server 使用有界连接设置：读 header 超时 5 秒、读超时 15 秒、写超时 35 秒、空闲连接超时 60 秒、请求 header 上限 1 MiB。
+
 ## Try the Core Journey in 10 Minutes
 
 This local scenario runs the most important AgentHarbor workflow: create a three-level tenant tree, register an MCP target, discover tools, approve one tool, assign it to a tenant/workspace/caller instance, run allowed and denied calls, and verify access-profile plus audit records.

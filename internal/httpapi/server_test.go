@@ -1133,6 +1133,23 @@ func TestManagementJSONAcceptsJSONContentTypeWithCharset(t *testing.T) {
 	}
 }
 
+func TestJSONResponsesSetNoSniffHeader(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	ok := request(t, router, http.MethodGet, "/healthz", nil, "")
+	if got := ok.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("successful JSON responses should set nosniff, got %q", got)
+	}
+
+	unauthorized := request(t, router, http.MethodGet, "/api/v1/agents", nil, "")
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthorized management read, got %d", unauthorized.Code)
+	}
+	if got := unauthorized.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("error JSON responses should set nosniff, got %q", got)
+	}
+}
+
 func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	router := newRouterWithAdmin("test-admin")
 

@@ -21,13 +21,13 @@ type envelope struct {
 const maxJSONBodyBytes int64 = 1 << 20
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
+	setJSONResponseHeaders(w)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(envelope{Code: 0, Data: data})
 }
 
 func writeError(w http.ResponseWriter, err error) {
-	w.Header().Set("Content-Type", "application/json")
+	setJSONResponseHeaders(w)
 	var appErr domain.AppError
 	if errors.As(err, &appErr) {
 		w.WriteHeader(appErr.Status)
@@ -44,6 +44,11 @@ func writeError(w http.ResponseWriter, err error) {
 		Error:   "INTERNAL_ERROR",
 		Message: "internal server error",
 	})
+}
+
+func setJSONResponseHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 }
 
 func decodeJSON(r *http.Request, out any) error {

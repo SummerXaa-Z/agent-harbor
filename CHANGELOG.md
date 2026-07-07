@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: JSON success and error responses now set `X-Content-Type-Options: nosniff` so browsers do not MIME-sniff management API responses.
+- 2026-07-08：JSON 成功和错误响应现在都会设置 `X-Content-Type-Options: nosniff`，避免浏览器对管理 API 响应做 MIME 嗅探。
 - 2026-07-08: The AgentHarbor binary now sets read, write, idle, read-header, and max-header defaults on its HTTP server to reduce slow or idle connection resource pressure.
 - 2026-07-08：AgentHarbor 二进制启动的 HTTP Server 现在会设置读、写、空闲连接、读 header 和最大 header 默认限制，降低慢请求或空闲连接长期占用资源的风险。
 - 2026-07-08: Management JSON endpoints now reject non-JSON `Content-Type` requests with `UNSUPPORTED_MEDIA_TYPE`, while continuing to accept `application/json` with parameters such as charset.

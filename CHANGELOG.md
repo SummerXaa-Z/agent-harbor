@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: Agent-key-protected MCP and OpenAPI data-plane responses now set `Cache-Control: no-store` to keep proxied business payloads out of browser and proxy caches.
+- 2026-07-08：Agent Key 保护的 MCP 和 OpenAPI 数据面响应现在会设置 `Cache-Control: no-store`，避免代理业务载荷被浏览器或代理缓存。
 - 2026-07-08: Management API responses now set `Cache-Control: no-store` so browsers and proxies do not cache permission, approval, or key-management payloads.
 - 2026-07-08：管理 API 响应现在会设置 `Cache-Control: no-store`，避免浏览器或代理缓存权限、审批或密钥管理载荷。
 - 2026-07-08: JSON success and error responses now set `X-Content-Type-Options: nosniff` so browsers do not MIME-sniff management API responses.

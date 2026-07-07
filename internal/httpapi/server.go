@@ -276,6 +276,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/metrics/runtime", s.runtimeMetrics)
 		})
 		r.Group(func(r chi.Router) {
+			r.Use(noStore)
 			r.Use(s.requireAgentKey)
 			r.Post("/mcp/agents/{targetId}", s.mcpRPC)
 			r.Post("/mcp/agents/{targetId}/rpc", s.mcpRPC)

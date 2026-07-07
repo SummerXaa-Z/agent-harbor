@@ -1180,6 +1180,29 @@ func TestManagementResponsesSetNoStore(t *testing.T) {
 	}
 }
 
+func TestDataPlaneResponsesSetNoStore(t *testing.T) {
+	router := newRouter()
+
+	mcp := request(t, router, http.MethodPost, "/api/v1/mcp/agents/target-1/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/list",
+	}, "")
+	if mcp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthorized data-plane MCP call, got %d body=%s", mcp.Code, mcp.Body.String())
+	}
+	if got := mcp.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("data-plane MCP responses should set no-store, got %q", got)
+	}
+
+	openapi := request(t, router, http.MethodPost, "/api/v1/openapi/agents/target-1/operations/listCustomers", map[string]any{}, "")
+	if openapi.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthorized data-plane OpenAPI call, got %d body=%s", openapi.Code, openapi.Body.String())
+	}
+	if got := openapi.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("data-plane OpenAPI responses should set no-store, got %q", got)
+	}
+}
+
 func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	router := newRouterWithAdmin("test-admin")
 
@@ -3743,6 +3766,7 @@ func TestMCPProxyRelaysAllowedUpstreamResponse(t *testing.T) {
 			t.Fatalf("upstream body did not receive original request: %s", string(body))
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"upstream":true}`))
 	}))
@@ -3763,6 +3787,9 @@ func TestMCPProxyRelaysAllowedUpstreamResponse(t *testing.T) {
 	}
 	if got := resp.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
 		t.Fatalf("expected upstream content-type, got %q", got)
+	}
+	if got := resp.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("expected AgentHarbor no-store to override upstream cache header, got %q", got)
 	}
 	if strings.TrimSpace(resp.Body.String()) != `{"upstream":true}` {
 		t.Fatalf("expected raw upstream body, got %s", resp.Body.String())

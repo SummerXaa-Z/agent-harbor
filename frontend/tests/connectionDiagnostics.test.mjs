@@ -123,8 +123,11 @@ test("connection diagnostics hides raw management MCP catalog contract issue key
   const rows = buildConnectionDiagnosticRows({
     apiHealth: {
       code: "api_contract_incompatible",
-      contractIssues: ["managementMcpToolCatalog.requiredMetadata.access"],
-      message: "system info contract issues: managementMcpToolCatalog.requiredMetadata.access",
+      contractIssues: [
+        "managementMcpToolCatalog.requiredMetadata.access",
+        "managementMcpToolCatalog.toolsWithConfirmationSchema"
+      ],
+      message: "system info contract issues: managementMcpToolCatalog.requiredMetadata.access, managementMcpToolCatalog.toolsWithConfirmationSchema",
       missingCapabilities: [],
       status: "error"
     },

@@ -18,8 +18,11 @@ function t(key) {
 test("health check presentation hides raw management MCP catalog contract issue keys", () => {
   const detail = healthCheckFailureDetail(t, "API", {
     code: "api_contract_incompatible",
-    contractIssues: ["managementMcpToolCatalog.requiredMetadata.access"],
-    message: "system info contract issues: managementMcpToolCatalog.requiredMetadata.access",
+    contractIssues: [
+      "managementMcpToolCatalog.requiredMetadata.access",
+      "managementMcpToolCatalog.confirmationRequiredTools"
+    ],
+    message: "system info contract issues: managementMcpToolCatalog.requiredMetadata.access, managementMcpToolCatalog.confirmationRequiredTools",
     missingCapabilities: [],
     status: "error"
   });

@@ -6,6 +6,9 @@ export interface SystemInfo {
   managementMcpToolCatalog: {
     metadataVersion: number
     requiredMetadata: string[]
+    toolCount: number
+    confirmationRequiredTools: number
+    toolsWithConfirmationSchema: number
   }
 }
 
@@ -22,6 +25,16 @@ export const requiredConsoleCapabilities = [
 ]
 
 export const requiredManagementMcpToolCatalogMetadata = ['safety', 'access', 'lifecycle', 'execution']
+
+export function isManagementMcpToolCatalogContractIssue(issue: string): boolean {
+  return (
+    issue === 'managementMcpToolCatalog.metadataVersion' ||
+    issue === 'managementMcpToolCatalog.toolCount' ||
+    issue === 'managementMcpToolCatalog.confirmationRequiredTools' ||
+    issue === 'managementMcpToolCatalog.toolsWithConfirmationSchema' ||
+    issue.startsWith('managementMcpToolCatalog.requiredMetadata.')
+  )
+}
 
 export function missingConsoleCapabilities(systemInfo: Pick<SystemInfo, 'capabilities'>): string[] {
   const available = new Set(Array.isArray(systemInfo.capabilities) ? systemInfo.capabilities : [])
@@ -43,6 +56,22 @@ export function systemInfoContractIssues(systemInfo: Partial<SystemInfo>): strin
     if (!catalogMetadata.has(field)) {
       issues.push(`managementMcpToolCatalog.requiredMetadata.${field}`)
     }
+  }
+
+  if (!Number.isFinite(catalog?.toolCount) || Number(catalog?.toolCount) <= 0) {
+    issues.push('managementMcpToolCatalog.toolCount')
+  }
+  if (
+    !Number.isFinite(catalog?.confirmationRequiredTools) ||
+    Number(catalog?.confirmationRequiredTools) <= 0
+  ) {
+    issues.push('managementMcpToolCatalog.confirmationRequiredTools')
+  }
+  if (
+    !Number.isFinite(catalog?.toolsWithConfirmationSchema) ||
+    catalog?.toolsWithConfirmationSchema !== catalog?.confirmationRequiredTools
+  ) {
+    issues.push('managementMcpToolCatalog.toolsWithConfirmationSchema')
   }
 
   return issues

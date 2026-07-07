@@ -42,8 +42,11 @@ type systemInfoResponse struct {
 	AuthRequired             bool     `json:"authRequired"`
 	Capabilities             []string `json:"capabilities"`
 	ManagementMcpToolCatalog struct {
-		MetadataVersion  int      `json:"metadataVersion"`
-		RequiredMetadata []string `json:"requiredMetadata"`
+		MetadataVersion             int      `json:"metadataVersion"`
+		RequiredMetadata            []string `json:"requiredMetadata"`
+		ToolCount                   int      `json:"toolCount"`
+		ConfirmationRequiredTools   int      `json:"confirmationRequiredTools"`
+		ToolsWithConfirmationSchema int      `json:"toolsWithConfirmationSchema"`
 	} `json:"managementMcpToolCatalog"`
 }
 
@@ -852,6 +855,15 @@ func TestSystemInfoIncludesConsoleCompatibilityContract(t *testing.T) {
 	}
 	if info.ManagementMcpToolCatalog.MetadataVersion != 4 {
 		t.Fatalf("management MCP catalog metadata version = %d, want 4", info.ManagementMcpToolCatalog.MetadataVersion)
+	}
+	if info.ManagementMcpToolCatalog.ToolCount < 20 {
+		t.Fatalf("management MCP catalog toolCount should summarize the current tool catalog: %#v", info.ManagementMcpToolCatalog)
+	}
+	if info.ManagementMcpToolCatalog.ConfirmationRequiredTools == 0 {
+		t.Fatalf("management MCP catalog should report confirmation-required write tools: %#v", info.ManagementMcpToolCatalog)
+	}
+	if info.ManagementMcpToolCatalog.ToolsWithConfirmationSchema != info.ManagementMcpToolCatalog.ConfirmationRequiredTools {
+		t.Fatalf("management MCP catalog confirmation schema summary mismatch: %#v", info.ManagementMcpToolCatalog)
 	}
 	requiredMetadata := make(map[string]bool, len(info.ManagementMcpToolCatalog.RequiredMetadata))
 	for _, field := range info.ManagementMcpToolCatalog.RequiredMetadata {

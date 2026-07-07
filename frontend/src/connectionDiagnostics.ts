@@ -1,6 +1,7 @@
 import type { HealthCheckResult } from "./api";
 import type { Translator } from "./consolePresenters";
 import { systemCapabilityLabelKeys } from "./systemCapabilityLabels.ts";
+import { isManagementMcpToolCatalogContractIssue } from "./systemInfoContract.ts";
 import type { ConsoleSession, JsonObject, JsonValue } from "./types";
 
 export type ConnectionDiagnosticKey = "session" | "api" | "dataSource" | "mcp" | "mcpCatalog";
@@ -462,10 +463,7 @@ function hasOnlyManagementMcpCatalogContractIssues(
 ): boolean {
   const issues = Array.isArray(contractIssues) ? contractIssues : [];
   const capabilities = Array.isArray(missingCapabilities) ? missingCapabilities : [];
-  return capabilities.length === 0 && issues.length > 0 && issues.every((issue) => (
-    issue === "managementMcpToolCatalog.metadataVersion" ||
-    issue.startsWith("managementMcpToolCatalog.requiredMetadata.")
-  ));
+  return capabilities.length === 0 && issues.length > 0 && issues.every(isManagementMcpToolCatalogContractIssue);
 }
 
 function tx(t: Translator, key: string, values: Record<string, string | number>) {

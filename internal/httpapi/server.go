@@ -482,26 +482,116 @@ type systemInfoResponse struct {
 }
 
 type systemInfoManagementMcpToolCatalogInfo struct {
-	MetadataVersion  int      `json:"metadataVersion"`
-	RequiredMetadata []string `json:"requiredMetadata"`
+	MetadataVersion             int      `json:"metadataVersion"`
+	RequiredMetadata            []string `json:"requiredMetadata"`
+	ToolCount                   int      `json:"toolCount"`
+	ConfirmationRequiredTools   int      `json:"confirmationRequiredTools"`
+	ToolsWithConfirmationSchema int      `json:"toolsWithConfirmationSchema"`
 }
 
 func (s *Server) systemInfo(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, systemInfoResponse{
-		Name:         "AgentHarbor",
-		APIVersion:   systemAPIVersion,
-		AuthRequired: !s.developmentAdminBypassActive(),
-		Capabilities: append([]string(nil), systemCapabilities...),
-		ManagementMcpToolCatalog: systemInfoManagementMcpToolCatalogInfo{
-			MetadataVersion: managementMCPToolsMetadataVersion,
-			RequiredMetadata: []string{
-				"safety",
-				"access",
-				"lifecycle",
-				"execution",
-			},
-		},
+		Name:                     "AgentHarbor",
+		APIVersion:               systemAPIVersion,
+		AuthRequired:             !s.developmentAdminBypassActive(),
+		Capabilities:             append([]string(nil), systemCapabilities...),
+		ManagementMcpToolCatalog: systemInfoManagementMcpToolCatalogSummary(),
 	})
+}
+
+func systemInfoManagementMcpToolCatalogSummary() systemInfoManagementMcpToolCatalogInfo {
+	tools := managementMCPTools()
+	summary := systemInfoManagementMcpToolCatalogInfo{
+		MetadataVersion: managementMCPToolsMetadataVersion,
+		RequiredMetadata: []string{
+			"safety",
+			"access",
+			"lifecycle",
+			"execution",
+		},
+		ToolCount: len(tools),
+	}
+	for _, tool := range tools {
+		if !managementMCPToolRequiresConfirmation(tool.Name) {
+			continue
+		}
+		summary.ConfirmationRequiredTools++
+		if managementMCPToolHasWriteConfirmationInputSchema(tool) {
+			summary.ToolsWithConfirmationSchema++
+		}
+	}
+	return summary
+}
+
+func managementMCPToolHasWriteConfirmationInputSchema(tool managementMCPTool) bool {
+	if !jsonSchemaRequiredIncludesField(tool.InputSchema, "confirmation") {
+		return false
+	}
+	properties, ok := jsonSchemaObjectProperty(tool.InputSchema, "properties")
+	if !ok {
+		return false
+	}
+	confirmation, ok := jsonSchemaObjectProperty(properties, "confirmation")
+	if !ok || confirmation["type"] != "object" {
+		return false
+	}
+	if !jsonSchemaRequiredIncludesField(confirmation, "confirmed") || !jsonSchemaRequiredIncludesField(confirmation, "reason") {
+		return false
+	}
+	confirmationProperties, ok := jsonSchemaObjectProperty(confirmation, "properties")
+	if !ok {
+		return false
+	}
+	confirmed, ok := jsonSchemaObjectProperty(confirmationProperties, "confirmed")
+	if !ok || confirmed["type"] != "boolean" {
+		return false
+	}
+	reason, ok := jsonSchemaObjectProperty(confirmationProperties, "reason")
+	if !ok || reason["type"] != "string" {
+		return false
+	}
+	return jsonSchemaNumberValueEquals(reason, "minLength", 1) &&
+		jsonSchemaNumberValueEquals(reason, "maxLength", maxManagementMCPWriteConfirmationReasonRunes)
+}
+
+func jsonSchemaObjectProperty(schema map[string]any, key string) (map[string]any, bool) {
+	value, ok := schema[key].(map[string]any)
+	return value, ok
+}
+
+func jsonSchemaRequiredIncludesField(schema map[string]any, field string) bool {
+	required, ok := schema["required"]
+	if !ok {
+		return false
+	}
+	switch typed := required.(type) {
+	case []string:
+		for _, value := range typed {
+			if value == field {
+				return true
+			}
+		}
+	case []any:
+		for _, value := range typed {
+			if value == field {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func jsonSchemaNumberValueEquals(schema map[string]any, key string, expected int) bool {
+	switch value := schema[key].(type) {
+	case int:
+		return value == expected
+	case int64:
+		return value == int64(expected)
+	case float64:
+		return value == float64(expected)
+	default:
+		return false
+	}
 }
 
 func (s *Server) listProviderContracts(w http.ResponseWriter, _ *http.Request) {

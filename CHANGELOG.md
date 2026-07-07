@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- `/api/v1/system/info` now includes Management MCP tool-catalog summary counts for total tools, confirmation-required write tools, and write tools with confirmation input schemas, and the release scenario cross-checks the summary against live `tools/list`.
+- `/api/v1/system/info` 现在会返回 Management MCP 工具目录摘要计数，包括工具总数、需要确认的写工具数和已暴露确认 input schema 的写工具数；发布场景会将摘要与真实 `tools/list` 交叉校验。
 - Management MCP tool-catalog metadata is now version `4`, and `/api/v1/system/info` advertises `management_mcp_tools_metadata_v4` to mark the confirmation-schema contract for write tools.
 - Management MCP 工具目录元数据现在升级为 `4`，`/api/v1/system/info` 会声明 `management_mcp_tools_metadata_v4`，用于标记写工具确认参数 schema 契约。
 - The permission-package approval release scenario now verifies that live Management MCP write tools expose the required confirmation input schema in `tools/list`.

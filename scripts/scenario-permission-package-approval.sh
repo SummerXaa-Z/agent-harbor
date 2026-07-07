@@ -37,6 +37,7 @@ WRITE_CAPABILITY_ID=""
 DENIED_CAPABILITY_ID=""
 APPROVAL_REQUEST_ID=""
 APPLICATION_ID=""
+SYSTEM_INFO_BODY=""
 
 cleanup() {
   if [[ -n "$MOCK_MCP_PID" ]]; then
@@ -527,7 +528,7 @@ PY
 }
 
 assert_management_mcp_tool_safety() {
-  RESPONSE_BODY="$HTTP_BODY" python3 <<'PY'
+  RESPONSE_BODY="$HTTP_BODY" SYSTEM_INFO_BODY="$SYSTEM_INFO_BODY" python3 <<'PY'
 import json
 import os
 
@@ -566,6 +567,62 @@ def assert_confirmation_schema(name, input_schema):
         raise SystemExit(f"management MCP tool {name!r} confirmation schema should expose reason string maxLength 500: {confirmation!r}")
     if not required_contains(confirmation, "confirmed") or not required_contains(confirmation, "reason"):
         raise SystemExit(f"management MCP tool {name!r} confirmation schema should require confirmed and reason: {confirmation!r}")
+
+def tool_requires_confirmation(tool):
+    safety = tool.get("safety") or {}
+    execution = tool.get("execution") or {}
+    return (
+        execution.get("confirmationRequired") is True
+        or safety.get("mutatesState") is True
+        or safety.get("operationType") == "write"
+    )
+
+def tool_has_confirmation_schema(tool):
+    input_schema = tool.get("inputSchema")
+    if not isinstance(input_schema, dict):
+        return False
+    properties = input_schema.get("properties")
+    if not isinstance(properties, dict):
+        return False
+    confirmation = properties.get("confirmation")
+    if not isinstance(confirmation, dict) or confirmation.get("type") != "object":
+        return False
+    confirmation_properties = confirmation.get("properties")
+    if not isinstance(confirmation_properties, dict):
+        return False
+    confirmed = confirmation_properties.get("confirmed")
+    reason = confirmation_properties.get("reason")
+    return (
+        required_contains(input_schema, "confirmation")
+        and required_contains(confirmation, "confirmed")
+        and required_contains(confirmation, "reason")
+        and isinstance(confirmed, dict)
+        and confirmed.get("type") == "boolean"
+        and isinstance(reason, dict)
+        and reason.get("type") == "string"
+        and reason.get("minLength") == 1
+        and reason.get("maxLength") == 500
+    )
+
+system_info_body = os.environ.get("SYSTEM_INFO_BODY", "")
+if system_info_body:
+    system_info = json.loads(system_info_body).get("data", {})
+    catalog = system_info.get("managementMcpToolCatalog") or {}
+    if catalog.get("metadataVersion") != result.get("metadataVersion"):
+        raise SystemExit(f"system info metadataVersion={catalog.get('metadataVersion')!r} does not match tools/list {result.get('metadataVersion')!r}")
+    required_metadata = catalog.get("requiredMetadata")
+    if required_metadata != ["safety", "access", "lifecycle", "execution"]:
+        raise SystemExit(f"system info requiredMetadata={required_metadata!r} is not the v4 contract")
+    confirmation_required = sum(1 for tool in tools_by_name.values() if tool_requires_confirmation(tool))
+    with_confirmation_schema = sum(1 for tool in tools_by_name.values() if tool_requires_confirmation(tool) and tool_has_confirmation_schema(tool))
+    expected_summary = {
+        "toolCount": len(tools_by_name),
+        "confirmationRequiredTools": confirmation_required,
+        "toolsWithConfirmationSchema": with_confirmation_schema,
+    }
+    for key, expected in expected_summary.items():
+        if catalog.get(key) != expected:
+            raise SystemExit(f"system info management MCP catalog {key}={catalog.get(key)!r} want {expected!r}: {catalog}")
 
 required_safety = {
     "explain_access_decision": {"operationType": "read", "readOnly": True, "mutatesState": False, "approvalMode": "none"},
@@ -648,11 +705,7 @@ for name, tool in tools_by_name.items():
         raise SystemExit(f"management MCP tool {name!r} non-idempotent execution must require confirmation: {execution!r}")
     input_schema = tool.get("inputSchema")
     input_properties = input_schema.get("properties") if isinstance(input_schema, dict) else {}
-    requires_confirmation = (
-        execution.get("confirmationRequired") is True
-        or safety.get("mutatesState") is True
-        or safety.get("operationType") == "write"
-    )
+    requires_confirmation = tool_requires_confirmation(tool)
     if requires_confirmation:
         assert_confirmation_schema(name, input_schema)
     elif isinstance(input_properties, dict) and "confirmation" in input_properties:
@@ -1285,6 +1338,10 @@ start_mcp_server
 
 request GET "/healthz"
 expect_status 200 "AgentHarbor health check"
+
+request GET "/api/v1/system/info"
+expect_status 200 "system info compatibility summary"
+SYSTEM_INFO_BODY="$HTTP_BODY"
 
 request POST "/api/v1/management/mcp" "$(json_body tools-list)"
 expect_status 200 "list management MCP tools with safety metadata"

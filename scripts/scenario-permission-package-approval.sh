@@ -561,10 +561,10 @@ if expected_status == "ready":
         raise SystemExit(f"production readiness application id mismatch: {application}")
     runtime = readiness.get("runtimeEvidence") or {}
     if not runtime.get("allowedTrace") or not runtime.get("deniedTrace"):
-        raise SystemExit(f"production readiness missing runtime evidence: {runtime}")
+        raise SystemExit(f"production readiness missing runtime records: {runtime}")
     audit = readiness.get("auditEvidence") or {}
     if not audit.get("appliedEvent"):
-        raise SystemExit(f"production readiness missing applied audit evidence: {audit}")
+        raise SystemExit(f"production readiness missing applied audit record: {audit}")
 else:
     if summary.get("blockingCount", 0) < 1:
         raise SystemExit(f"blocked production readiness should include blockers: {summary}")
@@ -588,32 +588,32 @@ expected_status, expected_check, application_id, tenant_id, workspace_id = sys.a
 if report.get("reportVersion") != "production-readiness-report/v1":
     raise SystemExit(f"unexpected report version: {report}")
 if report.get("status") != expected_status:
-    raise SystemExit(f"production evidence report status={report.get('status')!r} want {expected_status!r}: {report}")
+    raise SystemExit(f"production report status={report.get('status')!r} want {expected_status!r}: {report}")
 scope = report.get("scope") or {}
 if scope.get("tenantId") != tenant_id or scope.get("workspaceId") != workspace_id:
-    raise SystemExit(f"unexpected production evidence scope: {scope}")
+    raise SystemExit(f"unexpected production report scope: {scope}")
 checks = {check.get("code"): check for check in report.get("checks", [])}
 if expected_check not in checks:
-    raise SystemExit(f"production evidence report missing check {expected_check!r}: {checks}")
+    raise SystemExit(f"production report missing check {expected_check!r}: {checks}")
 evidence = report.get("evidence") or {}
 application = evidence.get("application") or {}
 runtime = evidence.get("runtime") or {}
 audit = evidence.get("audit") or {}
 if expected_status == "ready":
     if application.get("id") != application_id or application.get("present") is not True:
-        raise SystemExit(f"ready production evidence report missing application evidence: {application}")
+        raise SystemExit(f"ready production report missing application record: {application}")
     if not runtime.get("allowedTraceId") or not runtime.get("deniedTraceId"):
-        raise SystemExit(f"ready production evidence report missing runtime evidence: {runtime}")
+        raise SystemExit(f"ready production report missing runtime records: {runtime}")
     if not audit.get("appliedEventId"):
-        raise SystemExit(f"ready production evidence report missing audit evidence: {audit}")
+        raise SystemExit(f"ready production report missing audit record: {audit}")
     if (evidence.get("accessProfile") or {}).get("present") is not True:
-        raise SystemExit(f"ready production evidence report missing access profile evidence: {evidence}")
+        raise SystemExit(f"ready production report missing access profile record: {evidence}")
 else:
     if application.get("present") is True:
         raise SystemExit(f"blocked-before-apply report should not include application evidence: {application}")
     if checks[expected_check].get("severity") != "blocking":
         raise SystemExit(f"expected report check {expected_check!r} to block, got {checks[expected_check]}")
-print(f"permission package production evidence report verified: status={expected_status} check={expected_check}")
+print(f"permission package production report verified: status={expected_status} check={expected_check}")
 PY
 }
 
@@ -753,7 +753,7 @@ if trace.get("decision") != expected_decision:
     raise SystemExit(f"trace decision={trace.get('decision')!r} want {expected_decision!r}; trace={trace}")
 if expected_capability_id and trace.get("capabilityId") != expected_capability_id:
     raise SystemExit(f"trace capabilityId={trace.get('capabilityId')!r} want {expected_capability_id!r}; trace={trace}")
-print(f"{expected_decision} trace evidence verified")
+print(f"{expected_decision} trace record verified")
 PY
 }
 
@@ -782,7 +782,7 @@ for key, expected in expected_counts.items():
     if summary.get(key) != expected:
         raise SystemExit(f"summary[{key}]={summary.get(key)} want {expected}; summary={summary}")
 if summary.get("recentAllowedTraceCount", 0) < 1 or summary.get("recentDeniedTraceCount", 0) < 1:
-    raise SystemExit(f"expected allowed and denied trace evidence, summary={summary}")
+    raise SystemExit(f"expected allowed and denied trace records, summary={summary}")
 capability_ids = set()
 for grant in profile["grants"]:
     if grant.get("scopeStatus") != "valid":
@@ -1009,7 +1009,7 @@ if metadata.get("applicationId") != application_id:
     raise SystemExit(f"audit metadata applicationId mismatch: {metadata}")
 if metadata.get("approvalRequestId") != approval_request_id:
     raise SystemExit(f"audit metadata approvalRequestId mismatch: {metadata}")
-print("permission package approval audit evidence verified")
+print("permission package approval audit record verified")
 PY
 }
 
@@ -1175,7 +1175,7 @@ expect_status 200 "check production readiness before apply"
 assert_production_readiness "blocked" "application_present"
 
 request GET "$(production_evidence_report_path "$APPROVAL_REQUEST_ID")"
-expect_status 200 "export production evidence report before apply"
+expect_status 200 "export production report before apply"
 assert_production_evidence_report "blocked" "application_present"
 
 request POST "/api/v1/permission-packages:apply" "$(permission_package_body "$APPROVAL_REQUEST_ID")"
@@ -1250,11 +1250,11 @@ expect_status 200 "list applied audit events"
 assert_applied_audit_event
 
 request GET "$(production_readiness_path)"
-expect_status 200 "check production readiness after evidence"
+expect_status 200 "check production readiness after runtime records"
 assert_production_readiness "ready" "runtime_allowed_trace_present"
 
 request GET "$(production_evidence_report_path)"
-expect_status 200 "export production evidence report after evidence"
+expect_status 200 "export production report after runtime records"
 assert_production_evidence_report "ready" "runtime_allowed_trace_present"
 
 echo "permission package approval scenario complete"

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Management MCP now exposes `export_permission_package_production_report` as the preferred read-only acceptance-report export tool while retaining `export_permission_package_production_evidence` as a compatibility alias.
+- Management MCP 现在提供 `export_permission_package_production_report` 作为首选的只读验收报告导出工具，同时继续保留 `export_permission_package_production_evidence` 作为兼容别名。
 - Frontend API compatibility labels now use one shared coverage-checked map, so every required console capability must have an English and Simplified Chinese operator label before it can appear in diagnostics.
 - 前端 API 兼容能力标签现在使用一份带覆盖测试的共享映射，确保每个控制台必需能力在进入诊断前都具备英文和简体中文的操作员可读标签。
 - Unknown API compatibility contract failures now fall back to a localized upgrade prompt instead of echoing raw `system info contract issues` messages into diagnostics or preflight panels.
@@ -477,8 +479,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Management MCP 现在提供 `preflight_permission_package`，管理 Agent 可以在调用 `apply_permission_package` 前验证权限包安全性。
 - Management MCP now exposes `check_permission_package_production_readiness` so admin agents can ask for the same production go/no-go result without calling each acceptance endpoint separately.
 - Management MCP 现在提供 `check_permission_package_production_readiness`，管理 Agent 可以直接获取同一套上线就绪状态，而不必分别调用每个检查端点。
-- Management MCP now exposes `export_permission_package_production_evidence` so admin agents can produce the same bounded acceptance report for handoff.
-- Management MCP 现在提供 `export_permission_package_production_evidence`，管理 Agent 可以生成同一份有边界的验收报告用于交接。
+- Management MCP now exposes `export_permission_package_production_report` so admin agents can produce the same bounded acceptance report for handoff.
+- Management MCP 现在提供 `export_permission_package_production_report`，管理 Agent 可以生成同一份有边界的验收报告用于交接。
 - Permission package drafts now include a deterministic `policyGate` that allows direct apply for low-risk packages and requires approval for write, export, admin, high-risk, critical-risk, confidential, or restricted allowed capabilities.
 - Permission package approval requests are now persisted in memory and PostgreSQL so approval-required drafts can be reviewed and applied with structured records.
 - `POST /api/v1/permission-packages/approval-requests`, `GET /api/v1/permission-packages/approval-requests`, approve, and reject endpoints now provide the approval-request loop for permission packages.

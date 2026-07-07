@@ -7544,6 +7544,7 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		!mcpToolNamesContain(tools.Result.Tools, "withdraw_permission_package_approval_request") ||
 		!mcpToolNamesContain(tools.Result.Tools, "list_permission_package_applications") ||
 		!mcpToolNamesContain(tools.Result.Tools, "check_permission_package_production_readiness") ||
+		!mcpToolNamesContain(tools.Result.Tools, "export_permission_package_production_report") ||
 		!mcpToolNamesContain(tools.Result.Tools, "export_permission_package_production_evidence") {
 		t.Fatalf("management MCP tools missing permission package tools: %#v", tools.Result.Tools)
 	}
@@ -7596,6 +7597,8 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		ScopeBoundary: "reviewer_route",
 		ReviewerBound: true,
 	})
+	assertMCPToolDescriptionDoesNotContain(t, tools.Result.Tools, "export_permission_package_production_report", "evidence", "证据")
+	assertMCPToolDescriptionDoesNotContain(t, tools.Result.Tools, "export_permission_package_production_evidence", "evidence", "证据")
 
 	args := map[string]any{
 		"callerInstanceId": caller.ID,
@@ -7720,10 +7723,10 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 	}
 	reportCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
 		"jsonrpc": "2.0",
-		"id":      "production-evidence",
+		"id":      "production-report",
 		"method":  "tools/call",
 		"params": map[string]any{
-			"name": "export_permission_package_production_evidence",
+			"name": "export_permission_package_production_report",
 			"arguments": map[string]any{
 				"tenantId":         "tenant-east",
 				"workspaceId":      "ws-sales",
@@ -7743,6 +7746,30 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		report.Evidence.Runtime.AllowedTraceID == "" ||
 		report.Evidence.Audit.AppliedEventID == "" {
 		t.Fatalf("unexpected production evidence MCP report: %#v", report)
+	}
+	legacyReportCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "legacy-production-report",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "export_permission_package_production_evidence",
+			"arguments": map[string]any{
+				"tenantId":         "tenant-east",
+				"workspaceId":      "ws-sales",
+				"templateId":       "sales-readonly",
+				"targetId":         target.ID,
+				"callerInstanceId": caller.ID,
+				"subjectId":        "user:sales-001",
+			},
+		},
+	}, ""))
+	var legacyReport permissionPackageProductionEvidenceReportResponse
+	if err := json.Unmarshal(legacyReportCall.Result.StructuredContent, &legacyReport); err != nil {
+		t.Fatalf("decode legacy production report structured content: %v", err)
+	}
+	if legacyReport.ReportVersion != report.ReportVersion || legacyReport.Status != report.Status ||
+		legacyReport.Evidence.Application.ID != report.Evidence.Application.ID {
+		t.Fatalf("legacy production report alias changed report semantics: new=%#v legacy=%#v", report, legacyReport)
 	}
 	events := decodeData[[]auditEventResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/events?action=permission_package.applied", nil, ""))
 	if len(events) != 1 || events[0].ResourceType != "permission_package" {
@@ -8869,6 +8896,22 @@ func assertMCPToolAccess(t *testing.T, tools []mcpToolResponse, name string, wan
 		}
 		if tool.Access != want {
 			t.Fatalf("tool %q access=%#v want %#v", name, tool.Access, want)
+		}
+		return
+	}
+	t.Fatalf("tool %q missing from tools/list", name)
+}
+
+func assertMCPToolDescriptionDoesNotContain(t *testing.T, tools []mcpToolResponse, name string, forbidden ...string) {
+	t.Helper()
+	for _, tool := range tools {
+		if tool.Name != name {
+			continue
+		}
+		for _, value := range forbidden {
+			if strings.Contains(strings.ToLower(tool.Description), strings.ToLower(value)) {
+				t.Fatalf("tool %q description contains %q: %q", name, value, tool.Description)
+			}
 		}
 		return
 	}

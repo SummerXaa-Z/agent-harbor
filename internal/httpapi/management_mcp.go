@@ -428,7 +428,7 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 			return managementMCPCallResult{}, err
 		}
 		return managementMCPResult(readiness), nil
-	case "export_permission_package_production_evidence":
+	case "export_permission_package_production_report", "export_permission_package_production_evidence":
 		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageProductionReadinessArgs](req.Params.Arguments)
 		if err != nil {
 			return managementMCPCallResult{}, err
@@ -618,8 +618,13 @@ func managementMCPTools() []managementMCPTool {
 			InputSchema: permissionPackageProductionReadinessSchema(),
 		},
 		{
-			Name:        "export_permission_package_production_evidence",
+			Name:        "export_permission_package_production_report",
 			Description: "Export a read-only JSON acceptance report for a tenant-scoped permission package production readiness decision.",
+			InputSchema: permissionPackageProductionReadinessSchema(),
+		},
+		{
+			Name:        "export_permission_package_production_evidence",
+			Description: "Compatibility alias for the preferred production report export tool.",
 			InputSchema: permissionPackageProductionReadinessSchema(),
 		},
 		{
@@ -680,6 +685,7 @@ func managementMCPToolsWithSafety(tools []managementMCPTool) []managementMCPTool
 		"withdraw_permission_package_approval_request":  writeManagementMCPToolSafety("requester"),
 		"list_permission_package_applications":          readManagementMCPToolSafety(),
 		"check_permission_package_production_readiness": readManagementMCPToolSafety(),
+		"export_permission_package_production_report":   readManagementMCPToolSafety(),
 		"export_permission_package_production_evidence": readManagementMCPToolSafety(),
 		"explain_permission_package_draft":              previewManagementMCPToolSafety(),
 		"explain_access_decision":                       readManagementMCPToolSafety(),
@@ -744,6 +750,7 @@ func managementMCPToolsWithAccess(tools []managementMCPTool) []managementMCPTool
 		"withdraw_permission_package_approval_request":  scopedManagementMCPToolAccess(),
 		"list_permission_package_applications":          scopedManagementMCPToolAccess(),
 		"check_permission_package_production_readiness": scopedManagementMCPToolAccess(),
+		"export_permission_package_production_report":   scopedManagementMCPToolAccess(),
 		"export_permission_package_production_evidence": scopedManagementMCPToolAccess(),
 		"explain_permission_package_draft":              scopedManagementMCPToolAccess(),
 		"explain_access_decision":                       scopedManagementMCPToolAccess(),

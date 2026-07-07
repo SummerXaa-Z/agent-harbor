@@ -8,6 +8,10 @@ const webConsoleProductionJourneyScript = readFileSync(
   new URL("../../scripts/scenario-web-console-production-journey.sh", import.meta.url),
   "utf8"
 );
+const permissionPackageApprovalScript = readFileSync(
+  new URL("../../scripts/scenario-permission-package-approval.sh", import.meta.url),
+  "utf8"
+);
 const productJourney = readFileSync(new URL("../../docs/product/0.2.0-ai-admin-permission-journey.md", import.meta.url), "utf8");
 const releaseChecklist = readFileSync(new URL("../../docs/engineering/release-checklist.md", import.meta.url), "utf8");
 const changelog = readFileSync(new URL("../../CHANGELOG.md", import.meta.url), "utf8");
@@ -60,4 +64,11 @@ test("web console production smoke uses the canonical go-live route", () => {
 test("public product docs use records wording instead of forensic-style prose", () => {
   const publicProse = proseWithoutCode([readme, productJourney, releaseChecklist, changelog].join("\n"));
   assert.doesNotMatch(publicProse, /\bEvidence\b|\bevidence\b|证据/);
+});
+
+test("release scenario operator output uses report and record wording", () => {
+  assert.doesNotMatch(permissionPackageApprovalScript, /production evidence report/i);
+  assert.doesNotMatch(permissionPackageApprovalScript, /trace evidence verified/i);
+  assert.doesNotMatch(permissionPackageApprovalScript, /audit evidence verified/i);
+  assert.doesNotMatch(permissionPackageApprovalScript, /after evidence/i);
 });

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -33,6 +34,14 @@ type managementMCPResponse struct {
 }
 
 const maxManagementMCPWriteConfirmationReasonRunes = 500
+
+var (
+	managementMCPConfirmationBearerPattern     = regexp.MustCompile(`(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+`)
+	managementMCPConfirmationKeyValuePattern   = regexp.MustCompile(`(?i)\b(api[_-]?key|api[_-]?token|token|secret|password|credential)\s*[:=]\s*[^,\s]+`)
+	managementMCPConfirmationAdminKeyPattern   = regexp.MustCompile(`\bahadm_[A-Za-z0-9._~+/=-]+`)
+	managementMCPConfirmationOpenAIKeyPattern  = regexp.MustCompile(`\bsk-[A-Za-z0-9._~+/=-]+`)
+	managementMCPConfirmationSecretReplacement = "[redacted]"
+)
 
 type managementMCPError struct {
 	Code    int                     `json:"code"`
@@ -944,13 +953,21 @@ func managementMCPWriteConfirmationForRequest(req managementMCPRequest) (managem
 	}
 	return managementMCPWriteConfirmationAuditContext{
 		ToolName: req.Params.Name,
-		Reason:   reason,
+		Reason:   redactManagementMCPConfirmationReasonForAudit(reason),
 	}, true, nil
 }
 
 func managementMCPWriteConfirmationFromContext(ctx context.Context) (managementMCPWriteConfirmationAuditContext, bool) {
 	confirmation, ok := ctx.Value(managementMCPWriteConfirmationContextKey{}).(managementMCPWriteConfirmationAuditContext)
 	return confirmation, ok
+}
+
+func redactManagementMCPConfirmationReasonForAudit(reason string) string {
+	redacted := managementMCPConfirmationBearerPattern.ReplaceAllString(reason, "Bearer "+managementMCPConfirmationSecretReplacement)
+	redacted = managementMCPConfirmationKeyValuePattern.ReplaceAllString(redacted, "$1="+managementMCPConfirmationSecretReplacement)
+	redacted = managementMCPConfirmationAdminKeyPattern.ReplaceAllString(redacted, "ahadm_"+managementMCPConfirmationSecretReplacement)
+	redacted = managementMCPConfirmationOpenAIKeyPattern.ReplaceAllString(redacted, "sk-"+managementMCPConfirmationSecretReplacement)
+	return redacted
 }
 
 func managementMCPToolRequiresConfirmation(name string) bool {

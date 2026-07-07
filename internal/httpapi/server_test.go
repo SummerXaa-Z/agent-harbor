@@ -7385,6 +7385,46 @@ func TestManagementMCPWriteToolsRequireConfirmation(t *testing.T) {
 	}
 }
 
+func TestManagementMCPWriteConfirmationAuditRedactsSecrets(t *testing.T) {
+	router := newRouterWithRepoAndAdminIdentities(store.NewMemory(), []httpapi.AdminIdentity{
+		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+	})
+
+	secretReason := "Operator approved with Bearer confirmation-secret, apiToken=console-secret, admin key ahadm_abc123secret."
+	confirmed := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "create-admin-secret-confirmation",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "create_admin_identity",
+			"arguments": map[string]any{
+				"actor":    "mcp-redacted",
+				"role":     "tenant_admin",
+				"tenantId": "tenant-east",
+				"confirmation": map[string]any{
+					"confirmed": true,
+					"reason":    secretReason,
+				},
+			},
+		},
+	}, "", "platform-key"))
+	if confirmed.Error != nil {
+		t.Fatalf("confirmed write tool should pass confirmation gate: %#v", confirmed.Error)
+	}
+
+	events := decodeData[[]auditEventResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/audit/events?action=admin_identity.created", nil, "", "platform-key"))
+	if len(events) != 1 {
+		t.Fatalf("expected one admin identity audit event, got %#v", events)
+	}
+	reason, ok := events[0].Metadata["managementMcpConfirmationReason"].(string)
+	if !ok || strings.Contains(reason, "confirmation-secret") ||
+		strings.Contains(reason, "console-secret") ||
+		strings.Contains(reason, "ahadm_abc123secret") ||
+		!strings.Contains(reason, "[redacted]") {
+		t.Fatalf("confirmation audit reason should redact secrets, got %#v", events[0].Metadata)
+	}
+}
+
 func TestManagementMCPApprovalReviewerQueueDefaultsToAuthenticatedReviewer(t *testing.T) {
 	repo := store.NewMemory()
 	now := time.Date(2026, 6, 6, 10, 50, 0, 0, time.UTC)

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Management MCP confirmation audit reasons now redact common bearer tokens, API tokens, admin keys, passwords, and secret key patterns before they are stored in mutation audit metadata.
+- Management MCP 写确认说明写入审计前现在会脱敏常见 Bearer token、API token、管理员 key、密码和 secret key 形态，避免误把凭据落入变更审计 metadata。
 - Management MCP confirmed write calls now stamp the existing mutation audit event with the invoked tool name and trimmed confirmation reason, giving operators a durable handoff trail without adding duplicate audit rows.
 - Management MCP 已确认的写调用现在会把被调用工具名和裁剪后的确认说明写入原有变更审计事件，为管理员保留可追溯的交接记录，同时避免重复审计行。
 - Management MCP write confirmations now cap `confirmation.reason` at 500 characters, rejecting oversized operator handoff text before write tools mutate state.

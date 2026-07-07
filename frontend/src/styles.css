@@ -2852,6 +2852,22 @@ button {
   white-space: nowrap;
 }
 
+.go-live-acceptance-report dd {
+  display: grid;
+  gap: 3px;
+  white-space: normal;
+}
+
+.go-live-acceptance-report-digest {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .go-live-acceptance-checks {
   display: grid;
   align-items: start;

@@ -101,6 +101,9 @@ export function GoLiveAcceptanceOverview({
   const matchingProductionReport = reportMatchesAcceptanceScope(productionReport, acceptanceInput, productionReadiness)
     ? productionReport
     : null;
+  const matchingProductionReportDigest = matchingProductionReport
+    ? formatProductionReportDigest(matchingProductionReport)
+    : null;
   const acceptanceCenter = buildProductionAcceptanceCenter({
     connectionStatus,
     liveDataAvailable,
@@ -242,10 +245,24 @@ export function GoLiveAcceptanceOverview({
               <div className="go-live-acceptance-report">
                 <dt>{t("productionAcceptance.report")}</dt>
                 <dd>
-                  {tx(t, "productionAcceptance.reportExportedBy", {
-                    actor: permissionEntityDisplayName(matchingProductionReport.generatedBy, t),
-                    date: formatDate(matchingProductionReport.generatedAt)
-                  })}
+                  <span>
+                    {tx(t, "productionAcceptance.reportExportedBy", {
+                      actor: permissionEntityDisplayName(matchingProductionReport.generatedBy, t),
+                      date: formatDate(matchingProductionReport.generatedAt)
+                    })}
+                  </span>
+                  {matchingProductionReportDigest ? (
+                    <span
+                      className="go-live-acceptance-report-digest"
+                      title={`${matchingProductionReportDigest.algorithm}: ${matchingProductionReportDigest.fullDigest}`}
+                      translate="no"
+                    >
+                      {tx(t, "productionAcceptance.reportDigest", {
+                        algorithm: matchingProductionReportDigest.algorithm,
+                        digest: matchingProductionReportDigest.digest
+                      })}
+                    </span>
+                  ) : null}
                 </dd>
               </div>
             ) : null}
@@ -268,6 +285,18 @@ function reportMatchesAcceptanceScope(
     report.scope.templateId === input.templateId &&
     report.scope.targetId === input.targetId &&
     report.scope.callerInstanceId === input.callerInstanceId;
+}
+
+function formatProductionReportDigest(report: PermissionPackageProductionEvidenceReport) {
+  const fullDigest = report.reportDigest.trim();
+  const digest = fullDigest.length > 24
+    ? `${fullDigest.slice(0, 12)}...${fullDigest.slice(-8)}`
+    : fullDigest;
+  return {
+    algorithm: report.reportDigestAlgorithm,
+    digest,
+    fullDigest
+  };
 }
 
 function renderProductionAcceptanceAction({

@@ -537,6 +537,10 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   assert.match(goLiveAcceptanceOverview, /productionReport/);
   assert.match(goLiveAcceptanceOverview, /reportMatchesAcceptanceScope/);
   assert.match(goLiveAcceptanceOverview, /productionAcceptance\.reportExportedBy/);
+  assert.match(goLiveAcceptanceOverview, /productionAcceptance\.reportDigest/);
+  assert.match(goLiveAcceptanceOverview, /formatProductionReportDigest\(matchingProductionReport\)/);
+  assert.match(goLiveAcceptanceOverview, /report\.reportDigestAlgorithm/);
+  assert.match(goLiveAcceptanceOverview, /report\.reportDigest/);
   assert.match(goLiveAcceptanceOverview, /const statusMessage = productionReadinessMessage === t\("message\.permissionProductionReadinessLoaded"\)/);
   assert.match(goLiveAcceptanceOverview, /statusMessage \? <p className="go-live-acceptance-message">\{statusMessage\}<\/p> : null/);
   assert.match(goLiveAcceptanceOverview, /const acceptanceReady = acceptanceCenter\.status === "ready"/);
@@ -547,10 +551,12 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   assert.match(i18n, /"section\.goLiveAcceptance": "上线检查"/);
   assert.match(i18n, /"productionAcceptance\.title": "上线检查"/);
   assert.match(i18n, /"productionAcceptance\.reportExportedBy": "报告由 \{actor\} 于 \{date\} 导出"/);
+  assert.match(i18n, /"productionAcceptance\.reportDigest": "\{algorithm\} 摘要 \{digest\}"/);
   assert.match(i18n, /"empty\.evidenceRuns\.detail": "历史自检运行会在这里保留；当前权限变更请以上方上线检查状态为准。"/);
   assert.match(styles, /\.go-live-acceptance\s*\{/);
   assert.match(styles, /\.go-live-acceptance-decision\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
   assert.match(styles, /\.go-live-acceptance-blockers\s*\{/);
+  assert.match(styles, /\.go-live-acceptance-report-digest\s*\{/);
   assert.match(styles, /\.go-live-acceptance-context dl\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(styles, /\.go-live-step-list\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
 });

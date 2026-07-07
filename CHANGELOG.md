@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: The go-live status workspace now shows the exported report digest next to the authenticated exporter for handoff verification.
+- 2026-07-08：上线状态页现在会在认证导出人旁显示已导出报告摘要，便于交接复核。
 - 2026-07-08: Export success messaging now names the authenticated admin who generated the go-live status report.
 - 2026-07-08：上线状态报告导出成功提示现在会显示生成报告的认证管理员。
 - 2026-07-08: The go-live check UI now shows the matching exported report's authenticated exporter and export time after a report download.

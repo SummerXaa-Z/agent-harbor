@@ -160,6 +160,15 @@ type managementMCPApprovalResolutionArgs struct {
 	Comment  string `json:"comment"`
 }
 
+type managementMCPWriteConfirmation struct {
+	Confirmed bool   `json:"confirmed"`
+	Reason    string `json:"reason"`
+}
+
+type managementMCPWriteConfirmationArgs struct {
+	Confirmation managementMCPWriteConfirmation `json:"confirmation"`
+}
+
 type managementMCPAccessProfileArgs struct {
 	TenantID         string `json:"tenantId"`
 	WorkspaceID      string `json:"workspaceId"`
@@ -259,6 +268,9 @@ func managementMCPRequestFromHTTP(r *http.Request) (managementMCPRequest, error)
 }
 
 func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest) (managementMCPCallResult, error) {
+	if err := requireManagementMCPWriteConfirmation(req); err != nil {
+		return managementMCPCallResult{}, err
+	}
 	switch req.Params.Name {
 	case "list_admin_identities":
 		rows, err := s.adminIdentityRowsForPlatform(r)
@@ -836,6 +848,13 @@ func managementMCPToolsWithLifecycle(tools []managementMCPTool) []managementMCPT
 }
 
 func managementMCPToolsWithExecution(tools []managementMCPTool) []managementMCPTool {
+	for i := range tools {
+		tools[i].Execution = managementMCPToolExecutionForName(tools[i].Name)
+	}
+	return tools
+}
+
+func managementMCPToolExecutionForName(name string) managementMCPToolExecution {
 	executionByName := map[string]managementMCPToolExecution{
 		"create_admin_identity": {
 			Idempotency:          "not_idempotent",
@@ -881,14 +900,25 @@ func managementMCPToolsWithExecution(tools []managementMCPTool) []managementMCPT
 			AuditResourceType:    "permission_package_approval_request",
 		},
 	}
-	for i := range tools {
-		if execution, ok := executionByName[tools[i].Name]; ok {
-			tools[i].Execution = execution
-			continue
-		}
-		tools[i].Execution = managementMCPToolExecution{Idempotency: "safe_repeat"}
+	if execution, ok := executionByName[name]; ok {
+		return execution
 	}
-	return tools
+	return managementMCPToolExecution{Idempotency: "safe_repeat"}
+}
+
+func requireManagementMCPWriteConfirmation(req managementMCPRequest) error {
+	execution := managementMCPToolExecutionForName(req.Params.Name)
+	if !execution.ConfirmationRequired {
+		return nil
+	}
+	var args managementMCPWriteConfirmationArgs
+	if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+		return domain.BadRequest("VALIDATION_FAILED", "arguments must include confirmation for this write tool")
+	}
+	if !args.Confirmation.Confirmed || strings.TrimSpace(args.Confirmation.Reason) == "" {
+		return domain.BadRequest("VALIDATION_FAILED", "confirmation.confirmed must be true and confirmation.reason is required for this write tool")
+	}
+	return nil
 }
 
 func permissionPackageApplicationFilterFromMCPArgs(args managementMCPPermissionPackageApplicationArgs) (store.PermissionPackageApplicationFilter, error) {
@@ -1449,12 +1479,29 @@ func decodeManagementMCPArguments[T any](raw json.RawMessage) (T, error) {
 	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
 		raw = []byte("{}")
 	}
+	raw = managementMCPArgumentsWithoutConfirmation(raw)
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&out); err != nil {
 		return out, domain.BadRequest("VALIDATION_FAILED", "tool arguments are invalid: "+err.Error())
 	}
 	return out, nil
+}
+
+func managementMCPArgumentsWithoutConfirmation(raw json.RawMessage) json.RawMessage {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return raw
+	}
+	if _, ok := fields["confirmation"]; !ok {
+		return raw
+	}
+	delete(fields, "confirmation")
+	stripped, err := json.Marshal(fields)
+	if err != nil {
+		return raw
+	}
+	return stripped
 }
 
 func managementMCPResult(data any) managementMCPCallResult {

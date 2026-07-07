@@ -216,6 +216,49 @@ elif kind == "mcp-explain-access-decision":
             },
         },
     }
+elif kind == "mcp-permission-package-write":
+    tool, confirmation_mode, caller_id, region, request_text, subject_selector, target_id, template_id, tenant_id, workspace_id = sys.argv[2:12]
+    arguments = {
+        "callerInstanceId": caller_id,
+        "region": region,
+        "requestText": request_text,
+        "subjectSelector": subject_selector,
+        "targetId": target_id,
+        "templateId": template_id,
+        "tenantId": tenant_id,
+        "workspaceId": workspace_id,
+    }
+    if len(sys.argv) > 12 and sys.argv[12]:
+        arguments["approvalRequestId"] = sys.argv[12]
+    if confirmation_mode == "confirmed":
+        arguments["confirmation"] = {
+            "confirmed": True,
+            "reason": f"Scenario confirmed Management MCP write for {tool}.",
+        }
+    elif confirmation_mode != "missing":
+        raise SystemExit(f"unknown confirmation mode: {confirmation_mode}")
+    body = {
+        "jsonrpc": "2.0",
+        "id": f"call-{tool}",
+        "method": "tools/call",
+        "params": {"name": tool, "arguments": arguments},
+    }
+elif kind == "mcp-approval-resolution-write":
+    tool, approval_request_id, reviewer, comment, confirmation_mode = sys.argv[2:7]
+    arguments = {"id": approval_request_id, "reviewer": reviewer, "comment": comment}
+    if confirmation_mode == "confirmed":
+        arguments["confirmation"] = {
+            "confirmed": True,
+            "reason": f"Scenario confirmed Management MCP write for {tool}.",
+        }
+    elif confirmation_mode != "missing":
+        raise SystemExit(f"unknown confirmation mode: {confirmation_mode}")
+    body = {
+        "jsonrpc": "2.0",
+        "id": f"call-{tool}",
+        "method": "tools/call",
+        "params": {"name": tool, "arguments": arguments},
+    }
 elif kind == "tools-call":
     tool = sys.argv[2]
     body = {
@@ -249,6 +292,22 @@ mcp_explain_permission_package_body() {
 mcp_explain_access_decision_body() {
   local capability_id="$1"
   json_body mcp-explain-access-decision "$CALLER_ID" "$capability_id" "$SUBJECT_ID" "$TARGET_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID"
+}
+
+mcp_permission_package_write_body() {
+  local tool="$1"
+  local confirmation="${2:-confirmed}"
+  local approval_request_id="${3:-}"
+  json_body mcp-permission-package-write "$tool" "$confirmation" "$CALLER_ID" "$REGION" "$REQUEST_TEXT" "$SUBJECT_SELECTOR" "$TARGET_ID" "$TEMPLATE_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID" "$approval_request_id"
+}
+
+mcp_approval_resolution_write_body() {
+  local tool="$1"
+  local approval_request_id="$2"
+  local reviewer="$3"
+  local comment="$4"
+  local confirmation="${5:-confirmed}"
+  json_body mcp-approval-resolution-write "$tool" "$approval_request_id" "$reviewer" "$comment" "$confirmation"
 }
 
 production_readiness_path() {
@@ -416,6 +475,57 @@ print(f"management MCP access explanation verified: {expected_outcome}")
 PY
 }
 
+assert_mcp_tool_error() {
+  local expected_app_code="$1"
+  local expected_text="$2"
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_app_code" "$expected_text" <<'PY'
+import json
+import os
+import sys
+
+expected_app_code, expected_text = sys.argv[1:3]
+doc = json.loads(os.environ["RESPONSE_BODY"])
+error = doc.get("error") or {}
+data = error.get("data") or {}
+if doc.get("result") is not None:
+    raise SystemExit(f"expected JSON-RPC error, got result: {doc}")
+if data.get("appCode") != expected_app_code:
+    raise SystemExit(f"JSON-RPC appCode={data.get('appCode')!r} want {expected_app_code!r}: {doc}")
+if expected_text not in error.get("message", ""):
+    raise SystemExit(f"JSON-RPC message missing {expected_text!r}: {doc}")
+print(f"management MCP tool error verified: {expected_app_code}")
+PY
+}
+
+assert_mcp_approval_request() {
+  local expected_status="$1"
+  local expected_id="${2:-}"
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_status" "$expected_id" "$WRITE_TOOL" <<'PY'
+import json
+import os
+import sys
+
+expected_status, expected_id, write_tool = sys.argv[1:4]
+doc = json.loads(os.environ["RESPONSE_BODY"])
+approval = (doc.get("result") or {}).get("structuredContent")
+if not isinstance(approval, dict):
+    raise SystemExit(f"missing structuredContent approval request: {doc}")
+if expected_id and approval.get("id") != expected_id:
+    raise SystemExit(f"approval id={approval.get('id')!r} want {expected_id!r}")
+if approval.get("status") != expected_status:
+    raise SystemExit(f"approval status={approval.get('status')!r} want {expected_status!r}: {approval}")
+if approval.get("templateId") != "support-ticket-triage" or approval.get("templateVersion") != 1:
+    raise SystemExit(f"unexpected approval template: {approval}")
+if write_tool not in approval.get("allowedCapabilityKeys", []):
+    raise SystemExit(f"approval missing write tool {write_tool!r}: {approval.get('allowedCapabilityKeys')}")
+if (approval.get("policyGate") or {}).get("decision") != "approval_required":
+    raise SystemExit(f"approval missing policy gate snapshot: {approval.get('policyGate')}")
+if not approval.get("expiresAt"):
+    raise SystemExit(f"approval request should include expiresAt: {approval}")
+print(f"management MCP approval request {expected_status} verified")
+PY
+}
+
 assert_management_mcp_tool_safety() {
   RESPONSE_BODY="$HTTP_BODY" python3 <<'PY'
 import json
@@ -504,6 +614,8 @@ for name, tool in tools_by_name.items():
         raise SystemExit(f"management MCP tool {name!r} has incomplete execution metadata: {execution!r}")
     if execution.get("confirmationRequired") not in (True, False):
         raise SystemExit(f"management MCP tool {name!r} execution missing confirmationRequired: {execution!r}")
+    if safety.get("mutatesState") is True and execution.get("confirmationRequired") is not True:
+        raise SystemExit(f"management MCP write tool {name!r} must require confirmation: {execution!r}")
     if execution.get("idempotency") == "not_idempotent" and not execution.get("confirmationRequired"):
         raise SystemExit(f"management MCP tool {name!r} non-idempotent execution must require confirmation: {execution!r}")
 print("management MCP tool catalog metadata verified")
@@ -683,6 +795,18 @@ if not rows:
 if rows[0]["id"] != expected_id or rows[0]["status"] != expected_status:
     raise SystemExit(f"unexpected listed approval request: {rows[:1]}")
 print("approval request list verified")
+PY
+}
+
+assert_empty_approval_list() {
+  RESPONSE_BODY="$HTTP_BODY" python3 <<'PY'
+import json
+import os
+
+rows = json.loads(os.environ["RESPONSE_BODY"])["data"]
+if rows:
+    raise SystemExit(f"expected no approval requests, got {rows}")
+print("approval request list is empty")
 PY
 }
 
@@ -1175,14 +1299,22 @@ request POST "/api/v1/permission-packages:apply" "$(permission_package_body)"
 expect_status 400 "reject approval-required package without approval"
 echo "direct apply without approval rejected"
 
-request POST "/api/v1/permission-packages/approval-requests" "$(permission_package_body)"
-expect_status 201 "create withdrawable approval request"
-assert_approval_request "pending"
-WITHDRAWN_APPROVAL_REQUEST_ID="$(json_get data.id)"
+request POST "/api/v1/management/mcp" "$(mcp_permission_package_write_body create_permission_package_approval_request missing)"
+expect_status 200 "reject management MCP approval request without write confirmation"
+assert_mcp_tool_error "VALIDATION_FAILED" "confirmation.confirmed"
 
-request POST "/api/v1/permission-packages/approval-requests/$WITHDRAWN_APPROVAL_REQUEST_ID/withdraw" "$(json_body approval-resolution "$REQUESTER_ACTOR" "wrong scope for this request")"
-expect_status 200 "withdraw pending approval request"
-assert_approval_request "withdrawn" "$WITHDRAWN_APPROVAL_REQUEST_ID"
+request GET "/api/v1/permission-packages/approval-requests?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID&templateId=$TEMPLATE_ID&targetId=$TARGET_ID&callerInstanceId=$CALLER_ID&status=pending&limit=1"
+expect_status 200 "list approvals after rejected management MCP write"
+assert_empty_approval_list
+
+request POST "/api/v1/management/mcp" "$(mcp_permission_package_write_body create_permission_package_approval_request confirmed)"
+expect_status 200 "create withdrawable approval request through management MCP"
+assert_mcp_approval_request "pending"
+WITHDRAWN_APPROVAL_REQUEST_ID="$(json_get result.structuredContent.id)"
+
+request POST "/api/v1/management/mcp" "$(mcp_approval_resolution_write_body withdraw_permission_package_approval_request "$WITHDRAWN_APPROVAL_REQUEST_ID" "$REQUESTER_ACTOR" "wrong scope for this request")"
+expect_status 200 "withdraw pending approval request through management MCP"
+assert_mcp_approval_request "withdrawn" "$WITHDRAWN_APPROVAL_REQUEST_ID"
 
 request GET "/api/v1/permission-packages/approval-requests?tenantId=$ROOT_TENANT_ID&workspaceId=$WORKSPACE_ID&templateId=$TEMPLATE_ID&targetId=$TARGET_ID&callerInstanceId=$CALLER_ID&status=withdrawn&limit=1"
 expect_status 200 "list withdrawn approval request"

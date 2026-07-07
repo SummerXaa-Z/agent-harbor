@@ -1510,7 +1510,7 @@ func TestManagementMCPAdminIdentityTools(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "create_admin_identity",
-			"arguments": map[string]any{"actor": "mcp-east", "role": "tenant_admin", "tenantId": "tenant-east"},
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{"actor": "mcp-east", "role": "tenant_admin", "tenantId": "tenant-east"}),
 		},
 	}, "", "platform-key"))
 	var created createAdminIdentityResponse
@@ -1527,7 +1527,7 @@ func TestManagementMCPAdminIdentityTools(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "rotate_admin_identity_key",
-			"arguments": map[string]any{"id": created.Identity.ID},
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{"id": created.Identity.ID}),
 		},
 	}, "", "platform-key"))
 	var rotated rotateAdminIdentityKeyResponse
@@ -1544,7 +1544,7 @@ func TestManagementMCPAdminIdentityTools(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "disable_admin_identity",
-			"arguments": map[string]any{"id": created.Identity.ID},
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{"id": created.Identity.ID}),
 		},
 	}, "", "platform-key"))
 	var disabled adminIdentityResponse
@@ -1561,7 +1561,7 @@ func TestManagementMCPAdminIdentityTools(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "rotate_admin_identity_key",
-			"arguments": map[string]any{"id": created.Identity.ID},
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{"id": created.Identity.ID}),
 		},
 	}, "", "platform-key")
 	if rotateDisabled.Code != http.StatusOK {
@@ -1583,7 +1583,7 @@ func TestManagementMCPAdminIdentityTools(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "disable_admin_identity",
-			"arguments": map[string]any{"id": created.Identity.ID},
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{"id": created.Identity.ID}),
 		},
 	}, "", "platform-key")
 	if disableAgain.Code != http.StatusOK {
@@ -6407,9 +6407,9 @@ func TestScopedAdminCannotResolveDirtyPermissionPackageApprovalRequest(t *testin
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name": "approve_permission_package_approval_request",
-			"arguments": map[string]any{
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{
 				"id": approval.ID,
-			},
+			}),
 		},
 	}, "", "support-key")
 	var envelope mcpEnvelopeResponse
@@ -6475,9 +6475,9 @@ func TestApprovalResolutionRequiresExistingApprovalResources(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name": "approve_permission_package_approval_request",
-			"arguments": map[string]any{
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{
 				"id": approval.ID,
-			},
+			}),
 		},
 	}, "", "support-key")
 	var envelope mcpEnvelopeResponse
@@ -6521,10 +6521,10 @@ func TestApprovalResolutionRejectsExpiredApprovalRequest(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name": "reject_permission_package_approval_request",
-			"arguments": map[string]any{
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{
 				"id":      approval.ID,
 				"comment": "expired",
-			},
+			}),
 		},
 	}, "", "security-key")
 	var envelope mcpEnvelopeResponse
@@ -7219,10 +7219,10 @@ func TestManagementMCPApprovalReviewerUsesAuthenticatedAdminIdentity(t *testing.
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name": "approve_permission_package_approval_request",
-			"arguments": map[string]any{
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{
 				"id":       eastSupport.ID,
 				"reviewer": "security",
-			},
+			}),
 		},
 	}, "", "requester-key")
 	var impersonatedApproveEnvelope mcpEnvelopeResponse
@@ -7246,10 +7246,10 @@ func TestManagementMCPApprovalReviewerUsesAuthenticatedAdminIdentity(t *testing.
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name": "approve_permission_package_approval_request",
-			"arguments": map[string]any{
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{
 				"reviewer": "security",
 				"id":       eastSupport.ID,
-			},
+			}),
 		},
 	}, "", "security-key"))
 	var approved permissionPackageApprovalRequestResponse
@@ -7258,6 +7258,92 @@ func TestManagementMCPApprovalReviewerUsesAuthenticatedAdminIdentity(t *testing.
 	}
 	if approved.Status != "approved" || approved.ReviewedBy != "security" {
 		t.Fatalf("authenticated MCP reviewer should approve as themselves, got %#v", approved)
+	}
+}
+
+func TestManagementMCPWriteToolsRequireConfirmation(t *testing.T) {
+	router := newRouterWithRepoAndAdminIdentities(store.NewMemory(), []httpapi.AdminIdentity{
+		{Actor: "platform", Key: "platform-key", Role: "platform_admin"},
+	})
+
+	read := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "read-admins",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "list_admin_identities",
+			"arguments": map[string]any{},
+		},
+	}, "", "platform-key"))
+	if read.Error != nil {
+		t.Fatalf("read-only management MCP tool should not require write confirmation: %#v", read.Error)
+	}
+
+	missing := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "create-admin-missing-confirmation",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "create_admin_identity",
+			"arguments": map[string]any{"actor": "mcp-east", "role": "tenant_admin", "tenantId": "tenant-east"},
+		},
+	}, "", "platform-key")
+	var missingEnvelope mcpEnvelopeResponse
+	if err := json.Unmarshal(missing.Body.Bytes(), &missingEnvelope); err != nil {
+		t.Fatalf("decode missing confirmation MCP response: %v body=%s", err, missing.Body.String())
+	}
+	if missingEnvelope.Error == nil || missingEnvelope.Error.Data == nil ||
+		missingEnvelope.Error.Data.AppCode != "VALIDATION_FAILED" ||
+		!strings.Contains(missingEnvelope.Error.Message, "confirmation.confirmed") {
+		t.Fatalf("write tool without confirmation should fail validation, got %#v body=%s", missingEnvelope, missing.Body.String())
+	}
+
+	blankReason := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "create-admin-blank-confirmation-reason",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "create_admin_identity",
+			"arguments": map[string]any{
+				"actor":    "mcp-blank-reason",
+				"role":     "tenant_admin",
+				"tenantId": "tenant-east",
+				"confirmation": map[string]any{
+					"confirmed": true,
+					"reason":    "   ",
+				},
+			},
+		},
+	}, "", "platform-key")
+	var blankReasonEnvelope mcpEnvelopeResponse
+	if err := json.Unmarshal(blankReason.Body.Bytes(), &blankReasonEnvelope); err != nil {
+		t.Fatalf("decode blank confirmation reason MCP response: %v body=%s", err, blankReason.Body.String())
+	}
+	if blankReasonEnvelope.Error == nil || blankReasonEnvelope.Error.Data == nil ||
+		blankReasonEnvelope.Error.Data.AppCode != "VALIDATION_FAILED" ||
+		!strings.Contains(blankReasonEnvelope.Error.Message, "confirmation.reason") {
+		t.Fatalf("write tool with blank confirmation reason should fail validation, got %#v body=%s", blankReasonEnvelope, blankReason.Body.String())
+	}
+
+	confirmed := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "create-admin-confirmed",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "create_admin_identity",
+			"arguments": map[string]any{
+				"actor":    "mcp-east",
+				"role":     "tenant_admin",
+				"tenantId": "tenant-east",
+				"confirmation": map[string]any{
+					"confirmed": true,
+					"reason":    "Create scoped tenant admin for the MCP write gate test.",
+				},
+			},
+		},
+	}, "", "platform-key"))
+	if confirmed.Error != nil {
+		t.Fatalf("confirmed write tool should pass confirmation gate: %#v", confirmed.Error)
 	}
 }
 
@@ -7455,10 +7541,10 @@ func TestManagementMCPPermissionPackageApprovalReviewerRouting(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name": "approve_permission_package_approval_request",
-			"arguments": map[string]any{
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{
 				"id":       eastSupport.ID,
 				"reviewer": "security-west",
-			},
+			}),
 		},
 	}, "")
 	var unauthorizedEnvelope mcpEnvelopeResponse
@@ -7475,11 +7561,11 @@ func TestManagementMCPPermissionPackageApprovalReviewerRouting(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name": "approve_permission_package_approval_request",
-			"arguments": map[string]any{
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{
 				"id":       eastSupport.ID,
 				"reviewer": "security-east",
 				"comment":  "approved through routed MCP queue",
-			},
+			}),
 		},
 	}, ""))
 	var approved permissionPackageApprovalRequestResponse
@@ -7715,7 +7801,7 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "apply_permission_package",
-			"arguments": args,
+			"arguments": withManagementMCPWriteConfirmation(args),
 		},
 	}, ""))
 	var applied permissionPackageApplyResponse
@@ -7894,7 +7980,7 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "create_permission_package_approval_request",
-			"arguments": args,
+			"arguments": withManagementMCPWriteConfirmation(args),
 		},
 	}, ""))
 	var approval permissionPackageApprovalRequestResponse
@@ -7911,7 +7997,7 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "create_permission_package_approval_request",
-			"arguments": args,
+			"arguments": withManagementMCPWriteConfirmation(args),
 		},
 	}, "")
 	if duplicateCreateCall.Code != http.StatusOK {
@@ -7963,7 +8049,7 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "create_permission_package_approval_request",
-			"arguments": withdrawArgs,
+			"arguments": withManagementMCPWriteConfirmation(withdrawArgs),
 		},
 	}, ""))
 	var withdrawApproval permissionPackageApprovalRequestResponse
@@ -7976,10 +8062,10 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name": "withdraw_permission_package_approval_request",
-			"arguments": map[string]any{
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{
 				"id":      withdrawApproval.ID,
 				"comment": "replaced by narrower request",
-			},
+			}),
 		},
 	}, ""))
 	var withdrawn permissionPackageApprovalRequestResponse
@@ -7996,11 +8082,11 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name": "approve_permission_package_approval_request",
-			"arguments": map[string]any{
+			"arguments": withManagementMCPWriteConfirmation(map[string]any{
 				"id":       approval.ID,
 				"reviewer": "security",
 				"comment":  "approved via MCP",
-			},
+			}),
 		},
 	}, ""))
 	var approved permissionPackageApprovalRequestResponse
@@ -8053,7 +8139,7 @@ func TestManagementMCPPermissionPackageApprovalRequestFlow(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "apply_permission_package",
-			"arguments": applyArgs,
+			"arguments": withManagementMCPWriteConfirmation(applyArgs),
 		},
 	}, ""))
 	var applied permissionPackageApplyResponse
@@ -8329,7 +8415,7 @@ func TestManagementMCPExplainAccessDecision(t *testing.T) {
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "apply_permission_package",
-			"arguments": packageArgs,
+			"arguments": withManagementMCPWriteConfirmation(packageArgs),
 		},
 	}, ""))
 
@@ -8926,6 +9012,18 @@ func mcpToolNamesContain(tools []mcpToolResponse, name string) bool {
 		}
 	}
 	return false
+}
+
+func withManagementMCPWriteConfirmation(args map[string]any) map[string]any {
+	confirmed := make(map[string]any, len(args)+1)
+	for key, value := range args {
+		confirmed[key] = value
+	}
+	confirmed["confirmation"] = map[string]any{
+		"confirmed": true,
+		"reason":    "Confirmed by automated test for a state-changing Management MCP call.",
+	}
+	return confirmed
 }
 
 func assertMCPToolSafety(t *testing.T, tools []mcpToolResponse, name string, want mcpToolSafety) {

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Management MCP write tools that advertise `execution.confirmationRequired` now reject tool calls unless arguments include `confirmation.confirmed=true` and a non-empty `confirmation.reason`.
+- 标记了 `execution.confirmationRequired` 的 Management MCP 写工具现在会在服务端强制校验确认信息；调用参数必须包含 `confirmation.confirmed=true` 和非空 `confirmation.reason`。
 - Management MCP `tools/list` now returns `execution` metadata for every tool, including idempotency, confirmation, preflight, audit-resource, and one-time-secret hints for admin-agent callers.
 - Management MCP 的 `tools/list` 现在会为每个工具返回 `execution` 元数据，包括幂等性、确认要求、前置预检、审计资源和一次性密钥提示，便于管理 Agent 安全调用。
 - Management MCP `tools/list` now returns `lifecycle` metadata for every tool, including machine-readable compatibility-alias status and preferred tool names for legacy aliases.

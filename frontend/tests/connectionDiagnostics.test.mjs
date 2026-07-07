@@ -5,7 +5,8 @@ import {
   buildConnectionDiagnosticRows,
   connectionDiagnosticDetail,
   connectionDiagnosticsSummaryStatus,
-  managementMcpCatalogDiagnosticFromResult
+  managementMcpCatalogDiagnosticFromResult,
+  requiredManagementMcpToolNames
 } from "../src/connectionDiagnostics.ts";
 
 const catalogTool = {
@@ -13,6 +14,10 @@ const catalogTool = {
   name: "draft_permission_package",
   safety: { approvalMode: "none", mutatesState: false, operationType: "preview", readOnly: true }
 };
+
+function catalogToolNamed(name) {
+  return { ...catalogTool, name };
+}
 
 test("connection diagnostics reports ready when session, API, live data, and MCP are ready", () => {
   const rows = buildConnectionDiagnosticRows({
@@ -158,15 +163,40 @@ test("connection diagnostics blocks missing management MCP catalog metadata", ()
 });
 
 test("management MCP catalog diagnostic accepts versioned safety and access metadata", () => {
+  const catalogTools = requiredManagementMcpToolNames.map(catalogToolNamed);
+
   assert.deepEqual(
-    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 1, tools: [catalogTool] }),
-    { metadataVersion: 1, status: "ok", toolsWithAccess: 1, toolsWithSafety: 1 }
+    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 1, tools: catalogTools }),
+    { metadataVersion: 1, status: "ok", toolsWithAccess: catalogTools.length, toolsWithSafety: catalogTools.length }
   );
+});
+
+test("management MCP catalog diagnostic requires the preferred production report tool", () => {
+  const legacyOnlyTools = requiredManagementMcpToolNames
+    .filter((name) => name !== "export_permission_package_production_report")
+    .concat("export_permission_package_production_evidence")
+    .map(catalogToolNamed);
+  const diagnostic = managementMcpCatalogDiagnosticFromResult({ metadataVersion: 1, tools: legacyOnlyTools });
+
+  assert.equal(diagnostic.status, "error");
+  assert.deepEqual(diagnostic.missingRequiredTools, ["export_permission_package_production_report"]);
+
+  const rows = buildConnectionDiagnosticRows({
+    apiHealth: { status: "ok", message: "ok" },
+    liveDataLoaded: true,
+    loadError: "",
+    mcpCatalog: diagnostic,
+    mcpHealth: { status: "ok", message: "ok" },
+    session: { actor: "admin-key", authenticated: true, requiresLogin: true }
+  });
+  const mcpCatalogRow = rows.find((row) => row.key === "mcpCatalog");
+  assert.equal(mcpCatalogRow?.detailKey, "connectionDiagnostics.mcpCatalog.missingTools");
+  assert.equal(mcpCatalogRow?.detailParams, undefined);
 });
 
 test("management MCP catalog diagnostic flags incomplete or unknown metadata contracts", () => {
   assert.deepEqual(
-    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 2, tools: [catalogTool] }),
+    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 2, tools: requiredManagementMcpToolNames.map(catalogToolNamed) }),
     { metadataVersion: 2, status: "warning" }
   );
   assert.equal(

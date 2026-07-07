@@ -9,6 +9,7 @@ export type ConnectionDiagnosticStatus = "ok" | "warning" | "error";
 export interface ManagementMcpCatalogDiagnostic {
   metadataVersion?: number;
   message?: string;
+  missingRequiredTools?: string[];
   status: ConnectionDiagnosticStatus;
   toolsWithAccess?: number;
   toolsWithSafety?: number;
@@ -33,6 +34,26 @@ export interface ManagementMcpToolsListResult {
   metadataVersion?: number;
   tools?: ManagementMcpCatalogTool[];
 }
+
+export const requiredManagementMcpToolNames = [
+  "list_permission_package_templates",
+  "draft_permission_package",
+  "preflight_permission_package",
+  "apply_permission_package",
+  "create_permission_package_approval_request",
+  "list_permission_package_approval_requests",
+  "approve_permission_package_approval_request",
+  "reject_permission_package_approval_request",
+  "withdraw_permission_package_approval_request",
+  "list_permission_package_applications",
+  "check_permission_package_production_readiness",
+  "export_permission_package_production_report",
+  "explain_permission_package_draft",
+  "explain_access_decision",
+  "get_tenant_access_profile",
+  "list_agents",
+  "list_capabilities"
+] as const;
 
 export interface ConnectionDiagnosticRow {
   key: ConnectionDiagnosticKey;
@@ -96,6 +117,17 @@ export function managementMcpCatalogDiagnosticFromResult(
     return {
       metadataVersion: result.metadataVersion,
       message: `catalog metadata incomplete: safety ${toolsWithSafety}/${tools.length}, access ${toolsWithAccess}/${tools.length}`,
+      status: "error",
+      toolsWithAccess,
+      toolsWithSafety
+    };
+  }
+  const toolNames = new Set(tools.map((tool) => tool.name).filter((name): name is string => Boolean(name)));
+  const missingRequiredTools = requiredManagementMcpToolNames.filter((name) => !toolNames.has(name));
+  if (missingRequiredTools.length > 0) {
+    return {
+      metadataVersion: result.metadataVersion,
+      missingRequiredTools,
       status: "error",
       toolsWithAccess,
       toolsWithSafety
@@ -270,6 +302,14 @@ function mcpCatalogDiagnosticRow(catalog: ManagementMcpCatalogDiagnostic): Conne
       detailParams: { version: catalog.metadataVersion ?? "unknown" },
       key: "mcpCatalog",
       status: "warning",
+      titleKey: "connectionDiagnostics.mcpCatalog.title"
+    };
+  }
+  if (catalog.missingRequiredTools?.length) {
+    return {
+      detailKey: "connectionDiagnostics.mcpCatalog.missingTools",
+      key: "mcpCatalog",
+      status: "error",
       titleKey: "connectionDiagnostics.mcpCatalog.title"
     };
   }

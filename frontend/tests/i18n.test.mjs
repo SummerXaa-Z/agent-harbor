@@ -77,6 +77,10 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("connectionDiagnostics.mcp.error"), "Tool service check failed: {detail}");
   assert.equal(t("connectionDiagnostics.mcpCatalog.title"), "Management tool catalog");
   assert.equal(
+    t("connectionDiagnostics.mcpCatalog.missingTools"),
+    "Management tool catalog is missing required permission-change tools. Upgrade the AgentHarbor API before continuing."
+  );
+  assert.equal(
     t("connectionDiagnostics.mcpCatalog.versionWarning"),
     "Management tool catalog metadata v{version} needs compatibility review before automated writes."
   );
@@ -487,6 +491,10 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("connectionDiagnostics.session.title"), "控制台会话");
   assert.equal(t("connectionDiagnostics.mcp.error"), "工具服务检查失败：{detail}");
   assert.equal(t("connectionDiagnostics.mcpCatalog.title"), "管理工具目录");
+  assert.equal(
+    t("connectionDiagnostics.mcpCatalog.missingTools"),
+    "管理工具目录缺少权限变更所需工具。请先升级 AgentHarbor API，再继续操作。"
+  );
   assert.equal(t("connectionDiagnostics.mcpCatalog.error"), "管理工具目录检查失败：{detail}");
   assert.equal(t("readiness.aiAdmin.mockMcp.title"), "工具服务连接");
   assert.equal(t("readiness.aiAdmin.subjectHeader.title"), "浏览器身份可用");

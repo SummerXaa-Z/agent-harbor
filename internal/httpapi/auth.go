@@ -355,12 +355,9 @@ func (s *Server) consoleLoginRetryAfterSeconds(r *http.Request) int {
 	if s.loginFailures == nil {
 		return 0
 	}
+	pruneConsoleLoginFailuresLocked(s.loginFailures, now)
 	failure, ok := s.loginFailures[key]
 	if !ok {
-		return 0
-	}
-	if !failure.WindowEnds.After(now) {
-		delete(s.loginFailures, key)
 		return 0
 	}
 	if failure.Count >= consoleLoginMaxFailures {
@@ -377,12 +374,21 @@ func (s *Server) recordConsoleLoginFailure(r *http.Request) {
 	if s.loginFailures == nil {
 		s.loginFailures = map[string]consoleLoginFailure{}
 	}
+	pruneConsoleLoginFailuresLocked(s.loginFailures, now)
 	failure := s.loginFailures[key]
 	if !failure.WindowEnds.After(now) {
 		failure = consoleLoginFailure{WindowEnds: now.Add(consoleLoginFailureWindow)}
 	}
 	failure.Count++
 	s.loginFailures[key] = failure
+}
+
+func pruneConsoleLoginFailuresLocked(failures map[string]consoleLoginFailure, now time.Time) {
+	for key, failure := range failures {
+		if !failure.WindowEnds.After(now) {
+			delete(failures, key)
+		}
+	}
 }
 
 func (s *Server) clearConsoleLoginFailures(r *http.Request) {

@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: Console login rate limiting now prunes expired failed-login client windows during new checks and writes, preventing stale entries from accumulating in long-running processes.
+- 2026-07-08：控制台登录限流现在会在新的检查和写入时清理已过期的失败登录来源窗口，避免长期运行进程积累陈旧记录。
 - 2026-07-08: Browser console cookie sessions now require CSRF protection for future PUT management writes as well as existing POST, PATCH, and DELETE writes.
 - 2026-07-08：浏览器控制台 Cookie 会话现在会对未来的 PUT 管理写操作同样要求 CSRF 防护，并继续覆盖已有 POST、PATCH 和 DELETE 写操作。
 - Release scenario port-collision failures now print the listener PID and command for occupied API, MCP, and frontend ports, including the Makefile-hosted approval gate and tenant permission center scenario, so unattended `make release-check` runs are easier to recover without guessing which local process is blocking the gate.

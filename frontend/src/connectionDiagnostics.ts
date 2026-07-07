@@ -36,6 +36,10 @@ export interface ManagementMcpToolsListResult {
 }
 
 export const requiredManagementMcpToolNames = [
+  "list_admin_identities",
+  "create_admin_identity",
+  "rotate_admin_identity_key",
+  "disable_admin_identity",
   "list_permission_package_templates",
   "draft_permission_package",
   "preflight_permission_package",

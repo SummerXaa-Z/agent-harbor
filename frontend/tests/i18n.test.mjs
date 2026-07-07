@@ -78,7 +78,7 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("connectionDiagnostics.mcpCatalog.title"), "Management tool catalog");
   assert.equal(
     t("connectionDiagnostics.mcpCatalog.missingTools"),
-    "Management tool catalog is missing required permission-change tools. Upgrade the AgentHarbor API before continuing."
+    "Management tool catalog is missing required automation tools. Upgrade the AgentHarbor API before continuing."
   );
   assert.equal(
     t("connectionDiagnostics.mcpCatalog.versionWarning"),
@@ -493,7 +493,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("connectionDiagnostics.mcpCatalog.title"), "管理工具目录");
   assert.equal(
     t("connectionDiagnostics.mcpCatalog.missingTools"),
-    "管理工具目录缺少权限变更所需工具。请先升级 AgentHarbor API，再继续操作。"
+    "管理工具目录缺少管理自动化所需工具。请先升级 AgentHarbor API，再继续操作。"
   );
   assert.equal(t("connectionDiagnostics.mcpCatalog.error"), "管理工具目录检查失败：{detail}");
   assert.equal(t("readiness.aiAdmin.mockMcp.title"), "工具服务连接");

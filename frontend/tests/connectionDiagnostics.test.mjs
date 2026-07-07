@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -9,6 +10,9 @@ import {
   requiredManagementMcpToolNames
 } from "../src/connectionDiagnostics.ts";
 
+const managementMcpSource = readFileSync(new URL("../../internal/httpapi/management_mcp.go", import.meta.url), "utf8");
+const legacyManagementMcpToolNames = new Set(["export_permission_package_production_evidence"]);
+
 const catalogTool = {
   access: { requiredRole: "authenticated_admin", reviewerBound: false, scopeBoundary: "requested_scope" },
   name: "draft_permission_package",
@@ -17,6 +21,10 @@ const catalogTool = {
 
 function catalogToolNamed(name) {
   return { ...catalogTool, name };
+}
+
+function backendManagementMcpToolNames() {
+  return Array.from(managementMcpSource.matchAll(/Name:\s*"([^"]+)"/g), (match) => match[1]);
 }
 
 test("connection diagnostics reports ready when session, API, live data, and MCP are ready", () => {
@@ -192,6 +200,13 @@ test("management MCP catalog diagnostic requires the preferred production report
   const mcpCatalogRow = rows.find((row) => row.key === "mcpCatalog");
   assert.equal(mcpCatalogRow?.detailKey, "connectionDiagnostics.mcpCatalog.missingTools");
   assert.equal(mcpCatalogRow?.detailParams, undefined);
+});
+
+test("management MCP catalog diagnostic required tools cover backend management tools", () => {
+  const backendTools = backendManagementMcpToolNames().filter((name) => !legacyManagementMcpToolNames.has(name));
+  const missing = backendTools.filter((name) => !requiredManagementMcpToolNames.includes(name));
+
+  assert.deepEqual(missing, []);
 });
 
 test("management MCP catalog diagnostic flags incomplete or unknown metadata contracts", () => {

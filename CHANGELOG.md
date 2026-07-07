@@ -12,6 +12,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Management MCP 现在提供 `export_permission_package_production_report` 作为首选的只读验收报告导出工具，同时继续保留 `export_permission_package_production_evidence` 作为兼容别名。
 - Connection diagnostics now requires the preferred `export_permission_package_production_report` tool in the Management MCP catalog, so old APIs that only expose the legacy alias are blocked before admin-agent automation runs.
 - 连接诊断现在要求 Management MCP 工具目录包含首选的 `export_permission_package_production_report` 工具；如果旧 API 只暴露兼容别名，会在管理 Agent 自动执行前被阻断。
+- Connection diagnostics now checks that the Management MCP catalog exposes every current non-legacy management tool, including administrator identity lifecycle tools, before allowing admin-agent automation.
+- 连接诊断现在会检查 Management MCP 工具目录是否暴露当前所有非兼容别名的管理工具，包括管理员身份生命周期工具，再允许管理 Agent 自动执行。
 - Frontend API compatibility labels now use one shared coverage-checked map, so every required console capability must have an English and Simplified Chinese operator label before it can appear in diagnostics.
 - 前端 API 兼容能力标签现在使用一份带覆盖测试的共享映射，确保每个控制台必需能力在进入诊断前都具备英文和简体中文的操作员可读标签。
 - Unknown API compatibility contract failures now fall back to a localized upgrade prompt instead of echoing raw `system info contract issues` messages into diagnostics or preflight panels.

@@ -12,17 +12,54 @@ import {
 
 const managementMcpSource = readFileSync(new URL("../../internal/httpapi/management_mcp.go", import.meta.url), "utf8");
 const legacyManagementMcpToolNames = new Set(["export_permission_package_production_evidence"]);
+const confirmationRequiredToolNames = new Set([
+  "create_admin_identity",
+  "rotate_admin_identity_key",
+  "disable_admin_identity",
+  "apply_permission_package",
+  "create_permission_package_approval_request",
+  "approve_permission_package_approval_request",
+  "reject_permission_package_approval_request",
+  "withdraw_permission_package_approval_request"
+]);
+
+const confirmationInputSchema = {
+  type: "object",
+  properties: {
+    confirmation: {
+      type: "object",
+      properties: {
+        confirmed: { type: "boolean" },
+        reason: { type: "string", minLength: 1, maxLength: 500 }
+      },
+      required: ["confirmed", "reason"],
+      additionalProperties: false
+    }
+  },
+  required: ["confirmation"],
+  additionalProperties: false
+};
 
 const catalogTool = {
   access: { requiredRole: "authenticated_admin", reviewerBound: false, scopeBoundary: "requested_scope" },
   execution: { confirmationRequired: false, idempotency: "safe_repeat" },
+  inputSchema: { type: "object", properties: {}, required: [] },
   lifecycle: { status: "active" },
   name: "draft_permission_package",
   safety: { approvalMode: "none", mutatesState: false, operationType: "preview", readOnly: true }
 };
 
 function catalogToolNamed(name) {
-  return { ...catalogTool, name };
+  if (!confirmationRequiredToolNames.has(name)) {
+    return { ...catalogTool, name };
+  }
+  return {
+    ...catalogTool,
+    execution: { confirmationRequired: true, idempotency: "not_idempotent" },
+    inputSchema: confirmationInputSchema,
+    name,
+    safety: { approvalMode: "none", mutatesState: true, operationType: "write", readOnly: false }
+  };
 }
 
 function backendManagementMcpToolNames() {
@@ -186,6 +223,37 @@ test("management MCP catalog diagnostic accepts versioned safety access lifecycl
       toolsWithSafety: catalogTools.length
     }
   );
+});
+
+test("management MCP catalog diagnostic requires confirmation schema for write tools", () => {
+  const catalogTools = requiredManagementMcpToolNames.map(catalogToolNamed);
+  const unsafeTools = catalogTools.map((tool) => (
+    tool.name === "apply_permission_package"
+      ? { ...tool, inputSchema: { type: "object", properties: {}, required: [] } }
+      : tool
+  ));
+
+  const diagnostic = managementMcpCatalogDiagnosticFromResult({ metadataVersion: 3, tools: unsafeTools });
+
+  assert.equal(diagnostic.status, "error");
+  assert.equal(diagnostic.toolsWithConfirmationSchema, confirmationRequiredToolNames.size - 1);
+  assert.equal(diagnostic.confirmationRequiredTools, confirmationRequiredToolNames.size);
+  assert.equal(diagnostic.message, `confirmation schema incomplete: ${confirmationRequiredToolNames.size - 1}/${confirmationRequiredToolNames.size}`);
+
+  const rows = buildConnectionDiagnosticRows({
+    apiHealth: { status: "ok", message: "ok" },
+    liveDataLoaded: true,
+    loadError: "",
+    mcpCatalog: diagnostic,
+    mcpHealth: { status: "ok", message: "ok" },
+    session: { actor: "admin-key", authenticated: true, requiresLogin: true }
+  });
+  const mcpCatalogRow = rows.find((row) => row.key === "mcpCatalog");
+  assert.equal(mcpCatalogRow?.detailKey, "connectionDiagnostics.mcpCatalog.confirmationSchema");
+  assert.deepEqual(mcpCatalogRow?.detailParams, {
+    ready: confirmationRequiredToolNames.size - 1,
+    total: confirmationRequiredToolNames.size
+  });
 });
 
 test("management MCP catalog diagnostic requires the preferred production report tool", () => {

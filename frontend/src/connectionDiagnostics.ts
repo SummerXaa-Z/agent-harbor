@@ -1,16 +1,18 @@
 import type { HealthCheckResult } from "./api";
 import type { Translator } from "./consolePresenters";
 import { systemCapabilityLabelKeys } from "./systemCapabilityLabels.ts";
-import type { ConsoleSession } from "./types";
+import type { ConsoleSession, JsonObject, JsonValue } from "./types";
 
 export type ConnectionDiagnosticKey = "session" | "api" | "dataSource" | "mcp" | "mcpCatalog";
 export type ConnectionDiagnosticStatus = "ok" | "warning" | "error";
 
 export interface ManagementMcpCatalogDiagnostic {
+  confirmationRequiredTools?: number;
   metadataVersion?: number;
   message?: string;
   missingRequiredTools?: string[];
   status: ConnectionDiagnosticStatus;
+  toolsWithConfirmationSchema?: number;
   toolsWithAccess?: number;
   toolsWithExecution?: number;
   toolsWithLifecycle?: number;
@@ -30,6 +32,7 @@ export interface ManagementMcpCatalogTool {
     preflightTool?: string;
     returnsSecret?: boolean;
   };
+  inputSchema?: JsonObject;
   lifecycle?: {
     preferredName?: string;
     status?: string;
@@ -71,6 +74,8 @@ export const requiredManagementMcpToolNames = [
   "list_agents",
   "list_capabilities"
 ] as const;
+
+const managementMcpWriteConfirmationReasonMaxLength = 500;
 
 export interface ConnectionDiagnosticRow {
   key: ConnectionDiagnosticKey;
@@ -143,6 +148,21 @@ export function managementMcpCatalogDiagnosticFromResult(
       message: `catalog metadata incomplete: safety ${toolsWithSafety}/${tools.length}, access ${toolsWithAccess}/${tools.length}, lifecycle ${toolsWithLifecycle}/${tools.length}, execution ${toolsWithExecution}/${tools.length}`,
       status: "error",
       toolsWithAccess,
+      toolsWithExecution,
+      toolsWithLifecycle,
+      toolsWithSafety
+    };
+  }
+  const toolsRequiringConfirmation = tools.filter((tool) => managementMcpToolRequiresConfirmation(tool));
+  const toolsWithConfirmationSchema = toolsRequiringConfirmation.filter((tool) => hasWriteConfirmationInputSchema(tool)).length;
+  if (toolsWithConfirmationSchema !== toolsRequiringConfirmation.length) {
+    return {
+      confirmationRequiredTools: toolsRequiringConfirmation.length,
+      metadataVersion: result.metadataVersion,
+      message: `confirmation schema incomplete: ${toolsWithConfirmationSchema}/${toolsRequiringConfirmation.length}`,
+      status: "error",
+      toolsWithAccess,
+      toolsWithConfirmationSchema,
       toolsWithExecution,
       toolsWithLifecycle,
       toolsWithSafety
@@ -231,6 +251,55 @@ function hasExecutionMetadata(tool: ManagementMcpCatalogTool): boolean {
   if (execution.auditResourceType !== undefined && execution.auditResourceType.trim() === "") return false;
   if (execution.returnsSecret !== undefined && typeof execution.returnsSecret !== "boolean") return false;
   return true;
+}
+
+function managementMcpToolRequiresConfirmation(tool: ManagementMcpCatalogTool): boolean {
+  return Boolean(
+    tool.execution?.confirmationRequired ||
+    tool.safety?.mutatesState ||
+    tool.safety?.operationType === "write"
+  );
+}
+
+function hasWriteConfirmationInputSchema(tool: ManagementMcpCatalogTool): boolean {
+  const inputSchema = tool.inputSchema;
+  if (!jsonObjectHasStringValue(inputSchema, "type", "object")) return false;
+  if (!jsonSchemaRequiredIncludes(inputSchema, "confirmation")) return false;
+  const confirmationSchema = jsonObjectProperty(jsonObjectProperty(inputSchema, "properties"), "confirmation");
+  if (!jsonObjectHasStringValue(confirmationSchema, "type", "object")) return false;
+  if (!jsonSchemaRequiredIncludes(confirmationSchema, "confirmed")) return false;
+  if (!jsonSchemaRequiredIncludes(confirmationSchema, "reason")) return false;
+  const confirmationProperties = jsonObjectProperty(confirmationSchema, "properties");
+  const confirmedSchema = jsonObjectProperty(confirmationProperties, "confirmed");
+  const reasonSchema = jsonObjectProperty(confirmationProperties, "reason");
+  return Boolean(
+    jsonObjectHasStringValue(confirmedSchema, "type", "boolean") &&
+    jsonObjectHasStringValue(reasonSchema, "type", "string") &&
+    jsonObjectHasNumberValue(reasonSchema, "minLength", 1) &&
+    jsonObjectHasNumberValue(reasonSchema, "maxLength", managementMcpWriteConfirmationReasonMaxLength)
+  );
+}
+
+function jsonObjectProperty(object: JsonObject | undefined, key: string): JsonObject | undefined {
+  const value = object?.[key];
+  return isJsonObject(value) ? value : undefined;
+}
+
+function jsonObjectHasStringValue(object: JsonObject | undefined, key: string, expected: string): boolean {
+  return object?.[key] === expected;
+}
+
+function jsonObjectHasNumberValue(object: JsonObject | undefined, key: string, expected: number): boolean {
+  return object?.[key] === expected;
+}
+
+function jsonSchemaRequiredIncludes(schema: JsonObject | undefined, field: string): boolean {
+  const required = schema?.required;
+  return Array.isArray(required) && required.some((value) => value === field);
+}
+
+function isJsonObject(value: JsonValue | undefined): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function apiDiagnosticRow(apiHealth: HealthCheckResult): ConnectionDiagnosticRow {
@@ -361,6 +430,18 @@ function mcpCatalogDiagnosticRow(catalog: ManagementMcpCatalogDiagnostic): Conne
   if (catalog.missingRequiredTools?.length) {
     return {
       detailKey: "connectionDiagnostics.mcpCatalog.missingTools",
+      key: "mcpCatalog",
+      status: "error",
+      titleKey: "connectionDiagnostics.mcpCatalog.title"
+    };
+  }
+  if (catalog.toolsWithConfirmationSchema !== undefined && catalog.confirmationRequiredTools !== undefined) {
+    return {
+      detailKey: "connectionDiagnostics.mcpCatalog.confirmationSchema",
+      detailParams: {
+        ready: catalog.toolsWithConfirmationSchema,
+        total: catalog.confirmationRequiredTools
+      },
       key: "mcpCatalog",
       status: "error",
       titleKey: "connectionDiagnostics.mcpCatalog.title"

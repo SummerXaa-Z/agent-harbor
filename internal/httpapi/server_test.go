@@ -7742,6 +7742,11 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		if tool.Execution.Idempotency == "" || tool.Execution.Idempotency == "unspecified" {
 			t.Fatalf("management MCP tool %q missing execution metadata: %#v", tool.Name, tool)
 		}
+		if tool.Execution.ConfirmationRequired {
+			assertMCPToolInputSchemaRequiresConfirmation(t, tool)
+		} else {
+			assertMCPToolInputSchemaDoesNotExposeConfirmation(t, tool)
+		}
 	}
 	assertMCPToolSafety(t, tools.Result.Tools, "explain_access_decision", mcpToolSafety{
 		OperationType: "read",
@@ -9158,6 +9163,63 @@ func assertMCPToolExecution(t *testing.T, tools []mcpToolResponse, name string, 
 		return
 	}
 	t.Fatalf("tool %q missing from tools/list", name)
+}
+
+func assertMCPToolInputSchemaRequiresConfirmation(t *testing.T, tool mcpToolResponse) {
+	t.Helper()
+	properties, ok := tool.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("tool %q input schema has no object properties: %#v", tool.Name, tool.InputSchema)
+	}
+	confirmation, ok := properties["confirmation"].(map[string]any)
+	if !ok || confirmation["type"] != "object" {
+		t.Fatalf("tool %q input schema should expose confirmation object: %#v", tool.Name, tool.InputSchema)
+	}
+	if !schemaRequiredContains(tool.InputSchema, "confirmation") {
+		t.Fatalf("tool %q input schema should require confirmation: %#v", tool.Name, tool.InputSchema)
+	}
+	confirmationProperties, ok := confirmation["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("tool %q confirmation schema has no properties: %#v", tool.Name, confirmation)
+	}
+	confirmed, ok := confirmationProperties["confirmed"].(map[string]any)
+	if !ok || confirmed["type"] != "boolean" {
+		t.Fatalf("tool %q confirmation schema should expose confirmed boolean: %#v", tool.Name, confirmation)
+	}
+	reason, ok := confirmationProperties["reason"].(map[string]any)
+	if !ok || reason["type"] != "string" || reason["maxLength"] != float64(500) {
+		t.Fatalf("tool %q confirmation schema should expose reason string maxLength 500: %#v", tool.Name, confirmation)
+	}
+	if !schemaRequiredContains(confirmation, "confirmed") || !schemaRequiredContains(confirmation, "reason") {
+		t.Fatalf("tool %q confirmation schema should require confirmed and reason: %#v", tool.Name, confirmation)
+	}
+	if confirmation["additionalProperties"] != false {
+		t.Fatalf("tool %q confirmation schema should reject extra fields: %#v", tool.Name, confirmation)
+	}
+}
+
+func assertMCPToolInputSchemaDoesNotExposeConfirmation(t *testing.T, tool mcpToolResponse) {
+	t.Helper()
+	properties, ok := tool.InputSchema["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+	if _, ok := properties["confirmation"]; ok {
+		t.Fatalf("tool %q should not expose confirmation when it is not required: %#v", tool.Name, tool.InputSchema)
+	}
+}
+
+func schemaRequiredContains(schema map[string]any, field string) bool {
+	raw, ok := schema["required"].([]any)
+	if !ok {
+		return false
+	}
+	for _, value := range raw {
+		if value == field {
+			return true
+		}
+	}
+	return false
 }
 
 func assertMCPToolDescriptionDoesNotContain(t *testing.T, tools []mcpToolResponse, name string, forbidden ...string) {

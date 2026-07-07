@@ -714,12 +714,21 @@ func managementMCPTools() []managementMCPTool {
 			}, []string{}),
 		},
 	}
-	return managementMCPToolsWithExecution(managementMCPToolsWithLifecycle(managementMCPToolsWithAccess(managementMCPToolsWithSafety(tools))))
+	return managementMCPToolsWithConfirmationSchemas(managementMCPToolsWithExecution(managementMCPToolsWithLifecycle(managementMCPToolsWithAccess(managementMCPToolsWithSafety(tools)))))
 }
 
 func managementMCPToolsWithSafety(tools []managementMCPTool) []managementMCPTool {
 	for i := range tools {
 		tools[i].Safety = managementMCPToolSafetyForName(tools[i].Name)
+	}
+	return tools
+}
+
+func managementMCPToolsWithConfirmationSchemas(tools []managementMCPTool) []managementMCPTool {
+	for i := range tools {
+		if managementMCPToolRequiresConfirmation(tools[i].Name) {
+			tools[i].InputSchema = withManagementMCPWriteConfirmationSchema(tools[i].InputSchema)
+		}
 	}
 	return tools
 }
@@ -1740,6 +1749,59 @@ func objectSchema(properties map[string]any, required []string) map[string]any {
 		"required":             required,
 		"additionalProperties": false,
 	}
+}
+
+func withManagementMCPWriteConfirmationSchema(schema map[string]any) map[string]any {
+	copied := make(map[string]any, len(schema))
+	for key, value := range schema {
+		copied[key] = value
+	}
+	properties := map[string]any{}
+	if rawProperties, ok := schema["properties"].(map[string]any); ok {
+		for key, value := range rawProperties {
+			properties[key] = value
+		}
+	}
+	properties["confirmation"] = managementMCPWriteConfirmationSchema()
+	copied["properties"] = properties
+	copied["required"] = schemaRequiredWithField(schema["required"], "confirmation")
+	return copied
+}
+
+func managementMCPWriteConfirmationSchema() map[string]any {
+	return objectSchema(map[string]any{
+		"confirmed": map[string]any{
+			"type":        "boolean",
+			"description": "Must be true after the operator has explicitly confirmed the write call.",
+		},
+		"reason": map[string]any{
+			"type":        "string",
+			"minLength":   1,
+			"maxLength":   maxManagementMCPWriteConfirmationReasonRunes,
+			"description": "Operator confirmation reason. Common credential patterns are redacted before audit storage.",
+		},
+	}, []string{"confirmed", "reason"})
+}
+
+func schemaRequiredWithField(required any, field string) []string {
+	values := []string{}
+	switch typed := required.(type) {
+	case []string:
+		values = append(values, typed...)
+	case []any:
+		for _, value := range typed {
+			text, ok := value.(string)
+			if ok {
+				values = append(values, text)
+			}
+		}
+	}
+	for _, value := range values {
+		if value == field {
+			return values
+		}
+	}
+	return append(values, field)
 }
 
 func stringSchema(description string) map[string]any {

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Management MCP `tools/list` input schemas now include the required `confirmation.confirmed` and `confirmation.reason` object for every confirmation-required write tool, so admin agents can build valid write calls directly from the catalog contract.
+- Management MCP 的 `tools/list` 现在会在所有需要确认的写工具 input schema 中声明必填的 `confirmation.confirmed` 和 `confirmation.reason`，让管理 Agent 可直接按目录契约构造合法写调用。
 - Management MCP confirmation audit reasons now redact common bearer tokens, API tokens, admin keys, passwords, and secret key patterns before they are stored in mutation audit metadata.
 - Management MCP 写确认说明写入审计前现在会脱敏常见 Bearer token、API token、管理员 key、密码和 secret key 形态，避免误把凭据落入变更审计 metadata。
 - Management MCP confirmed write calls now stamp the existing mutation audit event with the invoked tool name and trimmed confirmation reason, giving operators a durable handoff trail without adding duplicate audit rows.

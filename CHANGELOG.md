@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Management MCP write confirmation now fails closed from tool safety metadata, so mutating tools still require confirmation if future execution metadata is incomplete.
+- Management MCP 写操作确认现在会基于工具安全元数据兜底；如果未来工具的 execution 元数据漏配，只要安全元数据标记为写入状态，仍会要求确认。
 - Management MCP write tools that advertise `execution.confirmationRequired` now reject tool calls unless arguments include `confirmation.confirmed=true` and a non-empty `confirmation.reason`.
 - 标记了 `execution.confirmationRequired` 的 Management MCP 写工具现在会在服务端强制校验确认信息；调用参数必须包含 `confirmation.confirmed=true` 和非空 `confirmation.reason`。
 - Management MCP `tools/list` now returns `execution` metadata for every tool, including idempotency, confirmation, preflight, audit-resource, and one-time-secret hints for admin-agent callers.

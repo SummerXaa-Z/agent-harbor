@@ -696,6 +696,13 @@ func managementMCPTools() []managementMCPTool {
 }
 
 func managementMCPToolsWithSafety(tools []managementMCPTool) []managementMCPTool {
+	for i := range tools {
+		tools[i].Safety = managementMCPToolSafetyForName(tools[i].Name)
+	}
+	return tools
+}
+
+func managementMCPToolSafetyForName(name string) managementMCPToolSafety {
 	safetyByName := map[string]managementMCPToolSafety{
 		"list_admin_identities":                         readManagementMCPToolSafety(),
 		"create_admin_identity":                         writeManagementMCPToolSafety("none"),
@@ -720,17 +727,13 @@ func managementMCPToolsWithSafety(tools []managementMCPTool) []managementMCPTool
 		"list_agents":                                   readManagementMCPToolSafety(),
 		"list_capabilities":                             readManagementMCPToolSafety(),
 	}
-	for i := range tools {
-		safety, ok := safetyByName[tools[i].Name]
-		if !ok {
-			safety = managementMCPToolSafety{
-				OperationType: "unspecified",
-				ApprovalMode:  "unspecified",
-			}
-		}
-		tools[i].Safety = safety
+	if safety, ok := safetyByName[name]; ok {
+		return safety
 	}
-	return tools
+	return managementMCPToolSafety{
+		OperationType: "unspecified",
+		ApprovalMode:  "unspecified",
+	}
 }
 
 func readManagementMCPToolSafety() managementMCPToolSafety {
@@ -907,8 +910,7 @@ func managementMCPToolExecutionForName(name string) managementMCPToolExecution {
 }
 
 func requireManagementMCPWriteConfirmation(req managementMCPRequest) error {
-	execution := managementMCPToolExecutionForName(req.Params.Name)
-	if !execution.ConfirmationRequired {
+	if !managementMCPToolRequiresConfirmation(req.Params.Name) {
 		return nil
 	}
 	var args managementMCPWriteConfirmationArgs
@@ -919,6 +921,20 @@ func requireManagementMCPWriteConfirmation(req managementMCPRequest) error {
 		return domain.BadRequest("VALIDATION_FAILED", "confirmation.confirmed must be true and confirmation.reason is required for this write tool")
 	}
 	return nil
+}
+
+func managementMCPToolRequiresConfirmation(name string) bool {
+	return managementMCPToolRequiresConfirmationForMetadata(
+		managementMCPToolSafetyForName(name),
+		managementMCPToolExecutionForName(name),
+	)
+}
+
+func managementMCPToolRequiresConfirmationForMetadata(safety managementMCPToolSafety, execution managementMCPToolExecution) bool {
+	if execution.ConfirmationRequired {
+		return true
+	}
+	return safety.MutatesState || safety.OperationType == "write"
 }
 
 func permissionPackageApplicationFilterFromMCPArgs(args managementMCPPermissionPackageApplicationArgs) (store.PermissionPackageApplicationFilter, error) {

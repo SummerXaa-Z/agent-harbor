@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: Management API responses now set `Cache-Control: no-store` so browsers and proxies do not cache permission, approval, or key-management payloads.
+- 2026-07-08：管理 API 响应现在会设置 `Cache-Control: no-store`，避免浏览器或代理缓存权限、审批或密钥管理载荷。
 - 2026-07-08: JSON success and error responses now set `X-Content-Type-Options: nosniff` so browsers do not MIME-sniff management API responses.
 - 2026-07-08：JSON 成功和错误响应现在都会设置 `X-Content-Type-Options: nosniff`，避免浏览器对管理 API 响应做 MIME 嗅探。
 - 2026-07-08: The AgentHarbor binary now sets read, write, idle, read-header, and max-header defaults on its HTTP server to reduce slow or idle connection resource pressure.

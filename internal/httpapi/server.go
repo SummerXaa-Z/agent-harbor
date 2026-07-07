@@ -215,6 +215,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/auth/login", s.login)
 		r.Post("/auth/logout", s.logout)
 		r.Group(func(r chi.Router) {
+			r.Use(noStore)
 			r.Use(s.requireAdmin)
 			r.Get("/admin-identities", s.listAdminIdentities)
 			r.Post("/admin-identities", s.createAdminIdentity)
@@ -283,6 +284,13 @@ func (s *Server) Router() http.Handler {
 		})
 	})
 	return r
+}
+
+func noStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func localDevCORS(extraOrigins []string, includeDefaultLocalOrigins bool) func(http.Handler) http.Handler {

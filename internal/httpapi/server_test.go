@@ -1150,6 +1150,36 @@ func TestJSONResponsesSetNoSniffHeader(t *testing.T) {
 	}
 }
 
+func TestManagementResponsesSetNoStore(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	publicHealth := request(t, router, http.MethodGet, "/healthz", nil, "")
+	if got := publicHealth.Header().Get("Cache-Control"); got == "no-store" {
+		t.Fatalf("public health should not be forced no-store, got %q", got)
+	}
+
+	unauthorized := request(t, router, http.MethodGet, "/api/v1/agents", nil, "")
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthorized management read, got %d body=%s", unauthorized.Code, unauthorized.Body.String())
+	}
+	if got := unauthorized.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("unauthorized management responses should set no-store, got %q", got)
+	}
+
+	created := requestWithAdmin(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
+		"name":        "No Store Agent",
+		"workspaceId": "ws-1",
+		"channelType": "local",
+		"status":      "active",
+	}, "", "test-admin")
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected management write to succeed, got %d body=%s", created.Code, created.Body.String())
+	}
+	if got := created.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("management responses should set no-store, got %q", got)
+	}
+}
+
 func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	router := newRouterWithAdmin("test-admin")
 

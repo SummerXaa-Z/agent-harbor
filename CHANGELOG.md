@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: Sensitive management, data-plane, and console authentication responses now add legacy `Pragma: no-cache` and `Expires: 0` headers alongside `Cache-Control: no-store`.
+- 2026-07-08：敏感的管理、数据面和控制台认证响应现在会在 `Cache-Control: no-store` 之外，同时设置兼容旧代理的 `Pragma: no-cache` 和 `Expires: 0`。
 - 2026-07-08: Agent-key-protected data-plane responses now set `X-Content-Type-Options: nosniff`, including successful proxied MCP/OpenAPI responses.
 - 2026-07-08：Agent Key 保护的数据面响应现在会设置 `X-Content-Type-Options: nosniff`，包括成功代理的 MCP/OpenAPI 响应。
 - 2026-07-08: Management MCP JSON-RPC responses now reuse the standard JSON response headers, including `X-Content-Type-Options: nosniff`.

@@ -114,7 +114,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func setConsoleAuthNoStore(w http.ResponseWriter) {
-	w.Header().Set("Cache-Control", "no-store")
+	setSensitiveNoCacheHeaders(w)
 }
 
 func (s *Server) consoleSessionFromRequest(r *http.Request) (adminPrincipal, time.Time, bool) {

@@ -1166,6 +1166,19 @@ func TestManagementMCPResponsesSetNoSniffHeader(t *testing.T) {
 	}
 }
 
+func assertSensitiveNoCacheHeaders(t *testing.T, rec *httptest.ResponseRecorder, label string) {
+	t.Helper()
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("%s should set Cache-Control no-store, got %q", label, got)
+	}
+	if got := rec.Header().Get("Pragma"); got != "no-cache" {
+		t.Fatalf("%s should set Pragma no-cache, got %q", label, got)
+	}
+	if got := rec.Header().Get("Expires"); got != "0" {
+		t.Fatalf("%s should set Expires 0, got %q", label, got)
+	}
+}
+
 func TestManagementResponsesSetNoStore(t *testing.T) {
 	router := newRouterWithAdmin("test-admin")
 
@@ -1178,9 +1191,7 @@ func TestManagementResponsesSetNoStore(t *testing.T) {
 	if unauthorized.Code != http.StatusUnauthorized {
 		t.Fatalf("expected unauthorized management read, got %d body=%s", unauthorized.Code, unauthorized.Body.String())
 	}
-	if got := unauthorized.Header().Get("Cache-Control"); got != "no-store" {
-		t.Fatalf("unauthorized management responses should set no-store, got %q", got)
-	}
+	assertSensitiveNoCacheHeaders(t, unauthorized, "unauthorized management responses")
 
 	created := requestWithAdmin(t, router, http.MethodPost, "/api/v1/agents", map[string]any{
 		"name":        "No Store Agent",
@@ -1191,9 +1202,7 @@ func TestManagementResponsesSetNoStore(t *testing.T) {
 	if created.Code != http.StatusCreated {
 		t.Fatalf("expected management write to succeed, got %d body=%s", created.Code, created.Body.String())
 	}
-	if got := created.Header().Get("Cache-Control"); got != "no-store" {
-		t.Fatalf("management responses should set no-store, got %q", got)
-	}
+	assertSensitiveNoCacheHeaders(t, created, "management responses")
 }
 
 func TestDataPlaneResponsesSetNoStore(t *testing.T) {
@@ -1206,17 +1215,13 @@ func TestDataPlaneResponsesSetNoStore(t *testing.T) {
 	if mcp.Code != http.StatusUnauthorized {
 		t.Fatalf("expected unauthorized data-plane MCP call, got %d body=%s", mcp.Code, mcp.Body.String())
 	}
-	if got := mcp.Header().Get("Cache-Control"); got != "no-store" {
-		t.Fatalf("data-plane MCP responses should set no-store, got %q", got)
-	}
+	assertSensitiveNoCacheHeaders(t, mcp, "data-plane MCP responses")
 
 	openapi := request(t, router, http.MethodPost, "/api/v1/openapi/agents/target-1/operations/listCustomers", map[string]any{}, "")
 	if openapi.Code != http.StatusUnauthorized {
 		t.Fatalf("expected unauthorized data-plane OpenAPI call, got %d body=%s", openapi.Code, openapi.Body.String())
 	}
-	if got := openapi.Header().Get("Cache-Control"); got != "no-store" {
-		t.Fatalf("data-plane OpenAPI responses should set no-store, got %q", got)
-	}
+	assertSensitiveNoCacheHeaders(t, openapi, "data-plane OpenAPI responses")
 }
 
 func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
@@ -1226,9 +1231,7 @@ func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	if missing.Code != http.StatusOK {
 		t.Fatalf("session status should be public, got %d body=%s", missing.Code, missing.Body.String())
 	}
-	if got := missing.Header().Get("Cache-Control"); got != "no-store" {
-		t.Fatalf("session status should not be cached, got Cache-Control=%q", got)
-	}
+	assertSensitiveNoCacheHeaders(t, missing, "session status")
 	missingSession := decodeData[map[string]any](t, missing)
 	if missingSession["authenticated"] != false || missingSession["requiresLogin"] != true {
 		t.Fatalf("expected unauthenticated production session, got %#v", missingSession)
@@ -1238,14 +1241,13 @@ func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	if wrongLogin.Code != http.StatusUnauthorized || len(wrongLogin.Result().Cookies()) != 0 {
 		t.Fatalf("wrong login should be unauthorized without setting cookies, status=%d body=%s cookies=%#v", wrongLogin.Code, wrongLogin.Body.String(), wrongLogin.Result().Cookies())
 	}
+	assertSensitiveNoCacheHeaders(t, wrongLogin, "failed login response")
 
 	login := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]any{"adminKey": "test-admin"}, "")
 	if login.Code != http.StatusOK {
 		t.Fatalf("login should succeed, got %d body=%s", login.Code, login.Body.String())
 	}
-	if got := login.Header().Get("Cache-Control"); got != "no-store" {
-		t.Fatalf("login response should not be cached, got Cache-Control=%q", got)
-	}
+	assertSensitiveNoCacheHeaders(t, login, "login response")
 	session := decodeData[map[string]any](t, login)
 	if session["authenticated"] != true || session["actor"] != "admin-key" || session["requiresLogin"] != true {
 		t.Fatalf("unexpected login session: %#v", session)
@@ -1301,9 +1303,7 @@ func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	if logout.Code != http.StatusOK {
 		t.Fatalf("logout should succeed, got %d body=%s", logout.Code, logout.Body.String())
 	}
-	if got := logout.Header().Get("Cache-Control"); got != "no-store" {
-		t.Fatalf("logout response should not be cached, got Cache-Control=%q", got)
-	}
+	assertSensitiveNoCacheHeaders(t, logout, "logout response")
 	clearedCookies := logout.Result().Cookies()
 	if len(clearedCookies) != 1 || clearedCookies[0].Name != "agent_harbor_session" || clearedCookies[0].MaxAge != -1 {
 		t.Fatalf("logout should clear the session cookie, got %#v", clearedCookies)
@@ -3783,6 +3783,8 @@ func TestMCPProxyRelaysAllowedUpstreamResponse(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Header().Set("Pragma", "cache")
+		w.Header().Set("Expires", "Wed, 21 Oct 2099 07:28:00 GMT")
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"upstream":true}`))
 	}))
@@ -3809,6 +3811,12 @@ func TestMCPProxyRelaysAllowedUpstreamResponse(t *testing.T) {
 	}
 	if got := resp.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Fatalf("expected AgentHarbor nosniff on proxied data-plane response, got %q", got)
+	}
+	if got := resp.Header().Get("Pragma"); got != "no-cache" {
+		t.Fatalf("expected AgentHarbor no-cache pragma on proxied data-plane response, got %q", got)
+	}
+	if got := resp.Header().Get("Expires"); got != "0" {
+		t.Fatalf("expected AgentHarbor Expires 0 on proxied data-plane response, got %q", got)
 	}
 	if strings.TrimSpace(resp.Body.String()) != `{"upstream":true}` {
 		t.Fatalf("expected raw upstream body, got %s", resp.Body.String())

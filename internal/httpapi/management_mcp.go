@@ -32,6 +32,8 @@ type managementMCPResponse struct {
 	Error   *managementMCPError `json:"error,omitempty"`
 }
 
+const maxManagementMCPWriteConfirmationReasonRunes = 500
+
 type managementMCPError struct {
 	Code    int                     `json:"code"`
 	Message string                  `json:"message"`
@@ -919,6 +921,9 @@ func requireManagementMCPWriteConfirmation(req managementMCPRequest) error {
 	}
 	if !args.Confirmation.Confirmed || strings.TrimSpace(args.Confirmation.Reason) == "" {
 		return domain.BadRequest("VALIDATION_FAILED", "confirmation.confirmed must be true and confirmation.reason is required for this write tool")
+	}
+	if utf8.RuneCountInString(args.Confirmation.Reason) > maxManagementMCPWriteConfirmationReasonRunes {
+		return domain.BadRequest("VALIDATION_FAILED", "confirmation.reason must be at most 500 characters for this write tool")
 	}
 	return nil
 }

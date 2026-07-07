@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Management MCP write confirmations now cap `confirmation.reason` at 500 characters, rejecting oversized operator handoff text before write tools mutate state.
+- Management MCP 写操作确认现在会将 `confirmation.reason` 限制在 500 个字符以内，超长操作确认说明会在写工具修改状态前被拒绝。
 - Management MCP write confirmation now fails closed from tool safety metadata, so mutating tools still require confirmation if future execution metadata is incomplete.
 - Management MCP 写操作确认现在会基于工具安全元数据兜底；如果未来工具的 execution 元数据漏配，只要安全元数据标记为写入状态，仍会要求确认。
 - Management MCP write tools that advertise `execution.confirmationRequired` now reject tool calls unless arguments include `confirmation.confirmed=true` and a non-empty `confirmation.reason`.

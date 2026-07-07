@@ -7325,6 +7325,33 @@ func TestManagementMCPWriteToolsRequireConfirmation(t *testing.T) {
 		t.Fatalf("write tool with blank confirmation reason should fail validation, got %#v body=%s", blankReasonEnvelope, blankReason.Body.String())
 	}
 
+	longReason := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "create-admin-long-confirmation-reason",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "create_admin_identity",
+			"arguments": map[string]any{
+				"actor":    "mcp-long-reason",
+				"role":     "tenant_admin",
+				"tenantId": "tenant-east",
+				"confirmation": map[string]any{
+					"confirmed": true,
+					"reason":    strings.Repeat("a", 501),
+				},
+			},
+		},
+	}, "", "platform-key")
+	var longReasonEnvelope mcpEnvelopeResponse
+	if err := json.Unmarshal(longReason.Body.Bytes(), &longReasonEnvelope); err != nil {
+		t.Fatalf("decode long confirmation reason MCP response: %v body=%s", err, longReason.Body.String())
+	}
+	if longReasonEnvelope.Error == nil || longReasonEnvelope.Error.Data == nil ||
+		longReasonEnvelope.Error.Data.AppCode != "VALIDATION_FAILED" ||
+		!strings.Contains(longReasonEnvelope.Error.Message, "confirmation.reason") {
+		t.Fatalf("write tool with long confirmation reason should fail validation, got %#v body=%s", longReasonEnvelope, longReason.Body.String())
+	}
+
 	confirmed := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "create-admin-confirmed",

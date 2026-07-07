@@ -538,6 +538,9 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   assert.match(goLiveAcceptanceOverview, /reportMatchesAcceptanceScope/);
   assert.match(goLiveAcceptanceOverview, /productionAcceptance\.reportExportedBy/);
   assert.match(goLiveAcceptanceOverview, /productionAcceptance\.reportDigest/);
+  assert.match(goLiveAcceptanceOverview, /productionAcceptance\.copyReportDigest/);
+  assert.match(goLiveAcceptanceOverview, /navigator\.clipboard\?\.writeText\(matchingProductionReportDigest\.fullDigest\)/);
+  assert.match(goLiveAcceptanceOverview, /<Copy size=\{12\} \/>/);
   assert.match(goLiveAcceptanceOverview, /formatProductionReportDigest\(matchingProductionReport\)/);
   assert.match(goLiveAcceptanceOverview, /report\.reportDigestAlgorithm/);
   assert.match(goLiveAcceptanceOverview, /report\.reportDigest/);
@@ -550,6 +553,7 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   assert.ok(evidenceRender.indexOf("{goLiveAcceptancePanel}") < evidenceRender.indexOf("{evidenceRunsPanel}"));
   assert.match(i18n, /"section\.goLiveAcceptance": "上线检查"/);
   assert.match(i18n, /"productionAcceptance\.title": "上线检查"/);
+  assert.match(i18n, /"productionAcceptance\.copyReportDigest": "复制报告摘要"/);
   assert.match(i18n, /"productionAcceptance\.reportExportedBy": "报告由 \{actor\} 于 \{date\} 导出"/);
   assert.match(i18n, /"productionAcceptance\.reportDigest": "\{algorithm\} 摘要 \{digest\}"/);
   assert.match(i18n, /"empty\.evidenceRuns\.detail": "历史自检运行会在这里保留；当前权限变更请以上方上线检查状态为准。"/);
@@ -557,6 +561,7 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   assert.match(styles, /\.go-live-acceptance-decision\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
   assert.match(styles, /\.go-live-acceptance-blockers\s*\{/);
   assert.match(styles, /\.go-live-acceptance-report-digest\s*\{/);
+  assert.match(styles, /\.go-live-acceptance-report-copy\s*\{/);
   assert.match(styles, /\.go-live-acceptance-context dl\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(styles, /\.go-live-step-list\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
 });

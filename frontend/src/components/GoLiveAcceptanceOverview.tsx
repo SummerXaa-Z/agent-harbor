@@ -1,4 +1,5 @@
 import {
+  Copy,
   Download,
   RefreshCw,
   ShieldCheck
@@ -252,15 +253,26 @@ export function GoLiveAcceptanceOverview({
                     })}
                   </span>
                   {matchingProductionReportDigest ? (
-                    <span
-                      className="go-live-acceptance-report-digest"
-                      title={`${matchingProductionReportDigest.algorithm}: ${matchingProductionReportDigest.fullDigest}`}
-                      translate="no"
-                    >
-                      {tx(t, "productionAcceptance.reportDigest", {
-                        algorithm: matchingProductionReportDigest.algorithm,
-                        digest: matchingProductionReportDigest.digest
-                      })}
+                    <span className="go-live-acceptance-report-digest-row">
+                      <span
+                        className="go-live-acceptance-report-digest"
+                        title={`${matchingProductionReportDigest.algorithm}: ${matchingProductionReportDigest.fullDigest}`}
+                        translate="no"
+                      >
+                        {tx(t, "productionAcceptance.reportDigest", {
+                          algorithm: matchingProductionReportDigest.algorithm,
+                          digest: matchingProductionReportDigest.digest
+                        })}
+                      </span>
+                      <button
+                        aria-label={t("productionAcceptance.copyReportDigest")}
+                        className="go-live-acceptance-report-copy"
+                        onClick={() => void navigator.clipboard?.writeText(matchingProductionReportDigest.fullDigest)}
+                        title={t("productionAcceptance.copyReportDigest")}
+                        type="button"
+                      >
+                        <Copy size={12} />
+                      </button>
                     </span>
                   ) : null}
                 </dd>

@@ -2858,6 +2858,13 @@ button {
   white-space: normal;
 }
 
+.go-live-acceptance-report-digest-row {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+}
+
 .go-live-acceptance-report-digest {
   overflow: hidden;
   color: var(--muted);
@@ -2866,6 +2873,24 @@ button {
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.go-live-acceptance-report-copy {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line-muted);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.go-live-acceptance-report-copy:hover {
+  border-color: var(--brand-border);
+  color: var(--brand);
 }
 
 .go-live-acceptance-checks {

@@ -1150,6 +1150,22 @@ func TestJSONResponsesSetNoSniffHeader(t *testing.T) {
 	}
 }
 
+func TestManagementMCPResponsesSetNoSniffHeader(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	resp := requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "tools",
+		"method":  "tools/list",
+	}, "", "test-admin")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected management MCP tools/list to succeed, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if got := resp.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("management MCP JSON responses should set nosniff, got %q", got)
+	}
+}
+
 func TestManagementResponsesSetNoStore(t *testing.T) {
 	router := newRouterWithAdmin("test-admin")
 

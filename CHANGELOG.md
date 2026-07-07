@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: Management MCP JSON-RPC responses now reuse the standard JSON response headers, including `X-Content-Type-Options: nosniff`.
+- 2026-07-08：Management MCP JSON-RPC 响应现在复用标准 JSON 响应头，包括 `X-Content-Type-Options: nosniff`。
 - 2026-07-08: Agent-key-protected MCP and OpenAPI data-plane responses now set `Cache-Control: no-store` to keep proxied business payloads out of browser and proxy caches.
 - 2026-07-08：Agent Key 保护的 MCP 和 OpenAPI 数据面响应现在会设置 `Cache-Control: no-store`，避免代理业务载荷被浏览器或代理缓存。
 - 2026-07-08: Management API responses now set `Cache-Control: no-store` so browsers and proxies do not cache permission, approval, or key-management payloads.

@@ -1662,7 +1662,7 @@ func writeManagementMCPErrorWithData(w http.ResponseWriter, id json.RawMessage, 
 }
 
 func writeManagementMCPResponse(w http.ResponseWriter, response managementMCPResponse) {
-	w.Header().Set("Content-Type", "application/json")
+	setJSONResponseHeaders(w)
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(response)
 }

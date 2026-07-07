@@ -42,6 +42,7 @@ type consoleSessionResponse struct {
 const consoleSessionCSRFHeader = "X-AgentHarbor-CSRF"
 const consoleLoginFailureWindow = 5 * time.Minute
 const consoleLoginMaxFailures = 5
+const consoleLoginFailureMaxClients = 4096
 
 type consoleLoginFailure struct {
 	Count      int
@@ -375,6 +376,9 @@ func (s *Server) recordConsoleLoginFailure(r *http.Request) {
 		s.loginFailures = map[string]consoleLoginFailure{}
 	}
 	pruneConsoleLoginFailuresLocked(s.loginFailures, now)
+	if _, exists := s.loginFailures[key]; !exists {
+		evictConsoleLoginFailureIfFullLocked(s.loginFailures, consoleLoginFailureMaxClients)
+	}
 	failure := s.loginFailures[key]
 	if !failure.WindowEnds.After(now) {
 		failure = consoleLoginFailure{WindowEnds: now.Add(consoleLoginFailureWindow)}
@@ -388,6 +392,23 @@ func pruneConsoleLoginFailuresLocked(failures map[string]consoleLoginFailure, no
 		if !failure.WindowEnds.After(now) {
 			delete(failures, key)
 		}
+	}
+}
+
+func evictConsoleLoginFailureIfFullLocked(failures map[string]consoleLoginFailure, maxClients int) {
+	if maxClients <= 0 || len(failures) < maxClients {
+		return
+	}
+	oldestKey := ""
+	oldestWindowEnd := time.Time{}
+	for key, failure := range failures {
+		if oldestKey == "" || failure.WindowEnds.Before(oldestWindowEnd) {
+			oldestKey = key
+			oldestWindowEnd = failure.WindowEnds
+		}
+	}
+	if oldestKey != "" {
+		delete(failures, oldestKey)
 	}
 }
 

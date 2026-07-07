@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: Console login rate limiting now caps tracked failed-login clients and evicts the oldest active window when the cap is full, limiting memory growth from distributed failed login attempts.
+- 2026-07-08：控制台登录限流现在会限制失败登录来源的跟踪数量；达到上限时淘汰最早到期的活跃窗口，降低分散失败登录导致的内存增长风险。
 - 2026-07-08: Console login rate limiting now prunes expired failed-login client windows during new checks and writes, preventing stale entries from accumulating in long-running processes.
 - 2026-07-08：控制台登录限流现在会在新的检查和写入时清理已过期的失败登录来源窗口，避免长期运行进程积累陈旧记录。
 - 2026-07-08: Browser console cookie sessions now require CSRF protection for future PUT management writes as well as existing POST, PATCH, and DELETE writes.

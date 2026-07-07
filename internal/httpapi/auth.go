@@ -303,10 +303,10 @@ func (s *Server) validateConsoleSessionCSRF(r *http.Request, sessionToken string
 
 func requiresCSRFProtection(method string) bool {
 	switch method {
-	case http.MethodPost, http.MethodPatch, http.MethodDelete:
-		return true
-	default:
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
 		return false
+	default:
+		return true
 	}
 }
 

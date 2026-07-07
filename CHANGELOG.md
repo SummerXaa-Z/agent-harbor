@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: Browser console cookie sessions now require CSRF protection for future PUT management writes as well as existing POST, PATCH, and DELETE writes.
+- 2026-07-08：浏览器控制台 Cookie 会话现在会对未来的 PUT 管理写操作同样要求 CSRF 防护，并继续覆盖已有 POST、PATCH 和 DELETE 写操作。
 - Release scenario port-collision failures now print the listener PID and command for occupied API, MCP, and frontend ports, including the Makefile-hosted approval gate and tenant permission center scenario, so unattended `make release-check` runs are easier to recover without guessing which local process is blocking the gate.
 - 发布场景遇到 API、MCP 或前端端口冲突时，现在会输出占用监听进程的 PID 和命令，并覆盖 Makefile 内联的审批门禁和租户权限中心场景，便于无人值守的 `make release-check` 失败后快速恢复，而不需要猜测哪个本地进程挡住门禁。
 - `make demo` now uses the same port-owner diagnostics as release gates, so first-run evaluators can see the blocking API, MCP, or frontend process instead of a generic port-in-use failure.

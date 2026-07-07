@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  canonicalNavHashFromHash,
   defaultNavKey,
   navHashFor,
   navKeyFromHash,
@@ -155,6 +156,14 @@ test("navigation hash preserves the current workspace across reloads", () => {
   assert.equal(navKeyFromHash("go-live"), "evidence");
   assert.equal(navKeyFromHash("evidence"), "evidence");
   assert.equal(navKeyFromHash("#unknown"), null);
+});
+
+test("legacy go-live status hash canonicalizes away from evidence wording", () => {
+  assert.equal(navKeyFromHash("#evidence"), "evidence");
+  assert.equal(canonicalNavHashFromHash("#evidence"), "#go-live");
+  assert.equal(canonicalNavHashFromHash("evidence"), "#go-live");
+  assert.equal(canonicalNavHashFromHash("#go-live"), "#go-live");
+  assert.equal(canonicalNavHashFromHash("#unknown"), null);
 });
 
 test("default navigation is resolved from setup readiness", () => {

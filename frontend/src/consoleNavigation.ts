@@ -148,3 +148,8 @@ export function navHashFor(key: NavKey): string {
   }
   return `${navHashPrefix}${key}`
 }
+
+export function canonicalNavHashFromHash(hash: string): string | null {
+  const key = navKeyFromHash(hash)
+  return key ? navHashFor(key) : null
+}

@@ -531,6 +531,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 - The web console now writes `#go-live` for the go-live status workspace while still accepting legacy `#evidence` links for compatibility.
 - Web 控制台现在将上线状态工作区写入为 `#go-live`，同时继续兼容旧的 `#evidence` 链接。
+- Legacy `#evidence` browser hash navigation now canonicalizes back to `#go-live`, so copied old links do not leave historical route wording visible after load.
+- 旧版 `#evidence` 浏览器 hash 现在会自动归一为 `#go-live`，复制旧链接进入后也不会长期显示历史路由用词。
 - Public product docs now use records, acceptance report, and go-live material wording instead of forensic-style prose, while keeping stable API and tool names unchanged.
 - 公开产品文档现在统一使用记录、验收报告和上线材料等表述，不再在可读正文中使用带侦查感的说法，同时保留稳定 API 和工具名称不变。
 - The web console now lazy-loads heavy workspace panels for AI Admin, Capability Governance, and Tenant Organization, keeping the main production entry under Vite's default chunk warning budget without raising the limit.

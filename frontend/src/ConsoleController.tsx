@@ -110,6 +110,7 @@ import {
   productionAcceptanceReportFilename
 } from "./productionAcceptance";
 import {
+  canonicalNavHashFromHash,
   defaultNavKey,
   navHashFor,
   navKeyFromHash,
@@ -2195,6 +2196,10 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
 
   useEffect(() => {
     const handleHashChange = () => {
+      const canonicalHash = canonicalNavHashFromHash(window.location.hash);
+      if (canonicalHash && window.location.hash !== canonicalHash) {
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${canonicalHash}`);
+      }
       const hashNav = navKeyFromHash(window.location.hash);
       defaultNavResolvedRef.current = hashNav !== null;
       userSelectedNavRef.current = hashNav !== null;

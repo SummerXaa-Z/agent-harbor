@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: Management JSON endpoints now reject request bodies larger than 1 MiB before decoding, returning `PAYLOAD_TOO_LARGE` before oversized console or API writes reach business handlers.
+- 2026-07-08：管理 JSON 接口现在会在解码前拒绝超过 1 MiB 的请求体，并返回 `PAYLOAD_TOO_LARGE`，避免过大的控制台或 API 写请求进入业务处理。
 - 2026-07-08: Console login rate limiting now caps tracked failed-login clients and evicts the oldest active window when the cap is full, limiting memory growth from distributed failed login attempts.
 - 2026-07-08：控制台登录限流现在会限制失败登录来源的跟踪数量；达到上限时淘汰最早到期的活跃窗口，降低分散失败登录导致的内存增长风险。
 - 2026-07-08: Console login rate limiting now prunes expired failed-login client windows during new checks and writes, preventing stale entries from accumulating in long-running processes.

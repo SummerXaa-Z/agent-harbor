@@ -1052,6 +1052,28 @@ func TestAdminKeyProtectsManagementEndpoints(t *testing.T) {
 	}
 }
 
+func TestManagementJSONRejectsOversizedBody(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	payload := `{"name":"` + strings.Repeat("x", 1<<20) + `","workspaceId":"ws-1","channelType":"local","status":"active"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected oversized management JSON body to return 413, got %d", rec.Code)
+	}
+	var env apiEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if env.Error != "PAYLOAD_TOO_LARGE" {
+		t.Fatalf("expected PAYLOAD_TOO_LARGE, got %#v", env)
+	}
+}
+
 func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	router := newRouterWithAdmin("test-admin")
 

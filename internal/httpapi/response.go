@@ -15,6 +15,8 @@ type envelope struct {
 	Message string `json:"message,omitempty"`
 }
 
+const maxJSONBodyBytes int64 = 1 << 20
+
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -42,10 +44,16 @@ func writeError(w http.ResponseWriter, err error) {
 }
 
 func decodeJSON(r *http.Request, out any) error {
-	defer r.Body.Close()
-	decoder := json.NewDecoder(r.Body)
+	limitedBody := http.MaxBytesReader(nil, r.Body, maxJSONBodyBytes)
+	defer limitedBody.Close()
+
+	decoder := json.NewDecoder(limitedBody)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(out); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return domain.PayloadTooLarge("request body exceeds 1MiB")
+		}
 		return domain.BadRequest("INVALID_JSON", "request body must be valid JSON")
 	}
 	return nil

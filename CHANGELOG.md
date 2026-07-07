@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Backend coverage now verifies that production go-live status reports stamp named authenticated admin exporters in addition to the local development actor.
+- 2026-07-08：后端测试现在会校验上线状态报告能记录命名认证管理员导出人，并覆盖本地开发 actor。
 - 2026-07-08: Production go-live status reports now include `generatedBy`, so handoff reviewers can see which authenticated admin exported the report.
 - 2026-07-08：上线状态报告现在会包含 `generatedBy`，交接复核方可以看到是哪一个已认证管理员导出了报告。
 - 2026-07-08: Production go-live status reports now include `reportDigestAlgorithm`, making the `reportDigest` verification contract self-describing for handoff reviewers.

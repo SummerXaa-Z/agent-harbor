@@ -5723,6 +5723,44 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 	}
 }
 
+func TestPermissionPackageProductionReportStampsAuthenticatedAdminActor(t *testing.T) {
+	repo := store.NewMemory()
+	const platformKey = "platform-operator-key"
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{
+			Actor: "platform-operator",
+			Key:   platformKey,
+			Role:  string(domain.AdminIdentityRolePlatformAdmin),
+		},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow support triage updates for this tenant.",
+		"subjectSelector":  "user:support-*",
+		"targetId":         target.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	reportResp := requestWithAdmin(t, router, http.MethodGet, permissionPackageProductionEvidenceReportPath(input, "", "user:support-001"), nil, "", platformKey)
+	report := decodeData[permissionPackageProductionEvidenceReportResponse](t, reportResp)
+	if report.GeneratedBy != "platform-operator" {
+		t.Fatalf("expected production report generatedBy=%q, got %q", "platform-operator", report.GeneratedBy)
+	}
+	assertProductionReportDigest(t, reportResp, report.ReportDigest)
+}
+
 func TestPermissionPackagePreflightDetectsDataScopeConflict(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)

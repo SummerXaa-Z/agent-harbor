@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: Agent-key-protected data-plane responses now set `X-Content-Type-Options: nosniff`, including successful proxied MCP/OpenAPI responses.
+- 2026-07-08：Agent Key 保护的数据面响应现在会设置 `X-Content-Type-Options: nosniff`，包括成功代理的 MCP/OpenAPI 响应。
 - 2026-07-08: Management MCP JSON-RPC responses now reuse the standard JSON response headers, including `X-Content-Type-Options: nosniff`.
 - 2026-07-08：Management MCP JSON-RPC 响应现在复用标准 JSON 响应头，包括 `X-Content-Type-Options: nosniff`。
 - 2026-07-08: Agent-key-protected MCP and OpenAPI data-plane responses now set `Cache-Control: no-store` to keep proxied business payloads out of browser and proxy caches.

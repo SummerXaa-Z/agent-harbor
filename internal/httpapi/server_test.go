@@ -3807,6 +3807,9 @@ func TestMCPProxyRelaysAllowedUpstreamResponse(t *testing.T) {
 	if got := resp.Header().Get("Cache-Control"); got != "no-store" {
 		t.Fatalf("expected AgentHarbor no-store to override upstream cache header, got %q", got)
 	}
+	if got := resp.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("expected AgentHarbor nosniff on proxied data-plane response, got %q", got)
+	}
 	if strings.TrimSpace(resp.Body.String()) != `{"upstream":true}` {
 		t.Fatalf("expected raw upstream body, got %s", resp.Body.String())
 	}

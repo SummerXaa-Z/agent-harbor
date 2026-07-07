@@ -215,7 +215,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/auth/login", s.login)
 		r.Post("/auth/logout", s.logout)
 		r.Group(func(r chi.Router) {
-			r.Use(noStore)
+			r.Use(sensitiveResponseHeaders)
 			r.Use(s.requireAdmin)
 			r.Get("/admin-identities", s.listAdminIdentities)
 			r.Post("/admin-identities", s.createAdminIdentity)
@@ -276,7 +276,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/metrics/runtime", s.runtimeMetrics)
 		})
 		r.Group(func(r chi.Router) {
-			r.Use(noStore)
+			r.Use(sensitiveResponseHeaders)
 			r.Use(s.requireAgentKey)
 			r.Post("/mcp/agents/{targetId}", s.mcpRPC)
 			r.Post("/mcp/agents/{targetId}/rpc", s.mcpRPC)
@@ -287,9 +287,10 @@ func (s *Server) Router() http.Handler {
 	return r
 }
 
-func noStore(next http.Handler) http.Handler {
+func sensitiveResponseHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r)
 	})
 }

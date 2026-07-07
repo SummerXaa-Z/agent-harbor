@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- The permission-package approval release scenario now verifies that live Management MCP write tools expose the required confirmation input schema in `tools/list`.
+- 权限包审批发布场景现在会校验真实 Management MCP 写工具是否在 `tools/list` 中暴露必需的确认 input schema。
 - Connection diagnostics now blocks Management MCP catalogs where confirmation-required write tools do not expose the required `confirmation.confirmed` and `confirmation.reason` input schema.
 - 连接诊断现在会阻断缺少写操作确认 input schema 的 Management MCP 工具目录；需要确认的写工具必须声明 `confirmation.confirmed` 和 `confirmation.reason`。
 - Management MCP `tools/list` input schemas now include the required `confirmation.confirmed` and `confirmation.reason` object for every confirmation-required write tool, so admin agents can build valid write calls directly from the catalog contract.

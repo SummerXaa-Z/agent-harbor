@@ -539,6 +539,34 @@ tools_by_name = {
     tool.get("name"): tool
     for tool in result.get("tools", [])
 }
+
+def required_contains(schema, field):
+    required = schema.get("required") if isinstance(schema, dict) else None
+    return isinstance(required, list) and field in required
+
+def assert_confirmation_schema(name, input_schema):
+    if not isinstance(input_schema, dict):
+        raise SystemExit(f"management MCP tool {name!r} inputSchema should be an object: {input_schema!r}")
+    properties = input_schema.get("properties")
+    if not isinstance(properties, dict):
+        raise SystemExit(f"management MCP tool {name!r} inputSchema should expose properties: {input_schema!r}")
+    confirmation = properties.get("confirmation")
+    if not isinstance(confirmation, dict) or confirmation.get("type") != "object":
+        raise SystemExit(f"management MCP tool {name!r} input schema should expose confirmation object: {input_schema!r}")
+    if not required_contains(input_schema, "confirmation"):
+        raise SystemExit(f"management MCP tool {name!r} input schema should require confirmation: {input_schema!r}")
+    confirmation_properties = confirmation.get("properties")
+    if not isinstance(confirmation_properties, dict):
+        raise SystemExit(f"management MCP tool {name!r} confirmation schema should expose properties: {confirmation!r}")
+    confirmed = confirmation_properties.get("confirmed")
+    if not isinstance(confirmed, dict) or confirmed.get("type") != "boolean":
+        raise SystemExit(f"management MCP tool {name!r} confirmation schema should expose confirmed boolean: {confirmation!r}")
+    reason = confirmation_properties.get("reason")
+    if not isinstance(reason, dict) or reason.get("type") != "string" or reason.get("maxLength") != 500:
+        raise SystemExit(f"management MCP tool {name!r} confirmation schema should expose reason string maxLength 500: {confirmation!r}")
+    if not required_contains(confirmation, "confirmed") or not required_contains(confirmation, "reason"):
+        raise SystemExit(f"management MCP tool {name!r} confirmation schema should require confirmed and reason: {confirmation!r}")
+
 required_safety = {
     "explain_access_decision": {"operationType": "read", "readOnly": True, "mutatesState": False, "approvalMode": "none"},
     "draft_permission_package": {"operationType": "preview", "readOnly": True, "mutatesState": False, "approvalMode": "none"},
@@ -618,7 +646,18 @@ for name, tool in tools_by_name.items():
         raise SystemExit(f"management MCP write tool {name!r} must require confirmation: {execution!r}")
     if execution.get("idempotency") == "not_idempotent" and not execution.get("confirmationRequired"):
         raise SystemExit(f"management MCP tool {name!r} non-idempotent execution must require confirmation: {execution!r}")
-print("management MCP tool catalog metadata verified")
+    input_schema = tool.get("inputSchema")
+    input_properties = input_schema.get("properties") if isinstance(input_schema, dict) else {}
+    requires_confirmation = (
+        execution.get("confirmationRequired") is True
+        or safety.get("mutatesState") is True
+        or safety.get("operationType") == "write"
+    )
+    if requires_confirmation:
+        assert_confirmation_schema(name, input_schema)
+    elif isinstance(input_properties, dict) and "confirmation" in input_properties:
+        raise SystemExit(f"management MCP read tool {name!r} should not expose confirmation schema: {input_schema!r}")
+print("management MCP tool catalog metadata and confirmation schemas verified")
 PY
 }
 

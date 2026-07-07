@@ -69,7 +69,7 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("systemCapability.permissionPackageApplicationImpact"), "Application impact review");
   assert.equal(t("systemCapability.permissionPackageProductionReadiness"), "Go-live status checks");
   assert.equal(t("systemCapability.permissionPackageConsumedApprovalRecovery"), "Used approval recovery guidance");
-  assert.equal(t("systemCapability.managementMcpToolsMetadataV2"), "Management MCP tool lifecycle metadata");
+  assert.equal(t("systemCapability.managementMcpToolsMetadataV3"), "Management MCP tool execution metadata");
   assert.equal(t("connectionDiagnostics.action"), "Run diagnostics");
   assert.equal(t("connectionDiagnostics.title"), "Connection diagnostics");
   assert.equal(t("connectionDiagnostics.summaryOk"), "Ready for the production journey.");
@@ -484,7 +484,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("systemCapability.permissionPackageApplicationImpact"), "影响复核");
   assert.equal(t("systemCapability.permissionPackageProductionReadiness"), "上线状态检查");
   assert.equal(t("systemCapability.permissionPackageConsumedApprovalRecovery"), "已使用审批恢复提示");
-  assert.equal(t("systemCapability.managementMcpToolsMetadataV2"), "Management MCP 工具生命周期元数据");
+  assert.equal(t("systemCapability.managementMcpToolsMetadataV3"), "Management MCP 工具执行元数据");
   assert.equal(t("connectionDiagnostics.action"), "运行诊断");
   assert.equal(t("connectionDiagnostics.title"), "连接诊断");
   assert.equal(t("connectionDiagnostics.summaryOk"), "可以继续生产主流程。");

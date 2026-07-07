@@ -423,8 +423,8 @@ import os
 
 doc = json.loads(os.environ["RESPONSE_BODY"])
 result = doc.get("result", {})
-if result.get("metadataVersion") != 2:
-    raise SystemExit(f"management MCP tools/list metadataVersion={result.get('metadataVersion')!r} want 2")
+if result.get("metadataVersion") != 3:
+    raise SystemExit(f"management MCP tools/list metadataVersion={result.get('metadataVersion')!r} want 3")
 tools_by_name = {
     tool.get("name"): tool
     for tool in result.get("tools", [])
@@ -440,6 +440,32 @@ required_access = {
     "draft_permission_package": {"requiredRole": "authenticated_admin", "scopeBoundary": "requested_scope", "reviewerBound": False},
     "approve_permission_package_approval_request": {"requiredRole": "authenticated_admin", "scopeBoundary": "reviewer_route", "reviewerBound": True},
 }
+required_execution = {
+    "explain_access_decision": {"idempotency": "safe_repeat", "confirmationRequired": False},
+    "create_admin_identity": {
+        "idempotency": "not_idempotent",
+        "confirmationRequired": True,
+        "auditResourceType": "admin_identity",
+        "returnsSecret": True,
+    },
+    "rotate_admin_identity_key": {
+        "idempotency": "not_idempotent",
+        "confirmationRequired": True,
+        "auditResourceType": "admin_identity",
+        "returnsSecret": True,
+    },
+    "apply_permission_package": {
+        "idempotency": "conditional_repeat",
+        "confirmationRequired": True,
+        "preflightTool": "preflight_permission_package",
+        "auditResourceType": "permission_package_application",
+    },
+    "approve_permission_package_approval_request": {
+        "idempotency": "conditional_repeat",
+        "confirmationRequired": True,
+        "auditResourceType": "permission_package_approval_request",
+    },
+}
 for name, expected in required_safety.items():
     safety = (tools_by_name.get(name) or {}).get("safety")
     if safety != expected:
@@ -448,6 +474,10 @@ for name, expected in required_access.items():
     access = (tools_by_name.get(name) or {}).get("access")
     if access != expected:
         raise SystemExit(f"management MCP tool {name!r} access={access!r} want {expected!r}")
+for name, expected in required_execution.items():
+    execution = (tools_by_name.get(name) or {}).get("execution")
+    if execution != expected:
+        raise SystemExit(f"management MCP tool {name!r} execution={execution!r} want {expected!r}")
 legacy_lifecycle = (tools_by_name.get("export_permission_package_production_evidence") or {}).get("lifecycle")
 expected_legacy_lifecycle = {
     "status": "compatibility_alias",
@@ -461,6 +491,7 @@ for name, tool in tools_by_name.items():
     safety = tool.get("safety") or {}
     access = tool.get("access") or {}
     lifecycle = tool.get("lifecycle") or {}
+    execution = tool.get("execution") or {}
     if safety.get("operationType") in ("", "unspecified", None) or safety.get("approvalMode") in ("", "unspecified", None):
         raise SystemExit(f"management MCP tool {name!r} has incomplete safety metadata: {safety!r}")
     if access.get("requiredRole") in ("", "unspecified", None) or access.get("scopeBoundary") in ("", "unspecified", None):
@@ -469,6 +500,12 @@ for name, tool in tools_by_name.items():
         raise SystemExit(f"management MCP tool {name!r} has incomplete lifecycle metadata: {lifecycle!r}")
     if lifecycle.get("status") == "compatibility_alias" and not lifecycle.get("preferredName"):
         raise SystemExit(f"management MCP tool {name!r} compatibility alias is missing preferredName: {lifecycle!r}")
+    if execution.get("idempotency") in ("", "unspecified", None):
+        raise SystemExit(f"management MCP tool {name!r} has incomplete execution metadata: {execution!r}")
+    if execution.get("confirmationRequired") not in (True, False):
+        raise SystemExit(f"management MCP tool {name!r} execution missing confirmationRequired: {execution!r}")
+    if execution.get("idempotency") == "not_idempotent" and not execution.get("confirmationRequired"):
+        raise SystemExit(f"management MCP tool {name!r} non-idempotent execution must require confirmation: {execution!r}")
 print("management MCP tool catalog metadata verified")
 PY
 }

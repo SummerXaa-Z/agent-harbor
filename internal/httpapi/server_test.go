@@ -576,6 +576,7 @@ type mcpToolResponse struct {
 	Safety      mcpToolSafety    `json:"safety"`
 	Access      mcpToolAccess    `json:"access"`
 	Lifecycle   mcpToolLifecycle `json:"lifecycle"`
+	Execution   mcpToolExecution `json:"execution"`
 }
 
 type mcpToolSafety struct {
@@ -594,6 +595,14 @@ type mcpToolAccess struct {
 type mcpToolLifecycle struct {
 	Status        string `json:"status"`
 	PreferredName string `json:"preferredName,omitempty"`
+}
+
+type mcpToolExecution struct {
+	Idempotency          string `json:"idempotency"`
+	ConfirmationRequired bool   `json:"confirmationRequired"`
+	PreflightTool        string `json:"preflightTool,omitempty"`
+	AuditResourceType    string `json:"auditResourceType,omitempty"`
+	ReturnsSecret        bool   `json:"returnsSecret,omitempty"`
 }
 
 type mcpContentItem struct {
@@ -835,20 +844,20 @@ func TestSystemInfoIncludesConsoleCompatibilityContract(t *testing.T) {
 		"permission_package_application_impact",
 		"permission_package_production_readiness",
 		"permission_package_consumed_approval_recovery",
-		"management_mcp_tools_metadata_v2",
+		"management_mcp_tools_metadata_v3",
 	} {
 		if !capabilities[capability] {
 			t.Fatalf("system info missing required console capability %q: %#v", capability, info.Capabilities)
 		}
 	}
-	if info.ManagementMcpToolCatalog.MetadataVersion != 2 {
-		t.Fatalf("management MCP catalog metadata version = %d, want 2", info.ManagementMcpToolCatalog.MetadataVersion)
+	if info.ManagementMcpToolCatalog.MetadataVersion != 3 {
+		t.Fatalf("management MCP catalog metadata version = %d, want 3", info.ManagementMcpToolCatalog.MetadataVersion)
 	}
 	requiredMetadata := make(map[string]bool, len(info.ManagementMcpToolCatalog.RequiredMetadata))
 	for _, field := range info.ManagementMcpToolCatalog.RequiredMetadata {
 		requiredMetadata[field] = true
 	}
-	for _, field := range []string{"safety", "access", "lifecycle"} {
+	for _, field := range []string{"safety", "access", "lifecycle", "execution"} {
 		if !requiredMetadata[field] {
 			t.Fatalf("management MCP catalog required metadata missing %q: %#v", field, info.ManagementMcpToolCatalog.RequiredMetadata)
 		}
@@ -7537,8 +7546,8 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		"id":      "tools-list",
 		"method":  "tools/list",
 	}, ""))
-	if tools.Result.MetadataVersion != 2 {
-		t.Fatalf("management MCP tools/list metadataVersion=%d want 2", tools.Result.MetadataVersion)
+	if tools.Result.MetadataVersion != 3 {
+		t.Fatalf("management MCP tools/list metadataVersion=%d want 3", tools.Result.MetadataVersion)
 	}
 	if !mcpToolNamesContain(tools.Result.Tools, "draft_permission_package") ||
 		!mcpToolNamesContain(tools.Result.Tools, "preflight_permission_package") ||
@@ -7565,6 +7574,9 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		}
 		if tool.Lifecycle.Status == "" || tool.Lifecycle.Status == "unspecified" {
 			t.Fatalf("management MCP tool %q missing lifecycle metadata: %#v", tool.Name, tool)
+		}
+		if tool.Execution.Idempotency == "" || tool.Execution.Idempotency == "unspecified" {
+			t.Fatalf("management MCP tool %q missing execution metadata: %#v", tool.Name, tool)
 		}
 	}
 	assertMCPToolSafety(t, tools.Result.Tools, "explain_access_decision", mcpToolSafety{
@@ -7612,6 +7624,32 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 	assertMCPToolLifecycle(t, tools.Result.Tools, "export_permission_package_production_evidence", mcpToolLifecycle{
 		Status:        "compatibility_alias",
 		PreferredName: "export_permission_package_production_report",
+	})
+	assertMCPToolExecution(t, tools.Result.Tools, "explain_access_decision", mcpToolExecution{
+		Idempotency: "safe_repeat",
+	})
+	assertMCPToolExecution(t, tools.Result.Tools, "create_admin_identity", mcpToolExecution{
+		Idempotency:          "not_idempotent",
+		ConfirmationRequired: true,
+		AuditResourceType:    "admin_identity",
+		ReturnsSecret:        true,
+	})
+	assertMCPToolExecution(t, tools.Result.Tools, "rotate_admin_identity_key", mcpToolExecution{
+		Idempotency:          "not_idempotent",
+		ConfirmationRequired: true,
+		AuditResourceType:    "admin_identity",
+		ReturnsSecret:        true,
+	})
+	assertMCPToolExecution(t, tools.Result.Tools, "apply_permission_package", mcpToolExecution{
+		Idempotency:          "conditional_repeat",
+		ConfirmationRequired: true,
+		PreflightTool:        "preflight_permission_package",
+		AuditResourceType:    "permission_package_application",
+	})
+	assertMCPToolExecution(t, tools.Result.Tools, "approve_permission_package_approval_request", mcpToolExecution{
+		Idempotency:          "conditional_repeat",
+		ConfirmationRequired: true,
+		AuditResourceType:    "permission_package_approval_request",
 	})
 	assertMCPToolDescriptionDoesNotContain(t, tools.Result.Tools, "export_permission_package_production_report", "evidence", "证据")
 	assertMCPToolDescriptionDoesNotContain(t, tools.Result.Tools, "export_permission_package_production_evidence", "evidence", "证据")
@@ -8926,6 +8964,20 @@ func assertMCPToolLifecycle(t *testing.T, tools []mcpToolResponse, name string, 
 		}
 		if tool.Lifecycle != want {
 			t.Fatalf("tool %q lifecycle=%#v want %#v", name, tool.Lifecycle, want)
+		}
+		return
+	}
+	t.Fatalf("tool %q missing from tools/list", name)
+}
+
+func assertMCPToolExecution(t *testing.T, tools []mcpToolResponse, name string, want mcpToolExecution) {
+	t.Helper()
+	for _, tool := range tools {
+		if tool.Name != name {
+			continue
+		}
+		if tool.Execution != want {
+			t.Fatalf("tool %q execution=%#v want %#v", name, tool.Execution, want)
 		}
 		return
 	}

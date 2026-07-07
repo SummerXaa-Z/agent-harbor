@@ -73,7 +73,7 @@ test("API health check verifies the system compatibility contract", () => {
   assert.match(systemInfoContractSource, /requiredConsoleCapabilities/);
   assert.match(systemInfoContractSource, /permission_package_approval_withdraw/);
   assert.match(systemInfoContractSource, /permission_package_consumed_approval_recovery/);
-  assert.match(systemInfoContractSource, /management_mcp_tools_metadata_v2/);
+  assert.match(systemInfoContractSource, /management_mcp_tools_metadata_v3/);
   assert.match(apiSource, /api_contract_unavailable/);
   assert.match(apiSource, /api_contract_incompatible/);
 });
@@ -84,8 +84,8 @@ test("system info contract issues validate the management MCP catalog summary", 
     authRequired: true,
     capabilities: requiredConsoleCapabilities,
     managementMcpToolCatalog: {
-      metadataVersion: 2,
-      requiredMetadata: ["safety", "access", "lifecycle"],
+      metadataVersion: 3,
+      requiredMetadata: ["safety", "access", "lifecycle", "execution"],
     },
     name: "AgentHarbor",
   };
@@ -94,16 +94,16 @@ test("system info contract issues validate the management MCP catalog summary", 
   assert.deepEqual(
     systemInfoContractIssues({
       ...compatibleInfo,
-      managementMcpToolCatalog: { metadataVersion: 1, requiredMetadata: ["safety", "access", "lifecycle"] },
+      managementMcpToolCatalog: { metadataVersion: 2, requiredMetadata: ["safety", "access", "lifecycle", "execution"] },
     }),
     ["managementMcpToolCatalog.metadataVersion"],
   );
   assert.deepEqual(
     systemInfoContractIssues({
       ...compatibleInfo,
-      managementMcpToolCatalog: { metadataVersion: 2, requiredMetadata: ["safety", "access"] },
+      managementMcpToolCatalog: { metadataVersion: 3, requiredMetadata: ["safety", "access", "lifecycle"] },
     }),
-    ["managementMcpToolCatalog.requiredMetadata.lifecycle"],
+    ["managementMcpToolCatalog.requiredMetadata.execution"],
   );
   assert.deepEqual(
     systemInfoContractIssues({
@@ -115,6 +115,7 @@ test("system info contract issues validate the management MCP catalog summary", 
       "managementMcpToolCatalog.requiredMetadata.safety",
       "managementMcpToolCatalog.requiredMetadata.access",
       "managementMcpToolCatalog.requiredMetadata.lifecycle",
+      "managementMcpToolCatalog.requiredMetadata.execution",
     ],
   );
 });

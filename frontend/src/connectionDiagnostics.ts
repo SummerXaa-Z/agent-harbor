@@ -12,6 +12,7 @@ export interface ManagementMcpCatalogDiagnostic {
   missingRequiredTools?: string[];
   status: ConnectionDiagnosticStatus;
   toolsWithAccess?: number;
+  toolsWithExecution?: number;
   toolsWithLifecycle?: number;
   toolsWithSafety?: number;
 }
@@ -21,6 +22,13 @@ export interface ManagementMcpCatalogTool {
     requiredRole?: string;
     reviewerBound?: boolean;
     scopeBoundary?: string;
+  };
+  execution?: {
+    auditResourceType?: string;
+    confirmationRequired?: boolean;
+    idempotency?: string;
+    preflightTool?: string;
+    returnsSecret?: boolean;
   };
   lifecycle?: {
     preferredName?: string;
@@ -113,7 +121,7 @@ export function managementMcpCatalogDiagnosticFromResult(
   if (!result || result.metadataVersion === undefined) {
     return { message: "missing metadataVersion", status: "error" };
   }
-  if (result.metadataVersion !== 2) {
+  if (result.metadataVersion !== 3) {
     return { metadataVersion: result.metadataVersion, status: "warning" };
   }
   const tools = Array.isArray(result.tools) ? result.tools : [];
@@ -123,12 +131,19 @@ export function managementMcpCatalogDiagnosticFromResult(
   const toolsWithSafety = tools.filter((tool) => hasSafetyMetadata(tool)).length;
   const toolsWithAccess = tools.filter((tool) => hasAccessMetadata(tool)).length;
   const toolsWithLifecycle = tools.filter((tool) => hasLifecycleMetadata(tool)).length;
-  if (toolsWithSafety !== tools.length || toolsWithAccess !== tools.length || toolsWithLifecycle !== tools.length) {
+  const toolsWithExecution = tools.filter((tool) => hasExecutionMetadata(tool)).length;
+  if (
+    toolsWithSafety !== tools.length ||
+    toolsWithAccess !== tools.length ||
+    toolsWithLifecycle !== tools.length ||
+    toolsWithExecution !== tools.length
+  ) {
     return {
       metadataVersion: result.metadataVersion,
-      message: `catalog metadata incomplete: safety ${toolsWithSafety}/${tools.length}, access ${toolsWithAccess}/${tools.length}, lifecycle ${toolsWithLifecycle}/${tools.length}`,
+      message: `catalog metadata incomplete: safety ${toolsWithSafety}/${tools.length}, access ${toolsWithAccess}/${tools.length}, lifecycle ${toolsWithLifecycle}/${tools.length}, execution ${toolsWithExecution}/${tools.length}`,
       status: "error",
       toolsWithAccess,
+      toolsWithExecution,
       toolsWithLifecycle,
       toolsWithSafety
     };
@@ -141,6 +156,7 @@ export function managementMcpCatalogDiagnosticFromResult(
       missingRequiredTools,
       status: "error",
       toolsWithAccess,
+      toolsWithExecution,
       toolsWithLifecycle,
       toolsWithSafety
     };
@@ -149,6 +165,7 @@ export function managementMcpCatalogDiagnosticFromResult(
     metadataVersion: result.metadataVersion,
     status: "ok",
     toolsWithAccess,
+    toolsWithExecution,
     toolsWithLifecycle,
     toolsWithSafety
   };
@@ -203,6 +220,17 @@ function hasLifecycleMetadata(tool: ManagementMcpCatalogTool): boolean {
   if (!lifecycle || !lifecycle.status || lifecycle.status === "unspecified") return false;
   if (lifecycle.status === "compatibility_alias") return Boolean(lifecycle.preferredName);
   return lifecycle.status === "active";
+}
+
+function hasExecutionMetadata(tool: ManagementMcpCatalogTool): boolean {
+  const execution = tool.execution;
+  if (!execution || !execution.idempotency || execution.idempotency === "unspecified") return false;
+  if (!["safe_repeat", "conditional_repeat", "not_idempotent"].includes(execution.idempotency)) return false;
+  if (typeof execution.confirmationRequired !== "boolean") return false;
+  if (execution.preflightTool !== undefined && execution.preflightTool.trim() === "") return false;
+  if (execution.auditResourceType !== undefined && execution.auditResourceType.trim() === "") return false;
+  if (execution.returnsSecret !== undefined && typeof execution.returnsSecret !== "boolean") return false;
+  return true;
 }
 
 function apiDiagnosticRow(apiHealth: HealthCheckResult): ConnectionDiagnosticRow {
@@ -308,8 +336,13 @@ function mcpCatalogDiagnosticRow(catalog: ManagementMcpCatalogDiagnostic): Conne
     return {
       detailKey: "connectionDiagnostics.mcpCatalog.ok",
       detailParams: {
-        tools: Math.min(catalog.toolsWithAccess ?? 0, catalog.toolsWithSafety ?? 0, catalog.toolsWithLifecycle ?? 0),
-        version: catalog.metadataVersion ?? 2
+        tools: Math.min(
+          catalog.toolsWithAccess ?? 0,
+          catalog.toolsWithExecution ?? 0,
+          catalog.toolsWithLifecycle ?? 0,
+          catalog.toolsWithSafety ?? 0
+        ),
+        version: catalog.metadataVersion ?? 3
       },
       key: "mcpCatalog",
       status: "ok",

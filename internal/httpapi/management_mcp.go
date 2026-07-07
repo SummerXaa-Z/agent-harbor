@@ -48,7 +48,7 @@ type managementMCPToolsListResult struct {
 	Tools           []managementMCPTool `json:"tools"`
 }
 
-const managementMCPToolsMetadataVersion = 2
+const managementMCPToolsMetadataVersion = 3
 
 type managementMCPTool struct {
 	Name        string                     `json:"name"`
@@ -57,6 +57,7 @@ type managementMCPTool struct {
 	Safety      managementMCPToolSafety    `json:"safety"`
 	Access      managementMCPToolAccess    `json:"access"`
 	Lifecycle   managementMCPToolLifecycle `json:"lifecycle"`
+	Execution   managementMCPToolExecution `json:"execution"`
 }
 
 type managementMCPToolSafety struct {
@@ -75,6 +76,14 @@ type managementMCPToolAccess struct {
 type managementMCPToolLifecycle struct {
 	Status        string `json:"status"`
 	PreferredName string `json:"preferredName,omitempty"`
+}
+
+type managementMCPToolExecution struct {
+	Idempotency          string `json:"idempotency"`
+	ConfirmationRequired bool   `json:"confirmationRequired"`
+	PreflightTool        string `json:"preflightTool,omitempty"`
+	AuditResourceType    string `json:"auditResourceType,omitempty"`
+	ReturnsSecret        bool   `json:"returnsSecret,omitempty"`
 }
 
 type managementMCPCallResult struct {
@@ -671,7 +680,7 @@ func managementMCPTools() []managementMCPTool {
 			}, []string{}),
 		},
 	}
-	return managementMCPToolsWithLifecycle(managementMCPToolsWithAccess(managementMCPToolsWithSafety(tools)))
+	return managementMCPToolsWithExecution(managementMCPToolsWithLifecycle(managementMCPToolsWithAccess(managementMCPToolsWithSafety(tools))))
 }
 
 func managementMCPToolsWithSafety(tools []managementMCPTool) []managementMCPTool {
@@ -822,6 +831,62 @@ func managementMCPToolsWithLifecycle(tools []managementMCPTool) []managementMCPT
 			continue
 		}
 		tools[i].Lifecycle = managementMCPToolLifecycle{Status: "active"}
+	}
+	return tools
+}
+
+func managementMCPToolsWithExecution(tools []managementMCPTool) []managementMCPTool {
+	executionByName := map[string]managementMCPToolExecution{
+		"create_admin_identity": {
+			Idempotency:          "not_idempotent",
+			ConfirmationRequired: true,
+			AuditResourceType:    "admin_identity",
+			ReturnsSecret:        true,
+		},
+		"rotate_admin_identity_key": {
+			Idempotency:          "not_idempotent",
+			ConfirmationRequired: true,
+			AuditResourceType:    "admin_identity",
+			ReturnsSecret:        true,
+		},
+		"disable_admin_identity": {
+			Idempotency:          "conditional_repeat",
+			ConfirmationRequired: true,
+			AuditResourceType:    "admin_identity",
+		},
+		"apply_permission_package": {
+			Idempotency:          "conditional_repeat",
+			ConfirmationRequired: true,
+			PreflightTool:        "preflight_permission_package",
+			AuditResourceType:    "permission_package_application",
+		},
+		"create_permission_package_approval_request": {
+			Idempotency:          "not_idempotent",
+			ConfirmationRequired: true,
+			AuditResourceType:    "permission_package_approval_request",
+		},
+		"approve_permission_package_approval_request": {
+			Idempotency:          "conditional_repeat",
+			ConfirmationRequired: true,
+			AuditResourceType:    "permission_package_approval_request",
+		},
+		"reject_permission_package_approval_request": {
+			Idempotency:          "conditional_repeat",
+			ConfirmationRequired: true,
+			AuditResourceType:    "permission_package_approval_request",
+		},
+		"withdraw_permission_package_approval_request": {
+			Idempotency:          "conditional_repeat",
+			ConfirmationRequired: true,
+			AuditResourceType:    "permission_package_approval_request",
+		},
+	}
+	for i := range tools {
+		if execution, ok := executionByName[tools[i].Name]; ok {
+			tools[i].Execution = execution
+			continue
+		}
+		tools[i].Execution = managementMCPToolExecution{Idempotency: "safe_repeat"}
 	}
 	return tools
 }

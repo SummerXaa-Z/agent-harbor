@@ -1074,6 +1074,28 @@ func TestManagementJSONRejectsOversizedBody(t *testing.T) {
 	}
 }
 
+func TestManagementJSONRejectsTrailingTokens(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	payload := `{"name":"Trailing Agent","workspaceId":"ws-1","channelType":"local","status":"active"} {}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected trailing management JSON body to return 400, got %d", rec.Code)
+	}
+	var env apiEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if env.Error != "INVALID_JSON" {
+		t.Fatalf("expected INVALID_JSON, got %#v", env)
+	}
+}
+
 func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	router := newRouterWithAdmin("test-admin")
 

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
@@ -55,6 +56,15 @@ func decodeJSON(r *http.Request, out any) error {
 			return domain.PayloadTooLarge("request body exceeds 1MiB")
 		}
 		return domain.BadRequest("INVALID_JSON", "request body must be valid JSON")
+	}
+
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return domain.PayloadTooLarge("request body exceeds 1MiB")
+		}
+		return domain.BadRequest("INVALID_JSON", "request body must contain a single JSON value")
 	}
 	return nil
 }

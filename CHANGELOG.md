@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: Management JSON endpoints now reject request bodies that contain trailing JSON values or extra non-whitespace content after the first decoded value.
+- 2026-07-08：管理 JSON 接口现在会拒绝首个 JSON 值之后仍包含额外 JSON 值或非空白内容的请求体。
 - 2026-07-08: Management JSON endpoints now reject request bodies larger than 1 MiB before decoding, returning `PAYLOAD_TOO_LARGE` before oversized console or API writes reach business handlers.
 - 2026-07-08：管理 JSON 接口现在会在解码前拒绝超过 1 MiB 的请求体，并返回 `PAYLOAD_TOO_LARGE`，避免过大的控制台或 API 写请求进入业务处理。
 - 2026-07-08: Console login rate limiting now caps tracked failed-login clients and evicts the oldest active window when the cap is full, limiting memory growth from distributed failed login attempts.

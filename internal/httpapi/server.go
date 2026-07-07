@@ -1920,6 +1920,7 @@ type permissionPackageProductionEvidenceReportResponse struct {
 	ReportVersion         string                                      `json:"reportVersion"`
 	ReportDigest          string                                      `json:"reportDigest,omitempty"`
 	ReportDigestAlgorithm string                                      `json:"reportDigestAlgorithm"`
+	GeneratedBy           string                                      `json:"generatedBy"`
 	GeneratedAt           time.Time                                   `json:"generatedAt"`
 	PlatformContract      permissionPackageProductionPlatformContract `json:"platformContract"`
 	Scope                 permissionPackageProductionEvidenceScope    `json:"scope"`
@@ -2033,7 +2034,7 @@ func (s *Server) getPermissionPackageProductionEvidenceReport(w http.ResponseWri
 		writeError(w, err)
 		return
 	}
-	result, err := s.permissionPackageProductionEvidenceReport(r.Context(), query)
+	result, err := s.permissionPackageProductionEvidenceReport(r.Context(), query, managementActor(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -2558,15 +2559,15 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 	return result, nil
 }
 
-func (s *Server) permissionPackageProductionEvidenceReport(ctx context.Context, query permissionPackageProductionReadinessQuery) (permissionPackageProductionEvidenceReportResponse, error) {
+func (s *Server) permissionPackageProductionEvidenceReport(ctx context.Context, query permissionPackageProductionReadinessQuery, generatedBy string) (permissionPackageProductionEvidenceReportResponse, error) {
 	readiness, err := s.permissionPackageProductionReadiness(ctx, query)
 	if err != nil {
 		return permissionPackageProductionEvidenceReportResponse{}, err
 	}
-	return permissionPackageProductionEvidenceReportFromReadiness(query, readiness), nil
+	return permissionPackageProductionEvidenceReportFromReadiness(query, readiness, generatedBy), nil
 }
 
-func permissionPackageProductionEvidenceReportFromReadiness(query permissionPackageProductionReadinessQuery, readiness permissionPackageProductionReadinessResponse) permissionPackageProductionEvidenceReportResponse {
+func permissionPackageProductionEvidenceReportFromReadiness(query permissionPackageProductionReadinessQuery, readiness permissionPackageProductionReadinessResponse, generatedBy string) permissionPackageProductionEvidenceReportResponse {
 	scope := permissionPackageProductionEvidenceScope{
 		TenantID:         query.TenantID,
 		WorkspaceID:      query.WorkspaceID,
@@ -2619,6 +2620,7 @@ func permissionPackageProductionEvidenceReportFromReadiness(query permissionPack
 	report := permissionPackageProductionEvidenceReportResponse{
 		ReportVersion:         permissionPackageProductionEvidenceReportVersion,
 		ReportDigestAlgorithm: permissionPackageProductionEvidenceReportDigestAlgorithm,
+		GeneratedBy:           generatedBy,
 		GeneratedAt:           readiness.GeneratedAt,
 		PlatformContract: permissionPackageProductionPlatformContract{
 			APIVersion: systemAPIVersion,

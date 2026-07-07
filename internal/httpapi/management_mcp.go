@@ -489,7 +489,7 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err := s.requirePermissionPackageQueryScope(r, query); err != nil {
 			return managementMCPCallResult{}, err
 		}
-		report, err := s.permissionPackageProductionEvidenceReport(r.Context(), query)
+		report, err := s.permissionPackageProductionEvidenceReport(r.Context(), query, managementActor(r))
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}

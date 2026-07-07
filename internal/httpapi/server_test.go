@@ -425,6 +425,7 @@ type permissionPackageProductionEvidenceReportResponse struct {
 	ReportVersion         string                                      `json:"reportVersion"`
 	ReportDigest          string                                      `json:"reportDigest"`
 	ReportDigestAlgorithm string                                      `json:"reportDigestAlgorithm"`
+	GeneratedBy           string                                      `json:"generatedBy"`
 	Status                string                                      `json:"status"`
 	PlatformContract      permissionPackageProductionPlatformContract `json:"platformContract"`
 	Scope                 permissionPackageProductionEvidenceScope    `json:"scope"`
@@ -5628,6 +5629,9 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		!isSHA256Hex(beforeReport.PlatformContract.ManagementMcpToolCatalog.CatalogDigest) {
 		t.Fatalf("expected blocked production report platform contract, got %#v", beforeReport.PlatformContract)
 	}
+	if beforeReport.GeneratedBy != "local-dev" {
+		t.Fatalf("expected blocked production report generatedBy=%q, got %q", "local-dev", beforeReport.GeneratedBy)
+	}
 	assertProductionReportDigest(t, beforeReportResp, beforeReport.ReportDigest)
 
 	applyInput := map[string]any{
@@ -5679,6 +5683,9 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		afterReport.PlatformContract.ManagementMcpToolCatalog.MetadataVersion != beforeReport.PlatformContract.ManagementMcpToolCatalog.MetadataVersion ||
 		afterReport.PlatformContract.ManagementMcpToolCatalog.CatalogDigest != beforeReport.PlatformContract.ManagementMcpToolCatalog.CatalogDigest {
 		t.Fatalf("expected stable production report platform contract, before=%#v after=%#v", beforeReport.PlatformContract, afterReport.PlatformContract)
+	}
+	if afterReport.GeneratedBy != beforeReport.GeneratedBy {
+		t.Fatalf("expected stable production report generatedBy, before=%q after=%q", beforeReport.GeneratedBy, afterReport.GeneratedBy)
 	}
 	assertProductionReportDigest(t, afterReportResp, afterReport.ReportDigest)
 	for _, check := range []string{
@@ -8024,6 +8031,9 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		report.PlatformContract.ManagementMcpToolCatalog.MetadataVersion != tools.Result.MetadataVersion ||
 		report.PlatformContract.ManagementMcpToolCatalog.CatalogDigest != tools.Result.CatalogDigest {
 		t.Fatalf("unexpected production report platform contract from MCP: report=%#v tools=%#v", report.PlatformContract, tools.Result)
+	}
+	if report.GeneratedBy != "local-dev" {
+		t.Fatalf("unexpected production report generatedBy from MCP: %q", report.GeneratedBy)
 	}
 	assertProductionReportDigestFromRaw(t, reportCall.Result.StructuredContent, report.ReportDigest)
 	legacyReportCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{

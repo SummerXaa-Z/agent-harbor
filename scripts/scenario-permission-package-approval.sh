@@ -849,6 +849,8 @@ report = json.loads(os.environ["RESPONSE_BODY"])["data"]
 expected_status, expected_check, application_id, tenant_id, workspace_id = sys.argv[1:6]
 if report.get("reportVersion") != "production-readiness-report/v1":
     raise SystemExit(f"unexpected report version: {report}")
+if not isinstance(report.get("generatedBy"), str) or not report.get("generatedBy").strip():
+    raise SystemExit(f"production report generatedBy should identify the exporting admin: {report.get('generatedBy')!r}")
 report_digest = report.get("reportDigest")
 if not re.fullmatch(r"[a-f0-9]{64}", str(report_digest or "")):
     raise SystemExit(f"production report digest should be a sha256 hex digest: {report_digest!r}")

@@ -260,6 +260,7 @@ export interface PermissionPackageProductionEvidenceReport {
   reportDigest: string;
   reportDigestAlgorithm: string;
   generatedAt: string;
+  generatedBy: string;
   platformContract: PermissionPackageProductionPlatformContract;
   scope: PermissionPackageProductionEvidenceScope;
   status: PermissionPackageProductionReadinessStatus;

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Production go-live status reports now include `reportDigestAlgorithm`, making the `reportDigest` verification contract self-describing for handoff reviewers.
+- 2026-07-08：上线状态报告现在会包含 `reportDigestAlgorithm`，让交接复核方可以直接知道 `reportDigest` 的校验合同。
 - 2026-07-08: Production go-live status reports now include a stable `reportDigest` over the report JSON payload, and the release scenario recalculates it before accepting the report.
 - 2026-07-08：上线状态报告现在会包含基于报告 JSON 内容生成的稳定 `reportDigest`，发布场景会重新计算后再接受该报告。
 - 2026-07-08: Production go-live status reports now include a `platformContract` stamp with the API version plus Management MCP catalog `metadataVersion` and `catalogDigest`, and the release scenario cross-checks it against `/api/v1/system/info`.

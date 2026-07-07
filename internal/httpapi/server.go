@@ -1911,21 +1911,25 @@ type permissionPackageAuditEvidence struct {
 	AppliedEvent *domain.AuditEvent `json:"appliedEvent,omitempty"`
 }
 
-const permissionPackageProductionEvidenceReportVersion = "production-readiness-report/v1"
+const (
+	permissionPackageProductionEvidenceReportVersion         = "production-readiness-report/v1"
+	permissionPackageProductionEvidenceReportDigestAlgorithm = "sha256-canonical-json-v1"
+)
 
 type permissionPackageProductionEvidenceReportResponse struct {
-	ReportVersion        string                                      `json:"reportVersion"`
-	ReportDigest         string                                      `json:"reportDigest,omitempty"`
-	GeneratedAt          time.Time                                   `json:"generatedAt"`
-	PlatformContract     permissionPackageProductionPlatformContract `json:"platformContract"`
-	Scope                permissionPackageProductionEvidenceScope    `json:"scope"`
-	Status               string                                      `json:"status"`
-	Summary              permissionPackageProductionReadinessSummary `json:"summary"`
-	Checks               []permissionPackageProductionReadinessCheck `json:"checks"`
-	Evidence             permissionPackageProductionEvidenceRefs     `json:"evidence"`
-	NextActionCode       string                                      `json:"nextActionCode"`
-	NextActions          []string                                    `json:"nextActions"`
-	ReadinessGeneratedAt time.Time                                   `json:"readinessGeneratedAt"`
+	ReportVersion         string                                      `json:"reportVersion"`
+	ReportDigest          string                                      `json:"reportDigest,omitempty"`
+	ReportDigestAlgorithm string                                      `json:"reportDigestAlgorithm"`
+	GeneratedAt           time.Time                                   `json:"generatedAt"`
+	PlatformContract      permissionPackageProductionPlatformContract `json:"platformContract"`
+	Scope                 permissionPackageProductionEvidenceScope    `json:"scope"`
+	Status                string                                      `json:"status"`
+	Summary               permissionPackageProductionReadinessSummary `json:"summary"`
+	Checks                []permissionPackageProductionReadinessCheck `json:"checks"`
+	Evidence              permissionPackageProductionEvidenceRefs     `json:"evidence"`
+	NextActionCode        string                                      `json:"nextActionCode"`
+	NextActions           []string                                    `json:"nextActions"`
+	ReadinessGeneratedAt  time.Time                                   `json:"readinessGeneratedAt"`
 }
 
 type permissionPackageProductionPlatformContract struct {
@@ -2613,8 +2617,9 @@ func permissionPackageProductionEvidenceReportFromReadiness(query permissionPack
 	}
 	toolCatalog := systemInfoManagementMcpToolCatalogSummary()
 	report := permissionPackageProductionEvidenceReportResponse{
-		ReportVersion: permissionPackageProductionEvidenceReportVersion,
-		GeneratedAt:   readiness.GeneratedAt,
+		ReportVersion:         permissionPackageProductionEvidenceReportVersion,
+		ReportDigestAlgorithm: permissionPackageProductionEvidenceReportDigestAlgorithm,
+		GeneratedAt:           readiness.GeneratedAt,
 		PlatformContract: permissionPackageProductionPlatformContract{
 			APIVersion: systemAPIVersion,
 			ManagementMcpToolCatalog: permissionPackageProductionManagementMcpToolCatalogStamp{

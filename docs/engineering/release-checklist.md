@@ -38,9 +38,9 @@ The production safety baseline starts a local API with `AGENT_HARBOR_ADMIN_KEY` 
 
 生产安全基线还必须验证 `AGENT_HARBOR_DEPLOYMENT_MODE=production` 会在启动或存储初始化前阻断开发专用的管理绕过、私有上游开关、格式错误、actor 格式无效、弱值、冲突、使用保留 actor、平台管理员携带租户范围或缺少平台管理员的引导管理员身份、格式错误、未绑定认证身份或范围过宽的审批人路由、缺失或弱值会话密钥、缺失或无效的持久化存储、缺失凭据加密密钥和无效 CORS 来源。
 
-The approval-required permission package journey gate starts an isolated local API and mock MCP service when `BASE_URL` is not provided. It must prove draft, approval request, withdrawal, approval expiry metadata, approved preflight, approved apply, atomic one-time approval consumption, consumed-approval reuse rejection, runtime allow/deny, tenant access-profile, permission package application, impact review, readiness report with the report digest and platform contract stamp, and applied audit records without adding browser automation dependencies.
+The approval-required permission package journey gate starts an isolated local API and mock MCP service when `BASE_URL` is not provided. It must prove draft, approval request, withdrawal, approval expiry metadata, approved preflight, approved apply, atomic one-time approval consumption, consumed-approval reuse rejection, runtime allow/deny, tenant access-profile, permission package application, impact review, readiness report with the digest algorithm, report digest, and platform contract stamp, and applied audit records without adding browser automation dependencies.
 
-需审批权限包旅程门禁在未提供 `BASE_URL` 时会启动隔离端口的本地 API 和 mock MCP 服务；它必须验证草稿、审批请求、撤回、审批过期元数据、已审批预检、已审批应用、审批一次性原子消费、已消费审批复用拒绝、运行时允许/拒绝、租户访问画像、权限包应用、影响复核、带报告摘要和平台合同戳的上线状态报告，以及应用审计记录，且不新增浏览器自动化依赖。
+需审批权限包旅程门禁在未提供 `BASE_URL` 时会启动隔离端口的本地 API 和 mock MCP 服务；它必须验证草稿、审批请求、撤回、审批过期元数据、已审批预检、已审批应用、审批一次性原子消费、已消费审批复用拒绝、运行时允许/拒绝、租户访问画像、权限包应用、影响复核、带摘要算法、报告摘要和平台合同戳的上线状态报告，以及应用审计记录，且不新增浏览器自动化依赖。
 
 The browser-facing AI Admin approval journey gate starts the API, MCP tool service, and web console on isolated ports. It must prove the browser origin is served, the subject-id header is accepted by CORS, and the same approval-required permission package journey completes while the console server is live.
 

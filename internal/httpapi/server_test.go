@@ -422,17 +422,18 @@ type permissionPackageAuditEvidence struct {
 }
 
 type permissionPackageProductionEvidenceReportResponse struct {
-	ReportVersion        string                                      `json:"reportVersion"`
-	ReportDigest         string                                      `json:"reportDigest"`
-	Status               string                                      `json:"status"`
-	PlatformContract     permissionPackageProductionPlatformContract `json:"platformContract"`
-	Scope                permissionPackageProductionEvidenceScope    `json:"scope"`
-	Summary              permissionPackageProductionReadinessSummary `json:"summary"`
-	Checks               []permissionPackageProductionReadinessCheck `json:"checks"`
-	Evidence             permissionPackageProductionEvidenceRefs     `json:"evidence"`
-	NextActionCode       string                                      `json:"nextActionCode"`
-	NextActions          []string                                    `json:"nextActions"`
-	ReadinessGeneratedAt string                                      `json:"readinessGeneratedAt"`
+	ReportVersion         string                                      `json:"reportVersion"`
+	ReportDigest          string                                      `json:"reportDigest"`
+	ReportDigestAlgorithm string                                      `json:"reportDigestAlgorithm"`
+	Status                string                                      `json:"status"`
+	PlatformContract      permissionPackageProductionPlatformContract `json:"platformContract"`
+	Scope                 permissionPackageProductionEvidenceScope    `json:"scope"`
+	Summary               permissionPackageProductionReadinessSummary `json:"summary"`
+	Checks                []permissionPackageProductionReadinessCheck `json:"checks"`
+	Evidence              permissionPackageProductionEvidenceRefs     `json:"evidence"`
+	NextActionCode        string                                      `json:"nextActionCode"`
+	NextActions           []string                                    `json:"nextActions"`
+	ReadinessGeneratedAt  string                                      `json:"readinessGeneratedAt"`
 }
 
 type permissionPackageProductionPlatformContract struct {
@@ -9592,6 +9593,9 @@ func assertProductionReportDigestFromRaw(t *testing.T, raw json.RawMessage, repo
 	var payload map[string]any
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		t.Fatalf("decode production report digest payload: %v raw=%s", err, string(raw))
+	}
+	if payload["reportDigestAlgorithm"] != "sha256-canonical-json-v1" {
+		t.Fatalf("production report digest algorithm=%#v", payload["reportDigestAlgorithm"])
 	}
 	delete(payload, "reportDigest")
 	canonical, err := json.Marshal(payload)

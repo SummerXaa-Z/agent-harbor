@@ -258,6 +258,7 @@ export interface PermissionPackageAuditEvidence {
 export interface PermissionPackageProductionEvidenceReport {
   reportVersion: string;
   reportDigest: string;
+  reportDigestAlgorithm: string;
   generatedAt: string;
   platformContract: PermissionPackageProductionPlatformContract;
   scope: PermissionPackageProductionEvidenceScope;

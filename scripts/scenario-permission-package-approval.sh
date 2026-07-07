@@ -852,6 +852,8 @@ if report.get("reportVersion") != "production-readiness-report/v1":
 report_digest = report.get("reportDigest")
 if not re.fullmatch(r"[a-f0-9]{64}", str(report_digest or "")):
     raise SystemExit(f"production report digest should be a sha256 hex digest: {report_digest!r}")
+if report.get("reportDigestAlgorithm") != "sha256-canonical-json-v1":
+    raise SystemExit(f"production report digest algorithm={report.get('reportDigestAlgorithm')!r} want 'sha256-canonical-json-v1'")
 digest_payload = dict(report)
 digest_payload.pop("reportDigest", None)
 expected_digest = hashlib.sha256(json.dumps(digest_payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()

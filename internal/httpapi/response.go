@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
+	"strings"
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
 )
@@ -45,6 +47,10 @@ func writeError(w http.ResponseWriter, err error) {
 }
 
 func decodeJSON(r *http.Request, out any) error {
+	if err := requireJSONContentType(r); err != nil {
+		return err
+	}
+
 	limitedBody := http.MaxBytesReader(nil, r.Body, maxJSONBodyBytes)
 	defer limitedBody.Close()
 
@@ -65,6 +71,18 @@ func decodeJSON(r *http.Request, out any) error {
 			return domain.PayloadTooLarge("request body exceeds 1MiB")
 		}
 		return domain.BadRequest("INVALID_JSON", "request body must contain a single JSON value")
+	}
+	return nil
+}
+
+func requireJSONContentType(r *http.Request) error {
+	contentType := strings.TrimSpace(r.Header.Get("Content-Type"))
+	if contentType == "" {
+		return domain.UnsupportedMediaType("content type must be application/json")
+	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil || !strings.EqualFold(mediaType, "application/json") {
+		return domain.UnsupportedMediaType("content type must be application/json")
 	}
 	return nil
 }

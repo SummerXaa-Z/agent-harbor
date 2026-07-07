@@ -28,6 +28,10 @@ func PayloadTooLarge(message string) AppError {
 	return AppError{Status: 413, Code: "PAYLOAD_TOO_LARGE", Message: message}
 }
 
+func UnsupportedMediaType(message string) AppError {
+	return AppError{Status: 415, Code: "UNSUPPORTED_MEDIA_TYPE", Message: message}
+}
+
 func Unauthorized(message string) AppError {
 	return AppError{Status: 401, Code: "UNAUTHORIZED", Message: message}
 }

@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: Management JSON endpoints now reject non-JSON `Content-Type` requests with `UNSUPPORTED_MEDIA_TYPE`, while continuing to accept `application/json` with parameters such as charset.
+- 2026-07-08：管理 JSON 接口现在会用 `UNSUPPORTED_MEDIA_TYPE` 拒绝非 JSON `Content-Type` 请求，同时继续接受带 charset 等参数的 `application/json`。
 - 2026-07-08: Management JSON endpoints now reject request bodies that contain trailing JSON values or extra non-whitespace content after the first decoded value.
 - 2026-07-08：管理 JSON 接口现在会拒绝首个 JSON 值之后仍包含额外 JSON 值或非空白内容的请求体。
 - 2026-07-08: Management JSON endpoints now reject request bodies larger than 1 MiB before decoding, returning `PAYLOAD_TOO_LARGE` before oversized console or API writes reach business handlers.

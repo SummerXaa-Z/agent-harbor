@@ -1096,6 +1096,43 @@ func TestManagementJSONRejectsTrailingTokens(t *testing.T) {
 	}
 }
 
+func TestManagementJSONRejectsNonJSONContentType(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	payload := `{"name":"Text Agent","workspaceId":"ws-1","channelType":"local","status":"active"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("X-Admin-Key", "test-admin")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("expected non-JSON management request to return 415, got %d", rec.Code)
+	}
+	var env apiEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if env.Error != "UNSUPPORTED_MEDIA_TYPE" {
+		t.Fatalf("expected UNSUPPORTED_MEDIA_TYPE, got %#v", env)
+	}
+}
+
+func TestManagementJSONAcceptsJSONContentTypeWithCharset(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	payload := `{"name":"Charset Agent","workspaceId":"ws-1","channelType":"local","status":"active"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("X-Admin-Key", "test-admin")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected JSON content type with charset to be accepted, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestConsoleAuthSessionProtectsManagementEndpoints(t *testing.T) {
 	router := newRouterWithAdmin("test-admin")
 

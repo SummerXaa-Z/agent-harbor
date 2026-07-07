@@ -162,6 +162,7 @@ import {
   type PermissionPackageApprovalRequest,
   type PermissionPackageDraft,
   type PermissionPackageDraftInput,
+  type PermissionPackageProductionEvidenceReport,
   type PermissionPackageProductionReadiness,
   type PermissionPackageProductionReadinessFilter,
   type PermissionPackageTemplate,
@@ -525,6 +526,10 @@ export function ConsoleController() {
     useState<LocalizedMessage | null>(null);
   const [aiAdminProductionReadiness, setAiAdminProductionReadiness] =
     useState<PermissionPackageProductionReadiness | null>(null);
+  const [aiAdminProductionReport, setAiAdminProductionReport] = useReducer(
+    (_current: PermissionPackageProductionEvidenceReport | null, next: PermissionPackageProductionEvidenceReport | null) => next,
+    null
+  );
   const [aiAdminProductionReadinessLoading, setAiAdminProductionReadinessLoading] = useState(false);
   const [aiAdminProductionEvidenceExporting, setAiAdminProductionEvidenceExporting] = useState(false);
   const [aiAdminProductionReadinessMessageState, setAiAdminProductionReadinessMessage] =
@@ -1082,6 +1087,7 @@ export function ConsoleController() {
         aiAdminProductionReadinessFilter(formInput),
         adminKey
       );
+      setAiAdminProductionReport(report);
       downloadJson(report, productionAcceptanceReportFilename(report));
       setAiAdminMessage({ key: "message.productionEvidenceExported" });
       return report;
@@ -2351,6 +2357,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onRunConnectionDiagnostics={() => void connectionDiagnostics.run()}
         onRefreshProductionReadiness={() => void refreshAiAdminProductionReadiness(goLiveAcceptanceForm)}
         productionEvidenceExporting={aiAdminProductionEvidenceExporting}
+        productionReport={aiAdminProductionReport}
         productionReadiness={aiAdminProductionReadiness}
         productionReadinessLoading={aiAdminProductionReadinessLoading}
         productionReadinessMessage={aiAdminProductionReadinessMessage}

@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 
 import {
+  formatDate,
   permissionEntityDisplayName,
   readableIdentifierLabel,
   type Tone,
@@ -23,6 +24,7 @@ import {
 import type {
   PermissionPackageDraft,
   PermissionPackageDraftInput,
+  PermissionPackageProductionEvidenceReport,
   PermissionPackageProductionReadiness,
   PermissionPackageTemplate
 } from "../permissionPackages";
@@ -47,6 +49,7 @@ export function GoLiveAcceptanceOverview({
   onRunConnectionDiagnostics,
   onRefreshProductionReadiness,
   productionEvidenceExporting,
+  productionReport,
   productionReadiness,
   productionReadinessLoading,
   productionReadinessMessage,
@@ -66,6 +69,7 @@ export function GoLiveAcceptanceOverview({
   onRunConnectionDiagnostics: () => void;
   onRefreshProductionReadiness: () => void;
   productionEvidenceExporting: boolean;
+  productionReport: PermissionPackageProductionEvidenceReport | null;
   productionReadiness: PermissionPackageProductionReadiness | null;
   productionReadinessLoading: boolean;
   productionReadinessMessage: string;
@@ -94,6 +98,9 @@ export function GoLiveAcceptanceOverview({
     : acceptanceInput.targetId
       ? t("text.selectedTargetFallback")
       : t("text.targetPendingSelection");
+  const matchingProductionReport = reportMatchesAcceptanceScope(productionReport, acceptanceInput, productionReadiness)
+    ? productionReport
+    : null;
   const acceptanceCenter = buildProductionAcceptanceCenter({
     connectionStatus,
     liveDataAvailable,
@@ -231,11 +238,36 @@ export function GoLiveAcceptanceOverview({
               <dt>{t("form.permissionPackage")}</dt>
               <dd>{templateName}</dd>
             </div>
+            {matchingProductionReport ? (
+              <div className="go-live-acceptance-report">
+                <dt>{t("productionAcceptance.report")}</dt>
+                <dd>
+                  {tx(t, "productionAcceptance.reportExportedBy", {
+                    actor: permissionEntityDisplayName(matchingProductionReport.generatedBy, t),
+                    date: formatDate(matchingProductionReport.generatedAt)
+                  })}
+                </dd>
+              </div>
+            ) : null}
           </dl>
         </aside>
       </section>
     </div>
   );
+}
+
+function reportMatchesAcceptanceScope(
+  report: PermissionPackageProductionEvidenceReport | null,
+  input: PermissionPackageDraftInput,
+  readiness: PermissionPackageProductionReadiness | null
+) {
+  if (!report) return false;
+  if (readiness && report.readinessGeneratedAt !== readiness.generatedAt) return false;
+  return report.scope.tenantId === input.tenantId &&
+    report.scope.workspaceId === input.workspaceId &&
+    report.scope.templateId === input.templateId &&
+    report.scope.targetId === input.targetId &&
+    report.scope.callerInstanceId === input.callerInstanceId;
 }
 
 function renderProductionAcceptanceAction({

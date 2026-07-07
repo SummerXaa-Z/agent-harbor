@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -422,6 +423,7 @@ type permissionPackageAuditEvidence struct {
 
 type permissionPackageProductionEvidenceReportResponse struct {
 	ReportVersion        string                                      `json:"reportVersion"`
+	ReportDigest         string                                      `json:"reportDigest"`
 	Status               string                                      `json:"status"`
 	PlatformContract     permissionPackageProductionPlatformContract `json:"platformContract"`
 	Scope                permissionPackageProductionEvidenceScope    `json:"scope"`
@@ -5611,7 +5613,8 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		!permissionPackageProductionReadinessHasCheck(before.Checks, "application_present", "blocking") {
 		t.Fatalf("expected ready preflight and missing application blocker, got %#v", before.Checks)
 	}
-	beforeReport := decodeData[permissionPackageProductionEvidenceReportResponse](t, request(t, router, http.MethodGet, permissionPackageProductionEvidenceReportPath(input, approved.ID, "user:support-001"), nil, ""))
+	beforeReportResp := request(t, router, http.MethodGet, permissionPackageProductionEvidenceReportPath(input, approved.ID, "user:support-001"), nil, "")
+	beforeReport := decodeData[permissionPackageProductionEvidenceReportResponse](t, beforeReportResp)
 	if beforeReport.ReportVersion != "production-readiness-report/v1" || beforeReport.Status != "blocked" ||
 		beforeReport.Scope.TenantID != "tenant-east" || beforeReport.Scope.SubjectID != "user:support-001" ||
 		beforeReport.Evidence.Application.Present || beforeReport.Summary.BlockingCount == 0 ||
@@ -5624,6 +5627,7 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		!isSHA256Hex(beforeReport.PlatformContract.ManagementMcpToolCatalog.CatalogDigest) {
 		t.Fatalf("expected blocked production report platform contract, got %#v", beforeReport.PlatformContract)
 	}
+	assertProductionReportDigest(t, beforeReportResp, beforeReport.ReportDigest)
 
 	applyInput := map[string]any{
 		"approvalRequestId": approved.ID,
@@ -5657,7 +5661,8 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		after.AuditEvidence.AppliedEvent == nil || after.AuditEvidence.AppliedEvent.ResourceID != applied.Application.ID {
 		t.Fatalf("expected runtime and audit evidence, got runtime=%#v audit=%#v", after.RuntimeEvidence, after.AuditEvidence)
 	}
-	afterReport := decodeData[permissionPackageProductionEvidenceReportResponse](t, request(t, router, http.MethodGet, permissionPackageProductionEvidenceReportPath(input, "", "user:support-001"), nil, ""))
+	afterReportResp := request(t, router, http.MethodGet, permissionPackageProductionEvidenceReportPath(input, "", "user:support-001"), nil, "")
+	afterReport := decodeData[permissionPackageProductionEvidenceReportResponse](t, afterReportResp)
 	if afterReport.ReportVersion != "production-readiness-report/v1" || afterReport.Status != "ready" ||
 		afterReport.Evidence.Application.ID != applied.Application.ID ||
 		afterReport.Evidence.Application.TemplateVersion != 1 ||
@@ -5674,6 +5679,7 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		afterReport.PlatformContract.ManagementMcpToolCatalog.CatalogDigest != beforeReport.PlatformContract.ManagementMcpToolCatalog.CatalogDigest {
 		t.Fatalf("expected stable production report platform contract, before=%#v after=%#v", beforeReport.PlatformContract, afterReport.PlatformContract)
 	}
+	assertProductionReportDigest(t, afterReportResp, afterReport.ReportDigest)
 	for _, check := range []string{
 		"application_present",
 		"application_health_ready",
@@ -8018,6 +8024,7 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		report.PlatformContract.ManagementMcpToolCatalog.CatalogDigest != tools.Result.CatalogDigest {
 		t.Fatalf("unexpected production report platform contract from MCP: report=%#v tools=%#v", report.PlatformContract, tools.Result)
 	}
+	assertProductionReportDigestFromRaw(t, reportCall.Result.StructuredContent, report.ReportDigest)
 	legacyReportCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "legacy-production-report",
@@ -9566,6 +9573,35 @@ func decodeData[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 		t.Fatalf("decode data: %v raw=%s", err, string(env.Data))
 	}
 	return out
+}
+
+func assertProductionReportDigest(t *testing.T, rec *httptest.ResponseRecorder, reportDigest string) {
+	t.Helper()
+	var env apiEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode envelope for production report digest: %v body=%s", err, rec.Body.String())
+	}
+	assertProductionReportDigestFromRaw(t, env.Data, reportDigest)
+}
+
+func assertProductionReportDigestFromRaw(t *testing.T, raw json.RawMessage, reportDigest string) {
+	t.Helper()
+	if !isSHA256Hex(reportDigest) {
+		t.Fatalf("production report digest should be sha256 hex, got %q", reportDigest)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("decode production report digest payload: %v raw=%s", err, string(raw))
+	}
+	delete(payload, "reportDigest")
+	canonical, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal production report digest payload: %v", err)
+	}
+	sum := sha256.Sum256(canonical)
+	if expected := hex.EncodeToString(sum[:]); reportDigest != expected {
+		t.Fatalf("production report digest=%q want %q payload=%s", reportDigest, expected, string(canonical))
+	}
 }
 
 func isSHA256Hex(value string) bool {

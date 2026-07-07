@@ -840,6 +840,7 @@ assert_production_evidence_report() {
   local expected_check="$2"
   RESPONSE_BODY="$HTTP_BODY" SYSTEM_INFO_BODY="$SYSTEM_INFO_BODY" python3 - "$expected_status" "$expected_check" "$APPLICATION_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID" <<'PY'
 import json
+import hashlib
 import os
 import re
 import sys
@@ -848,6 +849,14 @@ report = json.loads(os.environ["RESPONSE_BODY"])["data"]
 expected_status, expected_check, application_id, tenant_id, workspace_id = sys.argv[1:6]
 if report.get("reportVersion") != "production-readiness-report/v1":
     raise SystemExit(f"unexpected report version: {report}")
+report_digest = report.get("reportDigest")
+if not re.fullmatch(r"[a-f0-9]{64}", str(report_digest or "")):
+    raise SystemExit(f"production report digest should be a sha256 hex digest: {report_digest!r}")
+digest_payload = dict(report)
+digest_payload.pop("reportDigest", None)
+expected_digest = hashlib.sha256(json.dumps(digest_payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+if report_digest != expected_digest:
+    raise SystemExit(f"production report digest={report_digest!r} want {expected_digest!r}")
 if report.get("status") != expected_status:
     raise SystemExit(f"production report status={report.get('status')!r} want {expected_status!r}: {report}")
 system_info = json.loads(os.environ["SYSTEM_INFO_BODY"]).get("data", {})

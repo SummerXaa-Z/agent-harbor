@@ -1915,6 +1915,7 @@ const permissionPackageProductionEvidenceReportVersion = "production-readiness-r
 
 type permissionPackageProductionEvidenceReportResponse struct {
 	ReportVersion        string                                      `json:"reportVersion"`
+	ReportDigest         string                                      `json:"reportDigest,omitempty"`
 	GeneratedAt          time.Time                                   `json:"generatedAt"`
 	PlatformContract     permissionPackageProductionPlatformContract `json:"platformContract"`
 	Scope                permissionPackageProductionEvidenceScope    `json:"scope"`
@@ -2611,7 +2612,7 @@ func permissionPackageProductionEvidenceReportFromReadiness(query permissionPack
 		evidence.Audit.AppliedEventID = readiness.AuditEvidence.AppliedEvent.ID
 	}
 	toolCatalog := systemInfoManagementMcpToolCatalogSummary()
-	return permissionPackageProductionEvidenceReportResponse{
+	report := permissionPackageProductionEvidenceReportResponse{
 		ReportVersion: permissionPackageProductionEvidenceReportVersion,
 		GeneratedAt:   readiness.GeneratedAt,
 		PlatformContract: permissionPackageProductionPlatformContract{
@@ -2630,6 +2631,26 @@ func permissionPackageProductionEvidenceReportFromReadiness(query permissionPack
 		NextActions:          append([]string(nil), readiness.NextActions...),
 		ReadinessGeneratedAt: readiness.GeneratedAt,
 	}
+	report.ReportDigest = permissionPackageProductionEvidenceReportDigest(report)
+	return report
+}
+
+func permissionPackageProductionEvidenceReportDigest(report permissionPackageProductionEvidenceReportResponse) string {
+	report.ReportDigest = ""
+	payload, err := json.Marshal(report)
+	if err != nil {
+		return ""
+	}
+	var canonical any
+	if err := json.Unmarshal(payload, &canonical); err != nil {
+		return ""
+	}
+	canonicalPayload, err := json.Marshal(canonical)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(canonicalPayload)
+	return hex.EncodeToString(sum[:])
 }
 
 func stringOrDefault(value string, fallback string) string {

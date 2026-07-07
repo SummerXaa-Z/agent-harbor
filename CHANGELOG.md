@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Management MCP `tools/list` now returns `lifecycle` metadata for every tool, including machine-readable compatibility-alias status and preferred tool names for legacy aliases.
+- Management MCP 的 `tools/list` 现在会为每个工具返回 `lifecycle` 元数据，包括兼容别名状态和旧别名对应的首选工具名，便于管理 Agent 直接读取。
 - Management MCP now exposes `export_permission_package_production_report` as the preferred read-only acceptance-report export tool while retaining `export_permission_package_production_evidence` as a compatibility alias.
 - Management MCP 现在提供 `export_permission_package_production_report` 作为首选的只读验收报告导出工具，同时继续保留 `export_permission_package_production_evidence` 作为兼容别名。
 - Connection diagnostics now requires the preferred `export_permission_package_production_report` tool in the Management MCP catalog, so old APIs that only expose the legacy alias are blocked before admin-agent automation runs.
@@ -26,12 +28,12 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web 控制台现在会在 API 兼容检查中验证 `managementMcpToolCatalog` 系统信息摘要；当后端误声明或缺失 Management MCP 目录元数据契约时，会阻断管理 Agent 工作流。
 - `GET /api/v1/system/info` now includes a `managementMcpToolCatalog` contract summary with metadata version and required metadata fields, giving admin agents a public compatibility hint without exposing live management tools.
 - `GET /api/v1/system/info` 现在包含 `managementMcpToolCatalog` 契约摘要，声明元数据版本和必需元数据字段，让管理 Agent 可在不暴露实时管理工具的前提下进行公开兼容判断。
-- `GET /api/v1/system/info` now advertises `management_mcp_tools_metadata_v1`, and the web console requires it during API compatibility checks before running management MCP catalog diagnostics.
-- `GET /api/v1/system/info` 现在会声明 `management_mcp_tools_metadata_v1`，Web 控制台会在运行 Management MCP 工具目录诊断前先把它纳入 API 兼容检查。
-- Connection diagnostics now checks the management MCP `tools/list` catalog contract, including `metadataVersion`, `safety`, and `access`, so operators can catch incompatible admin-agent tooling before automated writes.
-- 连接诊断现在会检查 Management MCP 的 `tools/list` 目录契约，包括 `metadataVersion`、`safety` 和 `access`，让管理员在自动写操作前发现管理 Agent 工具兼容问题。
-- Management MCP `tools/list` now returns top-level `metadataVersion: 1`, giving admin-agent clients a stable contract marker for the current `safety` and `access` tool catalog metadata.
-- Management MCP 的 `tools/list` 现在会返回顶层 `metadataVersion: 1`，为管理 Agent 客户端标记当前 `safety` 和 `access` 工具目录元数据契约。
+- `GET /api/v1/system/info` now advertises `management_mcp_tools_metadata_v2`, and the web console requires it during API compatibility checks before running management MCP catalog diagnostics.
+- `GET /api/v1/system/info` 现在会声明 `management_mcp_tools_metadata_v2`，Web 控制台会在运行 Management MCP 工具目录诊断前先把它纳入 API 兼容检查。
+- Connection diagnostics now checks the management MCP `tools/list` catalog contract, including `metadataVersion`, `safety`, `access`, and `lifecycle`, so operators can catch incompatible admin-agent tooling before automated writes.
+- 连接诊断现在会检查 Management MCP 的 `tools/list` 目录契约，包括 `metadataVersion`、`safety`、`access` 和 `lifecycle`，让管理员在自动写操作前发现管理 Agent 工具兼容问题。
+- Management MCP `tools/list` now returns top-level `metadataVersion: 2`, giving admin-agent clients a stable contract marker for the current `safety`, `access`, and `lifecycle` tool catalog metadata.
+- Management MCP 的 `tools/list` 现在会返回顶层 `metadataVersion: 2`，为管理 Agent 客户端标记当前 `safety`、`access` 和 `lifecycle` 工具目录元数据契约。
 - Management MCP `tools/list` now returns `access` metadata for every admin tool, including required role, scope boundary, and reviewer binding, so admin agents can route calls without parsing descriptions.
 - Management MCP 的 `tools/list` 现在会为每个管理工具返回 `access` 元数据，包括所需角色、范围边界和审批人绑定，让管理 Agent 无需解析描述文案也能判断调用边界。
 - Management MCP `tools/list` now returns `safety` metadata for every admin tool, including operation type, read-only status, mutation status, and approval mode, so admin agents can avoid accidental writes.
@@ -529,6 +531,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Changed
 
+- Management MCP tool-catalog metadata is now version `2`, and the web console requires `safety`, `access`, and `lifecycle` metadata before allowing admin-agent automation.
+- Management MCP 工具目录元数据现在升级为版本 `2`，Web 控制台会要求同时具备 `safety`、`access` 和 `lifecycle` 元数据后，才允许管理 Agent 自动执行。
 - The web console now writes `#go-live` for the go-live status workspace while still accepting legacy `#evidence` links for compatibility.
 - Web 控制台现在将上线状态工作区写入为 `#go-live`，同时继续兼容旧的 `#evidence` 链接。
 - Legacy `#evidence` browser hash navigation now canonicalizes back to `#go-live`, so copied old links do not leave historical route wording visible after load.

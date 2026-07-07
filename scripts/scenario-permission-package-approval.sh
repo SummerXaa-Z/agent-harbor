@@ -423,8 +423,8 @@ import os
 
 doc = json.loads(os.environ["RESPONSE_BODY"])
 result = doc.get("result", {})
-if result.get("metadataVersion") != 1:
-    raise SystemExit(f"management MCP tools/list metadataVersion={result.get('metadataVersion')!r} want 1")
+if result.get("metadataVersion") != 2:
+    raise SystemExit(f"management MCP tools/list metadataVersion={result.get('metadataVersion')!r} want 2")
 tools_by_name = {
     tool.get("name"): tool
     for tool in result.get("tools", [])
@@ -448,13 +448,27 @@ for name, expected in required_access.items():
     access = (tools_by_name.get(name) or {}).get("access")
     if access != expected:
         raise SystemExit(f"management MCP tool {name!r} access={access!r} want {expected!r}")
+legacy_lifecycle = (tools_by_name.get("export_permission_package_production_evidence") or {}).get("lifecycle")
+expected_legacy_lifecycle = {
+    "status": "compatibility_alias",
+    "preferredName": "export_permission_package_production_report",
+}
+if legacy_lifecycle != expected_legacy_lifecycle:
+    raise SystemExit(
+        f"management MCP legacy report tool lifecycle={legacy_lifecycle!r} want {expected_legacy_lifecycle!r}"
+    )
 for name, tool in tools_by_name.items():
     safety = tool.get("safety") or {}
     access = tool.get("access") or {}
+    lifecycle = tool.get("lifecycle") or {}
     if safety.get("operationType") in ("", "unspecified", None) or safety.get("approvalMode") in ("", "unspecified", None):
         raise SystemExit(f"management MCP tool {name!r} has incomplete safety metadata: {safety!r}")
     if access.get("requiredRole") in ("", "unspecified", None) or access.get("scopeBoundary") in ("", "unspecified", None):
         raise SystemExit(f"management MCP tool {name!r} has incomplete access metadata: {access!r}")
+    if lifecycle.get("status") in ("", "unspecified", None):
+        raise SystemExit(f"management MCP tool {name!r} has incomplete lifecycle metadata: {lifecycle!r}")
+    if lifecycle.get("status") == "compatibility_alias" and not lifecycle.get("preferredName"):
+        raise SystemExit(f"management MCP tool {name!r} compatibility alias is missing preferredName: {lifecycle!r}")
 print("management MCP tool catalog metadata verified")
 PY
 }

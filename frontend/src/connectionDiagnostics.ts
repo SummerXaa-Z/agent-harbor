@@ -12,6 +12,7 @@ export interface ManagementMcpCatalogDiagnostic {
   missingRequiredTools?: string[];
   status: ConnectionDiagnosticStatus;
   toolsWithAccess?: number;
+  toolsWithLifecycle?: number;
   toolsWithSafety?: number;
 }
 
@@ -20,6 +21,10 @@ export interface ManagementMcpCatalogTool {
     requiredRole?: string;
     reviewerBound?: boolean;
     scopeBoundary?: string;
+  };
+  lifecycle?: {
+    preferredName?: string;
+    status?: string;
   };
   name?: string;
   safety?: {
@@ -108,7 +113,7 @@ export function managementMcpCatalogDiagnosticFromResult(
   if (!result || result.metadataVersion === undefined) {
     return { message: "missing metadataVersion", status: "error" };
   }
-  if (result.metadataVersion !== 1) {
+  if (result.metadataVersion !== 2) {
     return { metadataVersion: result.metadataVersion, status: "warning" };
   }
   const tools = Array.isArray(result.tools) ? result.tools : [];
@@ -117,12 +122,14 @@ export function managementMcpCatalogDiagnosticFromResult(
   }
   const toolsWithSafety = tools.filter((tool) => hasSafetyMetadata(tool)).length;
   const toolsWithAccess = tools.filter((tool) => hasAccessMetadata(tool)).length;
-  if (toolsWithSafety !== tools.length || toolsWithAccess !== tools.length) {
+  const toolsWithLifecycle = tools.filter((tool) => hasLifecycleMetadata(tool)).length;
+  if (toolsWithSafety !== tools.length || toolsWithAccess !== tools.length || toolsWithLifecycle !== tools.length) {
     return {
       metadataVersion: result.metadataVersion,
-      message: `catalog metadata incomplete: safety ${toolsWithSafety}/${tools.length}, access ${toolsWithAccess}/${tools.length}`,
+      message: `catalog metadata incomplete: safety ${toolsWithSafety}/${tools.length}, access ${toolsWithAccess}/${tools.length}, lifecycle ${toolsWithLifecycle}/${tools.length}`,
       status: "error",
       toolsWithAccess,
+      toolsWithLifecycle,
       toolsWithSafety
     };
   }
@@ -134,6 +141,7 @@ export function managementMcpCatalogDiagnosticFromResult(
       missingRequiredTools,
       status: "error",
       toolsWithAccess,
+      toolsWithLifecycle,
       toolsWithSafety
     };
   }
@@ -141,6 +149,7 @@ export function managementMcpCatalogDiagnosticFromResult(
     metadataVersion: result.metadataVersion,
     status: "ok",
     toolsWithAccess,
+    toolsWithLifecycle,
     toolsWithSafety
   };
 }
@@ -187,6 +196,13 @@ function hasAccessMetadata(tool: ManagementMcpCatalogTool): boolean {
     access.scopeBoundary !== "unspecified" &&
     typeof access.reviewerBound === "boolean"
   );
+}
+
+function hasLifecycleMetadata(tool: ManagementMcpCatalogTool): boolean {
+  const lifecycle = tool.lifecycle;
+  if (!lifecycle || !lifecycle.status || lifecycle.status === "unspecified") return false;
+  if (lifecycle.status === "compatibility_alias") return Boolean(lifecycle.preferredName);
+  return lifecycle.status === "active";
 }
 
 function apiDiagnosticRow(apiHealth: HealthCheckResult): ConnectionDiagnosticRow {
@@ -292,8 +308,8 @@ function mcpCatalogDiagnosticRow(catalog: ManagementMcpCatalogDiagnostic): Conne
     return {
       detailKey: "connectionDiagnostics.mcpCatalog.ok",
       detailParams: {
-        tools: Math.min(catalog.toolsWithAccess ?? 0, catalog.toolsWithSafety ?? 0),
-        version: catalog.metadataVersion ?? 1
+        tools: Math.min(catalog.toolsWithAccess ?? 0, catalog.toolsWithSafety ?? 0, catalog.toolsWithLifecycle ?? 0),
+        version: catalog.metadataVersion ?? 2
       },
       key: "mcpCatalog",
       status: "ok",

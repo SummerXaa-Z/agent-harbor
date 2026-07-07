@@ -48,14 +48,15 @@ type managementMCPToolsListResult struct {
 	Tools           []managementMCPTool `json:"tools"`
 }
 
-const managementMCPToolsMetadataVersion = 1
+const managementMCPToolsMetadataVersion = 2
 
 type managementMCPTool struct {
-	Name        string                  `json:"name"`
-	Description string                  `json:"description"`
-	InputSchema map[string]any          `json:"inputSchema"`
-	Safety      managementMCPToolSafety `json:"safety"`
-	Access      managementMCPToolAccess `json:"access"`
+	Name        string                     `json:"name"`
+	Description string                     `json:"description"`
+	InputSchema map[string]any             `json:"inputSchema"`
+	Safety      managementMCPToolSafety    `json:"safety"`
+	Access      managementMCPToolAccess    `json:"access"`
+	Lifecycle   managementMCPToolLifecycle `json:"lifecycle"`
 }
 
 type managementMCPToolSafety struct {
@@ -69,6 +70,11 @@ type managementMCPToolAccess struct {
 	RequiredRole  string `json:"requiredRole"`
 	ScopeBoundary string `json:"scopeBoundary"`
 	ReviewerBound bool   `json:"reviewerBound"`
+}
+
+type managementMCPToolLifecycle struct {
+	Status        string `json:"status"`
+	PreferredName string `json:"preferredName,omitempty"`
 }
 
 type managementMCPCallResult struct {
@@ -665,7 +671,7 @@ func managementMCPTools() []managementMCPTool {
 			}, []string{}),
 		},
 	}
-	return managementMCPToolsWithAccess(managementMCPToolsWithSafety(tools))
+	return managementMCPToolsWithLifecycle(managementMCPToolsWithAccess(managementMCPToolsWithSafety(tools)))
 }
 
 func managementMCPToolsWithSafety(tools []managementMCPTool) []managementMCPTool {
@@ -801,6 +807,23 @@ func reviewerManagementMCPToolAccess() managementMCPToolAccess {
 		ScopeBoundary: "reviewer_route",
 		ReviewerBound: true,
 	}
+}
+
+func managementMCPToolsWithLifecycle(tools []managementMCPTool) []managementMCPTool {
+	aliasByName := map[string]string{
+		"export_permission_package_production_evidence": "export_permission_package_production_report",
+	}
+	for i := range tools {
+		if preferredName, ok := aliasByName[tools[i].Name]; ok {
+			tools[i].Lifecycle = managementMCPToolLifecycle{
+				Status:        "compatibility_alias",
+				PreferredName: preferredName,
+			}
+			continue
+		}
+		tools[i].Lifecycle = managementMCPToolLifecycle{Status: "active"}
+	}
+	return tools
 }
 
 func permissionPackageApplicationFilterFromMCPArgs(args managementMCPPermissionPackageApplicationArgs) (store.PermissionPackageApplicationFilter, error) {

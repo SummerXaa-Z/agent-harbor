@@ -133,6 +133,7 @@ test("production acceptance center blocks fallback data from production actions"
 test("production acceptance report filename uses go-live status wording", () => {
   const filename = productionAcceptanceReportFilename({
     generatedAt: "2026-06-15T10:00:00Z",
+    reportDigest: "8bf0a7f6d58485e4d0f2359d6b4d0f77b3a7f62a64866f5d9cbdd73efc4ad123",
     scope: {
       callerInstanceId: "agt-caller",
       targetId: "agt-target",
@@ -145,6 +146,7 @@ test("production acceptance report filename uses go-live status wording", () => 
 
   assert.match(filename, /^agentharbor-go-live-status-/);
   assert.match(filename, /-ready-/);
+  assert.match(filename, /-digest-8bf0a7f6d584-/);
   assert.match(filename, /\.json$/);
   assert.doesNotMatch(filename, /evidence/i);
 });

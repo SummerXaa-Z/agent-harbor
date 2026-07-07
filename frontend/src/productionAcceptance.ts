@@ -271,17 +271,25 @@ function headlineKey(status: ProductionAcceptanceStatus) {
 }
 
 export function productionAcceptanceReportFilename(
-  report: Pick<PermissionPackageProductionEvidenceReport, "generatedAt" | "scope" | "status">
+  report: Pick<PermissionPackageProductionEvidenceReport, "generatedAt" | "scope" | "status"> &
+    Partial<Pick<PermissionPackageProductionEvidenceReport, "reportDigest">>
 ) {
   const generated = safeFilenameSegment(report.generatedAt || new Date().toISOString());
+  const digest = safeFilenameSegment(shortReportDigest(report.reportDigest));
   return [
     "agentharbor-go-live-status",
     safeFilenameSegment(report.scope.tenantId),
     safeFilenameSegment(report.scope.workspaceId),
     safeFilenameSegment(report.scope.templateId),
     safeFilenameSegment(report.status),
+    digest ? "digest" : "",
+    digest,
     generated
   ].filter(Boolean).join("-") + ".json";
+}
+
+function shortReportDigest(digest: string | undefined) {
+  return digest?.trim().slice(0, 12) ?? "";
 }
 
 function safeFilenameSegment(value: string | undefined) {

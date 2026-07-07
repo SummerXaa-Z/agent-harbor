@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Downloaded go-live status report filenames now include a short report digest for easier handoff matching.
+- 2026-07-08：下载的上线状态报告文件名现在会包含短报告摘要，便于交接时匹配。
 - 2026-07-08: The go-live status report digest in the console can now be copied as the full value while the primary UI keeps the shortened display.
 - 2026-07-08：控制台里的上线状态报告摘要现在可以复制完整值，同时主界面仍保持短摘要显示。
 - 2026-07-08: The go-live status workspace now shows the exported report digest next to the authenticated exporter for handoff verification.

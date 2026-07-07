@@ -204,6 +204,7 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(browserSecurityHeaders)
 	r.Use(localDevCORS(s.corsOrigins, s.defaultLocalCORSOrigins))
 
 	r.Get("/healthz", s.health)
@@ -299,6 +300,14 @@ func setSensitiveNoCacheHeaders(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
+}
+
+func browserSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("X-Frame-Options", "DENY")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func localDevCORS(extraOrigins []string, includeDefaultLocalOrigins bool) func(http.Handler) http.Handler {

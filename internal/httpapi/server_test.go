@@ -997,6 +997,42 @@ func TestLocalDevCORS(t *testing.T) {
 	}
 }
 
+func assertBrowserSecurityHeaders(t *testing.T, rec *httptest.ResponseRecorder, label string) {
+	t.Helper()
+	if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Fatalf("%s should set Referrer-Policy no-referrer, got %q", label, got)
+	}
+	if got := rec.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Fatalf("%s should set X-Frame-Options DENY, got %q", label, got)
+	}
+}
+
+func TestBrowserSecurityHeaders(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	health := request(t, router, http.MethodGet, "/healthz", nil, "")
+	if health.Code != http.StatusOK {
+		t.Fatalf("expected public health to succeed, got %d", health.Code)
+	}
+	assertBrowserSecurityHeaders(t, health, "public health responses")
+
+	unauthorized := request(t, router, http.MethodGet, "/api/v1/agents", nil, "")
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthorized management read, got %d body=%s", unauthorized.Code, unauthorized.Body.String())
+	}
+	assertBrowserSecurityHeaders(t, unauthorized, "management error responses")
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/agents", nil)
+	req.Header.Set("Origin", "http://127.0.0.1:5174")
+	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected CORS preflight to be short-circuited, got %d", rec.Code)
+	}
+	assertBrowserSecurityHeaders(t, rec, "CORS preflight responses")
+}
+
 func TestConfiguredCORSOriginAllowsBrowserGateMCPPreflight(t *testing.T) {
 	origin := "http://127.0.0.1:15174"
 	router := newRouterWithCORSOrigins([]string{origin})

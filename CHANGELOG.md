@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: All HTTP responses now include `Referrer-Policy: no-referrer` and `X-Frame-Options: DENY` so browser-based consoles do not leak referrers or allow framing.
+- 2026-07-08：所有 HTTP 响应现在都会包含 `Referrer-Policy: no-referrer` 和 `X-Frame-Options: DENY`，避免浏览器控制台泄露来源或被嵌入到其他页面。
 - 2026-07-08: Sensitive management, data-plane, and console authentication responses now add legacy `Pragma: no-cache` and `Expires: 0` headers alongside `Cache-Control: no-store`.
 - 2026-07-08：敏感的管理、数据面和控制台认证响应现在会在 `Cache-Control: no-store` 之外，同时设置兼容旧代理的 `Pragma: no-cache` 和 `Expires: 0`。
 - 2026-07-08: Agent-key-protected data-plane responses now set `X-Content-Type-Options: nosniff`, including successful proxied MCP/OpenAPI responses.

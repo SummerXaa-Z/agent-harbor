@@ -1089,7 +1089,10 @@ export function ConsoleController() {
       );
       setAiAdminProductionReport(report);
       downloadJson(report, productionAcceptanceReportFilename(report));
-      setAiAdminMessage({ key: "message.productionEvidenceExported" });
+      setAiAdminMessage({
+        key: "message.productionEvidenceExportedBy",
+        params: { actor: report.generatedBy }
+      });
       return report;
     } catch (error) {
       setAiAdminMessage(localizedErrorMessageState(error, "error.exportProductionEvidence"));

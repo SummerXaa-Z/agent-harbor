@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Production go-live status reports now include a `platformContract` stamp with the API version plus Management MCP catalog `metadataVersion` and `catalogDigest`, and the release scenario cross-checks it against `/api/v1/system/info`.
+- 2026-07-08：上线状态报告现在会包含 `platformContract` 合同戳，记录 API 版本以及 Management MCP 目录的 `metadataVersion` 和 `catalogDigest`；发布场景会将其与 `/api/v1/system/info` 交叉校验。
 - `/api/v1/system/info` and Management MCP `tools/list` now expose the same stable `catalogDigest`, letting admin agents and release scenarios detect catalog drift even when summary counts still match.
 - `/api/v1/system/info` 和 Management MCP `tools/list` 现在会暴露同一个稳定 `catalogDigest`，让管理 Agent 和发布场景在摘要计数相同但目录内容漂移时也能发现问题。
 - `/api/v1/system/info` now includes Management MCP tool-catalog summary counts for total tools, confirmation-required write tools, and write tools with confirmation input schemas, and the release scenario cross-checks the summary against live `tools/list`.

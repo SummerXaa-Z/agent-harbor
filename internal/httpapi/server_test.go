@@ -423,6 +423,7 @@ type permissionPackageAuditEvidence struct {
 type permissionPackageProductionEvidenceReportResponse struct {
 	ReportVersion        string                                      `json:"reportVersion"`
 	Status               string                                      `json:"status"`
+	PlatformContract     permissionPackageProductionPlatformContract `json:"platformContract"`
 	Scope                permissionPackageProductionEvidenceScope    `json:"scope"`
 	Summary              permissionPackageProductionReadinessSummary `json:"summary"`
 	Checks               []permissionPackageProductionReadinessCheck `json:"checks"`
@@ -430,6 +431,14 @@ type permissionPackageProductionEvidenceReportResponse struct {
 	NextActionCode       string                                      `json:"nextActionCode"`
 	NextActions          []string                                    `json:"nextActions"`
 	ReadinessGeneratedAt string                                      `json:"readinessGeneratedAt"`
+}
+
+type permissionPackageProductionPlatformContract struct {
+	APIVersion               string `json:"apiVersion"`
+	ManagementMcpToolCatalog struct {
+		MetadataVersion int    `json:"metadataVersion"`
+		CatalogDigest   string `json:"catalogDigest"`
+	} `json:"managementMcpToolCatalog"`
 }
 
 type permissionPackageProductionEvidenceScope struct {
@@ -5610,6 +5619,11 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		!permissionPackageProductionReadinessHasCheck(beforeReport.Checks, "application_present", "blocking") {
 		t.Fatalf("expected blocked production evidence report before apply, got %#v", beforeReport)
 	}
+	if beforeReport.PlatformContract.APIVersion != "2026-06-15" ||
+		beforeReport.PlatformContract.ManagementMcpToolCatalog.MetadataVersion != 4 ||
+		!isSHA256Hex(beforeReport.PlatformContract.ManagementMcpToolCatalog.CatalogDigest) {
+		t.Fatalf("expected blocked production report platform contract, got %#v", beforeReport.PlatformContract)
+	}
 
 	applyInput := map[string]any{
 		"approvalRequestId": approved.ID,
@@ -5654,6 +5668,11 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		afterReport.Evidence.AccessProfile.Present != true ||
 		afterReport.ReadinessGeneratedAt == "" {
 		t.Fatalf("expected ready production evidence report after evidence, got %#v", afterReport)
+	}
+	if afterReport.PlatformContract.APIVersion != beforeReport.PlatformContract.APIVersion ||
+		afterReport.PlatformContract.ManagementMcpToolCatalog.MetadataVersion != beforeReport.PlatformContract.ManagementMcpToolCatalog.MetadataVersion ||
+		afterReport.PlatformContract.ManagementMcpToolCatalog.CatalogDigest != beforeReport.PlatformContract.ManagementMcpToolCatalog.CatalogDigest {
+		t.Fatalf("expected stable production report platform contract, before=%#v after=%#v", beforeReport.PlatformContract, afterReport.PlatformContract)
 	}
 	for _, check := range []string{
 		"application_present",
@@ -7994,6 +8013,11 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		report.Evidence.Audit.AppliedEventID == "" {
 		t.Fatalf("unexpected production evidence MCP report: %#v", report)
 	}
+	if report.PlatformContract.APIVersion != "2026-06-15" ||
+		report.PlatformContract.ManagementMcpToolCatalog.MetadataVersion != tools.Result.MetadataVersion ||
+		report.PlatformContract.ManagementMcpToolCatalog.CatalogDigest != tools.Result.CatalogDigest {
+		t.Fatalf("unexpected production report platform contract from MCP: report=%#v tools=%#v", report.PlatformContract, tools.Result)
+	}
 	legacyReportCall := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "legacy-production-report",
@@ -9542,6 +9566,19 @@ func decodeData[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 		t.Fatalf("decode data: %v raw=%s", err, string(env.Data))
 	}
 	return out
+}
+
+func isSHA256Hex(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, char := range value {
+		if (char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func metricByID(t *testing.T, metrics []metricResponse, id string) metricResponse {

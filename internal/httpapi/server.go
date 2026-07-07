@@ -1916,6 +1916,7 @@ const permissionPackageProductionEvidenceReportVersion = "production-readiness-r
 type permissionPackageProductionEvidenceReportResponse struct {
 	ReportVersion        string                                      `json:"reportVersion"`
 	GeneratedAt          time.Time                                   `json:"generatedAt"`
+	PlatformContract     permissionPackageProductionPlatformContract `json:"platformContract"`
 	Scope                permissionPackageProductionEvidenceScope    `json:"scope"`
 	Status               string                                      `json:"status"`
 	Summary              permissionPackageProductionReadinessSummary `json:"summary"`
@@ -1924,6 +1925,16 @@ type permissionPackageProductionEvidenceReportResponse struct {
 	NextActionCode       string                                      `json:"nextActionCode"`
 	NextActions          []string                                    `json:"nextActions"`
 	ReadinessGeneratedAt time.Time                                   `json:"readinessGeneratedAt"`
+}
+
+type permissionPackageProductionPlatformContract struct {
+	APIVersion               string                                                   `json:"apiVersion"`
+	ManagementMcpToolCatalog permissionPackageProductionManagementMcpToolCatalogStamp `json:"managementMcpToolCatalog"`
+}
+
+type permissionPackageProductionManagementMcpToolCatalogStamp struct {
+	MetadataVersion int    `json:"metadataVersion"`
+	CatalogDigest   string `json:"catalogDigest"`
 }
 
 type permissionPackageProductionEvidenceScope struct {
@@ -2599,9 +2610,17 @@ func permissionPackageProductionEvidenceReportFromReadiness(query permissionPack
 	if readiness.AuditEvidence.AppliedEvent != nil {
 		evidence.Audit.AppliedEventID = readiness.AuditEvidence.AppliedEvent.ID
 	}
+	toolCatalog := systemInfoManagementMcpToolCatalogSummary()
 	return permissionPackageProductionEvidenceReportResponse{
-		ReportVersion:        permissionPackageProductionEvidenceReportVersion,
-		GeneratedAt:          readiness.GeneratedAt,
+		ReportVersion: permissionPackageProductionEvidenceReportVersion,
+		GeneratedAt:   readiness.GeneratedAt,
+		PlatformContract: permissionPackageProductionPlatformContract{
+			APIVersion: systemAPIVersion,
+			ManagementMcpToolCatalog: permissionPackageProductionManagementMcpToolCatalogStamp{
+				MetadataVersion: toolCatalog.MetadataVersion,
+				CatalogDigest:   toolCatalog.CatalogDigest,
+			},
+		},
 		Scope:                scope,
 		Status:               readiness.Status,
 		Summary:              readiness.Summary,

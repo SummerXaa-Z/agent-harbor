@@ -838,9 +838,10 @@ PY
 assert_production_evidence_report() {
   local expected_status="$1"
   local expected_check="$2"
-  RESPONSE_BODY="$HTTP_BODY" python3 - "$expected_status" "$expected_check" "$APPLICATION_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID" <<'PY'
+  RESPONSE_BODY="$HTTP_BODY" SYSTEM_INFO_BODY="$SYSTEM_INFO_BODY" python3 - "$expected_status" "$expected_check" "$APPLICATION_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID" <<'PY'
 import json
 import os
+import re
 import sys
 
 report = json.loads(os.environ["RESPONSE_BODY"])["data"]
@@ -849,6 +850,18 @@ if report.get("reportVersion") != "production-readiness-report/v1":
     raise SystemExit(f"unexpected report version: {report}")
 if report.get("status") != expected_status:
     raise SystemExit(f"production report status={report.get('status')!r} want {expected_status!r}: {report}")
+system_info = json.loads(os.environ["SYSTEM_INFO_BODY"]).get("data", {})
+system_catalog = system_info.get("managementMcpToolCatalog") or {}
+report_contract = report.get("platformContract") or {}
+report_catalog = report_contract.get("managementMcpToolCatalog") or {}
+if report_contract.get("apiVersion") != system_info.get("apiVersion"):
+    raise SystemExit(f"production report apiVersion={report_contract.get('apiVersion')!r} does not match system info {system_info.get('apiVersion')!r}")
+if report_catalog.get("metadataVersion") != system_catalog.get("metadataVersion"):
+    raise SystemExit(f"production report catalog metadataVersion={report_catalog.get('metadataVersion')!r} does not match system info {system_catalog.get('metadataVersion')!r}")
+if not re.fullmatch(r"[a-f0-9]{64}", str(report_catalog.get("catalogDigest", ""))):
+    raise SystemExit(f"production report catalogDigest should be a sha256 hex digest: {report_catalog}")
+if report_catalog.get("catalogDigest") != system_catalog.get("catalogDigest"):
+    raise SystemExit(f"production report catalogDigest={report_catalog.get('catalogDigest')!r} does not match system info {system_catalog.get('catalogDigest')!r}")
 scope = report.get("scope") or {}
 if scope.get("tenantId") != tenant_id or scope.get("workspaceId") != workspace_id:
     raise SystemExit(f"unexpected production report scope: {scope}")

@@ -258,6 +258,7 @@ export interface PermissionPackageAuditEvidence {
 export interface PermissionPackageProductionEvidenceReport {
   reportVersion: string;
   generatedAt: string;
+  platformContract: PermissionPackageProductionPlatformContract;
   scope: PermissionPackageProductionEvidenceScope;
   status: PermissionPackageProductionReadinessStatus;
   summary: PermissionPackageProductionReadinessSummary;
@@ -266,6 +267,14 @@ export interface PermissionPackageProductionEvidenceReport {
   nextActionCode?: PermissionPackageProductionNextActionCode;
   nextActions: string[];
   readinessGeneratedAt: string;
+}
+
+export interface PermissionPackageProductionPlatformContract {
+  apiVersion: string;
+  managementMcpToolCatalog: {
+    metadataVersion: number;
+    catalogDigest: string;
+  };
 }
 
 export interface PermissionPackageProductionEvidenceScope {

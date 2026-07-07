@@ -155,7 +155,7 @@ assert_contains "connection diagnostics model" "buildConnectionDiagnosticRows" "
 assert_contains "connection diagnostics UI action" "connection-diagnostics-action" "$console_controller_source"
 assert_contains "connection diagnostics UI list" "connection-diagnostics-list" "$console_controller_source"
 
-for hash in getting-started registry ask ai-admin evidence; do
+for hash in getting-started registry ask ai-admin go-live; do
   curl -fsS "$FRONTEND_ORIGIN/#$hash" >/dev/null
   echo "route smoke ready: #$hash"
 done

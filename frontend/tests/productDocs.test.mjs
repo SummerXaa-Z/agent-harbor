@@ -4,6 +4,10 @@ import test from "node:test";
 
 const readme = readFileSync(new URL("../../README.md", import.meta.url), "utf8");
 const demoScript = readFileSync(new URL("../../scripts/demo.sh", import.meta.url), "utf8");
+const webConsoleProductionJourneyScript = readFileSync(
+  new URL("../../scripts/scenario-web-console-production-journey.sh", import.meta.url),
+  "utf8"
+);
 const productJourney = readFileSync(new URL("../../docs/product/0.2.0-ai-admin-permission-journey.md", import.meta.url), "utf8");
 const releaseChecklist = readFileSync(new URL("../../docs/engineering/release-checklist.md", import.meta.url), "utf8");
 const changelog = readFileSync(new URL("../../CHANGELOG.md", import.meta.url), "utf8");
@@ -46,6 +50,11 @@ test("demo script checks ports before installing dependencies", () => {
   assert.ok(portPreflight >= 0);
   assert.ok(frontendInstall > portPreflight);
   assert.ok(realMcpInstall > portPreflight);
+});
+
+test("web console production smoke uses the canonical go-live route", () => {
+  assert.match(webConsoleProductionJourneyScript, /for hash in getting-started registry ask ai-admin go-live; do/);
+  assert.doesNotMatch(webConsoleProductionJourneyScript, /for hash in .*evidence/);
 });
 
 test("public product docs use records wording instead of forensic-style prose", () => {

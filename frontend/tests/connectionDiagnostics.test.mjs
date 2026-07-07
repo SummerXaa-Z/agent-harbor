@@ -71,7 +71,7 @@ test("connection diagnostics reports ready when session, API, live data, and MCP
     apiHealth: { status: "ok", message: "ok" },
     liveDataLoaded: true,
     loadError: "",
-    mcpCatalog: { metadataVersion: 3, status: "ok", toolsWithAccess: 12, toolsWithExecution: 12, toolsWithLifecycle: 12, toolsWithSafety: 12 },
+    mcpCatalog: { metadataVersion: 4, status: "ok", toolsWithAccess: 12, toolsWithExecution: 12, toolsWithLifecycle: 12, toolsWithSafety: 12 },
     mcpHealth: { status: "ok", message: "ok" },
     session: { actor: "admin-key", authenticated: true, requiresLogin: true }
   });
@@ -96,7 +96,7 @@ test("connection diagnostics blocks old API or expired session before production
     },
     liveDataLoaded: false,
     loadError: "",
-    mcpCatalog: { metadataVersion: 3, status: "ok", toolsWithAccess: 12, toolsWithExecution: 12, toolsWithLifecycle: 12, toolsWithSafety: 12 },
+    mcpCatalog: { metadataVersion: 4, status: "ok", toolsWithAccess: 12, toolsWithExecution: 12, toolsWithLifecycle: 12, toolsWithSafety: 12 },
     mcpHealth: { status: "ok", message: "ok" },
     session: { authenticated: false, requiresLogin: true }
   });
@@ -130,7 +130,7 @@ test("connection diagnostics hides raw management MCP catalog contract issue key
     },
     liveDataLoaded: true,
     loadError: "",
-    mcpCatalog: { metadataVersion: 3, status: "ok", toolsWithAccess: 12, toolsWithExecution: 12, toolsWithLifecycle: 12, toolsWithSafety: 12 },
+    mcpCatalog: { metadataVersion: 4, status: "ok", toolsWithAccess: 12, toolsWithExecution: 12, toolsWithLifecycle: 12, toolsWithSafety: 12 },
     mcpHealth: { status: "ok", message: "ok" },
     session: { actor: "admin-key", authenticated: true, requiresLogin: true }
   });
@@ -151,7 +151,7 @@ test("connection diagnostics hides unknown raw API contract issue keys", () => {
     },
     liveDataLoaded: true,
     loadError: "",
-    mcpCatalog: { metadataVersion: 3, status: "ok", toolsWithAccess: 12, toolsWithExecution: 12, toolsWithLifecycle: 12, toolsWithSafety: 12 },
+    mcpCatalog: { metadataVersion: 4, status: "ok", toolsWithAccess: 12, toolsWithExecution: 12, toolsWithLifecycle: 12, toolsWithSafety: 12 },
     mcpHealth: { status: "ok", message: "ok" },
     session: { actor: "admin-key", authenticated: true, requiresLogin: true }
   });
@@ -184,14 +184,14 @@ test("connection diagnostics warns on unknown management MCP catalog metadata ve
     apiHealth: { status: "ok", message: "ok" },
     liveDataLoaded: true,
     loadError: "",
-    mcpCatalog: { metadataVersion: 4, status: "warning", toolsWithAccess: 12, toolsWithExecution: 12, toolsWithLifecycle: 12, toolsWithSafety: 12 },
+    mcpCatalog: { metadataVersion: 5, status: "warning", toolsWithAccess: 12, toolsWithExecution: 12, toolsWithLifecycle: 12, toolsWithSafety: 12 },
     mcpHealth: { status: "ok", message: "ok" },
     session: { actor: "admin-key", authenticated: true, requiresLogin: true }
   });
 
   assert.equal(connectionDiagnosticsSummaryStatus(rows), "warning");
   assert.equal(rows.find((row) => row.key === "mcpCatalog")?.detailKey, "connectionDiagnostics.mcpCatalog.versionWarning");
-  assert.deepEqual(rows.find((row) => row.key === "mcpCatalog")?.detailParams, { version: 4 });
+  assert.deepEqual(rows.find((row) => row.key === "mcpCatalog")?.detailParams, { version: 5 });
 });
 
 test("connection diagnostics blocks missing management MCP catalog metadata", () => {
@@ -209,13 +209,13 @@ test("connection diagnostics blocks missing management MCP catalog metadata", ()
   assert.deepEqual(rows.find((row) => row.key === "mcpCatalog")?.detailParams, { detail: "missing safety metadata" });
 });
 
-test("management MCP catalog diagnostic accepts versioned safety access lifecycle and execution metadata", () => {
+test("management MCP catalog diagnostic accepts versioned safety access lifecycle execution and confirmation schema metadata", () => {
   const catalogTools = requiredManagementMcpToolNames.map(catalogToolNamed);
 
   assert.deepEqual(
-    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 3, tools: catalogTools }),
+    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 4, tools: catalogTools }),
     {
-      metadataVersion: 3,
+      metadataVersion: 4,
       status: "ok",
       toolsWithAccess: catalogTools.length,
       toolsWithExecution: catalogTools.length,
@@ -233,7 +233,7 @@ test("management MCP catalog diagnostic requires confirmation schema for write t
       : tool
   ));
 
-  const diagnostic = managementMcpCatalogDiagnosticFromResult({ metadataVersion: 3, tools: unsafeTools });
+  const diagnostic = managementMcpCatalogDiagnosticFromResult({ metadataVersion: 4, tools: unsafeTools });
 
   assert.equal(diagnostic.status, "error");
   assert.equal(diagnostic.toolsWithConfirmationSchema, confirmationRequiredToolNames.size - 1);
@@ -261,7 +261,7 @@ test("management MCP catalog diagnostic requires the preferred production report
     .filter((name) => name !== "export_permission_package_production_report")
     .concat("export_permission_package_production_evidence")
     .map(catalogToolNamed);
-  const diagnostic = managementMcpCatalogDiagnosticFromResult({ metadataVersion: 3, tools: legacyOnlyTools });
+  const diagnostic = managementMcpCatalogDiagnosticFromResult({ metadataVersion: 4, tools: legacyOnlyTools });
 
   assert.equal(diagnostic.status, "error");
   assert.deepEqual(diagnostic.missingRequiredTools, ["export_permission_package_production_report"]);
@@ -288,19 +288,19 @@ test("management MCP catalog diagnostic required tools cover backend management 
 
 test("management MCP catalog diagnostic flags incomplete or unknown metadata contracts", () => {
   assert.deepEqual(
-    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 4, tools: requiredManagementMcpToolNames.map(catalogToolNamed) }),
-    { metadataVersion: 4, status: "warning" }
+    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 5, tools: requiredManagementMcpToolNames.map(catalogToolNamed) }),
+    { metadataVersion: 5, status: "warning" }
   );
   assert.equal(
-    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 3, tools: [{ ...catalogTool, access: undefined }] }).status,
+    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 4, tools: [{ ...catalogTool, access: undefined }] }).status,
     "error"
   );
   assert.equal(
-    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 3, tools: [{ ...catalogTool, lifecycle: undefined }] }).status,
+    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 4, tools: [{ ...catalogTool, lifecycle: undefined }] }).status,
     "error"
   );
   assert.equal(
-    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 3, tools: [{ ...catalogTool, execution: undefined }] }).status,
+    managementMcpCatalogDiagnosticFromResult({ metadataVersion: 4, tools: [{ ...catalogTool, execution: undefined }] }).status,
     "error"
   );
   assert.equal(managementMcpCatalogDiagnosticFromResult({ tools: [catalogTool] }).message, "missing metadataVersion");

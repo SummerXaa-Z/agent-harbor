@@ -1,7 +1,7 @@
 import type { Translator } from "./consolePresenters";
 
 export const systemCapabilityLabelKeyByName: Record<string, string> = {
-  management_mcp_tools_metadata_v3: "systemCapability.managementMcpToolsMetadataV3",
+  management_mcp_tools_metadata_v4: "systemCapability.managementMcpToolsMetadataV4",
   permission_package_applications: "systemCapability.permissionPackageApplications",
   permission_package_application_health: "systemCapability.permissionPackageApplicationHealth",
   permission_package_application_impact: "systemCapability.permissionPackageApplicationImpact",

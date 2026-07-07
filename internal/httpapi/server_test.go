@@ -844,14 +844,14 @@ func TestSystemInfoIncludesConsoleCompatibilityContract(t *testing.T) {
 		"permission_package_application_impact",
 		"permission_package_production_readiness",
 		"permission_package_consumed_approval_recovery",
-		"management_mcp_tools_metadata_v3",
+		"management_mcp_tools_metadata_v4",
 	} {
 		if !capabilities[capability] {
 			t.Fatalf("system info missing required console capability %q: %#v", capability, info.Capabilities)
 		}
 	}
-	if info.ManagementMcpToolCatalog.MetadataVersion != 3 {
-		t.Fatalf("management MCP catalog metadata version = %d, want 3", info.ManagementMcpToolCatalog.MetadataVersion)
+	if info.ManagementMcpToolCatalog.MetadataVersion != 4 {
+		t.Fatalf("management MCP catalog metadata version = %d, want 4", info.ManagementMcpToolCatalog.MetadataVersion)
 	}
 	requiredMetadata := make(map[string]bool, len(info.ManagementMcpToolCatalog.RequiredMetadata))
 	for _, field := range info.ManagementMcpToolCatalog.RequiredMetadata {
@@ -7710,8 +7710,8 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		"id":      "tools-list",
 		"method":  "tools/list",
 	}, ""))
-	if tools.Result.MetadataVersion != 3 {
-		t.Fatalf("management MCP tools/list metadataVersion=%d want 3", tools.Result.MetadataVersion)
+	if tools.Result.MetadataVersion != 4 {
+		t.Fatalf("management MCP tools/list metadataVersion=%d want 4", tools.Result.MetadataVersion)
 	}
 	if !mcpToolNamesContain(tools.Result.Tools, "draft_permission_package") ||
 		!mcpToolNamesContain(tools.Result.Tools, "preflight_permission_package") ||

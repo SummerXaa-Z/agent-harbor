@@ -59,7 +59,7 @@ type managementMCPToolsListResult struct {
 	Tools           []managementMCPTool `json:"tools"`
 }
 
-const managementMCPToolsMetadataVersion = 3
+const managementMCPToolsMetadataVersion = 4
 
 type managementMCPTool struct {
 	Name        string                     `json:"name"`

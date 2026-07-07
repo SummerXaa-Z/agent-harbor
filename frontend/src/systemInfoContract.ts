@@ -18,7 +18,7 @@ export const requiredConsoleCapabilities = [
   'permission_package_application_impact',
   'permission_package_production_readiness',
   'permission_package_consumed_approval_recovery',
-  'management_mcp_tools_metadata_v3',
+  'management_mcp_tools_metadata_v4',
 ]
 
 export const requiredManagementMcpToolCatalogMetadata = ['safety', 'access', 'lifecycle', 'execution']
@@ -34,7 +34,7 @@ export function systemInfoContractIssues(systemInfo: Partial<SystemInfo>): strin
   })
 
   const catalog = systemInfo.managementMcpToolCatalog
-  if (catalog?.metadataVersion !== 3) {
+  if (catalog?.metadataVersion !== 4) {
     issues.push('managementMcpToolCatalog.metadataVersion')
   }
 

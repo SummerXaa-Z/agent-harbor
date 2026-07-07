@@ -533,8 +533,8 @@ import os
 
 doc = json.loads(os.environ["RESPONSE_BODY"])
 result = doc.get("result", {})
-if result.get("metadataVersion") != 3:
-    raise SystemExit(f"management MCP tools/list metadataVersion={result.get('metadataVersion')!r} want 3")
+if result.get("metadataVersion") != 4:
+    raise SystemExit(f"management MCP tools/list metadataVersion={result.get('metadataVersion')!r} want 4")
 tools_by_name = {
     tool.get("name"): tool
     for tool in result.get("tools", [])

@@ -126,7 +126,7 @@ export function managementMcpCatalogDiagnosticFromResult(
   if (!result || result.metadataVersion === undefined) {
     return { message: "missing metadataVersion", status: "error" };
   }
-  if (result.metadataVersion !== 3) {
+  if (result.metadataVersion !== 4) {
     return { metadataVersion: result.metadataVersion, status: "warning" };
   }
   const tools = Array.isArray(result.tools) ? result.tools : [];
@@ -411,7 +411,7 @@ function mcpCatalogDiagnosticRow(catalog: ManagementMcpCatalogDiagnostic): Conne
           catalog.toolsWithLifecycle ?? 0,
           catalog.toolsWithSafety ?? 0
         ),
-        version: catalog.metadataVersion ?? 3
+        version: catalog.metadataVersion ?? 4
       },
       key: "mcpCatalog",
       status: "ok",

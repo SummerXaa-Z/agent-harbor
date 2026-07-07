@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Management MCP tool-catalog metadata is now version `4`, and `/api/v1/system/info` advertises `management_mcp_tools_metadata_v4` to mark the confirmation-schema contract for write tools.
+- Management MCP 工具目录元数据现在升级为 `4`，`/api/v1/system/info` 会声明 `management_mcp_tools_metadata_v4`，用于标记写工具确认参数 schema 契约。
 - The permission-package approval release scenario now verifies that live Management MCP write tools expose the required confirmation input schema in `tools/list`.
 - 权限包审批发布场景现在会校验真实 Management MCP 写工具是否在 `tools/list` 中暴露必需的确认 input schema。
 - Connection diagnostics now blocks Management MCP catalogs where confirmation-required write tools do not expose the required `confirmation.confirmed` and `confirmation.reason` input schema.
@@ -46,12 +48,12 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Web 控制台现在会在 API 兼容检查中验证 `managementMcpToolCatalog` 系统信息摘要；当后端误声明或缺失 Management MCP 目录元数据契约时，会阻断管理 Agent 工作流。
 - `GET /api/v1/system/info` now includes a `managementMcpToolCatalog` contract summary with metadata version and required metadata fields, giving admin agents a public compatibility hint without exposing live management tools.
 - `GET /api/v1/system/info` 现在包含 `managementMcpToolCatalog` 契约摘要，声明元数据版本和必需元数据字段，让管理 Agent 可在不暴露实时管理工具的前提下进行公开兼容判断。
-- `GET /api/v1/system/info` now advertises `management_mcp_tools_metadata_v3`, and the web console requires it during API compatibility checks before running management MCP catalog diagnostics.
-- `GET /api/v1/system/info` 现在会声明 `management_mcp_tools_metadata_v3`，Web 控制台会在运行 Management MCP 工具目录诊断前先把它纳入 API 兼容检查。
-- Connection diagnostics now checks the management MCP `tools/list` catalog contract, including `metadataVersion`, `safety`, `access`, `lifecycle`, and `execution`, so operators can catch incompatible admin-agent tooling before automated writes.
-- 连接诊断现在会检查 Management MCP 的 `tools/list` 目录契约，包括 `metadataVersion`、`safety`、`access`、`lifecycle` 和 `execution`，让管理员在自动写操作前发现管理 Agent 工具兼容问题。
-- Management MCP `tools/list` now returns top-level `metadataVersion: 3`, giving admin-agent clients a stable contract marker for the current `safety`, `access`, `lifecycle`, and `execution` tool catalog metadata.
-- Management MCP 的 `tools/list` 现在会返回顶层 `metadataVersion: 3`，为管理 Agent 客户端标记当前 `safety`、`access`、`lifecycle` 和 `execution` 工具目录元数据契约。
+- `GET /api/v1/system/info` now advertises `management_mcp_tools_metadata_v4`, and the web console requires it during API compatibility checks before running Management MCP catalog diagnostics.
+- `GET /api/v1/system/info` 现在会声明 `management_mcp_tools_metadata_v4`，Web 控制台会在运行 Management MCP 工具目录诊断前先把它纳入 API 兼容检查。
+- Connection diagnostics now checks the Management MCP `tools/list` catalog contract, including `metadataVersion`, `safety`, `access`, `lifecycle`, `execution`, and write-tool confirmation schemas, so operators can catch incompatible admin-agent tooling before automated writes.
+- 连接诊断现在会检查 Management MCP 的 `tools/list` 目录契约，包括 `metadataVersion`、`safety`、`access`、`lifecycle`、`execution` 和写工具确认参数 schema，让管理员在自动写操作前发现管理 Agent 工具兼容问题。
+- Management MCP `tools/list` now returns top-level `metadataVersion: 4`, giving admin-agent clients a stable contract marker for the current `safety`, `access`, `lifecycle`, `execution`, and write-tool confirmation schema metadata.
+- Management MCP 的 `tools/list` 现在会返回顶层 `metadataVersion: 4`，为管理 Agent 客户端标记当前 `safety`、`access`、`lifecycle`、`execution` 和写工具确认参数 schema 元数据契约。
 - Management MCP `tools/list` now returns `access` metadata for every admin tool, including required role, scope boundary, and reviewer binding, so admin agents can route calls without parsing descriptions.
 - Management MCP 的 `tools/list` 现在会为每个管理工具返回 `access` 元数据，包括所需角色、范围边界和审批人绑定，让管理 Agent 无需解析描述文案也能判断调用边界。
 - Management MCP `tools/list` now returns `safety` metadata for every admin tool, including operation type, read-only status, mutation status, and approval mode, so admin agents can avoid accidental writes.

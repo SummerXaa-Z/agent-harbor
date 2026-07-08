@@ -533,7 +533,7 @@ The script passes the requester key to setup and apply calls, and passes the rev
 
 - [x] **Step 4: Document and verify**
 
-Documentation was updated in `README.md`, `CHANGELOG.md`, `docs/engineering/release-checklist.md`, `docs/product/0.2.0-ai-admin-permission-journey.md`, and `docs/engineering/0.2.0-local-validation-evidence.md`.
+Documentation was updated in `README.md`, `CHANGELOG.md`, `docs/engineering/release-checklist.md`, `docs/product/0.2.0-ai-admin-permission-journey.md`, and `docs/engineering/0.2.0-local-validation-record.md`.
 
 Verified:
 
@@ -1247,7 +1247,7 @@ Result: passed with run id `ai-admin-browser-journey-20260611054116`. The gate c
 
 - [x] **Step 2: Record evidence**
 
-Updated `docs/engineering/0.2.0-local-validation-evidence.md` with the post-UI-hardening browser journey run id and coverage.
+Updated `docs/engineering/0.2.0-local-validation-record.md` with the post-UI-hardening browser journey run id and coverage.
 
 - [x] **Step 3: Commit, push, and inspect PR checks**
 

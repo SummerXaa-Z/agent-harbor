@@ -212,8 +212,8 @@ trace = traces[0]
 if not trace.get("capabilityId"):
     raise SystemExit(f"trace missing capabilityId: {trace}")
 if not trace.get("entitlementId") or not trace.get("workspaceAssignmentId") or not trace.get("instanceAssignmentId"):
-    raise SystemExit(f"trace missing policy evidence: {trace}")
-print("capability trace evidence verified")
+    raise SystemExit(f"trace missing policy records: {trace}")
+print("capability trace records verified")
 PY
 }
 

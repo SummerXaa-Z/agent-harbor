@@ -14,7 +14,15 @@ const permissionPackageApprovalScript = readFileSync(
 );
 const productJourney = readFileSync(new URL("../../docs/product/0.2.0-ai-admin-permission-journey.md", import.meta.url), "utf8");
 const releaseChecklist = readFileSync(new URL("../../docs/engineering/release-checklist.md", import.meta.url), "utf8");
+const localValidationRecord = readFileSync(
+  new URL("../../docs/engineering/0.2.0-local-validation-record.md", import.meta.url),
+  "utf8"
+);
 const changelog = readFileSync(new URL("../../CHANGELOG.md", import.meta.url), "utf8");
+const capabilityGovernanceScript = readFileSync(
+  new URL("../../scripts/scenario-mcp-capability-governance.sh", import.meta.url),
+  "utf8"
+);
 
 function proseWithoutCode(text) {
   return text
@@ -62,7 +70,7 @@ test("web console production smoke uses the canonical go-live route", () => {
 });
 
 test("public product docs use records wording instead of forensic-style prose", () => {
-  const publicProse = proseWithoutCode([readme, productJourney, releaseChecklist, changelog].join("\n"));
+  const publicProse = proseWithoutCode([readme, productJourney, releaseChecklist, localValidationRecord, changelog].join("\n"));
   assert.doesNotMatch(publicProse, /\bEvidence\b|\bevidence\b|证据/);
 });
 
@@ -71,4 +79,7 @@ test("release scenario operator output uses report and record wording", () => {
   assert.doesNotMatch(permissionPackageApprovalScript, /trace evidence verified/i);
   assert.doesNotMatch(permissionPackageApprovalScript, /audit evidence verified/i);
   assert.doesNotMatch(permissionPackageApprovalScript, /after evidence/i);
+  assert.doesNotMatch(permissionPackageApprovalScript, /application evidence/i);
+  assert.doesNotMatch(capabilityGovernanceScript, /policy evidence/i);
+  assert.doesNotMatch(capabilityGovernanceScript, /trace evidence verified/i);
 });

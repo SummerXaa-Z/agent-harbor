@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Public validation docs and scenario operator output now use record/report wording instead of investigation-style wording.
+- 2026-07-08：公开验收文档和场景脚本输出现在统一使用记录/报告措辞，不再使用取证式措辞。
 - 2026-07-08: Downloaded go-live status report filenames now include a short report digest for easier handoff matching.
 - 2026-07-08：下载的上线状态报告文件名现在会包含短报告摘要，便于交接时匹配。
 - 2026-07-08: The go-live status report digest in the console can now be copied as the full value while the primary UI keeps the shortened display.

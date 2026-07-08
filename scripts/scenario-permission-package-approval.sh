@@ -896,7 +896,7 @@ if expected_status == "ready":
         raise SystemExit(f"ready production report missing access profile record: {evidence}")
 else:
     if application.get("present") is True:
-        raise SystemExit(f"blocked-before-apply report should not include application evidence: {application}")
+        raise SystemExit(f"blocked-before-apply report should not include an application record: {application}")
     if checks[expected_check].get("severity") != "blocking":
         raise SystemExit(f"expected report check {expected_check!r} to block, got {checks[expected_check]}")
 print(f"permission package production report verified: status={expected_status} check={expected_check}")

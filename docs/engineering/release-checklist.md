@@ -2,9 +2,9 @@
 
 Use this checklist before merging larger behavior changes, cutting a tagged release, or declaring `main` ready for downstream integration.
 
-For the current v0.2.0 local validation record, see `docs/engineering/0.2.0-local-validation-evidence.md`.
+For the current v0.2.0 local validation record, see `docs/engineering/0.2.0-local-validation-record.md`.
 
-当前 v0.2.0 本地验收材料见 `docs/engineering/0.2.0-local-validation-evidence.md`。
+当前 v0.2.0 本地验收材料见 `docs/engineering/0.2.0-local-validation-record.md`。
 
 ## Required Local Checks
 

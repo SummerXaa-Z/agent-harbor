@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Acceptance history translations now expose only `acceptanceHistory` keys.
+- 2026-07-08：历史验收翻译现在只暴露 `acceptanceHistory` key。
 - 2026-07-08: Acceptance concept translations now expose only `concept.acceptanceMaterials*` keys.
 - 2026-07-08：验收材料概念翻译现在只暴露 `concept.acceptanceMaterials*` key。
 - 2026-07-08: Runtime history status translations now expose only `status.record*` keys.

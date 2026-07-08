@@ -49,7 +49,7 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("page.go-live"), "Go-Live Check");
   assert.equal(t("navGroup.audit"), "Audit & Acceptance");
   assert.equal(t("panel.acceptanceHistory"), "Acceptance History");
-  assert.equal(t("panel.evidenceRuns"), "Acceptance History");
+  assert.doesNotMatch(i18nSource, /(?:panel|empty)\.evidenceRuns(?:\.(?:title|detail))?/);
   assert.equal(t("section.aiAdminApprovalJourney"), "Runtime Validation Records");
   assert.equal(t("text.cockpitKeyMessageEvidence"), "Clear go-live status");
   assert.equal(t("message.acceptanceReportExported"), "Acceptance report exported.");
@@ -278,7 +278,6 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("empty.auditTraces.title"), "暂无运行记录");
   assert.equal(t("empty.auditTraces.detail"), "允许、拒绝和工具发现过滤记录会显示在这里。");
   assert.equal(t("panel.acceptanceHistory"), "历史验收");
-  assert.equal(t("panel.evidenceRuns"), "历史验收");
   assert.equal(t("panel.resourceLifecycle"), "资源管理");
   assert.equal(t("resource.status.needsApproval"), "需要授权");
   assert.equal(t("resource.detail.needsCredentials"), "需要先配置目标服务凭据。");
@@ -309,7 +308,6 @@ test("createTranslator returns core journey Chinese labels", () => {
   );
   assert.equal(t("resource.nextAction.capabilities"), "发现能力");
   assert.equal(t("empty.acceptanceHistory.title"), "暂无历史验收记录");
-  assert.equal(t("empty.evidenceRuns.title"), "暂无历史验收记录");
   assert.equal(t("section.goLiveAcceptance"), "上线检查");
   assert.equal(t("productionAcceptance.title"), "上线检查");
   assert.equal(t("productionAcceptance.status.ready"), "可上线");

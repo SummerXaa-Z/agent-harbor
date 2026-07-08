@@ -17,7 +17,7 @@ export function GettingStartedView({ setupDataAvailable, steps, t }: GettingStar
   const completedSteps = steps.filter((step) => step.done).length;
   const allStepsDone = steps.length > 0 && completedSteps === steps.length;
   const focusStatus = focusStep?.done ? "complete" : "current";
-  const chainNodes = ["tenant", "agent", "capability", "grant", "runtime", "evidence"];
+  const chainNodes = ["tenant", "agent", "capability", "grant", "runtime", "status"];
 
   function statusForStep(step: GettingStartedStep | undefined, index: number) {
     if (step?.done) return "complete";

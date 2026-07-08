@@ -66,9 +66,9 @@ test("getting started copy is bilingual and token-styled", () => {
     "gettingStarted.step.discover-capabilities.title",
     "gettingStarted.step.create-grant-chain.title",
     "gettingStarted.step.run-decision.title",
-    "gettingStarted.step.review-evidence.title",
+    "gettingStarted.step.confirm-status.title",
     "gettingStarted.chain.tenant",
-    "gettingStarted.chain.evidence"
+    "gettingStarted.chain.status"
   ]) {
     assert.match(i18n, new RegExp(`"${key}"`), `${key} should be present in i18n`);
   }

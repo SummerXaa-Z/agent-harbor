@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: The getting-started status step now uses preferred `confirm-status` and `chain.status` keys while keeping old setup keys compatible.
+- 2026-07-08：首次使用流程的上线状态步骤现在使用首选 `confirm-status` 和 `chain.status` key，同时保留旧接入 key 兼容。
 - 2026-07-08: The go-live acceptance history panel now uses preferred acceptance-history component, prop, and translation keys while keeping old keys compatible.
 - 2026-07-08：上线验收历史面板现在使用首选的 acceptance-history 组件、属性和翻译 key，同时保留旧 key 兼容。
 - 2026-07-08: The go-live status page container is now named `GoLiveStatusView` in the frontend, matching the preferred route and translation naming.

@@ -7,7 +7,7 @@ export type GettingStartedStepKey =
   | "discover-capabilities"
   | "create-grant-chain"
   | "run-decision"
-  | "review-evidence";
+  | "confirm-status";
 
 export interface GettingStartedStep {
   key: GettingStartedStepKey;
@@ -46,7 +46,7 @@ export function gettingStartedSteps(data: ConsoleData): GettingStartedStep[] {
     },
     {
       done: data.loadedFromApi && data.evidenceRuns.length > 0,
-      key: "review-evidence",
+      key: "confirm-status",
       targetHash: navHashFor("go-live")
     }
   ];

@@ -117,7 +117,7 @@ test("getting started progress reports an empty live system as not configured", 
     ["discover-capabilities", false, "#capabilities"],
     ["create-grant-chain", false, "#ai-admin"],
     ["run-decision", false, "#traces"],
-    ["review-evidence", false, "#go-live"]
+    ["confirm-status", false, "#go-live"]
   ]);
   assert.equal(isSetupComplete(data), false);
 });
@@ -136,7 +136,7 @@ test("getting started progress follows the dependency chain for partial setup", 
     ["discover-capabilities", true],
     ["create-grant-chain", false],
     ["run-decision", false],
-    ["review-evidence", false]
+    ["confirm-status", false]
   ]);
   assert.equal(isSetupComplete(data), false);
 });
@@ -160,7 +160,7 @@ test("sample data does not count as completed setup progress", () => {
     ["discover-capabilities", false],
     ["create-grant-chain", false],
     ["run-decision", false],
-    ["review-evidence", false]
+    ["confirm-status", false]
   ]);
   assert.equal(isSetupComplete(data), false);
 });
@@ -182,12 +182,12 @@ test("setup readiness is not blocked by runtime data fallback", () => {
     ["discover-capabilities", true],
     ["create-grant-chain", true],
     ["run-decision", false],
-    ["review-evidence", false]
+    ["confirm-status", false]
   ]);
   assert.equal(isSetupComplete(data), true);
 });
 
-test("configured live systems are setup-complete before runtime and evidence are present", () => {
+test("configured live systems are setup-complete before runtime and status history is present", () => {
   const data = baseConsoleData({
     agents: [activeAgent],
     capabilities: [capability],

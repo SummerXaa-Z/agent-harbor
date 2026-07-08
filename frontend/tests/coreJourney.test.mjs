@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -7,6 +8,7 @@ import {
   evaluateCoreJourney
 } from "../src/coreJourney.ts";
 
+const coreJourneySource = readFileSync(new URL("../src/coreJourney.ts", import.meta.url), "utf8");
 const now = "2026-06-03T04:00:00Z";
 
 test("createCoreJourneyConfig generates a scoped tenant tree for a run", () => {
@@ -18,6 +20,13 @@ test("createCoreJourneyConfig generates a scoped tenant tree for a run", () => {
   assert.equal(config.grandchildTenantId, "tenant-grandchild-ui-core-2026-06-03-12-00");
   assert.equal(config.subjectSelector, "user:ui-core-2026-06-03-12-00-*");
   assert.equal(config.subjectId, "user:ui-core-2026-06-03-12-00-operator");
+});
+
+test("core journey uses runtime record helper naming", () => {
+  assert.match(coreJourneySource, /const runtimeRecord = runtimeRecordState/);
+  assert.match(coreJourneySource, /function runtimeRecordState/);
+  assert.doesNotMatch(coreJourneySource, /const runtimeEvidence = runtimeEvidenceState/);
+  assert.doesNotMatch(coreJourneySource, /function runtimeEvidenceState/);
 });
 
 test("evaluateCoreJourney requires tenant, capability, grant, runtime, and profile evidence", () => {

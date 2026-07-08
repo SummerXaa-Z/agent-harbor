@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Core and AI Admin journey evaluators now use runtime-record helper names while preserving existing step keys.
+- 2026-07-08：核心链路和 AI Admin 旅程评估器现在使用运行记录 helper 命名，同时保持现有 step key 兼容。
 - 2026-07-08: Runtime history status labels now use preferred `status.record*` translation keys while retaining older status key aliases.
 - 2026-07-08：运行历史状态标签现在使用首选 `status.record*` 翻译 key，同时保留旧状态 key alias。
 - 2026-07-08: Production console presenter internals now use runtime-record and approval-record local names while preserving the backend readiness fields.

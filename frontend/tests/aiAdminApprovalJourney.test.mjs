@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -7,6 +8,7 @@ import {
   summarizeAiAdminGoLiveReadiness
 } from "../src/aiAdminApprovalJourney.ts";
 
+const approvalJourneySource = readFileSync(new URL("../src/aiAdminApprovalJourney.ts", import.meta.url), "utf8");
 const now = "2026-06-05T09:00:00Z";
 
 test("createAiAdminApprovalJourneyConfig generates deterministic approval run ids", () => {
@@ -21,6 +23,13 @@ test("createAiAdminApprovalJourneyConfig generates deterministic approval run id
   assert.equal(config.subjectSelector, "user:support-*");
   assert.equal(config.subjectId, "user:support-001");
   assert.equal(config.templateId, "support-ticket-triage");
+});
+
+test("AI Admin approval journey uses runtime record helper naming", () => {
+  assert.match(approvalJourneySource, /const runtimeRecord = runtimeRecordState/);
+  assert.match(approvalJourneySource, /function runtimeRecordState/);
+  assert.doesNotMatch(approvalJourneySource, /const runtimeEvidence = runtimeEvidenceState/);
+  assert.doesNotMatch(approvalJourneySource, /function runtimeEvidenceState/);
 });
 
 test("evaluateAiAdminApprovalJourney reports missing evidence before the live run", () => {

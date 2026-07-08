@@ -124,7 +124,7 @@ export function evaluateCoreJourney(
       assignment.effect === "allow" &&
       assignment.status === "enabled",
   );
-  const runtimeEvidence = runtimeEvidenceState(data?.traces ?? [], accessProfile, config);
+  const runtimeRecord = runtimeRecordState(data?.traces ?? [], accessProfile, config);
   const tenantTreeStatus = tenantTreeState(accessProfile, config);
   const profileComplete = Boolean(
     accessProfile?.tenant.id === config.childTenantId &&
@@ -163,10 +163,10 @@ export function evaluateCoreJourney(
       status: tenantEntitlement && workspaceAssignment && instanceAssignment ? "complete" : tenantEntitlement || workspaceAssignment || instanceAssignment ? "partial" : "missing",
     },
     {
-      detail: `${config.runId} allowed=${runtimeEvidence.allowed} denied=${runtimeEvidence.denied}`,
+      detail: `${config.runId} allowed=${runtimeRecord.allowed} denied=${runtimeRecord.denied}`,
       key: "runtimeEvidence",
-      metric: `${runtimeEvidence.allowed}/${runtimeEvidence.denied}`,
-      status: runtimeEvidence.allowed > 0 && runtimeEvidence.denied > 0 ? "complete" : runtimeEvidence.allowed > 0 || runtimeEvidence.denied > 0 ? "partial" : "missing",
+      metric: `${runtimeRecord.allowed}/${runtimeRecord.denied}`,
+      status: runtimeRecord.allowed > 0 && runtimeRecord.denied > 0 ? "complete" : runtimeRecord.allowed > 0 || runtimeRecord.denied > 0 ? "partial" : "missing",
     },
     {
       detail: accessProfile ? `${accessProfile.tenant.name} grants=${accessProfile.summary.grantCount}` : config.childTenantId,
@@ -206,7 +206,7 @@ function tenantTreeState(
   return child || grandchild ? "partial" : "missing";
 }
 
-function runtimeEvidenceState(
+function runtimeRecordState(
   traces: TraceEvent[],
   accessProfile: TenantAccessProfileData | null,
   config: CoreJourneyConfig,

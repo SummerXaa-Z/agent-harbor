@@ -143,7 +143,7 @@ export function evaluateAiAdminApprovalJourney({
         capability.dataScopes?.some((scope) => scope.tenantFilter?.includes(config.childTenantId)),
     ),
   ).length;
-  const runtimeEvidence = runtimeEvidenceState(data?.traces ?? [], accessProfile, config);
+  const runtimeRecord = runtimeRecordState(data?.traces ?? [], accessProfile, config);
   const profileComplete = Boolean(
     accessProfile?.tenant.id === config.childTenantId &&
       accessProfile.summary.grantCount >= 2 &&
@@ -176,8 +176,8 @@ export function evaluateAiAdminApprovalJourney({
       result.deniedStatus === 403 &&
       result.allowedStatus >= 200 &&
       result.allowedStatus < 300 &&
-      runtimeEvidence.allowed > 0 &&
-      runtimeEvidence.denied > 0,
+      runtimeRecord.allowed > 0 &&
+      runtimeRecord.denied > 0,
   );
   const steps: AiAdminApprovalJourneyStep[] = [
     {
@@ -217,10 +217,10 @@ export function evaluateAiAdminApprovalJourney({
       status: appliedComplete ? "complete" : application ? "partial" : "missing",
     },
     {
-      detail: `${config.runId} allowed=${runtimeEvidence.allowed} denied=${runtimeEvidence.denied}`,
+      detail: `${config.runId} allowed=${runtimeRecord.allowed} denied=${runtimeRecord.denied}`,
       key: "runtimeEvidence",
-      metric: result ? `${result.toolListStatus}/${result.deniedStatus}/${result.allowedStatus}` : `${runtimeEvidence.allowed}/${runtimeEvidence.denied}`,
-      status: runtimeStatusComplete ? "complete" : runtimeEvidence.allowed > 0 || runtimeEvidence.denied > 0 || result ? "partial" : "missing",
+      metric: result ? `${result.toolListStatus}/${result.deniedStatus}/${result.allowedStatus}` : `${runtimeRecord.allowed}/${runtimeRecord.denied}`,
+      status: runtimeStatusComplete ? "complete" : runtimeRecord.allowed > 0 || runtimeRecord.denied > 0 || result ? "partial" : "missing",
     },
     {
       detail: accessProfile ? `${accessProfile.tenant.name} grants=${accessProfile.summary.grantCount}` : config.childTenantId,
@@ -277,7 +277,7 @@ function tenantTreeState(
   return child || grandchild ? "partial" : "missing";
 }
 
-function runtimeEvidenceState(
+function runtimeRecordState(
   traces: TraceEvent[],
   accessProfile: TenantAccessProfileData | null,
   config: AiAdminApprovalJourneyConfig,

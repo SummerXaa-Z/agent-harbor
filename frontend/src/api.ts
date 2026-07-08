@@ -26,10 +26,10 @@ import {
 } from './systemInfoContract'
 import {
   accessDecisionExplainPath,
+  permissionPackageAcceptanceReportPath,
   permissionPackageApplicationHealthPath,
   permissionPackageApplicationImpactPath,
   permissionPackageApprovalRequestsPath,
-  permissionPackageProductionReportPath,
   permissionPackageProductionReadinessPath,
   type PermissionPackageApplicationHealthPathFilter,
   type PermissionPackageApplicationImpactPathScope,
@@ -735,19 +735,19 @@ export async function fetchPermissionPackageProductionReadiness(
   return request<PermissionPackageProductionReadiness>(permissionPackageProductionReadinessPath(filter), { adminKey, signal })
 }
 
-export async function fetchPermissionPackageProductionReport(
+export async function fetchPermissionPackageAcceptanceReport(
   filter: PermissionPackageProductionReadinessFilter,
   adminKey?: string,
   signal?: AbortSignal,
 ): Promise<PermissionPackageAcceptanceReport> {
   return request<PermissionPackageAcceptanceReport>(
-    permissionPackageProductionReportPath(filter),
+    permissionPackageAcceptanceReportPath(filter),
     { adminKey, signal },
   )
 }
 
-export const fetchPermissionPackageAcceptanceReport = fetchPermissionPackageProductionReport
-export const fetchPermissionPackageProductionEvidenceReport = fetchPermissionPackageProductionReport
+export const fetchPermissionPackageProductionReport = fetchPermissionPackageAcceptanceReport
+export const fetchPermissionPackageProductionEvidenceReport = fetchPermissionPackageAcceptanceReport
 
 export async function createPermissionPackageApprovalRequest(
   body: PermissionPackageDraftInput,

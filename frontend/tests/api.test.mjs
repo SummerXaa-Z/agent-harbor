@@ -6,6 +6,7 @@ import {
   requiredConsoleCapabilities,
   systemInfoContractIssues,
 } from "../src/systemInfoContract.ts";
+import * as apiPaths from "../src/apiPaths.ts";
 import {
   accessDecisionExplainPath,
   permissionPackageApplicationHealthPath,
@@ -239,7 +240,7 @@ test("permissionPackageApplicationHealthPath includes application health filters
   assert.equal(url.searchParams.get("workspaceId"), "ws-sales");
 });
 
-test("permissionPackageProductionReadinessPath includes production evidence filters", () => {
+test("permissionPackageProductionReadinessPath includes status-check filters", () => {
   const path = permissionPackageProductionReadinessPath({
     approvalRequestId: "ppar-1",
     callerInstanceId: "caller-sales",
@@ -269,8 +270,10 @@ test("permissionPackageProductionReadinessPath includes production evidence filt
   assert.equal(url.searchParams.get("workspaceId"), "ws-sales");
 });
 
-test("permissionPackageProductionEvidenceReportPath includes production evidence filters", () => {
-  const path = permissionPackageProductionEvidenceReportPath({
+test("permissionPackageAcceptanceReportPath includes acceptance report filters", () => {
+  assert.equal(typeof apiPaths.permissionPackageAcceptanceReportPath, "function");
+
+  const path = apiPaths.permissionPackageAcceptanceReportPath({
     approvalRequestId: "ppar-1",
     callerInstanceId: "caller-sales",
     region: "us-east",
@@ -299,7 +302,10 @@ test("permissionPackageProductionEvidenceReportPath includes production evidence
   assert.equal(url.searchParams.get("workspaceId"), "ws-sales");
 });
 
-test("permissionPackageProductionReportPath provides the preferred report helper name", () => {
+test("legacy report path helpers remain compatibility aliases", () => {
+  assert.equal(permissionPackageProductionReportPath, apiPaths.permissionPackageAcceptanceReportPath);
+  assert.equal(permissionPackageProductionEvidenceReportPath, apiPaths.permissionPackageAcceptanceReportPath);
+
   const path = permissionPackageProductionReportPath({
     approvalRequestId: "ppar-1",
     callerInstanceId: "caller-sales",
@@ -327,4 +333,12 @@ test("permissionPackageProductionReportPath provides the preferred report helper
   assert.equal(url.searchParams.get("tenantId"), "tenant-east");
   assert.equal(url.searchParams.get("traceLimit"), "20");
   assert.equal(url.searchParams.get("workspaceId"), "ws-sales");
+});
+
+test("acceptance report fetch helper is the primary report implementation", () => {
+  assert.match(apiSource, /function fetchPermissionPackageAcceptanceReport\(/);
+  assert.match(apiSource, /permissionPackageAcceptanceReportPath\(filter\)/);
+  assert.match(apiSource, /fetchPermissionPackageProductionReport = fetchPermissionPackageAcceptanceReport/);
+  assert.match(apiSource, /fetchPermissionPackageProductionEvidenceReport = fetchPermissionPackageAcceptanceReport/);
+  assert.doesNotMatch(apiSource, /function fetchPermissionPackageProductionReport\(/);
 });

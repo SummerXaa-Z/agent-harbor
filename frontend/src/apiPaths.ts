@@ -111,7 +111,7 @@ export function permissionPackageProductionReadinessPath(filter: PermissionPacka
   return `/api/v1/permission-packages/production-readiness${query}`
 }
 
-export function permissionPackageProductionReportPath(filter: PermissionPackageProductionReadinessPathFilter): string {
+export function permissionPackageAcceptanceReportPath(filter: PermissionPackageProductionReadinessPathFilter): string {
   const query = queryString({
     approvalRequestId: filter.approvalRequestId,
     callerInstanceId: filter.callerInstanceId,
@@ -128,7 +128,8 @@ export function permissionPackageProductionReportPath(filter: PermissionPackageP
   return `/api/v1/permission-packages/production-readiness/report${query}`
 }
 
-export const permissionPackageProductionEvidenceReportPath = permissionPackageProductionReportPath
+export const permissionPackageProductionReportPath = permissionPackageAcceptanceReportPath
+export const permissionPackageProductionEvidenceReportPath = permissionPackageAcceptanceReportPath
 
 export function permissionPackageApprovalRequestsPath(filter: PermissionPackageApprovalRequestPathFilter): string {
   const query = queryString({

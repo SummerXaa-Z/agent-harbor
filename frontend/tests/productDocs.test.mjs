@@ -102,6 +102,7 @@ test("public release docs keep legacy report identifiers in compatibility docs o
 
 test("release scenario operator output uses report and record wording", () => {
   assert.doesNotMatch(permissionPackageApprovalScript, /production evidence report/i);
+  assert.doesNotMatch(permissionPackageApprovalScript, /production report/i);
   assert.doesNotMatch(permissionPackageApprovalScript, /trace evidence verified/i);
   assert.doesNotMatch(permissionPackageApprovalScript, /audit evidence verified/i);
   assert.doesNotMatch(permissionPackageApprovalScript, /after evidence/i);

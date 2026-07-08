@@ -336,7 +336,7 @@ print("/api/v1/permission-packages/production-readiness?" + urlencode(params))
 PY
 }
 
-production_evidence_report_path() {
+acceptance_report_path() {
   local approval_request_id="${1:-}"
   production_readiness_path "$approval_request_id" | sed 's#/production-readiness?#/production-readiness/report?#'
 }
@@ -835,7 +835,7 @@ print(f"permission package production readiness verified: status={expected_statu
 PY
 }
 
-assert_production_evidence_report() {
+assert_acceptance_report() {
   local expected_status="$1"
   local expected_check="$2"
   RESPONSE_BODY="$HTTP_BODY" SYSTEM_INFO_BODY="$SYSTEM_INFO_BODY" python3 - "$expected_status" "$expected_check" "$APPLICATION_ID" "$CHILD_TENANT_ID" "$WORKSPACE_ID" <<'PY'
@@ -850,56 +850,56 @@ expected_status, expected_check, application_id, tenant_id, workspace_id = sys.a
 if report.get("reportVersion") != "production-readiness-report/v1":
     raise SystemExit(f"unexpected report version: {report}")
 if not isinstance(report.get("generatedBy"), str) or not report.get("generatedBy").strip():
-    raise SystemExit(f"production report generatedBy should identify the exporting admin: {report.get('generatedBy')!r}")
+    raise SystemExit(f"acceptance report generatedBy should identify the exporting admin: {report.get('generatedBy')!r}")
 report_digest = report.get("reportDigest")
 if not re.fullmatch(r"[a-f0-9]{64}", str(report_digest or "")):
-    raise SystemExit(f"production report digest should be a sha256 hex digest: {report_digest!r}")
+    raise SystemExit(f"acceptance report digest should be a sha256 hex digest: {report_digest!r}")
 if report.get("reportDigestAlgorithm") != "sha256-canonical-json-v1":
-    raise SystemExit(f"production report digest algorithm={report.get('reportDigestAlgorithm')!r} want 'sha256-canonical-json-v1'")
+    raise SystemExit(f"acceptance report digest algorithm={report.get('reportDigestAlgorithm')!r} want 'sha256-canonical-json-v1'")
 digest_payload = dict(report)
 digest_payload.pop("reportDigest", None)
 expected_digest = hashlib.sha256(json.dumps(digest_payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 if report_digest != expected_digest:
-    raise SystemExit(f"production report digest={report_digest!r} want {expected_digest!r}")
+    raise SystemExit(f"acceptance report digest={report_digest!r} want {expected_digest!r}")
 if report.get("status") != expected_status:
-    raise SystemExit(f"production report status={report.get('status')!r} want {expected_status!r}: {report}")
+    raise SystemExit(f"acceptance report status={report.get('status')!r} want {expected_status!r}: {report}")
 system_info = json.loads(os.environ["SYSTEM_INFO_BODY"]).get("data", {})
 system_catalog = system_info.get("managementMcpToolCatalog") or {}
 report_contract = report.get("platformContract") or {}
 report_catalog = report_contract.get("managementMcpToolCatalog") or {}
 if report_contract.get("apiVersion") != system_info.get("apiVersion"):
-    raise SystemExit(f"production report apiVersion={report_contract.get('apiVersion')!r} does not match system info {system_info.get('apiVersion')!r}")
+    raise SystemExit(f"acceptance report apiVersion={report_contract.get('apiVersion')!r} does not match system info {system_info.get('apiVersion')!r}")
 if report_catalog.get("metadataVersion") != system_catalog.get("metadataVersion"):
-    raise SystemExit(f"production report catalog metadataVersion={report_catalog.get('metadataVersion')!r} does not match system info {system_catalog.get('metadataVersion')!r}")
+    raise SystemExit(f"acceptance report catalog metadataVersion={report_catalog.get('metadataVersion')!r} does not match system info {system_catalog.get('metadataVersion')!r}")
 if not re.fullmatch(r"[a-f0-9]{64}", str(report_catalog.get("catalogDigest", ""))):
-    raise SystemExit(f"production report catalogDigest should be a sha256 hex digest: {report_catalog}")
+    raise SystemExit(f"acceptance report catalogDigest should be a sha256 hex digest: {report_catalog}")
 if report_catalog.get("catalogDigest") != system_catalog.get("catalogDigest"):
-    raise SystemExit(f"production report catalogDigest={report_catalog.get('catalogDigest')!r} does not match system info {system_catalog.get('catalogDigest')!r}")
+    raise SystemExit(f"acceptance report catalogDigest={report_catalog.get('catalogDigest')!r} does not match system info {system_catalog.get('catalogDigest')!r}")
 scope = report.get("scope") or {}
 if scope.get("tenantId") != tenant_id or scope.get("workspaceId") != workspace_id:
-    raise SystemExit(f"unexpected production report scope: {scope}")
+    raise SystemExit(f"unexpected acceptance report scope: {scope}")
 checks = {check.get("code"): check for check in report.get("checks", [])}
 if expected_check not in checks:
-    raise SystemExit(f"production report missing check {expected_check!r}: {checks}")
+    raise SystemExit(f"acceptance report missing check {expected_check!r}: {checks}")
 evidence = report.get("evidence") or {}
 application = evidence.get("application") or {}
 runtime = evidence.get("runtime") or {}
 audit = evidence.get("audit") or {}
 if expected_status == "ready":
     if application.get("id") != application_id or application.get("present") is not True:
-        raise SystemExit(f"ready production report missing application record: {application}")
+        raise SystemExit(f"ready acceptance report missing application record: {application}")
     if not runtime.get("allowedTraceId") or not runtime.get("deniedTraceId"):
-        raise SystemExit(f"ready production report missing runtime records: {runtime}")
+        raise SystemExit(f"ready acceptance report missing runtime records: {runtime}")
     if not audit.get("appliedEventId"):
-        raise SystemExit(f"ready production report missing audit record: {audit}")
+        raise SystemExit(f"ready acceptance report missing audit record: {audit}")
     if (evidence.get("accessProfile") or {}).get("present") is not True:
-        raise SystemExit(f"ready production report missing access profile record: {evidence}")
+        raise SystemExit(f"ready acceptance report missing access profile record: {evidence}")
 else:
     if application.get("present") is True:
         raise SystemExit(f"blocked-before-apply report should not include an application record: {application}")
     if checks[expected_check].get("severity") != "blocking":
         raise SystemExit(f"expected report check {expected_check!r} to block, got {checks[expected_check]}")
-print(f"permission package production report verified: status={expected_status} check={expected_check}")
+print(f"permission package acceptance report verified: status={expected_status} check={expected_check}")
 PY
 }
 
@@ -1484,9 +1484,9 @@ request GET "$(production_readiness_path "$APPROVAL_REQUEST_ID")"
 expect_status 200 "check production readiness before apply"
 assert_production_readiness "blocked" "application_present"
 
-request GET "$(production_evidence_report_path "$APPROVAL_REQUEST_ID")"
-expect_status 200 "export production report before apply"
-assert_production_evidence_report "blocked" "application_present"
+request GET "$(acceptance_report_path "$APPROVAL_REQUEST_ID")"
+expect_status 200 "export acceptance report before apply"
+assert_acceptance_report "blocked" "application_present"
 
 request POST "/api/v1/permission-packages:apply" "$(permission_package_body "$APPROVAL_REQUEST_ID")"
 expect_status 201 "apply approved permission package"
@@ -1563,8 +1563,8 @@ request GET "$(production_readiness_path)"
 expect_status 200 "check production readiness after runtime records"
 assert_production_readiness "ready" "runtime_allowed_trace_present"
 
-request GET "$(production_evidence_report_path)"
-expect_status 200 "export production report after runtime records"
-assert_production_evidence_report "ready" "runtime_allowed_trace_present"
+request GET "$(acceptance_report_path)"
+expect_status 200 "export acceptance report after runtime records"
+assert_acceptance_report "ready" "runtime_allowed_trace_present"
 
 echo "permission package approval scenario complete"

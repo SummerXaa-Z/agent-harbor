@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: The permission package approval scenario now prints acceptance report wording instead of production-report wording for operator-facing status and error output.
+- 2026-07-08：权限包审批场景现在在面向操作者的状态与错误输出中使用验收报告表述，不再使用 production-report 旧表述。
 - 2026-07-08: Frontend API helpers now expose `permissionPackageAcceptanceReportPath` and `fetchPermissionPackageAcceptanceReport` as the primary report names while retaining older aliases.
 - 2026-07-08：前端 API helper 现在以 `permissionPackageAcceptanceReportPath` 和 `fetchPermissionPackageAcceptanceReport` 作为报告主名称，同时保留旧别名。
 - 2026-07-08: The permission console now calls the preferred acceptance report fetch helper while keeping older report fetch aliases compatible.

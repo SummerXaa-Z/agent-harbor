@@ -41,12 +41,14 @@ export function accessDecisionOutcomeLabel(outcome: AccessDecisionExplainResult[
   return outcome === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied");
 }
 
-export function accessDecisionEvidenceTone(status: string): Tone {
+export function accessDecisionRecordTone(status: string): Tone {
   if (status === "matched") return "success";
   if (status === "blocking" || status === "missing" || status === "mismatch") return "danger";
   if (status === "not_approved" || status === "inactive") return "warning";
   return "neutral";
 }
+
+export const accessDecisionEvidenceTone = accessDecisionRecordTone;
 
 export function formatConsoleTime(
   value: Date,

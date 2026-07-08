@@ -2,7 +2,7 @@ import { AlertCircle, ArrowRight, History, Search, Wrench } from "lucide-react";
 
 import type {
   AskAccessSelection,
-  AskEvidenceChainRow,
+  AskDecisionRecordRow,
   ExplainRequestBuildResult
 } from "../askJourney";
 import {
@@ -25,7 +25,6 @@ import { Badge } from "./ui";
 interface AskAccessViewProps {
   agents: Agent[]
   capabilities: Capability[]
-  chainRows: AskEvidenceChainRow[]
   effectiveSelection: AskAccessSelection
   exampleAvailable: boolean
   history: AskAccessHistoryEntry[]
@@ -37,6 +36,7 @@ interface AskAccessViewProps {
   onRunExampleQuery: () => void
   onSelectHistory: (entry: AskAccessHistoryEntry) => void
   onStartPermissionChange: () => void
+  recordRows: AskDecisionRecordRow[]
   requestBuild: ExplainRequestBuildResult
   result: AccessDecisionExplainResult | null
   t: Translator
@@ -65,7 +65,6 @@ export function AskAccessPanel({
       <AskAccessView
         agents={agents}
         capabilities={capabilities}
-        chainRows={controller.chainRows}
         effectiveSelection={controller.effectiveSelection}
         exampleAvailable={controller.exampleAvailable}
         history={controller.history}
@@ -77,6 +76,7 @@ export function AskAccessPanel({
         onRunExampleQuery={() => void controller.runExampleQuery()}
         onSelectHistory={controller.selectHistory}
         onStartPermissionChange={controller.startPermissionChange}
+        recordRows={controller.recordRows}
         requestBuild={controller.requestBuild}
         result={controller.result}
         t={t}
@@ -89,7 +89,6 @@ export function AskAccessPanel({
 export function AskAccessView({
   agents,
   capabilities,
-  chainRows,
   effectiveSelection,
   exampleAvailable,
   history: recentHistory,
@@ -101,6 +100,7 @@ export function AskAccessView({
   onRunExampleQuery,
   onSelectHistory,
   onStartPermissionChange,
+  recordRows,
   requestBuild,
   result,
   t,
@@ -272,7 +272,7 @@ export function AskAccessView({
                     <span>{t("ask.chainDetail")}</span>
                   </header>
                   <ol>
-                    {chainRows.map((row) => (
+                    {recordRows.map((row) => (
                       <li className={row.isBroken ? "is-broken" : ""} key={`${row.layer}-${row.id ?? row.message}`}>
                         <Badge tone={row.tone}>{t(`status.${row.status}`, row.status)}</Badge>
                         <div>

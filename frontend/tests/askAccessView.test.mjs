@@ -31,6 +31,8 @@ test("ask access state delegates access-query business rules to askJourney pure 
   assert.match(hook, /buildPermissionChangeHandoff/);
   assert.match(hook, /decisionRecordRows/);
   assert.doesNotMatch(hook, /evidenceChainRows/);
+  assert.match(hook, /const recordRows = useMemo/);
+  assert.doesNotMatch(hook, /\bchainRows\b/);
   assert.match(hook, /fetchAccessDecisionExplanation/);
   assert.match(hook, /slice\(0,\s*5\)/);
 });
@@ -43,6 +45,9 @@ test("ask access view exposes denied-to-fix handoff without automatic submission
 });
 
 test("ask access view translates backend decision text at render time", () => {
+  assert.match(view, /recordRows: AskDecisionRecordRow\[\]/);
+  assert.doesNotMatch(view, /AskEvidenceChainRow/);
+  assert.doesNotMatch(view, /\bchainRows\b/);
   assert.match(view, /accessDecisionSummaryLabel\(result, t\)/);
   assert.match(view, /accessDecisionRecordMessageLabel\(row, t\)/);
   assert.doesNotMatch(view, /accessEvidenceMessageLabel\(row, t\)/);

@@ -65,7 +65,7 @@ export function useAskAccessController({
     [consoleData, selection]
   );
   const requestBuild = useMemo(() => buildExplainRequest(effectiveSelection), [effectiveSelection]);
-  const chainRows = useMemo(() => result ? decisionRecordRows(result) : [], [result]);
+  const recordRows = useMemo(() => result ? decisionRecordRows(result) : [], [result]);
   const exampleSelection = useMemo(() => applySelectionDefaults({}, consoleData), [consoleData]);
   const exampleAvailable = buildExplainRequest(exampleSelection).complete;
 
@@ -156,7 +156,6 @@ export function useAskAccessController({
   }
 
   return {
-    chainRows,
     effectiveSelection,
     exampleAvailable,
     explain,
@@ -164,6 +163,7 @@ export function useAskAccessController({
     loading,
     message,
     requestBuild,
+    recordRows,
     result,
     runExampleQuery,
     selectHistory,

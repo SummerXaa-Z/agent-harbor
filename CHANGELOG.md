@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: The go-live status workspace now has preferred `go-live` translation keys, so localized sidebar and page titles do not fall back to old go-live status keys.
+- 2026-07-08：上线状态页现在具备首选 `go-live` 翻译 key，侧栏和页面标题不会再依赖旧上线状态 key 回退。
 - 2026-07-08: The web console now uses `go-live` as the preferred internal navigation key for the go-live status workspace while keeping old `evidence` hashes compatible.
 - 2026-07-08：Web 控制台现在使用 `go-live` 作为上线状态页的首选内部导航 key，同时继续兼容旧 `evidence` hash。
 - 2026-07-08: Frontend API helpers now expose preferred production-report names while keeping the previous report helper aliases for compatibility.

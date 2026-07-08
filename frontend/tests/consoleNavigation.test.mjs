@@ -133,6 +133,14 @@ test("go-live status navigation points to the acceptance workflow", () => {
   assert.equal(viewForNav("go-live").primaryPanelKey, "goLiveAcceptance");
 });
 
+test("go-live status navigation uses preferred translation keys", () => {
+  const item = navItems.find((candidate) => candidate.key === "go-live");
+
+  assert.equal(item?.detailKey, "navDetail.go-live");
+  assert.equal(viewForNav("go-live").titleKey, "page.go-live");
+  assert.equal(viewForNav("evidence").titleKey, "page.go-live");
+});
+
 test("resource management is the single entry for Agent and MCP lifecycle", () => {
   assert.equal(viewForNav("registry").primaryPanelKey, "resourceLifecycle");
 });

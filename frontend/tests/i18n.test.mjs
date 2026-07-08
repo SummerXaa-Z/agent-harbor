@@ -37,6 +37,8 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("concept.evidence"), "Acceptance materials");
   assert.equal(t("metric.runtimeEvidence"), "Runtime Records");
   assert.equal(t("metric.traceEvidence"), "Trace Records");
+  assert.equal(t("nav.go-live"), "Go-Live Check");
+  assert.equal(t("page.go-live"), "Go-Live Check");
   assert.equal(t("navGroup.audit"), "Audit & Acceptance");
   assert.equal(t("panel.evidenceRuns"), "Acceptance History");
   assert.equal(t("section.aiAdminApprovalJourney"), "Runtime Validation Records");
@@ -226,6 +228,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("nav.cockpit"), "系统自检");
   assert.equal(t("nav.access"), "权限画像");
   assert.equal(t("nav.traces"), "运行审计");
+  assert.equal(t("nav.go-live"), "上线检查");
   assert.equal(t("nav.evidence"), "上线检查");
   assert.equal(t("nav.admin-access"), "管理员与边界");
   assert.equal(t("nav.registry"), "资源管理");
@@ -241,6 +244,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("page.cockpit"), "系统自检");
   assert.equal(t("page.access"), "权限画像");
   assert.equal(t("page.adminAccess"), "管理员与边界");
+  assert.equal(t("page.go-live"), "上线检查");
   assert.equal(t("page.evidence"), "上线检查");
   assert.equal(t("page.registry"), "资源管理");
   assert.equal(t("page.tenants"), "租户与组织");

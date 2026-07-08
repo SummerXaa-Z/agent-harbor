@@ -48,7 +48,7 @@ export const navItems: NavItem[] = [
   { detailKey: "navDetail.ai-admin", groupKey: "primary", key: "ai-admin", label: "Permission Changes" },
   { detailKey: "navDetail.access", groupKey: "primary", key: "access", label: "Access Profile" },
   { detailKey: "navDetail.traces", groupKey: "audit", key: "traces", label: "Call Logs" },
-  { detailKey: "navDetail.evidence", groupKey: "audit", key: "go-live", label: "Go-Live Status" },
+  { detailKey: "navDetail.go-live", groupKey: "audit", key: "go-live", label: "Go-Live Status" },
   { detailKey: "navDetail.cockpit", groupKey: "audit", key: "cockpit", label: "System Check" },
   { detailKey: "navDetail.adminAccess", groupKey: "configuration", key: "admin-access", label: "Administrators & Boundaries" },
   { detailKey: "navDetail.tenants", groupKey: "configuration", key: "tenants", label: "Tenants & Organization" },
@@ -117,7 +117,7 @@ const views: Record<NavKey, ConsoleView> = {
   "go-live": {
     key: "go-live",
     primaryPanelKey: "goLiveAcceptance",
-    titleKey: "page.evidence",
+    titleKey: "page.go-live",
   },
   "admin-access": {
     key: "admin-access",

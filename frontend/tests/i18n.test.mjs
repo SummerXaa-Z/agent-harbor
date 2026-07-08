@@ -34,10 +34,15 @@ test("English product copy uses acceptance and records wording", () => {
   const t = createTranslator("en");
 
   assert.equal(t("action.exportProductionEvidence"), "Export acceptance report");
+  assert.equal(t("concept.acceptanceMaterials"), "Acceptance materials");
+  assert.equal(t("concept.acceptanceMaterials.detail"), "Approval, apply, runtime, access profile, and audit records used for go-live acceptance.");
   assert.equal(t("concept.evidence"), "Acceptance materials");
   assert.equal(t("metric.runtimeRecords"), "Runtime Records");
   assert.equal(t("metric.runtimeEvidence"), "Runtime Records");
+  assert.equal(t("metric.traceRecords"), "Trace Records");
   assert.equal(t("metric.traceEvidence"), "Trace Records");
+  assert.equal(t("empty.traceRecords.title"), "No trace records");
+  assert.equal(t("empty.traceRecords.detail"), "Set trace limit above 0 to include recent runtime decisions.");
   assert.equal(t("nav.go-live"), "Go-Live Check");
   assert.equal(t("page.go-live"), "Go-Live Check");
   assert.equal(t("navGroup.audit"), "Audit & Acceptance");
@@ -294,8 +299,11 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("productionAcceptance.blocker.liveData"), "实时 API 数据尚未连接。");
   assert.equal(t("text.goLiveAcceptanceTaskTitle"), "确认这次权限变更是否可以上线");
   assert.equal(t("text.goLiveAcceptanceNoReadinessDetail"), "先回到权限变更工作台执行运行验证或状态检查，系统会补齐运行、权限画像和审计记录。");
+  assert.equal(t("concept.acceptanceMaterials"), "验收材料");
+  assert.equal(t("concept.acceptanceMaterials.detail"), "审批、应用、运行验证、访问画像和审计记录共同支撑上线检查。");
   assert.equal(t("metric.runtimeRecords"), "运行记录");
   assert.equal(t("metric.runtimeEvidence"), "运行记录");
+  assert.equal(t("metric.traceRecords"), "追踪记录");
   assert.equal(t("action.loadProfile"), "加载画像");
   assert.equal(t("panel.coreJourney"), "核心权限链路自检");
   assert.equal(t("action.runCoreJourney"), "执行自检");
@@ -306,6 +314,9 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("section.selfCheckRuntimeDetail"), "运行明细");
   assert.equal(t("section.selfCheckRuntimeScope"), "运行范围");
   assert.equal(t("section.selfCheckRuntimeDecision"), "运行判定");
+  assert.equal(t("section.traceRecords"), "追踪记录");
+  assert.equal(t("empty.traceRecords.title"), "无追踪记录");
+  assert.equal(t("empty.traceRecords.detail"), "将追踪数量设为大于 0，以包含最近的运行时决策。");
   assert.equal(t("section.selfCheckDiagnosticIdentifiers"), "排障标识");
   assert.equal(t("status.systemHealthReady"), "可执行");
   assert.equal(t("status.systemHealthNeedsCheck"), "需检查");

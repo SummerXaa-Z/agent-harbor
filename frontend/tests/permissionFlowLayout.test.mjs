@@ -197,7 +197,8 @@ test("permission request embeds a concise concept guide without blocking the tas
   assert.match(permissionWorkbenchParts, /concept\.tenant/);
   assert.match(permissionWorkbenchParts, /concept\.caller/);
   assert.match(permissionWorkbenchParts, /concept\.permissionPackage/);
-  assert.match(permissionWorkbenchParts, /concept\.evidence/);
+  assert.match(permissionWorkbenchParts, /concept\.acceptanceMaterials/);
+  assert.doesNotMatch(permissionWorkbenchParts, /concept\.evidence/);
   assert.match(styles, /\.approval-concept-guide\s*\{/);
   assert.match(styles, /\.approval-concept-grid\s*\{/);
   assert.match(i18n, /"section\.permissionConceptGuide": "概念速览"/);

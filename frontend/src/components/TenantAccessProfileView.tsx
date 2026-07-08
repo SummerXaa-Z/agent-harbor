@@ -348,13 +348,13 @@ export function TenantAccessProfileView({
               ))}
             </section>
 
-            <section className="access-trace-evidence" aria-label={t("section.traceEvidence")}>
+            <section className="access-trace-evidence" aria-label={t("section.traceRecords")}>
               <header>
-                <strong>{t("section.traceEvidence")}</strong>
+                <strong>{t("section.traceRecords")}</strong>
                 <span>{profileRecentTraces.length} {t("text.recentTraces")}</span>
               </header>
               {profileRecentTraces.length === 0 ? (
-                <EmptyRow title={t("empty.traceEvidence.title")} detail={t("empty.traceEvidence.detail")} />
+                <EmptyRow title={t("empty.traceRecords.title")} detail={t("empty.traceRecords.detail")} />
               ) : null}
               {profileRecentTraces.map((trace) => {
                 const capabilityName = trace.capabilityId

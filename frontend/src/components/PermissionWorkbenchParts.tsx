@@ -146,8 +146,8 @@ export function PermissionChangeDraftSheet({
                     <span>{t("concept.permissionPackage.detail")}</span>
                   </article>
                   <article>
-                    <strong>{t("concept.evidence")}</strong>
-                    <span>{t("concept.evidence.detail")}</span>
+                    <strong>{t("concept.acceptanceMaterials")}</strong>
+                    <span>{t("concept.acceptanceMaterials.detail")}</span>
                   </article>
                 </div>
               </details>

@@ -348,7 +348,7 @@ export function TenantAccessProfileView({
               ))}
             </section>
 
-            <section className="access-trace-evidence" aria-label={t("section.traceRecords")}>
+            <section className="access-trace-records" aria-label={t("section.traceRecords")}>
               <header>
                 <strong>{t("section.traceRecords")}</strong>
                 <span>{profileRecentTraces.length} {t("text.recentTraces")}</span>

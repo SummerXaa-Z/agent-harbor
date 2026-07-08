@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Access-query and tenant-profile styles now use `access-*-records` class names for runtime record sections.
+- 2026-07-08：访问查询和租户访问画像样式现在使用 `access-*-records` 类名表达运行记录区域。
 - 2026-07-08: Permission request acceptance-detail styles now use `approval-records` class names instead of older class names.
 - 2026-07-08：权限变更验收明细样式现在使用 `approval-records` 类名，替换旧类名。
 - 2026-07-08: Core and AI Admin journey evaluators now use runtime-record helper names while preserving existing step keys.

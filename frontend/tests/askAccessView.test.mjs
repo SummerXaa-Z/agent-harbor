@@ -152,6 +152,14 @@ test("ask access form controls use one coherent control treatment", () => {
   assert.match(styles, /\.ask-query-grid-access\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s);
 });
 
+test("access query and tenant profile styles use record class names", () => {
+  assert.match(styles, /\.access-decision-records\s*\{/);
+  assert.match(styles, /\.access-trace-records\s*\{/);
+  assert.match(accessProfileView, /className="access-trace-records"/);
+  assert.doesNotMatch(styles, /access-decision-evidence|access-trace-evidence/);
+  assert.doesNotMatch(accessProfileView, /access-trace-evidence/);
+});
+
 test("resource pages hand off access questions to the answer-first workspace", () => {
   assert.match(operationalViews, /onQueryAccess: \(context: AskHandoffContext\) => void/);
   assert.match(operationalViews, /sourceView:\s*"registry"/);

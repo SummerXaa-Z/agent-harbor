@@ -6556,14 +6556,14 @@ td code {
   font-size: 12px;
 }
 
-.access-decision-evidence {
+.access-decision-records {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   min-width: 0;
 }
 
-.access-decision-evidence article {
+.access-decision-records article {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 8px;
@@ -6574,28 +6574,28 @@ td code {
   background: var(--surface);
 }
 
-.access-decision-evidence article > div {
+.access-decision-records article > div {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
-.access-decision-evidence strong,
-.access-decision-evidence span,
-.access-decision-evidence code {
+.access-decision-records strong,
+.access-decision-records span,
+.access-decision-records code {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.access-decision-evidence strong {
+.access-decision-records strong {
   color: var(--ink);
   font-size: 12px;
 }
 
-.access-decision-evidence span,
-.access-decision-evidence code {
+.access-decision-records span,
+.access-decision-records code {
   color: var(--muted);
   font-size: 11px;
 }
@@ -6753,7 +6753,7 @@ td code {
 }
 
 .access-grant-chain > header,
-.access-trace-evidence > header {
+.access-trace-records > header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6763,13 +6763,13 @@ td code {
 }
 
 .access-grant-chain > header strong,
-.access-trace-evidence > header strong {
+.access-trace-records > header strong {
   color: var(--ink);
   font-size: 13px;
 }
 
 .access-grant-chain > header span,
-.access-trace-evidence > header span {
+.access-trace-records > header span {
   color: var(--muted);
   font-size: 12px;
 }
@@ -6912,7 +6912,7 @@ td code {
   font-size: 12px;
 }
 
-.access-trace-evidence {
+.access-trace-records {
   min-width: 0;
 }
 
@@ -7142,7 +7142,7 @@ td code {
     justify-content: flex-start;
   }
 
-  .access-decision-evidence {
+  .access-decision-records {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -7392,7 +7392,7 @@ td code {
   .access-selected-scope,
   .access-query-grid,
   .access-decision-summary,
-  .access-decision-evidence,
+  .access-decision-records,
   .access-decision-footer,
   .access-summary-grid,
   .access-tenant-list,

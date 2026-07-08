@@ -88,6 +88,14 @@ Then open `http://127.0.0.1:5174/`. The demo command starts the API in explicit 
 
 The web console opens on **Getting Started** when the live system is not configured yet, then defaults back to **Permission Changes** once tenant, Agent, capability, and grant-chain setup is complete. Confirm the runtime checks are ready, then run the validation journey. The **Self-Check** workspace remains available for the lower-level `6/6` core permission loop validation.
 
+Generate the external evaluator pack when you want a fresh reviewer to run the product without author guidance:
+
+```bash
+make evaluation-readiness
+```
+
+This writes a walkthrough, feedback log, and acceptance-report notes to a local output directory. Use it with [AgentHarbor Evaluation Readiness](docs/product/evaluation-readiness.md) to record `time-to-first-report`, the first blocker, and the exported report digest.
+
 Use the local development check when you want to verify backend, frontend, and static gate wiring without running the longer scenario gates:
 
 ```bash

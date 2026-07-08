@@ -54,6 +54,7 @@ assert_target_exists "scenario-admin-access-management"
 assert_target_depends_on "release-check" "scenario-admin-access-management"
 assert_target_exists "scenario-tenant-permission-center"
 assert_target_depends_on "release-check" "scenario-tenant-permission-center"
+assert_target_exists "evaluation-readiness"
 
 assert_file_contains "Makefile" "scripts/scenario-tenant-permission-center.sh"
 assert_file_contains "Makefile" "PNPM ?= ./scripts/pnpm.sh"
@@ -61,6 +62,7 @@ assert_file_contains "Makefile" '$(PNPM) --dir frontend install --frozen-lockfil
 assert_file_contains "Makefile" '$(PNPM) --dir scripts/real-mcp start'
 assert_file_contains "Makefile" "scripts/pnpm.sh"
 assert_file_contains "Makefile" "demo: scripts/demo.sh"
+assert_file_contains "Makefile" "evaluation-readiness: scripts/evaluation-readiness.sh"
 assert_file_contains "Makefile" "scripts/lib/ports.sh"
 assert_file_contains "Makefile" "assert_port_free \"API\""
 assert_file_contains "Makefile" "assert_port_free \"MCP\""
@@ -107,3 +109,8 @@ assert_file_contains "scripts/scenario-tenant-permission-center.sh" "scripts/lib
 assert_file_contains "scripts/scenario-tenant-permission-center.sh" "assert_port_free"
 assert_file_contains "scripts/scenario-permission-package-approval.sh" 'PNPM:-scripts/pnpm.sh'
 assert_file_contains "scripts/demo.sh" "scripts/lib/ports.sh"
+assert_file_contains "scripts/evaluation-readiness.sh" "feedback-log.csv"
+assert_file_contains "scripts/evaluation-readiness.sh" "acceptance-report-notes.md"
+assert_file_contains "README.md" "make evaluation-readiness"
+assert_file_contains "docs/product/evaluation-readiness.md" "time-to-first-report"
+assert_file_contains "docs/product/evaluation-readiness.md" "30-minute evaluator walkthrough"

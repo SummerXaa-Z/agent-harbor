@@ -28,13 +28,14 @@ SCENARIO_SCRIPTS := \
 	scripts/scenario-admin-access-management.sh \
 	scripts/scenario-tenant-permission-center.sh \
 	scripts/demo.sh \
+	scripts/evaluation-readiness.sh \
 	scripts/scenario-tenant-access-profile.sh
 
 SCENARIO_SCRIPT_LIBS := \
 	scripts/lib/ports.sh \
 	scripts/pnpm.sh
 
-.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
+.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -58,6 +59,7 @@ help:
 	@printf '  make mock-mcp              Start the dependency-free mock MCP server for low-level tests\n'
 	@printf '  make real-mcp              Start the local official SDK MCP demo server\n'
 	@printf '  make demo                  Start API, real MCP, and web console for first-run evaluation\n'
+	@printf '  make evaluation-readiness  Generate the external evaluator walkthrough and feedback pack\n'
 	@printf '  make core-journey          Run the 10-minute local core journey scenario\n'
 	@printf '  make scenario-permission-package-approval Run the local approval-required permission package scenario\n'
 	@printf '  make ai-admin-browser-journey Run the browser-facing AI Admin approval journey release gate\n'
@@ -134,6 +136,9 @@ real-mcp: real-mcp-deps
 
 demo: scripts/demo.sh
 	scripts/demo.sh
+
+evaluation-readiness: scripts/evaluation-readiness.sh
+	scripts/evaluation-readiness.sh
 
 core-journey:
 	bash scripts/scenario-core-journey.sh

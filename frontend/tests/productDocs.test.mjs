@@ -13,6 +13,7 @@ const permissionPackageApprovalScript = readFileSync(
   "utf8"
 );
 const productJourney = readFileSync(new URL("../../docs/product/0.2.0-ai-admin-permission-journey.md", import.meta.url), "utf8");
+const frontendDesignReference = readFileSync(new URL("../../docs/frontend-design-reference.md", import.meta.url), "utf8");
 const releaseChecklist = readFileSync(new URL("../../docs/engineering/release-checklist.md", import.meta.url), "utf8");
 const localValidationRecord = readFileSync(
   new URL("../../docs/engineering/0.2.0-local-validation-record.md", import.meta.url),
@@ -81,6 +82,7 @@ test("public product docs use records wording instead of forensic-style prose", 
   const publicProse = proseWithoutCode([
     readme,
     productJourney,
+    frontendDesignReference,
     releaseChecklist,
     localValidationRecord,
     productionReportPlan,

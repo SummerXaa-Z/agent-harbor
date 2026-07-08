@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: The public frontend design reference now uses audit-record wording and is covered by the public product-doc wording guard.
+- 2026-07-08：公开前端设计参考现在使用审计记录表述，并纳入公开产品文档用词守护。
 - 2026-07-08: The console controller now uses acceptance-history local naming for go-live history while preserving the existing backend `evidenceRuns` data contract.
 - 2026-07-08：控制台控制器现在用验收历史作为上线历史的本地命名，同时保留后端已有 `evidenceRuns` 数据合同。
 - 2026-07-08: Permission workbench preview, production readiness, and acceptance report responses now return `export_acceptance_report` as the preferred report-export `nextActionCode`.

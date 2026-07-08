@@ -13,7 +13,7 @@ The first screen should be usable immediately. Avoid marketing-page patterns, ov
 - Use a stable application shell with primary navigation for Overview, Tenants, Agents, MCP Capabilities, Access Profiles, Route Policies, Audit, and Settings.
 - Keep the top environment bar focused on tenant/workspace scope, API base, backend health, and operator context.
 - Prefer tables and compact detail panels for operational objects. Include filtering, search, sorting, and stable row actions where the workflow needs them.
-- Make object detail views lifecycle-oriented: configuration, permissions, linked callers/targets, recent activity, and audit evidence.
+- Make object detail views lifecycle-oriented: configuration, permissions, linked callers/targets, recent activity, and audit records.
 - Keep URLs stable enough for troubleshooting, review handoffs, and audit references.
 
 ## Governance Loop
@@ -23,7 +23,7 @@ Every major workflow should help operators answer four questions:
 - Who is calling?
 - Which tenant, workspace, and agent instance does the call belong to?
 - Which MCP tool, route policy, or data scope made the decision possible?
-- What evidence proves the allow or deny decision?
+- Which records explain the allow or deny decision?
 
 Allowed/denied, active/draft/revoked, healthy/degraded/unreachable, and inherited/overridden states should use consistent visual language across the console. Dangerous operations need clear confirmation, predictable side effects, and audit visibility.
 

@@ -35,6 +35,7 @@ test("English product copy uses acceptance and records wording", () => {
 
   assert.equal(t("action.exportProductionEvidence"), "Export acceptance report");
   assert.equal(t("concept.evidence"), "Acceptance materials");
+  assert.equal(t("metric.runtimeRecords"), "Runtime Records");
   assert.equal(t("metric.runtimeEvidence"), "Runtime Records");
   assert.equal(t("metric.traceEvidence"), "Trace Records");
   assert.equal(t("nav.go-live"), "Go-Live Check");
@@ -293,6 +294,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("productionAcceptance.blocker.liveData"), "实时 API 数据尚未连接。");
   assert.equal(t("text.goLiveAcceptanceTaskTitle"), "确认这次权限变更是否可以上线");
   assert.equal(t("text.goLiveAcceptanceNoReadinessDetail"), "先回到权限变更工作台执行运行验证或状态检查，系统会补齐运行、权限画像和审计记录。");
+  assert.equal(t("metric.runtimeRecords"), "运行记录");
   assert.equal(t("metric.runtimeEvidence"), "运行记录");
   assert.equal(t("action.loadProfile"), "加载画像");
   assert.equal(t("panel.coreJourney"), "核心权限链路自检");

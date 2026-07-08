@@ -55,7 +55,7 @@ import {
   withdrawPermissionPackageApprovalRequest
 } from "./api";
 import {
-  runtimeEvidenceMetric
+  runtimeRecordMetric
 } from "./consoleMetrics";
 import { connectionDiagnosticDetail } from "./connectionDiagnostics";
 import {
@@ -2190,7 +2190,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const activePolicies = policies.filter((policy) => policy.status === "enabled").length;
   const deniedTraces = traces.filter((trace) => trace.decision === "denied").length;
   const allowedTraces = traces.filter((trace) => trace.decision === "allowed").length;
-  const runtimeEvidence = runtimeEvidenceMetric(allowedTraces, deniedTraces);
+  const runtimeRecord = runtimeRecordMetric(allowedTraces, deniedTraces);
   const dataSourceLabel = loadError
     ? t("dataSource.apiError")
     : data?.loadedFromApi
@@ -3058,10 +3058,10 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
                 <strong>{deniedTraces}</strong>
                 <small>{allowedTraces} {t("detail.allowed")}</small>
               </span>
-              <span className={`system-check-signal tone-${runtimeEvidence.tone}`}>
-                <span>{t("metric.runtimeEvidence")}</span>
-                <strong>{runtimeEvidence.value}</strong>
-                <small>{runtimeEvidence.value === "0" ? t("detail.noTraces") : `${allowedTraces} ${t("detail.allowed")} / ${deniedTraces} ${t("detail.denied")}`}</small>
+              <span className={`system-check-signal tone-${runtimeRecord.tone}`}>
+                <span>{t("metric.runtimeRecords")}</span>
+                <strong>{runtimeRecord.value}</strong>
+                <small>{runtimeRecord.value === "0" ? t("detail.noTraces") : `${allowedTraces} ${t("detail.allowed")} / ${deniedTraces} ${t("detail.denied")}`}</small>
               </span>
             </div>
             {loadError ? <div className="strip-error">{loadError}</div> : null}

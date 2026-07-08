@@ -1,11 +1,13 @@
 export type MetricTone = "success" | "warning" | "danger" | "info" | "neutral"
 
-export interface RuntimeEvidenceMetric {
+export interface RuntimeRecordMetric {
   label: string
   value: string
   detail: string
   tone: MetricTone
 }
+
+export type RuntimeEvidenceMetric = RuntimeRecordMetric
 
 export function consoleDataSourceLabel(loadError: string | undefined, loadedFromApi?: boolean) {
   if (loadError) {
@@ -14,7 +16,7 @@ export function consoleDataSourceLabel(loadError: string | undefined, loadedFrom
   return loadedFromApi ? "Go runtime" : "Fallback dataset"
 }
 
-export function runtimeEvidenceMetric(allowedTraceCount: number, deniedTraceCount: number): RuntimeEvidenceMetric {
+export function runtimeRecordMetric(allowedTraceCount: number, deniedTraceCount: number): RuntimeRecordMetric {
   const totalTraceCount = allowedTraceCount + deniedTraceCount
   if (totalTraceCount === 0) {
     return {
@@ -32,3 +34,5 @@ export function runtimeEvidenceMetric(allowedTraceCount: number, deniedTraceCoun
     tone: deniedTraceCount > 0 ? "info" : "success",
   }
 }
+
+export const runtimeEvidenceMetric = runtimeRecordMetric

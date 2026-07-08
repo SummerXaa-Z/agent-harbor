@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   consoleDataSourceLabel,
+  runtimeRecordMetric,
   runtimeEvidenceMetric
 } from "../src/consoleMetrics.ts";
 
@@ -12,23 +13,27 @@ test("consoleDataSourceLabel does not call live API data samples", () => {
   assert.equal(consoleDataSourceLabel("failed", true), "API error");
 });
 
-test("runtimeEvidenceMetric summarizes real runtime traces", () => {
-  assert.deepEqual(runtimeEvidenceMetric(0, 0), {
+test("runtimeRecordMetric summarizes real runtime traces", () => {
+  assert.deepEqual(runtimeRecordMetric(0, 0), {
     label: "Runtime Records",
     value: "0",
     detail: "no traces yet",
     tone: "neutral"
   });
-  assert.deepEqual(runtimeEvidenceMetric(2, 1), {
+  assert.deepEqual(runtimeRecordMetric(2, 1), {
     label: "Runtime Records",
     value: "3",
     detail: "2 allowed / 1 denied",
     tone: "info"
   });
-  assert.deepEqual(runtimeEvidenceMetric(2, 0), {
+  assert.deepEqual(runtimeRecordMetric(2, 0), {
     label: "Runtime Records",
     value: "2",
     detail: "2 allowed / 0 denied",
     tone: "success"
   });
+});
+
+test("runtimeEvidenceMetric remains as a compatibility alias", () => {
+  assert.equal(runtimeEvidenceMetric, runtimeRecordMetric);
 });

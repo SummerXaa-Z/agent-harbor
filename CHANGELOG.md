@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Runtime record metrics now use preferred `runtimeRecord` helper and `metric.runtimeRecords` translation names while keeping old aliases compatible.
+- 2026-07-08：运行记录指标现在使用首选的 `runtimeRecord` helper 和 `metric.runtimeRecords` 翻译命名，同时保留旧别名兼容。
 - 2026-07-08: Runtime record UI components now live under `RuntimeRecordViews`, matching the current go-live and audit wording while preserving backend field compatibility.
 - 2026-07-08：运行记录 UI 组件现在归入 `RuntimeRecordViews`，与当前上线和审计用词一致，同时保持后端字段兼容。
 - 2026-07-08: The getting-started status step now uses preferred `confirm-status` and `chain.status` keys while keeping old setup keys compatible.

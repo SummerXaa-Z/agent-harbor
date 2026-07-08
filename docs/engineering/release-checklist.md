@@ -136,3 +136,29 @@ For a tagged release or downstream handoff, summarize:
 - known follow-ups that should not block the release
 
 Keep release notes short, factual, and tied to merged commits or PRs.
+
+## Phase Closeout
+
+For a developer-preview phase closeout, keep the scope frozen and record the handoff instead of adding new product behavior.
+
+Run:
+
+```bash
+git diff --check
+make check
+make release-check
+make evaluation-readiness
+```
+
+Then update the phase closeout record with:
+
+- target branch, commit, and planned preview tag
+- local verification commands and results
+- PR CI and main CI run ids after merge
+- generated evaluator-pack location or command
+- known limitations that do not block developer preview
+- next-stage entry criteria
+
+Developer-preview tags must avoid stable or production-ready language. Use a name such as `v0.2.0-dev-preview`, and only push it after the closeout PR is merged and main CI is green.
+
+开发者预览阶段封口时，应冻结范围并记录交接材料，不再新增产品行为。标签命名不要使用 stable 或 production-ready 口径；建议使用 `v0.2.0-dev-preview`，并且只在封口 PR 合入且 main CI 通过后推送。

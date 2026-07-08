@@ -765,6 +765,10 @@ test("runtime record views are split from the app shell", () => {
   assert.match(types, /evidenceRuns: AcceptanceRun\[\]/);
   assert.match(data, /import type \{[\s\S]*AcceptanceRun/);
   assert.match(data, /export const evidenceRuns: AcceptanceRun\[\]/);
+  assert.match(runtimeRecordViews, /status\.recordPassed/);
+  assert.match(runtimeRecordViews, /status\.recordFailed/);
+  assert.match(runtimeRecordViews, /status\.recordWarning/);
+  assert.doesNotMatch(runtimeRecordViews, /status\.evidence(?:Passed|Failed|Warning)/);
   assert.match(runtimeRecordViews, /export function SignalBoard/);
   assert.match(runtimeRecordViews, /export function TraceTable/);
   assert.match(runtimeRecordViews, /export function ManagementAuditTable/);

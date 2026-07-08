@@ -215,9 +215,9 @@ function auditSummaryLabel(summary: string | undefined, t: Translator) {
 }
 
 function acceptanceRunStatusLabel(status: AcceptanceRun["status"], t: Translator) {
-  if (status === "passed") return t("status.evidencePassed");
-  if (status === "failed") return t("status.evidenceFailed");
-  return t("status.evidenceWarning");
+  if (status === "passed") return t("status.recordPassed");
+  if (status === "failed") return t("status.recordFailed");
+  return t("status.recordWarning");
 }
 
 function auditTone(action: string): Tone {

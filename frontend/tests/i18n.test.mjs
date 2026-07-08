@@ -43,11 +43,10 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("concept.acceptanceMaterials.detail"), "Approval, apply, runtime, access profile, and audit records used for go-live acceptance.");
   assert.doesNotMatch(i18nSource, /concept\.evidence(?:\.detail)?/);
   assert.equal(t("metric.runtimeRecords"), "Runtime Records");
-  assert.equal(t("metric.runtimeEvidence"), "Runtime Records");
   assert.equal(t("metric.traceRecords"), "Trace Records");
-  assert.equal(t("metric.traceEvidence"), "Trace Records");
   assert.equal(t("empty.traceRecords.title"), "No trace records");
   assert.equal(t("empty.traceRecords.detail"), "Set trace limit above 0 to include recent runtime decisions.");
+  assert.doesNotMatch(i18nSource, /(?:empty|section)\.traceEvidence(?:\.(?:title|detail))?|metric\.(?:runtimeEvidence|traceEvidence)/);
   assert.equal(t("nav.go-live"), "Go-Live Check");
   assert.equal(t("page.go-live"), "Go-Live Check");
   assert.equal(t("navGroup.audit"), "Audit & Acceptance");
@@ -316,7 +315,6 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("concept.acceptanceMaterials"), "验收材料");
   assert.equal(t("concept.acceptanceMaterials.detail"), "审批、应用、运行验证、访问画像和审计记录共同支撑上线检查。");
   assert.equal(t("metric.runtimeRecords"), "运行记录");
-  assert.equal(t("metric.runtimeEvidence"), "运行记录");
   assert.equal(t("metric.traceRecords"), "追踪记录");
   assert.equal(t("status.recordPassed"), "通过");
   assert.equal(t("status.recordFailed"), "失败");

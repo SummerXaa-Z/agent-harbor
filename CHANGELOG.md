@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: HTTPS and trusted HTTPS-proxy responses now include `Strict-Transport-Security: max-age=31536000; includeSubDomains` while plain HTTP development responses stay unchanged.
+- 2026-07-08：真实 HTTPS 和可信 HTTPS 代理响应现在会包含 `Strict-Transport-Security: max-age=31536000; includeSubDomains`，普通 HTTP 开发响应保持不变。
 - 2026-07-08: All HTTP responses now include `Referrer-Policy: no-referrer` and `X-Frame-Options: DENY` so browser-based consoles do not leak referrers or allow framing.
 - 2026-07-08：所有 HTTP 响应现在都会包含 `Referrer-Policy: no-referrer` 和 `X-Frame-Options: DENY`，避免浏览器控制台泄露来源或被嵌入到其他页面。
 - 2026-07-08: Sensitive management, data-plane, and console authentication responses now add legacy `Pragma: no-cache` and `Expires: 0` headers alongside `Cache-Control: no-store`.

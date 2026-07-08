@@ -1033,6 +1033,39 @@ func TestBrowserSecurityHeaders(t *testing.T) {
 	assertBrowserSecurityHeaders(t, rec, "CORS preflight responses")
 }
 
+func TestBrowserSecurityHeadersSetHSTSOnlyForHTTPS(t *testing.T) {
+	router := newRouter()
+	const expectedHSTS = "max-age=31536000; includeSubDomains"
+
+	plainHTTP := request(t, router, http.MethodGet, "/healthz", nil, "")
+	if got := plainHTTP.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("plain HTTP responses should not set HSTS, got %q", got)
+	}
+
+	tlsRec, tlsReq := buildRequest(t, http.MethodGet, "/healthz", nil, "", "", "")
+	tlsReq.TLS = &tls.ConnectionState{}
+	router.ServeHTTP(tlsRec, tlsReq)
+	if got := tlsRec.Header().Get("Strict-Transport-Security"); got != expectedHSTS {
+		t.Fatalf("TLS responses should set HSTS, got %q", got)
+	}
+
+	trustedProxyRec, trustedProxyReq := buildRequest(t, http.MethodGet, "/healthz", nil, "", "", "")
+	trustedProxyReq.RemoteAddr = "127.0.0.1:4000"
+	trustedProxyReq.Header.Set("X-Forwarded-Proto", "https")
+	router.ServeHTTP(trustedProxyRec, trustedProxyReq)
+	if got := trustedProxyRec.Header().Get("Strict-Transport-Security"); got != expectedHSTS {
+		t.Fatalf("trusted forwarded HTTPS responses should set HSTS, got %q", got)
+	}
+
+	untrustedProxyRec, untrustedProxyReq := buildRequest(t, http.MethodGet, "/healthz", nil, "", "", "")
+	untrustedProxyReq.RemoteAddr = "198.51.100.20:4000"
+	untrustedProxyReq.Header.Set("X-Forwarded-Proto", "https")
+	router.ServeHTTP(untrustedProxyRec, untrustedProxyReq)
+	if got := untrustedProxyRec.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("untrusted forwarded HTTPS should not force HSTS, got %q", got)
+	}
+}
+
 func TestConfiguredCORSOriginAllowsBrowserGateMCPPreflight(t *testing.T) {
 	origin := "http://127.0.0.1:15174"
 	router := newRouterWithCORSOrigins([]string{origin})

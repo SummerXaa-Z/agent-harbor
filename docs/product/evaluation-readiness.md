@@ -45,18 +45,19 @@ Recommended success bar:
    make evaluation-readiness
    ```
 
-4. Start the local product:
+4. Review the generated `environment-snapshot.md` and confirm it captured branch, commit, working-tree state, Go, Node, and pnpm.
+5. Start the local product:
 
    ```bash
    make demo
    ```
 
-5. Open `http://127.0.0.1:5174/`.
-6. Follow the visible setup path until the product reaches **Permission Changes** or lets the evaluator start a permission fix from **Access Query**.
-7. Use the **Support ticket triage / 客服工单处理** permission package.
-8. Complete approval, apply, runtime validation, and go-live status review.
-9. Export the production acceptance report.
-10. Record the session in `feedback-log.csv` from the generated evaluator pack.
+6. Open `http://127.0.0.1:5174/`.
+7. Follow the visible setup path until the product reaches **Permission Changes** or lets the evaluator start a permission fix from **Access Query**.
+8. Use the **Support ticket triage / 客服工单处理** permission package.
+9. Complete approval, apply, runtime validation, and go-live status review.
+10. Export the production acceptance report.
+11. Record the session in `feedback-log.csv` from the generated evaluator pack.
 
 If the evaluator cannot finish within 30 minutes, stop and record the first blocker. Do not explain around the blocker during the timed pass.
 
@@ -65,6 +66,7 @@ If the evaluator cannot finish within 30 minutes, stop and record the first bloc
 Keep these records in the generated evaluator pack:
 
 - Branch and commit.
+- Toolchain snapshot from `environment-snapshot.md`.
 - Evaluator role.
 - `time-to-first-report`.
 - First blocker, if any.

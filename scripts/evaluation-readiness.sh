@@ -40,6 +40,27 @@ done
 
 mkdir -p "$OUTPUT_DIR"
 
+capture_command() {
+  local label="$1"
+  local output
+  shift
+  if command -v "$1" >/dev/null 2>&1; then
+    output="$("$@" 2>/dev/null | head -n 1 || true)"
+    printf '%s%s\n' "$label" "${output:-unavailable}"
+  else
+    printf '%snot found\n' "$label"
+  fi
+}
+
+branch="$(git -C "$ROOT_DIR" branch --show-current 2>/dev/null || true)"
+commit="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || true)"
+generated_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+if [[ -n "$(git -C "$ROOT_DIR" status --short 2>/dev/null || true)" ]]; then
+  working_tree="dirty"
+else
+  working_tree="clean"
+fi
+
 cat > "$OUTPUT_DIR/README.md" <<'EOF'
 # AgentHarbor Evaluation Readiness Pack
 
@@ -49,22 +70,35 @@ administrator to evaluate AgentHarbor from a fresh local checkout.
 Start here:
 
 1. Read `fresh-run-checklist.md`.
-2. Start the product with `make demo`.
-3. Follow `docs/product/evaluation-readiness.md` in the repository.
-4. Export the production acceptance report from the web console.
-5. Record the session in `feedback-log.csv`.
-6. Summarize the exported report in `acceptance-report-notes.md`.
+2. Review `environment-snapshot.md`.
+3. Start the product with `make demo`.
+4. Follow `docs/product/evaluation-readiness.md` in the repository.
+5. Export the production acceptance report from the web console.
+6. Record the session in `feedback-log.csv`.
+7. Summarize the exported report in `acceptance-report-notes.md`.
 
 Keep secrets out of these files. Record actor names, report digests, blocker
 codes, and route names instead of admin keys, agent keys, bearer tokens, or
 upstream credentials.
 EOF
 
+{
+  echo "# Environment Snapshot"
+  echo
+  echo "- Generated at: ${generated_at}"
+  echo "- Branch: ${branch:-unknown}"
+  echo "- Commit: ${commit:-unknown}"
+  echo "- Working tree: ${working_tree}"
+  capture_command "- Go: " go version
+  capture_command "- Node: " node --version
+  capture_command "- pnpm: " "$ROOT_DIR/scripts/pnpm.sh" --version
+} > "$OUTPUT_DIR/environment-snapshot.md"
+
 cat > "$OUTPUT_DIR/fresh-run-checklist.md" <<'EOF'
 # Fresh Run Checklist
 
 - Repository was freshly cloned or reset to the reviewed branch.
-- `go version`, `node --version`, and `scripts/pnpm.sh --version` were captured.
+- `environment-snapshot.md` captured branch, commit, and toolchain versions.
 - `make check` passed before the manual walkthrough, or the failure was recorded.
 - `make demo` started API, MCP, and web console without hidden local services.
 - The evaluator opened `http://127.0.0.1:5174/` without author guidance.

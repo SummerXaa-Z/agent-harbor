@@ -35,7 +35,7 @@ SCENARIO_SCRIPT_LIBS := \
 	scripts/lib/ports.sh \
 	scripts/pnpm.sh
 
-.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
+.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test evaluation-readiness-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -52,6 +52,7 @@ help:
 	@printf '  make frontend-test         Run frontend unit tests\n'
 	@printf '  make frontend-build        Build frontend assets\n'
 	@printf '  make makefile-targets-test Verify Makefile release-gate dependencies\n'
+	@printf '  make evaluation-readiness-test Verify external evaluator pack generation\n'
 	@printf '  make scenario-scripts-lint Syntax-check scenario scripts\n'
 	@printf '  make github-config-lint    Parse-check GitHub YAML configuration\n'
 	@printf '  make test-postgres         Run store tests using AGENT_HARBOR_TEST_DATABASE_URL\n'
@@ -70,9 +71,9 @@ help:
 	@printf '  make scenario-tenant-permission-center Run tenant permission center projection gate\n'
 	@printf '  make scenario-all          Run all scenarios against BASE_URL\n'
 
-check: gofmt-check test vet build makefile-targets-test frontend-test frontend-build scenario-scripts-lint github-config-lint
+check: gofmt-check test vet build makefile-targets-test evaluation-readiness-test frontend-test frontend-build scenario-scripts-lint github-config-lint
 
-release-check: gofmt-check test-fresh vet build production-hardening scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center makefile-targets-test frontend-test frontend-build scenario-scripts-lint github-config-lint
+release-check: gofmt-check test-fresh vet build production-hardening scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center makefile-targets-test evaluation-readiness-test frontend-test frontend-build scenario-scripts-lint github-config-lint
 
 fmt:
 	gofmt -w $(GO_FILES)
@@ -111,6 +112,9 @@ real-mcp-deps:
 
 makefile-targets-test:
 	bash tests/makefile_targets_test.sh
+
+evaluation-readiness-test:
+	bash tests/evaluation_readiness_test.sh
 
 scenario-scripts-lint:
 	bash -n $(SCENARIO_SCRIPTS) $(SCENARIO_SCRIPT_LIBS) scripts/scenario-all.sh

@@ -94,7 +94,7 @@ Generate the external evaluator pack when you want a fresh reviewer to run the p
 make evaluation-readiness
 ```
 
-This writes a walkthrough, feedback log, and acceptance-report notes to a local output directory. Use it with [AgentHarbor Evaluation Readiness](docs/product/evaluation-readiness.md) to record `time-to-first-report`, the first blocker, and the exported report digest.
+This writes a walkthrough, environment snapshot, feedback log, and acceptance-report notes to a local output directory. Use it with [AgentHarbor Evaluation Readiness](docs/product/evaluation-readiness.md) to record `time-to-first-report`, the first blocker, and the exported report digest.
 
 Use the local development check when you want to verify backend, frontend, and static gate wiring without running the longer scenario gates:
 

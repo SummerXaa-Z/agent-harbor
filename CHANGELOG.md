@@ -10,6 +10,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 - 2026-07-09: Added `make evaluation-readiness`, an external evaluator pack generator, and a product guide for measuring fresh-checkout `time-to-first-report`, blocker, and acceptance-report digest feedback.
 - 2026-07-09：新增 `make evaluation-readiness` 外部评估材料生成入口，并补充产品评估指南，用于记录全新检出后的 `time-to-first-report`、阻塞点和验收报告摘要反馈。
+- 2026-07-09: Evaluation readiness packs now include an environment snapshot and a `make check` gate that verifies the generated evaluator handoff files.
+- 2026-07-09：评估材料包现在包含环境快照，并新增纳入 `make check` 的生成文件检查门禁。
 - 2026-07-09: Makefile and local browser scenario gates now resolve pnpm through `scripts/pnpm.sh`, selecting a pnpm 10.x executable for the target package while keeping `PNPM=...` and `AGENT_HARBOR_PNPM_BIN` overrides available.
 - 2026-07-09：Makefile 和本地浏览器场景门禁现在通过 `scripts/pnpm.sh` 解析 pnpm，为目标 package 选择 pnpm 10.x，同时保留 `PNPM=...` 和 `AGENT_HARBOR_PNPM_BIN` 覆盖入口。
 - 2026-07-09: CI now publishes a stable `Frontend` aggregate check after the Node 24 and Node 26 frontend matrix passes, keeping branch protection aligned with the matrix workflow.

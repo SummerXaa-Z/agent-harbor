@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Ask access journey internals now use record naming for local tone helpers while preserving the backend decision detail field.
+- 2026-07-08：访问查询旅程内部现在使用 record 命名的本地 tone helper，同时保留后端判定详情字段。
 - 2026-07-08: Console types now remove the unused legacy acceptance-run type alias while preserving the existing runtime data field.
 - 2026-07-08：控制台类型现在移除未使用的旧上线验收运行类型 alias，同时保留现有运行数据字段。
 - 2026-07-08: Console metrics now remove unused legacy runtime metric compatibility aliases and keep runtime-record naming as the single helper.

@@ -119,17 +119,17 @@ export function buildPermissionChangeHandoff(
 
 export function decisionRecordRows(result: AccessDecisionExplainResult): AskDecisionRecordRow[] {
   const brokenIndex = result.outcome === "denied"
-    ? result.evidence.findIndex((evidence) => evidenceTone(evidence) === "danger")
+    ? result.evidence.findIndex((record) => recordTone(record) === "danger")
     : -1;
 
-  return result.evidence.map((evidence, index) => ({
-    id: evidence.id,
+  return result.evidence.map((record, index) => ({
+    id: record.id,
     isBroken: index === brokenIndex,
-    layer: evidence.layer,
-    layerKey: `ask.recordLayer.${evidence.layer}`,
-    message: evidence.message,
-    status: evidence.status,
-    tone: evidenceTone(evidence)
+    layer: record.layer,
+    layerKey: `ask.recordLayer.${record.layer}`,
+    message: record.message,
+    status: record.status,
+    tone: recordTone(record)
   }));
 }
 
@@ -158,10 +158,10 @@ function normalizeOptional(value?: string) {
   return value?.trim() ?? "";
 }
 
-function evidenceTone(evidence: AccessDecisionExplainEvidence): AskDecisionRecordRow["tone"] {
-  if (evidence.status === "matched") return "success";
-  if (["blocking", "denied", "missing", "mismatch", "not_approved"].includes(evidence.status)) return "danger";
-  if (["inactive", "pending_review"].includes(evidence.status)) return "warning";
+function recordTone(record: AccessDecisionExplainEvidence): AskDecisionRecordRow["tone"] {
+  if (record.status === "matched") return "success";
+  if (["blocking", "denied", "missing", "mismatch", "not_approved"].includes(record.status)) return "danger";
+  if (["inactive", "pending_review"].includes(record.status)) return "warning";
   return "neutral";
 }
 

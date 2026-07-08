@@ -160,6 +160,8 @@ test("ask access presentation no longer exports legacy evidence aliases", () => 
   assert.doesNotMatch(askJourneySource, /AskEvidenceChainRow/);
   assert.doesNotMatch(askJourneySource, /evidenceChainRows/);
   assert.doesNotMatch(askJourneySource, /accessEvidenceMessageLabel/);
+  assert.doesNotMatch(askJourneySource, /function evidenceTone/);
+  assert.doesNotMatch(askJourneySource, /evidenceTone\(/);
 });
 
 test("access query presentation localizes backend decision guidance at render time", () => {

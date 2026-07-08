@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: AI Admin journey translations now expose only `journey.aiAdmin.record.*` keys for acceptance records.
+- 2026-07-08：AI Admin 旅程翻译现在只用 `journey.aiAdmin.record.*` key 表达验收记录。
 - 2026-07-08: Acceptance history translations now expose only `acceptanceHistory` keys.
 - 2026-07-08：历史验收翻译现在只暴露 `acceptanceHistory` key。
 - 2026-07-08: Acceptance concept translations now expose only `concept.acceptanceMaterials*` keys.
@@ -18,8 +20,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 2026-07-08：访问查询翻译现在只暴露 `ask.recordLayer.*` 与 `ask.recordMessage.*` 判定记录 key。
 - 2026-07-08: First-run setup translations now use the `confirm-status` step without older status-step aliases.
 - 2026-07-08：首次接入翻译现在统一使用 `confirm-status` 步骤，移除旧状态步骤 alias。
-- 2026-07-08: AI Admin journey translations now expose `journey.aiAdmin.record.*` keys while retaining legacy aliases.
-- 2026-07-08：AI Admin 旅程翻译现在提供 `journey.aiAdmin.record.*` key，同时保留旧 alias。
+- 2026-07-08: AI Admin journey translations now expose `journey.aiAdmin.record.*` keys.
+- 2026-07-08：AI Admin 旅程翻译现在提供 `journey.aiAdmin.record.*` key。
 - 2026-07-08: System self-check runtime summary internals now use runtime-record naming.
 - 2026-07-08：系统自检运行摘要内部命名现在统一为运行记录口径。
 - 2026-07-08: Access-query and tenant-profile styles now use `access-*-records` class names for runtime record sections.

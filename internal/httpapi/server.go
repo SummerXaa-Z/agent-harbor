@@ -2317,7 +2317,7 @@ func permissionPackageWorkbenchStatusAndAction(draft domain.PermissionPackageDra
 		return "needs_input", "complete_request"
 	}
 	if productionReady {
-		return "production_ready", "export_production_evidence"
+		return "production_ready", "export_acceptance_report"
 	}
 	if applied {
 		return "validating", "run_runtime_validation"
@@ -2583,7 +2583,7 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 	result.Summary = permissionPackageProductionReadinessSummaryFor(result)
 	result.Status = permissionPackageProductionReadinessStatus(result.Summary)
 	if result.Status == "ready" {
-		permissionPackageProductionAddNextAction(&result, "export_production_evidence", "Production readiness is complete.")
+		permissionPackageProductionAddNextAction(&result, "export_acceptance_report", "Production readiness is complete.")
 	}
 	return result, nil
 }

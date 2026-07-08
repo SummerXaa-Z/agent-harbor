@@ -5751,7 +5751,7 @@ func TestPermissionPackageWorkbenchPreviewSummarizesPrimaryJourney(t *testing.T)
 
 	afterEvidence := decodeData[permissionPackageWorkbenchPreviewResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/workbench:preview", input, ""))
 	if afterEvidence.LatestApplication == nil || afterEvidence.LatestApplication.ID != applied.Application.ID ||
-		afterEvidence.Summary.Status != "production_ready" || afterEvidence.Summary.PrimaryActionCode != "export_production_evidence" ||
+		afterEvidence.Summary.Status != "production_ready" || afterEvidence.Summary.PrimaryActionCode != "export_acceptance_report" ||
 		!afterEvidence.Summary.Applied || !afterEvidence.Summary.RuntimeEvidenceReady || !afterEvidence.Summary.ProductionReady {
 		t.Fatalf("expected production-ready workbench summary after evidence, got summary=%#v app=%#v", afterEvidence.Summary, afterEvidence.LatestApplication)
 	}
@@ -5912,8 +5912,8 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		!after.Summary.AccessProfileReady || after.LatestApplication == nil || after.LatestApplication.ID != applied.Application.ID {
 		t.Fatalf("expected production readiness after evidence, got %#v", after)
 	}
-	if after.NextActionCode != "export_production_evidence" {
-		t.Fatalf("expected evidence export next action after readiness, got %q", after.NextActionCode)
+	if after.NextActionCode != "export_acceptance_report" {
+		t.Fatalf("expected acceptance report export next action after readiness, got %q", after.NextActionCode)
 	}
 	if after.RuntimeEvidence.AllowedTrace == nil || after.RuntimeEvidence.AllowedTrace.CapabilityID != updateTicket.ID ||
 		after.RuntimeEvidence.DeniedTrace == nil || after.RuntimeEvidence.DeniedTrace.CapabilityID != exportContracts.ID ||
@@ -5928,7 +5928,7 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 		len(afterReport.Evidence.Application.AllowedCapabilityIDs) != len(applied.Application.AllowedCapabilityIDs) ||
 		afterReport.Evidence.Runtime.AllowedTraceID == "" || afterReport.Evidence.Runtime.DeniedTraceID == "" ||
 		afterReport.Evidence.Audit.AppliedEventID == "" ||
-		afterReport.NextActionCode != "export_production_evidence" ||
+		afterReport.NextActionCode != "export_acceptance_report" ||
 		afterReport.Evidence.AccessProfile.Present != true ||
 		afterReport.ReadinessGeneratedAt == "" {
 		t.Fatalf("expected ready production evidence report after evidence, got %#v", afterReport)

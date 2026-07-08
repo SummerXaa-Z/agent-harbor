@@ -698,6 +698,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- 2026-07-08: Browser responses now include `Permissions-Policy: camera=(), microphone=(), geolocation=()` so the control plane does not expose unused device/location permissions.
+- 2026-07-08：浏览器响应现在会包含 `Permissions-Policy: camera=(), microphone=(), geolocation=()`，控制台不会暴露未使用的设备或位置权限。
 - 2026-07-08: HTTPS and trusted HTTPS-proxy responses now include `Strict-Transport-Security: max-age=31536000; includeSubDomains` while plain HTTP development responses stay unchanged.
 - 2026-07-08：真实 HTTPS 和可信 HTTPS 代理响应现在会包含 `Strict-Transport-Security: max-age=31536000; includeSubDomains`，普通 HTTP 开发响应保持不变。
 - 2026-07-08: All HTTP responses now include `Referrer-Policy: no-referrer` and `X-Frame-Options: DENY` so browser-based consoles do not leak referrers or allow framing.

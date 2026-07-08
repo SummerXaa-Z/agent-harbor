@@ -1005,6 +1005,9 @@ func assertBrowserSecurityHeaders(t *testing.T, rec *httptest.ResponseRecorder, 
 	if got := rec.Header().Get("X-Frame-Options"); got != "DENY" {
 		t.Fatalf("%s should set X-Frame-Options DENY, got %q", label, got)
 	}
+	if got := rec.Header().Get("Permissions-Policy"); got != "camera=(), microphone=(), geolocation=()" {
+		t.Fatalf("%s should set restrictive Permissions-Policy, got %q", label, got)
+	}
 }
 
 func TestBrowserSecurityHeaders(t *testing.T) {

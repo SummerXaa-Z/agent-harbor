@@ -304,6 +304,7 @@ func setSensitiveNoCacheHeaders(w http.ResponseWriter) {
 
 func browserSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Frame-Options", "DENY")
 		if isHTTPSRequest(r) {

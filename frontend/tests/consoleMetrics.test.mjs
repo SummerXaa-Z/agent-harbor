@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
   consoleDataSourceLabel,
-  runtimeRecordMetric,
-  runtimeEvidenceMetric
+  runtimeRecordMetric
 } from "../src/consoleMetrics.ts";
+
+const consoleMetricsSource = readFileSync(new URL("../src/consoleMetrics.ts", import.meta.url), "utf8");
 
 test("consoleDataSourceLabel does not call live API data samples", () => {
   assert.equal(consoleDataSourceLabel(undefined, true), "Go runtime");
@@ -34,6 +36,7 @@ test("runtimeRecordMetric summarizes real runtime traces", () => {
   });
 });
 
-test("runtimeEvidenceMetric remains as a compatibility alias", () => {
-  assert.equal(runtimeEvidenceMetric, runtimeRecordMetric);
+test("runtime metric helpers no longer export legacy aliases", () => {
+  assert.doesNotMatch(consoleMetricsSource, /RuntimeEvidenceMetric/);
+  assert.doesNotMatch(consoleMetricsSource, /runtimeEvidenceMetric/);
 });

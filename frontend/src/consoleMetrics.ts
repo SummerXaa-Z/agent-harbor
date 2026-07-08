@@ -7,8 +7,6 @@ export interface RuntimeRecordMetric {
   tone: MetricTone
 }
 
-export type RuntimeEvidenceMetric = RuntimeRecordMetric
-
 export function consoleDataSourceLabel(loadError: string | undefined, loadedFromApi?: boolean) {
   if (loadError) {
     return "API error"
@@ -34,5 +32,3 @@ export function runtimeRecordMetric(allowedTraceCount: number, deniedTraceCount:
     tone: deniedTraceCount > 0 ? "info" : "success",
   }
 }
-
-export const runtimeEvidenceMetric = runtimeRecordMetric

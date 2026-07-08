@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Console metrics now remove unused legacy runtime metric compatibility aliases and keep runtime-record naming as the single helper.
+- 2026-07-08：控制台指标现在移除未使用的旧运行指标兼容 alias，统一使用 runtime-record 命名 helper。
 - 2026-07-08: Console presenters now remove the unused legacy access-decision tone alias and keep record naming as the single helper.
 - 2026-07-08：控制台 presenter 现在移除未使用的旧访问判定 tone alias，统一使用 record 命名 helper。
 - 2026-07-08: Ask access journey helpers now remove unused legacy access-query compatibility exports in favor of decision-record naming.

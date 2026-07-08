@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Permission package approval scenario now uses report-ref local naming while preserving the backend acceptance report field.
+- 2026-07-08：权限包审批场景现在使用 report-ref 局部命名，同时保留后端验收报告字段。
 - 2026-07-08: Core journey scenario failure output now uses runtime-record wording and has a release-script guard against old trace phrasing.
 - 2026-07-08：核心旅程场景失败输出现在使用运行记录表述，并为发布脚本增加旧 trace 文案防回流检查。
 - 2026-07-08: Ask access journey internals now use record naming for local tone helpers while preserving the backend decision detail field.

@@ -881,10 +881,10 @@ if scope.get("tenantId") != tenant_id or scope.get("workspaceId") != workspace_i
 checks = {check.get("code"): check for check in report.get("checks", [])}
 if expected_check not in checks:
     raise SystemExit(f"acceptance report missing check {expected_check!r}: {checks}")
-evidence = report.get("evidence") or {}
-application = evidence.get("application") or {}
-runtime = evidence.get("runtime") or {}
-audit = evidence.get("audit") or {}
+report_refs = report.get("evidence") or {}
+application = report_refs.get("application") or {}
+runtime = report_refs.get("runtime") or {}
+audit = report_refs.get("audit") or {}
 if expected_status == "ready":
     if application.get("id") != application_id or application.get("present") is not True:
         raise SystemExit(f"ready acceptance report missing application record: {application}")
@@ -892,8 +892,8 @@ if expected_status == "ready":
         raise SystemExit(f"ready acceptance report missing runtime records: {runtime}")
     if not audit.get("appliedEventId"):
         raise SystemExit(f"ready acceptance report missing audit record: {audit}")
-    if (evidence.get("accessProfile") or {}).get("present") is not True:
-        raise SystemExit(f"ready acceptance report missing access profile record: {evidence}")
+    if (report_refs.get("accessProfile") or {}).get("present") is not True:
+        raise SystemExit(f"ready acceptance report missing access profile record: {report_refs}")
 else:
     if application.get("present") is True:
         raise SystemExit(f"blocked-before-apply report should not include an application record: {application}")

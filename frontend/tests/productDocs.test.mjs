@@ -113,6 +113,7 @@ test("release scenario operator output uses report and record wording", () => {
   assert.doesNotMatch(permissionPackageApprovalScript, /audit evidence verified/i);
   assert.doesNotMatch(permissionPackageApprovalScript, /after evidence/i);
   assert.doesNotMatch(permissionPackageApprovalScript, /application evidence/i);
+  assert.doesNotMatch(permissionPackageApprovalScript, /evidence = report\.get/);
   assert.doesNotMatch(capabilityGovernanceScript, /policy evidence/i);
   assert.doesNotMatch(capabilityGovernanceScript, /trace evidence verified/i);
   assert.doesNotMatch(coreJourneyScript, /trace evidence/i);

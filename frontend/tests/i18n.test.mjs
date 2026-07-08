@@ -53,7 +53,7 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("panel.acceptanceHistory"), "Acceptance History");
   assert.doesNotMatch(i18nSource, /(?:panel|empty)\.evidenceRuns(?:\.(?:title|detail))?/);
   assert.equal(t("section.aiAdminApprovalJourney"), "Runtime Validation Records");
-  assert.equal(t("text.cockpitKeyMessageEvidence"), "Clear go-live status");
+  assert.doesNotMatch(i18nSource, /text\.cockpitKeyMessageEvidence(?:Detail)?/);
   assert.equal(t("message.acceptanceReportExported"), "Acceptance report exported.");
   assert.equal(t("ask.recordLayer.capability"), "Capability approval");
   assert.equal(t("ask.recordLayer.tenant_entitlement"), "Tenant grant");
@@ -342,8 +342,6 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("text.cockpitKeyMessageBoundaryDetail"), "三级租户、工作区和实例权限共同决定可访问数据。");
   assert.equal(t("text.cockpitKeyMessageOperations"), "权限变更可控");
   assert.equal(t("text.cockpitKeyMessageOperationsDetail"), "管理员新建权限变更，高风险能力先审批再落地。");
-  assert.equal(t("text.cockpitKeyMessageEvidence"), "上线状态清楚");
-  assert.equal(t("text.cockpitKeyMessageEvidenceDetail"), "允许/拒绝调用、访问画像和审计事件共同支撑上线判断。");
   assert.equal(t("text.coreJourneyIntro"), "验证租户、工具发现、授权链、运行拦截和访问画像是否形成最小权限闭环。");
   assert.equal(t("text.coreJourneyCompletion"), "自检进度");
   assert.equal(t("text.systemHealthReadyTitle"), "可以执行自检");

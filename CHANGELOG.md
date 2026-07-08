@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Cockpit key-message translations now omit unused `text.cockpitKeyMessageEvidence*` aliases.
+- 2026-07-08：驾驶舱关键信息翻译现在移除未使用的 `text.cockpitKeyMessageEvidence*` alias。
 - 2026-07-08: Runtime and trace record translations now expose only `runtimeRecords` and `traceRecords` keys.
 - 2026-07-08：运行记录和追踪记录翻译现在只暴露 `runtimeRecords` 与 `traceRecords` key。
 - 2026-07-08: Acceptance report translations now expose only `acceptanceReport*` keys for report export messages.

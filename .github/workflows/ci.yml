@@ -114,3 +114,17 @@ jobs:
 
       - name: Build
         run: make frontend-build
+
+  frontend-required:
+    name: Frontend
+    runs-on: ubuntu-latest
+    needs: frontend
+    if: always()
+    steps:
+      - name: Verify frontend matrix
+        run: |
+          if [[ "${{ needs.frontend.result }}" != "success" ]]; then
+            echo "Frontend matrix completed with result: ${{ needs.frontend.result }}" >&2
+            exit 1
+          fi
+          echo "Frontend matrix passed"

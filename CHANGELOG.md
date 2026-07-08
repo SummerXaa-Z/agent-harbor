@@ -10,6 +10,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 - 2026-07-09: Makefile and local browser scenario gates now resolve pnpm through `scripts/pnpm.sh`, selecting a pnpm 10.x executable for the target package while keeping `PNPM=...` and `AGENT_HARBOR_PNPM_BIN` overrides available.
 - 2026-07-09：Makefile 和本地浏览器场景门禁现在通过 `scripts/pnpm.sh` 解析 pnpm，为目标 package 选择 pnpm 10.x，同时保留 `PNPM=...` 和 `AGENT_HARBOR_PNPM_BIN` 覆盖入口。
+- 2026-07-09: CI now publishes a stable `Frontend` aggregate check after the Node 24 and Node 26 frontend matrix passes, keeping branch protection aligned with the matrix workflow.
+- 2026-07-09：CI 现在会在 Node 24 和 Node 26 前端矩阵通过后发布稳定的 `Frontend` 聚合检查，保证分支保护与矩阵 workflow 一致。
 - 2026-07-08: OpenAPI proxy relative paths now reject decoded traversal markers before preparing upstream requests.
 - 2026-07-08：OpenAPI 代理相对路径现在会在准备上游请求前拒绝解码后的目录穿越标记。
 - 2026-07-08: Agent-key-protected MCP RPC requests now require `application/json` before gateway authorization and runtime trace recording.

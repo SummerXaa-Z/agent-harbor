@@ -67,6 +67,9 @@ assert_file_contains "Makefile" "assert_port_free \"MCP\""
 assert_file_contains "frontend/package.json" '"node": ">=24 <27"'
 assert_file_contains ".github/workflows/ci.yml" "node-version: [24, 26]"
 assert_file_contains ".github/workflows/ci.yml" 'node-version: ${{ matrix.node-version }}'
+assert_file_contains ".github/workflows/ci.yml" "frontend-required:"
+assert_file_contains ".github/workflows/ci.yml" "needs: frontend"
+assert_file_contains ".github/workflows/ci.yml" "Frontend matrix passed"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "authRequired"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "productionAcceptance.ts"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "buildProductionAcceptanceCenter"

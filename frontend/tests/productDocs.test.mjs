@@ -18,6 +18,14 @@ const localValidationRecord = readFileSync(
   new URL("../../docs/engineering/0.2.0-local-validation-record.md", import.meta.url),
   "utf8"
 );
+const productionReportPlan = readFileSync(
+  new URL("../../docs/engineering/0.2.0-production-report-plan.md", import.meta.url),
+  "utf8"
+);
+const productionReportDesign = readFileSync(
+  new URL("../../docs/engineering/0.2.0-production-report-design.md", import.meta.url),
+  "utf8"
+);
 const changelog = readFileSync(new URL("../../CHANGELOG.md", import.meta.url), "utf8");
 const capabilityGovernanceScript = readFileSync(
   new URL("../../scripts/scenario-mcp-capability-governance.sh", import.meta.url),
@@ -70,7 +78,15 @@ test("web console production smoke uses the canonical go-live route", () => {
 });
 
 test("public product docs use records wording instead of forensic-style prose", () => {
-  const publicProse = proseWithoutCode([readme, productJourney, releaseChecklist, localValidationRecord, changelog].join("\n"));
+  const publicProse = proseWithoutCode([
+    readme,
+    productJourney,
+    releaseChecklist,
+    localValidationRecord,
+    productionReportPlan,
+    productionReportDesign,
+    changelog
+  ].join("\n"));
   assert.doesNotMatch(publicProse, /\bEvidence\b|\bevidence\b|证据/);
 });
 

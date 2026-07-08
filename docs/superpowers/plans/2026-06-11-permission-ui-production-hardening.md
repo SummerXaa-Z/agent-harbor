@@ -415,7 +415,7 @@ Extend `frontend/tests/permissionFlowLayout.test.mjs` to lock the responsive cas
 
 - [x] **Step 5: Align completed quick actions**
 
-When `goLiveReady` is true, keep the primary action on evidence export and switch the header secondary action to Access Profile review. Browser verification confirmed the completed header reads `导出证据 / 查看权限画像` instead of sending users back to runtime validation.
+When `goLiveReady` is true, keep the primary action on report export and switch the header secondary action to Access Profile review. Browser verification confirmed the completed header reads `导出验收报告 / 查看权限画像` instead of sending users back to runtime validation.
 
 ## Task 7: Access Profile Handoff Tenant Readability
 
@@ -971,7 +971,7 @@ make release-check
 
 Commit and push if clean, then inspect PR #74.
 
-Committed and pushed `9aba35a fix: prioritize evidence export when ready` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=UNSTABLE` because Backend, Frontend, and PostgreSQL integration checks were in progress immediately after push.
+Committed and pushed `9aba35a fix: prioritize report export when ready` to `codex/production-readiness-gate`. GitHub PR #74 reported `mergeStateStatus=UNSTABLE` because Backend, Frontend, and PostgreSQL integration checks were in progress immediately after push.
 
 ## Task 26: Make Runtime Audit Business Readable
 
@@ -1243,7 +1243,7 @@ Run the isolated-port AI Admin browser journey after the read-only review, new-d
 AGENT_HARBOR_BROWSER_GATE_API_PORT=19090 AGENT_HARBOR_BROWSER_GATE_FRONTEND_PORT=15174 MOCK_MCP_PORT=18787 make ai-admin-browser-journey
 ```
 
-Result: passed with run id `ai-admin-browser-journey-20260611054116`. The gate covered approval withdrawal, split requester/reviewer admin identities, approval, apply, runtime allow/deny, access profile, health, impact, audit, status check, and production evidence report.
+Result: passed with run id `ai-admin-browser-journey-20260611054116`. The gate covered approval withdrawal, split requester/reviewer admin identities, approval, apply, runtime allow/deny, access profile, health, impact, audit, status check, and production report.
 
 - [x] **Step 2: Record evidence**
 

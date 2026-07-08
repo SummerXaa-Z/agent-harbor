@@ -72,7 +72,7 @@ test("demo script checks ports before installing dependencies", () => {
   const portPreflight = demoScript.indexOf('assert_port_free "API" "$API_PORT"');
   const frontendInstall = demoScript.indexOf('"${PNPM_CMD[@]}" --dir frontend install --frozen-lockfile');
   const realMcpInstall = demoScript.indexOf('"${PNPM_CMD[@]}" --dir scripts/real-mcp install --frozen-lockfile');
-  assert.match(demoScript, /PNPM:-corepack pnpm/);
+  assert.match(demoScript, /PNPM:-\$ROOT_DIR\/scripts\/pnpm\.sh/);
   assert.ok(portPreflight >= 0);
   assert.ok(frontendInstall > portPreflight);
   assert.ok(realMcpInstall > portPreflight);

@@ -16,7 +16,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="${TMPDIR:-/tmp}/agent-harbor-web-gate-${RUN_ID}"
 PIDS=()
 CLEANED_UP=0
-read -r -a PNPM_CMD <<< "${PNPM:-corepack pnpm}"
+read -r -a PNPM_CMD <<< "${PNPM:-$ROOT_DIR/scripts/pnpm.sh}"
 
 # shellcheck source=scripts/lib/ports.sh
 source "$ROOT_DIR/scripts/lib/ports.sh"

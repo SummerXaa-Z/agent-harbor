@@ -56,9 +56,10 @@ assert_target_exists "scenario-tenant-permission-center"
 assert_target_depends_on "release-check" "scenario-tenant-permission-center"
 
 assert_file_contains "Makefile" "scripts/scenario-tenant-permission-center.sh"
-assert_file_contains "Makefile" "PNPM ?= corepack pnpm"
+assert_file_contains "Makefile" "PNPM ?= ./scripts/pnpm.sh"
 assert_file_contains "Makefile" '$(PNPM) --dir frontend install --frozen-lockfile'
 assert_file_contains "Makefile" '$(PNPM) --dir scripts/real-mcp start'
+assert_file_contains "Makefile" "scripts/pnpm.sh"
 assert_file_contains "Makefile" "demo: scripts/demo.sh"
 assert_file_contains "Makefile" "scripts/lib/ports.sh"
 assert_file_contains "Makefile" "assert_port_free \"API\""
@@ -86,18 +87,20 @@ assert_file_contains "scripts/lib/ports.sh" "describe_port_owner"
 assert_file_contains "scripts/lib/ports.sh" "assert_port_free"
 assert_file_contains "scripts/scenario-production-hardening.sh" "scripts/lib/ports.sh"
 assert_file_contains "scripts/scenario-production-hardening.sh" "assert_port_free"
-assert_file_contains "scripts/demo.sh" 'PNPM:-corepack pnpm'
+assert_file_contains "scripts/pnpm.sh" 'PINNED_PNPM_VERSION="${AGENT_HARBOR_PNPM_VERSION:-10.30.3}"'
+assert_file_contains "scripts/pnpm.sh" 'AGENT_HARBOR_PNPM_BIN'
+assert_file_contains "scripts/demo.sh" 'PNPM:-$ROOT_DIR/scripts/pnpm.sh'
 assert_file_contains "scripts/scenario-ai-admin-browser-journey.sh" "scripts/lib/ports.sh"
 assert_file_contains "scripts/scenario-ai-admin-browser-journey.sh" "assert_port_free"
-assert_file_contains "scripts/scenario-ai-admin-browser-journey.sh" 'PNPM:-corepack pnpm'
+assert_file_contains "scripts/scenario-ai-admin-browser-journey.sh" 'PNPM:-$ROOT_DIR/scripts/pnpm.sh'
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "scripts/lib/ports.sh"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "assert_port_free"
-assert_file_contains "scripts/scenario-web-console-production-journey.sh" 'PNPM:-corepack pnpm'
+assert_file_contains "scripts/scenario-web-console-production-journey.sh" 'PNPM:-$ROOT_DIR/scripts/pnpm.sh'
 assert_file_contains "scripts/scenario-admin-tenant-boundary.sh" "scripts/lib/ports.sh"
 assert_file_contains "scripts/scenario-admin-tenant-boundary.sh" "assert_port_free"
 assert_file_contains "scripts/scenario-admin-access-management.sh" "scripts/lib/ports.sh"
 assert_file_contains "scripts/scenario-admin-access-management.sh" "assert_port_free"
 assert_file_contains "scripts/scenario-tenant-permission-center.sh" "scripts/lib/ports.sh"
 assert_file_contains "scripts/scenario-tenant-permission-center.sh" "assert_port_free"
-assert_file_contains "scripts/scenario-permission-package-approval.sh" 'PNPM:-corepack pnpm'
+assert_file_contains "scripts/scenario-permission-package-approval.sh" 'PNPM:-scripts/pnpm.sh'
 assert_file_contains "scripts/demo.sh" "scripts/lib/ports.sh"

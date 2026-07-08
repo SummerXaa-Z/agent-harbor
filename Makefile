@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-PNPM ?= corepack pnpm
+PNPM ?= ./scripts/pnpm.sh
 
 GO_FILES := $(shell git ls-files '*.go')
 
@@ -31,7 +31,8 @@ SCENARIO_SCRIPTS := \
 	scripts/scenario-tenant-access-profile.sh
 
 SCENARIO_SCRIPT_LIBS := \
-	scripts/lib/ports.sh
+	scripts/lib/ports.sh \
+	scripts/pnpm.sh
 
 .PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
 

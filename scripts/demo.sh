@@ -10,7 +10,7 @@ MOCK_MCP_HOST="${MOCK_MCP_HOST:-127.0.0.1}"
 MOCK_MCP_PORT="${MOCK_MCP_PORT:-8787}"
 MCP_SERVER_MODE="${AGENT_HARBOR_DEMO_MCP_MODE:-real}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-read -r -a PNPM_CMD <<< "${PNPM:-corepack pnpm}"
+read -r -a PNPM_CMD <<< "${PNPM:-$ROOT_DIR/scripts/pnpm.sh}"
 
 # shellcheck source=scripts/lib/ports.sh
 source "$ROOT_DIR/scripts/lib/ports.sh"

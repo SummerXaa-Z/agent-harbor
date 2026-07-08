@@ -26,7 +26,7 @@ REQUEST_TEXT="${REQUEST_TEXT:-Allow support triage reads and bounded ticket upda
 TEMPLATE_ID="${TEMPLATE_ID:-support-ticket-triage}"
 SUBJECT_SELECTOR="${SUBJECT_SELECTOR:-user:support-*}"
 SUBJECT_ID="${SUBJECT_ID:-user:support-001}"
-read -r -a PNPM_CMD <<< "${PNPM:-corepack pnpm}"
+read -r -a PNPM_CMD <<< "${PNPM:-scripts/pnpm.sh}"
 
 HTTP_STATUS=""
 HTTP_BODY=""

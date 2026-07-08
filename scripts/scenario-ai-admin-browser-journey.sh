@@ -21,7 +21,7 @@ RUN_ID="${RUN_ID:-ai-admin-browser-journey-$(date +%Y%m%d%H%M%S)}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="${TMPDIR:-/tmp}/agent-harbor-browser-gate-${RUN_ID}"
 PIDS=()
-read -r -a PNPM_CMD <<< "${PNPM:-corepack pnpm}"
+read -r -a PNPM_CMD <<< "${PNPM:-$ROOT_DIR/scripts/pnpm.sh}"
 
 # shellcheck source=scripts/lib/ports.sh
 source "$ROOT_DIR/scripts/lib/ports.sh"

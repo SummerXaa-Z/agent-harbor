@@ -8,8 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
-- 2026-07-08: Makefile and local browser scenario gates now run through `corepack pnpm` by default so they stay on a pnpm 10 toolchain without depending on global pnpm 11.
-- 2026-07-08：Makefile 和本地浏览器场景门禁现在默认通过 `corepack pnpm` 执行，避免误用全局 pnpm 11。
+- 2026-07-09: Makefile and local browser scenario gates now resolve pnpm through `scripts/pnpm.sh`, selecting a pnpm 10.x executable for the target package while keeping `PNPM=...` and `AGENT_HARBOR_PNPM_BIN` overrides available.
+- 2026-07-09：Makefile 和本地浏览器场景门禁现在通过 `scripts/pnpm.sh` 解析 pnpm，为目标 package 选择 pnpm 10.x，同时保留 `PNPM=...` 和 `AGENT_HARBOR_PNPM_BIN` 覆盖入口。
 - 2026-07-08: OpenAPI proxy relative paths now reject decoded traversal markers before preparing upstream requests.
 - 2026-07-08：OpenAPI 代理相对路径现在会在准备上游请求前拒绝解码后的目录穿越标记。
 - 2026-07-08: Agent-key-protected MCP RPC requests now require `application/json` before gateway authorization and runtime trace recording.

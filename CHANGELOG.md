@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Runtime history status translations now expose only `status.record*` keys.
+- 2026-07-08：运行历史状态翻译现在只暴露 `status.record*` key。
 - 2026-07-08: Access-query translations now expose only `ask.recordLayer.*` and `ask.recordMessage.*` keys for decision records.
 - 2026-07-08：访问查询翻译现在只暴露 `ask.recordLayer.*` 与 `ask.recordMessage.*` 判定记录 key。
 - 2026-07-08: First-run setup translations now use the `confirm-status` step without older status-step aliases.
@@ -22,8 +24,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 2026-07-08：权限变更验收明细样式现在使用 `approval-records` 类名，替换旧类名。
 - 2026-07-08: Core and AI Admin journey evaluators now use runtime-record helper names while preserving existing step keys.
 - 2026-07-08：核心链路和 AI Admin 旅程评估器现在使用运行记录 helper 命名，同时保持现有 step key 兼容。
-- 2026-07-08: Runtime history status labels now use preferred `status.record*` translation keys while retaining older status key aliases.
-- 2026-07-08：运行历史状态标签现在使用首选 `status.record*` 翻译 key，同时保留旧状态 key alias。
+- 2026-07-08: Runtime history status labels now use `status.record*` translation keys.
+- 2026-07-08：运行历史状态标签现在使用 `status.record*` 翻译 key。
 - 2026-07-08: Production console presenter internals now use runtime-record and approval-record local names while preserving the backend readiness fields.
 - 2026-07-08：生产控制台 presenter 内部现在使用运行记录和审批记录本地命名，同时保持后端 readiness 字段兼容。
 - 2026-07-08: Permission-package acceptance report types now prefer `AcceptanceReport` record names while keeping older production-report aliases compatible.

@@ -72,9 +72,7 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("status.recordPassed"), "passed");
   assert.equal(t("status.recordFailed"), "failed");
   assert.equal(t("status.recordWarning"), "warning");
-  assert.equal(t("status.evidencePassed"), "passed");
-  assert.equal(t("status.evidenceFailed"), "failed");
-  assert.equal(t("status.evidenceWarning"), "warning");
+  assert.doesNotMatch(i18nSource, /status\.evidence(?:Passed|Failed|Warning)/);
   assert.equal(
     t("message.permissionApprovalAlreadyConsumedRecovery"),
     "This approval has already been used. Refresh status checks or review the current permission change before retrying."
@@ -327,9 +325,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("status.recordPassed"), "通过");
   assert.equal(t("status.recordFailed"), "失败");
   assert.equal(t("status.recordWarning"), "告警");
-  assert.equal(t("status.evidencePassed"), "通过");
-  assert.equal(t("status.evidenceFailed"), "失败");
-  assert.equal(t("status.evidenceWarning"), "告警");
+  assert.doesNotMatch(i18nSource, /status\.evidence(?:Passed|Failed|Warning)/);
   assert.equal(t("action.loadProfile"), "加载画像");
   assert.equal(t("panel.coreJourney"), "核心权限链路自检");
   assert.equal(t("action.runCoreJourney"), "执行自检");

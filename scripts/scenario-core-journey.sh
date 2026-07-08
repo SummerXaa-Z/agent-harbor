@@ -248,7 +248,7 @@ for key, expected in expected_counts.items():
     if summary.get(key) != expected:
         raise SystemExit(f"summary[{key}]={summary.get(key)} want {expected}; summary={summary}")
 if summary.get("recentAllowedTraceCount", 0) < 1 or summary.get("recentDeniedTraceCount", 0) < 1:
-    raise SystemExit(f"expected allowed and denied trace evidence, summary={summary}")
+    raise SystemExit(f"expected allowed and denied runtime records, summary={summary}")
 grant = profile["grants"][0]
 if grant.get("scopeStatus") != "valid":
     raise SystemExit(f"grant not valid: {grant}")

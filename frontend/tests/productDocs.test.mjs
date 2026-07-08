@@ -32,6 +32,10 @@ const capabilityGovernanceScript = readFileSync(
   new URL("../../scripts/scenario-mcp-capability-governance.sh", import.meta.url),
   "utf8"
 );
+const coreJourneyScript = readFileSync(
+  new URL("../../scripts/scenario-core-journey.sh", import.meta.url),
+  "utf8"
+);
 
 function proseWithoutCode(text) {
   return text
@@ -111,4 +115,5 @@ test("release scenario operator output uses report and record wording", () => {
   assert.doesNotMatch(permissionPackageApprovalScript, /application evidence/i);
   assert.doesNotMatch(capabilityGovernanceScript, /policy evidence/i);
   assert.doesNotMatch(capabilityGovernanceScript, /trace evidence verified/i);
+  assert.doesNotMatch(coreJourneyScript, /trace evidence/i);
 });

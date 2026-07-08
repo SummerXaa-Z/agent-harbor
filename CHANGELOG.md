@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Core journey scenario failure output now uses runtime-record wording and has a release-script guard against old trace phrasing.
+- 2026-07-08：核心旅程场景失败输出现在使用运行记录表述，并为发布脚本增加旧 trace 文案防回流检查。
 - 2026-07-08: Ask access journey internals now use record naming for local tone helpers while preserving the backend decision detail field.
 - 2026-07-08：访问查询旅程内部现在使用 record 命名的本地 tone helper，同时保留后端判定详情字段。
 - 2026-07-08: Console types now remove the unused legacy acceptance-run type alias while preserving the existing runtime data field.

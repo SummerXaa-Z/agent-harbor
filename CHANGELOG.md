@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Access-query translations now expose only `ask.recordLayer.*` and `ask.recordMessage.*` keys for decision records.
+- 2026-07-08：访问查询翻译现在只暴露 `ask.recordLayer.*` 与 `ask.recordMessage.*` 判定记录 key。
 - 2026-07-08: First-run setup translations now use the `confirm-status` step without older status-step aliases.
 - 2026-07-08：首次接入翻译现在统一使用 `confirm-status` 步骤，移除旧状态步骤 alias。
 - 2026-07-08: AI Admin journey translations now expose `journey.aiAdmin.record.*` keys while retaining legacy aliases.
@@ -32,10 +34,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 2026-07-08：访问判定 presenter helper 现在首选 `accessDecisionRecordTone`，同时保留旧 tone helper 别名兼容。
 - 2026-07-08: Access-query view props now use `recordRows` and `AskDecisionRecordRow` as the primary decision-record names, with older pure-function aliases kept compatible.
 - 2026-07-08：访问查询视图 prop 现在以 `recordRows` 和 `AskDecisionRecordRow` 作为判定记录主名称，同时保留旧纯函数别名兼容。
-- 2026-07-08: Access-query decision records now prefer `accessDecisionRecordMessageLabel` and `ask.recordMessage.*` while keeping older message aliases compatible.
-- 2026-07-08：访问查询判定记录现在首选 `accessDecisionRecordMessageLabel` 与 `ask.recordMessage.*`，同时保留旧 message 别名兼容。
-- 2026-07-08: Access-query decision rows now emit preferred `ask.recordLayer.*` translation keys while keeping older layer keys compatible.
-- 2026-07-08：访问查询判定行现在输出首选 `ask.recordLayer.*` 翻译 key，同时保留旧 layer key 兼容。
+- 2026-07-08: Access-query decision records now use `accessDecisionRecordMessageLabel` and `ask.recordMessage.*`.
+- 2026-07-08：访问查询判定记录现在使用 `accessDecisionRecordMessageLabel` 与 `ask.recordMessage.*`。
+- 2026-07-08: Access-query decision rows now emit `ask.recordLayer.*` translation keys.
+- 2026-07-08：访问查询判定行现在输出 `ask.recordLayer.*` 翻译 key。
 - 2026-07-08: Access-query presentation now prefers `decisionRecordRows` naming for decision records while keeping the older chain-row helper compatible.
 - 2026-07-08：访问查询展示现在首选 `decisionRecordRows` 判定记录命名，同时保留旧链路行 helper 兼容。
 - 2026-07-08: The public frontend design reference now uses audit-record wording and is covered by the public product-doc wording guard.

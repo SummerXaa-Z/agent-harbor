@@ -148,9 +148,9 @@ test("decisionRecordRows marks the first denied record layer as the broken ring"
   assert.deepEqual(
     rows.map((row) => [row.layerKey, row.tone, row.isBroken]),
     [
-      ["ask.evidenceLayer.tenant_entitlement", "success", false],
-      ["ask.evidenceLayer.workspace_assignment", "danger", true],
-      ["ask.evidenceLayer.instance_assignment", "neutral", false]
+      ["ask.recordLayer.tenant_entitlement", "success", false],
+      ["ask.recordLayer.workspace_assignment", "danger", true],
+      ["ask.recordLayer.instance_assignment", "neutral", false]
     ]
   );
 });

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Access-query decision rows now emit preferred `ask.recordLayer.*` translation keys while keeping older layer keys compatible.
+- 2026-07-08：访问查询判定行现在输出首选 `ask.recordLayer.*` 翻译 key，同时保留旧 layer key 兼容。
 - 2026-07-08: Access-query presentation now prefers `decisionRecordRows` naming for decision records while keeping the older chain-row helper compatible.
 - 2026-07-08：访问查询展示现在首选 `decisionRecordRows` 判定记录命名，同时保留旧链路行 helper 兼容。
 - 2026-07-08: The public frontend design reference now uses audit-record wording and is covered by the public product-doc wording guard.

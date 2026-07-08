@@ -128,7 +128,7 @@ export function decisionRecordRows(result: AccessDecisionExplainResult): AskDeci
     id: evidence.id,
     isBroken: index === brokenIndex,
     layer: evidence.layer,
-    layerKey: `ask.evidenceLayer.${evidence.layer}`,
+    layerKey: `ask.recordLayer.${evidence.layer}`,
     message: evidence.message,
     status: evidence.status,
     tone: evidenceTone(evidence)

@@ -54,6 +54,12 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("text.cockpitKeyMessageEvidence"), "Clear go-live status");
   assert.equal(t("message.acceptanceReportExported"), "Acceptance report exported.");
   assert.equal(t("message.productionEvidenceExported"), "Acceptance report exported.");
+  assert.equal(t("ask.recordLayer.capability"), "Capability approval");
+  assert.equal(t("ask.recordLayer.tenant_entitlement"), "Tenant grant");
+  assert.equal(t("ask.recordLayer.workspace_assignment"), "Workspace assignment");
+  assert.equal(t("ask.evidenceLayer.capability"), "Capability approval");
+  assert.equal(t("ask.evidenceLayer.tenant_entitlement"), "Tenant grant");
+  assert.equal(t("ask.evidenceLayer.workspace_assignment"), "Workspace assignment");
   assert.equal(
     tx(t, "message.acceptanceReportExportedBy", { actor: "platform-operator" }),
     "Acceptance report exported by platform-operator."
@@ -615,6 +621,12 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("message.permissionProductionReadinessLoaded"), "状态检查结果已加载。");
   assert.equal(t("message.acceptanceReportExported"), "上线状态报告已导出。");
   assert.equal(t("message.productionEvidenceExported"), "上线状态报告已导出。");
+  assert.equal(t("ask.recordLayer.capability"), "能力审批");
+  assert.equal(t("ask.recordLayer.tenant_entitlement"), "租户授权");
+  assert.equal(t("ask.recordLayer.workspace_assignment"), "工作区分配");
+  assert.equal(t("ask.evidenceLayer.capability"), "能力审批");
+  assert.equal(t("ask.evidenceLayer.tenant_entitlement"), "租户授权");
+  assert.equal(t("ask.evidenceLayer.workspace_assignment"), "工作区分配");
   assert.equal(
     tx(t, "message.acceptanceReportExportedBy", { actor: "platform-operator" }),
     "上线状态报告已由 platform-operator 导出。"

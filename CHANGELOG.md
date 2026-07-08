@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-09: Added v0.2 developer-preview phase closeout docs and draft release notes, and updated the roadmap to separate current developer-preview scope from the next Access Handoff stage.
+- 2026-07-09：新增 v0.2 开发者预览阶段封口文档和发布说明草稿，并更新路线图，将当前开发者预览范围与下一阶段 Access Handoff 分开。
 - 2026-07-09: Added `make evaluation-readiness`, an external evaluator pack generator, and a product guide for measuring fresh-checkout `time-to-first-report`, blocker, and acceptance-report digest feedback.
 - 2026-07-09：新增 `make evaluation-readiness` 外部评估材料生成入口，并补充产品评估指南，用于记录全新检出后的 `time-to-first-report`、阻塞点和验收报告摘要反馈。
 - 2026-07-09: Evaluation readiness packs now include an environment snapshot and a `make check` gate that verifies the generated evaluator handoff files.

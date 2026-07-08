@@ -14,27 +14,38 @@ AgentHarbor supports MCP gateway capabilities, but its primary product surface i
 
 AgentHarbor 支持 MCP 网关能力，但主要产品界面不是通用 MCP 聚合。核心用户旅程是权限运营：描述一个租户范围的访问需求，生成权限包草案，模拟有效访问结果，在风险需要时进入审批路由，通过现有授权链落地，并在事后查看记录。
 
+## Current Developer Preview / 当前开发者预览
+
+The current v0.2 developer preview is scoped to local evaluation, design feedback, and early contribution. It is not recommended for production traffic.
+
+当前 v0.2 开发者预览范围是本地评估、设计反馈和早期贡献；暂不建议承载生产流量。
+
+- Permission Changes supports deterministic package drafts, allow/deny simulation, policy gates, approval-required apply, read-only preflight, application health, impact review, go-live status, and bounded acceptance-report export.
+  权限变更已支持确定性权限包草案、允许/拒绝模拟、策略门禁、需审批应用、只读预检、落地状态、影响复核、上线状态和有边界的验收报告导出。
+- Tenant-first governance covers tenant, workspace, caller, capability, and data-scope enforcement, with scoped administrators, managed administrator identities, tenant permission center views, and audit records.
+  租户优先治理已覆盖租户、工作区、调用方、能力和数据范围控制，并具备范围化管理员、托管管理员身份、租户权限中心视图和审计记录。
+- Management MCP exposes permission-operation tools with safety, access, lifecycle, execution, and confirmation metadata so admin-agent clients can inspect boundaries before writes.
+  Management MCP 已暴露带安全、访问、生命周期、执行和确认元数据的权限运营工具，便于管理 Agent 在写入前检查边界。
+- Local validation is anchored by `make check`, `make release-check`, `make evaluation-readiness`, PR CI, and main-branch CI.
+  本地验收以 `make check`、`make release-check`、`make evaluation-readiness`、PR CI 和 main 分支 CI 为准。
+
 ## Near Term / 近期
 
-- Add approver roles and policy-configured approval routing for approval-required permission package application.
-  增加审批角色和基于策略的审批路由，用于需要审批的权限包应用。
-- Add approval review queues scoped by tenant subtree, workspace, template, target, caller instance, and status.
-  增加按租户子树、工作区、模板、目标、调用方实例和状态过滤的审批队列。
-- Add richer permission package recommendations and templates for non-technical administrators.
-  为非技术管理员增加更丰富的权限包推荐和模板。
-- Add effective permission explanations that show why a subject is allowed or denied across tenant, workspace, caller, capability, and data-scope layers.
-  增加有效权限解释，展示主体在租户、工作区、调用方、能力和数据范围各层为什么被允许或拒绝。
-- Expand permission package application health into richer diff and rollback review flows.
-  将权限包应用健康巡检扩展为更丰富的差异和回滚评审流程。
-- Harden tenant access profiles with clearer inherited-vs-direct permission views.
-  强化租户访问画像，明确展示继承权限与直接权限。
+- Run the external evaluator loop with platform engineer, security reviewer, and tenant administrator roles, using `time-to-first-report` and first-blocker records as the primary inputs.
+  用平台工程师、安全审核人和租户管理员三个角色跑外部评估，以 `time-to-first-report` 和首个阻塞点记录作为主要输入。
+- Fix repeated evaluator blockers before adding new product surface area.
+  新增产品界面前，先修复外部评估中重复出现的阻塞点。
+- Keep release-candidate hardening limited to setup reliability, Permission Changes comprehension, report trust, security regressions, and documentation gaps.
+  发布候选加固只覆盖启动可靠性、权限变更可理解性、报告可信度、安全回归和文档缺口。
+- Prepare the v0.2 developer-preview tag and short release notes after local gates, PR CI, and main CI pass.
+  本地门禁、PR CI 和 main CI 通过后，准备 v0.2 开发者预览标签和简短发布说明。
 
 ## Next / 下一阶段
 
-- Add approval notification hooks and review queues for high-risk permission package application.
-  为高风险权限包应用增加审批通知 Hook 和评审队列。
-- Add package version conflict remediation and data-scope repair flows before apply.
-  在应用前增加权限包版本冲突修复和数据范围修复流程。
+- Add Access Handoff so a completed permission application can produce copyable MCP config, prompt guidance, short-lived token handling, and reviewer-friendly handoff references.
+  增加接入交付，让完成的权限应用可以生成可复制 MCP 配置、提示词指引、短期 Token 处理和便于审核的交接引用。
+- Add package version conflict remediation and data-scope repair flows before apply when evaluator feedback shows these block real usage.
+  当外部评估显示版本冲突或数据范围修复阻碍真实使用时，再补应用前修复流程。
 - Add OpenAPI capability discovery and assignment semantics alongside MCP tools.
   在 MCP 工具之外增加 OpenAPI 能力发现和分配语义。
 - Add first-class data-system targets for data lakes, warehouses, and databases.

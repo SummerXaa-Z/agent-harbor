@@ -267,7 +267,7 @@ test("permission journey mutation handlers require live API before network write
     ["rejectAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "rejectPermissionPackageApprovalRequest("],
     ["withdrawAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "withdrawPermissionPackageApprovalRequest("],
     ["applyAiAdminPermissionPackage", "message.fallbackDataModeActionBlocked", "applyPermissionPackage("],
-    ["exportAiAdminProductionEvidence", "message.productionEvidenceRequiresLiveApi", "fetchPermissionPackageProductionEvidenceReport("],
+    ["exportAiAdminProductionEvidence", "message.productionEvidenceRequiresLiveApi", "fetchPermissionPackageProductionReport("],
   ].forEach(([functionName, liveApiMessage, networkCall]) => {
     const block = functionBlock(functionName);
     const liveApiGuardIndex = block.indexOf("!data?.loadedFromApi");

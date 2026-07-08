@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Frontend API helpers now expose preferred production-report names while keeping the previous report helper aliases for compatibility.
+- 2026-07-08：前端 API helper 现在提供首选的上线状态报告命名，同时保留旧 helper 别名以兼容现有调用。
 - 2026-07-08: README and product journey docs now keep legacy Management MCP report-export aliases out of the primary path and link to a dedicated engineering compatibility map.
 - 2026-07-08：README 和产品旅程现在不在主路径展示旧版 Management MCP 报告导出别名，兼容映射集中到工程说明。
 - 2026-07-08: Production report engineering docs now use report/record wording and are covered by the public product-doc language regression.

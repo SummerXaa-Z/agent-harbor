@@ -29,7 +29,7 @@ import {
   permissionPackageApplicationHealthPath,
   permissionPackageApplicationImpactPath,
   permissionPackageApprovalRequestsPath,
-  permissionPackageProductionEvidenceReportPath,
+  permissionPackageProductionReportPath,
   permissionPackageProductionReadinessPath,
   type PermissionPackageApplicationHealthPathFilter,
   type PermissionPackageApplicationImpactPathScope,
@@ -735,16 +735,18 @@ export async function fetchPermissionPackageProductionReadiness(
   return request<PermissionPackageProductionReadiness>(permissionPackageProductionReadinessPath(filter), { adminKey, signal })
 }
 
-export async function fetchPermissionPackageProductionEvidenceReport(
+export async function fetchPermissionPackageProductionReport(
   filter: PermissionPackageProductionReadinessFilter,
   adminKey?: string,
   signal?: AbortSignal,
 ): Promise<PermissionPackageProductionEvidenceReport> {
   return request<PermissionPackageProductionEvidenceReport>(
-    permissionPackageProductionEvidenceReportPath(filter),
+    permissionPackageProductionReportPath(filter),
     { adminKey, signal },
   )
 }
+
+export const fetchPermissionPackageProductionEvidenceReport = fetchPermissionPackageProductionReport
 
 export async function createPermissionPackageApprovalRequest(
   body: PermissionPackageDraftInput,

@@ -12,6 +12,7 @@ import {
   permissionPackageApplicationImpactPath,
   permissionPackageApprovalRequestsPath,
   permissionPackageProductionEvidenceReportPath,
+  permissionPackageProductionReportPath,
   permissionPackageProductionReadinessPath
 } from "../src/apiPaths.ts";
 
@@ -270,6 +271,36 @@ test("permissionPackageProductionReadinessPath includes production evidence filt
 
 test("permissionPackageProductionEvidenceReportPath includes production evidence filters", () => {
   const path = permissionPackageProductionEvidenceReportPath({
+    approvalRequestId: "ppar-1",
+    callerInstanceId: "caller-sales",
+    region: "us-east",
+    requestText: "Allow support triage",
+    subjectId: "user:sales-001",
+    subjectSelector: "user:sales-*",
+    targetId: "mcp-crm",
+    templateId: "support-ticket-triage",
+    tenantId: "tenant-east",
+    traceLimit: 20,
+    workspaceId: "ws-sales"
+  });
+
+  const url = new URL(path, "http://127.0.0.1:9090");
+  assert.equal(url.pathname, "/api/v1/permission-packages/production-readiness/report");
+  assert.equal(url.searchParams.get("approvalRequestId"), "ppar-1");
+  assert.equal(url.searchParams.get("callerInstanceId"), "caller-sales");
+  assert.equal(url.searchParams.get("region"), "us-east");
+  assert.equal(url.searchParams.get("requestText"), "Allow support triage");
+  assert.equal(url.searchParams.get("subjectId"), "user:sales-001");
+  assert.equal(url.searchParams.get("subjectSelector"), "user:sales-*");
+  assert.equal(url.searchParams.get("targetId"), "mcp-crm");
+  assert.equal(url.searchParams.get("templateId"), "support-ticket-triage");
+  assert.equal(url.searchParams.get("tenantId"), "tenant-east");
+  assert.equal(url.searchParams.get("traceLimit"), "20");
+  assert.equal(url.searchParams.get("workspaceId"), "ws-sales");
+});
+
+test("permissionPackageProductionReportPath provides the preferred report helper name", () => {
+  const path = permissionPackageProductionReportPath({
     approvalRequestId: "ppar-1",
     callerInstanceId: "caller-sales",
     region: "us-east",

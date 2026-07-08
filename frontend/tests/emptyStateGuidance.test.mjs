@@ -6,7 +6,7 @@ const ui = readFileSync(new URL("../src/components/ui.tsx", import.meta.url), "u
 const operationalViews = readFileSync(new URL("../src/components/OperationalViews.tsx", import.meta.url), "utf8");
 const capabilityGovernance = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
 const accessProfile = readFileSync(new URL("../src/components/TenantAccessProfileView.tsx", import.meta.url), "utf8");
-const runtimeEvidence = readFileSync(new URL("../src/components/RuntimeEvidenceViews.tsx", import.meta.url), "utf8");
+const runtimeRecords = readFileSync(new URL("../src/components/RuntimeRecordViews.tsx", import.meta.url), "utf8");
 const i18n = readFileSync(new URL("../src/i18n.ts", import.meta.url), "utf8");
 
 test("empty row supports optional guidance actions without replacing the empty state", () => {
@@ -31,8 +31,8 @@ test("setup-dependent empty states point to the next useful workspace", () => {
 
   assert.match(accessProfile, /empty\.grantChains\.action/);
   assert.match(accessProfile, /actionHash="#ai-admin"/);
-  assert.match(runtimeEvidence, /empty\.auditTraces\.action/);
-  assert.match(runtimeEvidence, /actionHash="#getting-started"/);
+  assert.match(runtimeRecords, /empty\.auditTraces\.action/);
+  assert.match(runtimeRecords, /actionHash="#getting-started"/);
 });
 
 test("empty state guidance copy is bilingual", () => {

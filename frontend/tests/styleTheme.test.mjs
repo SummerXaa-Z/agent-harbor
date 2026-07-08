@@ -18,7 +18,7 @@ const consolePrimitives = readFileSync(new URL("../src/components/ConsolePrimiti
 const goLiveAcceptanceOverview = readFileSync(new URL("../src/components/GoLiveAcceptanceOverview.tsx", import.meta.url), "utf8");
 const managementForms = readFileSync(new URL("../src/components/ManagementForms.tsx", import.meta.url), "utf8");
 const operationalViews = readFileSync(new URL("../src/components/OperationalViews.tsx", import.meta.url), "utf8");
-const runtimeEvidenceViews = readFileSync(new URL("../src/components/RuntimeEvidenceViews.tsx", import.meta.url), "utf8");
+const runtimeRecordViews = readFileSync(new URL("../src/components/RuntimeRecordViews.tsx", import.meta.url), "utf8");
 const dropdown = readFileSync(new URL("../src/components/ApprovalDropdown.tsx", import.meta.url), "utf8");
 const technicalId = readFileSync(new URL("../src/components/TechnicalId.tsx", import.meta.url), "utf8");
 const tenantOrganizationView = readFileSync(new URL("../src/components/TenantOrganizationView.tsx", import.meta.url), "utf8");
@@ -516,7 +516,7 @@ test("technical identifiers use a readable copyable component in dense workspace
   assert.match(technicalId, /navigator\.clipboard\?\.writeText\(value\)/);
   assert.match(app, /import \{ TechnicalId \} from "\.\/components\/TechnicalId"/);
   assert.match(operationalViews, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} value=\{agent\.id\} \/>/);
-  assert.match(runtimeEvidenceViews, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.capability"\)\} value=\{trace\.capabilityId\} \/>/);
+  assert.match(runtimeRecordViews, /<TechnicalId copyLabel=\{t\("action\.copy"\)\} label=\{t\("form\.capability"\)\} value=\{trace\.capabilityId\} \/>/);
   assert.match(styles, /\.technical-id\s*\{/);
   assert.match(styles, /\.technical-id code\s*\{[^}]*font-family:\s*var\(--mono-font\);/s);
 });
@@ -744,8 +744,8 @@ test("management forms and console primitives are split from the app shell", () 
   assert.match(consolePrimitives, /export function Panel/);
 });
 
-test("runtime evidence views are split from the app shell", () => {
-  assert.match(app, /from "\.\/components\/RuntimeEvidenceViews"/);
+test("runtime record views are split from the app shell", () => {
+  assert.match(app, /from "\.\/components\/RuntimeRecordViews"/);
   assert.doesNotMatch(app, /function EvidenceTimeline/);
   assert.doesNotMatch(app, /function AcceptanceHistoryTimeline/);
   assert.doesNotMatch(app, /function SignalBoard/);
@@ -753,11 +753,11 @@ test("runtime evidence views are split from the app shell", () => {
   assert.doesNotMatch(app, /function ManagementAuditTable/);
   assert.doesNotMatch(app, /function auditCredentialVersion/);
   assert.doesNotMatch(app, /function metricRatio/);
-  assert.match(runtimeEvidenceViews, /export function AcceptanceHistoryTimeline/);
-  assert.doesNotMatch(runtimeEvidenceViews, /export function EvidenceTimeline/);
-  assert.match(runtimeEvidenceViews, /export function SignalBoard/);
-  assert.match(runtimeEvidenceViews, /export function TraceTable/);
-  assert.match(runtimeEvidenceViews, /export function ManagementAuditTable/);
+  assert.match(runtimeRecordViews, /export function AcceptanceHistoryTimeline/);
+  assert.doesNotMatch(runtimeRecordViews, /export function EvidenceTimeline/);
+  assert.match(runtimeRecordViews, /export function SignalBoard/);
+  assert.match(runtimeRecordViews, /export function TraceTable/);
+  assert.match(runtimeRecordViews, /export function ManagementAuditTable/);
   assert.doesNotMatch(consolePrimitives, /export function IconMore/);
   assert.doesNotMatch(consolePrimitives, /export function IconOpen/);
   assert.doesNotMatch(app, /action=\{<Icon(?:More|Open)/);

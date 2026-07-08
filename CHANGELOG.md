@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Runtime record UI components now live under `RuntimeRecordViews`, matching the current go-live and audit wording while preserving backend field compatibility.
+- 2026-07-08：运行记录 UI 组件现在归入 `RuntimeRecordViews`，与当前上线和审计用词一致，同时保持后端字段兼容。
 - 2026-07-08: The getting-started status step now uses preferred `confirm-status` and `chain.status` keys while keeping old setup keys compatible.
 - 2026-07-08：首次使用流程的上线状态步骤现在使用首选 `confirm-status` 和 `chain.status` key，同时保留旧接入 key 兼容。
 - 2026-07-08: The go-live acceptance history panel now uses preferred acceptance-history component, prop, and translation keys while keeping old keys compatible.

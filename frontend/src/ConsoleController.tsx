@@ -215,7 +215,7 @@ import {
   ManagementAuditTable,
   SignalBoard,
   TraceTable
-} from "./components/RuntimeEvidenceViews";
+} from "./components/RuntimeRecordViews";
 import { TechnicalId } from "./components/TechnicalId";
 import { TenantAccessProfileView } from "./components/TenantAccessProfileView";
 import type { TenantWorkspaceContext } from "./components/TenantOrganizationView";

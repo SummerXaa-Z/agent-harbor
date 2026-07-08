@@ -22,7 +22,7 @@ const consoleViews = readFileSync(new URL("../src/components/ConsoleViews.tsx", 
 const coreJourneyWorkbench = readFileSync(new URL("../src/components/CoreJourneyWorkbench.tsx", import.meta.url), "utf8");
 const goLiveAcceptanceOverview = readFileSync(new URL("../src/components/GoLiveAcceptanceOverview.tsx", import.meta.url), "utf8");
 const managementForms = readFileSync(new URL("../src/components/ManagementForms.tsx", import.meta.url), "utf8");
-const runtimeEvidenceViews = readFileSync(new URL("../src/components/RuntimeEvidenceViews.tsx", import.meta.url), "utf8");
+const runtimeRecordViews = readFileSync(new URL("../src/components/RuntimeRecordViews.tsx", import.meta.url), "utf8");
 const presenters = readFileSync(new URL("../src/consolePresenters.ts", import.meta.url), "utf8");
 const accessProfileHook = readFileSync(new URL("../src/hooks/useAccessProfileController.ts", import.meta.url), "utf8");
 const capabilityGovernanceHook = readFileSync(
@@ -331,7 +331,7 @@ test("access profile grant chain keeps technical ids in advanced details", () =>
   assert.match(accessProfileView, /const traceTargetName = permissionEntityDisplayName\(names\[trace\.targetAgentId\] \?\? trace\.targetAgentId, t\)/);
   assert.match(accessProfileView, /<strong>\{traceCallerName\} → \{traceTargetName\}<\/strong>/);
   assert.match(accessProfileView, /accessTraceReasonLabel\(trace\.reason, trace\.decision === "allowed" \? "allow" : "deny", t\)/);
-  assert.match(runtimeEvidenceViews, /accessTraceReasonLabel\(trace\.reason, trace\.decision === "allowed" \? "allow" : "deny", t\)/);
+  assert.match(runtimeRecordViews, /accessTraceReasonLabel\(trace\.reason, trace\.decision === "allowed" \? "allow" : "deny", t\)/);
   assert.match(presenters, /export function accessTraceReasonLabel/);
   assert.match(i18n, /"traceReason\.capabilityAssignmentMatched": "权限分配已命中"/);
   assert.match(i18n, /"text\.customSubjectScope": "自定义主体范围"/);
@@ -341,23 +341,23 @@ test("access profile grant chain keeps technical ids in advanced details", () =>
 });
 
 test("runtime audit keeps protocol details out of primary trace rows", () => {
-  assert.match(runtimeEvidenceViews, /function traceRouteBusinessLabel/);
-  assert.match(runtimeEvidenceViews, /className="trace-business-line"/);
-  assert.match(runtimeEvidenceViews, /className="trace-technical-details"/);
-  assert.match(runtimeEvidenceViews, /const \[traceDetailsExpanded, setTraceDetailsExpanded\] = useState\(false\)/);
-  assert.match(runtimeEvidenceViews, /open=\{traceDetailsExpanded\}/);
-  assert.match(runtimeEvidenceViews, /traceDetailsExpanded \? t\("action\.collapseTraceDetails"\) : t\("action\.expandTraceDetails"\)/);
-  assert.match(runtimeEvidenceViews, /<summary>\{t\("text\.traceDetails"\)\}<\/summary>/);
+  assert.match(runtimeRecordViews, /function traceRouteBusinessLabel/);
+  assert.match(runtimeRecordViews, /className="trace-business-line"/);
+  assert.match(runtimeRecordViews, /className="trace-technical-details"/);
+  assert.match(runtimeRecordViews, /const \[traceDetailsExpanded, setTraceDetailsExpanded\] = useState\(false\)/);
+  assert.match(runtimeRecordViews, /open=\{traceDetailsExpanded\}/);
+  assert.match(runtimeRecordViews, /traceDetailsExpanded \? t\("action\.collapseTraceDetails"\) : t\("action\.expandTraceDetails"\)/);
+  assert.match(runtimeRecordViews, /<summary>\{t\("text\.traceDetails"\)\}<\/summary>/);
   assert.match(managementForms, /<summary>\{t\("text\.filterSettings"\)\}<\/summary>/);
   assert.doesNotMatch(managementForms, /<input placeholder="runId"/);
   assert.match(managementForms, /placeholder=\{t\("form\.traceRunPlaceholder"\)\}/);
-  const traceRowStart = runtimeEvidenceViews.indexOf('<article className="trace-row"');
-  const traceTechnicalStart = runtimeEvidenceViews.indexOf('<details className="trace-technical-details"', traceRowStart);
+  const traceRowStart = runtimeRecordViews.indexOf('<article className="trace-row"');
+  const traceTechnicalStart = runtimeRecordViews.indexOf('<details className="trace-technical-details"', traceRowStart);
   assert.notEqual(traceRowStart, -1);
   assert.notEqual(traceTechnicalStart, -1);
-  assert.doesNotMatch(runtimeEvidenceViews.slice(traceRowStart, traceTechnicalStart), /trace\.routeType/);
-  assert.doesNotMatch(runtimeEvidenceViews.slice(traceRowStart, traceTechnicalStart), /trace\.routeKey/);
-  assert.doesNotMatch(runtimeEvidenceViews.slice(traceRowStart, traceTechnicalStart), /trace\.capabilityId/);
+  assert.doesNotMatch(runtimeRecordViews.slice(traceRowStart, traceTechnicalStart), /trace\.routeType/);
+  assert.doesNotMatch(runtimeRecordViews.slice(traceRowStart, traceTechnicalStart), /trace\.routeKey/);
+  assert.doesNotMatch(runtimeRecordViews.slice(traceRowStart, traceTechnicalStart), /trace\.capabilityId/);
   assert.match(presenters, /traceReason\.filteredToolsListByCapabilityAssignments/);
   assert.match(presenters, /traceReason\.capabilityNotApproved/);
   assert.match(i18n, /"traceReason\.filteredToolsListByCapabilityAssignments": "工具列表已按权限收敛"/);
@@ -498,19 +498,19 @@ test("permission request acceptance details stay secondary to the main operator 
 });
 
 test("management audit evidence uses business labels before technical ids", () => {
-  const auditTableStart = runtimeEvidenceViews.indexOf("export function ManagementAuditTable");
-  const auditTableEnd = runtimeEvidenceViews.indexOf("export function AcceptanceHistoryTimeline", auditTableStart);
-  const auditTable = runtimeEvidenceViews.slice(auditTableStart, auditTableEnd >= 0 ? auditTableEnd : undefined);
-  assert.match(runtimeEvidenceViews, /auditActionLabel\(event\.action, t\)/);
-  assert.match(runtimeEvidenceViews, /auditResourceTypeLabel\(event\.resourceType, t\)/);
-  assert.match(runtimeEvidenceViews, /auditActorLabel\(event\.actor, t\)/);
-  assert.match(runtimeEvidenceViews, /auditSummaryLabel\(event\.summary, t\)/);
-  assert.match(runtimeEvidenceViews, /className="audit-technical"/);
+  const auditTableStart = runtimeRecordViews.indexOf("export function ManagementAuditTable");
+  const auditTableEnd = runtimeRecordViews.indexOf("export function AcceptanceHistoryTimeline", auditTableStart);
+  const auditTable = runtimeRecordViews.slice(auditTableStart, auditTableEnd >= 0 ? auditTableEnd : undefined);
+  assert.match(runtimeRecordViews, /auditActionLabel\(event\.action, t\)/);
+  assert.match(runtimeRecordViews, /auditResourceTypeLabel\(event\.resourceType, t\)/);
+  assert.match(runtimeRecordViews, /auditActorLabel\(event\.actor, t\)/);
+  assert.match(runtimeRecordViews, /auditSummaryLabel\(event\.summary, t\)/);
+  assert.match(runtimeRecordViews, /className="audit-technical"/);
   assert.match(auditTable, /className="management-audit-empty-state"/);
   assert.doesNotMatch(auditTable, /<td colSpan=\{6\}>/);
   assert.match(auditTable, /<summary>\{t\("text\.auditDetails"\)\}<\/summary>/);
   assert.doesNotMatch(auditTable, /text\.technicalDetails/);
-  assert.doesNotMatch(runtimeEvidenceViews, /<span>\{event\.resourceId\}<\/span>/);
+  assert.doesNotMatch(runtimeRecordViews, /<span>\{event\.resourceId\}<\/span>/);
   assert.match(i18n, /"auditAction\.permission_package\.applied": "应用权限包"/);
   assert.match(i18n, /"auditActor\.local-dev": "本地开发管理员"/);
   assert.match(i18n, /"text\.auditDetails": "详情"/);

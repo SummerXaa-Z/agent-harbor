@@ -259,7 +259,7 @@ export function resolvePermissionJourneyStatus(args: {
     return {
       detailKey: "permissionJourney.statusDetail.ready",
       labelKey: "permissionJourney.status.ready",
-      nextActionKey: "action.exportProductionEvidence",
+      nextActionKey: "action.exportAcceptanceReport",
       tone: "success"
     };
   }
@@ -566,7 +566,7 @@ export function permissionWorkbenchActionKey(code: string | undefined, fallback:
     case "run_runtime_validation":
       return "action.runApprovalJourney";
     case "export_production_evidence":
-      return "action.exportProductionEvidence";
+      return "action.exportAcceptanceReport";
     default:
       return fallback;
   }

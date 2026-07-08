@@ -160,12 +160,12 @@ test("new permission change ignores historical preview evidence until submitted"
 
 test("production evidence export reports the result on the main permission journey", () => {
   const block = functionBlock("exportAiAdminProductionEvidence");
-  assert.match(block, /setAiAdminMessage\(\{ key: "message\.productionEvidenceRequiresLiveApi" \}\)/);
+  assert.match(block, /setAiAdminMessage\(\{ key: "message\.acceptanceReportRequiresLiveApi" \}\)/);
   assert.match(
     block,
-    /setAiAdminMessage\(\{\s*key: "message\.productionEvidenceExportedBy",\s*params: \{ actor: report\.generatedBy \}\s*\}\)/s
+    /setAiAdminMessage\(\{\s*key: "message\.acceptanceReportExportedBy",\s*params: \{ actor: report\.generatedBy \}\s*\}\)/s
   );
-  assert.match(block, /setAiAdminMessage\(localizedErrorMessageState\(error, "error\.exportProductionEvidence"\)\)/);
+  assert.match(block, /setAiAdminMessage\(localizedErrorMessageState\(error, "error\.exportAcceptanceReport"\)\)/);
 });
 
 test("permission journey messages store translation keys instead of rendered language snapshots", () => {
@@ -183,7 +183,7 @@ test("permission journey messages store translation keys instead of rendered lan
   assert.match(applyBlock, /setAiAdminMessage\(\{[\s\S]*key: refreshResult\.ok \? "message\.permissionPackageApplied" : permissionApplyRefreshFailedMessageKey\(\),[\s\S]*params: \{ count: appliedCount \}[\s\S]*\}\)/);
   assert.match(
     exportBlock,
-    /setAiAdminMessage\(\{\s*key: "message\.productionEvidenceExportedBy",\s*params: \{ actor: report\.generatedBy \}\s*\}\)/s
+    /setAiAdminMessage\(\{\s*key: "message\.acceptanceReportExportedBy",\s*params: \{ actor: report\.generatedBy \}\s*\}\)/s
   );
   assert.doesNotMatch(app, /setAiAdminMessage\(tx\(t,/);
 });
@@ -267,7 +267,7 @@ test("permission journey mutation handlers require live API before network write
     ["rejectAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "rejectPermissionPackageApprovalRequest("],
     ["withdrawAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "withdrawPermissionPackageApprovalRequest("],
     ["applyAiAdminPermissionPackage", "message.fallbackDataModeActionBlocked", "applyPermissionPackage("],
-    ["exportAiAdminProductionEvidence", "message.productionEvidenceRequiresLiveApi", "fetchPermissionPackageProductionReport("],
+    ["exportAiAdminProductionEvidence", "message.acceptanceReportRequiresLiveApi", "fetchPermissionPackageProductionReport("],
   ].forEach(([functionName, liveApiMessage, networkCall]) => {
     const block = functionBlock(functionName);
     const liveApiGuardIndex = block.indexOf("!data?.loadedFromApi");

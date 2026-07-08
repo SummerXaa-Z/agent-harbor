@@ -153,7 +153,7 @@ test("production console summary reports ready after approval application and ru
 
   assert.equal(summary.status, "ready");
   assert.equal(summary.readyCount, 5);
-  assert.equal(summary.primaryActionKey, "action.exportProductionEvidence");
+  assert.equal(summary.primaryActionKey, "action.exportAcceptanceReport");
   assert.deepEqual(summary.steps.map((step) => step.status), [
     "ready",
     "ready",

@@ -706,7 +706,7 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /text\.permissionChangeCompleteTitle/);
   assert.match(workbench, /text\.permissionChangeCompleteDetail/);
   assert.match(workbench, /productionReadiness\?\.generatedAt/);
-  assert.match(workbench, /action\.exportProductionEvidence/);
+  assert.match(workbench, /action\.exportAcceptanceReport/);
   assert.match(workbench, /action\.downloadAcceptanceReport/);
   assert.match(workbench, /action\.openAccessProfile/);
   assert.match(workbench, /action\.startPermissionApproval/);
@@ -746,7 +746,7 @@ test("permission request go-live step presents one guided primary action", () =>
   assert.match(workbench, /runtimeValidationReady\s*\?\s*"action\.checkProductionReadiness"/);
   assert.match(workbench, /const runGoLivePrimaryAction = \(\) => \{/);
   assert.match(workbench, /if \(!goLivePrerequisitesReady\) \{\s*runProductionPrimaryAction\(\);/);
-  assert.match(workbench, /goLivePrimaryActionKey === "action\.exportProductionEvidence"[\s\S]*onExportProductionEvidence\(\);/);
+  assert.match(workbench, /goLivePrimaryActionKey === "action\.exportAcceptanceReport"[\s\S]*onExportProductionEvidence\(\);/);
   assert.match(workbench, /goLivePrimaryActionKey === "action\.checkProductionReadiness"[\s\S]*onRefreshProductionReadiness\(\);/);
   assert.match(workbench, /onClick=\{runGoLivePrimaryAction\}/);
   const goLiveBlockStart = workbench.indexOf('className="approval-process-block approval-go-live-block"');

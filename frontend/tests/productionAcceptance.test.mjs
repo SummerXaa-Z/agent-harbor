@@ -57,7 +57,7 @@ test("production acceptance center exports the report when status and connection
     liveDataAvailable: true,
     productionReadiness: productionReadiness(),
     productionSummary: productionSummary({
-      primaryActionKey: "action.exportProductionEvidence",
+      primaryActionKey: "action.exportAcceptanceReport",
       readyCount: 5,
       status: "ready",
       steps: productionSummary().steps.map((step) => ({ ...step, status: "ready" }))

@@ -394,7 +394,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       onApply();
       return;
     }
-    if (journeyStatus.nextActionKey === "action.exportProductionEvidence") {
+    if (journeyStatus.nextActionKey === "action.exportAcceptanceReport") {
       onExportProductionEvidence();
       return;
     }
@@ -430,7 +430,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       onRunApprovalJourney();
       return;
     }
-    if (primaryActionCode === "export_production_evidence" || productionSummary.primaryActionKey === "action.exportProductionEvidence") {
+    if (primaryActionCode === "export_production_evidence" || productionSummary.primaryActionKey === "action.exportAcceptanceReport") {
       onExportProductionEvidence();
       return;
     }
@@ -560,7 +560,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const goLivePrimaryActionKey = !goLivePrerequisitesReady
     ? journeyStatus.nextActionKey
     : goLiveReady
-    ? "action.exportProductionEvidence"
+    ? "action.exportAcceptanceReport"
     : runtimeValidationReady
       ? "action.checkProductionReadiness"
       : "action.runApprovalJourney";
@@ -574,15 +574,15 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       : t("text.runtimeValidationBlockedDetail");
   const goLivePrimaryActionIcon = !goLivePrerequisitesReady
     ? <CheckCircle2 size={14} />
-    : goLivePrimaryActionKey === "action.exportProductionEvidence"
+    : goLivePrimaryActionKey === "action.exportAcceptanceReport"
     ? <Download size={14} />
     : goLivePrimaryActionKey === "action.checkProductionReadiness"
       ? <RefreshCw size={14} />
       : <Workflow size={14} />;
   const goLivePrimaryActionLabel = !goLivePrerequisitesReady
     ? t(journeyStatus.nextActionKey)
-    : goLivePrimaryActionKey === "action.exportProductionEvidence" && productionEvidenceExporting
-    ? t("action.exportingProductionEvidence")
+    : goLivePrimaryActionKey === "action.exportAcceptanceReport" && productionEvidenceExporting
+    ? t("action.exportingAcceptanceReport")
     : goLivePrimaryActionKey === "action.checkProductionReadiness" && productionReadinessLoading
       ? t("action.checkingProductionReadiness")
       : goLivePrimaryActionKey === "action.runApprovalJourney" && approvalJourneyRunning
@@ -593,7 +593,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       runProductionPrimaryAction();
       return;
     }
-    if (goLivePrimaryActionKey === "action.exportProductionEvidence") {
+    if (goLivePrimaryActionKey === "action.exportAcceptanceReport") {
       onExportProductionEvidence();
       return;
     }
@@ -922,7 +922,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                 <div className="approval-completion-actions">
                   <button className="secondary-button" disabled={liveDataBlocked || permissionRequestBusy} onClick={onExportProductionEvidence} type="button">
                     <Download size={14} />
-                    {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.downloadAcceptanceReport")}
+                    {productionEvidenceExporting ? t("action.exportingAcceptanceReport") : t("action.downloadAcceptanceReport")}
                   </button>
                   <button className="secondary-button" disabled={permissionRequestBusy} onClick={onOpenAccessProfile} type="button">
                     <FileSearch size={14} />
@@ -1091,7 +1091,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                 </button>
                 <button className="secondary-button" disabled={liveDataBlocked || !productionReadiness || permissionRequestBusy} onClick={onExportProductionEvidence} type="button">
                   <Download size={14} />
-                  {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
+                  {productionEvidenceExporting ? t("action.exportingAcceptanceReport") : t("action.exportAcceptanceReport")}
                 </button>
               </div>
             </header>

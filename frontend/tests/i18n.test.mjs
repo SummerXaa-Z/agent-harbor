@@ -33,7 +33,9 @@ test("Simplified Chinese product copy avoids forensic wording", () => {
 test("English product copy uses acceptance and records wording", () => {
   const t = createTranslator("en");
 
+  assert.equal(t("action.exportAcceptanceReport"), "Export acceptance report");
   assert.equal(t("action.exportProductionEvidence"), "Export acceptance report");
+  assert.equal(t("action.exportingAcceptanceReport"), "Exporting");
   assert.equal(t("concept.acceptanceMaterials"), "Acceptance materials");
   assert.equal(t("concept.acceptanceMaterials.detail"), "Approval, apply, runtime, access profile, and audit records used for go-live acceptance.");
   assert.equal(t("concept.evidence"), "Acceptance materials");
@@ -50,11 +52,17 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("panel.evidenceRuns"), "Acceptance History");
   assert.equal(t("section.aiAdminApprovalJourney"), "Runtime Validation Records");
   assert.equal(t("text.cockpitKeyMessageEvidence"), "Clear go-live status");
+  assert.equal(t("message.acceptanceReportExported"), "Acceptance report exported.");
   assert.equal(t("message.productionEvidenceExported"), "Acceptance report exported.");
+  assert.equal(
+    tx(t, "message.acceptanceReportExportedBy", { actor: "platform-operator" }),
+    "Acceptance report exported by platform-operator."
+  );
   assert.equal(
     tx(t, "message.productionEvidenceExportedBy", { actor: "platform-operator" }),
     "Acceptance report exported by platform-operator."
   );
+  assert.equal(t("message.acceptanceReportRequiresLiveApi"), "Exporting the acceptance report requires the live API.");
   assert.equal(
     t("message.permissionApprovalAlreadyConsumedRecovery"),
     "This approval has already been used. Refresh status checks or review the current permission change before retrying."
@@ -589,7 +597,9 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("action.reviewApplicationImpact"), "查看影响");
   assert.equal(t("action.refreshApplicationHealth"), "刷新状态");
   assert.equal(t("action.checkProductionReadiness"), "执行状态检查");
+  assert.equal(t("action.exportAcceptanceReport"), "导出验收报告");
   assert.equal(t("action.exportProductionEvidence"), "导出验收报告");
+  assert.equal(t("action.exportingAcceptanceReport"), "导出中");
   assert.equal(t("action.openAcceptanceDetails"), "查看验收明细");
   assert.equal(t("action.openProcessDetails"), "查看处理流程");
   assert.equal(t("action.openAccessProfile"), "查看权限画像");
@@ -603,11 +613,17 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("message.permissionApplicationImpactLoaded"), "影响复核已加载。");
   assert.equal(t("message.permissionApplicationHealthLoaded"), "落地状态已加载。");
   assert.equal(t("message.permissionProductionReadinessLoaded"), "状态检查结果已加载。");
+  assert.equal(t("message.acceptanceReportExported"), "上线状态报告已导出。");
   assert.equal(t("message.productionEvidenceExported"), "上线状态报告已导出。");
+  assert.equal(
+    tx(t, "message.acceptanceReportExportedBy", { actor: "platform-operator" }),
+    "上线状态报告已由 platform-operator 导出。"
+  );
   assert.equal(
     tx(t, "message.productionEvidenceExportedBy", { actor: "platform-operator" }),
     "上线状态报告已由 platform-operator 导出。"
   );
+  assert.equal(t("message.acceptanceReportRequiresLiveApi"), "导出上线状态报告需要实时 API。");
   assert.equal(t("message.productionEvidenceRequiresLiveApi"), "导出上线状态报告需要实时 API。");
   assert.equal(t("message.permissionProductionReadinessRequiresLiveApi"), "状态检查需要实时 API。");
   assert.equal(t("message.permissionApplicationHealthRequiresLiveApi"), "落地状态巡检需要实时 API。");

@@ -160,7 +160,7 @@ function primaryActionKey({
   approved: boolean;
   productionReadiness: PermissionPackageProductionReadiness | null;
 }) {
-  if (productionReadiness?.status === "ready") return "action.exportProductionEvidence";
+  if (productionReadiness?.status === "ready") return "action.exportAcceptanceReport";
   if (!approved && approvalRequired) return "action.createApprovalRequest";
   if (!application) return "action.applyPermissionPackage";
   return "action.checkProductionReadiness";

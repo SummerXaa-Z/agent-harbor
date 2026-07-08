@@ -1076,7 +1076,7 @@ export function ConsoleController() {
 
   async function exportAiAdminProductionEvidence(formInput: PermissionPackageDraftInput = aiAdminForm) {
     if (!data?.loadedFromApi) {
-      setAiAdminMessage({ key: "message.productionEvidenceRequiresLiveApi" });
+      setAiAdminMessage({ key: "message.acceptanceReportRequiresLiveApi" });
       return null;
     }
     setAiAdminProductionEvidenceExporting(true);
@@ -1090,12 +1090,12 @@ export function ConsoleController() {
       setAiAdminProductionReport(report);
       downloadJson(report, productionAcceptanceReportFilename(report));
       setAiAdminMessage({
-        key: "message.productionEvidenceExportedBy",
+        key: "message.acceptanceReportExportedBy",
         params: { actor: report.generatedBy }
       });
       return report;
     } catch (error) {
-      setAiAdminMessage(localizedErrorMessageState(error, "error.exportProductionEvidence"));
+      setAiAdminMessage(localizedErrorMessageState(error, "error.exportAcceptanceReport"));
       return null;
     } finally {
       setAiAdminProductionEvidenceExporting(false);

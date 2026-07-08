@@ -171,7 +171,7 @@ export function GoLiveAcceptanceOverview({
               <>
                 {acceptanceCenter.primaryAction !== "export_acceptance_report" ? <button className="secondary-button" disabled={!liveDataAvailable || !productionReadiness || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
                   <Download size={14} />
-                  {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
+                  {productionEvidenceExporting ? t("action.exportingAcceptanceReport") : t("action.exportAcceptanceReport")}
                 </button> : null}
               </>
             )}
@@ -356,7 +356,7 @@ function renderProductionAcceptanceAction({
     return (
       <button className="primary-button" disabled={!liveDataAvailable || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
         <Download size={14} />
-        {productionEvidenceExporting ? t("action.exportingProductionEvidence") : t("action.exportProductionEvidence")}
+        {productionEvidenceExporting ? t("action.exportingAcceptanceReport") : t("action.exportAcceptanceReport")}
       </button>
     );
   }

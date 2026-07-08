@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
   accessDecisionSummaryLabel,
   accessDecisionRecordMessageLabel,
-  accessEvidenceMessageLabel,
   accessNextActionLabel,
   buildExplainRequest,
   buildPermissionChangeHandoff,
-  decisionRecordRows,
-  evidenceChainRows
+  decisionRecordRows
 } from "../src/askJourney.ts";
 import {
   createTranslator
@@ -17,6 +16,7 @@ import {
 import { permissionPackageTemplates } from "../src/permissionPackages.ts";
 
 const now = "2026-06-11T10:00:00Z";
+const askJourneySource = readFileSync(new URL("../src/askJourney.ts", import.meta.url), "utf8");
 
 const tenant = { createdAt: now, id: "tenant-root", level: 0, name: "Platform Ops", status: "active", updatedAt: now };
 const caller = {
@@ -156,8 +156,10 @@ test("decisionRecordRows marks the first denied record layer as the broken ring"
   );
 });
 
-test("evidenceChainRows remains a compatibility alias for decisionRecordRows", () => {
-  assert.equal(evidenceChainRows, decisionRecordRows);
+test("ask access presentation no longer exports legacy evidence aliases", () => {
+  assert.doesNotMatch(askJourneySource, /AskEvidenceChainRow/);
+  assert.doesNotMatch(askJourneySource, /evidenceChainRows/);
+  assert.doesNotMatch(askJourneySource, /accessEvidenceMessageLabel/);
 });
 
 test("access query presentation localizes backend decision guidance at render time", () => {
@@ -192,7 +194,6 @@ test("access query presentation localizes backend decision guidance at render ti
   assert.equal(accessDecisionSummaryLabel(result, t), "当前不能访问：租户尚未获得该能力授权。");
   assert.equal(accessDecisionRecordMessageLabel(rows[0], t), "租户授权缺失，或正在阻断这个工具能力。");
   assert.equal(accessDecisionRecordMessageLabel(rows[1], t), "工作区分配已匹配。");
-  assert.equal(accessEvidenceMessageLabel, accessDecisionRecordMessageLabel);
   assert.equal(accessNextActionLabel(result.nextActions[0], t), "发起权限包变更，一次性创建租户、工作区和调用方授权。");
 });
 

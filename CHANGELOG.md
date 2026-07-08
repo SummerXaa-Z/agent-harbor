@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Ask access journey helpers now remove unused legacy access-query compatibility exports in favor of decision-record naming.
+- 2026-07-08：访问查询旅程 helper 现在移除未使用的旧访问查询兼容导出，统一使用 decision-record 命名。
 - 2026-07-08: Permission application section translations now omit the unused `section.permissionApplicationEvidence` alias.
 - 2026-07-08：权限应用区块翻译现在移除未使用的 `section.permissionApplicationEvidence` alias。
 - 2026-07-08: Navigation translations now omit unused `nav.evidence`, `navDetail.evidence`, and `page.evidence` aliases while route compatibility remains in `consoleNavigation`.

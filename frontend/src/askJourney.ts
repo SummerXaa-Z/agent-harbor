@@ -34,8 +34,6 @@ export interface AskDecisionRecordRow {
   tone: "danger" | "neutral" | "success" | "warning"
 }
 
-export type AskEvidenceChainRow = AskDecisionRecordRow;
-
 export interface PermissionChangeHandoffOptions {
   templates?: PermissionPackageTemplate[]
   translateIntent?: (key: string, values: Record<string, string>) => string
@@ -135,8 +133,6 @@ export function decisionRecordRows(result: AccessDecisionExplainResult): AskDeci
   }));
 }
 
-export const evidenceChainRows = decisionRecordRows;
-
 export function accessDecisionSummaryLabel(result: AccessDecisionExplainResult, t: Translator) {
   const reason = accessDecisionReasonLabel(result.decision.reason, t);
   return tx(t, result.outcome === "allowed" ? "ask.summaryAllowed" : "ask.summaryDenied", { reason });
@@ -146,8 +142,6 @@ export function accessDecisionRecordMessageLabel(row: Pick<AskDecisionRecordRow,
   const key = knownDecisionRecordMessages[row.message];
   return key ? t(key) : sanitizeAccessGuidance(row.message);
 }
-
-export const accessEvidenceMessageLabel = accessDecisionRecordMessageLabel;
 
 export function accessNextActionLabel(action: string, t: Translator) {
   const key = knownNextActions[action];

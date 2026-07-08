@@ -72,7 +72,7 @@ export function CoreJourneyWorkbench({
   const healthStatusLabel = canRun ? t("status.systemHealthReady") : t("status.systemHealthNeedsCheck");
   const healthTitle = canRun ? t("text.systemHealthReadyTitle") : t("text.systemHealthNeedsCheckTitle");
   const healthDetail = canRun ? t("text.systemHealthReadyDetail") : t("text.systemHealthNeedsCheckDetail");
-  const runtimeEvidenceSummary = result
+  const runtimeRecordSummary = result
     ? `tools/list ${result.toolListStatus} · ${form.deniedTool} ${result.deniedStatus} · ${form.allowedTool} ${result.allowedStatus}`
     : t("text.selfCheckRuntimePending");
   return (
@@ -197,7 +197,7 @@ export function CoreJourneyWorkbench({
         <summary>
           <div>
             <strong>{t("section.selfCheckRuntimeDetail")}</strong>
-            <span>{runtimeEvidenceSummary}</span>
+            <span>{runtimeRecordSummary}</span>
           </div>
           <span className="core-journey-disclosure-action">
             {t("action.viewDetails")}

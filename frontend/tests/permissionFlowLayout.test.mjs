@@ -384,6 +384,8 @@ test("system self-check uses structured configuration and copyable runtime conte
   assert.match(panel, /className="core-journey-task"/);
   assert.match(panel, /className="core-journey-advanced"/);
   assert.match(panel, /className="core-journey-runtime-summary"/);
+  assert.match(panel, /const runtimeRecordSummary = result/);
+  assert.doesNotMatch(panel, /runtimeEvidenceSummary/);
   assert.match(panel, /className="core-journey-disclosure-action"/);
   assert.match(panel, /t\("action\.viewDetails"\)/);
   assert.match(panel, /className="core-journey-runtime-cards"/);

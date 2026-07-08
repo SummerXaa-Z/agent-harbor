@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: System self-check runtime summary internals now use runtime-record naming.
+- 2026-07-08：系统自检运行摘要内部命名现在统一为运行记录口径。
 - 2026-07-08: Access-query and tenant-profile styles now use `access-*-records` class names for runtime record sections.
 - 2026-07-08：访问查询和租户访问画像样式现在使用 `access-*-records` 类名表达运行记录区域。
 - 2026-07-08: Permission request acceptance-detail styles now use `approval-records` class names instead of older class names.

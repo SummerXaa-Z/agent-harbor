@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Production console presenter internals now use runtime-record and approval-record local names while preserving the backend readiness fields.
+- 2026-07-08：生产控制台 presenter 内部现在使用运行记录和审批记录本地命名，同时保持后端 readiness 字段兼容。
 - 2026-07-08: Permission-package acceptance report types now prefer `AcceptanceReport` record names while keeping older production-report aliases compatible.
 - 2026-07-08：权限包验收报告类型现在优先使用 `AcceptanceReport` 记录命名，同时保留旧 production-report alias 兼容。
 - 2026-07-08: Frontend acceptance history now uses `AcceptanceRun` as the primary runtime-history type while keeping the existing `evidenceRuns` data field compatible.

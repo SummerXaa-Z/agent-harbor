@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
   buildAiAdminProductionConsoleSummary
 } from "../src/aiAdminProductionConsole.ts";
+
+const presenterSource = readFileSync(new URL("../src/aiAdminProductionConsole.ts", import.meta.url), "utf8");
 
 const baseDraft = {
   id: "draft-support",
@@ -200,6 +203,13 @@ test("production console summary treats applied production evidence as approval 
   assert.equal(summary.status, "ready");
   assert.equal(approvalStep?.status, "ready");
   assert.equal(approvalStep?.detailKey, "productionConsole.approvalSatisfied");
+});
+
+test("production console presenter prefers runtime record local naming", () => {
+  assert.match(presenterSource, /const runtimeRecordCount =/);
+  assert.match(presenterSource, /const approvalSatisfiedByRecords =/);
+  assert.doesNotMatch(presenterSource, /const runtimeEvidenceCount =/);
+  assert.doesNotMatch(presenterSource, /approvalSatisfiedByEvidence/);
 });
 
 test("production console summary treats direct apply packages as approval ready", () => {

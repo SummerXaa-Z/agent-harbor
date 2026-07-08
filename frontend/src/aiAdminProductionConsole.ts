@@ -46,10 +46,10 @@ export function buildAiAdminProductionConsoleSummary({
   productionReadiness
 }: AiAdminProductionConsoleInput): AiAdminProductionConsoleSummary {
   const approvalRequired = !draft.policyGate.canApplyDirectly;
-  const approvalSatisfiedByEvidence = approvalRequired && (Boolean(application) || productionReadiness?.status === "ready");
+  const approvalSatisfiedByRecords = approvalRequired && (Boolean(application) || productionReadiness?.status === "ready");
   const approvalRequestEffectiveStatus = approvalRequest ? approvalEffectiveStatus(approvalRequest) : null;
-  const approved = !approvalRequired || approvalRequestEffectiveStatus === "approved" || approvalSatisfiedByEvidence;
-  const runtimeEvidenceCount = productionReadiness
+  const approved = !approvalRequired || approvalRequestEffectiveStatus === "approved" || approvalSatisfiedByRecords;
+  const runtimeRecordCount = productionReadiness
     ? Number(Boolean(productionReadiness.runtimeEvidence.allowedTrace)) + Number(Boolean(productionReadiness.runtimeEvidence.deniedTrace))
     : 0;
 
@@ -67,10 +67,10 @@ export function buildAiAdminProductionConsoleSummary({
     {
       key: "approval",
       labelKey: "productionConsole.approval",
-      status: approvalRequired ? approvalStatus(approvalRequest, approvalSatisfiedByEvidence) : "ready",
+      status: approvalRequired ? approvalStatus(approvalRequest, approvalSatisfiedByRecords) : "ready",
       detail: approvalRequired ? approvalRequest?.id ?? application?.id ?? "-" : "-",
       detailKey: approvalRequired
-        ? approvalSatisfiedByEvidence
+        ? approvalSatisfiedByRecords
           ? "productionConsole.approvalSatisfied"
           : approvalRequest
           ? `status.approval${capitalize(approvalRequestEffectiveStatus ?? approvalRequest.status)}`
@@ -89,10 +89,10 @@ export function buildAiAdminProductionConsoleSummary({
     {
       key: "runtime",
       labelKey: "productionConsole.runtime",
-      status: runtimeEvidenceCount === 2 ? "ready" : productionReadiness ? "blocked" : "pending",
-      detail: productionReadiness ? `${runtimeEvidenceCount}/2` : "-",
-      detailKey: runtimeEvidenceCount === 2 ? "productionConsole.runtimeReady" : "productionConsole.runtimeEvidence",
-      metric: `${runtimeEvidenceCount}/2`
+      status: runtimeRecordCount === 2 ? "ready" : productionReadiness ? "blocked" : "pending",
+      detail: productionReadiness ? `${runtimeRecordCount}/2` : "-",
+      detailKey: runtimeRecordCount === 2 ? "productionConsole.runtimeReady" : "productionConsole.runtimeEvidence",
+      metric: `${runtimeRecordCount}/2`
     },
     {
       key: "production",
@@ -115,8 +115,8 @@ export function buildAiAdminProductionConsoleSummary({
   };
 }
 
-function approvalStatus(request: PermissionPackageApprovalRequest | null, satisfiedByEvidence = false): AiAdminProductionConsoleStatus {
-  if (satisfiedByEvidence) return "ready";
+function approvalStatus(request: PermissionPackageApprovalRequest | null, satisfiedByRecords = false): AiAdminProductionConsoleStatus {
+  if (satisfiedByRecords) return "ready";
   if (!request) return "pending";
   const effectiveStatus = approvalEffectiveStatus(request);
   if (effectiveStatus === "approved") return "ready";

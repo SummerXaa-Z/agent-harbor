@@ -1172,7 +1172,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               {approvalJourneyEvaluation.steps.map((step) => (
                 <div className={`approval-mini-row status-${step.status}`} key={step.key}>
                   <strong>{t(`journey.aiAdmin.step.${step.key}`)}</strong>
-                  <span>{step.status === "complete" ? t("journey.aiAdmin.evidence.ready") : t(`journey.aiAdmin.next.${step.key}`)}</span>
+                  <span>{step.status === "complete" ? t("journey.aiAdmin.record.ready") : t(`journey.aiAdmin.next.${step.key}`)}</span>
                 </div>
               ))}
             </div>

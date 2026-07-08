@@ -498,6 +498,8 @@ test("permission request acceptance details stay secondary to the main operator 
   assert.ok(auditStart > workbench.indexOf('<aside className="approval-process-panel"'));
   assert.doesNotMatch(workbench, /approval-evidence/);
   assert.match(workbench, /approval-record-grid/);
+  assert.match(workbench, /journey\.aiAdmin\.record\.ready/);
+  assert.doesNotMatch(workbench, /journey\.aiAdmin\.evidence/);
   assert.match(workbench.slice(auditStart), /section\.aiAdminReadiness/);
   assert.match(workbench.slice(auditStart), /section\.permissionProductionReadiness/);
   assert.match(i18n, /"section\.permissionAdvancedChecks": "验收明细"/);

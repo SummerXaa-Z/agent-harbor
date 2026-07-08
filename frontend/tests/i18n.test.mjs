@@ -564,6 +564,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("readiness.aiAdmin.privateUpstreams.title"), "本地演示连接");
   assert.equal(t("readiness.aiAdmin.privateUpstreams.detail"), "本地演示环境已允许连接工具服务。");
   assert.equal(t("journey.aiAdmin.step.approvedApply"), "权限包落地");
+  assert.equal(t("journey.aiAdmin.record.approvedApply"), "确认已批准的权限变更已经落地并生成应用记录。");
   assert.equal(t("journey.aiAdmin.evidence.approvedApply"), "确认已批准的权限变更已经落地并生成应用记录。");
   assert.equal(t("section.permissionApplicationEvidence"), "权限已落地");
   assert.equal(t("detail.applicationId"), "应用记录");

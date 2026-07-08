@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: AI Admin journey translations now expose `journey.aiAdmin.record.*` keys while retaining legacy aliases.
+- 2026-07-08：AI Admin 旅程翻译现在提供 `journey.aiAdmin.record.*` key，同时保留旧 alias。
 - 2026-07-08: System self-check runtime summary internals now use runtime-record naming.
 - 2026-07-08：系统自检运行摘要内部命名现在统一为运行记录口径。
 - 2026-07-08: Access-query and tenant-profile styles now use `access-*-records` class names for runtime record sections.

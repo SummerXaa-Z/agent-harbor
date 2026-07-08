@@ -158,8 +158,8 @@ test("new permission change ignores historical preview evidence until submitted"
   assert.match(createBlock, /setAiAdminProductionReadiness\(null\)/);
 });
 
-test("production evidence export reports the result on the main permission journey", () => {
-  const block = functionBlock("exportAiAdminProductionEvidence");
+test("acceptance report export reports the result on the main permission journey", () => {
+  const block = functionBlock("exportAiAdminAcceptanceReport");
   assert.match(block, /setAiAdminMessage\(\{ key: "message\.acceptanceReportRequiresLiveApi" \}\)/);
   assert.match(
     block,
@@ -171,7 +171,7 @@ test("production evidence export reports the result on the main permission journ
 test("permission journey messages store translation keys instead of rendered language snapshots", () => {
   const createBlock = functionBlock("createAiAdminApprovalRequest");
   const applyBlock = functionBlock("applyAiAdminPermissionPackage");
-  const exportBlock = functionBlock("exportAiAdminProductionEvidence");
+  const exportBlock = functionBlock("exportAiAdminAcceptanceReport");
 
   assert.match(localizedMessages, /export type LocalizedMessage =/);
   assert.match(localizedMessages, /export function localizedMessageText\(message: LocalizedMessage \| null, t: Translator, language: Language\)/);
@@ -267,7 +267,7 @@ test("permission journey mutation handlers require live API before network write
     ["rejectAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "rejectPermissionPackageApprovalRequest("],
     ["withdrawAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "withdrawPermissionPackageApprovalRequest("],
     ["applyAiAdminPermissionPackage", "message.fallbackDataModeActionBlocked", "applyPermissionPackage("],
-    ["exportAiAdminProductionEvidence", "message.acceptanceReportRequiresLiveApi", "fetchPermissionPackageProductionReport("],
+    ["exportAiAdminAcceptanceReport", "message.acceptanceReportRequiresLiveApi", "fetchPermissionPackageProductionReport("],
   ].forEach(([functionName, liveApiMessage, networkCall]) => {
     const block = functionBlock(functionName);
     const liveApiGuardIndex = block.indexOf("!data?.loadedFromApi");

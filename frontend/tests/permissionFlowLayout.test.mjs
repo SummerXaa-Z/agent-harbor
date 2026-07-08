@@ -534,7 +534,8 @@ test("go-live status page starts with acceptance workflow instead of historical 
   assert.match(goLiveAcceptanceOverview, /connectionStatus/);
   assert.match(goLiveAcceptanceOverview, /onRunConnectionDiagnostics/);
   assert.match(goLiveAcceptanceOverview, /onRefreshProductionReadiness/);
-  assert.match(goLiveAcceptanceOverview, /onExportProductionEvidence/);
+  assert.match(goLiveAcceptanceOverview, /onExportAcceptanceReport/);
+  assert.doesNotMatch(goLiveAcceptanceOverview, /onExportProductionEvidence/);
   assert.match(goLiveAcceptanceOverview, /onOpenPermissionChange/);
   assert.match(goLiveAcceptanceOverview, /productionReport/);
   assert.match(goLiveAcceptanceOverview, /reportMatchesAcceptanceScope/);
@@ -672,7 +673,8 @@ test("permission request primary operations share one busy guard", () => {
   assert.match(workbench, /approvalReadinessChecking/);
   assert.match(workbench, /applyPreflightLoading/);
   assert.match(workbench, /productionReadinessLoading/);
-  assert.match(workbench, /productionEvidenceExporting/);
+  assert.match(workbench, /acceptanceReportExporting/);
+  assert.doesNotMatch(workbench, /productionEvidenceExporting/);
   assert.match(workbench, /accessDecisionExplanationLoading/);
   assert.match(workbench, /applicationHealthLoading/);
   assert.match(workbench, /applicationImpactLoading/);
@@ -746,7 +748,8 @@ test("permission request go-live step presents one guided primary action", () =>
   assert.match(workbench, /runtimeValidationReady\s*\?\s*"action\.checkProductionReadiness"/);
   assert.match(workbench, /const runGoLivePrimaryAction = \(\) => \{/);
   assert.match(workbench, /if \(!goLivePrerequisitesReady\) \{\s*runProductionPrimaryAction\(\);/);
-  assert.match(workbench, /goLivePrimaryActionKey === "action\.exportAcceptanceReport"[\s\S]*onExportProductionEvidence\(\);/);
+  assert.match(workbench, /goLivePrimaryActionKey === "action\.exportAcceptanceReport"[\s\S]*onExportAcceptanceReport\(\);/);
+  assert.doesNotMatch(workbench, /onExportProductionEvidence/);
   assert.match(workbench, /goLivePrimaryActionKey === "action\.checkProductionReadiness"[\s\S]*onRefreshProductionReadiness\(\);/);
   assert.match(workbench, /onClick=\{runGoLivePrimaryAction\}/);
   const goLiveBlockStart = workbench.indexOf('className="approval-process-block approval-go-live-block"');

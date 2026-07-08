@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Acceptance report export state now uses preferred frontend handler and prop names while preserving backend report compatibility contracts.
+- 2026-07-08：验收报告导出状态现在使用首选前端 handler 与 prop 命名，同时保留后端报告兼容契约。
 - 2026-07-08: Go-live report actions now use preferred acceptance-report translation and message keys while preserving older report aliases for compatibility.
 - 2026-07-08：上线报告操作现在使用首选的 acceptance-report 翻译与消息 key，同时保留旧报告别名兼容。
 - 2026-07-08: Permission-change concept guidance and trace panels now use preferred acceptance-materials and trace-record translation keys while keeping old keys compatible.

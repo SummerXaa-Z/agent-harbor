@@ -45,11 +45,11 @@ export function GoLiveAcceptanceOverview({
   draft,
   form,
   liveDataAvailable,
-  onExportProductionEvidence,
+  onExportAcceptanceReport,
   onOpenPermissionChange,
   onRunConnectionDiagnostics,
   onRefreshProductionReadiness,
-  productionEvidenceExporting,
+  acceptanceReportExporting,
   productionReport,
   productionReadiness,
   productionReadinessLoading,
@@ -65,11 +65,11 @@ export function GoLiveAcceptanceOverview({
   draft: PermissionPackageDraft | null;
   form: PermissionPackageDraftInput;
   liveDataAvailable: boolean;
-  onExportProductionEvidence: () => void;
+  onExportAcceptanceReport: () => void;
   onOpenPermissionChange: () => void;
   onRunConnectionDiagnostics: () => void;
   onRefreshProductionReadiness: () => void;
-  productionEvidenceExporting: boolean;
+  acceptanceReportExporting: boolean;
   productionReport: PermissionPackageProductionEvidenceReport | null;
   productionReadiness: PermissionPackageProductionReadiness | null;
   productionReadinessLoading: boolean;
@@ -134,11 +134,11 @@ export function GoLiveAcceptanceOverview({
     action: acceptanceCenter.primaryAction,
     connectionDiagnosticsChecking,
     liveDataAvailable,
-    onExportProductionEvidence,
+    onExportAcceptanceReport,
     onOpenPermissionChange,
     onRefreshProductionReadiness,
     onRunConnectionDiagnostics,
-    productionEvidenceExporting,
+    acceptanceReportExporting,
     productionReadiness,
     productionReadinessLoading,
     t
@@ -169,9 +169,9 @@ export function GoLiveAcceptanceOverview({
               </>
             ) : (
               <>
-                {acceptanceCenter.primaryAction !== "export_acceptance_report" ? <button className="secondary-button" disabled={!liveDataAvailable || !productionReadiness || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
+                {acceptanceCenter.primaryAction !== "export_acceptance_report" ? <button className="secondary-button" disabled={!liveDataAvailable || !productionReadiness || acceptanceReportExporting} onClick={onExportAcceptanceReport} type="button">
                   <Download size={14} />
-                  {productionEvidenceExporting ? t("action.exportingAcceptanceReport") : t("action.exportAcceptanceReport")}
+                  {acceptanceReportExporting ? t("action.exportingAcceptanceReport") : t("action.exportAcceptanceReport")}
                 </button> : null}
               </>
             )}
@@ -315,11 +315,11 @@ function renderProductionAcceptanceAction({
   action,
   connectionDiagnosticsChecking,
   liveDataAvailable,
-  onExportProductionEvidence,
+  onExportAcceptanceReport,
   onOpenPermissionChange,
   onRefreshProductionReadiness,
   onRunConnectionDiagnostics,
-  productionEvidenceExporting,
+  acceptanceReportExporting,
   productionReadiness,
   productionReadinessLoading,
   t
@@ -327,11 +327,11 @@ function renderProductionAcceptanceAction({
   action: ProductionAcceptanceAction;
   connectionDiagnosticsChecking: boolean;
   liveDataAvailable: boolean;
-  onExportProductionEvidence: () => void;
+  onExportAcceptanceReport: () => void;
   onOpenPermissionChange: () => void;
   onRefreshProductionReadiness: () => void;
   onRunConnectionDiagnostics: () => void;
-  productionEvidenceExporting: boolean;
+  acceptanceReportExporting: boolean;
   productionReadiness: PermissionPackageProductionReadiness | null;
   productionReadinessLoading: boolean;
   t: Translator;
@@ -354,9 +354,9 @@ function renderProductionAcceptanceAction({
   }
   if (action === "export_acceptance_report") {
     return (
-      <button className="primary-button" disabled={!liveDataAvailable || productionEvidenceExporting} onClick={onExportProductionEvidence} type="button">
+      <button className="primary-button" disabled={!liveDataAvailable || acceptanceReportExporting} onClick={onExportAcceptanceReport} type="button">
         <Download size={14} />
-        {productionEvidenceExporting ? t("action.exportingAcceptanceReport") : t("action.exportAcceptanceReport")}
+        {acceptanceReportExporting ? t("action.exportingAcceptanceReport") : t("action.exportAcceptanceReport")}
       </button>
     );
   }

@@ -531,7 +531,7 @@ export function ConsoleController() {
     null
   );
   const [aiAdminProductionReadinessLoading, setAiAdminProductionReadinessLoading] = useState(false);
-  const [aiAdminProductionEvidenceExporting, setAiAdminProductionEvidenceExporting] = useState(false);
+  const [aiAdminAcceptanceReportExporting, setAiAdminAcceptanceReportExporting] = useState(false);
   const [aiAdminProductionReadinessMessageState, setAiAdminProductionReadinessMessage] =
     useState<LocalizedMessage | null>(null);
   const [aiAdminApprovalRequests, setAiAdminApprovalRequests] = useState<PermissionPackageApprovalRequest[]>([]);
@@ -1074,12 +1074,12 @@ export function ConsoleController() {
     }
   }
 
-  async function exportAiAdminProductionEvidence(formInput: PermissionPackageDraftInput = aiAdminForm) {
+  async function exportAiAdminAcceptanceReport(formInput: PermissionPackageDraftInput = aiAdminForm) {
     if (!data?.loadedFromApi) {
       setAiAdminMessage({ key: "message.acceptanceReportRequiresLiveApi" });
       return null;
     }
-    setAiAdminProductionEvidenceExporting(true);
+    setAiAdminAcceptanceReportExporting(true);
     setAiAdminMessage(null);
     setAiAdminProductionReadinessMessage(null);
     try {
@@ -1098,7 +1098,7 @@ export function ConsoleController() {
       setAiAdminMessage(localizedErrorMessageState(error, "error.exportAcceptanceReport"));
       return null;
     } finally {
-      setAiAdminProductionEvidenceExporting(false);
+      setAiAdminAcceptanceReportExporting(false);
     }
   }
 
@@ -2355,11 +2355,11 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         draft={aiAdminServerDraft}
         form={aiAdminForm}
         liveDataAvailable={Boolean(data?.loadedFromApi)}
-        onExportProductionEvidence={() => void exportAiAdminProductionEvidence(goLiveAcceptanceForm)}
+        onExportAcceptanceReport={() => void exportAiAdminAcceptanceReport(goLiveAcceptanceForm)}
         onOpenPermissionChange={() => setActiveNav("ai-admin")}
         onRunConnectionDiagnostics={() => void connectionDiagnostics.run()}
         onRefreshProductionReadiness={() => void refreshAiAdminProductionReadiness(goLiveAcceptanceForm)}
-        productionEvidenceExporting={aiAdminProductionEvidenceExporting}
+        acceptanceReportExporting={aiAdminAcceptanceReportExporting}
         productionReport={aiAdminProductionReport}
         productionReadiness={aiAdminProductionReadiness}
         productionReadinessLoading={aiAdminProductionReadinessLoading}
@@ -2554,7 +2554,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         applicationImpactLoading={aiAdminApplicationImpactLoading}
         applicationImpactMessage={aiAdminApplicationImpactMessage}
         productionReadiness={aiAdminProductionReadiness}
-        productionEvidenceExporting={aiAdminProductionEvidenceExporting}
+        acceptanceReportExporting={aiAdminAcceptanceReportExporting}
         productionReadinessLoading={aiAdminProductionReadinessLoading}
         productionReadinessMessage={aiAdminProductionReadinessMessage}
         accessDecisionExplanation={aiAdminAccessDecisionExplanation}
@@ -2594,7 +2594,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onRefreshApplyPreflight={() => void refreshAiAdminApplyPreflight()}
         onRefreshApprovalReadiness={() => void refreshAiAdminApprovalReadiness()}
         onRefreshApplicationHealth={() => void refreshAiAdminApplicationHealth()}
-        onExportProductionEvidence={() => void exportAiAdminProductionEvidence()}
+        onExportAcceptanceReport={() => void exportAiAdminAcceptanceReport()}
         onRefreshProductionReadiness={() => void refreshAiAdminProductionReadiness()}
         onRefreshReviewerQueue={() => void refreshAiAdminReviewerQueue()}
         onRejectApprovalRequest={(requestId, comment) => void rejectAiAdminApprovalRequest(requestId, comment)}

@@ -123,7 +123,7 @@ interface AiAdminPermissionWorkbenchProps {
   applicationImpactLoading: boolean;
   applicationImpactMessage: string;
   productionReadiness: PermissionPackageProductionReadiness | null;
-  productionEvidenceExporting: boolean;
+  acceptanceReportExporting: boolean;
   productionReadinessLoading: boolean;
   productionReadinessMessage: string;
   accessDecisionExplanation: AccessDecisionExplainResult | null;
@@ -145,7 +145,7 @@ interface AiAdminPermissionWorkbenchProps {
   onRefreshApplyPreflight: () => void;
   onRefreshApprovalReadiness: () => void;
   onRefreshApplicationHealth: () => void;
-  onExportProductionEvidence: () => void;
+  onExportAcceptanceReport: () => void;
   onRefreshProductionReadiness: () => void;
   onRefreshReviewerQueue: () => void;
   onRejectApprovalRequest: (requestId?: string, comment?: string) => void;
@@ -196,7 +196,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     applicationImpactLoading,
     applicationImpactMessage,
     productionReadiness,
-    productionEvidenceExporting,
+    acceptanceReportExporting,
     productionReadinessLoading,
     productionReadinessMessage,
     accessDecisionExplanation,
@@ -218,7 +218,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     onRefreshApplyPreflight,
     onRefreshApprovalReadiness,
     onRefreshApplicationHealth,
-    onExportProductionEvidence,
+    onExportAcceptanceReport,
     onRefreshProductionReadiness,
     onRefreshReviewerQueue,
     onRejectApprovalRequest,
@@ -356,7 +356,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     || approvalResolutionBlocked
     || approvalReadinessChecking
     || applyPreflightLoading
-    || productionEvidenceExporting
+    || acceptanceReportExporting
     || productionReadinessLoading
     || accessDecisionExplanationLoading
     || applicationHealthLoading
@@ -395,7 +395,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       return;
     }
     if (journeyStatus.nextActionKey === "action.exportAcceptanceReport") {
-      onExportProductionEvidence();
+      onExportAcceptanceReport();
       return;
     }
     if (journeyStatus.nextActionKey === "action.checkPreflight") {
@@ -431,7 +431,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       return;
     }
     if (primaryActionCode === "export_production_evidence" || productionSummary.primaryActionKey === "action.exportAcceptanceReport") {
-      onExportProductionEvidence();
+      onExportAcceptanceReport();
       return;
     }
     onRefreshProductionReadiness();
@@ -581,7 +581,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       : <Workflow size={14} />;
   const goLivePrimaryActionLabel = !goLivePrerequisitesReady
     ? t(journeyStatus.nextActionKey)
-    : goLivePrimaryActionKey === "action.exportAcceptanceReport" && productionEvidenceExporting
+    : goLivePrimaryActionKey === "action.exportAcceptanceReport" && acceptanceReportExporting
     ? t("action.exportingAcceptanceReport")
     : goLivePrimaryActionKey === "action.checkProductionReadiness" && productionReadinessLoading
       ? t("action.checkingProductionReadiness")
@@ -594,7 +594,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       return;
     }
     if (goLivePrimaryActionKey === "action.exportAcceptanceReport") {
-      onExportProductionEvidence();
+      onExportAcceptanceReport();
       return;
     }
     if (goLivePrimaryActionKey === "action.checkProductionReadiness") {
@@ -920,9 +920,9 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                   </div>
                 </div>
                 <div className="approval-completion-actions">
-                  <button className="secondary-button" disabled={liveDataBlocked || permissionRequestBusy} onClick={onExportProductionEvidence} type="button">
+                  <button className="secondary-button" disabled={liveDataBlocked || permissionRequestBusy} onClick={onExportAcceptanceReport} type="button">
                     <Download size={14} />
-                    {productionEvidenceExporting ? t("action.exportingAcceptanceReport") : t("action.downloadAcceptanceReport")}
+                    {acceptanceReportExporting ? t("action.exportingAcceptanceReport") : t("action.downloadAcceptanceReport")}
                   </button>
                   <button className="secondary-button" disabled={permissionRequestBusy} onClick={onOpenAccessProfile} type="button">
                     <FileSearch size={14} />
@@ -1089,9 +1089,9 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
                   <RefreshCw size={14} />
                   {productionReadinessLoading ? t("action.checkingProductionReadiness") : t("action.checkProductionReadiness")}
                 </button>
-                <button className="secondary-button" disabled={liveDataBlocked || !productionReadiness || permissionRequestBusy} onClick={onExportProductionEvidence} type="button">
+                <button className="secondary-button" disabled={liveDataBlocked || !productionReadiness || permissionRequestBusy} onClick={onExportAcceptanceReport} type="button">
                   <Download size={14} />
-                  {productionEvidenceExporting ? t("action.exportingAcceptanceReport") : t("action.exportAcceptanceReport")}
+                  {acceptanceReportExporting ? t("action.exportingAcceptanceReport") : t("action.exportAcceptanceReport")}
                 </button>
               </div>
             </header>

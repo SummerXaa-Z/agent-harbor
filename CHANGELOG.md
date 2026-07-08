@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: The go-live status page container is now named `GoLiveStatusView` in the frontend, matching the preferred route and translation naming.
+- 2026-07-08：前端上线状态页容器现在命名为 `GoLiveStatusView`，与首选路由和翻译命名保持一致。
 - 2026-07-08: The go-live status workspace now has preferred `go-live` translation keys, so localized sidebar and page titles do not fall back to old go-live status keys.
 - 2026-07-08：上线状态页现在具备首选 `go-live` 翻译 key，侧栏和页面标题不会再依赖旧上线状态 key 回退。
 - 2026-07-08: The web console now uses `go-live` as the preferred internal navigation key for the go-live status workspace while keeping old `evidence` hashes compatible.

@@ -200,7 +200,7 @@ export function TracesView({
   );
 }
 
-export function EvidenceView({
+export function GoLiveStatusView({
   evidenceRunsPanel,
   goLiveAcceptancePanel,
   journeyCheckpoint,

@@ -376,7 +376,7 @@ test("production journey checkpoint is wired through primary journey views", () 
   assert.match(consoleViews, /AskView[\s\S]*journeyCheckpoint/);
   assert.match(consoleViews, /RegistryView[\s\S]*journeyCheckpoint/);
   assert.match(consoleViews, /AiAdminView[\s\S]*journeyCheckpoint/);
-  assert.match(consoleViews, /EvidenceView[\s\S]*journeyCheckpoint/);
+  assert.match(consoleViews, /GoLiveStatusView[\s\S]*journeyCheckpoint/);
 });
 
 test("management mutation forms open from resource command modals", () => {
@@ -763,6 +763,7 @@ test("runtime evidence views are split from the app shell", () => {
 
 test("go-live acceptance overview is split from the app shell", () => {
   assert.match(app, /from "\.\/components\/GoLiveAcceptanceOverview"/);
+  assert.match(app, /GoLiveStatusView/);
   assert.doesNotMatch(app, /function GoLiveAcceptanceOverview/);
   assert.doesNotMatch(app, /function productionReadinessStatusLabel/);
   assert.doesNotMatch(app, /function permissionProductionReadinessNextAction/);

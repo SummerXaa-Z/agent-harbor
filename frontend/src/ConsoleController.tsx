@@ -183,7 +183,7 @@ import {
   AskView,
   CapabilitiesView,
   CockpitView,
-  EvidenceView,
+  GoLiveStatusView,
   GettingStartedConsoleView,
   PoliciesView,
   RegistryView,
@@ -2809,7 +2809,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         );
       case "go-live":
         return (
-          <EvidenceView
+          <GoLiveStatusView
             evidenceRunsPanel={evidenceRunsPanel("span-5")}
             goLiveAcceptancePanel={goLiveAcceptancePanel}
             journeyCheckpoint={productionJourneyCheckpoint}

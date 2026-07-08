@@ -520,12 +520,13 @@ test("management audit evidence uses business labels before technical ids", () =
   assert.doesNotMatch(styles, /\.badge\s*\{[^}]*text-transform:\s*lowercase;/s);
 });
 
-test("go-live evidence page starts with acceptance workflow instead of historical runs", () => {
-  const evidenceStart = consoleViews.indexOf("export function EvidenceView");
-  const cockpitStart = consoleViews.indexOf("export function CockpitView", evidenceStart);
-  const evidenceCase = consoleViews.slice(evidenceStart, cockpitStart);
-  const evidenceRender = evidenceCase.slice(evidenceCase.indexOf("return ("));
+test("go-live status page starts with acceptance workflow instead of historical runs", () => {
+  const goLiveStart = consoleViews.indexOf("export function GoLiveStatusView");
+  const cockpitStart = consoleViews.indexOf("export function CockpitView", goLiveStart);
+  const goLiveCase = consoleViews.slice(goLiveStart, cockpitStart);
+  const goLiveRender = goLiveCase.slice(goLiveCase.indexOf("return ("));
   assert.match(goLiveAcceptanceOverview, /export function GoLiveAcceptanceOverview/);
+  assert.match(app, /GoLiveStatusView/);
   assert.match(app, /const goLiveAcceptancePanel =/);
   assert.match(goLiveAcceptanceOverview, /className="go-live-acceptance"/);
   assert.match(goLiveAcceptanceOverview, /buildProductionAcceptanceCenter\(/);
@@ -549,8 +550,8 @@ test("go-live evidence page starts with acceptance workflow instead of historica
   assert.match(goLiveAcceptanceOverview, /const acceptanceReady = acceptanceCenter\.status === "ready"/);
   assert.match(goLiveAcceptanceOverview, /const primaryAction = renderProductionAcceptanceAction/);
   assert.match(goLiveAcceptanceOverview, /<section className="go-live-acceptance-main">[\s\S]*<div className="go-live-acceptance-decision">[\s\S]*<section className="go-live-acceptance-blockers"[\s\S]*<section className="go-live-acceptance-checks"[\s\S]*<aside className="go-live-acceptance-context"/);
-  assert.match(evidenceCase, /goLiveAcceptancePanel/);
-  assert.ok(evidenceRender.indexOf("{goLiveAcceptancePanel}") < evidenceRender.indexOf("{evidenceRunsPanel}"));
+  assert.match(goLiveCase, /goLiveAcceptancePanel/);
+  assert.ok(goLiveRender.indexOf("{goLiveAcceptancePanel}") < goLiveRender.indexOf("{evidenceRunsPanel}"));
   assert.match(i18n, /"section\.goLiveAcceptance": "上线检查"/);
   assert.match(i18n, /"productionAcceptance\.title": "上线检查"/);
   assert.match(i18n, /"productionAcceptance\.copyReportDigest": "复制报告摘要"/);

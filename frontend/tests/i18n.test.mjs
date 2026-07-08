@@ -38,7 +38,7 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("action.exportingAcceptanceReport"), "Exporting");
   assert.equal(t("concept.acceptanceMaterials"), "Acceptance materials");
   assert.equal(t("concept.acceptanceMaterials.detail"), "Approval, apply, runtime, access profile, and audit records used for go-live acceptance.");
-  assert.equal(t("concept.evidence"), "Acceptance materials");
+  assert.doesNotMatch(i18nSource, /concept\.evidence(?:\.detail)?/);
   assert.equal(t("metric.runtimeRecords"), "Runtime Records");
   assert.equal(t("metric.runtimeEvidence"), "Runtime Records");
   assert.equal(t("metric.traceRecords"), "Trace Records");

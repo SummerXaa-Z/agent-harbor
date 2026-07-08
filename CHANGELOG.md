@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Acceptance concept translations now expose only `concept.acceptanceMaterials*` keys.
+- 2026-07-08：验收材料概念翻译现在只暴露 `concept.acceptanceMaterials*` key。
 - 2026-07-08: Runtime history status translations now expose only `status.record*` keys.
 - 2026-07-08：运行历史状态翻译现在只暴露 `status.record*` key。
 - 2026-07-08: Access-query translations now expose only `ask.recordLayer.*` and `ask.recordMessage.*` keys for decision records.

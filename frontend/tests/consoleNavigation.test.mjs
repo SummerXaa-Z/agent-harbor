@@ -92,7 +92,7 @@ test("every primary navigation item resolves to a distinct workspace", () => {
     "ai-admin",
     "access",
     "traces",
-    "evidence",
+    "go-live",
     "cockpit",
     "admin-access",
     "tenants",
@@ -130,7 +130,7 @@ test("default navigation opens answer-first access query", () => {
 });
 
 test("go-live status navigation points to the acceptance workflow", () => {
-  assert.equal(viewForNav("evidence").primaryPanelKey, "goLiveAcceptance");
+  assert.equal(viewForNav("go-live").primaryPanelKey, "goLiveAcceptance");
 });
 
 test("resource management is the single entry for Agent and MCP lifecycle", () => {
@@ -142,24 +142,24 @@ test("production journey acceptance keeps existing primary routes", () => {
   assert.equal(viewForNav("ask").primaryPanelKey, "askAccess");
   assert.equal(viewForNav("registry").primaryPanelKey, "resourceLifecycle");
   assert.equal(viewForNav("ai-admin").primaryPanelKey, "aiAdminPermissionWorkbench");
-  assert.equal(viewForNav("evidence").primaryPanelKey, "goLiveAcceptance");
+  assert.equal(viewForNav("go-live").primaryPanelKey, "goLiveAcceptance");
 });
 
 test("navigation hash preserves the current workspace across reloads", () => {
-  assert.equal(navHashFor("evidence"), "#go-live");
+  assert.equal(navHashFor("go-live"), "#go-live");
   assert.equal(navHashFor("tenants"), "#tenants");
   assert.equal(navHashFor("getting-started"), "#getting-started");
-  assert.equal(navKeyFromHash("#go-live"), "evidence");
-  assert.equal(navKeyFromHash("#evidence"), "evidence");
+  assert.equal(navKeyFromHash("#go-live"), "go-live");
+  assert.equal(navKeyFromHash("#evidence"), "go-live");
   assert.equal(navKeyFromHash("#tenants"), "tenants");
   assert.equal(navKeyFromHash("#getting-started"), "getting-started");
-  assert.equal(navKeyFromHash("go-live"), "evidence");
-  assert.equal(navKeyFromHash("evidence"), "evidence");
+  assert.equal(navKeyFromHash("go-live"), "go-live");
+  assert.equal(navKeyFromHash("evidence"), "go-live");
   assert.equal(navKeyFromHash("#unknown"), null);
 });
 
 test("legacy go-live status hash canonicalizes away from evidence wording", () => {
-  assert.equal(navKeyFromHash("#evidence"), "evidence");
+  assert.equal(navKeyFromHash("#evidence"), "go-live");
   assert.equal(canonicalNavHashFromHash("#evidence"), "#go-live");
   assert.equal(canonicalNavHashFromHash("evidence"), "#go-live");
   assert.equal(canonicalNavHashFromHash("#go-live"), "#go-live");

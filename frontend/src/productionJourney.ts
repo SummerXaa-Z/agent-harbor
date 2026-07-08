@@ -84,7 +84,7 @@ export function deriveProductionJourney(input: ProductionJourneyInput): Producti
     return {
       completedStageKeys: ["setup", "resources", "access_query", "permission_change"],
       currentStageKey: "go_live_status",
-      nextActionHash: navHashFor("evidence"),
+      nextActionHash: navHashFor("go-live"),
       nextActionKey: "productionJourney.next.confirmGoLive",
       state: "ready"
     };

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: The web console now uses `go-live` as the preferred internal navigation key for the go-live status workspace while keeping old `evidence` hashes compatible.
+- 2026-07-08：Web 控制台现在使用 `go-live` 作为上线状态页的首选内部导航 key，同时继续兼容旧 `evidence` hash。
 - 2026-07-08: Frontend API helpers now expose preferred production-report names while keeping the previous report helper aliases for compatibility.
 - 2026-07-08：前端 API helper 现在提供首选的上线状态报告命名，同时保留旧 helper 别名以兼容现有调用。
 - 2026-07-08: README and product journey docs now keep legacy Management MCP report-export aliases out of the primary path and link to a dedicated engineering compatibility map.

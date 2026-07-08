@@ -574,10 +574,10 @@ test("workspace navigation is reflected in the URL hash", () => {
   assert.match(app, /navKeyFromHash\(window\.location\.hash\)/);
 });
 
-test("go-live evidence route loads the current permission change preview", () => {
-  assert.match(app, /const shouldLoadAiAdminCatalog =\s*consoleAccessReady && \(activeNav === "ask" \|\| activeNav === "ai-admin" \|\| activeNav === "evidence" \|\| activeNav === "tenants"\)/);
+test("go-live route loads the current permission change preview", () => {
+  assert.match(app, /const shouldLoadAiAdminCatalog =\s*consoleAccessReady && \(activeNav === "ask" \|\| activeNav === "ai-admin" \|\| activeNav === "go-live" \|\| activeNav === "tenants"\)/);
   assert.match(app, /shouldLoadAiAdminCatalog \? undefined : normalizedScope\(scope\)/);
-  assert.match(app, /const shouldLoadAiAdminWorkbenchPreview = consoleAccessReady && \(activeNav === "ai-admin" \|\| activeNav === "evidence"\)/);
+  assert.match(app, /const shouldLoadAiAdminWorkbenchPreview = consoleAccessReady && \(activeNav === "ai-admin" \|\| activeNav === "go-live"\)/);
   assert.match(app, /if \(!shouldLoadAiAdminWorkbenchPreview \|\| !data\?\.loadedFromApi \|\| aiAdminNewDraftMode\)/);
   assert.match(app, /previewPermissionPackageWorkbench\(aiAdminForm, adminKey, controller\.signal\)/);
   assert.match(app, /const goLiveAcceptanceForm = aiAdminServerDraft\?\.input \?\? aiAdminForm/);

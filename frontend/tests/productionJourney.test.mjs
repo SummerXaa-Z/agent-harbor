@@ -163,7 +163,7 @@ test("blocked permission changes stay on the permission change workspace", () =>
   const journey = deriveProductionJourney({
     data: configuredData(),
     permissionBlocked: true,
-    activeNav: "evidence"
+    activeNav: "go-live"
   });
 
   assert.equal(journey.state, "blocked");

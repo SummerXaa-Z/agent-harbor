@@ -391,7 +391,7 @@ function navIconFor(key: NavKey) {
       return LockKeyhole;
     case "traces":
       return FileSearch;
-    case "evidence":
+    case "go-live":
       return ClipboardCheck;
     case "cockpit":
     default:
@@ -778,7 +778,7 @@ export function ConsoleController() {
   }, [activeNav]);
 
   const shouldLoadAiAdminCatalog =
-    consoleAccessReady && (activeNav === "ask" || activeNav === "ai-admin" || activeNav === "evidence" || activeNav === "tenants");
+    consoleAccessReady && (activeNav === "ask" || activeNav === "ai-admin" || activeNav === "go-live" || activeNav === "tenants");
 
   useEffect(() => {
     if (shouldLoadAiAdminCatalog) {
@@ -820,7 +820,7 @@ export function ConsoleController() {
     });
   }, [data, scope]);
 
-  const shouldLoadAiAdminWorkbenchPreview = consoleAccessReady && (activeNav === "ai-admin" || activeNav === "evidence");
+  const shouldLoadAiAdminWorkbenchPreview = consoleAccessReady && (activeNav === "ai-admin" || activeNav === "go-live");
 
   useEffect(() => {
     if (!shouldLoadAiAdminWorkbenchPreview || !data?.loadedFromApi || aiAdminNewDraftMode) {
@@ -2807,7 +2807,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
             tracePanel={tracePanel("span-12")}
           />
         );
-      case "evidence":
+      case "go-live":
         return (
           <EvidenceView
             evidenceRunsPanel={evidenceRunsPanel("span-5")}

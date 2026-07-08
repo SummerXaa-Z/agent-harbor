@@ -10,7 +10,7 @@ export type NavKey =
   | "capabilities"
   | "access"
   | "traces"
-  | "evidence"
+  | "go-live"
   | "admin-access"
 
 export type NavGroupKey = "onboarding" | "configuration" | "primary" | "audit"
@@ -31,8 +31,8 @@ export interface ConsoleView {
 export const defaultNavKey: NavKey = "getting-started"
 const navHashPrefix = "#"
 const navHashAliases: Record<string, NavKey> = {
-  "go-live": "evidence",
-  evidence: "evidence",
+  "go-live": "go-live",
+  evidence: "go-live",
 }
 
 export const navGroups: Array<{ key: NavGroupKey; labelKey: string }> = [
@@ -48,7 +48,7 @@ export const navItems: NavItem[] = [
   { detailKey: "navDetail.ai-admin", groupKey: "primary", key: "ai-admin", label: "Permission Changes" },
   { detailKey: "navDetail.access", groupKey: "primary", key: "access", label: "Access Profile" },
   { detailKey: "navDetail.traces", groupKey: "audit", key: "traces", label: "Call Logs" },
-  { detailKey: "navDetail.evidence", groupKey: "audit", key: "evidence", label: "Go-Live Status" },
+  { detailKey: "navDetail.evidence", groupKey: "audit", key: "go-live", label: "Go-Live Status" },
   { detailKey: "navDetail.cockpit", groupKey: "audit", key: "cockpit", label: "System Check" },
   { detailKey: "navDetail.adminAccess", groupKey: "configuration", key: "admin-access", label: "Administrators & Boundaries" },
   { detailKey: "navDetail.tenants", groupKey: "configuration", key: "tenants", label: "Tenants & Organization" },
@@ -114,8 +114,8 @@ const views: Record<NavKey, ConsoleView> = {
     primaryPanelKey: "auditTraces",
     titleKey: "page.traces",
   },
-  evidence: {
-    key: "evidence",
+  "go-live": {
+    key: "go-live",
     primaryPanelKey: "goLiveAcceptance",
     titleKey: "page.evidence",
   },
@@ -127,7 +127,8 @@ const views: Record<NavKey, ConsoleView> = {
 }
 
 export function viewForNav(key: string): ConsoleView {
-  return views[(key as NavKey) in views ? (key as NavKey) : defaultNavKey]
+  const navKey = navKeyFromHash(key) ?? defaultNavKey
+  return views[navKey]
 }
 
 export function isNavKey(key: string): key is NavKey {
@@ -143,7 +144,7 @@ export function navKeyFromHash(hash: string): NavKey | null {
 }
 
 export function navHashFor(key: NavKey): string {
-  if (key === "evidence") {
+  if (key === "go-live") {
     return `${navHashPrefix}go-live`
   }
   return `${navHashPrefix}${key}`

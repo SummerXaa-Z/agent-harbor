@@ -47,7 +47,7 @@ export function gettingStartedSteps(data: ConsoleData): GettingStartedStep[] {
     {
       done: data.loadedFromApi && data.evidenceRuns.length > 0,
       key: "review-evidence",
-      targetHash: navHashFor("evidence")
+      targetHash: navHashFor("go-live")
     }
   ];
 }

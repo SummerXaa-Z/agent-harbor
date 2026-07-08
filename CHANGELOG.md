@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Frontend acceptance history now uses `AcceptanceRun` as the primary runtime-history type while keeping the existing `evidenceRuns` data field compatible.
+- 2026-07-08：前端验收历史现在以 `AcceptanceRun` 作为运行历史主类型，同时保持现有 `evidenceRuns` 数据字段兼容。
 - 2026-07-08: Access-decision presenter helpers now prefer `accessDecisionRecordTone` while keeping the older tone helper alias compatible.
 - 2026-07-08：访问判定 presenter helper 现在首选 `accessDecisionRecordTone`，同时保留旧 tone helper 别名兼容。
 - 2026-07-08: Access-query view props now use `recordRows` and `AskDecisionRecordRow` as the primary decision-record names, with older pure-function aliases kept compatible.

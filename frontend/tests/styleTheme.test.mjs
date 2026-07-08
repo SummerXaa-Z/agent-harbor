@@ -28,6 +28,8 @@ const resourceLifecycleView = readFileSync(new URL("../src/components/ResourceLi
 const productionJourney = readExistingFile(new URL("../src/productionJourney.ts", import.meta.url));
 const productionJourneyCheckpoint = readExistingFile(new URL("../src/components/ProductionJourneyCheckpoint.tsx", import.meta.url));
 const productionAcceptance = readExistingFile(new URL("../src/productionAcceptance.ts", import.meta.url));
+const data = readFileSync(new URL("../src/data.ts", import.meta.url), "utf8");
+const types = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
 const ui = readFileSync(new URL("../src/components/ui.tsx", import.meta.url), "utf8");
 const managementOperationsHookUrl = new URL("../src/hooks/useManagementOperations.ts", import.meta.url);
 const capabilityGovernanceHookUrl = new URL("../src/hooks/useCapabilityGovernanceController.ts", import.meta.url);
@@ -756,6 +758,13 @@ test("runtime record views are split from the app shell", () => {
   assert.doesNotMatch(app, /function metricRatio/);
   assert.match(runtimeRecordViews, /export function AcceptanceHistoryTimeline/);
   assert.doesNotMatch(runtimeRecordViews, /export function EvidenceTimeline/);
+  assert.match(runtimeRecordViews, /\bAcceptanceRun\b/);
+  assert.doesNotMatch(runtimeRecordViews, /\bEvidenceRun\[\]/);
+  assert.match(types, /export interface AcceptanceRun/);
+  assert.match(types, /export type EvidenceRun = AcceptanceRun/);
+  assert.match(types, /evidenceRuns: AcceptanceRun\[\]/);
+  assert.match(data, /import type \{[\s\S]*AcceptanceRun/);
+  assert.match(data, /export const evidenceRuns: AcceptanceRun\[\]/);
   assert.match(runtimeRecordViews, /export function SignalBoard/);
   assert.match(runtimeRecordViews, /export function TraceTable/);
   assert.match(runtimeRecordViews, /export function ManagementAuditTable/);

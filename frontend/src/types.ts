@@ -345,7 +345,7 @@ export interface CreateInstanceAssignmentRequest {
   status?: RoutePolicyStatus
 }
 
-export interface EvidenceRun {
+export interface AcceptanceRun {
   id: string
   runId: string
   title: string
@@ -357,6 +357,8 @@ export interface EvidenceRun {
   completedAt?: string
   summary: string
 }
+
+export type EvidenceRun = AcceptanceRun;
 
 export interface SystemMetric {
   id: string
@@ -386,7 +388,7 @@ export interface ConsoleData {
   traces: TraceEvent[]
   auditEvents: AuditEvent[]
   routePolicies: RoutePolicy[]
-  evidenceRuns: EvidenceRun[]
+  evidenceRuns: AcceptanceRun[]
   systemMetrics: SystemMetric[]
   loadedFromApi: boolean
   setupLoadedFromApi: boolean

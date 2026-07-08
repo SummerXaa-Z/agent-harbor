@@ -19,14 +19,14 @@ import {
 import type {
   Agent,
   AuditEvent,
-  EvidenceRun,
+  AcceptanceRun,
   SystemMetric,
   TraceEvent
 } from "../types";
 import { TechnicalId } from "./TechnicalId";
 import { Badge, EmptyRow } from "./ui";
 
-export function AcceptanceHistoryTimeline({ runs, t }: { runs: EvidenceRun[]; t: Translator }) {
+export function AcceptanceHistoryTimeline({ runs, t }: { runs: AcceptanceRun[]; t: Translator }) {
   return (
     <div className="timeline">
       {runs.length === 0 ? <EmptyRow title={t("empty.acceptanceHistory.title")} detail={t("empty.acceptanceHistory.detail")} /> : null}
@@ -214,7 +214,7 @@ function auditSummaryLabel(summary: string | undefined, t: Translator) {
   return t(`auditSummary.${key}`, summary);
 }
 
-function acceptanceRunStatusLabel(status: EvidenceRun["status"], t: Translator) {
+function acceptanceRunStatusLabel(status: AcceptanceRun["status"], t: Translator) {
   if (status === "passed") return t("status.evidencePassed");
   if (status === "failed") return t("status.evidenceFailed");
   return t("status.evidenceWarning");
@@ -227,7 +227,7 @@ function auditTone(action: string): Tone {
   return "info";
 }
 
-function acceptanceRunDuration(run: EvidenceRun) {
+function acceptanceRunDuration(run: AcceptanceRun) {
   if (!run.completedAt) return 0;
   const started = new Date(run.startedAt).getTime();
   const completed = new Date(run.completedAt).getTime();

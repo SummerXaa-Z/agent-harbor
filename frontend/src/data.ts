@@ -1,9 +1,9 @@
 import type {
   Agent,
   AuditEvent,
+  AcceptanceRun,
   Capability,
   ChannelContract,
-  EvidenceRun,
   InstanceAssignment,
   ProviderContract,
   RoutePolicy,
@@ -527,7 +527,7 @@ export const routePolicies: RoutePolicy[] = [
   },
 ]
 
-export const evidenceRuns: EvidenceRun[] = [
+export const evidenceRuns: AcceptanceRun[] = [
   {
     id: 'evd_001',
     runId: 'run_20260529_001',

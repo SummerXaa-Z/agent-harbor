@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Management MCP JSON-RPC requests now require `application/json` and reject request bodies larger than 1 MiB before parsing.
+- 2026-07-08：Management MCP JSON-RPC 请求现在要求 `application/json`，并会在解析前拒绝超过 1 MiB 的请求体。
 - 2026-07-08: HTTP panic recovery now returns the standard JSON error envelope with `INTERNAL_ERROR` instead of a plain-text 500 response, and recovery logs omit panic values.
 - 2026-07-08：HTTP panic recovery 现在返回标准 JSON 错误 envelope 和 `INTERNAL_ERROR`，不再返回纯文本 500，recovery 日志也不记录 panic 具体值。
 - 2026-07-08: Permission package approval scenario now uses report-ref local naming while preserving the backend acceptance report field.

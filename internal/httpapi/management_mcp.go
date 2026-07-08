@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -263,7 +264,7 @@ func (s *Server) managementMCP(w http.ResponseWriter, r *http.Request) {
 }
 
 func managementMCPRequestFromHTTP(r *http.Request) (managementMCPRequest, error) {
-	body, err := readProxyBody(r.Body)
+	body, err := readManagementMCPBody(r)
 	if err != nil {
 		return managementMCPRequest{}, err
 	}
@@ -283,6 +284,24 @@ func managementMCPRequestFromHTTP(r *http.Request) (managementMCPRequest, error)
 		return managementMCPRequest{}, errors.New("method is required")
 	}
 	return req, nil
+}
+
+func readManagementMCPBody(r *http.Request) ([]byte, error) {
+	if err := requireJSONContentType(r); err != nil {
+		return nil, err
+	}
+
+	limitedBody := http.MaxBytesReader(nil, r.Body, maxJSONBodyBytes)
+	defer limitedBody.Close()
+	payload, err := io.ReadAll(limitedBody)
+	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return nil, domain.PayloadTooLarge("request body exceeds 1MiB")
+		}
+		return nil, domain.BadRequest("INVALID_JSON", "request body could not be read")
+	}
+	return payload, nil
 }
 
 func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest) (managementMCPCallResult, error) {

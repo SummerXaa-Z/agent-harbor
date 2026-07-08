@@ -1238,6 +1238,49 @@ func TestManagementMCPResponsesSetNoSniffHeader(t *testing.T) {
 	}
 }
 
+func TestManagementMCPRequiresJSONContentType(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/management/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":"tools","method":"tools/list"}`))
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("X-Admin-Key", "test-admin")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("management MCP parse errors should keep JSON-RPC HTTP 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload mcpEnvelopeResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode management MCP error: %v body=%s", err, rec.Body.String())
+	}
+	if payload.Error == nil || payload.Error.Code != -32700 || !strings.Contains(payload.Error.Message, "application/json") {
+		t.Fatalf("expected JSON content-type parse error, got %#v", payload.Error)
+	}
+}
+
+func TestManagementMCPRejectsBodiesLargerThanJSONLimit(t *testing.T) {
+	router := newRouterWithAdmin("test-admin")
+
+	oversized := `{"jsonrpc":"2.0","id":"tools","method":"tools/list","padding":"` + strings.Repeat("x", 1<<20) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/management/mcp", strings.NewReader(oversized))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("management MCP parse errors should keep JSON-RPC HTTP 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload mcpEnvelopeResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode management MCP error: %v body=%s", err, rec.Body.String())
+	}
+	if payload.Error == nil || payload.Error.Code != -32700 || !strings.Contains(payload.Error.Message, "1MiB") {
+		t.Fatalf("expected payload size parse error, got %#v", payload.Error)
+	}
+}
+
 func assertSensitiveNoCacheHeaders(t *testing.T, rec *httptest.ResponseRecorder, label string) {
 	t.Helper()
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {

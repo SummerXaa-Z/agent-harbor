@@ -209,8 +209,8 @@ export interface PermissionPackageProductionReadiness {
   applicationHealth?: PermissionPackageApplicationHealthRow;
   applicationImpact?: PermissionPackageApplicationImpact;
   accessProfile?: TenantAccessProfile;
-  runtimeEvidence: PermissionPackageRuntimeEvidence;
-  auditEvidence: PermissionPackageAuditEvidence;
+  runtimeEvidence: PermissionPackageRuntimeRecord;
+  auditEvidence: PermissionPackageAuditRecord;
   nextActionCode?: PermissionPackageProductionNextActionCode;
   nextActions: string[];
   generatedAt: string;
@@ -247,14 +247,18 @@ export interface PermissionPackageProductionReadinessCheck {
   evidenceId?: string;
 }
 
-export interface PermissionPackageRuntimeEvidence {
+export interface PermissionPackageRuntimeRecord {
   allowedTrace?: TraceEvent;
   deniedTrace?: TraceEvent;
 }
 
-export interface PermissionPackageAuditEvidence {
+export type PermissionPackageRuntimeEvidence = PermissionPackageRuntimeRecord;
+
+export interface PermissionPackageAuditRecord {
   appliedEvent?: AuditEvent;
 }
+
+export type PermissionPackageAuditEvidence = PermissionPackageAuditRecord;
 
 export interface PermissionPackageAcceptanceReport {
   reportVersion: string;
@@ -263,11 +267,11 @@ export interface PermissionPackageAcceptanceReport {
   generatedAt: string;
   generatedBy: string;
   platformContract: PermissionPackageProductionPlatformContract;
-  scope: PermissionPackageProductionEvidenceScope;
+  scope: PermissionPackageAcceptanceReportScope;
   status: PermissionPackageProductionReadinessStatus;
   summary: PermissionPackageProductionReadinessSummary;
   checks: PermissionPackageProductionReadinessCheck[];
-  evidence: PermissionPackageProductionEvidenceRefs;
+  evidence: PermissionPackageAcceptanceReportRefs;
   nextActionCode?: PermissionPackageProductionNextActionCode;
   nextActions: string[];
   readinessGeneratedAt: string;
@@ -283,7 +287,7 @@ export interface PermissionPackageProductionPlatformContract {
   };
 }
 
-export interface PermissionPackageProductionEvidenceScope {
+export interface PermissionPackageAcceptanceReportScope {
   tenantId: string;
   workspaceId: string;
   templateId: string;
@@ -294,16 +298,20 @@ export interface PermissionPackageProductionEvidenceScope {
   subjectSelector?: string;
 }
 
-export interface PermissionPackageProductionEvidenceRefs {
-  application: PermissionPackageProductionApplicationEvidence;
-  runtime: PermissionPackageProductionRuntimeEvidence;
-  audit: PermissionPackageProductionAuditEvidence;
-  accessProfile: PermissionPackageProductionEvidenceState;
-  applicationHealth: PermissionPackageProductionEvidenceState;
-  applicationImpact: PermissionPackageProductionEvidenceState;
+export type PermissionPackageProductionEvidenceScope = PermissionPackageAcceptanceReportScope;
+
+export interface PermissionPackageAcceptanceReportRefs {
+  application: PermissionPackageAcceptanceApplicationRecord;
+  runtime: PermissionPackageAcceptanceRuntimeRecord;
+  audit: PermissionPackageAcceptanceAuditRecord;
+  accessProfile: PermissionPackageAcceptanceReportState;
+  applicationHealth: PermissionPackageAcceptanceReportState;
+  applicationImpact: PermissionPackageAcceptanceReportState;
 }
 
-export interface PermissionPackageProductionApplicationEvidence {
+export type PermissionPackageProductionEvidenceRefs = PermissionPackageAcceptanceReportRefs;
+
+export interface PermissionPackageAcceptanceApplicationRecord {
   present: boolean;
   id?: string;
   draftId?: string;
@@ -314,19 +322,27 @@ export interface PermissionPackageProductionApplicationEvidence {
   dataScopes?: DataScope[];
 }
 
-export interface PermissionPackageProductionRuntimeEvidence {
+export type PermissionPackageProductionApplicationEvidence = PermissionPackageAcceptanceApplicationRecord;
+
+export interface PermissionPackageAcceptanceRuntimeRecord {
   allowedTraceId?: string;
   deniedTraceId?: string;
 }
 
-export interface PermissionPackageProductionAuditEvidence {
+export type PermissionPackageProductionRuntimeEvidence = PermissionPackageAcceptanceRuntimeRecord;
+
+export interface PermissionPackageAcceptanceAuditRecord {
   appliedEventId?: string;
 }
 
-export interface PermissionPackageProductionEvidenceState {
+export type PermissionPackageProductionAuditEvidence = PermissionPackageAcceptanceAuditRecord;
+
+export interface PermissionPackageAcceptanceReportState {
   present: boolean;
   status?: string;
 }
+
+export type PermissionPackageProductionEvidenceState = PermissionPackageAcceptanceReportState;
 
 export type PermissionPackageWorkbenchStatus =
   | "needs_input"

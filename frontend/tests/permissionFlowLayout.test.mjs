@@ -579,6 +579,23 @@ test("go-live status page starts with acceptance workflow instead of historical 
 test("acceptance report model type is preferred outside compatibility aliases", () => {
   assert.match(permissionPackages, /export interface PermissionPackageAcceptanceReport/);
   assert.match(permissionPackages, /export type PermissionPackageProductionEvidenceReport = PermissionPackageAcceptanceReport/);
+  assert.match(permissionPackages, /runtimeEvidence: PermissionPackageRuntimeRecord/);
+  assert.match(permissionPackages, /auditEvidence: PermissionPackageAuditRecord/);
+  assert.match(permissionPackages, /export interface PermissionPackageRuntimeRecord/);
+  assert.match(permissionPackages, /export type PermissionPackageRuntimeEvidence = PermissionPackageRuntimeRecord/);
+  assert.match(permissionPackages, /export interface PermissionPackageAuditRecord/);
+  assert.match(permissionPackages, /export type PermissionPackageAuditEvidence = PermissionPackageAuditRecord/);
+  assert.doesNotMatch(permissionPackages, /export interface PermissionPackageRuntimeEvidence/);
+  assert.doesNotMatch(permissionPackages, /export interface PermissionPackageAuditEvidence/);
+  assert.match(permissionPackages, /export interface PermissionPackageAcceptanceReportScope/);
+  assert.match(permissionPackages, /export type PermissionPackageProductionEvidenceScope = PermissionPackageAcceptanceReportScope/);
+  assert.match(permissionPackages, /export interface PermissionPackageAcceptanceReportRefs/);
+  assert.match(permissionPackages, /export type PermissionPackageProductionEvidenceRefs = PermissionPackageAcceptanceReportRefs/);
+  assert.match(permissionPackages, /export interface PermissionPackageAcceptanceReportState/);
+  assert.match(permissionPackages, /export type PermissionPackageProductionEvidenceState = PermissionPackageAcceptanceReportState/);
+  assert.doesNotMatch(permissionPackages, /export interface PermissionPackageProductionEvidenceScope/);
+  assert.doesNotMatch(permissionPackages, /export interface PermissionPackageProductionEvidenceRefs/);
+  assert.doesNotMatch(permissionPackages, /export interface PermissionPackageProductionEvidenceState/);
   assert.match(app, /type PermissionPackageAcceptanceReport/);
   assert.doesNotMatch(app, /\bPermissionPackageProductionEvidenceReport\b/);
   assert.match(goLiveAcceptanceOverview, /PermissionPackageAcceptanceReport/);

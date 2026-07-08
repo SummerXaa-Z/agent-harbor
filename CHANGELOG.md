@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Permission-package acceptance report types now prefer `AcceptanceReport` record names while keeping older production-report aliases compatible.
+- 2026-07-08：权限包验收报告类型现在优先使用 `AcceptanceReport` 记录命名，同时保留旧 production-report alias 兼容。
 - 2026-07-08: Frontend acceptance history now uses `AcceptanceRun` as the primary runtime-history type while keeping the existing `evidenceRuns` data field compatible.
 - 2026-07-08：前端验收历史现在以 `AcceptanceRun` 作为运行历史主类型，同时保持现有 `evidenceRuns` 数据字段兼容。
 - 2026-07-08: Access-decision presenter helpers now prefer `accessDecisionRecordTone` while keeping the older tone helper alias compatible.

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: The console controller now uses acceptance-history local naming for go-live history while preserving the existing backend `evidenceRuns` data contract.
+- 2026-07-08：控制台控制器现在用验收历史作为上线历史的本地命名，同时保留后端已有 `evidenceRuns` 数据合同。
 - 2026-07-08: Permission workbench preview, production readiness, and acceptance report responses now return `export_acceptance_report` as the preferred report-export `nextActionCode`.
 - 2026-07-08：权限变更工作台预览、状态检查和验收报告响应现在返回 `export_acceptance_report` 作为报告导出的首选 `nextActionCode`。
 - 2026-07-08: Permission workbench action handling now prefers `export_acceptance_report` while retaining `export_production_evidence` as a legacy backend compatibility alias.

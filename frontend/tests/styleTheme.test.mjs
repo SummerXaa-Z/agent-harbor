@@ -694,8 +694,9 @@ test("access policy page routes creation back to resource management", () => {
 
 test("runtime audit hides empty management audit behind disclosure", () => {
   const tracesStart = consoleViews.indexOf("export function TracesView");
-  const evidenceStart = consoleViews.indexOf("export function EvidenceView", tracesStart);
-  const tracesView = consoleViews.slice(tracesStart, evidenceStart);
+  const goLiveStatusStart = consoleViews.indexOf("export function GoLiveStatusView", tracesStart);
+  assert.notEqual(goLiveStatusStart, -1);
+  const tracesView = consoleViews.slice(tracesStart, goLiveStatusStart);
 
   assert.match(tracesView, /managementAuditEventCount: number/);
   assert.match(tracesView, /managementAuditEventCount > 0 \? \(/);
@@ -766,6 +767,10 @@ test("runtime record views are split from the app shell", () => {
 test("go-live acceptance overview is split from the app shell", () => {
   assert.match(app, /from "\.\/components\/GoLiveAcceptanceOverview"/);
   assert.match(app, /GoLiveStatusView/);
+  assert.doesNotMatch(consoleViews, /export function EvidenceView/);
+  assert.match(app, /const acceptanceHistoryRuns = data\?\.evidenceRuns \?\? \[\]/);
+  assert.match(app, /<AcceptanceHistoryTimeline runs=\{acceptanceHistoryRuns\} t=\{t\} \/>/);
+  assert.doesNotMatch(app, /const evidenceRuns =/);
   assert.doesNotMatch(app, /function GoLiveAcceptanceOverview/);
   assert.doesNotMatch(app, /function productionReadinessStatusLabel/);
   assert.doesNotMatch(app, /function permissionProductionReadinessNextAction/);

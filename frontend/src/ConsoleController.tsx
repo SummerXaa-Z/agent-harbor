@@ -2068,7 +2068,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const tenantEntitlements = data?.tenantEntitlements ?? [];
   const workspaceAssignments = data?.workspaceAssignments ?? [];
   const instanceAssignments = data?.instanceAssignments ?? [];
-  const evidenceRuns = data?.evidenceRuns ?? [];
+  const acceptanceHistoryRuns = data?.evidenceRuns ?? [];
   const metrics = data?.systemMetrics ?? [];
   const tenantOrganizationEffectiveTenantId = tenantOrganizationSelectedTenantId || scope.tenantId || tenants[0]?.id || "";
 
@@ -2410,7 +2410,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   );
   const acceptanceHistoryPanel = (className = "span-4") => (
     <Panel className={className} icon={<ClipboardCheck size={18} />} title={t("panel.acceptanceHistory")}>
-      <AcceptanceHistoryTimeline runs={evidenceRuns} t={t} />
+      <AcceptanceHistoryTimeline runs={acceptanceHistoryRuns} t={t} />
     </Panel>
   );
   const runtimeSignalsPanel = (className = "span-5") => (

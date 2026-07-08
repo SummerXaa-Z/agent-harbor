@@ -49,8 +49,7 @@ test("ask access view translates backend decision text at render time", () => {
   assert.doesNotMatch(view, /AskEvidenceChainRow/);
   assert.doesNotMatch(view, /\bchainRows\b/);
   assert.match(presenters, /export function accessDecisionRecordTone/);
-  assert.match(presenters, /export const accessDecisionEvidenceTone = accessDecisionRecordTone/);
-  assert.doesNotMatch(presenters, /export function accessDecisionEvidenceTone/);
+  assert.doesNotMatch(presenters, /accessDecisionEvidenceTone/);
   assert.match(view, /accessDecisionSummaryLabel\(result, t\)/);
   assert.match(view, /accessDecisionRecordMessageLabel\(row, t\)/);
   assert.doesNotMatch(view, /accessEvidenceMessageLabel\(row, t\)/);

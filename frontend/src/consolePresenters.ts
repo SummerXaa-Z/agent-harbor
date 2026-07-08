@@ -48,8 +48,6 @@ export function accessDecisionRecordTone(status: string): Tone {
   return "neutral";
 }
 
-export const accessDecisionEvidenceTone = accessDecisionRecordTone;
-
 export function formatConsoleTime(
   value: Date,
   language: Language,

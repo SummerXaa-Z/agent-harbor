@@ -7,6 +7,7 @@ import {
   accessNextActionLabel,
   buildExplainRequest,
   buildPermissionChangeHandoff,
+  decisionRecordRows,
   evidenceChainRows
 } from "../src/askJourney.ts";
 import {
@@ -123,8 +124,8 @@ test("buildExplainRequest validates and normalizes required access query fields"
   );
 });
 
-test("evidenceChainRows marks the first denied evidence layer as the broken ring", () => {
-  const rows = evidenceChainRows({
+test("decisionRecordRows marks the first denied record layer as the broken ring", () => {
+  const rows = decisionRecordRows({
     dataScopes: [],
     decision: { allowed: false, reason: "capability is not approved", source: "capability" },
     evidence: [
@@ -154,6 +155,10 @@ test("evidenceChainRows marks the first denied evidence layer as the broken ring
   );
 });
 
+test("evidenceChainRows remains a compatibility alias for decisionRecordRows", () => {
+  assert.equal(evidenceChainRows, decisionRecordRows);
+});
+
 test("access query presentation localizes backend decision guidance at render time", () => {
   const t = createTranslator("zh-CN");
   const result = {
@@ -181,7 +186,7 @@ test("access query presentation localizes backend decision guidance at render ti
     },
     summary: "Denied: tenant has no entitlement for capability."
   };
-  const rows = evidenceChainRows(result);
+  const rows = decisionRecordRows(result);
 
   assert.equal(accessDecisionSummaryLabel(result, t), "当前不能访问：租户尚未获得该能力授权。");
   assert.equal(accessEvidenceMessageLabel(rows[0], t), "租户授权缺失，或正在阻断这个工具能力。");

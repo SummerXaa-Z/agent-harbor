@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Access-query presentation now prefers `decisionRecordRows` naming for decision records while keeping the older chain-row helper compatible.
+- 2026-07-08：访问查询展示现在首选 `decisionRecordRows` 判定记录命名，同时保留旧链路行 helper 兼容。
 - 2026-07-08: The public frontend design reference now uses audit-record wording and is covered by the public product-doc wording guard.
 - 2026-07-08：公开前端设计参考现在使用审计记录表述，并纳入公开产品文档用词守护。
 - 2026-07-08: The console controller now uses acceptance-history local naming for go-live history while preserving the existing backend `evidenceRuns` data contract.

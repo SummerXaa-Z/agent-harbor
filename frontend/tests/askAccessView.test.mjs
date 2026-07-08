@@ -29,7 +29,8 @@ test("answer-first access query is registered as a first-class console workspace
 test("ask access state delegates access-query business rules to askJourney pure functions", () => {
   assert.match(hook, /buildExplainRequest/);
   assert.match(hook, /buildPermissionChangeHandoff/);
-  assert.match(hook, /evidenceChainRows/);
+  assert.match(hook, /decisionRecordRows/);
+  assert.doesNotMatch(hook, /evidenceChainRows/);
   assert.match(hook, /fetchAccessDecisionExplanation/);
   assert.match(hook, /slice\(0,\s*5\)/);
 });

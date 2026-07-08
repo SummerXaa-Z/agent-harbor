@@ -4,7 +4,7 @@ import { fetchAccessDecisionExplanation } from "../api";
 import {
   buildExplainRequest,
   buildPermissionChangeHandoff,
-  evidenceChainRows,
+  decisionRecordRows,
   type AskAccessSelection
 } from "../askJourney";
 import type { Translator } from "../consolePresenters";
@@ -65,7 +65,7 @@ export function useAskAccessController({
     [consoleData, selection]
   );
   const requestBuild = useMemo(() => buildExplainRequest(effectiveSelection), [effectiveSelection]);
-  const chainRows = useMemo(() => result ? evidenceChainRows(result) : [], [result]);
+  const chainRows = useMemo(() => result ? decisionRecordRows(result) : [], [result]);
   const exampleSelection = useMemo(() => applySelectionDefaults({}, consoleData), [consoleData]);
   const exampleAvailable = buildExplainRequest(exampleSelection).complete;
 

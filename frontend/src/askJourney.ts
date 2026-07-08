@@ -24,7 +24,7 @@ export interface ExplainRequestBuildResult {
   request: AccessDecisionExplainRequest | null
 }
 
-export interface AskEvidenceChainRow {
+export interface AskDecisionRecordRow {
   id?: string
   isBroken: boolean
   layer: string
@@ -33,6 +33,8 @@ export interface AskEvidenceChainRow {
   status: string
   tone: "danger" | "neutral" | "success" | "warning"
 }
+
+export type AskEvidenceChainRow = AskDecisionRecordRow;
 
 export interface PermissionChangeHandoffOptions {
   templates?: PermissionPackageTemplate[]
@@ -117,7 +119,7 @@ export function buildPermissionChangeHandoff(
   };
 }
 
-export function evidenceChainRows(result: AccessDecisionExplainResult): AskEvidenceChainRow[] {
+export function decisionRecordRows(result: AccessDecisionExplainResult): AskDecisionRecordRow[] {
   const brokenIndex = result.outcome === "denied"
     ? result.evidence.findIndex((evidence) => evidenceTone(evidence) === "danger")
     : -1;
@@ -133,12 +135,14 @@ export function evidenceChainRows(result: AccessDecisionExplainResult): AskEvide
   }));
 }
 
+export const evidenceChainRows = decisionRecordRows;
+
 export function accessDecisionSummaryLabel(result: AccessDecisionExplainResult, t: Translator) {
   const reason = accessDecisionReasonLabel(result.decision.reason, t);
   return tx(t, result.outcome === "allowed" ? "ask.summaryAllowed" : "ask.summaryDenied", { reason });
 }
 
-export function accessEvidenceMessageLabel(row: Pick<AskEvidenceChainRow, "message">, t: Translator) {
+export function accessEvidenceMessageLabel(row: Pick<AskDecisionRecordRow, "message">, t: Translator) {
   const key = knownEvidenceMessages[row.message];
   return key ? t(key) : sanitizeAccessGuidance(row.message);
 }
@@ -158,7 +162,7 @@ function normalizeOptional(value?: string) {
   return value?.trim() ?? "";
 }
 
-function evidenceTone(evidence: AccessDecisionExplainEvidence): AskEvidenceChainRow["tone"] {
+function evidenceTone(evidence: AccessDecisionExplainEvidence): AskDecisionRecordRow["tone"] {
   if (evidence.status === "matched") return "success";
   if (["blocking", "denied", "missing", "mismatch", "not_approved"].includes(evidence.status)) return "danger";
   if (["inactive", "pending_review"].includes(evidence.status)) return "warning";

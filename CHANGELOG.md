@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Acceptance report translations now expose only `acceptanceReport*` keys for report export messages.
+- 2026-07-08：验收报告导出翻译现在只暴露 `acceptanceReport*` key。
 - 2026-07-08: AI Admin journey translations now expose only `journey.aiAdmin.record.*` keys for acceptance records.
 - 2026-07-08：AI Admin 旅程翻译现在只用 `journey.aiAdmin.record.*` key 表达验收记录。
 - 2026-07-08: Acceptance history translations now expose only `acceptanceHistory` keys.

@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Permission request acceptance-detail styles now use `approval-records` class names instead of older class names.
+- 2026-07-08：权限变更验收明细样式现在使用 `approval-records` 类名，替换旧类名。
 - 2026-07-08: Core and AI Admin journey evaluators now use runtime-record helper names while preserving existing step keys.
 - 2026-07-08：核心链路和 AI Admin 旅程评估器现在使用运行记录 helper 命名，同时保持现有 step key 兼容。
 - 2026-07-08: Runtime history status labels now use preferred `status.record*` translation keys while retaining older status key aliases.

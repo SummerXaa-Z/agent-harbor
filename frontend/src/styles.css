@@ -7070,7 +7070,7 @@ td code {
   .approval-context-bar,
   .approval-overview,
   .approval-overview-metrics,
-  .approval-evidence-grid {
+  .approval-record-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -7365,7 +7365,7 @@ td code {
   .approval-form-grid,
   .approval-capability-columns,
   .approval-apply,
-  .approval-evidence-grid,
+  .approval-record-grid,
   .approval-metrics,
   .approval-review-row,
   .ask-workspace,
@@ -7429,7 +7429,7 @@ td code {
   .core-journey-task > header,
   .approval-section header,
   .approval-process-block header,
-  .approval-evidence section header {
+  .approval-records section header {
     align-items: stretch;
     flex-direction: column;
   }

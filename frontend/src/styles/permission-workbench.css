@@ -121,7 +121,7 @@
 .approval-command,
 .approval-section,
 .approval-process-panel,
-.approval-evidence {
+.approval-records {
   min-width: 0;
   border: 1px solid var(--line-muted);
   border-radius: 8px;
@@ -548,7 +548,7 @@
 
 .approval-section header,
 .approval-process-block header,
-.approval-evidence section header {
+.approval-records section header {
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -564,7 +564,7 @@
 
 .approval-section header strong,
 .approval-process-block header strong,
-.approval-evidence section header strong {
+.approval-records section header strong {
   color: var(--ink);
   font-size: 14px;
   font-weight: 700;
@@ -1356,7 +1356,7 @@ button.approval-mini-row {
   border-left-color: var(--amber);
 }
 
-.approval-evidence > summary {
+.approval-records > summary {
   display: flex;
   gap: 12px;
   align-items: center;
@@ -1367,23 +1367,23 @@ button.approval-mini-row {
   list-style: none;
 }
 
-.approval-evidence > summary::-webkit-details-marker {
+.approval-records > summary::-webkit-details-marker {
   display: none;
 }
 
-.approval-evidence > summary div {
+.approval-records > summary div {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
-.approval-evidence > summary strong {
+.approval-records > summary strong {
   color: var(--ink);
   font-size: 14px;
   font-weight: 700;
 }
 
-.approval-evidence > summary span,
+.approval-records > summary span,
 .approval-inline-message {
   color: var(--ink-3);
   font-size: 12px;
@@ -1406,7 +1406,7 @@ button.approval-mini-row {
   color: var(--brand-strong);
 }
 
-.approval-evidence-grid {
+.approval-record-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
@@ -1415,7 +1415,7 @@ button.approval-mini-row {
   background: var(--surface-raised);
 }
 
-.approval-evidence section {
+.approval-records section {
   display: grid;
   align-content: start;
   gap: 12px;

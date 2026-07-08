@@ -958,7 +958,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
         </aside>
       </div>
 
-      <details className="approval-evidence" id="permission-request-acceptance-details">
+      <details className="approval-records" id="permission-request-acceptance-details">
         <summary>
           <div>
             <strong>{t("section.permissionAdvancedChecks")}</strong>
@@ -968,7 +968,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             {productionSummary.readyCount}/{productionSummary.totalCount}
           </Badge>
         </summary>
-        <div className="approval-evidence-grid">
+        <div className="approval-record-grid">
           <section>
             <header>
               <strong>{t("section.aiAdminReadiness")}</strong>

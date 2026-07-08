@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Console types now remove the unused legacy acceptance-run type alias while preserving the existing runtime data field.
+- 2026-07-08：控制台类型现在移除未使用的旧上线验收运行类型 alias，同时保留现有运行数据字段。
 - 2026-07-08: Console metrics now remove unused legacy runtime metric compatibility aliases and keep runtime-record naming as the single helper.
 - 2026-07-08：控制台指标现在移除未使用的旧运行指标兼容 alias，统一使用 runtime-record 命名 helper。
 - 2026-07-08: Console presenters now remove the unused legacy access-decision tone alias and keep record naming as the single helper.

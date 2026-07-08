@@ -761,7 +761,7 @@ test("runtime record views are split from the app shell", () => {
   assert.match(runtimeRecordViews, /\bAcceptanceRun\b/);
   assert.doesNotMatch(runtimeRecordViews, /\bEvidenceRun\[\]/);
   assert.match(types, /export interface AcceptanceRun/);
-  assert.match(types, /export type EvidenceRun = AcceptanceRun/);
+  assert.doesNotMatch(types, /export type EvidenceRun = AcceptanceRun/);
   assert.match(types, /evidenceRuns: AcceptanceRun\[\]/);
   assert.match(data, /import type \{[\s\S]*AcceptanceRun/);
   assert.match(data, /export const evidenceRuns: AcceptanceRun\[\]/);

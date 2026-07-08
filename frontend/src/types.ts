@@ -358,8 +358,6 @@ export interface AcceptanceRun {
   summary: string
 }
 
-export type EvidenceRun = AcceptanceRun;
-
 export interface SystemMetric {
   id: string
   label: string

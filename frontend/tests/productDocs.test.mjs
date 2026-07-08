@@ -95,6 +95,11 @@ test("primary product docs keep legacy report aliases out of the main path", () 
   assert.doesNotMatch(productJourney, /export_permission_package_production_evidence/);
 });
 
+test("public release docs keep legacy report identifiers in compatibility docs only", () => {
+  assert.doesNotMatch(changelog, /export_permission_package_production_evidence/);
+  assert.doesNotMatch(productJourney, /export_production_evidence/);
+});
+
 test("release scenario operator output uses report and record wording", () => {
   assert.doesNotMatch(permissionPackageApprovalScript, /production evidence report/i);
   assert.doesNotMatch(permissionPackageApprovalScript, /trace evidence verified/i);

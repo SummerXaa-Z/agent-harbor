@@ -60,8 +60,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - Management MCP 的 `tools/list` 现在会为每个工具返回 `execution` 元数据，包括幂等性、确认要求、前置预检、审计资源和一次性密钥提示，便于管理 Agent 安全调用。
 - Management MCP `tools/list` now returns `lifecycle` metadata for every tool, including machine-readable compatibility-alias status and preferred tool names for legacy aliases.
 - Management MCP 的 `tools/list` 现在会为每个工具返回 `lifecycle` 元数据，包括兼容别名状态和旧别名对应的首选工具名，便于管理 Agent 直接读取。
-- Management MCP now exposes `export_permission_package_production_report` as the preferred read-only acceptance-report export tool while retaining `export_permission_package_production_evidence` as a compatibility alias.
-- Management MCP 现在提供 `export_permission_package_production_report` 作为首选的只读验收报告导出工具，同时继续保留 `export_permission_package_production_evidence` 作为兼容别名。
+- Management MCP now exposes `export_permission_package_production_report` as the preferred read-only acceptance-report export tool while retaining a documented compatibility alias for old clients.
+- Management MCP 现在提供 `export_permission_package_production_report` 作为首选的只读验收报告导出工具，同时继续保留面向旧客户端的兼容别名。
 - Connection diagnostics now requires the preferred `export_permission_package_production_report` tool in the Management MCP catalog, so old APIs that only expose the legacy alias are blocked before admin-agent automation runs.
 - 连接诊断现在要求 Management MCP 工具目录包含首选的 `export_permission_package_production_report` 工具；如果旧 API 只暴露兼容别名，会在管理 Agent 自动执行前被阻断。
 - Connection diagnostics now checks that the Management MCP catalog exposes every current non-legacy management tool, including administrator identity lifecycle tools, before allowing admin-agent automation.

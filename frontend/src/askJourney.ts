@@ -142,10 +142,12 @@ export function accessDecisionSummaryLabel(result: AccessDecisionExplainResult, 
   return tx(t, result.outcome === "allowed" ? "ask.summaryAllowed" : "ask.summaryDenied", { reason });
 }
 
-export function accessEvidenceMessageLabel(row: Pick<AskDecisionRecordRow, "message">, t: Translator) {
-  const key = knownEvidenceMessages[row.message];
+export function accessDecisionRecordMessageLabel(row: Pick<AskDecisionRecordRow, "message">, t: Translator) {
+  const key = knownDecisionRecordMessages[row.message];
   return key ? t(key) : sanitizeAccessGuidance(row.message);
 }
+
+export const accessEvidenceMessageLabel = accessDecisionRecordMessageLabel;
 
 export function accessNextActionLabel(action: string, t: Translator) {
   const key = knownNextActions[action];
@@ -220,13 +222,13 @@ const knownDecisionReasons: Record<string, string> = {
   "workspace has no assignment for capability": "ask.reason.workspaceMissing"
 }
 
-const knownEvidenceMessages: Record<string, string> = {
-  "Caller instance assignment matched.": "ask.evidenceMessage.instanceMatched",
-  "Caller instance assignment is missing or blocking this capability.": "ask.evidenceMessage.instanceBlocked",
-  "Tenant entitlement matched.": "ask.evidenceMessage.tenantMatched",
-  "Tenant entitlement is missing or blocking this capability.": "ask.evidenceMessage.tenantBlocked",
-  "Workspace assignment matched.": "ask.evidenceMessage.workspaceMatched",
-  "Workspace assignment is missing or blocking this capability.": "ask.evidenceMessage.workspaceBlocked"
+const knownDecisionRecordMessages: Record<string, string> = {
+  "Caller instance assignment matched.": "ask.recordMessage.instanceMatched",
+  "Caller instance assignment is missing or blocking this capability.": "ask.recordMessage.instanceBlocked",
+  "Tenant entitlement matched.": "ask.recordMessage.tenantMatched",
+  "Tenant entitlement is missing or blocking this capability.": "ask.recordMessage.tenantBlocked",
+  "Workspace assignment matched.": "ask.recordMessage.workspaceMatched",
+  "Workspace assignment is missing or blocking this capability.": "ask.recordMessage.workspaceBlocked"
 }
 
 const knownNextActions: Record<string, string> = {

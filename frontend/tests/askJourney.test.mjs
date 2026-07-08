@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   accessDecisionSummaryLabel,
+  accessDecisionRecordMessageLabel,
   accessEvidenceMessageLabel,
   accessNextActionLabel,
   buildExplainRequest,
@@ -189,8 +190,9 @@ test("access query presentation localizes backend decision guidance at render ti
   const rows = decisionRecordRows(result);
 
   assert.equal(accessDecisionSummaryLabel(result, t), "当前不能访问：租户尚未获得该能力授权。");
-  assert.equal(accessEvidenceMessageLabel(rows[0], t), "租户授权缺失，或正在阻断这个工具能力。");
-  assert.equal(accessEvidenceMessageLabel(rows[1], t), "工作区分配已匹配。");
+  assert.equal(accessDecisionRecordMessageLabel(rows[0], t), "租户授权缺失，或正在阻断这个工具能力。");
+  assert.equal(accessDecisionRecordMessageLabel(rows[1], t), "工作区分配已匹配。");
+  assert.equal(accessEvidenceMessageLabel, accessDecisionRecordMessageLabel);
   assert.equal(accessNextActionLabel(result.nextActions[0], t), "发起权限包变更，一次性创建租户、工作区和调用方授权。");
 });
 

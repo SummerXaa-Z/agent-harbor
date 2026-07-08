@@ -57,9 +57,13 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("ask.recordLayer.capability"), "Capability approval");
   assert.equal(t("ask.recordLayer.tenant_entitlement"), "Tenant grant");
   assert.equal(t("ask.recordLayer.workspace_assignment"), "Workspace assignment");
+  assert.equal(t("ask.recordMessage.tenantBlocked"), "Tenant grant is missing or blocks this tool capability.");
+  assert.equal(t("ask.recordMessage.workspaceMatched"), "Workspace assignment matched.");
   assert.equal(t("ask.evidenceLayer.capability"), "Capability approval");
   assert.equal(t("ask.evidenceLayer.tenant_entitlement"), "Tenant grant");
   assert.equal(t("ask.evidenceLayer.workspace_assignment"), "Workspace assignment");
+  assert.equal(t("ask.evidenceMessage.tenantBlocked"), "Tenant grant is missing or blocks this tool capability.");
+  assert.equal(t("ask.evidenceMessage.workspaceMatched"), "Workspace assignment matched.");
   assert.equal(
     tx(t, "message.acceptanceReportExportedBy", { actor: "platform-operator" }),
     "Acceptance report exported by platform-operator."
@@ -624,9 +628,13 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("ask.recordLayer.capability"), "能力审批");
   assert.equal(t("ask.recordLayer.tenant_entitlement"), "租户授权");
   assert.equal(t("ask.recordLayer.workspace_assignment"), "工作区分配");
+  assert.equal(t("ask.recordMessage.tenantBlocked"), "租户授权缺失，或正在阻断这个工具能力。");
+  assert.equal(t("ask.recordMessage.workspaceMatched"), "工作区分配已匹配。");
   assert.equal(t("ask.evidenceLayer.capability"), "能力审批");
   assert.equal(t("ask.evidenceLayer.tenant_entitlement"), "租户授权");
   assert.equal(t("ask.evidenceLayer.workspace_assignment"), "工作区分配");
+  assert.equal(t("ask.evidenceMessage.tenantBlocked"), "租户授权缺失，或正在阻断这个工具能力。");
+  assert.equal(t("ask.evidenceMessage.workspaceMatched"), "工作区分配已匹配。");
   assert.equal(
     tx(t, "message.acceptanceReportExportedBy", { actor: "platform-operator" }),
     "上线状态报告已由 platform-operator 导出。"

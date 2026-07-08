@@ -44,7 +44,8 @@ test("ask access view exposes denied-to-fix handoff without automatic submission
 
 test("ask access view translates backend decision text at render time", () => {
   assert.match(view, /accessDecisionSummaryLabel\(result, t\)/);
-  assert.match(view, /accessEvidenceMessageLabel\(row, t\)/);
+  assert.match(view, /accessDecisionRecordMessageLabel\(row, t\)/);
+  assert.doesNotMatch(view, /accessEvidenceMessageLabel\(row, t\)/);
   assert.match(view, /accessNextActionLabel\(action, t\)/);
   assert.doesNotMatch(view, /<p>\{result\.summary\}<\/p>/);
   assert.doesNotMatch(view, /<li key=\{action\}>\{action\}<\/li>/);

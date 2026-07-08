@@ -7,7 +7,7 @@ import type {
 } from "../askJourney";
 import {
   accessDecisionSummaryLabel,
-  accessEvidenceMessageLabel,
+  accessDecisionRecordMessageLabel,
   accessNextActionLabel
 } from "../askJourney";
 import {
@@ -277,7 +277,7 @@ export function AskAccessView({
                         <Badge tone={row.tone}>{t(`status.${row.status}`, row.status)}</Badge>
                         <div>
                           <strong>{t(row.layerKey, readableIdentifierLabel(row.layer))}</strong>
-                          <span>{accessEvidenceMessageLabel(row, t)}</span>
+                          <span>{accessDecisionRecordMessageLabel(row, t)}</span>
                         </div>
                       </li>
                     ))}

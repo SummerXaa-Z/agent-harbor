@@ -162,7 +162,7 @@ import {
   type PermissionPackageApprovalRequest,
   type PermissionPackageDraft,
   type PermissionPackageDraftInput,
-  type PermissionPackageProductionEvidenceReport,
+  type PermissionPackageAcceptanceReport,
   type PermissionPackageProductionReadiness,
   type PermissionPackageProductionReadinessFilter,
   type PermissionPackageTemplate,
@@ -527,7 +527,7 @@ export function ConsoleController() {
   const [aiAdminProductionReadiness, setAiAdminProductionReadiness] =
     useState<PermissionPackageProductionReadiness | null>(null);
   const [aiAdminProductionReport, setAiAdminProductionReport] = useReducer(
-    (_current: PermissionPackageProductionEvidenceReport | null, next: PermissionPackageProductionEvidenceReport | null) => next,
+    (_current: PermissionPackageAcceptanceReport | null, next: PermissionPackageAcceptanceReport | null) => next,
     null
   );
   const [aiAdminProductionReadinessLoading, setAiAdminProductionReadinessLoading] = useState(false);

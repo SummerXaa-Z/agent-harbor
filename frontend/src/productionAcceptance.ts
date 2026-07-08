@@ -1,7 +1,7 @@
 import type { ConnectionDiagnosticStatus } from "./connectionDiagnostics";
 import type { AiAdminProductionConsoleSummary } from "./aiAdminProductionConsole";
 import type {
-  PermissionPackageProductionEvidenceReport,
+  PermissionPackageAcceptanceReport,
   PermissionPackageProductionReadiness,
   PermissionPackageProductionReadinessCheck
 } from "./permissionPackages";
@@ -271,8 +271,8 @@ function headlineKey(status: ProductionAcceptanceStatus) {
 }
 
 export function productionAcceptanceReportFilename(
-  report: Pick<PermissionPackageProductionEvidenceReport, "generatedAt" | "scope" | "status"> &
-    Partial<Pick<PermissionPackageProductionEvidenceReport, "reportDigest">>
+  report: Pick<PermissionPackageAcceptanceReport, "generatedAt" | "scope" | "status"> &
+    Partial<Pick<PermissionPackageAcceptanceReport, "reportDigest">>
 ) {
   const generated = safeFilenameSegment(report.generatedAt || new Date().toISOString());
   const digest = safeFilenameSegment(shortReportDigest(report.reportDigest));

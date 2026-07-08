@@ -45,7 +45,7 @@ import type {
   PermissionPackageApplicationImpact,
   PermissionPackageDraft,
   PermissionPackageDraftInput,
-  PermissionPackageProductionEvidenceReport,
+  PermissionPackageAcceptanceReport,
   PermissionPackageProductionReadiness,
   PermissionPackageProductionReadinessFilter,
   PermissionPackageTemplate,
@@ -739,13 +739,14 @@ export async function fetchPermissionPackageProductionReport(
   filter: PermissionPackageProductionReadinessFilter,
   adminKey?: string,
   signal?: AbortSignal,
-): Promise<PermissionPackageProductionEvidenceReport> {
-  return request<PermissionPackageProductionEvidenceReport>(
+): Promise<PermissionPackageAcceptanceReport> {
+  return request<PermissionPackageAcceptanceReport>(
     permissionPackageProductionReportPath(filter),
     { adminKey, signal },
   )
 }
 
+export const fetchPermissionPackageAcceptanceReport = fetchPermissionPackageProductionReport
 export const fetchPermissionPackageProductionEvidenceReport = fetchPermissionPackageProductionReport
 
 export async function createPermissionPackageApprovalRequest(

@@ -25,7 +25,7 @@ import {
 import type {
   PermissionPackageDraft,
   PermissionPackageDraftInput,
-  PermissionPackageProductionEvidenceReport,
+  PermissionPackageAcceptanceReport,
   PermissionPackageProductionReadiness,
   PermissionPackageTemplate
 } from "../permissionPackages";
@@ -70,7 +70,7 @@ export function GoLiveAcceptanceOverview({
   onRunConnectionDiagnostics: () => void;
   onRefreshProductionReadiness: () => void;
   acceptanceReportExporting: boolean;
-  productionReport: PermissionPackageProductionEvidenceReport | null;
+  productionReport: PermissionPackageAcceptanceReport | null;
   productionReadiness: PermissionPackageProductionReadiness | null;
   productionReadinessLoading: boolean;
   productionReadinessMessage: string;
@@ -286,7 +286,7 @@ export function GoLiveAcceptanceOverview({
 }
 
 function reportMatchesAcceptanceScope(
-  report: PermissionPackageProductionEvidenceReport | null,
+  report: PermissionPackageAcceptanceReport | null,
   input: PermissionPackageDraftInput,
   readiness: PermissionPackageProductionReadiness | null
 ) {
@@ -299,7 +299,7 @@ function reportMatchesAcceptanceScope(
     report.scope.callerInstanceId === input.callerInstanceId;
 }
 
-function formatProductionReportDigest(report: PermissionPackageProductionEvidenceReport) {
+function formatProductionReportDigest(report: PermissionPackageAcceptanceReport) {
   const fullDigest = report.reportDigest.trim();
   const digest = fullDigest.length > 24
     ? `${fullDigest.slice(0, 12)}...${fullDigest.slice(-8)}`

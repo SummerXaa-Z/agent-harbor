@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Frontend report models now expose `PermissionPackageAcceptanceReport` as the preferred type while keeping older report type and fetch aliases compatible.
+- 2026-07-08：前端报告模型现在提供首选 `PermissionPackageAcceptanceReport` 类型，同时保留旧报告类型和 fetch 别名兼容。
 - 2026-07-08: Acceptance report export state now uses preferred frontend handler and prop names while preserving backend report compatibility contracts.
 - 2026-07-08：验收报告导出状态现在使用首选前端 handler 与 prop 命名，同时保留后端报告兼容契约。
 - 2026-07-08: Go-live report actions now use preferred acceptance-report translation and message keys while preserving older report aliases for compatibility.

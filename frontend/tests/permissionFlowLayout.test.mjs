@@ -3,12 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
+const api = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
 const i18n = readFileSync(new URL("../src/i18n.ts", import.meta.url), "utf8");
 const baseStyles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const workbenchStyles = readFileSync(new URL("../src/styles/permission-workbench.css", import.meta.url), "utf8");
 const styles = `${baseStyles}\n${workbenchStyles}`;
 const workbench = readFileSync(new URL("../src/components/AiAdminPermissionWorkbench.tsx", import.meta.url), "utf8");
 const permissionPackages = readFileSync(new URL("../src/permissionPackages.ts", import.meta.url), "utf8");
+const productionAcceptance = readFileSync(new URL("../src/productionAcceptance.ts", import.meta.url), "utf8");
 const permissionWorkbenchPresenters = readFileSync(new URL("../src/permissionWorkbenchPresenters.ts", import.meta.url), "utf8");
 const permissionWorkbenchParts = readFileSync(new URL("../src/components/PermissionWorkbenchParts.tsx", import.meta.url), "utf8");
 const permissionApprovalDecisionHook = readFileSync(new URL("../src/hooks/usePermissionApprovalDecision.ts", import.meta.url), "utf8");
@@ -569,6 +571,20 @@ test("go-live status page starts with acceptance workflow instead of historical 
   assert.match(styles, /\.go-live-acceptance-report-copy\s*\{/);
   assert.match(styles, /\.go-live-acceptance-context dl\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
   assert.match(styles, /\.go-live-step-list\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
+});
+
+test("acceptance report model type is preferred outside compatibility aliases", () => {
+  assert.match(permissionPackages, /export interface PermissionPackageAcceptanceReport/);
+  assert.match(permissionPackages, /export type PermissionPackageProductionEvidenceReport = PermissionPackageAcceptanceReport/);
+  assert.match(app, /type PermissionPackageAcceptanceReport/);
+  assert.doesNotMatch(app, /\bPermissionPackageProductionEvidenceReport\b/);
+  assert.match(goLiveAcceptanceOverview, /PermissionPackageAcceptanceReport/);
+  assert.doesNotMatch(goLiveAcceptanceOverview, /\bPermissionPackageProductionEvidenceReport\b/);
+  assert.match(productionAcceptance, /PermissionPackageAcceptanceReport/);
+  assert.doesNotMatch(productionAcceptance, /\bPermissionPackageProductionEvidenceReport\b/);
+  assert.match(api, /PermissionPackageAcceptanceReport/);
+  assert.doesNotMatch(api, /\bPermissionPackageProductionEvidenceReport\b/);
+  assert.match(api, /Promise<PermissionPackageAcceptanceReport>/);
 });
 
 test("workspace navigation is reflected in the URL hash", () => {

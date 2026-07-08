@@ -255,7 +255,7 @@ export interface PermissionPackageAuditEvidence {
   appliedEvent?: AuditEvent;
 }
 
-export interface PermissionPackageProductionEvidenceReport {
+export interface PermissionPackageAcceptanceReport {
   reportVersion: string;
   reportDigest: string;
   reportDigestAlgorithm: string;
@@ -271,6 +271,8 @@ export interface PermissionPackageProductionEvidenceReport {
   nextActions: string[];
   readinessGeneratedAt: string;
 }
+
+export type PermissionPackageProductionEvidenceReport = PermissionPackageAcceptanceReport;
 
 export interface PermissionPackageProductionPlatformContract {
   apiVersion: string;

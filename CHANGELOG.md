@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: First-run setup translations now use the `confirm-status` step without older status-step aliases.
+- 2026-07-08：首次接入翻译现在统一使用 `confirm-status` 步骤，移除旧状态步骤 alias。
 - 2026-07-08: AI Admin journey translations now expose `journey.aiAdmin.record.*` keys while retaining legacy aliases.
 - 2026-07-08：AI Admin 旅程翻译现在提供 `journey.aiAdmin.record.*` key，同时保留旧 alias。
 - 2026-07-08: System self-check runtime summary internals now use runtime-record naming.
@@ -64,8 +66,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 - 2026-07-08：运行记录指标现在使用首选的 `runtimeRecord` helper 和 `metric.runtimeRecords` 翻译命名，同时保留旧别名兼容。
 - 2026-07-08: Runtime record UI components now live under `RuntimeRecordViews`, matching the current go-live and audit wording while preserving backend field compatibility.
 - 2026-07-08：运行记录 UI 组件现在归入 `RuntimeRecordViews`，与当前上线和审计用词一致，同时保持后端字段兼容。
-- 2026-07-08: The getting-started status step now uses preferred `confirm-status` and `chain.status` keys while keeping old setup keys compatible.
-- 2026-07-08：首次使用流程的上线状态步骤现在使用首选 `confirm-status` 和 `chain.status` key，同时保留旧接入 key 兼容。
+- 2026-07-08: The getting-started status step now uses preferred `confirm-status` and `chain.status` keys without older setup-step keys.
+- 2026-07-08：首次使用流程的上线状态步骤现在使用首选 `confirm-status` 和 `chain.status` key，不再依赖旧接入步骤 key。
 - 2026-07-08: The go-live acceptance history panel now uses preferred acceptance-history component, prop, and translation keys while keeping old keys compatible.
 - 2026-07-08：上线验收历史面板现在使用首选的 acceptance-history 组件、属性和翻译 key，同时保留旧 key 兼容。
 - 2026-07-08: The go-live status page container is now named `GoLiveStatusView` in the frontend, matching the preferred route and translation naming.

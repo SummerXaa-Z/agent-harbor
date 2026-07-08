@@ -72,6 +72,8 @@ test("getting started copy is bilingual and token-styled", () => {
   ]) {
     assert.match(i18n, new RegExp(`"${key}"`), `${key} should be present in i18n`);
   }
+  assert.doesNotMatch(i18n, /gettingStarted\.chain\.evidence/);
+  assert.doesNotMatch(i18n, /gettingStarted\.step\.review-evidence/);
 
   assert.match(styles, /\.getting-started\s*\{/);
   assert.match(styles, /\.getting-started-layout\s*\{/);

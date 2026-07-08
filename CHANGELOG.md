@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Navigation translations now omit unused `nav.evidence`, `navDetail.evidence`, and `page.evidence` aliases while route compatibility remains in `consoleNavigation`.
+- 2026-07-08：导航翻译现在移除未使用的 `nav.evidence`、`navDetail.evidence` 和 `page.evidence` alias，旧路由兼容仍保留在 `consoleNavigation`。
 - 2026-07-08: Cockpit key-message translations now omit unused `text.cockpitKeyMessageEvidence*` aliases.
 - 2026-07-08：驾驶舱关键信息翻译现在移除未使用的 `text.cockpitKeyMessageEvidence*` alias。
 - 2026-07-08: Runtime and trace record translations now expose only `runtimeRecords` and `traceRecords` keys.

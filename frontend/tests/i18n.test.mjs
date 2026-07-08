@@ -251,7 +251,7 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("nav.access"), "权限画像");
   assert.equal(t("nav.traces"), "运行审计");
   assert.equal(t("nav.go-live"), "上线检查");
-  assert.equal(t("nav.evidence"), "上线检查");
+  assert.doesNotMatch(i18nSource, /"(?:nav|navDetail|page)\.evidence"/);
   assert.equal(t("nav.admin-access"), "管理员与边界");
   assert.equal(t("nav.registry"), "资源管理");
   assert.equal(t("nav.tenants"), "租户与组织");
@@ -267,7 +267,6 @@ test("createTranslator returns core journey Chinese labels", () => {
   assert.equal(t("page.access"), "权限画像");
   assert.equal(t("page.adminAccess"), "管理员与边界");
   assert.equal(t("page.go-live"), "上线检查");
-  assert.equal(t("page.evidence"), "上线检查");
   assert.equal(t("page.registry"), "资源管理");
   assert.equal(t("page.tenants"), "租户与组织");
   assert.equal(t("page.traces"), "运行审计");

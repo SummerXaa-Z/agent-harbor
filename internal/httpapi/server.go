@@ -12,10 +12,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"path"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -202,7 +204,7 @@ func New(repo store.Repository, options ...Option) *Server {
 func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.Recoverer)
+	r.Use(jsonPanicRecovery)
 	r.Use(middleware.Timeout(30 * time.Second))
 	r.Use(browserSecurityHeaders)
 	r.Use(localDevCORS(s.corsOrigins, s.defaultLocalCORSOrigins))
@@ -286,6 +288,38 @@ func (s *Server) Router() http.Handler {
 		})
 	})
 	return r
+}
+
+var recoveredPanicLogger = func(r *http.Request, value any, stack []byte) {
+	log.Printf("%s\n%s", recoveredPanicLogMessage(r, value), string(stack))
+}
+
+func recoveredPanicLogMessage(r *http.Request, value any) string {
+	return fmt.Sprintf(
+		"agent-harbor panic recovered requestId=%s method=%s path=%s panicType=%T",
+		middleware.GetReqID(r.Context()),
+		r.Method,
+		r.URL.Path,
+		value,
+	)
+}
+
+func jsonPanicRecovery(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				if recovered == http.ErrAbortHandler {
+					panic(recovered)
+				}
+				recoveredPanicLogger(r, recovered, debug.Stack())
+				if ww.Status() == 0 {
+					writeError(ww, errors.New("panic recovered"))
+				}
+			}
+		}()
+		next.ServeHTTP(ww, r)
+	})
 }
 
 func sensitiveResponseHeaders(next http.Handler) http.Handler {

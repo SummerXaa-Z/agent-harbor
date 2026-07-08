@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: The permission console now calls the preferred acceptance report fetch helper while keeping older report fetch aliases compatible.
+- 2026-07-08：权限控制台现在调用首选验收报告 fetch helper，同时保留旧报告 fetch 别名兼容。
 - 2026-07-08: Go-live acceptance report state and component props now use `acceptanceReport` naming while keeping the report API helper compatible.
 - 2026-07-08：上线验收报告 state 与组件 prop 现在使用 `acceptanceReport` 命名，同时保留报告 API helper 兼容。
 - 2026-07-08: Frontend report models now expose `PermissionPackageAcceptanceReport` as the preferred type while keeping older report type and fetch aliases compatible.

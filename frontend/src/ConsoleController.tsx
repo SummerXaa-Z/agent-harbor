@@ -39,7 +39,7 @@ import {
   fetchPermissionPackageApplicationHealth,
   fetchPermissionPackageApplicationImpact,
   fetchPermissionPackageApprovalRequests,
-  fetchPermissionPackageProductionReport,
+  fetchPermissionPackageAcceptanceReport,
   fetchPermissionPackageProductionReadiness,
   fetchPermissionPackageTemplates,
   fetchTenantPermissionCenter,
@@ -1083,7 +1083,7 @@ export function ConsoleController() {
     setAiAdminMessage(null);
     setAiAdminProductionReadinessMessage(null);
     try {
-      const report = await fetchPermissionPackageProductionReport(
+      const report = await fetchPermissionPackageAcceptanceReport(
         aiAdminProductionReadinessFilter(formInput),
         adminKey
       );

@@ -260,6 +260,8 @@ test("permission apply duplicate direct retry shows recovery guidance", () => {
 });
 
 test("permission journey mutation handlers require live API before network writes", () => {
+  assert.match(app, /\bfetchPermissionPackageAcceptanceReport\b/);
+  assert.doesNotMatch(app, /\bfetchPermissionPackageProductionReport\b/);
   [
     ["runAiAdminApprovalJourney", "message.fallbackDataModeActionBlocked", "createTenant("],
     ["createAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "createPermissionPackageApprovalRequest("],
@@ -267,7 +269,7 @@ test("permission journey mutation handlers require live API before network write
     ["rejectAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "rejectPermissionPackageApprovalRequest("],
     ["withdrawAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "withdrawPermissionPackageApprovalRequest("],
     ["applyAiAdminPermissionPackage", "message.fallbackDataModeActionBlocked", "applyPermissionPackage("],
-    ["exportAiAdminAcceptanceReport", "message.acceptanceReportRequiresLiveApi", "fetchPermissionPackageProductionReport("],
+    ["exportAiAdminAcceptanceReport", "message.acceptanceReportRequiresLiveApi", "fetchPermissionPackageAcceptanceReport("],
   ].forEach(([functionName, liveApiMessage, networkCall]) => {
     const block = functionBlock(functionName);
     const liveApiGuardIndex = block.indexOf("!data?.loadedFromApi");

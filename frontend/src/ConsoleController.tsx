@@ -526,7 +526,7 @@ export function ConsoleController() {
     useState<LocalizedMessage | null>(null);
   const [aiAdminProductionReadiness, setAiAdminProductionReadiness] =
     useState<PermissionPackageProductionReadiness | null>(null);
-  const [aiAdminProductionReport, setAiAdminProductionReport] = useReducer(
+  const [aiAdminAcceptanceReport, setAiAdminAcceptanceReport] = useReducer(
     (_current: PermissionPackageAcceptanceReport | null, next: PermissionPackageAcceptanceReport | null) => next,
     null
   );
@@ -1087,7 +1087,7 @@ export function ConsoleController() {
         aiAdminProductionReadinessFilter(formInput),
         adminKey
       );
-      setAiAdminProductionReport(report);
+      setAiAdminAcceptanceReport(report);
       downloadJson(report, productionAcceptanceReportFilename(report));
       setAiAdminMessage({
         key: "message.acceptanceReportExportedBy",
@@ -2360,7 +2360,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onRunConnectionDiagnostics={() => void connectionDiagnostics.run()}
         onRefreshProductionReadiness={() => void refreshAiAdminProductionReadiness(goLiveAcceptanceForm)}
         acceptanceReportExporting={aiAdminAcceptanceReportExporting}
-        productionReport={aiAdminProductionReport}
+        acceptanceReport={aiAdminAcceptanceReport}
         productionReadiness={aiAdminProductionReadiness}
         productionReadinessLoading={aiAdminProductionReadinessLoading}
         productionReadinessMessage={aiAdminProductionReadinessMessage}

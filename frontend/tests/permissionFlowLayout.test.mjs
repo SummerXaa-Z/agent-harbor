@@ -531,6 +531,8 @@ test("go-live status page starts with acceptance workflow instead of historical 
   assert.match(goLiveAcceptanceOverview, /export function GoLiveAcceptanceOverview/);
   assert.match(app, /GoLiveStatusView/);
   assert.match(app, /const goLiveAcceptancePanel =/);
+  assert.match(app, /aiAdminAcceptanceReport/);
+  assert.doesNotMatch(app, /\baiAdminProductionReport\b/);
   assert.match(goLiveAcceptanceOverview, /className="go-live-acceptance"/);
   assert.match(goLiveAcceptanceOverview, /buildProductionAcceptanceCenter\(/);
   assert.match(goLiveAcceptanceOverview, /connectionStatus/);
@@ -539,14 +541,15 @@ test("go-live status page starts with acceptance workflow instead of historical 
   assert.match(goLiveAcceptanceOverview, /onExportAcceptanceReport/);
   assert.doesNotMatch(goLiveAcceptanceOverview, /onExportProductionEvidence/);
   assert.match(goLiveAcceptanceOverview, /onOpenPermissionChange/);
-  assert.match(goLiveAcceptanceOverview, /productionReport/);
+  assert.match(goLiveAcceptanceOverview, /acceptanceReport/);
+  assert.doesNotMatch(goLiveAcceptanceOverview, /\bproductionReport\b/);
   assert.match(goLiveAcceptanceOverview, /reportMatchesAcceptanceScope/);
   assert.match(goLiveAcceptanceOverview, /productionAcceptance\.reportExportedBy/);
   assert.match(goLiveAcceptanceOverview, /productionAcceptance\.reportDigest/);
   assert.match(goLiveAcceptanceOverview, /productionAcceptance\.copyReportDigest/);
-  assert.match(goLiveAcceptanceOverview, /navigator\.clipboard\?\.writeText\(matchingProductionReportDigest\.fullDigest\)/);
+  assert.match(goLiveAcceptanceOverview, /navigator\.clipboard\?\.writeText\(matchingAcceptanceReportDigest\.fullDigest\)/);
   assert.match(goLiveAcceptanceOverview, /<Copy size=\{12\} \/>/);
-  assert.match(goLiveAcceptanceOverview, /formatProductionReportDigest\(matchingProductionReport\)/);
+  assert.match(goLiveAcceptanceOverview, /formatAcceptanceReportDigest\(matchingAcceptanceReport\)/);
   assert.match(goLiveAcceptanceOverview, /report\.reportDigestAlgorithm/);
   assert.match(goLiveAcceptanceOverview, /report\.reportDigest/);
   assert.match(goLiveAcceptanceOverview, /const statusMessage = productionReadinessMessage === t\("message\.permissionProductionReadinessLoaded"\)/);

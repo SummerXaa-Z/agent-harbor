@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Go-live acceptance report state and component props now use `acceptanceReport` naming while keeping the report API helper compatible.
+- 2026-07-08：上线验收报告 state 与组件 prop 现在使用 `acceptanceReport` 命名，同时保留报告 API helper 兼容。
 - 2026-07-08: Frontend report models now expose `PermissionPackageAcceptanceReport` as the preferred type while keeping older report type and fetch aliases compatible.
 - 2026-07-08：前端报告模型现在提供首选 `PermissionPackageAcceptanceReport` 类型，同时保留旧报告类型和 fetch 别名兼容。
 - 2026-07-08: Acceptance report export state now uses preferred frontend handler and prop names while preserving backend report compatibility contracts.

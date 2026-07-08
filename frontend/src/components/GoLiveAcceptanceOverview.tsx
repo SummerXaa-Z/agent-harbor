@@ -50,7 +50,7 @@ export function GoLiveAcceptanceOverview({
   onRunConnectionDiagnostics,
   onRefreshProductionReadiness,
   acceptanceReportExporting,
-  productionReport,
+  acceptanceReport,
   productionReadiness,
   productionReadinessLoading,
   productionReadinessMessage,
@@ -70,7 +70,7 @@ export function GoLiveAcceptanceOverview({
   onRunConnectionDiagnostics: () => void;
   onRefreshProductionReadiness: () => void;
   acceptanceReportExporting: boolean;
-  productionReport: PermissionPackageAcceptanceReport | null;
+  acceptanceReport: PermissionPackageAcceptanceReport | null;
   productionReadiness: PermissionPackageProductionReadiness | null;
   productionReadinessLoading: boolean;
   productionReadinessMessage: string;
@@ -99,11 +99,11 @@ export function GoLiveAcceptanceOverview({
     : acceptanceInput.targetId
       ? t("text.selectedTargetFallback")
       : t("text.targetPendingSelection");
-  const matchingProductionReport = reportMatchesAcceptanceScope(productionReport, acceptanceInput, productionReadiness)
-    ? productionReport
+  const matchingAcceptanceReport = reportMatchesAcceptanceScope(acceptanceReport, acceptanceInput, productionReadiness)
+    ? acceptanceReport
     : null;
-  const matchingProductionReportDigest = matchingProductionReport
-    ? formatProductionReportDigest(matchingProductionReport)
+  const matchingAcceptanceReportDigest = matchingAcceptanceReport
+    ? formatAcceptanceReportDigest(matchingAcceptanceReport)
     : null;
   const acceptanceCenter = buildProductionAcceptanceCenter({
     connectionStatus,
@@ -242,32 +242,32 @@ export function GoLiveAcceptanceOverview({
               <dt>{t("form.permissionPackage")}</dt>
               <dd>{templateName}</dd>
             </div>
-            {matchingProductionReport ? (
+            {matchingAcceptanceReport ? (
               <div className="go-live-acceptance-report">
                 <dt>{t("productionAcceptance.report")}</dt>
                 <dd>
                   <span>
                     {tx(t, "productionAcceptance.reportExportedBy", {
-                      actor: permissionEntityDisplayName(matchingProductionReport.generatedBy, t),
-                      date: formatDate(matchingProductionReport.generatedAt)
+                      actor: permissionEntityDisplayName(matchingAcceptanceReport.generatedBy, t),
+                      date: formatDate(matchingAcceptanceReport.generatedAt)
                     })}
                   </span>
-                  {matchingProductionReportDigest ? (
+                  {matchingAcceptanceReportDigest ? (
                     <span className="go-live-acceptance-report-digest-row">
                       <span
                         className="go-live-acceptance-report-digest"
-                        title={`${matchingProductionReportDigest.algorithm}: ${matchingProductionReportDigest.fullDigest}`}
+                        title={`${matchingAcceptanceReportDigest.algorithm}: ${matchingAcceptanceReportDigest.fullDigest}`}
                         translate="no"
                       >
                         {tx(t, "productionAcceptance.reportDigest", {
-                          algorithm: matchingProductionReportDigest.algorithm,
-                          digest: matchingProductionReportDigest.digest
+                          algorithm: matchingAcceptanceReportDigest.algorithm,
+                          digest: matchingAcceptanceReportDigest.digest
                         })}
                       </span>
                       <button
                         aria-label={t("productionAcceptance.copyReportDigest")}
                         className="go-live-acceptance-report-copy"
-                        onClick={() => void navigator.clipboard?.writeText(matchingProductionReportDigest.fullDigest)}
+                        onClick={() => void navigator.clipboard?.writeText(matchingAcceptanceReportDigest.fullDigest)}
                         title={t("productionAcceptance.copyReportDigest")}
                         type="button"
                       >
@@ -299,7 +299,7 @@ function reportMatchesAcceptanceScope(
     report.scope.callerInstanceId === input.callerInstanceId;
 }
 
-function formatProductionReportDigest(report: PermissionPackageAcceptanceReport) {
+function formatAcceptanceReportDigest(report: PermissionPackageAcceptanceReport) {
   const fullDigest = report.reportDigest.trim();
   const digest = fullDigest.length > 24
     ? `${fullDigest.slice(0, 12)}...${fullDigest.slice(-8)}`

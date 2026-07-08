@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Agent-key-protected MCP RPC requests now require `application/json` before gateway authorization and runtime trace recording.
+- 2026-07-08：Agent Key 保护的 MCP RPC 请求现在会在网关授权和运行记录写入前要求 `application/json`。
 - 2026-07-08: Management MCP JSON-RPC requests now require `application/json` and reject request bodies larger than 1 MiB before parsing.
 - 2026-07-08：Management MCP JSON-RPC 请求现在要求 `application/json`，并会在解析前拒绝超过 1 MiB 的请求体。
 - 2026-07-08: HTTP panic recovery now returns the standard JSON error envelope with `INTERNAL_ERROR` instead of a plain-text 500 response, and recovery logs omit panic values.

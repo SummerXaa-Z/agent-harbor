@@ -3882,6 +3882,36 @@ func TestMCPInvalidMethodReturnsValidationErrorWithoutTrace(t *testing.T) {
 	}
 }
 
+func TestMCPRPCRequiresJSONContentTypeWithoutTrace(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	caller, key := createLocalCallerWithKey(t, router, "Non JSON MCP Caller")
+	target := createDirectAgent(t, repo, "Non JSON MCP Target", "default", "ws-1", "mcp", domain.AgentStatusActive, nil)
+	grantRoute(t, router, caller.ID, target.ID, "mcp", "tools/list")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", strings.NewReader(`{"jsonrpc":"2.0","id":"list","method":"tools/list"}`))
+	req.Header.Set("Authorization", "Bearer "+key.Key)
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("X-Run-Id", "run-mcp-content-type")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("non-JSON MCP RPC should return 415, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var env apiEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if env.Error != "UNSUPPORTED_MEDIA_TYPE" {
+		t.Fatalf("expected content-type error, got %#v", env)
+	}
+	traces := decodeData[[]traceResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/traces?runId=run-mcp-content-type", nil, ""))
+	if len(traces) != 0 {
+		t.Fatalf("invalid MCP content type should not record trace, got %#v", traces)
+	}
+}
+
 func TestMCPProxyRelaysAllowedUpstreamResponse(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)

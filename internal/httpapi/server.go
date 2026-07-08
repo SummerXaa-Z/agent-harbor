@@ -5383,6 +5383,9 @@ type mcpRequestInfo struct {
 }
 
 func mcpRequestInfoFromRequest(r *http.Request) (mcpRequestInfo, error) {
+	if err := requireJSONContentType(r); err != nil {
+		return mcpRequestInfo{}, err
+	}
 	body, err := readProxyBody(r.Body)
 	if err != nil {
 		return mcpRequestInfo{}, err

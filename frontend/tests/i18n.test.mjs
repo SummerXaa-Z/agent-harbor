@@ -549,7 +549,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("journey.aiAdmin.step.approvedApply"), "权限包落地");
   assert.equal(t("journey.aiAdmin.record.approvedApply"), "确认已批准的权限变更已经落地并生成应用记录。");
   assert.doesNotMatch(i18nSource, /journey\.aiAdmin\.evidence\./);
-  assert.equal(t("section.permissionApplicationEvidence"), "权限已落地");
+  assert.doesNotMatch(i18nSource, /section\.permissionApplicationEvidence/);
   assert.equal(t("detail.applicationId"), "应用记录");
   assert.equal(t("section.permissionDraft"), "申请配置");
   assert.equal(t("section.permissionPolicyGate"), "策略门禁");

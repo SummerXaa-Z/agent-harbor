@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Permission workbench action handling now prefers `export_acceptance_report` while retaining `export_production_evidence` as a legacy backend compatibility alias.
+- 2026-07-08：权限变更工作台的 action 处理现在首选 `export_acceptance_report`，同时保留 `export_production_evidence` 作为旧后端兼容别名。
 - 2026-07-08: The permission package approval scenario now prints acceptance report wording instead of production-report wording for operator-facing status and error output.
 - 2026-07-08：权限包审批场景现在在面向操作者的状态与错误输出中使用验收报告表述，不再使用 production-report 旧表述。
 - 2026-07-08: Frontend API helpers now expose `permissionPackageAcceptanceReportPath` and `fetchPermissionPackageAcceptanceReport` as the primary report names while retaining older aliases.

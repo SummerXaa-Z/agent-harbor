@@ -590,6 +590,25 @@ test("acceptance report model type is preferred outside compatibility aliases", 
   assert.match(api, /Promise<PermissionPackageAcceptanceReport>/);
 });
 
+test("acceptance report action code is preferred with a legacy backend alias", () => {
+  const productionActionCodeStart = permissionPackages.indexOf("export type PermissionPackageProductionNextActionCode =");
+  const workbenchActionCodeStart = permissionPackages.indexOf("export type PermissionPackageWorkbenchActionCode =");
+  const stepKeyStart = permissionPackages.indexOf("export type PermissionPackageWorkbenchStepKey =", workbenchActionCodeStart);
+  assert.notEqual(productionActionCodeStart, -1);
+  assert.notEqual(workbenchActionCodeStart, -1);
+  assert.notEqual(stepKeyStart, -1);
+
+  const productionActionCodes = permissionPackages.slice(productionActionCodeStart, workbenchActionCodeStart);
+  const workbenchActionCodes = permissionPackages.slice(workbenchActionCodeStart, stepKeyStart);
+  assert.match(productionActionCodes, /\| "export_acceptance_report"/);
+  assert.match(productionActionCodes, /\| "export_production_evidence"/);
+  assert.match(workbenchActionCodes, /\| "export_acceptance_report"/);
+  assert.match(workbenchActionCodes, /\| "export_production_evidence"/);
+  assert.match(permissionWorkbenchPresenters, /export function isAcceptanceReportActionCode/);
+  assert.match(workbench, /isAcceptanceReportActionCode\(primaryActionCode\)/);
+  assert.doesNotMatch(workbench, /primaryActionCode === "export_production_evidence"/);
+});
+
 test("workspace navigation is reflected in the URL hash", () => {
   assert.match(app, /const \[activeNav, setActiveNav\] = useState<NavKey>\(initialNavKey\)/);
   assert.match(app, /window\.history\.replaceState/);

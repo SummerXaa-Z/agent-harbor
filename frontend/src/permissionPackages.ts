@@ -226,6 +226,7 @@ export type PermissionPackageProductionNextActionCode =
   | "run_allowed_runtime_call"
   | "run_denied_runtime_call"
   | "verify_applied_audit"
+  | "export_acceptance_report"
   | "export_production_evidence";
 
 export interface PermissionPackageProductionReadinessSummary {
@@ -341,6 +342,7 @@ export type PermissionPackageWorkbenchActionCode =
   | "review_approval_request"
   | "apply_permission_package"
   | "run_runtime_validation"
+  | "export_acceptance_report"
   | "export_production_evidence";
 
 export type PermissionPackageWorkbenchStepKey =

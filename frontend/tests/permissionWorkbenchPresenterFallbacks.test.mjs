@@ -58,3 +58,13 @@ test("permission preflight and policy fallbacks do not expose raw service wordin
   assert.match(readinessBlock, /t\("message\.permissionPackageReadinessWarning"\)/);
   assert.doesNotMatch(readinessBlock, /: warning/);
 });
+
+test("permission workbench report action code prefers acceptance report while retaining legacy backend compatibility", () => {
+  const acceptanceActionBlock = functionBlock("isAcceptanceReportActionCode");
+  const actionKeyBlock = functionBlock("permissionWorkbenchActionKey");
+
+  assert.match(acceptanceActionBlock, /code === "export_acceptance_report"/);
+  assert.match(acceptanceActionBlock, /code === "export_production_evidence"/);
+  assert.match(actionKeyBlock, /isAcceptanceReportActionCode\(code\)/);
+  assert.doesNotMatch(actionKeyBlock, /case "export_production_evidence"/);
+});

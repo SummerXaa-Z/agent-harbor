@@ -37,6 +37,7 @@ import {
   accessDecisionOutcomeLabel,
   accessSubjectDropdownOption,
   formatDate,
+  isAcceptanceReportActionCode,
   permissionApplicationHealthLabel,
   permissionApplicationHealthRowSummary,
   permissionApprovalRequestBusinessLabel,
@@ -430,7 +431,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       onRunApprovalJourney();
       return;
     }
-    if (primaryActionCode === "export_production_evidence" || productionSummary.primaryActionKey === "action.exportAcceptanceReport") {
+    if (isAcceptanceReportActionCode(primaryActionCode) || productionSummary.primaryActionKey === "action.exportAcceptanceReport") {
       onExportAcceptanceReport();
       return;
     }

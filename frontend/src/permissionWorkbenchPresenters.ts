@@ -553,7 +553,12 @@ export function productionConsoleStatusTone(status: AiAdminProductionConsoleStat
   return "neutral";
 }
 
+export function isAcceptanceReportActionCode(code: string | undefined) {
+  return code === "export_acceptance_report" || code === "export_production_evidence";
+}
+
 export function permissionWorkbenchActionKey(code: string | undefined, fallback: string) {
+  if (isAcceptanceReportActionCode(code)) return "action.exportAcceptanceReport";
   switch (code) {
     case "complete_request":
       return "action.completePermissionRequest";
@@ -565,8 +570,6 @@ export function permissionWorkbenchActionKey(code: string | undefined, fallback:
       return "action.applyPermissionPackage";
     case "run_runtime_validation":
       return "action.runApprovalJourney";
-    case "export_production_evidence":
-      return "action.exportAcceptanceReport";
     default:
       return fallback;
   }

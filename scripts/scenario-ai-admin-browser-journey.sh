@@ -21,6 +21,7 @@ RUN_ID="${RUN_ID:-ai-admin-browser-journey-$(date +%Y%m%d%H%M%S)}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="${TMPDIR:-/tmp}/agent-harbor-browser-gate-${RUN_ID}"
 PIDS=()
+read -r -a PNPM_CMD <<< "${PNPM:-corepack pnpm}"
 
 # shellcheck source=scripts/lib/ports.sh
 source "$ROOT_DIR/scripts/lib/ports.sh"
@@ -106,7 +107,7 @@ verify_subject_header_cors() {
 need curl
 need go
 need node
-need pnpm
+need "${PNPM_CMD[0]}"
 need python3
 
 assert_port_free "API" "$API_PORT"
@@ -128,7 +129,7 @@ PIDS+=("$!")
 
 case "$MCP_SERVER_MODE" in
   real)
-    pnpm --dir scripts/real-mcp install --frozen-lockfile >/dev/null
+    "${PNPM_CMD[@]}" --dir scripts/real-mcp install --frozen-lockfile >/dev/null
     (cd scripts/real-mcp && REAL_MCP_HOST="$MOCK_MCP_HOST" REAL_MCP_PORT="$MOCK_MCP_PORT" node server.mjs) > "$LOG_DIR/mcp.log" 2>&1 &
     PIDS+=("$!")
     ;;
@@ -142,7 +143,7 @@ case "$MCP_SERVER_MODE" in
     ;;
 esac
 
-VITE_API_BASE="$BASE_URL" pnpm --dir frontend dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort > "$LOG_DIR/frontend.log" 2>&1 &
+VITE_API_BASE="$BASE_URL" "${PNPM_CMD[@]}" --dir frontend dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort > "$LOG_DIR/frontend.log" 2>&1 &
 PIDS+=("$!")
 
 wait_http "API" "$BASE_URL/healthz"

@@ -10,6 +10,7 @@ MOCK_MCP_HOST="${MOCK_MCP_HOST:-127.0.0.1}"
 MOCK_MCP_PORT="${MOCK_MCP_PORT:-8787}"
 MCP_SERVER_MODE="${AGENT_HARBOR_DEMO_MCP_MODE:-real}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+read -r -a PNPM_CMD <<< "${PNPM:-corepack pnpm}"
 
 # shellcheck source=scripts/lib/ports.sh
 source "$ROOT_DIR/scripts/lib/ports.sh"
@@ -92,7 +93,7 @@ supervise() {
 need go
 need node
 need python3
-need pnpm
+need "${PNPM_CMD[0]}"
 
 assert_port_free "API" "$API_PORT"
 assert_port_free "MCP" "$MOCK_MCP_PORT"
@@ -100,7 +101,7 @@ assert_port_free "frontend" "$FRONTEND_PORT"
 
 cd "$ROOT_DIR"
 
-pnpm --dir frontend install --frozen-lockfile
+"${PNPM_CMD[@]}" --dir frontend install --frozen-lockfile
 
 echo "Starting AgentHarbor demo..."
 echo "API:       ${API_BASE_URL}"
@@ -117,7 +118,7 @@ PIDS+=("$!")
 
 case "$MCP_SERVER_MODE" in
   real)
-    pnpm --dir scripts/real-mcp install --frozen-lockfile >/dev/null
+    "${PNPM_CMD[@]}" --dir scripts/real-mcp install --frozen-lockfile >/dev/null
     (cd scripts/real-mcp && REAL_MCP_HOST="$MOCK_MCP_HOST" REAL_MCP_PORT="$MOCK_MCP_PORT" node server.mjs) &
     PIDS+=("$!")
     ;;
@@ -131,7 +132,7 @@ case "$MCP_SERVER_MODE" in
     ;;
 esac
 
-VITE_API_BASE="${VITE_API_BASE:-$API_BASE_URL}" pnpm --dir frontend dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort &
+VITE_API_BASE="${VITE_API_BASE:-$API_BASE_URL}" "${PNPM_CMD[@]}" --dir frontend dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort &
 PIDS+=("$!")
 
 echo "Demo is starting. Open ${FRONTEND_ORIGIN}"

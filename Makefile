@@ -1,5 +1,7 @@
 SHELL := /bin/bash
 
+PNPM ?= corepack pnpm
+
 GO_FILES := $(shell git ls-files '*.go')
 
 SCENARIO_SCRIPTS := \
@@ -93,16 +95,16 @@ build:
 	go build ./...
 
 frontend-deps:
-	pnpm --dir frontend install --frozen-lockfile
+	$(PNPM) --dir frontend install --frozen-lockfile
 
 frontend-test: frontend-deps
-	pnpm --dir frontend test
+	$(PNPM) --dir frontend test
 
 frontend-build: frontend-deps
-	pnpm --dir frontend build
+	$(PNPM) --dir frontend build
 
 real-mcp-deps:
-	pnpm --dir scripts/real-mcp install --frozen-lockfile
+	$(PNPM) --dir scripts/real-mcp install --frozen-lockfile
 
 makefile-targets-test:
 	bash tests/makefile_targets_test.sh
@@ -127,7 +129,7 @@ mock-mcp:
 	scripts/mock-mcp-server.py --host "$${MOCK_MCP_HOST:-127.0.0.1}" --port "$${MOCK_MCP_PORT:-8787}"
 
 real-mcp: real-mcp-deps
-	pnpm --dir scripts/real-mcp start
+	$(PNPM) --dir scripts/real-mcp start
 
 demo: scripts/demo.sh
 	scripts/demo.sh

@@ -5182,6 +5182,31 @@ func TestOpenAPIProxyRelaysRelativePath(t *testing.T) {
 	}
 }
 
+func TestOpenAPIProxyRejectsEncodedPathTraversalBeforeUpstream(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	upstreamCalled := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalled = true
+		t.Fatalf("encoded traversal path should not reach upstream: %s", r.URL.String())
+	}))
+	defer upstream.Close()
+
+	caller, key := createLocalCallerWithKey(t, router, "OpenAPI Traversal Caller")
+	target := createDirectAgent(t, repo, "Traversal OpenAPI", "default", "ws-1", "openapi", domain.AgentStatusActive, map[string]any{
+		"endpoint": upstream.URL + "/base",
+	})
+	grantRoute(t, router, caller.ID, target.ID, "openapi", "")
+
+	resp := request(t, router, http.MethodGet, "/api/v1/openapi/agents/"+target.ID+"/%252e%252e/admin", nil, key.Key)
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected encoded traversal rejection, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if upstreamCalled {
+		t.Fatalf("encoded traversal path reached upstream")
+	}
+}
+
 func TestProxyUpstreamConnectFailureRecordsTraceAndReturnsConnectError(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)

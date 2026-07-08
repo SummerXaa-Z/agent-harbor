@@ -16,6 +16,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="${TMPDIR:-/tmp}/agent-harbor-web-gate-${RUN_ID}"
 PIDS=()
 CLEANED_UP=0
+read -r -a PNPM_CMD <<< "${PNPM:-corepack pnpm}"
 
 # shellcheck source=scripts/lib/ports.sh
 source "$ROOT_DIR/scripts/lib/ports.sh"
@@ -98,7 +99,7 @@ assert_contains() {
 need curl
 need go
 need node
-need pnpm
+need "${PNPM_CMD[0]}"
 need python3
 
 assert_port_free "API" "$API_PORT"
@@ -120,7 +121,7 @@ track_pid "$!"
 (cd scripts/real-mcp && REAL_MCP_HOST="$MCP_HOST" REAL_MCP_PORT="$MCP_PORT" node server.mjs) > "$LOG_DIR/mcp.log" 2>&1 &
 track_pid "$!"
 
-VITE_API_BASE="$BASE_URL" pnpm --dir frontend dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort > "$LOG_DIR/frontend.log" 2>&1 &
+VITE_API_BASE="$BASE_URL" "${PNPM_CMD[@]}" --dir frontend dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort > "$LOG_DIR/frontend.log" 2>&1 &
 track_pid "$!"
 
 wait_http "API" "$BASE_URL/healthz"
@@ -160,7 +161,7 @@ for hash in getting-started registry ask ai-admin go-live; do
   echo "route smoke ready: #$hash"
 done
 
-pnpm --dir frontend exec node --test \
+"${PNPM_CMD[@]}" --dir frontend exec node --test \
   tests/connectionDiagnostics.test.mjs \
   tests/productionAcceptance.test.mjs \
   tests/productionJourney.test.mjs \

@@ -8,6 +8,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: Makefile and local browser scenario gates now run through `corepack pnpm` by default so they stay on a pnpm 10 toolchain without depending on global pnpm 11.
+- 2026-07-08：Makefile 和本地浏览器场景门禁现在默认通过 `corepack pnpm` 执行，避免误用全局 pnpm 11。
+- 2026-07-08: OpenAPI proxy relative paths now reject decoded traversal markers before preparing upstream requests.
+- 2026-07-08：OpenAPI 代理相对路径现在会在准备上游请求前拒绝解码后的目录穿越标记。
 - 2026-07-08: Agent-key-protected MCP RPC requests now require `application/json` before gateway authorization and runtime trace recording.
 - 2026-07-08：Agent Key 保护的 MCP RPC 请求现在会在网关授权和运行记录写入前要求 `application/json`。
 - 2026-07-08: Management MCP JSON-RPC requests now require `application/json` and reject request bodies larger than 1 MiB before parsing.

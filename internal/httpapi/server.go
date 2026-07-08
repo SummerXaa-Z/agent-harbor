@@ -4793,8 +4793,8 @@ func (s *Server) openapiOperation(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) openapiRelativePath(w http.ResponseWriter, r *http.Request) {
 	relativePath := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
-	if relativePath == "" || strings.Contains(relativePath, "..") || strings.Contains(relativePath, "://") {
-		writeError(w, domain.BadRequest("VALIDATION_FAILED", "openapi relative path is invalid"))
+	if err := validateOpenAPIRelativePath(relativePath); err != nil {
+		writeError(w, err)
 		return
 	}
 	s.handleDataPlane(w, r, "openapi", relativePath)
@@ -5329,8 +5329,8 @@ func elapsedProxyDurationMs(startedAt time.Time) int64 {
 }
 
 func openAPIUpstreamURL(endpoint string, relativePath string, rawQuery string) (string, error) {
-	if relativePath == "" || strings.Contains(relativePath, "..") || strings.Contains(relativePath, "://") {
-		return "", domain.BadRequest("VALIDATION_FAILED", "openapi relative path is invalid")
+	if err := validateOpenAPIRelativePath(relativePath); err != nil {
+		return "", err
 	}
 	parsed, err := url.Parse(endpoint)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
@@ -5342,6 +5342,27 @@ func openAPIUpstreamURL(endpoint string, relativePath string, rawQuery string) (
 	}
 	parsed.RawQuery = rawQuery
 	return parsed.String(), nil
+}
+
+func validateOpenAPIRelativePath(relativePath string) error {
+	if relativePath == "" || strings.Contains(relativePath, "://") {
+		return domain.BadRequest("VALIDATION_FAILED", "openapi relative path is invalid")
+	}
+	decoded := relativePath
+	for range 3 {
+		next, err := url.PathUnescape(decoded)
+		if err != nil {
+			return domain.BadRequest("VALIDATION_FAILED", "openapi relative path is invalid")
+		}
+		if next == decoded {
+			break
+		}
+		decoded = next
+	}
+	if strings.Contains(decoded, "..") || strings.Contains(decoded, "://") {
+		return domain.BadRequest("VALIDATION_FAILED", "openapi relative path is invalid")
+	}
+	return nil
 }
 
 func copyUpstreamRequestHeaders(dst http.Header, src http.Header) {

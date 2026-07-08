@@ -70,8 +70,9 @@ test("demo script wires isolated ports without hidden frontend variables", () =>
 
 test("demo script checks ports before installing dependencies", () => {
   const portPreflight = demoScript.indexOf('assert_port_free "API" "$API_PORT"');
-  const frontendInstall = demoScript.indexOf("pnpm --dir frontend install --frozen-lockfile");
-  const realMcpInstall = demoScript.indexOf("pnpm --dir scripts/real-mcp install --frozen-lockfile");
+  const frontendInstall = demoScript.indexOf('"${PNPM_CMD[@]}" --dir frontend install --frozen-lockfile');
+  const realMcpInstall = demoScript.indexOf('"${PNPM_CMD[@]}" --dir scripts/real-mcp install --frozen-lockfile');
+  assert.match(demoScript, /PNPM:-corepack pnpm/);
   assert.ok(portPreflight >= 0);
   assert.ok(frontendInstall > portPreflight);
   assert.ok(realMcpInstall > portPreflight);

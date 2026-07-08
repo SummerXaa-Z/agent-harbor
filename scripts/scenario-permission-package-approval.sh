@@ -26,6 +26,7 @@ REQUEST_TEXT="${REQUEST_TEXT:-Allow support triage reads and bounded ticket upda
 TEMPLATE_ID="${TEMPLATE_ID:-support-ticket-triage}"
 SUBJECT_SELECTOR="${SUBJECT_SELECTOR:-user:support-*}"
 SUBJECT_ID="${SUBJECT_ID:-user:support-001}"
+read -r -a PNPM_CMD <<< "${PNPM:-corepack pnpm}"
 
 HTTP_STATUS=""
 HTTP_BODY=""
@@ -1326,8 +1327,8 @@ start_mcp_server() {
       ;;
     real)
       need node
-      need pnpm
-      pnpm --dir scripts/real-mcp install --frozen-lockfile >/dev/null
+      need "${PNPM_CMD[0]}"
+      "${PNPM_CMD[@]}" --dir scripts/real-mcp install --frozen-lockfile >/dev/null
       (cd scripts/real-mcp && REAL_MCP_HOST="$MOCK_MCP_HOST" REAL_MCP_PORT="$MOCK_MCP_PORT" node server.mjs) &
       MOCK_MCP_PID="$!"
       ;;

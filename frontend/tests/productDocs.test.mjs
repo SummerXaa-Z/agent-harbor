@@ -90,6 +90,11 @@ test("public product docs use records wording instead of forensic-style prose", 
   assert.doesNotMatch(publicProse, /\bEvidence\b|\bevidence\b|证据/);
 });
 
+test("primary product docs keep legacy report aliases out of the main path", () => {
+  assert.doesNotMatch(readme, /export_permission_package_production_evidence/);
+  assert.doesNotMatch(productJourney, /export_permission_package_production_evidence/);
+});
+
 test("release scenario operator output uses report and record wording", () => {
   assert.doesNotMatch(permissionPackageApprovalScript, /production evidence report/i);
   assert.doesNotMatch(permissionPackageApprovalScript, /trace evidence verified/i);

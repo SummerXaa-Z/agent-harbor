@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: README and product journey docs now keep legacy Management MCP report-export aliases out of the primary path and link to a dedicated engineering compatibility map.
+- 2026-07-08：README 和产品旅程现在不在主路径展示旧版 Management MCP 报告导出别名，兼容映射集中到工程说明。
 - 2026-07-08: Production report engineering docs now use report/record wording and are covered by the public product-doc language regression.
 - 2026-07-08：生产报告工程文档现在统一使用报告/记录措辞，并纳入公开产品文档语言回归测试。
 - 2026-07-08: Public validation docs and scenario operator output now use record/report wording instead of investigation-style wording.

@@ -747,12 +747,14 @@ test("management forms and console primitives are split from the app shell", () 
 test("runtime evidence views are split from the app shell", () => {
   assert.match(app, /from "\.\/components\/RuntimeEvidenceViews"/);
   assert.doesNotMatch(app, /function EvidenceTimeline/);
+  assert.doesNotMatch(app, /function AcceptanceHistoryTimeline/);
   assert.doesNotMatch(app, /function SignalBoard/);
   assert.doesNotMatch(app, /function TraceTable/);
   assert.doesNotMatch(app, /function ManagementAuditTable/);
   assert.doesNotMatch(app, /function auditCredentialVersion/);
   assert.doesNotMatch(app, /function metricRatio/);
-  assert.match(runtimeEvidenceViews, /export function EvidenceTimeline/);
+  assert.match(runtimeEvidenceViews, /export function AcceptanceHistoryTimeline/);
+  assert.doesNotMatch(runtimeEvidenceViews, /export function EvidenceTimeline/);
   assert.match(runtimeEvidenceViews, /export function SignalBoard/);
   assert.match(runtimeEvidenceViews, /export function TraceTable/);
   assert.match(runtimeEvidenceViews, /export function ManagementAuditTable/);

@@ -26,10 +26,10 @@ import type {
 import { TechnicalId } from "./TechnicalId";
 import { Badge, EmptyRow } from "./ui";
 
-export function EvidenceTimeline({ runs, t }: { runs: EvidenceRun[]; t: Translator }) {
+export function AcceptanceHistoryTimeline({ runs, t }: { runs: EvidenceRun[]; t: Translator }) {
   return (
     <div className="timeline">
-      {runs.length === 0 ? <EmptyRow title={t("empty.evidenceRuns.title")} detail={t("empty.evidenceRuns.detail")} /> : null}
+      {runs.length === 0 ? <EmptyRow title={t("empty.acceptanceHistory.title")} detail={t("empty.acceptanceHistory.detail")} /> : null}
       {runs.map((run) => (
         <article className="timeline-row" key={run.id}>
           <div className={`timeline-marker tone-${toneFromStatus(run.status)}`}>
@@ -38,9 +38,9 @@ export function EvidenceTimeline({ runs, t }: { runs: EvidenceRun[]; t: Translat
           <div>
             <div className="timeline-title">
               <strong>{run.title}</strong>
-              <Badge tone={toneFromStatus(run.status)}>{evidenceStatusLabel(run.status, t)}</Badge>
+              <Badge tone={toneFromStatus(run.status)}>{acceptanceRunStatusLabel(run.status, t)}</Badge>
             </div>
-            <p>{run.checks} {t("text.checks")} · {formatDuration(evidenceDuration(run))} · {formatDate(run.completedAt ?? run.startedAt)}</p>
+            <p>{run.checks} {t("text.checks")} · {formatDuration(acceptanceRunDuration(run))} · {formatDate(run.completedAt ?? run.startedAt)}</p>
           </div>
         </article>
       ))}
@@ -214,7 +214,7 @@ function auditSummaryLabel(summary: string | undefined, t: Translator) {
   return t(`auditSummary.${key}`, summary);
 }
 
-function evidenceStatusLabel(status: EvidenceRun["status"], t: Translator) {
+function acceptanceRunStatusLabel(status: EvidenceRun["status"], t: Translator) {
   if (status === "passed") return t("status.evidencePassed");
   if (status === "failed") return t("status.evidenceFailed");
   return t("status.evidenceWarning");
@@ -227,7 +227,7 @@ function auditTone(action: string): Tone {
   return "info";
 }
 
-function evidenceDuration(run: EvidenceRun) {
+function acceptanceRunDuration(run: EvidenceRun) {
   if (!run.completedAt) return 0;
   const started = new Date(run.startedAt).getTime();
   const completed = new Date(run.completedAt).getTime();

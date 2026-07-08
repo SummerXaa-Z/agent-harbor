@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- 2026-07-08: The go-live acceptance history panel now uses preferred acceptance-history component, prop, and translation keys while keeping old keys compatible.
+- 2026-07-08：上线验收历史面板现在使用首选的 acceptance-history 组件、属性和翻译 key，同时保留旧 key 兼容。
 - 2026-07-08: The go-live status page container is now named `GoLiveStatusView` in the frontend, matching the preferred route and translation naming.
 - 2026-07-08：前端上线状态页容器现在命名为 `GoLiveStatusView`，与首选路由和翻译命名保持一致。
 - 2026-07-08: The go-live status workspace now has preferred `go-live` translation keys, so localized sidebar and page titles do not fall back to old go-live status keys.

@@ -211,7 +211,7 @@ import {
   PolicyTable
 } from "./components/OperationalViews";
 import {
-  EvidenceTimeline,
+  AcceptanceHistoryTimeline,
   ManagementAuditTable,
   SignalBoard,
   TraceTable
@@ -2408,9 +2408,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       />
     </Panel>
   );
-  const evidenceRunsPanel = (className = "span-4") => (
-    <Panel className={className} icon={<ClipboardCheck size={18} />} title={t("panel.evidenceRuns")}>
-      <EvidenceTimeline runs={evidenceRuns} t={t} />
+  const acceptanceHistoryPanel = (className = "span-4") => (
+    <Panel className={className} icon={<ClipboardCheck size={18} />} title={t("panel.acceptanceHistory")}>
+      <AcceptanceHistoryTimeline runs={evidenceRuns} t={t} />
     </Panel>
   );
   const runtimeSignalsPanel = (className = "span-5") => (
@@ -2810,7 +2810,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       case "go-live":
         return (
           <GoLiveStatusView
-            evidenceRunsPanel={evidenceRunsPanel("span-5")}
+            acceptanceHistoryPanel={acceptanceHistoryPanel("span-5")}
             goLiveAcceptancePanel={goLiveAcceptancePanel}
             journeyCheckpoint={productionJourneyCheckpoint}
             managementAuditPanel={managementAuditPanel("span-7")}
@@ -2822,7 +2822,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         return (
           <CockpitView
             coreJourneyPanel={coreJourneyPanel}
-            evidenceRunsPanel={evidenceRunsPanel("span-4")}
+            acceptanceHistoryPanel={acceptanceHistoryPanel("span-4")}
             runtimeSignalsPanel={runtimeSignalsPanel("span-5")}
             tracePanel={tracePanel("span-7")}
           />

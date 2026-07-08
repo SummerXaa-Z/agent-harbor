@@ -201,13 +201,13 @@ export function TracesView({
 }
 
 export function GoLiveStatusView({
-  evidenceRunsPanel,
+  acceptanceHistoryPanel,
   goLiveAcceptancePanel,
   journeyCheckpoint,
   managementAuditPanel,
   runtimeSignalsPanel
 }: {
-  evidenceRunsPanel: ReactNode;
+  acceptanceHistoryPanel: ReactNode;
   goLiveAcceptancePanel: ReactNode;
   journeyCheckpoint?: ReactNode;
   managementAuditPanel: ReactNode;
@@ -217,7 +217,7 @@ export function GoLiveStatusView({
     <section className="content-grid">
       {journeyCheckpoint}
       {goLiveAcceptancePanel}
-      {evidenceRunsPanel}
+      {acceptanceHistoryPanel}
       {managementAuditPanel}
       {runtimeSignalsPanel}
     </section>
@@ -226,12 +226,12 @@ export function GoLiveStatusView({
 
 export function CockpitView({
   coreJourneyPanel,
-  evidenceRunsPanel,
+  acceptanceHistoryPanel,
   runtimeSignalsPanel,
   tracePanel
 }: {
   coreJourneyPanel: ReactNode;
-  evidenceRunsPanel: ReactNode;
+  acceptanceHistoryPanel: ReactNode;
   runtimeSignalsPanel: ReactNode;
   tracePanel: ReactNode;
 }) {
@@ -240,7 +240,7 @@ export function CockpitView({
       {coreJourneyPanel}
       {runtimeSignalsPanel}
       {tracePanel}
-      {evidenceRunsPanel}
+      {acceptanceHistoryPanel}
     </section>
   );
 }

@@ -499,7 +499,7 @@ test("permission request acceptance details stay secondary to the main operator 
 
 test("management audit evidence uses business labels before technical ids", () => {
   const auditTableStart = runtimeEvidenceViews.indexOf("export function ManagementAuditTable");
-  const auditTableEnd = runtimeEvidenceViews.indexOf("export function EvidenceTimeline", auditTableStart);
+  const auditTableEnd = runtimeEvidenceViews.indexOf("export function AcceptanceHistoryTimeline", auditTableStart);
   const auditTable = runtimeEvidenceViews.slice(auditTableStart, auditTableEnd >= 0 ? auditTableEnd : undefined);
   assert.match(runtimeEvidenceViews, /auditActionLabel\(event\.action, t\)/);
   assert.match(runtimeEvidenceViews, /auditResourceTypeLabel\(event\.resourceType, t\)/);
@@ -551,13 +551,15 @@ test("go-live status page starts with acceptance workflow instead of historical 
   assert.match(goLiveAcceptanceOverview, /const primaryAction = renderProductionAcceptanceAction/);
   assert.match(goLiveAcceptanceOverview, /<section className="go-live-acceptance-main">[\s\S]*<div className="go-live-acceptance-decision">[\s\S]*<section className="go-live-acceptance-blockers"[\s\S]*<section className="go-live-acceptance-checks"[\s\S]*<aside className="go-live-acceptance-context"/);
   assert.match(goLiveCase, /goLiveAcceptancePanel/);
-  assert.ok(goLiveRender.indexOf("{goLiveAcceptancePanel}") < goLiveRender.indexOf("{evidenceRunsPanel}"));
+  assert.match(goLiveCase, /acceptanceHistoryPanel/);
+  assert.doesNotMatch(goLiveCase, /evidenceRunsPanel/);
+  assert.ok(goLiveRender.indexOf("{goLiveAcceptancePanel}") < goLiveRender.indexOf("{acceptanceHistoryPanel}"));
   assert.match(i18n, /"section\.goLiveAcceptance": "上线检查"/);
   assert.match(i18n, /"productionAcceptance\.title": "上线检查"/);
   assert.match(i18n, /"productionAcceptance\.copyReportDigest": "复制报告摘要"/);
   assert.match(i18n, /"productionAcceptance\.reportExportedBy": "报告由 \{actor\} 于 \{date\} 导出"/);
   assert.match(i18n, /"productionAcceptance\.reportDigest": "\{algorithm\} 摘要 \{digest\}"/);
-  assert.match(i18n, /"empty\.evidenceRuns\.detail": "历史自检运行会在这里保留；当前权限变更请以上方上线检查状态为准。"/);
+  assert.match(i18n, /"empty\.acceptanceHistory\.detail": "历史自检运行会在这里保留；当前权限变更请以上方上线检查状态为准。"/);
   assert.match(styles, /\.go-live-acceptance\s*\{/);
   assert.match(styles, /\.go-live-acceptance-decision\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
   assert.match(styles, /\.go-live-acceptance-blockers\s*\{/);

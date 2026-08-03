@@ -54,6 +54,10 @@ Tenant
   -> Runtime decision and trace records
 ```
 
+New to the model? Read the [Tenant hierarchy and permission flow guide](docs/product/tenant-hierarchy-and-permission-flow.md) for a concrete example and a visual explanation of how access narrows at each boundary.
+
+初次了解这个模型？请阅读[租户层级与权限流转指南](docs/product/tenant-hierarchy-and-permission-flow.md)，通过一个具体示例和图解了解权限如何在每一层边界逐步收敛。
+
 The tenant is the primary control boundary. A registered tenant can manage its own subtree; unregistered tenant strings keep exact-match behavior for compatibility.
 
 The data plane uses short-lived Agent Keys. Management APIs require configured admin authentication by default: use `AGENT_HARBOR_ADMIN_KEY` for a shared local admin key or `AGENT_HARBOR_ADMIN_IDENTITIES` for named administrators and reviewers. Named identities can also carry role, tenant, and workspace boundaries, for example `AGENT_HARBOR_ADMIN_IDENTITIES="platform=platform-admin-key-32|role=platform_admin;east=east-admin-key-32|role=tenant_admin|tenant=tenant-east|workspace=ws-support"`. Actor names must be stable machine identifiers using 1-80 letters, numbers, dots, underscores, hyphens, or at signs. Scoped tenant admins can only read or mutate their allowed tenant subtree and workspace across REST management APIs, permission-package operations, and the management MCP endpoint. Production deployment mode rejects short or common weak bootstrap admin keys, rejects a shared admin key that matches any named bootstrap identity key, and reserves the `admin-key` and `local-dev` actor names for built-in bootstrap/development identities, so keep shared and named bootstrap keys long, distinct, and stored outside the product. The web console signs in through `/api/v1/auth/login` and exchanges the admin key for an HttpOnly `agent_harbor_session` cookie; direct `X-Admin-Key` remains available for API clients and advanced local overrides. Browser console cookie sessions require a session-bound CSRF header for every unsafe management method; direct API-key clients are unaffected. Management JSON, Management MCP JSON-RPC, and Agent-key-protected MCP RPC endpoints require `application/json`; management endpoints reject request bodies larger than 1 MiB before decoding, while data-plane MCP RPC keeps the 4 MiB proxy body limit. OpenAPI proxy relative paths reject decoded traversal markers before an allowed request is prepared for upstream services. REST management JSON also requires a single complete JSON value. All HTTP responses include `Permissions-Policy: camera=(), microphone=(), geolocation=()`, `Referrer-Policy: no-referrer`, and `X-Frame-Options: DENY`; HTTPS and trusted HTTPS-proxy responses also include `Strict-Transport-Security: max-age=31536000; includeSubDomains`; JSON success, error, and Management MCP JSON-RPC responses include `X-Content-Type-Options: nosniff`. Unexpected handler panics are recovered as the same JSON error envelope with `INTERNAL_ERROR`, without returning panic details to clients. Management, Agent-key-protected data-plane, and console authentication responses set `Cache-Control: no-store`, `Pragma: no-cache`, and `Expires: 0`; Agent-key-protected MCP and OpenAPI data-plane responses also set `X-Content-Type-Options: nosniff`. Console session cookies set `Secure` for direct TLS requests and for trusted loopback/private proxy requests that carry `X-Forwarded-Proto: https` or `Forwarded: proto=https`; forwarded scheme headers from public clients are ignored. Set `AGENT_HARBOR_SESSION_SECRET` for deployment-style environments so console sessions are signed with a stable, high-entropy secret; production mode blocks missing, short, or common weak session secrets. `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true` is development-only and must not be used for production deployments.
@@ -343,13 +347,9 @@ Run `make production-hardening` before any deployment-style handoff. It proves t
 
 部署式交付前请先运行 `make production-hardening`。它会验证管理 API 的管理员密钥保护、未配置管理员认证时的失败关闭行为、可信 HTTPS 转发代理后的控制台登录会设置 Secure 会话 Cookie、生产模式会在启动或存储初始化前拒绝开发专用开关、弱或冲突的引导管理员密钥、缺失或弱值会话密钥、缺失或无效的持久化存储、缺失凭据加密密钥和无效 CORS 来源，并确认私有上游访问默认保持关闭。
 
-PostgreSQL example:
+For a persisted local developer-preview setup, including the PostgreSQL 16 Compose file, automatic migration behavior, credential-key handling, and cleanup guidance, see [Local PostgreSQL setup](docs/development/postgres.md). This is intentionally not a production deployment recipe.
 
-```bash
-export AGENT_HARBOR_CREDENTIAL_KEY="$(openssl rand -base64 32)"
-AGENT_HARBOR_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' \
-  go run ./cmd/agent-harbor
-```
+需要持久化的本地开发预览环境（包括 PostgreSQL 16 Compose 文件、自动迁移行为、凭据 key 处理和清理说明）请参阅[本地 PostgreSQL 配置](docs/development/postgres.md)。该文档刻意不将其描述为生产部署方案。
 
 ## Local Verification
 
@@ -365,7 +365,9 @@ make scenario-scripts-lint
 make github-config-lint
 ```
 
-PostgreSQL integration remains opt-in:
+PostgreSQL integration remains opt-in. For local database startup, migration behavior, credential-key handling, and safe reset instructions, see [Local PostgreSQL setup](docs/development/postgres.md):
+
+PostgreSQL 集成测试仍按需执行。关于本地数据库启动、迁移行为、凭据 key 处理与安全重置，请参阅[本地 PostgreSQL 配置](docs/development/postgres.md)：
 
 ```bash
 AGENT_HARBOR_TEST_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' \

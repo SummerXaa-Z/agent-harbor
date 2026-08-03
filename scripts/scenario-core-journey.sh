@@ -150,6 +150,16 @@ elif kind == "approve-scoped":
             "tenantFilter": f"tenant_id = '{tenant_id}'",
         }],
     }
+elif kind == "narrow-capability-scope":
+    tenant_id = sys.argv[2]
+    body = {
+        "dataScopes": [{
+            "dataDomain": "crm",
+            "region": "us-east",
+            "table": "contacts",
+            "tenantFilter": f"tenant_id = '{tenant_id}'",
+        }],
+    }
 elif kind == "entitlement":
     tenant_id, target_id, capability_id = sys.argv[2], sys.argv[3], sys.argv[4]
     body = {
@@ -271,6 +281,60 @@ print("tenant access profile grant chain verified")
 PY
 }
 
+assert_data_scope_denied_trace() {
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$ALLOWED_CAPABILITY_ID" <<'PY'
+import json
+import os
+import sys
+
+capability_id = sys.argv[1]
+traces = json.loads(os.environ["RESPONSE_BODY"])["data"]
+if len(traces) != 1:
+    raise SystemExit(f"expected one data-scope denial trace, got {traces}")
+trace = traces[0]
+expected_reason = "workspace assignment data scopes exceed tenant entitlement boundary"
+if trace.get("decision") != "denied" or trace.get("reason") != expected_reason:
+    raise SystemExit(f"unexpected data-scope denial trace: {trace}")
+if trace.get("capabilityId") != capability_id:
+    raise SystemExit(f"denial capability mismatch: {trace}")
+if not trace.get("entitlementId") or not trace.get("workspaceAssignmentId"):
+    raise SystemExit(f"denial is missing matched grant evidence: {trace}")
+print(f"data-scope denial reason: {trace['reason']}")
+PY
+}
+
+assert_data_scope_mismatch_profile() {
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$ALLOWED_CAPABILITY_ID" <<'PY'
+import json
+import os
+import sys
+
+capability_id = sys.argv[1]
+profile = json.loads(os.environ["RESPONSE_BODY"])["data"]
+grants = [grant for grant in profile["grants"] if grant.get("capability", {}).get("id") == capability_id]
+if len(grants) != 1:
+    raise SystemExit(f"expected one matching grant in access profile, got {grants}")
+grant = grants[0]
+tenant_scopes = grant.get("effectiveTenantDataScopes", [])
+if len(tenant_scopes) != 1 or tenant_scopes[0].get("table") != "contacts":
+    raise SystemExit(f"expected narrowed effective tenant scope, got {tenant_scopes}")
+workspace = grant["workspaceAssignments"][0]
+expected_reason = "workspace assignment dataScopes exceed tenant entitlement dataScopes"
+if workspace.get("scopeStatus") != "invalid" or workspace.get("scopeReason") != expected_reason:
+    raise SystemExit(f"workspace scope should be invalid after narrowing: {workspace}")
+requested_scopes = workspace["workspaceAssignment"].get("dataScopes", [])
+if len(requested_scopes) != 1 or requested_scopes[0].get("table") != "accounts":
+    raise SystemExit(f"expected original workspace scope evidence, got {requested_scopes}")
+evidence = {
+    "effectiveTenantDataScopes": tenant_scopes,
+    "workspaceRequestedDataScopes": requested_scopes,
+    "workspaceScopeStatus": workspace["scopeStatus"],
+    "workspaceScopeReason": workspace["scopeReason"],
+}
+print("data-scope evidence: " + json.dumps(evidence, ensure_ascii=False, separators=(",", ":")))
+PY
+}
+
 start_mock_mcp() {
   if [[ "$START_MOCK_MCP" != "true" ]]; then
     return
@@ -365,5 +429,20 @@ echo "allowed assigned tool: $ALLOWED_TOOL"
 request GET "/api/v1/tenants/$CHILD_TENANT_ID/access-profile?traceLimit=10"
 expect_status 200 "fetch tenant access profile"
 assert_profile_chain
+
+request PATCH "/api/v1/capabilities/$ALLOWED_CAPABILITY_ID" "$(json_body narrow-capability-scope "$CHILD_TENANT_ID")"
+expect_status 200 "narrow capability data scope"
+
+DATA_SCOPE_MISMATCH_RUN_ID="$RUN_ID-data-scope-mismatch"
+request POST "/api/v1/mcp/agents/$TARGET_ID/rpc" "$(json_body tools-call "$ALLOWED_TOOL")" "$AGENT_KEY" "$DATA_SCOPE_MISMATCH_RUN_ID" "$SUBJECT_ID"
+expect_status 403 "deny data-scope mismatch tools/call"
+
+request GET "/api/v1/audit/traces?runId=$DATA_SCOPE_MISMATCH_RUN_ID&decision=denied"
+expect_status 200 "fetch data-scope denial trace"
+assert_data_scope_denied_trace
+
+request GET "/api/v1/tenants/$CHILD_TENANT_ID/access-profile?targetId=$TARGET_ID&capabilityId=$ALLOWED_CAPABILITY_ID&callerInstanceId=$CALLER_ID&traceLimit=10"
+expect_status 200 "fetch data-scope mismatch access profile"
+assert_data_scope_mismatch_profile
 
 echo "core journey scenario complete"

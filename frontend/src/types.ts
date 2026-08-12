@@ -276,6 +276,7 @@ export interface UpdateCapabilityRequest {
   discoveryStatus?: CapabilityDiscoveryStatus
   sensitivity?: CapabilitySensitivity
   riskLevel?: CapabilityRisk
+  dataDomains?: string[]
   dataScopes?: DataScope[]
 }
 
@@ -433,6 +434,9 @@ export interface PermissionChangeHandoffContext {
   targetName?: string
   capabilityId?: string
   capabilityName?: string
+  brokenLayer?: string
+  decisionReason?: string
+  decisionSource?: string
   subjectId?: string
   templateId?: string
   intentText?: string
@@ -446,7 +450,8 @@ export interface CapabilityGovernanceHandoffContext {
   workspaceName?: string
   targetId: string
   targetName?: string
-  sourceView: 'registry'
+  capabilityId?: string
+  sourceView: 'registry' | 'ask'
 }
 
 export interface AskHandoffContext {
@@ -544,6 +549,7 @@ export interface AccessDecisionExplainResult {
   decision: CapabilityAccessDecision
   evidence: AccessDecisionExplainEvidence[]
   dataScopes?: DataScope[]
+  nextActionCodes?: string[]
   nextActions: string[]
 }
 

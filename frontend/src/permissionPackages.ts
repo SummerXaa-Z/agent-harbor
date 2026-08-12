@@ -41,6 +41,7 @@ export interface PermissionPackageDraftInput {
   callerInstanceId: string;
   region: string;
   requestText: string;
+  requestedCapabilityId?: string;
   subjectSelector?: string;
   targetId: string;
   templateId: string;
@@ -138,6 +139,7 @@ export interface PermissionPackageApplication {
   workspaceId: string;
   targetId: string;
   callerInstanceId: string;
+  requestedCapabilityId?: string;
   subjectSelector?: string;
   requestText?: string;
   region?: string;
@@ -191,6 +193,7 @@ export interface PermissionPackageProductionReadinessFilter {
   callerInstanceId: string;
   region?: string;
   requestText?: string;
+  requestedCapabilityId?: string;
   subjectId?: string;
   subjectSelector?: string;
   targetId: string;
@@ -225,6 +228,7 @@ export interface AccessHandoff {
     workspaceId: string;
     callerInstanceId: string;
     targetId: string;
+    requestedCapabilityId?: string;
     subjectId?: string;
     subjectSelector?: string;
     region?: string;
@@ -388,6 +392,7 @@ export interface PermissionPackageAcceptanceReportScope {
   templateId: string;
   targetId: string;
   callerInstanceId: string;
+  requestedCapabilityId?: string;
   subjectId?: string;
   region?: string;
   subjectSelector?: string;
@@ -410,6 +415,7 @@ export interface PermissionPackageAcceptanceApplicationRecord {
   present: boolean;
   id?: string;
   draftId?: string;
+  requestedCapabilityId?: string;
   templateVersion?: number;
   appliedAt?: string;
   allowedCapabilityIds?: string[];
@@ -566,6 +572,7 @@ export interface PermissionPackageApprovalRequest {
   workspaceId: string;
   targetId: string;
   callerInstanceId: string;
+  requestedCapabilityId?: string;
   subjectSelector?: string;
   requestText?: string;
   region?: string;
@@ -638,7 +645,7 @@ const policyGateVersion = 1;
 export const permissionPackageTemplates: PermissionPackageTemplate[] = [
   {
     id: "sales-readonly",
-    version: 1,
+    version: 2,
     name: "Sales read-only",
     summary: "Allow CRM reads for a scoped sales tenant while blocking exports, deletes, admin actions, and restricted data.",
     allowedActions: ["read"],
@@ -663,7 +670,7 @@ export const permissionPackageTemplates: PermissionPackageTemplate[] = [
   },
   {
     id: "support-ticket-triage",
-    version: 1,
+    version: 2,
     name: "Support ticket triage",
     summary: "Allow ticket reads and bounded updates while blocking exports, deletes, and admin operations.",
     allowedActions: ["read", "write"],
@@ -682,7 +689,7 @@ export const permissionPackageTemplates: PermissionPackageTemplate[] = [
   },
   {
     id: "analytics-sandbox",
-    version: 1,
+    version: 2,
     name: "Analytics sandbox",
     summary: "Allow read and execute capabilities for sandbox analysis while blocking writes, exports, and production admin actions.",
     allowedActions: ["read", "execute"],
@@ -701,7 +708,7 @@ export const permissionPackageTemplates: PermissionPackageTemplate[] = [
   },
   {
     id: "audit-readonly",
-    version: 1,
+    version: 2,
     name: "Audit read-only",
     summary: "Allow low-risk reads for audit review while blocking mutations, exports, and restricted data.",
     allowedActions: ["read"],
@@ -742,10 +749,17 @@ export function permissionPackageApplicationDraftInput(
   application: PermissionPackageApplication,
   fallback: PermissionPackageDraftInput,
 ): PermissionPackageDraftInput {
+  const legacyExactRequestedCapabilityId = (
+    !application.requestedCapabilityId
+    && fallback.requestedCapabilityId
+    && application.allowedCapabilityIds.length === 1
+    && application.allowedCapabilityIds[0] === fallback.requestedCapabilityId
+  ) ? fallback.requestedCapabilityId : undefined;
   return {
     callerInstanceId: application.callerInstanceId,
     region: application.region ?? fallback.region,
     requestText: application.requestText ?? fallback.requestText,
+    requestedCapabilityId: application.requestedCapabilityId ?? legacyExactRequestedCapabilityId,
     subjectSelector: application.subjectSelector ?? fallback.subjectSelector,
     targetId: application.targetId,
     templateId: application.templateId,
@@ -758,14 +772,23 @@ export function createPermissionPackageDraft(
   input: PermissionPackageDraftInput,
   inventory: PermissionPackageInventory,
 ): PermissionPackageDraft {
-  const template = permissionPackageTemplates.find((item) => item.id === input.templateId) ?? permissionPackageTemplates[0];
+  const template = permissionPackageTemplates.find((item) => item.id === input.templateId) ?? unselectedPermissionPackageTemplate();
   const targetCapabilities = inventory.capabilities.filter((capability) => capability.targetId === input.targetId);
-  const blockedCapabilities = targetCapabilities.filter((capability) => isBlockedByTemplate(capability, template));
+  const requestedCapabilityId = input.requestedCapabilityId?.trim() ?? "";
+  const blockedCapabilities = targetCapabilities.filter((capability) => (
+    (requestedCapabilityId !== "" && capability.id !== requestedCapabilityId)
+    || isBlockedByTemplate(capability, template)
+    || (requestedCapabilityId !== "" && !template.allowedActions.includes(capability.action))
+  ));
   const allowedCapabilities = targetCapabilities.filter(
-    (capability) => template.allowedActions.includes(capability.action) && !isBlockedByTemplate(capability, template),
+    (capability) => (
+      (requestedCapabilityId === "" || capability.id === requestedCapabilityId)
+      && template.allowedActions.includes(capability.action)
+      && !isBlockedByTemplate(capability, template)
+    ),
   );
-  const dataScopes = buildDraftDataScopes(input, template, allowedCapabilities);
-  const readiness = buildReadiness(input, allowedCapabilities);
+  const dataScopes = template.id ? buildDraftDataScopes(input, template, allowedCapabilities) : [];
+  const readiness = buildReadiness(input, allowedCapabilities, requestedCapabilityId);
   const policyGate = buildPolicyGate(allowedCapabilities);
   return {
     allowedCapabilities,
@@ -782,10 +805,24 @@ export function createPermissionPackageDraft(
 
 function isBlockedByTemplate(capability: Capability, template: PermissionPackageTemplate): boolean {
   return (
+    !capabilityMatchesTemplateDomain(capability, template) ||
     template.blockedActions.includes(capability.action) ||
     template.blockedRisks.includes(capability.riskLevel) ||
-    template.blockedSensitivities.includes(capability.sensitivity)
+    template.blockedSensitivities.includes(capability.sensitivity) ||
+    template.guardrails.some((guardrail) => (
+      guardrail.capabilityKey === capability.key && guardrail.expectedDecision === "deny"
+    ))
   );
+}
+
+function capabilityMatchesTemplateDomain(capability: Capability, template: PermissionPackageTemplate) {
+  const domains = Array.from(new Set([
+    ...(capability.dataDomains ?? []),
+    ...(capability.dataScopes ?? []).map((scope) => scope.dataDomain ?? "")
+  ].map((value) => value.trim()).filter(Boolean)));
+  return Boolean(template.defaultDataDomain)
+    && domains.length > 0
+    && domains.every((domain) => domain === template.defaultDataDomain);
 }
 
 function buildDraftDataScopes(
@@ -809,23 +846,49 @@ function buildDraftDataScopes(
 function buildReadiness(
   input: PermissionPackageDraftInput,
   allowedCapabilities: Capability[],
+  requestedCapabilityId: string,
 ): PermissionPackageReadiness {
   const missingFields = [
     ["tenantId", input.tenantId],
     ["workspaceId", input.workspaceId],
     ["callerInstanceId", input.callerInstanceId],
     ["targetId", input.targetId],
+    ["templateId", input.templateId],
   ]
     .filter(([, value]) => !value.trim())
     .map(([field]) => field);
   if (!input.subjectSelector?.trim() || input.subjectSelector.trim() === "*") {
     missingFields.push("subjectSelector");
   }
-  const warnings = allowedCapabilities.length === 0 ? ["No matching allowed capabilities for the selected target."] : [];
+  const requestedCapabilitySafelyCovered = requestedCapabilityId === ""
+    || (allowedCapabilities.length === 1 && allowedCapabilities[0].id === requestedCapabilityId);
+  const warnings = allowedCapabilities.length === 0
+    ? [requestedCapabilityId
+      ? "The requested capability is not safely covered by this permission package."
+      : "No matching allowed capabilities for the selected target."]
+    : [];
+  if (!requestedCapabilitySafelyCovered && allowedCapabilities.length > 0) {
+    warnings.push("The requested capability is not safely covered by this permission package.");
+  }
   return {
     canApply: missingFields.length === 0 && warnings.length === 0,
     missingFields,
     warnings,
+  };
+}
+
+function unselectedPermissionPackageTemplate(): PermissionPackageTemplate {
+  return {
+    allowedActions: [],
+    blockedActions: ["read", "write", "execute", "export", "delete", "admin"],
+    blockedRisks: ["low", "medium", "high", "critical"],
+    blockedSensitivities: ["public", "internal", "confidential", "restricted"],
+    defaultDataDomain: "",
+    guardrails: [],
+    id: "",
+    name: "Select a permission package",
+    summary: "Choose a package that safely covers the requested capability before continuing.",
+    version: 0
   };
 }
 

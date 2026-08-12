@@ -4,6 +4,7 @@ import test from "node:test";
 
 const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
+const askJourney = readFileSync(new URL("../src/askJourney.ts", import.meta.url), "utf8");
 const i18n = readFileSync(new URL("../src/i18n.ts", import.meta.url), "utf8");
 const baseStyles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const workbenchStyles = readFileSync(new URL("../src/styles/permission-workbench.css", import.meta.url), "utf8");
@@ -657,6 +658,17 @@ test("go-live route loads the current permission change preview", () => {
   assert.match(i18n, /"text\.targetPendingSelection": "请选择 MCP 目标"/);
 });
 
+test("access-query permission changes keep one exact capability boundary through delivery", () => {
+  assert.match(askJourney, /requestedCapabilityId: context\.sourceView === "ask" \? context\.capabilityId : undefined/);
+  assert.match(app, /setAiAdminForm\(\(current\) => permissionChangeHandoffDraftInput\(context, current\)\)/);
+  assert.match(app, /requestedCapabilityId: formInput\.requestedCapabilityId/);
+  assert.match(app, /requestedCapabilityId: draft\.input\.requestedCapabilityId/);
+  assert.match(app, /\(request\.requestedCapabilityId \?\? ""\) === \(draft\.input\.requestedCapabilityId \?\? ""\)/);
+  assert.match(app, /requestedCapabilityId: undefined/);
+  assert.match(permissionPackages, /application\.requestedCapabilityId \?\? legacyExactRequestedCapabilityId/);
+  assert.match(goLiveAcceptanceOverview, /\(report\.scope\.requestedCapabilityId \?\? ""\) === \(input\.requestedCapabilityId \?\? ""\)/);
+});
+
 test("permission request blocks main actions when sample fallback data is shown", () => {
   assert.match(workbench, /liveDataAvailable: boolean/);
   assert.match(workbench, /const liveDataBlocked = !liveDataAvailable/);
@@ -971,6 +983,34 @@ test("permission change draft editor opens from a command sheet", () => {
   assert.match(workbench, /onOpenDraftSheet=\{\(\) => setPermissionDraftSheet\("edit"\)\}/);
   assert.match(workbench, /onClose=\{\(\) => setPermissionDraftSheet\("closed"\)\}/);
   assert.doesNotMatch(workbench, /className=\{`approval-section approval-request-form-section/);
+});
+
+test("permission change draft sheet keeps keyboard focus inside the modal", () => {
+  assert.match(permissionWorkbenchParts, /aria-labelledby="permission-draft-sheet-title"/);
+  assert.match(permissionWorkbenchParts, /aria-modal="true"/);
+  assert.match(permissionWorkbenchParts, /role="dialog"/);
+  assert.match(permissionWorkbenchParts, /event\.defaultPrevented/);
+  assert.match(permissionWorkbenchParts, /event\.key === "Escape"/);
+  assert.match(permissionWorkbenchParts, /document\.body\.style\.overflow = "hidden"/);
+  assert.match(permissionWorkbenchParts, /document\.body\.style\.overflow = previousOverflow/);
+  assert.match(permissionWorkbenchParts, /previousFocusRef\.current\?\.focus\(\)/);
+  assert.match(permissionWorkbenchParts, /event\.shiftKey && document\.activeElement === first/);
+  assert.match(permissionWorkbenchParts, /!event\.shiftKey && document\.activeElement === last/);
+});
+
+test("permission change draft sheet explains blockers before confirmation", () => {
+  assert.match(permissionWorkbenchParts, /permissionReadinessMessages\(draft\.readiness, t\)/);
+  assert.match(permissionWorkbenchParts, /className="permission-draft-readiness" role="status"/);
+  assert.match(permissionWorkbenchParts, /text\.permissionDraftNeedsAttention/);
+  assert.match(permissionWorkbenchParts, /disabled=\{!draft\.readiness\.canApply\}/);
+  assert.match(permissionWorkbenchParts, /action\.confirmPermissionChangeDraft/);
+});
+
+test("permission dropdown keeps combobox focus while pointer-selecting an option", () => {
+  assert.match(dropdown, /role="combobox"/);
+  assert.match(dropdown, /aria-activedescendant=\{activeOptionId\}/);
+  assert.match(dropdown, /onMouseDown=\{\(event\) => event\.preventDefault\(\)\}/);
+  assert.match(dropdown, /tabIndex=\{-1\}/);
 });
 
 test("permission request freezes configuration after approval or apply", () => {

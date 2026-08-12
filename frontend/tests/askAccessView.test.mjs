@@ -5,6 +5,7 @@ import test from "node:test";
 import { translationKeys } from "../src/i18n.ts";
 
 const controller = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
+const askJourney = readFileSync(new URL("../src/askJourney.ts", import.meta.url), "utf8");
 const hook = readFileSync(new URL("../src/hooks/useAskAccessController.ts", import.meta.url), "utf8");
 const navigation = readFileSync(new URL("../src/consoleNavigation.ts", import.meta.url), "utf8");
 const types = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
@@ -38,7 +39,8 @@ test("ask access state delegates access-query business rules to askJourney pure 
 });
 
 test("ask access view exposes denied-to-fix handoff without automatic submission", () => {
-  assert.match(view, /result\.outcome === "denied"/);
+  assert.match(view, /accessDecisionPrimaryAction\(result, capabilities, templates, permissionChangeAvailable\)/);
+  assert.match(view, /primaryAction\?\.kind === "permission_change"/);
   assert.match(view, /onStartPermissionChange/);
   assert.doesNotMatch(view, /onApply/);
   assert.doesNotMatch(hook, /applyPermissionPackage|createPermissionPackageDraftFromApi|createPermissionPackageApprovalRequest/);
@@ -62,7 +64,10 @@ test("permission change handoff is consumed once and only pre-fills the editable
   assert.match(controller, /permissionChange:\s*PermissionChangeHandoffContext \| null/);
   assert.match(controller, /permissionNotice:\s*PermissionChangeHandoffContext \| null/);
   assert.match(controller, /setAiAdminNewDraftMode\(true\)/);
-  assert.match(controller, /subjectSelector:\s*context\.subjectId \?\? current\.subjectSelector/);
+  assert.match(controller, /permissionChangeHandoffDraftInput\(context, current\)/);
+  assert.match(askJourney, /requestedCapabilityId:\s*context\.sourceView === "ask" \? context\.capabilityId : undefined/);
+  assert.match(askJourney, /subjectSelector:\s*context\.sourceView === "ask"/);
+  assert.match(askJourney, /templateId:\s*context\.sourceView === "ask"/);
   assert.match(controller, /permissionChange:\s*null,\s*permissionNotice:\s*context/);
   assert.match(controller, /permissionHandoffContext=\{handoffContexts\.permissionNotice\}/);
   assert.match(controller, /onDismissPermissionHandoff/);
@@ -83,6 +88,7 @@ test("ask access copy is bilingual", () => {
     "ask.answerTitle",
     "ask.chainTitle",
     "ask.dataSourceTitle",
+    "ask.effectiveDataScope",
     "ask.emptyDetail",
     "ask.group.access",
     "ask.group.context",
@@ -95,7 +101,11 @@ test("ask access copy is bilingual", () => {
     "ask.setupBlocker.resources.detail",
     "ask.setupBlocker.resources.title",
     "ask.questionTitle",
+    "ask.resultContextTitle",
+    "action.reviewPermissionBoundary",
     "text.permissionHandoffDetail",
+    "text.permissionHandoffNoTemplate",
+    "text.permissionHandoffReason",
     "text.permissionHandoffRegistryTitle",
     "text.permissionHandoffTitle",
     "resource.permissionIntent",
@@ -149,6 +159,16 @@ test("ask access form controls use one coherent control treatment", () => {
   assert.match(styles, /\.ask-query-field \.approval-dropdown-trigger:focus-visible,\s*\.ask-subject-field input:focus-visible\s*\{/s);
   assert.match(styles, /\.ask-query-field \.approval-dropdown-trigger:hover,\s*\.ask-subject-field input:hover:not\(:focus-visible\)\s*\{/s);
   assert.match(styles, /\.ask-query-grid-access\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(view, /<form[\s\S]*onSubmit=/);
+  assert.match(view, /className="ask-answer-summary" role="status"/);
+  assert.match(view, /<div aria-atomic="true" aria-live="polite" className="ask-answer-summary" role="status">/);
+  assert.doesNotMatch(view, /<section[\s\S]{0,180}aria-live="polite"[\s\S]{0,180}className="ask-answer"/);
+  assert.match(view, /aria-busy=\{loading\}/);
+  assert.match(view, /className="ask-result-context"/);
+  assert.match(view, /className="ask-data-scope"/);
+  assert.match(hook, /AbortController/);
+  assert.match(hook, /requestSequenceRef/);
+  assert.match(hook, /void explain\(nextSelection\)/);
 });
 
 test("access query and tenant profile styles use record class names", () => {

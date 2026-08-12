@@ -1,12 +1,14 @@
-import type { PermissionPackageTemplate } from "./permissionPackages";
+import type { PermissionPackageDraftInput, PermissionPackageTemplate } from "./permissionPackages";
 import type { Translator } from "./consolePresenters";
 import type {
   AccessDecisionExplainRequest,
   AccessDecisionExplainResult,
   AccessDecisionExplainEvidence,
+  Agent,
   Capability,
   ConsoleData,
-  PermissionChangeHandoffContext
+  PermissionChangeHandoffContext,
+  Tenant
 } from "./types";
 
 export interface AskAccessSelection {
@@ -35,9 +37,29 @@ export interface AskDecisionRecordRow {
 }
 
 export interface PermissionChangeHandoffOptions {
+  decisionResult?: AccessDecisionExplainResult
   templates?: PermissionPackageTemplate[]
   translateIntent?: (key: string, values: Record<string, string>) => string
 }
+
+export interface AskAccessInventory {
+  agents: Agent[]
+  capabilities: Capability[]
+  tenants: Tenant[]
+}
+
+export interface AskAccessScopeOptions {
+  callers: Agent[]
+  capabilities: Capability[]
+  targets: Agent[]
+  tenants: Tenant[]
+  workspaceIds: string[]
+}
+
+export type AccessDecisionPrimaryAction =
+  | { kind: "access_profile"; labelKey: "action.openAccessProfile" | "action.reviewPermissionBoundary" | "action.reviewPlatformManagedTarget" }
+  | { kind: "capability_review"; labelKey: "action.reviewCapabilityApproval" | "action.classifyCapability" }
+  | { kind: "permission_change"; labelKey: "action.fixAccessDecision" }
 
 const requiredExplainFields: Array<keyof AccessDecisionExplainRequest> = [
   "tenantId",
@@ -79,6 +101,211 @@ export function buildExplainRequest(selection: AskAccessSelection): ExplainReque
   };
 }
 
+export function askAccessScopeOptions(
+  inventory: AskAccessInventory,
+  selection: AskAccessSelection
+): AskAccessScopeOptions {
+  const tenantId = normalizeOptional(selection.tenantId);
+  const workspaceId = normalizeOptional(selection.workspaceId);
+  const targetId = normalizeOptional(selection.targetId);
+  const activeTenants = inventory.tenants.filter((tenant) => tenant.status === "active");
+  const activeTenantIds = new Set(activeTenants.map((tenant) => tenant.id));
+  const activeAgents = inventory.agents.filter((agent) => (
+    agent.status === "active" && activeTenantIds.has(agent.tenantId)
+  ));
+  const targetIdsWithCapabilities = new Set(inventory.capabilities.map((capability) => capability.targetId));
+  const tenantAgents = activeAgents.filter((agent) => !tenantId || agent.tenantId === tenantId);
+  const scopedAgents = tenantAgents.filter((agent) => !workspaceId || agent.workspaceId === workspaceId);
+  const targets = activeAgents.filter((agent) => (
+    targetIdsWithCapabilities.has(agent.id)
+    && askAccessTargetVisibleToScope(agent, tenantId, workspaceId, inventory.tenants)
+  ));
+  const visibleTargetIds = new Set(targets.map((agent) => agent.id));
+
+  return {
+    callers: scopedAgents.filter((agent) => agent.channelType === "local"),
+    capabilities: targetId && visibleTargetIds.has(targetId)
+      ? inventory.capabilities.filter((capability) => capability.targetId === targetId)
+      : [],
+    targets,
+    tenants: activeTenants,
+    workspaceIds: uniqueStrings(tenantAgents.map((agent) => agent.workspaceId))
+  };
+}
+
+export function askAccessTargetVisibleToScope(
+  target: Agent,
+  tenantId: string,
+  workspaceId: string,
+  tenants: Tenant[]
+): boolean {
+  const normalizedTenantId = normalizeOptional(tenantId);
+  const normalizedWorkspaceId = normalizeOptional(workspaceId);
+  if (
+    !normalizedTenantId
+    || !normalizedWorkspaceId
+    || target.status !== "active"
+    || target.workspaceId !== normalizedWorkspaceId
+  ) {
+    return false;
+  }
+
+  const tenantsById = new Map(tenants.map((tenant) => [tenant.id, tenant]));
+  const visitedTenantIds = new Set<string>();
+  let currentTenant = tenantsById.get(normalizedTenantId);
+  while (currentTenant && currentTenant.status === "active" && !visitedTenantIds.has(currentTenant.id)) {
+    if (currentTenant.id === target.tenantId) return true;
+    visitedTenantIds.add(currentTenant.id);
+    currentTenant = currentTenant.parentTenantId
+      ? tenantsById.get(currentTenant.parentTenantId)
+      : undefined;
+  }
+  return false;
+}
+
+export function resolveAskAccessSelection(
+  selection: AskAccessSelection,
+  inventory: AskAccessInventory
+): AskAccessSelection {
+  const activeTenants = inventory.tenants.filter((tenant) => tenant.status === "active");
+  const activeTenantIds = new Set(activeTenants.map((tenant) => tenant.id));
+  const activeAgents = inventory.agents.filter((agent) => (
+    agent.status === "active" && activeTenantIds.has(agent.tenantId)
+  ));
+  const targetIdsWithCapabilities = new Set(inventory.capabilities.map((capability) => capability.targetId));
+  const usableScopes = activeAgents
+    .filter((agent) => agent.channelType === "local")
+    .map((caller) => ({ tenantId: caller.tenantId, workspaceId: caller.workspaceId }))
+    .filter((scope) => activeAgents.some((agent) => (
+      targetIdsWithCapabilities.has(agent.id)
+      && askAccessTargetVisibleToScope(agent, scope.tenantId, scope.workspaceId, inventory.tenants)
+    )));
+  const selectedCaller = activeAgents.find((agent) => (
+    agent.id === selection.callerInstanceId && agent.channelType === "local"
+  ));
+  const explicitTenant = hasSelectionField(selection, "tenantId");
+  const explicitWorkspace = hasSelectionField(selection, "workspaceId");
+  const explicitCaller = hasSelectionField(selection, "callerInstanceId");
+  const explicitTarget = hasSelectionField(selection, "targetId");
+  const explicitCapability = hasSelectionField(selection, "capabilityId");
+  const preferredScope = selectedCaller && !explicitTenant && !explicitWorkspace
+    ? { tenantId: selectedCaller.tenantId, workspaceId: selectedCaller.workspaceId }
+    : usableScopes.find((scope) => (
+    (!selection.tenantId || scope.tenantId === selection.tenantId)
+    && (!selection.workspaceId || scope.workspaceId === selection.workspaceId)
+  )) ?? (selectedCaller ? {
+    tenantId: selectedCaller.tenantId,
+    workspaceId: selectedCaller.workspaceId
+  } : usableScopes[0]);
+  const selectedTenantId = normalizeOptional(selection.tenantId);
+  const tenantId = explicitTenant
+    ? activeTenants.some((tenant) => tenant.id === selectedTenantId) ? selectedTenantId : ""
+    : preferredScope?.tenantId ?? activeTenants[0]?.id ?? "";
+  if (!tenantId) return clearedAskAccessSelection(selection.subjectId);
+  const tenantAgents = activeAgents.filter((agent) => agent.tenantId === tenantId);
+  const workspaceIds = uniqueStrings(tenantAgents.map((agent) => agent.workspaceId));
+  const selectedWorkspaceId = normalizeOptional(selection.workspaceId);
+  const workspaceId = explicitWorkspace
+    ? workspaceIds.includes(selectedWorkspaceId) ? selectedWorkspaceId : ""
+    : preferredScope?.tenantId === tenantId && workspaceIds.includes(preferredScope.workspaceId)
+      ? preferredScope.workspaceId
+      : workspaceIds[0] ?? "";
+  if (!workspaceId) return { ...clearedAskAccessSelection(selection.subjectId), tenantId };
+  const scopedAgents = tenantAgents.filter((agent) => agent.workspaceId === workspaceId);
+  const callers = scopedAgents.filter((agent) => agent.channelType === "local");
+  const targets = activeAgents.filter((agent) => (
+    targetIdsWithCapabilities.has(agent.id)
+    && askAccessTargetVisibleToScope(agent, tenantId, workspaceId, inventory.tenants)
+  ));
+  const caller = callers.find((agent) => agent.id === selection.callerInstanceId)
+    ?? (explicitCaller ? undefined : callers[0]);
+  const target = targets.find((agent) => agent.id === selection.targetId)
+    ?? (explicitTarget ? undefined : targets[0]);
+  const capabilities = inventory.capabilities.filter((capability) => capability.targetId === target?.id);
+  const capability = capabilities.find((item) => item.id === selection.capabilityId)
+    ?? (explicitCapability ? undefined : capabilities[0]);
+
+  return {
+    capabilityId: capability?.id ?? "",
+    callerInstanceId: caller?.id ?? "",
+    subjectId: selection.subjectId ?? "",
+    targetId: target?.id ?? "",
+    tenantId,
+    workspaceId
+  };
+}
+
+function hasSelectionField(selection: AskAccessSelection, field: keyof AskAccessSelection) {
+  return Object.prototype.hasOwnProperty.call(selection, field);
+}
+
+function clearedAskAccessSelection(subjectId?: string): AskAccessSelection {
+  return {
+    capabilityId: "",
+    callerInstanceId: "",
+    subjectId: subjectId ?? "",
+    targetId: "",
+    tenantId: "",
+    workspaceId: ""
+  };
+}
+
+export function accessDecisionPrimaryAction(
+  result: AccessDecisionExplainResult,
+  capabilities: Capability[],
+  templates: PermissionPackageTemplate[],
+  permissionChangeAvailable = true
+): AccessDecisionPrimaryAction | null {
+  if (result.outcome === "allowed") return null;
+  const code = result.nextActionCodes?.[0] ?? legacyAccessDecisionActionCode(result);
+  if (["approve_capability", "refresh_capabilities"].includes(code)) {
+    return { kind: "capability_review", labelKey: "action.reviewCapabilityApproval" };
+  }
+  if (["create_caller_assignment", "create_workspace_assignment", "use_permission_package"].includes(code)) {
+    const capability = capabilities.find((item) => item.id === result.request.capabilityId);
+    if (capability && !hasExplicitCapabilityDomain(capability)) {
+      return { kind: "capability_review", labelKey: "action.classifyCapability" };
+    }
+    if (capability && findTemplateForCapability(capability, templates)) {
+      if (!permissionChangeAvailable) {
+        return { kind: "access_profile", labelKey: "action.reviewPlatformManagedTarget" };
+      }
+      return { kind: "permission_change", labelKey: "action.fixAccessDecision" };
+    }
+    return { kind: "access_profile", labelKey: "action.reviewPermissionBoundary" };
+  }
+  return { kind: "access_profile", labelKey: "action.openAccessProfile" };
+}
+
+export function canStartPermissionChangeForAdmin(
+  adminRole: string | undefined,
+  request: AccessDecisionExplainRequest | undefined,
+  agents: Agent[]
+): boolean {
+  if (!request) return false;
+  const role = normalizeOptional(adminRole) || "platform_admin";
+  if (role === "platform_admin") return true;
+  const target = agents.find((agent) => agent.id === request.targetId);
+  return Boolean(target && target.tenantId === request.tenantId);
+}
+
+function hasExplicitCapabilityDomain(capability: Capability) {
+  return uniqueStrings([
+    ...(capability.dataDomains ?? []),
+    ...(capability.dataScopes ?? []).map((scope) => scope.dataDomain ?? "")
+  ]).length > 0;
+}
+
+function legacyAccessDecisionActionCode(result: AccessDecisionExplainResult) {
+  const reason = result.decision.reason.toLowerCase();
+  if (reason.includes("not registered")) return "refresh_capabilities";
+  if (reason.includes("not approved")) return "approve_capability";
+  if (reason.includes("tenant has no entitlement")) return "use_permission_package";
+  if (reason.includes("workspace has no assignment")) return "create_workspace_assignment";
+  if (reason.includes("caller instance has no assignment")) return "create_caller_assignment";
+  return "inspect_access_profile";
+}
+
 export function buildPermissionChangeHandoff(
   request: AccessDecisionExplainRequest,
   consoleData: ConsoleData,
@@ -90,6 +317,9 @@ export function buildPermissionChangeHandoff(
   const capability = consoleData.capabilities.find((item) => item.id === request.capabilityId);
   const template = capability
     ? findTemplateForCapability(capability, options.templates ?? [])
+    : undefined;
+  const brokenRecord = options.decisionResult
+    ? decisionRecordRows(options.decisionResult).find((row) => row.isBroken)
     : undefined;
   const values = {
     callerName: caller?.name ?? request.callerInstanceId,
@@ -104,6 +334,9 @@ export function buildPermissionChangeHandoff(
     callerName: caller?.name,
     capabilityId: request.capabilityId,
     capabilityName: capability?.displayName ?? capability?.key,
+    ...(brokenRecord?.layer ? { brokenLayer: brokenRecord.layer } : {}),
+    ...(options.decisionResult?.decision.reason ? { decisionReason: options.decisionResult.decision.reason } : {}),
+    ...(options.decisionResult?.decision.source ? { decisionSource: options.decisionResult.decision.source } : {}),
     intentText: (options.translateIntent ?? defaultTranslateIntent)("ask.intent.openAccess", values),
     sourceView: "ask",
     subjectId: request.subjectId,
@@ -114,6 +347,27 @@ export function buildPermissionChangeHandoff(
     tenantName: tenant?.name,
     workspaceId: request.workspaceId,
     workspaceName: values.workspaceName
+  };
+}
+
+export function permissionChangeHandoffDraftInput(
+  context: PermissionChangeHandoffContext,
+  current: PermissionPackageDraftInput,
+): PermissionPackageDraftInput {
+  return {
+    ...current,
+    callerInstanceId: context.callerInstanceId ?? current.callerInstanceId,
+    requestText: context.intentText ?? current.requestText,
+    requestedCapabilityId: context.sourceView === "ask" ? context.capabilityId : undefined,
+    subjectSelector: context.sourceView === "ask"
+      ? context.subjectId ?? ""
+      : context.subjectId ?? current.subjectSelector,
+    targetId: context.targetId ?? current.targetId,
+    templateId: context.sourceView === "ask"
+      ? context.templateId ?? ""
+      : context.templateId ?? current.templateId,
+    tenantId: context.tenantId,
+    workspaceId: context.workspaceId,
   };
 }
 
@@ -173,12 +427,25 @@ function findTemplateForCapability(
 }
 
 function templateAllowsCapability(capability: Capability, template: PermissionPackageTemplate) {
+  const capabilityDomains = uniqueStrings([
+    ...(capability.dataDomains ?? []),
+    ...(capability.dataScopes ?? []).map((scope) => scope.dataDomain ?? "")
+  ]);
   return (
+    capabilityDomains.length > 0 &&
+    capabilityDomains.every((domain) => domain === template.defaultDataDomain) &&
     template.allowedActions.includes(capability.action) &&
     !template.blockedActions.includes(capability.action) &&
     !template.blockedRisks.includes(capability.riskLevel) &&
-    !template.blockedSensitivities.includes(capability.sensitivity)
+    !template.blockedSensitivities.includes(capability.sensitivity) &&
+    !template.guardrails.some((guardrail) => (
+      guardrail.capabilityKey === capability.key && guardrail.expectedDecision === "deny"
+    ))
   );
+}
+
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
 function workspaceNameFromId(workspaceId: string) {

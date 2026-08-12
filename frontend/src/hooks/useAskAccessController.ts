@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchAccessDecisionExplanation } from "../api";
 import {
   buildExplainRequest,
   buildPermissionChangeHandoff,
+  canStartPermissionChangeForAdmin,
   decisionRecordRows,
+  resolveAskAccessSelection,
   type AskAccessSelection
 } from "../askJourney";
 import type { Translator } from "../consolePresenters";
@@ -31,6 +33,7 @@ export interface AskAccessHistoryEntry {
 }
 
 interface UseAskAccessControllerArgs {
+  adminRole?: string
   adminKey: string
   consoleData: ConsoleData | null
   handoffContext: AskHandoffContext | null
@@ -43,6 +46,7 @@ interface UseAskAccessControllerArgs {
 }
 
 export function useAskAccessController({
+  adminRole,
   adminKey,
   consoleData,
   handoffContext,
@@ -58,20 +62,29 @@ export function useAskAccessController({
   const [history, setHistory] = useState<AskAccessHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [messageState, setMessage] = useState<LocalizedMessage | null>(null);
+  const activeRequestRef = useRef<AbortController | null>(null);
+  const requestSequenceRef = useRef(0);
   const message = localizedMessageText(messageState, t, language);
 
   const effectiveSelection = useMemo(
-    () => applySelectionDefaults(selection, consoleData),
+    () => consoleData ? resolveAskAccessSelection(selection, consoleData) : selection,
     [consoleData, selection]
   );
   const requestBuild = useMemo(() => buildExplainRequest(effectiveSelection), [effectiveSelection]);
+  const permissionChangeAvailable = useMemo(
+    () => canStartPermissionChangeForAdmin(adminRole, result?.request ?? requestBuild.request ?? undefined, consoleData?.agents ?? []),
+    [adminRole, consoleData, requestBuild.request, result]
+  );
   const recordRows = useMemo(() => result ? decisionRecordRows(result) : [], [result]);
-  const exampleSelection = useMemo(() => applySelectionDefaults({}, consoleData), [consoleData]);
+  const exampleSelection = useMemo(
+    () => consoleData ? resolveAskAccessSelection({}, consoleData) : {},
+    [consoleData]
+  );
   const exampleAvailable = buildExplainRequest(exampleSelection).complete;
 
   useEffect(() => {
-    if (!handoffContext) return;
-    setSelection((current) => ({
+    if (!handoffContext || !consoleData) return;
+    setSelection((current) => resolveAskAccessSelection({
       ...current,
       callerInstanceId: handoffContext.callerInstanceId ?? current.callerInstanceId,
       capabilityId: handoffContext.capabilityId ?? current.capabilityId,
@@ -79,20 +92,20 @@ export function useAskAccessController({
       targetId: handoffContext.targetId ?? current.targetId,
       tenantId: handoffContext.tenantId ?? current.tenantId,
       workspaceId: handoffContext.workspaceId ?? current.workspaceId
-    }));
+    }, consoleData));
+    invalidateActiveRequest();
     setResult(null);
     setMessage(null);
     onConsumeHandoff();
-  }, [handoffContext]);
+  }, [handoffContext, consoleData]);
+
+  useEffect(() => () => activeRequestRef.current?.abort(), []);
 
   function updateSelection(next: AskAccessSelection) {
-    setSelection((current) => {
-      const merged = { ...current, ...next };
-      if (next.targetId && next.targetId !== current.targetId) {
-        return { ...merged, capabilityId: "" };
-      }
-      return merged;
-    });
+    invalidateActiveRequest();
+    setSelection((current) => consoleData
+      ? resolveAskAccessSelection({ ...current, ...next }, consoleData)
+      : { ...current, ...next });
     setResult(null);
     setMessage(null);
   }
@@ -110,10 +123,16 @@ export function useAskAccessController({
       return;
     }
     const request = build.request;
+    activeRequestRef.current?.abort();
+    const controller = new AbortController();
+    const requestSequence = ++requestSequenceRef.current;
+    activeRequestRef.current = controller;
     setLoading(true);
+    setResult(null);
     setMessage(null);
     try {
-      const next = await fetchAccessDecisionExplanation(request, adminKey);
+      const next = await fetchAccessDecisionExplanation(request, adminKey, controller.signal);
+      if (requestSequence !== requestSequenceRef.current) return;
       setResult(next);
       setHistory((current) => [
         {
@@ -125,16 +144,24 @@ export function useAskAccessController({
       ].slice(0, 5));
       setMessage({ key: "message.accessDecisionExplainLoaded" });
     } catch (error) {
+      if (requestSequence !== requestSequenceRef.current || isAbortError(error)) return;
       setMessage(localizedErrorMessageState(error, "error.explainAccessDecision"));
     } finally {
-      setLoading(false);
+      if (requestSequence === requestSequenceRef.current) {
+        activeRequestRef.current = null;
+        setLoading(false);
+      }
     }
   }
 
   function selectHistory(entry: AskAccessHistoryEntry) {
-    setSelection(entry.request);
-    setResult(entry.result);
+    const nextSelection = consoleData
+      ? resolveAskAccessSelection(entry.request, consoleData)
+      : entry.request;
+    setSelection(nextSelection);
+    setResult(null);
     setMessage(null);
+    void explain(nextSelection);
   }
 
   async function runExampleQuery() {
@@ -149,10 +176,22 @@ export function useAskAccessController({
       setMessage({ key: "message.accessDecisionExplainMissingFields" });
       return;
     }
+    if (!canStartPermissionChangeForAdmin(adminRole, request, consoleData.agents)) {
+      setMessage({ key: "message.permissionChangeTargetManagedByPlatform" });
+      return;
+    }
     onStartPermissionChange(buildPermissionChangeHandoff(request, consoleData, {
+      decisionResult: result ?? undefined,
       templates,
       translateIntent: (key, values) => tx(t, key, values)
     }));
+  }
+
+  function invalidateActiveRequest() {
+    requestSequenceRef.current += 1;
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
+    setLoading(false);
   }
 
   return {
@@ -162,6 +201,7 @@ export function useAskAccessController({
     history,
     loading,
     message,
+    permissionChangeAvailable,
     requestBuild,
     recordRows,
     result,
@@ -170,40 +210,12 @@ export function useAskAccessController({
     selection,
     setMessage,
     startPermissionChange,
+    templates,
     updateSelection
   };
 }
 
 export type AskAccessController = ReturnType<typeof useAskAccessController>;
-
-function applySelectionDefaults(selection: AskAccessSelection, consoleData: ConsoleData | null): AskAccessSelection {
-  if (!consoleData) return selection;
-  const targetIdsWithCapabilities = new Set(consoleData.capabilities.map((capability) => capability.targetId));
-  const target = findAgent(consoleData, selection.targetId)
-    ?? consoleData.agents.find((agent) => targetIdsWithCapabilities.has(agent.id) && agent.status === "active")
-    ?? consoleData.agents.find((agent) => targetIdsWithCapabilities.has(agent.id));
-  const caller = findAgent(consoleData, selection.callerInstanceId)
-    ?? consoleData.agents.find((agent) => agent.status === "active" && agent.channelType === "local")
-    ?? consoleData.agents.find((agent) => agent.status === "active");
-  const tenant = consoleData.tenants.find((item) => item.id === selection.tenantId)
-    ?? consoleData.tenants.find((item) => item.id === caller?.tenantId)
-    ?? consoleData.tenants[0];
-  const targetCapabilities = consoleData.capabilities.filter((capability) => capability.targetId === target?.id);
-  const capability = targetCapabilities.find((item) => item.id === selection.capabilityId) ?? targetCapabilities[0];
-
-  return {
-    capabilityId: selection.capabilityId || capability?.id || "",
-    callerInstanceId: selection.callerInstanceId || caller?.id || "",
-    subjectId: selection.subjectId || "",
-    targetId: selection.targetId || target?.id || "",
-    tenantId: selection.tenantId || tenant?.id || caller?.tenantId || "",
-    workspaceId: selection.workspaceId || caller?.workspaceId || target?.workspaceId || ""
-  };
-}
-
-function findAgent(consoleData: ConsoleData, agentId?: string) {
-  return agentId ? consoleData.agents.find((agent) => agent.id === agentId) : undefined;
-}
 
 function historyId(request: AccessDecisionExplainRequest) {
   return [
@@ -214,4 +226,8 @@ function historyId(request: AccessDecisionExplainRequest) {
     request.capabilityId,
     request.subjectId ?? ""
   ].join("|");
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
 }

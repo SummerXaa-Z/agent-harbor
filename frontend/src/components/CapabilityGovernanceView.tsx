@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { FileSearch, RefreshCw, ShieldCheck, X } from "lucide-react";
 
 import {
@@ -53,11 +53,13 @@ export function CapabilityGovernanceView({
   message,
   mcpTargets,
   onApprove,
+  onClassify,
   onChange,
   onCreateGrantChain,
   onDismissHandoff,
   onQueryAccess,
   onRefreshTarget,
+  permissionPackageDataDomains,
   t,
   tenants,
   tenantEntitlements,
@@ -72,11 +74,13 @@ export function CapabilityGovernanceView({
   message: string;
   mcpTargets: Agent[];
   onApprove: (capability: Capability) => void;
+  onClassify: (capability: Capability, dataDomain: string) => void;
   onChange: (form: CapabilityGrantForm) => void;
   onCreateGrantChain: (event: FormEvent<HTMLFormElement>) => void;
   onDismissHandoff?: () => void;
   onQueryAccess: (context: AskHandoffContext) => void;
   onRefreshTarget: () => void;
+  permissionPackageDataDomains: string[];
   t: Translator;
   tenants: Tenant[];
   tenantEntitlements: TenantEntitlement[];
@@ -86,6 +90,7 @@ export function CapabilityGovernanceView({
   const [capabilityStatusFilter, setCapabilityStatusFilter] = useState("");
   const [grantPanelOpen, setGrantPanelOpen] = useState(false);
   const [selectedCapabilityId, setSelectedCapabilityId] = useState("");
+  const [capabilityDataDomain, setCapabilityDataDomain] = useState("");
   const agentNames = useMemo(
     () => Object.fromEntries(agents.map((agent) => [agent.id, permissionEntityDisplayName(agent.name, t)])),
     [agents, t]
@@ -121,7 +126,18 @@ export function CapabilityGovernanceView({
   }, [agentNames, capabilityQuery, capabilityStatusFilter, targetCapabilities, t]);
   const selectedCapability = capabilities.find((capability) => capability.id === form.capabilityId);
   const selectedCatalogCapability = capabilities.find((capability) => capability.id === selectedCapabilityId) ?? null;
+  const selectedCatalogDataDomain = selectedCatalogCapability?.dataDomains?.[0]
+    ?? selectedCatalogCapability?.dataScopes?.find((scope) => scope.dataDomain)?.dataDomain
+    ?? "";
   const selectedAccessSubject = accessSubjectOptionForSelector(form.subjectSelector);
+
+  useEffect(() => {
+    if (!handoffContext?.capabilityId) return;
+    const capability = capabilities.find((item) => item.id === handoffContext.capabilityId);
+    if (!capability) return;
+    setCapabilityDataDomain(capability.dataDomains?.[0] ?? capability.dataScopes?.[0]?.dataDomain ?? "");
+    setSelectedCapabilityId(capability.id);
+  }, [capabilities, handoffContext]);
   const currentTargetLabel = form.targetId ? agentNames[form.targetId] ?? form.targetId : t("form.allMcpTargets");
   const normalizedSubjectSelector = form.subjectSelector.trim();
   const grantFormReady = Boolean(
@@ -197,6 +213,10 @@ export function CapabilityGovernanceView({
       label: `${t("accessSubject.kind.custom")} · ${t(customAccessSubjectOption.labelKey)}`
     }
   ];
+  const dataDomainOptions = [
+    { value: "", label: t("form.selectCapabilityDataDomain") },
+    ...permissionPackageDataDomains.map((domain) => ({ value: domain, label: domain }))
+  ];
   const entitlementIdsByCapability = useMemo(() => {
     return tenantEntitlements.reduce<Record<string, string[]>>((acc, entitlement) => {
       acc[entitlement.capabilityId] = [...(acc[entitlement.capabilityId] ?? []), entitlement.id];
@@ -265,7 +285,7 @@ export function CapabilityGovernanceView({
         <section className="capability-handoff-notice" role="status" aria-live="polite">
           <FileSearch size={16} />
           <div>
-            <strong>{t("text.capabilityHandoffTitle")}</strong>
+            <strong>{t(handoffContext.sourceView === "ask" ? "text.capabilityHandoffAskTitle" : "text.capabilityHandoffTitle")}</strong>
             <span>
               {tx(t, "text.capabilityHandoffDetail", {
                 target: handoffContext.targetName ?? handoffContext.targetId,
@@ -273,6 +293,7 @@ export function CapabilityGovernanceView({
                 workspace: handoffContext.workspaceName ?? handoffContext.workspaceId
               })}
             </span>
+            {handoffContext.sourceView === "ask" ? <small>{t("text.capabilityHandoffAskDetail")}</small> : null}
           </div>
           {onDismissHandoff ? (
             <button className="secondary-button" onClick={onDismissHandoff} type="button">
@@ -433,7 +454,10 @@ export function CapabilityGovernanceView({
                             <div className="table-action-group">
                               <button
                                 className="table-action"
-                                onClick={() => setSelectedCapabilityId(capability.id)}
+                                onClick={() => {
+                                  setCapabilityDataDomain(capability.dataDomains?.[0] ?? capability.dataScopes?.[0]?.dataDomain ?? "");
+                                  setSelectedCapabilityId(capability.id);
+                                }}
                                 type="button"
                               >
                                 <FileSearch size={13} />
@@ -486,6 +510,27 @@ export function CapabilityGovernanceView({
                 <span>{t("table.status")}<strong>{capabilityDiscoveryStatusLabel(selectedCatalogCapability.discoveryStatus, t)}</strong></span>
                 <span>{t("section.dataScope")}<strong>{dataScopeText(selectedCatalogCapability.dataScopes, t) || t("text.noDataScope")}</strong></span>
                 <span>{t("text.technicalDetails")}<strong>{selectedCatalogCapability.key}</strong></span>
+              </div>
+              <div className="capability-domain-editor">
+                <label>
+                  {t("form.capabilityDataDomain")}
+                  <ApprovalDropdown
+                    label={t("form.capabilityDataDomain")}
+                    onChange={setCapabilityDataDomain}
+                    options={dataDomainOptions}
+                    value={capabilityDataDomain || selectedCatalogDataDomain}
+                  />
+                </label>
+                <button
+                  className="secondary-button table-detail-action"
+                  disabled={actionId === `classify:${selectedCatalogCapability.id}` || !(capabilityDataDomain || selectedCatalogDataDomain).trim()}
+                  onClick={() => onClassify(selectedCatalogCapability, capabilityDataDomain || selectedCatalogDataDomain)}
+                  type="button"
+                >
+                  <ShieldCheck size={14} />
+                  {actionId === `classify:${selectedCatalogCapability.id}` ? t("action.saving") : t("action.saveCapabilityDataDomain")}
+                </button>
+                <small>{t("text.capabilityDataDomainHelp")}</small>
               </div>
               {selectedCatalogCapability.discoveryStatus === "approved" ? (
                 <button

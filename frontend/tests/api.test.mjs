@@ -75,6 +75,8 @@ test("API health check verifies the system compatibility contract", () => {
   assert.match(apiSource, /\/api\/v1\/system\/info/);
   assert.match(apiSource, /systemInfoContractIssues\(systemInfo\)/);
   assert.match(systemInfoContractSource, /requiredConsoleCapabilities/);
+  assert.match(systemInfoContractSource, /capability_data_domain_classification_v1/);
+  assert.match(systemInfoContractSource, /permission_package_requested_capability_v1/);
   assert.match(systemInfoContractSource, /permission_package_approval_withdraw/);
   assert.match(systemInfoContractSource, /permission_package_consumed_approval_recovery/);
   assert.match(systemInfoContractSource, /management_mcp_tools_metadata_v4/);
@@ -99,6 +101,20 @@ test("system info contract issues validate the management MCP catalog summary", 
   };
 
   assert.deepEqual(systemInfoContractIssues(compatibleInfo), []);
+  assert.deepEqual(
+    systemInfoContractIssues({
+      ...compatibleInfo,
+      capabilities: requiredConsoleCapabilities.filter((capability) => capability !== "capability_data_domain_classification_v1"),
+    }),
+    ["capability_data_domain_classification_v1"],
+  );
+  assert.deepEqual(
+    systemInfoContractIssues({
+      ...compatibleInfo,
+      capabilities: requiredConsoleCapabilities.filter((capability) => capability !== "permission_package_requested_capability_v1"),
+    }),
+    ["permission_package_requested_capability_v1"],
+  );
   assert.deepEqual(
     systemInfoContractIssues({
       ...compatibleInfo,
@@ -155,6 +171,7 @@ test("system info contract issues validate the management MCP catalog summary", 
 test("permissionPackageApprovalRequestsPath includes reviewer routing query", () => {
   const path = permissionPackageApprovalRequestsPath({
     limit: 20,
+    requestedCapabilityId: "cap-update-ticket",
     reviewer: "security-east",
     status: "pending",
     tenantId: "tenant-east",
@@ -166,6 +183,7 @@ test("permissionPackageApprovalRequestsPath includes reviewer routing query", ()
   assert.equal(url.searchParams.get("reviewer"), "security-east");
   assert.equal(url.searchParams.get("status"), "pending");
   assert.equal(url.searchParams.get("limit"), "20");
+  assert.equal(url.searchParams.get("requestedCapabilityId"), "cap-update-ticket");
   assert.equal(url.searchParams.get("tenantId"), "tenant-east");
   assert.equal(url.searchParams.get("workspaceId"), "ws-support");
 });
@@ -226,6 +244,7 @@ test("permissionPackageApplicationHealthPath includes application health filters
   const path = permissionPackageApplicationHealthPath({
     callerInstanceId: "caller-sales",
     limit: 10,
+    requestedCapabilityId: "cap-search-customer",
     targetId: "mcp-crm",
     templateId: "sales-readonly",
     tenantId: "tenant-root",
@@ -236,6 +255,7 @@ test("permissionPackageApplicationHealthPath includes application health filters
   assert.equal(url.pathname, "/api/v1/permission-packages/applications/health");
   assert.equal(url.searchParams.get("callerInstanceId"), "caller-sales");
   assert.equal(url.searchParams.get("limit"), "10");
+  assert.equal(url.searchParams.get("requestedCapabilityId"), "cap-search-customer");
   assert.equal(url.searchParams.get("targetId"), "mcp-crm");
   assert.equal(url.searchParams.get("templateId"), "sales-readonly");
   assert.equal(url.searchParams.get("tenantId"), "tenant-root");
@@ -248,6 +268,7 @@ test("permissionPackageProductionReadinessPath includes status-check filters", (
     callerInstanceId: "caller-sales",
     region: "us-east",
     requestText: "Allow support triage",
+    requestedCapabilityId: "cap-update-ticket",
     subjectId: "user:sales-001",
     subjectSelector: "user:sales-*",
     targetId: "mcp-crm",
@@ -263,6 +284,7 @@ test("permissionPackageProductionReadinessPath includes status-check filters", (
   assert.equal(url.searchParams.get("callerInstanceId"), "caller-sales");
   assert.equal(url.searchParams.get("region"), "us-east");
   assert.equal(url.searchParams.get("requestText"), "Allow support triage");
+  assert.equal(url.searchParams.get("requestedCapabilityId"), "cap-update-ticket");
   assert.equal(url.searchParams.get("subjectId"), "user:sales-001");
   assert.equal(url.searchParams.get("subjectSelector"), "user:sales-*");
   assert.equal(url.searchParams.get("targetId"), "mcp-crm");
@@ -275,6 +297,7 @@ test("permissionPackageProductionReadinessPath includes status-check filters", (
 test("access handoff paths preserve the permission scope and encode token ids", () => {
   const path = permissionPackageAccessHandoffPath({
     callerInstanceId: "caller-1",
+    requestedCapabilityId: "cap-update-ticket",
     subjectId: "user:support-001",
     subjectSelector: "user:support-*",
     targetId: "target-1",
@@ -284,6 +307,7 @@ test("access handoff paths preserve the permission scope and encode token ids", 
   });
   assert.match(path, /^\/api\/v1\/permission-packages\/access-handoff\?/);
   assert.match(path, /callerInstanceId=caller-1/);
+  assert.match(path, /requestedCapabilityId=cap-update-ticket/);
   assert.match(path, /subjectSelector=user%3Asupport-\*/);
   assert.equal(
     permissionPackageAccessHandoffTokenPath("key/one"),
@@ -307,6 +331,7 @@ test("permissionPackageAcceptanceReportPath includes acceptance report filters",
     callerInstanceId: "caller-sales",
     region: "us-east",
     requestText: "Allow support triage",
+    requestedCapabilityId: "cap-update-ticket",
     subjectId: "user:sales-001",
     subjectSelector: "user:sales-*",
     targetId: "mcp-crm",
@@ -322,6 +347,7 @@ test("permissionPackageAcceptanceReportPath includes acceptance report filters",
   assert.equal(url.searchParams.get("callerInstanceId"), "caller-sales");
   assert.equal(url.searchParams.get("region"), "us-east");
   assert.equal(url.searchParams.get("requestText"), "Allow support triage");
+  assert.equal(url.searchParams.get("requestedCapabilityId"), "cap-update-ticket");
   assert.equal(url.searchParams.get("subjectId"), "user:sales-001");
   assert.equal(url.searchParams.get("subjectSelector"), "user:sales-*");
   assert.equal(url.searchParams.get("targetId"), "mcp-crm");
@@ -340,6 +366,7 @@ test("legacy report path helpers remain compatibility aliases", () => {
     callerInstanceId: "caller-sales",
     region: "us-east",
     requestText: "Allow support triage",
+    requestedCapabilityId: "cap-update-ticket",
     subjectId: "user:sales-001",
     subjectSelector: "user:sales-*",
     targetId: "mcp-crm",
@@ -355,6 +382,7 @@ test("legacy report path helpers remain compatibility aliases", () => {
   assert.equal(url.searchParams.get("callerInstanceId"), "caller-sales");
   assert.equal(url.searchParams.get("region"), "us-east");
   assert.equal(url.searchParams.get("requestText"), "Allow support triage");
+  assert.equal(url.searchParams.get("requestedCapabilityId"), "cap-update-ticket");
   assert.equal(url.searchParams.get("subjectId"), "user:sales-001");
   assert.equal(url.searchParams.get("subjectSelector"), "user:sales-*");
   assert.equal(url.searchParams.get("targetId"), "mcp-crm");

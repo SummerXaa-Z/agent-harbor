@@ -13,9 +13,117 @@ import (
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/db"
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
+	"github.com/SummerXaa-Z/agent-harbor/internal/permissionpack"
 	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 	"github.com/SummerXaa-Z/agent-harbor/internal/store"
 )
+
+func TestPostgresPermissionPackageRequestedCapabilityFilterSemantics(t *testing.T) {
+	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set AGENT_HARBOR_TEST_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	ctx := t.Context()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	defer pool.Close()
+	if err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	repo := store.NewPostgres(pool)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	tenantID := security.NewID("tenant_filter")
+	workspaceID := security.NewID("ws_filter")
+	if _, err := repo.CreateTenant(ctx, domain.Tenant{ID: tenantID, Name: "Filter tenant", Status: domain.TenantStatusActive, CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: tenantID, WorkspaceID: workspaceID, Name: "Filter caller", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	target := domain.Agent{ID: security.NewID("agt"), TenantID: tenantID, WorkspaceID: workspaceID, Name: "Filter target", ChannelType: "mcp", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(ctx, caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	if _, err := repo.CreateAgent(ctx, target); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+	legacyApplication := domain.PermissionPackageApplication{
+		ID:                    security.NewID("ppa"),
+		DraftID:               security.NewID("ppd"),
+		TemplateID:            "support-ticket-triage",
+		TemplateVersion:       2,
+		TenantID:              tenantID,
+		WorkspaceID:           workspaceID,
+		TargetID:              target.ID,
+		CallerInstanceID:      caller.ID,
+		SubjectSelector:       "user:support-*",
+		AllowedCapabilityIDs:  []string{"cap-a"},
+		AllowedCapabilityKeys: []string{"search_ticket"},
+		AppliedAt:             now,
+	}
+	exactApplication := legacyApplication
+	exactApplication.ID = security.NewID("ppa")
+	exactApplication.DraftID = security.NewID("ppd")
+	exactApplication.RequestedCapabilityID = "cap-a"
+	exactApplication.AppliedAt = now.Add(time.Second)
+	for _, application := range []domain.PermissionPackageApplication{legacyApplication, exactApplication} {
+		if _, err := repo.CreatePermissionPackageApplication(ctx, application); err != nil {
+			t.Fatalf("create application %s: %v", application.ID, err)
+		}
+	}
+	assertApplicationCount := func(filter store.PermissionPackageApplicationFilter, wantID string, wantCount int) {
+		t.Helper()
+		rows, err := repo.ListPermissionPackageApplications(ctx, filter)
+		if err != nil || len(rows) != wantCount || wantID != "" && (len(rows) == 0 || rows[0].ID != wantID) {
+			t.Fatalf("unexpected application filter result: rows=%#v err=%v", rows, err)
+		}
+	}
+	scope := store.ManagementScope{TenantID: tenantID, WorkspaceID: workspaceID}
+	assertApplicationCount(store.PermissionPackageApplicationFilter{ManagementScope: scope}, "", 2)
+	assertApplicationCount(store.PermissionPackageApplicationFilter{ManagementScope: scope, MatchRequestedCapabilityID: true}, legacyApplication.ID, 1)
+	assertApplicationCount(store.PermissionPackageApplicationFilter{ManagementScope: scope, RequestedCapabilityID: "cap-a", MatchRequestedCapabilityID: true}, exactApplication.ID, 1)
+
+	legacyApproval := domain.PermissionPackageApprovalRequest{
+		ID:                    security.NewID("ppar"),
+		DraftID:               legacyApplication.DraftID,
+		TemplateID:            legacyApplication.TemplateID,
+		TemplateVersion:       2,
+		PolicyVersion:         1,
+		TenantID:              tenantID,
+		WorkspaceID:           workspaceID,
+		TargetID:              target.ID,
+		CallerInstanceID:      caller.ID,
+		SubjectSelector:       legacyApplication.SubjectSelector,
+		AllowedCapabilityIDs:  []string{"cap-a"},
+		AllowedCapabilityKeys: []string{"search_ticket"},
+		Status:                domain.PermissionPackageApprovalStatusApproved,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+		ResolvedAt:            now,
+		ExpiresAt:             now.Add(time.Hour),
+	}
+	exactApproval := legacyApproval
+	exactApproval.ID = security.NewID("ppar")
+	exactApproval.DraftID = exactApplication.DraftID
+	exactApproval.RequestedCapabilityID = "cap-a"
+	exactApproval.CreatedAt = now.Add(time.Second)
+	exactApproval.UpdatedAt = exactApproval.CreatedAt
+	for _, approval := range []domain.PermissionPackageApprovalRequest{legacyApproval, exactApproval} {
+		if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, approval); err != nil {
+			t.Fatalf("create approval %s: %v", approval.ID, err)
+		}
+	}
+	assertApprovalCount := func(filter store.PermissionPackageApprovalRequestFilter, wantID string, wantCount int) {
+		t.Helper()
+		rows, err := repo.ListPermissionPackageApprovalRequests(ctx, filter)
+		if err != nil || len(rows) != wantCount || wantID != "" && (len(rows) == 0 || rows[0].ID != wantID) {
+			t.Fatalf("unexpected approval filter result: rows=%#v err=%v", rows, err)
+		}
+	}
+	assertApprovalCount(store.PermissionPackageApprovalRequestFilter{ManagementScope: scope}, "", 2)
+	assertApprovalCount(store.PermissionPackageApprovalRequestFilter{ManagementScope: scope, MatchRequestedCapabilityID: true}, legacyApproval.ID, 1)
+	assertApprovalCount(store.PermissionPackageApprovalRequestFilter{ManagementScope: scope, RequestedCapabilityID: "cap-a", MatchRequestedCapabilityID: true}, exactApproval.ID, 1)
+}
 
 func TestPostgresPermissionPackageApprovalRequestRejectsDuplicateActivePending(t *testing.T) {
 	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
@@ -71,6 +179,7 @@ func TestPostgresPermissionPackageApprovalRequestRejectsDuplicateActivePending(t
 		WorkspaceID:                   caller.WorkspaceID,
 		TargetID:                      target.ID,
 		CallerInstanceID:              caller.ID,
+		RequestedCapabilityID:         "cap_update",
 		SubjectSelector:               "role:support",
 		RequestText:                   "grant support access",
 		Region:                        "us-east",
@@ -87,6 +196,14 @@ func TestPostgresPermissionPackageApprovalRequestRejectsDuplicateActivePending(t
 	created, err := repo.CreatePermissionPackageApprovalRequest(ctx, request)
 	if err != nil {
 		t.Fatalf("create original approval request: %v", err)
+	}
+	differentRequestedCapability := request
+	differentRequestedCapability.ID = security.NewID("ppar")
+	differentRequestedCapability.RequestedCapabilityID = "cap_search"
+	differentRequestedCapability.CreatedAt = now.Add(30 * time.Second)
+	differentRequestedCapability.UpdatedAt = now.Add(30 * time.Second)
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, differentRequestedCapability); err != nil {
+		t.Fatalf("different requested capability should be a distinct approval: %v", err)
 	}
 
 	duplicate := request
@@ -160,6 +277,7 @@ func TestPostgresTransitionPermissionPackageApprovalRequestRejectsStaleState(t *
 		WorkspaceID:           caller.WorkspaceID,
 		TargetID:              target.ID,
 		CallerInstanceID:      caller.ID,
+		RequestedCapabilityID: "cap_update",
 		SubjectSelector:       "role:support",
 		RequestText:           "grant support access",
 		Region:                "us-east",
@@ -181,7 +299,8 @@ func TestPostgresTransitionPermissionPackageApprovalRequestRejectsStaleState(t *
 	approved.ReviewedBy = "security-one"
 	approved.UpdatedAt = now.Add(time.Minute)
 	approved.ResolvedAt = now.Add(time.Minute)
-	if saved, ok, err := repo.TransitionPermissionPackageApprovalRequest(ctx, approved, approved.UpdatedAt); err != nil || !ok || saved.Status != domain.PermissionPackageApprovalStatusApproved {
+	if saved, ok, err := repo.TransitionPermissionPackageApprovalRequest(ctx, approved, approved.UpdatedAt); err != nil || !ok ||
+		saved.Status != domain.PermissionPackageApprovalStatusApproved || saved.RequestedCapabilityID != request.RequestedCapabilityID {
 		t.Fatalf("approve transition: ok=%v saved=%#v err=%v", ok, saved, err)
 	}
 
@@ -197,7 +316,8 @@ func TestPostgresTransitionPermissionPackageApprovalRequestRejectsStaleState(t *
 	if err != nil || !ok {
 		t.Fatalf("get approval request: ok=%v err=%v", ok, err)
 	}
-	if loaded.Status != domain.PermissionPackageApprovalStatusApproved || loaded.ReviewedBy != "security-one" {
+	if loaded.Status != domain.PermissionPackageApprovalStatusApproved || loaded.ReviewedBy != "security-one" ||
+		loaded.RequestedCapabilityID != request.RequestedCapabilityID {
 		t.Fatalf("stale transition overwrote first resolution: %#v", loaded)
 	}
 }
@@ -276,6 +396,7 @@ func TestPostgresPermissionPackageApplyRejectsDuplicateApplication(t *testing.T)
 		WorkspaceID:            workspaceID,
 		TargetID:               target.ID,
 		CallerInstanceID:       caller.ID,
+		RequestedCapabilityID:  capability.ID,
 		SubjectSelector:        "user:support-*",
 		RequestText:            "grant support write access",
 		Region:                 "us-east",
@@ -288,21 +409,23 @@ func TestPostgresPermissionPackageApplyRejectsDuplicateApplication(t *testing.T)
 		AppliedAt:              appliedAt,
 	}
 	mutation := store.PermissionPackageApplyMutation{
-		Capabilities: []domain.Capability{{
-			ID:              capability.ID,
-			TargetID:        capability.TargetID,
-			Type:            capability.Type,
-			Key:             capability.Key,
-			DisplayName:     capability.DisplayName,
-			Action:          capability.Action,
-			DataScopes:      application.DataScopes,
-			Sensitivity:     capability.Sensitivity,
-			RiskLevel:       capability.RiskLevel,
-			DiscoveryStatus: domain.CapabilityDiscoveryApproved,
-			Version:         capability.Version,
-			DiscoveredAt:    capability.DiscoveredAt,
-			UpdatedAt:       appliedAt,
-		}},
+		Capabilities: []store.PermissionPackageApplyCapabilityMutation{{
+			ExpectedFingerprint: permissionpack.CapabilityFingerprint(capability),
+			Capability: domain.Capability{
+				ID:              capability.ID,
+				TargetID:        capability.TargetID,
+				Type:            capability.Type,
+				Key:             capability.Key,
+				DisplayName:     capability.DisplayName,
+				Action:          capability.Action,
+				DataScopes:      application.DataScopes,
+				Sensitivity:     capability.Sensitivity,
+				RiskLevel:       capability.RiskLevel,
+				DiscoveryStatus: domain.CapabilityDiscoveryApproved,
+				Version:         capability.Version,
+				DiscoveredAt:    capability.DiscoveredAt,
+				UpdatedAt:       appliedAt,
+			}}},
 		TenantEntitlements: []domain.TenantEntitlement{{
 			ID:           application.TenantEntitlementIDs[0],
 			TenantID:     application.TenantID,
@@ -357,6 +480,7 @@ func TestPostgresPermissionPackageApplyRejectsDuplicateApplication(t *testing.T)
 	}
 	retry := mutation
 	retry.Application.ID = security.NewID("ppa")
+	retry.Application.RequestedCapabilityID = security.NewID("cap")
 	retry.Application.TenantEntitlementIDs = []string{security.NewID("ent")}
 	retry.Application.WorkspaceAssignmentIDs = []string{security.NewID("wsa")}
 	retry.Application.InstanceAssignmentIDs = []string{security.NewID("ina")}
@@ -1118,6 +1242,7 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 		WorkspaceID:            caller.WorkspaceID,
 		TargetID:               target.ID,
 		CallerInstanceID:       caller.ID,
+		RequestedCapabilityID:  capability.ID,
 		SubjectSelector:        "user:*",
 		RequestText:            "grant sales read access",
 		Region:                 "us-east",
@@ -1133,18 +1258,20 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 		t.Fatalf("create permission package application: %v", err)
 	}
 	applications, err := repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
-		ManagementScope:  store.ManagementScope{TenantID: caller.TenantID, WorkspaceID: caller.WorkspaceID},
-		TemplateID:       "sales-readonly",
-		TargetID:         target.ID,
-		CallerInstanceID: caller.ID,
-		Limit:            1,
+		ManagementScope:       store.ManagementScope{TenantID: caller.TenantID, WorkspaceID: caller.WorkspaceID},
+		TemplateID:            "sales-readonly",
+		TargetID:              target.ID,
+		CallerInstanceID:      caller.ID,
+		RequestedCapabilityID: capability.ID,
+		Limit:                 1,
 	})
 	if err != nil {
 		t.Fatalf("list permission package applications: %v", err)
 	}
 	if len(applications) != 1 || applications[0].ID != application.ID || applications[0].TemplateVersion != 1 ||
 		len(applications[0].AllowedCapabilityIDs) != 1 || applications[0].AllowedCapabilityIDs[0] != capability.ID ||
-		len(applications[0].DataScopes) != 1 || applications[0].DataScopes[0].Region != "us-east" {
+		len(applications[0].DataScopes) != 1 || applications[0].DataScopes[0].Region != "us-east" ||
+		applications[0].RequestedCapabilityID != capability.ID {
 		t.Fatalf("unexpected permission package applications: %#v", applications)
 	}
 	byID, err := repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
@@ -1167,12 +1294,16 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 		WorkspaceID:           caller.WorkspaceID,
 		TargetID:              target.ID,
 		CallerInstanceID:      caller.ID,
+		RequestedCapabilityID: capability.ID,
 		SubjectSelector:       "user:*",
 		RequestText:           "grant sales read access",
 		Region:                "us-east",
 		DataScopes:            []domain.DataScope{{DataDomain: "crm", Region: "us-east", TenantFilter: "tenant_id = 'tenant-pg-cap'"}},
 		AllowedCapabilityIDs:  []string{capability.ID},
 		AllowedCapabilityKeys: []string{capability.Key},
+		AllowedCapabilityFingerprints: []string{
+			permissionpack.CapabilityFingerprint(capability),
+		},
 		PolicyGate: domain.PermissionPackagePolicyGate{
 			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
 			CanApplyDirectly: false,
@@ -1198,12 +1329,13 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 		t.Fatalf("create permission package approval request: %v", err)
 	}
 	approvalRows, err := repo.ListPermissionPackageApprovalRequests(ctx, store.PermissionPackageApprovalRequestFilter{
-		ManagementScope:  store.ManagementScope{TenantID: caller.TenantID, WorkspaceID: caller.WorkspaceID},
-		TemplateID:       "sales-readonly",
-		TargetID:         target.ID,
-		CallerInstanceID: caller.ID,
-		Status:           domain.PermissionPackageApprovalStatusPending,
-		Limit:            1,
+		ManagementScope:       store.ManagementScope{TenantID: caller.TenantID, WorkspaceID: caller.WorkspaceID},
+		TemplateID:            "sales-readonly",
+		TargetID:              target.ID,
+		CallerInstanceID:      caller.ID,
+		RequestedCapabilityID: capability.ID,
+		Status:                domain.PermissionPackageApprovalStatusPending,
+		Limit:                 1,
 	})
 	if err != nil {
 		t.Fatalf("list permission package approval requests: %v", err)
@@ -1211,14 +1343,15 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 	if len(approvalRows) != 1 || approvalRows[0].ID != approval.ID ||
 		len(approvalRows[0].PolicyGate.Reasons) != 1 || approvalRows[0].PolicyGate.Reasons[0].ReasonValues["risk"] != "high" ||
 		len(approvalRows[0].DataScopes) != 1 || approvalRows[0].DataScopes[0].Region != "us-east" ||
-		!approvalRows[0].ExpiresAt.Equal(now.Add(24*time.Hour)) {
+		!approvalRows[0].ExpiresAt.Equal(now.Add(24*time.Hour)) || approvalRows[0].RequestedCapabilityID != capability.ID {
 		t.Fatalf("unexpected permission package approval requests: %#v", approvalRows)
 	}
 	loadedApproval, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, approval.ID)
 	if err != nil {
 		t.Fatalf("get permission package approval request: %v", err)
 	}
-	if !ok || loadedApproval.ID != approval.ID || loadedApproval.Status != domain.PermissionPackageApprovalStatusPending {
+	if !ok || loadedApproval.ID != approval.ID || loadedApproval.Status != domain.PermissionPackageApprovalStatusPending ||
+		loadedApproval.RequestedCapabilityID != capability.ID {
 		t.Fatalf("unexpected permission package approval request get: ok=%v row=%#v", ok, loadedApproval)
 	}
 	loadedApproval.Status = domain.PermissionPackageApprovalStatusApproved
@@ -1235,7 +1368,7 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 	if !ok || updatedApproval.Status != domain.PermissionPackageApprovalStatusApproved ||
 		updatedApproval.ReviewedBy != "security" || updatedApproval.ResolvedAt.IsZero() ||
 		updatedApproval.ConsumedByApplicationID != "ppa_pg" || updatedApproval.ConsumedAt.IsZero() ||
-		!updatedApproval.ExpiresAt.Equal(now.Add(24*time.Hour)) {
+		!updatedApproval.ExpiresAt.Equal(now.Add(24*time.Hour)) || updatedApproval.RequestedCapabilityID != capability.ID {
 		t.Fatalf("unexpected updated permission package approval request: ok=%v row=%#v", ok, updatedApproval)
 	}
 	decision, err := repo.EvaluateCapabilityAccess(ctx, store.CapabilityAccessRequest{
@@ -1318,12 +1451,16 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 		WorkspaceID:           caller.WorkspaceID,
 		TargetID:              target.ID,
 		CallerInstanceID:      caller.ID,
+		RequestedCapabilityID: capability.ID,
 		SubjectSelector:       "user:pg-apply",
 		RequestText:           "grant support write access",
 		Region:                "us-east",
 		DataScopes:            []domain.DataScope{{DataDomain: "crm", Region: "us-east", TenantFilter: "tenant_id = 'tenant-pg-cap'"}},
 		AllowedCapabilityIDs:  []string{capability.ID},
 		AllowedCapabilityKeys: []string{capability.Key},
+		AllowedCapabilityFingerprints: []string{
+			permissionpack.CapabilityFingerprint(capability),
+		},
 		PolicyGate: domain.PermissionPackagePolicyGate{
 			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
 			CanApplyDirectly: false,
@@ -1340,7 +1477,7 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create apply approval request: %v", err)
 	}
-	applyTime := now.Add(80 * time.Second)
+	applyTime := now.Add(80*time.Second + 321*time.Nanosecond)
 	applyEntitlement := domain.TenantEntitlement{
 		ID:           security.NewID("ent"),
 		TenantID:     caller.TenantID,
@@ -1383,6 +1520,7 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 		WorkspaceID:            caller.WorkspaceID,
 		TargetID:               target.ID,
 		CallerInstanceID:       caller.ID,
+		RequestedCapabilityID:  applyApproval.RequestedCapabilityID,
 		SubjectSelector:        "user:pg-apply",
 		RequestText:            applyApproval.RequestText,
 		Region:                 applyApproval.Region,
@@ -1399,12 +1537,16 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 	consumedApproval.ConsumedByApplicationID = applyApplication.ID
 	consumedApproval.UpdatedAt = applyTime
 	applyMutation := store.PermissionPackageApplyMutation{
-		Capabilities:         []domain.Capability{capability},
+		Capabilities: []store.PermissionPackageApplyCapabilityMutation{{
+			ExpectedFingerprint: permissionpack.CapabilityFingerprint(capability),
+			Capability:          capability,
+		}},
 		TenantEntitlements:   []domain.TenantEntitlement{applyEntitlement},
 		WorkspaceAssignments: []domain.WorkspaceAssignment{applyWorkspaceAssignment},
 		InstanceAssignments:  []domain.InstanceAssignment{applyInstanceAssignment},
 		Application:          applyApplication,
 		ApprovalRequest:      &consumedApproval,
+		ExpectedApproval:     &applyApproval,
 		AuditEvent: domain.AuditEvent{
 			ID:           security.NewID("aud"),
 			TenantID:     caller.TenantID,
@@ -1418,23 +1560,57 @@ func TestPostgresCapabilityGovernanceRoundTrip(t *testing.T) {
 			CreatedAt:    applyTime,
 		},
 	}
+	driftedApplyApproval := applyApproval
+	driftedApplyApproval.SubjectSelector = "user:finance-*"
+	driftedApplyApproval.DataScopes = []domain.DataScope{{DataDomain: "crm", Region: "eu-west", TenantFilter: "tenant_id = 'tenant-pg-cap'"}}
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(ctx, driftedApplyApproval); err != nil || !ok {
+		t.Fatalf("drift apply approval snapshot: ok=%v err=%v", ok, err)
+	}
+	if _, err := repo.ApplyPermissionPackage(ctx, applyMutation); !errors.Is(err, store.ErrPermissionPackageCapabilitySnapshotChanged) {
+		t.Fatalf("expected approval snapshot conflict, got %v", err)
+	}
+	loadedDriftedApplyApproval, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, applyApproval.ID)
+	if err != nil || !ok || !loadedDriftedApplyApproval.ConsumedAt.IsZero() || loadedDriftedApplyApproval.ConsumedByApplicationID != "" {
+		t.Fatalf("approval snapshot conflict must roll back consumption: ok=%v approval=%#v err=%v", ok, loadedDriftedApplyApproval, err)
+	}
+	assertNoApplyRow := func(label, query, id string) {
+		t.Helper()
+		var count int
+		if err := pool.QueryRow(ctx, query, id).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("approval snapshot conflict must not create %s %s: count=%d err=%v", label, id, count, err)
+		}
+	}
+	assertNoApplyRow("application", "select count(*) from permission_package_applications where id=$1", applyApplication.ID)
+	assertNoApplyRow("tenant entitlement", "select count(*) from tenant_entitlements where id=$1", applyEntitlement.ID)
+	assertNoApplyRow("workspace assignment", "select count(*) from workspace_assignments where id=$1", applyWorkspaceAssignment.ID)
+	assertNoApplyRow("instance assignment", "select count(*) from instance_assignments where id=$1", applyInstanceAssignment.ID)
+	assertNoApplyRow("audit event", "select count(*) from audit_events where id=$1", applyMutation.AuditEvent.ID)
+	currentApplyCapability, ok, err := repo.GetCapability(ctx, capability.ID)
+	if err != nil || !ok || currentApplyCapability.DiscoveryStatus != capability.DiscoveryStatus {
+		t.Fatalf("approval snapshot conflict must not update capability: ok=%v capability=%#v err=%v", ok, currentApplyCapability, err)
+	}
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(ctx, applyApproval); err != nil || !ok {
+		t.Fatalf("restore apply approval snapshot: ok=%v err=%v", ok, err)
+	}
 	applyResult, err := repo.ApplyPermissionPackage(ctx, applyMutation)
 	if err != nil {
 		t.Fatalf("apply permission package mutation: %v", err)
 	}
 	if applyResult.Application.ID != applyApplication.ID || applyResult.ApprovalRequest == nil ||
-		applyResult.ApprovalRequest.ConsumedByApplicationID != applyApplication.ID || applyResult.ApprovalRequest.ConsumedAt.IsZero() {
+		applyResult.ApprovalRequest.ConsumedByApplicationID != applyApplication.ID || applyResult.ApprovalRequest.ConsumedAt.IsZero() ||
+		applyResult.Application.RequestedCapabilityID != capability.ID || applyResult.ApprovalRequest.RequestedCapabilityID != capability.ID {
 		t.Fatalf("unexpected apply mutation result: %#v", applyResult)
 	}
 	loadedApplyApproval, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, applyApproval.ID)
 	if err != nil || !ok {
 		t.Fatalf("get applied approval request: ok=%v err=%v", ok, err)
 	}
-	if loadedApplyApproval.ConsumedByApplicationID != applyApplication.ID || loadedApplyApproval.ConsumedAt.IsZero() {
+	if loadedApplyApproval.ConsumedByApplicationID != applyApplication.ID || loadedApplyApproval.ConsumedAt.IsZero() ||
+		loadedApplyApproval.RequestedCapabilityID != capability.ID {
 		t.Fatalf("approval request should be consumed by application %s: %#v", applyApplication.ID, loadedApplyApproval)
 	}
-	if _, err := repo.ApplyPermissionPackage(ctx, applyMutation); !errors.Is(err, store.ErrPermissionPackageApprovalNotConsumable) {
-		t.Fatalf("expected consumed approval error on retry, got %v", err)
+	if _, err := repo.ApplyPermissionPackage(ctx, applyMutation); !errors.Is(err, store.ErrPermissionPackageApplicationAlreadyApplied) {
+		t.Fatalf("expected duplicate application error on retry, got %v", err)
 	}
 	applyApplications, err := repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
 		ManagementScope:  store.ManagementScope{TenantID: caller.TenantID, WorkspaceID: caller.WorkspaceID},

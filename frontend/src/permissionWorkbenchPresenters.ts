@@ -405,19 +405,20 @@ export function permissionReadinessMessages(readiness: PermissionPackageDraft["r
   const fieldLabels: Record<string, string> = {
     callerInstanceId: t("form.caller"),
     subjectSelector: t("form.accessSubject"),
+    templateId: t("form.permissionPackage"),
     targetId: t("form.target"),
     tenantId: t("form.tenant"),
     workspaceId: t("form.workspace")
+  };
+  const warningLabels: Record<string, string> = {
+    "No matching allowed capabilities for the selected target.": t("message.noMatchingAllowedCapabilities"),
+    "The requested capability is not safely covered by this permission package.": t("message.requestedCapabilityNotCovered")
   };
   return [
     ...readiness.missingFields.map((field) =>
       tx(t, "message.permissionPackageMissingField", { field: fieldLabels[field] ?? t("form.requiredFieldFallback") })
     ),
-    ...readiness.warnings.map((warning) =>
-      warning === "No matching allowed capabilities for the selected target."
-        ? t("message.noMatchingAllowedCapabilities")
-        : t("message.permissionPackageReadinessWarning")
-    )
+    ...readiness.warnings.map((warning) => warningLabels[warning] ?? t("message.permissionPackageReadinessWarning"))
   ];
 }
 

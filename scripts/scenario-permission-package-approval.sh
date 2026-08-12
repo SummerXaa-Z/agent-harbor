@@ -175,6 +175,8 @@ elif kind == "permission-package":
     }
     if len(sys.argv) > 10 and sys.argv[10]:
         body["approvalRequestId"] = sys.argv[10]
+elif kind == "classify-capability":
+    body = {"dataDomains": [sys.argv[2]]}
 elif kind == "approval-resolution":
     reviewer, comment = sys.argv[2], sys.argv[3]
     body = {"reviewer": reviewer, "comment": comment}
@@ -516,7 +518,7 @@ if expected_id and approval.get("id") != expected_id:
     raise SystemExit(f"approval id={approval.get('id')!r} want {expected_id!r}")
 if approval.get("status") != expected_status:
     raise SystemExit(f"approval status={approval.get('status')!r} want {expected_status!r}: {approval}")
-if approval.get("templateId") != "support-ticket-triage" or approval.get("templateVersion") != 1:
+if approval.get("templateId") != "support-ticket-triage" or approval.get("templateVersion") != 2:
     raise SystemExit(f"unexpected approval template: {approval}")
 if write_tool not in approval.get("allowedCapabilityKeys", []):
     raise SystemExit(f"approval missing write tool {write_tool!r}: {approval.get('allowedCapabilityKeys')}")
@@ -734,7 +736,7 @@ if expected_id and approval["id"] != expected_id:
     raise SystemExit(f"approval id={approval['id']!r} want {expected_id!r}")
 if approval["status"] != expected_status:
     raise SystemExit(f"approval status={approval['status']!r} want {expected_status!r}")
-if approval["templateId"] != "support-ticket-triage" or approval["templateVersion"] != 1:
+if approval["templateId"] != "support-ticket-triage" or approval["templateVersion"] != 2:
     raise SystemExit(f"unexpected approval template: {approval}")
 if write_tool not in approval.get("allowedCapabilityKeys", []):
     raise SystemExit(f"approval missing write tool {write_tool!r}: {approval.get('allowedCapabilityKeys')}")
@@ -1003,7 +1005,7 @@ if "create_approval_request" not in next_action_codes:
 application = doc.get("application")
 if not application:
     raise SystemExit(f"apply response missing application: {doc}")
-if application["templateId"] != "support-ticket-triage" or application["templateVersion"] != 1:
+if application["templateId"] != "support-ticket-triage" or application["templateVersion"] != 2:
     raise SystemExit(f"unexpected application template: {application}")
 allowed_keys = set(application.get("allowedCapabilityKeys", []))
 for key in (read_tool, write_tool):
@@ -1406,6 +1408,13 @@ READ_CAPABILITY_ID="$(capability_id_for_key "$READ_TOOL")"
 WRITE_CAPABILITY_ID="$(capability_id_for_key "$WRITE_TOOL")"
 DENIED_CAPABILITY_ID="$(capability_id_for_key "$DENIED_TOOL")"
 echo "discovered capabilities: read=$READ_CAPABILITY_ID write=$WRITE_CAPABILITY_ID deny=$DENIED_CAPABILITY_ID"
+
+request PATCH "/api/v1/capabilities/$READ_CAPABILITY_ID" "$(json_body classify-capability support)"
+expect_status 200 "classify read capability data domain"
+request PATCH "/api/v1/capabilities/$WRITE_CAPABILITY_ID" "$(json_body classify-capability support)"
+expect_status 200 "classify write capability data domain"
+request PATCH "/api/v1/capabilities/$DENIED_CAPABILITY_ID" "$(json_body classify-capability support)"
+expect_status 200 "classify denied capability data domain"
 
 request POST "/api/v1/permission-packages/drafts" "$(permission_package_body)"
 expect_status 200 "draft approval-required permission package"

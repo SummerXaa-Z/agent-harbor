@@ -1,4 +1,5 @@
 import { ClipboardCheck, SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 import type { AccessSubjectOption } from "../accessSubjects";
 import { summarizeDataScopes } from "../accessProfile";
@@ -8,6 +9,7 @@ import {
   permissionRequestStepSectionId,
   permissionPackageTemplateName,
   permissionPackageTemplateSummary,
+  permissionReadinessMessages,
   type Tone,
   type Translator
 } from "../permissionWorkbenchPresenters";
@@ -77,6 +79,53 @@ export function PermissionChangeDraftSheet({
   workspaceName
 }: PermissionChangeDraftSheetProps) {
   const dataScopeLabels = dataScopeValueLabels(t);
+  const sheetRef = useRef<HTMLElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const readinessMessages = permissionReadinessMessages(draft.readiness, t);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !sheetRef.current) return;
+      const focusable = Array.from(sheetRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+      ));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previousFocusRef.current?.focus();
+    };
+  }, [isOpen]);
+
   return (
     <>
       <button className="permission-draft-command" id={permissionRequestStepSectionId("scope")} onClick={onOpenDraftSheet} type="button">
@@ -98,16 +147,22 @@ export function PermissionChangeDraftSheet({
 
       {isOpen ? (
         <div className="permission-draft-sheet-backdrop" role="presentation">
-          <section className="permission-draft-sheet" aria-label={t("text.permissionDraftSheetTitle")} role="dialog" aria-modal="true">
+          <section
+            aria-labelledby="permission-draft-sheet-title"
+            aria-modal="true"
+            className="permission-draft-sheet"
+            ref={sheetRef}
+            role="dialog"
+          >
             <header className="permission-draft-sheet-header">
               <div>
                 <span>{t(requestFormTitleKey)}</span>
-                <h3>{t("text.permissionDraftSheetTitle")}</h3>
+                <h3 id="permission-draft-sheet-title">{t("text.permissionDraftSheetTitle")}</h3>
                 <p>{t("text.permissionDraftSheetDetail")}</p>
               </div>
               <div className="permission-draft-sheet-header-actions">
                 <Badge tone={statusTone}>{statusLabel}</Badge>
-                <button className="icon-button" aria-label={t("action.closePermissionChangeDraft")} onClick={onClose} type="button">
+                <button className="icon-button" aria-label={t("action.closePermissionChangeDraft")} onClick={onClose} ref={closeButtonRef} type="button">
                   <X aria-hidden="true" size={16} />
                 </button>
               </div>
@@ -115,6 +170,14 @@ export function PermissionChangeDraftSheet({
 
             <div className="permission-draft-sheet-body">
               <p className="permission-draft-sheet-help">{t(requestFormHelpKey)}</p>
+              {readinessMessages.length > 0 ? (
+                <div className="permission-draft-readiness" role="status">
+                  <strong>{t("text.permissionDraftNeedsAttention")}</strong>
+                  <ul>
+                    {readinessMessages.map((readinessMessage) => <li key={readinessMessage}>{readinessMessage}</li>)}
+                  </ul>
+                </div>
+              ) : null}
               {isLocked ? (
                 <div className="approval-lock-notice">
                   <div>
@@ -292,6 +355,10 @@ export function PermissionChangeDraftSheet({
               <button className="secondary-button" onClick={onClose} type="button">
                 <X aria-hidden="true" size={14} />
                 {t("action.closePermissionChangeDraft")}
+              </button>
+              <button className="primary-button" disabled={!draft.readiness.canApply} onClick={onClose} type="button">
+                <ClipboardCheck aria-hidden="true" size={14} />
+                {t("action.confirmPermissionChangeDraft")}
               </button>
             </footer>
           </section>

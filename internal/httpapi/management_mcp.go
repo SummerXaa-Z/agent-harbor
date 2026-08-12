@@ -136,37 +136,40 @@ type managementMCPCapabilityArgs struct {
 }
 
 type managementMCPPermissionPackageApplicationArgs struct {
-	TenantID         string `json:"tenantId"`
-	WorkspaceID      string `json:"workspaceId"`
-	TemplateID       string `json:"templateId"`
-	TargetID         string `json:"targetId"`
-	CallerInstanceID string `json:"callerInstanceId"`
-	Limit            *int   `json:"limit"`
+	TenantID              string `json:"tenantId"`
+	WorkspaceID           string `json:"workspaceId"`
+	TemplateID            string `json:"templateId"`
+	TargetID              string `json:"targetId"`
+	CallerInstanceID      string `json:"callerInstanceId"`
+	RequestedCapabilityID string `json:"requestedCapabilityId"`
+	Limit                 *int   `json:"limit"`
 }
 
 type managementMCPPermissionPackageProductionReadinessArgs struct {
-	TenantID          string `json:"tenantId"`
-	WorkspaceID       string `json:"workspaceId"`
-	TemplateID        string `json:"templateId"`
-	TargetID          string `json:"targetId"`
-	CallerInstanceID  string `json:"callerInstanceId"`
-	SubjectID         string `json:"subjectId"`
-	Region            string `json:"region"`
-	RequestText       string `json:"requestText"`
-	SubjectSelector   string `json:"subjectSelector"`
-	ApprovalRequestID string `json:"approvalRequestId"`
-	TraceLimit        *int   `json:"traceLimit"`
+	TenantID              string `json:"tenantId"`
+	WorkspaceID           string `json:"workspaceId"`
+	TemplateID            string `json:"templateId"`
+	TargetID              string `json:"targetId"`
+	CallerInstanceID      string `json:"callerInstanceId"`
+	RequestedCapabilityID string `json:"requestedCapabilityId"`
+	SubjectID             string `json:"subjectId"`
+	Region                string `json:"region"`
+	RequestText           string `json:"requestText"`
+	SubjectSelector       string `json:"subjectSelector"`
+	ApprovalRequestID     string `json:"approvalRequestId"`
+	TraceLimit            *int   `json:"traceLimit"`
 }
 
 type managementMCPPermissionPackageApprovalRequestArgs struct {
-	TenantID         string                                 `json:"tenantId"`
-	WorkspaceID      string                                 `json:"workspaceId"`
-	TemplateID       string                                 `json:"templateId"`
-	TargetID         string                                 `json:"targetId"`
-	CallerInstanceID string                                 `json:"callerInstanceId"`
-	Status           domain.PermissionPackageApprovalStatus `json:"status"`
-	Reviewer         string                                 `json:"reviewer"`
-	Limit            *int                                   `json:"limit"`
+	TenantID              string                                 `json:"tenantId"`
+	WorkspaceID           string                                 `json:"workspaceId"`
+	TemplateID            string                                 `json:"templateId"`
+	TargetID              string                                 `json:"targetId"`
+	CallerInstanceID      string                                 `json:"callerInstanceId"`
+	RequestedCapabilityID string                                 `json:"requestedCapabilityId"`
+	Status                domain.PermissionPackageApprovalStatus `json:"status"`
+	Reviewer              string                                 `json:"reviewer"`
+	Limit                 *int                                   `json:"limit"`
 }
 
 type managementMCPApprovalResolutionArgs struct {
@@ -481,6 +484,7 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
+		rows = permissionPackageApplicationsForRequestedCapability(rows, filter.RequestedCapabilityID)
 		return managementMCPResult(rows), nil
 	case "check_permission_package_production_readiness":
 		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageProductionReadinessArgs](req.Params.Arguments)
@@ -1056,26 +1060,28 @@ func permissionPackageApplicationFilterFromMCPArgs(args managementMCPPermissionP
 			TenantID:    strings.TrimSpace(args.TenantID),
 			WorkspaceID: strings.TrimSpace(args.WorkspaceID),
 		},
-		TemplateID:       strings.TrimSpace(args.TemplateID),
-		TargetID:         strings.TrimSpace(args.TargetID),
-		CallerInstanceID: strings.TrimSpace(args.CallerInstanceID),
-		Limit:            limit,
+		TemplateID:            strings.TrimSpace(args.TemplateID),
+		TargetID:              strings.TrimSpace(args.TargetID),
+		CallerInstanceID:      strings.TrimSpace(args.CallerInstanceID),
+		RequestedCapabilityID: strings.TrimSpace(args.RequestedCapabilityID),
+		Limit:                 limit,
 	}, nil
 }
 
 func permissionPackageProductionReadinessQueryFromMCPArgs(args managementMCPPermissionPackageProductionReadinessArgs) (permissionPackageProductionReadinessQuery, error) {
 	query := permissionPackageProductionReadinessQuery{
-		TenantID:          strings.TrimSpace(args.TenantID),
-		WorkspaceID:       strings.TrimSpace(args.WorkspaceID),
-		TemplateID:        strings.TrimSpace(args.TemplateID),
-		TargetID:          strings.TrimSpace(args.TargetID),
-		CallerInstanceID:  strings.TrimSpace(args.CallerInstanceID),
-		SubjectID:         strings.TrimSpace(args.SubjectID),
-		Region:            strings.TrimSpace(args.Region),
-		RequestText:       strings.TrimSpace(args.RequestText),
-		SubjectSelector:   strings.TrimSpace(args.SubjectSelector),
-		ApprovalRequestID: strings.TrimSpace(args.ApprovalRequestID),
-		TraceLimit:        defaultAccessProfileTraceLimit,
+		TenantID:              strings.TrimSpace(args.TenantID),
+		WorkspaceID:           strings.TrimSpace(args.WorkspaceID),
+		TemplateID:            strings.TrimSpace(args.TemplateID),
+		TargetID:              strings.TrimSpace(args.TargetID),
+		CallerInstanceID:      strings.TrimSpace(args.CallerInstanceID),
+		RequestedCapabilityID: strings.TrimSpace(args.RequestedCapabilityID),
+		SubjectID:             strings.TrimSpace(args.SubjectID),
+		Region:                strings.TrimSpace(args.Region),
+		RequestText:           strings.TrimSpace(args.RequestText),
+		SubjectSelector:       strings.TrimSpace(args.SubjectSelector),
+		ApprovalRequestID:     strings.TrimSpace(args.ApprovalRequestID),
+		TraceLimit:            defaultAccessProfileTraceLimit,
 	}
 	for _, required := range []struct {
 		name  string
@@ -1116,11 +1122,12 @@ func permissionPackageApprovalRequestFilterFromMCPArgs(args managementMCPPermiss
 			TenantID:    strings.TrimSpace(args.TenantID),
 			WorkspaceID: strings.TrimSpace(args.WorkspaceID),
 		},
-		TemplateID:       strings.TrimSpace(args.TemplateID),
-		TargetID:         strings.TrimSpace(args.TargetID),
-		CallerInstanceID: strings.TrimSpace(args.CallerInstanceID),
-		Status:           args.Status,
-		Limit:            limit,
+		TemplateID:            strings.TrimSpace(args.TemplateID),
+		TargetID:              strings.TrimSpace(args.TargetID),
+		CallerInstanceID:      strings.TrimSpace(args.CallerInstanceID),
+		RequestedCapabilityID: strings.TrimSpace(args.RequestedCapabilityID),
+		Status:                args.Status,
+		Limit:                 limit,
 	}, nil
 }
 
@@ -1712,14 +1719,15 @@ func permissionPackageApplySchema() map[string]any {
 
 func permissionPackageDraftProperties() map[string]any {
 	return map[string]any{
-		"callerInstanceId": stringSchema("Caller agent instance that will receive the package."),
-		"region":           stringSchema("Region data-scope value, for example us-east."),
-		"requestText":      stringSchema("Administrator natural-language request for audit context."),
-		"subjectSelector":  stringSchema("Required subject selector for the access object, for example user:sales-*. Empty and bare * are rejected."),
-		"targetId":         stringSchema("Target MCP agent id."),
-		"templateId":       stringSchema("Permission package template id, for example sales-readonly."),
-		"tenantId":         stringSchema("Tenant that receives the entitlement."),
-		"workspaceId":      stringSchema("Workspace that receives the assignment."),
+		"callerInstanceId":      stringSchema("Caller agent instance that will receive the package."),
+		"region":                stringSchema("Region data-scope value, for example us-east."),
+		"requestText":           stringSchema("Administrator natural-language request for audit context."),
+		"requestedCapabilityId": stringSchema("Optional capability id that narrows this permission package request to exactly one capability."),
+		"subjectSelector":       stringSchema("Required subject selector for the access object, for example user:sales-*. Empty and bare * are rejected."),
+		"targetId":              stringSchema("Target MCP agent id."),
+		"templateId":            stringSchema("Permission package template id, for example sales-readonly."),
+		"tenantId":              stringSchema("Tenant that receives the entitlement."),
+		"workspaceId":           stringSchema("Workspace that receives the assignment."),
 	}
 }
 
@@ -1729,41 +1737,44 @@ func permissionPackageDraftRequiredFields() []string {
 
 func permissionPackageApplicationListSchema() map[string]any {
 	return objectSchema(map[string]any{
-		"tenantId":         stringSchema("Optional tenant scope. Tenant subtree is included when the tenant is registered."),
-		"workspaceId":      stringSchema("Optional workspace scope."),
-		"templateId":       stringSchema("Optional permission package template id."),
-		"targetId":         stringSchema("Optional target MCP agent id."),
-		"callerInstanceId": stringSchema("Optional caller agent instance id."),
-		"limit":            map[string]any{"type": "integer", "minimum": 1, "maximum": maxAuditLimit, "description": "Maximum application records to return."},
+		"tenantId":              stringSchema("Optional tenant scope. Tenant subtree is included when the tenant is registered."),
+		"workspaceId":           stringSchema("Optional workspace scope."),
+		"templateId":            stringSchema("Optional permission package template id."),
+		"targetId":              stringSchema("Optional target MCP agent id."),
+		"callerInstanceId":      stringSchema("Optional caller agent instance id."),
+		"requestedCapabilityId": stringSchema("Optional exact requested capability id."),
+		"limit":                 map[string]any{"type": "integer", "minimum": 1, "maximum": maxAuditLimit, "description": "Maximum application records to return."},
 	}, []string{})
 }
 
 func permissionPackageProductionReadinessSchema() map[string]any {
 	return objectSchema(map[string]any{
-		"tenantId":          stringSchema("Tenant that receives the entitlement."),
-		"workspaceId":       stringSchema("Workspace that receives the assignment."),
-		"templateId":        stringSchema("Permission package template id, for example sales-readonly."),
-		"targetId":          stringSchema("Target MCP agent id."),
-		"callerInstanceId":  stringSchema("Caller agent instance that will receive the package."),
-		"subjectId":         stringSchema("Optional production subject id used to filter runtime records."),
-		"region":            stringSchema("Optional region data-scope value. Defaults from the latest application when available."),
-		"requestText":       stringSchema("Optional administrator request text. Defaults from the latest application when available."),
-		"subjectSelector":   stringSchema("Optional subject selector. Defaults from the latest application when available."),
-		"approvalRequestId": stringSchema("Optional approved request id for pre-apply readiness checks."),
-		"traceLimit":        map[string]any{"type": "integer", "minimum": 0, "maximum": maxAccessProfileTraceLimit, "description": "Recent trace count to include."},
+		"tenantId":              stringSchema("Tenant that receives the entitlement."),
+		"workspaceId":           stringSchema("Workspace that receives the assignment."),
+		"templateId":            stringSchema("Permission package template id, for example sales-readonly."),
+		"targetId":              stringSchema("Target MCP agent id."),
+		"callerInstanceId":      stringSchema("Caller agent instance that will receive the package."),
+		"requestedCapabilityId": stringSchema("Optional capability id that narrows readiness and access handoff evidence to exactly one capability."),
+		"subjectId":             stringSchema("Optional production subject id used to filter runtime records."),
+		"region":                stringSchema("Optional region data-scope value. Defaults from the latest application when available."),
+		"requestText":           stringSchema("Optional administrator request text. Defaults from the latest application when available."),
+		"subjectSelector":       stringSchema("Optional subject selector. Defaults from the latest application when available."),
+		"approvalRequestId":     stringSchema("Optional approved request id for pre-apply readiness checks."),
+		"traceLimit":            map[string]any{"type": "integer", "minimum": 0, "maximum": maxAccessProfileTraceLimit, "description": "Recent trace count to include."},
 	}, []string{"tenantId", "workspaceId", "templateId", "targetId", "callerInstanceId"})
 }
 
 func permissionPackageApprovalRequestListSchema() map[string]any {
 	return objectSchema(map[string]any{
-		"tenantId":         stringSchema("Optional tenant scope. Tenant subtree is included when the tenant is registered."),
-		"workspaceId":      stringSchema("Optional workspace scope."),
-		"templateId":       stringSchema("Optional permission package template id."),
-		"targetId":         stringSchema("Optional target MCP agent id."),
-		"callerInstanceId": stringSchema("Optional caller agent instance id."),
-		"status":           map[string]any{"type": "string", "enum": []string{"pending", "approved", "rejected", "withdrawn"}, "description": "Optional approval request status filter."},
-		"reviewer":         stringSchema("Optional reviewer identity for reviewable approval queue filtering."),
-		"limit":            map[string]any{"type": "integer", "minimum": 1, "maximum": maxAuditLimit, "description": "Maximum approval requests to return."},
+		"tenantId":              stringSchema("Optional tenant scope. Tenant subtree is included when the tenant is registered."),
+		"workspaceId":           stringSchema("Optional workspace scope."),
+		"templateId":            stringSchema("Optional permission package template id."),
+		"targetId":              stringSchema("Optional target MCP agent id."),
+		"callerInstanceId":      stringSchema("Optional caller agent instance id."),
+		"requestedCapabilityId": stringSchema("Optional exact requested capability id."),
+		"status":                map[string]any{"type": "string", "enum": []string{"pending", "approved", "rejected", "withdrawn"}, "description": "Optional approval request status filter."},
+		"reviewer":              stringSchema("Optional reviewer identity for reviewable approval queue filtering."),
+		"limit":                 map[string]any{"type": "integer", "minimum": 1, "maximum": maxAuditLimit, "description": "Maximum approval requests to return."},
 	}, []string{})
 }
 

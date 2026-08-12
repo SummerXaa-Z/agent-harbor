@@ -162,6 +162,34 @@ export function useCapabilityGovernanceController({
     }
   }
 
+  async function handleClassifyCapability(capability: Capability, dataDomain: string) {
+    const normalizedDomain = dataDomain.trim();
+    if (!normalizedDomain) {
+      setMessage({ key: "message.validationCapabilityDataDomainRequired" });
+      return;
+    }
+    setMessage(null);
+    setActionId(`classify:${capability.id}`);
+    try {
+      const updated = await updateCapability(capability.id, { dataDomains: [normalizedDomain] }, adminKey);
+      setData((current) => current ? {
+        ...current,
+        capabilities: current.capabilities.map((item) => item.id === updated.id ? updated : item),
+        capabilitiesLoadedFromApi: true
+      } : current);
+      setMessage({
+        render: (t) => tx(t, "message.capabilityDataDomainSaved", {
+          domain: normalizedDomain,
+          name: capabilityDisplayName(capability, t)
+        })
+      });
+    } catch (error) {
+      setMessage(localizedErrorMessageState(error, "error.classifyCapability"));
+    } finally {
+      setActionId("");
+    }
+  }
+
   async function submitCapabilityGrantChain(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
@@ -250,6 +278,7 @@ export function useCapabilityGovernanceController({
     actionId,
     form,
     handleApproveCapability,
+    handleClassifyCapability,
     handleRefreshTargetCapabilities,
     message,
     setForm,

@@ -42,13 +42,14 @@ type accessHandoffResponse struct {
 }
 
 type accessHandoffScope struct {
-	TenantID         string `json:"tenantId"`
-	WorkspaceID      string `json:"workspaceId"`
-	CallerInstanceID string `json:"callerInstanceId"`
-	TargetID         string `json:"targetId"`
-	SubjectID        string `json:"subjectId,omitempty"`
-	SubjectSelector  string `json:"subjectSelector,omitempty"`
-	Region           string `json:"region,omitempty"`
+	TenantID              string `json:"tenantId"`
+	WorkspaceID           string `json:"workspaceId"`
+	CallerInstanceID      string `json:"callerInstanceId"`
+	TargetID              string `json:"targetId"`
+	RequestedCapabilityID string `json:"requestedCapabilityId,omitempty"`
+	SubjectID             string `json:"subjectId,omitempty"`
+	SubjectSelector       string `json:"subjectSelector,omitempty"`
+	Region                string `json:"region,omitempty"`
 }
 
 type accessHandoffTemplate struct {
@@ -113,19 +114,20 @@ type accessHandoffToken struct {
 }
 
 type createAccessHandoffTokenRequest struct {
-	HandoffID         string `json:"handoffId"`
-	TenantID          string `json:"tenantId"`
-	WorkspaceID       string `json:"workspaceId"`
-	TemplateID        string `json:"templateId"`
-	TargetID          string `json:"targetId"`
-	CallerInstanceID  string `json:"callerInstanceId"`
-	SubjectID         string `json:"subjectId"`
-	Region            string `json:"region"`
-	RequestText       string `json:"requestText"`
-	SubjectSelector   string `json:"subjectSelector"`
-	ApprovalRequestID string `json:"approvalRequestId"`
-	Name              string `json:"name"`
-	ExpiresInSeconds  int64  `json:"expiresInSeconds"`
+	HandoffID             string `json:"handoffId"`
+	TenantID              string `json:"tenantId"`
+	WorkspaceID           string `json:"workspaceId"`
+	TemplateID            string `json:"templateId"`
+	TargetID              string `json:"targetId"`
+	CallerInstanceID      string `json:"callerInstanceId"`
+	RequestedCapabilityID string `json:"requestedCapabilityId,omitempty"`
+	SubjectID             string `json:"subjectId"`
+	Region                string `json:"region"`
+	RequestText           string `json:"requestText"`
+	SubjectSelector       string `json:"subjectSelector"`
+	ApprovalRequestID     string `json:"approvalRequestId"`
+	Name                  string `json:"name"`
+	ExpiresInSeconds      int64  `json:"expiresInSeconds"`
 }
 
 type createAccessHandoffTokenResponse struct {
@@ -223,13 +225,14 @@ func (s *Server) permissionPackageAccessHandoff(ctx context.Context, query permi
 	}
 
 	response.Scope = accessHandoffScope{
-		TenantID:         query.TenantID,
-		WorkspaceID:      query.WorkspaceID,
-		CallerInstanceID: query.CallerInstanceID,
-		TargetID:         query.TargetID,
-		SubjectID:        query.SubjectID,
-		SubjectSelector:  subjectSelector,
-		Region:           region,
+		TenantID:              query.TenantID,
+		WorkspaceID:           query.WorkspaceID,
+		CallerInstanceID:      query.CallerInstanceID,
+		TargetID:              query.TargetID,
+		RequestedCapabilityID: query.RequestedCapabilityID,
+		SubjectID:             query.SubjectID,
+		SubjectSelector:       subjectSelector,
+		Region:                region,
 	}
 
 	response.AuditRefs = accessHandoffAuditRefsFromReadiness(query, readiness)
@@ -419,17 +422,18 @@ func (s *Server) revokeAccessHandoffToken(w http.ResponseWriter, r *http.Request
 
 func (req createAccessHandoffTokenRequest) readinessQuery() (permissionPackageProductionReadinessQuery, error) {
 	query := permissionPackageProductionReadinessQuery{
-		TenantID:          strings.TrimSpace(req.TenantID),
-		WorkspaceID:       strings.TrimSpace(req.WorkspaceID),
-		TemplateID:        strings.TrimSpace(req.TemplateID),
-		TargetID:          strings.TrimSpace(req.TargetID),
-		CallerInstanceID:  strings.TrimSpace(req.CallerInstanceID),
-		SubjectID:         strings.TrimSpace(req.SubjectID),
-		Region:            strings.TrimSpace(req.Region),
-		RequestText:       strings.TrimSpace(req.RequestText),
-		SubjectSelector:   strings.TrimSpace(req.SubjectSelector),
-		ApprovalRequestID: strings.TrimSpace(req.ApprovalRequestID),
-		TraceLimit:        defaultAccessProfileTraceLimit,
+		TenantID:              strings.TrimSpace(req.TenantID),
+		WorkspaceID:           strings.TrimSpace(req.WorkspaceID),
+		TemplateID:            strings.TrimSpace(req.TemplateID),
+		TargetID:              strings.TrimSpace(req.TargetID),
+		CallerInstanceID:      strings.TrimSpace(req.CallerInstanceID),
+		RequestedCapabilityID: strings.TrimSpace(req.RequestedCapabilityID),
+		SubjectID:             strings.TrimSpace(req.SubjectID),
+		Region:                strings.TrimSpace(req.Region),
+		RequestText:           strings.TrimSpace(req.RequestText),
+		SubjectSelector:       strings.TrimSpace(req.SubjectSelector),
+		ApprovalRequestID:     strings.TrimSpace(req.ApprovalRequestID),
+		TraceLimit:            defaultAccessProfileTraceLimit,
 	}
 	for _, required := range []struct {
 		name  string

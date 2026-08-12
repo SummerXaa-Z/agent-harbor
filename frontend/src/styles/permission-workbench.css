@@ -241,12 +241,14 @@
 
 .permission-handoff-notice span {
   min-width: 0;
-  overflow: hidden;
   color: var(--ink-2);
   font-size: 12px;
   line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.permission-handoff-template-warning {
+  color: var(--danger-strong) !important;
+  font-weight: 700;
 }
 
 .approval-context-bar {
@@ -496,7 +498,7 @@
 
 .permission-draft-sheet-header span,
 .permission-draft-sheet-help {
-  color: var(--ink-3);
+  color: var(--muted);
   font-size: 12px;
   font-weight: 600;
 }
@@ -512,7 +514,7 @@
 .permission-draft-sheet-header p,
 .permission-draft-sheet-help {
   margin: 0;
-  color: var(--ink-3);
+  color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -534,10 +536,35 @@
 }
 
 .permission-draft-sheet-footer {
+  flex-wrap: wrap;
   justify-content: flex-end;
   border-top: 1px solid var(--line-subtle);
   border-bottom: 0;
   background: var(--surface-raised);
+}
+
+.permission-draft-readiness {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-control);
+  background: var(--warning-surface);
+}
+
+.permission-draft-readiness strong {
+  color: var(--warning-strong);
+  font-size: 13px;
+}
+
+.permission-draft-readiness ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .approval-section {

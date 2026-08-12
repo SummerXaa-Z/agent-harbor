@@ -179,6 +179,7 @@ type capabilityResponse struct {
 	DisplayName     string              `json:"displayName"`
 	Description     string              `json:"description"`
 	Action          string              `json:"action"`
+	DataDomains     []string            `json:"dataDomains"`
 	DataScopes      []dataScopeResponse `json:"dataScopes"`
 	Sensitivity     string              `json:"sensitivity"`
 	RiskLevel       string              `json:"riskLevel"`
@@ -299,6 +300,7 @@ type permissionPackageApplicationResponse struct {
 	WorkspaceID            string              `json:"workspaceId"`
 	TargetID               string              `json:"targetId"`
 	CallerInstanceID       string              `json:"callerInstanceId"`
+	RequestedCapabilityID  string              `json:"requestedCapabilityId"`
 	SubjectSelector        string              `json:"subjectSelector"`
 	RequestText            string              `json:"requestText"`
 	Region                 string              `json:"region"`
@@ -446,14 +448,15 @@ type permissionPackageProductionPlatformContract struct {
 }
 
 type permissionPackageProductionEvidenceScope struct {
-	TenantID         string `json:"tenantId"`
-	WorkspaceID      string `json:"workspaceId"`
-	TemplateID       string `json:"templateId"`
-	TargetID         string `json:"targetId"`
-	CallerInstanceID string `json:"callerInstanceId"`
-	SubjectID        string `json:"subjectId"`
-	Region           string `json:"region"`
-	SubjectSelector  string `json:"subjectSelector"`
+	TenantID              string `json:"tenantId"`
+	WorkspaceID           string `json:"workspaceId"`
+	TemplateID            string `json:"templateId"`
+	TargetID              string `json:"targetId"`
+	CallerInstanceID      string `json:"callerInstanceId"`
+	RequestedCapabilityID string `json:"requestedCapabilityId"`
+	SubjectID             string `json:"subjectId"`
+	Region                string `json:"region"`
+	SubjectSelector       string `json:"subjectSelector"`
 }
 
 type permissionPackageProductionEvidenceRefs struct {
@@ -466,10 +469,11 @@ type permissionPackageProductionEvidenceRefs struct {
 }
 
 type permissionPackageProductionApplicationEvidence struct {
-	Present              bool     `json:"present"`
-	ID                   string   `json:"id"`
-	TemplateVersion      int      `json:"templateVersion"`
-	AllowedCapabilityIDs []string `json:"allowedCapabilityIds"`
+	Present               bool     `json:"present"`
+	ID                    string   `json:"id"`
+	RequestedCapabilityID string   `json:"requestedCapabilityId"`
+	TemplateVersion       int      `json:"templateVersion"`
+	AllowedCapabilityIDs  []string `json:"allowedCapabilityIds"`
 }
 
 type permissionPackageProductionRuntimeEvidence struct {
@@ -544,6 +548,7 @@ type permissionPackageApprovalRequestResponse struct {
 	WorkspaceID             string                              `json:"workspaceId"`
 	TargetID                string                              `json:"targetId"`
 	CallerInstanceID        string                              `json:"callerInstanceId"`
+	RequestedCapabilityID   string                              `json:"requestedCapabilityId"`
 	SubjectSelector         string                              `json:"subjectSelector"`
 	RequestText             string                              `json:"requestText"`
 	Region                  string                              `json:"region"`
@@ -854,6 +859,8 @@ func TestSystemInfoIncludesConsoleCompatibilityContract(t *testing.T) {
 		capabilities[capability] = true
 	}
 	for _, capability := range []string{
+		"capability_data_domain_classification_v1",
+		"permission_package_requested_capability_v1",
 		"permission_package_approval_requests",
 		"permission_package_approval_withdraw",
 		"permission_package_apply_preflight",
@@ -2590,11 +2597,13 @@ func TestScopedAdminIdentityCannotOperatePermissionPackageOutsideScope(t *testin
 	repo := store.NewMemory()
 	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
 		{Actor: "east-admin", Key: "east-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+		{Actor: "platform-admin", Key: "platform-key", Role: "platform_admin"},
 	})
 	now := time.Now().UTC()
 	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
 	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
 	createDirectTenant(t, repo, "tenant-west", "tenant-root", "West tenant", now)
+	eastCaller := createDirectAgent(t, repo, "East caller", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
 	westCaller := createDirectAgent(t, repo, "West caller", "tenant-west", "ws-finance", "local", domain.AgentStatusActive, nil)
 	westTarget := createDirectAgent(t, repo, "West MCP", "tenant-west", "ws-finance", "mcp", domain.AgentStatusActive, nil)
 	createDirectCapabilityWithAction(t, repo, westTarget.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
@@ -2624,6 +2633,27 @@ func TestScopedAdminIdentityCannotOperatePermissionPackageOutsideScope(t *testin
 		if resp.Code != http.StatusForbidden {
 			t.Fatalf("%s should reject permission package outside admin scope, got %d body=%s", tc.name, resp.Code, resp.Body.String())
 		}
+	}
+
+	ancestorTarget := createDirectAgent(t, repo, "Platform Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	ancestorCapability := createDirectCapabilityWithAction(t, repo, ancestorTarget.ID, "search_ticket", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	ancestorInput := map[string]any{
+		"callerInstanceId": eastCaller.ID,
+		"region":           "us-east",
+		"requestText":      "Allow a child tenant to use a platform-managed target.",
+		"subjectSelector":  "role:support",
+		"targetId":         ancestorTarget.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	ancestorScoped := requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/drafts", ancestorInput, "", "east-key")
+	if ancestorScoped.Code != http.StatusForbidden || strings.Contains(ancestorScoped.Body.String(), ancestorCapability.ID) {
+		t.Fatalf("tenant admin must not mutate a platform-managed ancestor target, got %d body=%s", ancestorScoped.Code, ancestorScoped.Body.String())
+	}
+	ancestorPlatform := requestWithAdmin(t, router, http.MethodPost, "/api/v1/permission-packages/drafts", ancestorInput, "", "platform-key")
+	if ancestorPlatform.Code != http.StatusOK {
+		t.Fatalf("platform admin should be able to prepare an ancestor-target permission request, got %d body=%s", ancestorPlatform.Code, ancestorPlatform.Body.String())
 	}
 }
 
@@ -5316,10 +5346,16 @@ func TestMCPCapabilityDiscoveryAndAssignmentManagement(t *testing.T) {
 	}
 
 	approved := decodeData[capabilityResponse](t, request(t, router, http.MethodPatch, "/api/v1/capabilities/"+search.ID, map[string]any{
+		"dataDomains":     []string{" crm ", "crm"},
 		"discoveryStatus": "approved",
 	}, ""))
-	if approved.DiscoveryStatus != "approved" {
+	if approved.DiscoveryStatus != "approved" || !reflect.DeepEqual(approved.DataDomains, []string{"crm"}) {
 		t.Fatalf("capability should be approved, got %#v", approved)
+	}
+	refreshed := decodeData[[]capabilityResponse](t, request(t, router, http.MethodPost, "/api/v1/targets/"+target.ID+"/capabilities:refresh", nil, ""))
+	refreshedSearch := capabilityByKey(t, refreshed, "search_customer")
+	if refreshedSearch.DiscoveryStatus != "approved" || !reflect.DeepEqual(refreshedSearch.DataDomains, []string{"crm"}) {
+		t.Fatalf("capability classification should survive discovery refresh, got %#v", refreshedSearch)
 	}
 	entitlement := decodeData[tenantEntitlementResponse](t, request(t, router, http.MethodPost, "/api/v1/tenant-entitlements", map[string]any{
 		"tenantId":     "tenant-a",
@@ -5380,7 +5416,7 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	export := createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
 
 	templates := decodeData[[]permissionPackageTemplateResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/templates", nil, ""))
-	if len(templates) == 0 || templates[0].ID != "sales-readonly" || templates[0].Version != 1 {
+	if len(templates) == 0 || templates[0].ID != "sales-readonly" || templates[0].Version != 2 {
 		t.Fatalf("expected sales-readonly template first, got %#v", templates)
 	}
 	accessSubjects := decodeData[[]domain.PermissionPackageAccessSubject](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/access-subjects", nil, ""))
@@ -5409,7 +5445,7 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 		"workspaceId":      "ws-sales",
 	}
 	draft := decodeData[permissionPackageDraftResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/drafts", input, ""))
-	if !draft.Readiness.CanApply || draft.Template.ID != "sales-readonly" || draft.Template.Version != 1 {
+	if !draft.Readiness.CanApply || draft.Template.ID != "sales-readonly" || draft.Template.Version != 2 {
 		t.Fatalf("expected applicable sales-readonly draft, got %#v", draft)
 	}
 	if draft.PolicyGate.Decision != "allow" || !draft.PolicyGate.CanApplyDirectly || draft.PolicyGate.PolicyVersion != 1 {
@@ -5443,7 +5479,7 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 		t.Fatalf("expected one caller instance assignment, got %#v", applied.InstanceAssignments)
 	}
 	if applied.Application == nil || applied.Application.DraftID != applied.Draft.ID ||
-		applied.Application.TemplateID != "sales-readonly" || applied.Application.TemplateVersion != 1 ||
+		applied.Application.TemplateID != "sales-readonly" || applied.Application.TemplateVersion != 2 ||
 		applied.Application.TenantID != "tenant-east" || applied.Application.WorkspaceID != "ws-sales" ||
 		applied.Application.TargetID != target.ID || applied.Application.CallerInstanceID != caller.ID ||
 		len(applied.Application.AllowedCapabilityIDs) != 1 || applied.Application.AllowedCapabilityIDs[0] != search.ID ||
@@ -5623,8 +5659,257 @@ func TestPermissionPackageDraftAndApplyManagement(t *testing.T) {
 	events := decodeData[[]auditEventResponse](t, request(t, router, http.MethodGet, "/api/v1/audit/events?action=permission_package.applied", nil, ""))
 	if len(events) != 1 || events[0].TenantID != "tenant-east" || events[0].ResourceID != applied.Application.ID ||
 		events[0].Metadata["applicationId"] != applied.Application.ID || events[0].Metadata["draftId"] != applied.Draft.ID ||
-		events[0].Metadata["templateVersion"] != float64(1) {
+		events[0].Metadata["templateVersion"] != float64(2) {
 		t.Fatalf("expected permission_package.applied audit event, got %#v", events)
+	}
+}
+
+func TestPermissionPackageRequestedCapabilityStaysExactThroughApprovalAndApplication(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	updateTicket := createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	assignTicket := createDirectCapabilityWithAction(t, repo, target.ID, "assign_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId":      caller.ID,
+		"region":                "us-east",
+		"requestText":           "Repair only the denied ticket update capability.",
+		"requestedCapabilityId": updateTicket.ID,
+		"subjectSelector":       "user:support-*",
+		"targetId":              target.ID,
+		"templateId":            "support-ticket-triage",
+		"tenantId":              "tenant-east",
+		"workspaceId":           "ws-support",
+	}
+	draft := decodeData[permissionPackageDraftResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/drafts", input, ""))
+	if !draft.Readiness.CanApply || len(draft.AllowedCapabilities) != 1 || draft.AllowedCapabilities[0].ID != updateTicket.ID {
+		t.Fatalf("requested capability should be the only allowed capability: %#v", draft)
+	}
+	if len(draft.BlockedCapabilities) != 1 || draft.BlockedCapabilities[0].ID != assignTicket.ID {
+		t.Fatalf("sibling capability should remain blocked evidence: %#v", draft.BlockedCapabilities)
+	}
+
+	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
+	if approval.RequestedCapabilityID != updateTicket.ID || len(approval.AllowedCapabilityIDs) != 1 || approval.AllowedCapabilityIDs[0] != updateTicket.ID {
+		t.Fatalf("approval snapshot lost exact capability boundary: %#v", approval)
+	}
+	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", map[string]any{"reviewer": "security"}, ""))
+
+	mismatchedInput := map[string]any{
+		"approvalRequestId":     approved.ID,
+		"callerInstanceId":      caller.ID,
+		"region":                input["region"],
+		"requestText":           input["requestText"],
+		"requestedCapabilityId": assignTicket.ID,
+		"subjectSelector":       input["subjectSelector"],
+		"targetId":              target.ID,
+		"templateId":            input["templateId"],
+		"tenantId":              input["tenantId"],
+		"workspaceId":           input["workspaceId"],
+	}
+	mismatch := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", mismatchedInput, "")
+	if mismatch.Code != http.StatusBadRequest || !strings.Contains(mismatch.Body.String(), "does not match current draft") {
+		t.Fatalf("approval must not be reusable for another requested capability, status=%d body=%s", mismatch.Code, mismatch.Body.String())
+	}
+
+	applyInput := map[string]any{}
+	for key, value := range input {
+		applyInput[key] = value
+	}
+	applyInput["approvalRequestId"] = approved.ID
+	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", applyInput, ""))
+	if applied.Application == nil || applied.Application.RequestedCapabilityID != updateTicket.ID ||
+		len(applied.Application.AllowedCapabilityIDs) != 1 || applied.Application.AllowedCapabilityIDs[0] != updateTicket.ID ||
+		len(applied.TenantEntitlements) != 1 || applied.TenantEntitlements[0].CapabilityID != updateTicket.ID {
+		t.Fatalf("application lost exact capability boundary: %#v", applied)
+	}
+
+	requested := url.QueryEscape(updateTicket.ID)
+	applications := decodeData[[]permissionPackageApplicationResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications?tenantId=tenant-east&workspaceId=ws-support&requestedCapabilityId="+requested, nil, ""))
+	if len(applications) != 1 || applications[0].ID != applied.Application.ID {
+		t.Fatalf("application exact capability filter mismatch: %#v", applications)
+	}
+	otherApplications := decodeData[[]permissionPackageApplicationResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications?tenantId=tenant-east&workspaceId=ws-support&requestedCapabilityId="+url.QueryEscape(assignTicket.ID), nil, ""))
+	if len(otherApplications) != 0 {
+		t.Fatalf("application filter leaked another requested capability: %#v", otherApplications)
+	}
+	mcpApplicationsResult := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "exact-capability-applications",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_permission_package_applications",
+			"arguments": map[string]any{
+				"tenantId":              "tenant-east",
+				"workspaceId":           "ws-support",
+				"requestedCapabilityId": updateTicket.ID,
+			},
+		},
+	}, ""))
+	var mcpApplications []permissionPackageApplicationResponse
+	if err := json.Unmarshal(mcpApplicationsResult.Result.StructuredContent, &mcpApplications); err != nil || len(mcpApplications) != 1 || mcpApplications[0].ID != applied.Application.ID {
+		t.Fatalf("management MCP application filter lost exact capability: rows=%#v err=%v", mcpApplications, err)
+	}
+	mcpApprovalsResult := decodeMCPResult(t, request(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "exact-capability-approvals",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_permission_package_approval_requests",
+			"arguments": map[string]any{
+				"tenantId":              "tenant-east",
+				"workspaceId":           "ws-support",
+				"requestedCapabilityId": updateTicket.ID,
+			},
+		},
+	}, ""))
+	var mcpApprovals []permissionPackageApprovalRequestResponse
+	if err := json.Unmarshal(mcpApprovalsResult.Result.StructuredContent, &mcpApprovals); err != nil || len(mcpApprovals) != 1 || mcpApprovals[0].ID != approved.ID {
+		t.Fatalf("management MCP approval filter lost exact capability: rows=%#v err=%v", mcpApprovals, err)
+	}
+	health := decodeData[permissionPackageApplicationHealthResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications/health?tenantId=tenant-east&workspaceId=ws-support&requestedCapabilityId="+requested, nil, ""))
+	if health.Summary.Total != 1 || len(health.Applications) != 1 || health.Applications[0].Application.RequestedCapabilityID != updateTicket.ID {
+		t.Fatalf("application health lost exact capability filter: %#v", health)
+	}
+
+	readiness := decodeData[permissionPackageProductionReadinessResponse](t, request(t, router, http.MethodGet, permissionPackageProductionReadinessPath(input, "", "user:support-001"), nil, ""))
+	if readiness.LatestApplication == nil || readiness.LatestApplication.ID != applied.Application.ID || readiness.LatestApplication.RequestedCapabilityID != updateTicket.ID {
+		t.Fatalf("readiness did not reload exact capability application: %#v", readiness.LatestApplication)
+	}
+	report := decodeData[permissionPackageProductionEvidenceReportResponse](t, request(t, router, http.MethodGet, permissionPackageProductionEvidenceReportPath(input, "", "user:support-001"), nil, ""))
+	if report.Scope.RequestedCapabilityID != updateTicket.ID || report.Evidence.Application.RequestedCapabilityID != updateTicket.ID {
+		t.Fatalf("production report lost exact capability scope: %#v", report)
+	}
+}
+
+func TestPermissionPackageExactSingleCapabilityDoesNotRequireImpossibleDeniedTrace(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-support", Name: "Support Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Single-tool Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	searchTicket := createDirectCapabilityWithAction(t, repo, target.ID, "search_ticket", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	input := map[string]any{
+		"callerInstanceId":      caller.ID,
+		"region":                "us-east",
+		"requestText":           "Allow only the single safe ticket search capability.",
+		"requestedCapabilityId": searchTicket.ID,
+		"subjectSelector":       "user:support-*",
+		"targetId":              target.ID,
+		"templateId":            "support-ticket-triage",
+		"tenantId":              "tenant-east",
+		"workspaceId":           "ws-support",
+	}
+	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", input, ""))
+	if applied.Application == nil || len(applied.Draft.BlockedCapabilities) != 0 || len(applied.Application.AllowedCapabilityIDs) != 1 {
+		t.Fatalf("expected exact single-capability application, got %#v", applied)
+	}
+	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionAllowed, caller, target, searchTicket, "search_ticket", "user:support-001", time.Now().UTC().Add(time.Second))
+	readiness := decodeData[permissionPackageProductionReadinessResponse](t, request(t, router, http.MethodGet, permissionPackageProductionReadinessPath(input, "", "user:support-001"), nil, ""))
+	if readiness.Status != "ready" || readiness.Summary.BlockingCount != 0 || !readiness.Summary.HasAllowedTrace || readiness.Summary.HasDeniedTrace {
+		t.Fatalf("single-capability readiness should not require impossible denied evidence: %#v", readiness)
+	}
+	if !permissionPackageProductionReadinessHasCheck(readiness.Checks, "runtime_denied_trace_not_applicable", "passed") {
+		t.Fatalf("expected explicit denied-evidence not-applicable check: %#v", readiness.Checks)
+	}
+}
+
+func TestPermissionPackageExactReadinessAcceptsEquivalentLegacySingleCapabilityApplication(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-east", "", "East tenant", now)
+	caller := createDirectAgent(t, repo, "Support Assistant", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	target := createDirectAgent(t, repo, "Legacy single-tool MCP", "tenant-east", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	searchTicket := createDirectCapabilityWithAction(t, repo, target.ID, "search_ticket", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	legacyInput := map[string]any{
+		"callerInstanceId": caller.ID,
+		"region":           "us-east",
+		"requestText":      "Legacy package request whose effective boundary is one capability.",
+		"subjectSelector":  "user:support-*",
+		"targetId":         target.ID,
+		"templateId":       "support-ticket-triage",
+		"tenantId":         "tenant-east",
+		"workspaceId":      "ws-support",
+	}
+	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", legacyInput, ""))
+	if applied.Application == nil || applied.Application.RequestedCapabilityID != "" || len(applied.Application.AllowedCapabilityIDs) != 1 || applied.Application.AllowedCapabilityIDs[0] != searchTicket.ID {
+		t.Fatalf("expected one-capability legacy application provenance: %#v", applied.Application)
+	}
+	exactInput := map[string]any{}
+	for key, value := range legacyInput {
+		exactInput[key] = value
+	}
+	exactInput["requestedCapabilityId"] = searchTicket.ID
+	readiness := decodeData[permissionPackageProductionReadinessResponse](t, request(t, router, http.MethodGet, permissionPackageProductionReadinessPath(exactInput, "", "user:support-001"), nil, ""))
+	if readiness.LatestApplication == nil || readiness.LatestApplication.ID != applied.Application.ID || readiness.LatestApplication.RequestedCapabilityID != "" {
+		t.Fatalf("exact readiness should reuse equivalent legacy provenance without rewriting it: %#v", readiness.LatestApplication)
+	}
+	if !permissionPackageProductionReadinessHasCheck(readiness.Checks, "legacy_exact_equivalent", "info") || !permissionPackageProductionReadinessHasCheck(readiness.Checks, "application_scope_match", "passed") {
+		t.Fatalf("expected transparent legacy exact equivalence checks: %#v", readiness.Checks)
+	}
+	report := decodeData[permissionPackageProductionEvidenceReportResponse](t, request(t, router, http.MethodGet, permissionPackageProductionEvidenceReportPath(exactInput, "", "user:support-001"), nil, ""))
+	if report.Scope.RequestedCapabilityID != searchTicket.ID || report.Evidence.Application.RequestedCapabilityID != "" {
+		t.Fatalf("report must preserve exact query scope and legacy application provenance separately: %#v", report)
+	}
+	duplicate := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", exactInput, "")
+	if duplicate.Code != http.StatusConflict || !strings.Contains(duplicate.Body.String(), "PERMISSION_PACKAGE_ALREADY_APPLIED") {
+		t.Fatalf("equivalent exact request must not create duplicate grants, status=%d body=%s", duplicate.Code, duplicate.Body.String())
+	}
+	applications := decodeData[[]permissionPackageApplicationResponse](t, request(t, router, http.MethodGet, "/api/v1/permission-packages/applications?tenantId=tenant-east&workspaceId=ws-support", nil, ""))
+	if len(applications) != 1 || applications[0].RequestedCapabilityID != "" {
+		t.Fatalf("legacy exact compatibility must not add or rewrite application provenance: %#v", applications)
+	}
+}
+
+func TestPermissionPackageApplyRejectsCapabilityDriftAtRepositoryBoundary(t *testing.T) {
+	memory := store.NewMemory()
+	now := time.Now().UTC()
+	createDirectTenant(t, memory, "tenant-east", "", "East tenant", now)
+	caller := createDirectAgent(t, memory, "Support Assistant", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	target := createDirectAgent(t, memory, "Support MCP", "tenant-east", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	capability := createDirectCapabilityWithAction(t, memory, target.ID, "search_ticket", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	repo := &capabilityDriftBeforeApplyRepository{Repository: memory, capabilityID: capability.ID}
+	router := newRouterWithRepo(repo)
+	input := map[string]any{
+		"callerInstanceId":      caller.ID,
+		"region":                "us-east",
+		"requestText":           "Apply an exact ticket search capability.",
+		"requestedCapabilityId": capability.ID,
+		"subjectSelector":       "user:support-*",
+		"targetId":              target.ID,
+		"templateId":            "support-ticket-triage",
+		"tenantId":              "tenant-east",
+		"workspaceId":           "ws-support",
+	}
+	resp := request(t, router, http.MethodPost, "/api/v1/permission-packages:apply", input, "")
+	if resp.Code != http.StatusConflict || !strings.Contains(resp.Body.String(), "PERMISSION_PACKAGE_CAPABILITY_CHANGED") {
+		t.Fatalf("capability drift at apply boundary should fail closed, status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	current, ok, err := memory.GetCapability(t.Context(), capability.ID)
+	if err != nil || !ok || current.RiskLevel != domain.CapabilityRiskCritical || current.Version != capability.Version+1 || current.DiscoveryStatus != domain.CapabilityDiscoveryPendingReview {
+		t.Fatalf("concurrent capability drift must remain intact: ok=%v capability=%#v err=%v", ok, current, err)
+	}
+	applications, err := memory.ListPermissionPackageApplications(t.Context(), store.PermissionPackageApplicationFilter{})
+	if err != nil || len(applications) != 0 {
+		t.Fatalf("conflicted apply must not create an application: rows=%#v err=%v", applications, err)
+	}
+	entitlements, err := memory.ListTenantEntitlements(t.Context(), store.EntitlementFilter{ManagementScope: store.ManagementScope{TenantID: "tenant-east"}})
+	if err != nil || len(entitlements) != 0 {
+		t.Fatalf("conflicted apply must not create grants: rows=%#v err=%v", entitlements, err)
 	}
 }
 
@@ -5819,8 +6104,8 @@ func TestPermissionPackageWorkbenchPreviewSummarizesPrimaryJourney(t *testing.T)
 	}
 	if beforeApply.Summary.Status != "ready_to_apply" || beforeApply.Summary.PrimaryActionCode != "apply_permission_package" ||
 		!beforeApply.Summary.ApprovalRequired || !beforeApply.Summary.CanApply || beforeApply.Summary.Applied ||
-		beforeApply.Summary.AllowedCapabilityCount != 2 || beforeApply.Summary.BlockedCapabilityCount != 1 ||
-		beforeApply.Summary.PlannedObjectCount != 6 || beforeApply.ProductionReadiness == nil ||
+		beforeApply.Summary.AllowedCapabilityCount != 1 || beforeApply.Summary.BlockedCapabilityCount != 2 ||
+		beforeApply.Summary.PlannedObjectCount != 3 || beforeApply.ProductionReadiness == nil ||
 		beforeApply.ProductionReadiness.NextActionCode != "apply_permission_package" {
 		t.Fatalf("expected ready-to-apply workbench summary, got %#v", beforeApply.Summary)
 	}
@@ -6024,7 +6309,7 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 	afterReport := decodeData[permissionPackageProductionEvidenceReportResponse](t, afterReportResp)
 	if afterReport.ReportVersion != "production-readiness-report/v1" || afterReport.Status != "ready" ||
 		afterReport.Evidence.Application.ID != applied.Application.ID ||
-		afterReport.Evidence.Application.TemplateVersion != 1 ||
+		afterReport.Evidence.Application.TemplateVersion != 2 ||
 		len(afterReport.Evidence.Application.AllowedCapabilityIDs) != len(applied.Application.AllowedCapabilityIDs) ||
 		afterReport.Evidence.Runtime.AllowedTraceID == "" || afterReport.Evidence.Runtime.DeniedTraceID == "" ||
 		afterReport.Evidence.Audit.AppliedEventID == "" ||
@@ -6066,14 +6351,14 @@ func TestPermissionPackageProductionReadinessBlocksBeforeApplyAndReadyAfterEvide
 	for _, capability := range applied.Draft.AllowedCapabilities {
 		allowedIDs[capability.ID] = struct{}{}
 	}
-	if len(allowedIDs) != 2 {
-		t.Fatalf("expected support package to include two allowed capabilities, got %#v", applied.Draft.AllowedCapabilities)
+	if len(allowedIDs) != 1 {
+		t.Fatalf("expected support package to include one domain-matched capability, got %#v", applied.Draft.AllowedCapabilities)
 	}
-	if _, ok := allowedIDs[searchCustomer.ID]; !ok {
-		t.Fatalf("expected support package to include search capability, got %#v", applied.Draft.AllowedCapabilities)
+	if _, ok := allowedIDs[searchCustomer.ID]; ok {
+		t.Fatalf("expected support package to block CRM search capability, got %#v", applied.Draft.AllowedCapabilities)
 	}
 	if _, ok := allowedIDs[updateTicket.ID]; !ok {
-		t.Fatalf("expected support package to include search and update capabilities, got %#v", applied.Draft.AllowedCapabilities)
+		t.Fatalf("expected support package to include update capability, got %#v", applied.Draft.AllowedCapabilities)
 	}
 }
 
@@ -6487,6 +6772,7 @@ func TestPermissionPackageApplicationReadsRedactDirtyApplicationCapabilityScope(
 			"templateVersion":        dirtyCapabilityApplication.TemplateVersion,
 			"targetId":               financeTarget.ID,
 			"callerInstanceId":       supportCaller.ID,
+			"requestedCapabilityId":  financeCapability.ID,
 			"subjectSelector":        dirtyCapabilityApplication.SubjectSelector,
 			"allowedCapabilityIds":   []string{financeCapability.ID},
 			"allowedCapabilityKeys":  []string{financeCapability.Key},
@@ -6512,6 +6798,10 @@ func TestPermissionPackageApplicationReadsRedactDirtyApplicationCapabilityScope(
 	}
 	if len(applications[0].AllowedCapabilityIDs) != 0 || len(applications[0].AllowedCapabilityKeys) != 0 {
 		t.Fatalf("expected dirty out-of-scope capabilities to be redacted from application list, got %#v", applications[0])
+	}
+	dirtyRequestedList := decodeData[[]permissionPackageApplicationResponse](t, requestWithAdmin(t, router, http.MethodGet, listPath+"&requestedCapabilityId="+url.QueryEscape(financeCapability.ID), nil, "", "support-key"))
+	if len(dirtyRequestedList) != 0 {
+		t.Fatalf("requested capability filter must not reveal a redacted capability reference: %#v", dirtyRequestedList)
 	}
 
 	mcpList := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
@@ -6539,6 +6829,27 @@ func TestPermissionPackageApplicationReadsRedactDirtyApplicationCapabilityScope(
 		len(mcpApplications[0].AllowedCapabilityIDs) != 0 || len(mcpApplications[0].AllowedCapabilityKeys) != 0 {
 		t.Fatalf("expected MCP application list to redact dirty out-of-scope capabilities, got %#v", mcpApplications)
 	}
+	dirtyRequestedMCP := decodeMCPResult(t, requestWithAdmin(t, router, http.MethodPost, "/api/v1/management/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "dirty-requested-application-list",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_permission_package_applications",
+			"arguments": map[string]any{
+				"callerInstanceId":      supportCaller.ID,
+				"limit":                 10,
+				"requestedCapabilityId": financeCapability.ID,
+				"targetId":              supportTarget.ID,
+				"templateId":            "support-ticket-triage",
+				"tenantId":              "tenant-east",
+				"workspaceId":           "ws-support",
+			},
+		},
+	}, "", "support-key"))
+	var dirtyRequestedMCPApplications []permissionPackageApplicationResponse
+	if err := json.Unmarshal(dirtyRequestedMCP.Result.StructuredContent, &dirtyRequestedMCPApplications); err != nil || len(dirtyRequestedMCPApplications) != 0 {
+		t.Fatalf("MCP requested capability filter must not reveal a redacted reference: rows=%#v err=%v", dirtyRequestedMCPApplications, err)
+	}
 
 	healthResp := requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/applications/health?tenantId=tenant-east&workspaceId=ws-support&limit=10", nil, "", "support-key")
 	if healthResp.Code != http.StatusOK {
@@ -6548,6 +6859,10 @@ func TestPermissionPackageApplicationReadsRedactDirtyApplicationCapabilityScope(
 	health := decodeData[permissionPackageApplicationHealthResponse](t, healthResp)
 	if health.Summary.Total != 1 || len(health.Applications) != 1 || health.Applications[0].Application.ID != dirtyCapabilityApplication.ID {
 		t.Fatalf("expected application health to hide dirty target applications, got %#v", health)
+	}
+	dirtyRequestedHealth := decodeData[permissionPackageApplicationHealthResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/applications/health?tenantId=tenant-east&workspaceId=ws-support&requestedCapabilityId="+url.QueryEscape(financeCapability.ID), nil, "", "support-key"))
+	if dirtyRequestedHealth.Summary.Total != 0 || len(dirtyRequestedHealth.Applications) != 0 {
+		t.Fatalf("application health filter must not reveal a redacted capability reference: %#v", dirtyRequestedHealth)
 	}
 
 	input := map[string]any{
@@ -6650,6 +6965,7 @@ func TestPermissionPackageApprovalAuditMetadataRedactsDirtyScope(t *testing.T) {
 		WorkspaceID:           "ws-support",
 		TargetID:              supportTarget.ID,
 		CallerInstanceID:      supportCaller.ID,
+		RequestedCapabilityID: financeCapability.ID,
 		SubjectSelector:       "role:support",
 		RequestText:           "approve support ticket updates",
 		Region:                "us-east",
@@ -6688,19 +7004,20 @@ func TestPermissionPackageApprovalAuditMetadataRedactsDirtyScope(t *testing.T) {
 		ResourceID:   approval.ID,
 		Summary:      "Permission package approval requested",
 		Metadata: map[string]any{
-			"approvalRequestId":    approval.ID,
-			"draftId":              approval.DraftID,
-			"templateId":           approval.TemplateID,
-			"templateVersion":      approval.TemplateVersion,
-			"policyVersion":        approval.PolicyVersion,
-			"targetId":             financeTarget.ID,
-			"callerInstanceId":     supportCaller.ID,
-			"status":               approval.Status,
-			"requestedBy":          approval.RequestedBy,
-			"reviewedBy":           approval.ReviewedBy,
-			"reasonCount":          1,
-			"allowedCapabilityIds": []string{financeCapability.ID},
-			"expiresAt":            approval.ExpiresAt,
+			"approvalRequestId":     approval.ID,
+			"draftId":               approval.DraftID,
+			"templateId":            approval.TemplateID,
+			"templateVersion":       approval.TemplateVersion,
+			"policyVersion":         approval.PolicyVersion,
+			"targetId":              financeTarget.ID,
+			"callerInstanceId":      supportCaller.ID,
+			"requestedCapabilityId": financeCapability.ID,
+			"status":                approval.Status,
+			"requestedBy":           approval.RequestedBy,
+			"reviewedBy":            approval.ReviewedBy,
+			"reasonCount":           1,
+			"allowedCapabilityIds":  []string{financeCapability.ID},
+			"expiresAt":             approval.ExpiresAt,
 		},
 		CreatedAt: now,
 	}); err != nil {
@@ -6747,6 +7064,7 @@ func TestPermissionPackageApprovalListRedactsDirtyCapabilityScope(t *testing.T) 
 		WorkspaceID:           "ws-support",
 		TargetID:              supportTarget.ID,
 		CallerInstanceID:      supportCaller.ID,
+		RequestedCapabilityID: financeCapability.ID,
 		SubjectSelector:       "role:support",
 		RequestText:           "approve support ticket updates",
 		Region:                "us-east",
@@ -6791,6 +7109,10 @@ func TestPermissionPackageApprovalListRedactsDirtyCapabilityScope(t *testing.T) 
 	}
 	if len(approvals[0].PolicyGate.Reasons) != 0 {
 		t.Fatalf("expected dirty approval policy reasons to be redacted, got %#v", approvals[0].PolicyGate.Reasons)
+	}
+	dirtyRequested := decodeData[[]permissionPackageApprovalRequestResponse](t, requestWithAdmin(t, router, http.MethodGet, "/api/v1/permission-packages/approval-requests?tenantId=tenant-east&workspaceId=ws-support&status=pending&requestedCapabilityId="+url.QueryEscape(financeCapability.ID), nil, "", "support-key"))
+	if len(dirtyRequested) != 0 {
+		t.Fatalf("approval filter must not reveal a redacted capability reference: %#v", dirtyRequested)
 	}
 }
 
@@ -7134,7 +7456,7 @@ func TestPermissionPackageApplyRequiresApprovalForPolicyGatedDraft(t *testing.T)
 
 	firstApproval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/approval-requests", input, ""))
 	if firstApproval.Status != "pending" || firstApproval.TemplateID != "support-ticket-triage" ||
-		firstApproval.TemplateVersion != 1 || firstApproval.PolicyVersion != 1 ||
+		firstApproval.TemplateVersion != 2 || firstApproval.PolicyVersion != 1 ||
 		firstApproval.TargetID != target.ID || firstApproval.CallerInstanceID != caller.ID ||
 		len(firstApproval.AllowedCapabilityIDs) != 1 || firstApproval.AllowedCapabilityIDs[0] != updateTicket.ID ||
 		len(firstApproval.PolicyGate.Reasons) == 0 {
@@ -7308,7 +7630,7 @@ func TestPermissionPackageApprovalRejectsCapabilityDriftAfterApproval(t *testing
 	}
 	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
 	updateTicket := createDirectCapabilityWithActionAndScopes(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, []domain.DataScope{{
-		DataDomain:   "crm",
+		DataDomain:   "support",
 		Region:       "us-east",
 		TenantFilter: "tenant_id = 'tenant-east'",
 	}}, now)
@@ -7332,7 +7654,7 @@ func TestPermissionPackageApprovalRejectsCapabilityDriftAfterApproval(t *testing
 	}
 
 	changed := decodeData[capabilityResponse](t, request(t, router, http.MethodPatch, "/api/v1/capabilities/"+updateTicket.ID, map[string]any{
-		"dataScopes": []map[string]any{{"dataDomain": "crm"}},
+		"dataScopes": []map[string]any{{"dataDomain": "support"}},
 	}, ""))
 	if len(changed.DataScopes) != 1 || changed.DataScopes[0].Region != "" {
 		t.Fatalf("expected capability boundary to be widened, got %#v", changed.DataScopes)
@@ -8176,6 +8498,18 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 		!mcpToolNamesContain(tools.Result.Tools, "export_permission_package_production_evidence") {
 		t.Fatalf("management MCP tools missing permission package tools: %#v", tools.Result.Tools)
 	}
+	for _, toolName := range []string{
+		"draft_permission_package",
+		"preflight_permission_package",
+		"apply_permission_package",
+		"create_permission_package_approval_request",
+		"list_permission_package_approval_requests",
+		"list_permission_package_applications",
+		"check_permission_package_production_readiness",
+		"export_permission_package_production_report",
+	} {
+		assertMCPToolInputSchemaHasProperty(t, tools.Result.Tools, toolName, "requestedCapabilityId")
+	}
 	for _, tool := range tools.Result.Tools {
 		if tool.Safety.OperationType == "" || tool.Safety.OperationType == "unspecified" ||
 			tool.Safety.ApprovalMode == "" || tool.Safety.ApprovalMode == "unspecified" {
@@ -8363,7 +8697,7 @@ func TestManagementMCPToolsListAndPermissionPackageCalls(t *testing.T) {
 	if err := json.Unmarshal(applicationsCall.Result.StructuredContent, &applications); err != nil {
 		t.Fatalf("decode applications structured content: %v", err)
 	}
-	if applied.Application == nil || len(applications) != 1 || applications[0].ID != applied.Application.ID || applications[0].TemplateVersion != 1 {
+	if applied.Application == nil || len(applications) != 1 || applications[0].ID != applied.Application.ID || applications[0].TemplateVersion != 2 {
 		t.Fatalf("unexpected management MCP applications: applied=%#v rows=%#v", applied.Application, applications)
 	}
 	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionDenied, caller, target, exportContracts, "export_contracts", "user:sales-001", now.Add(time.Minute))
@@ -9374,6 +9708,10 @@ func createDirectCapabilityWithAction(t *testing.T, repo store.Repository, targe
 
 func createDirectCapabilityWithActionAndScopes(t *testing.T, repo store.Repository, targetID string, key string, action domain.CapabilityAction, risk domain.CapabilityRisk, sensitivity domain.CapabilitySensitivity, dataScopes []domain.DataScope, now time.Time) domain.Capability {
 	t.Helper()
+	dataDomain := "crm"
+	if strings.Contains(key, "ticket") {
+		dataDomain = "support"
+	}
 	capability := domain.Capability{
 		ID:              security.NewID("cap"),
 		TargetID:        targetID,
@@ -9382,7 +9720,7 @@ func createDirectCapabilityWithActionAndScopes(t *testing.T, repo store.Reposito
 		DisplayName:     key,
 		Description:     key,
 		Action:          action,
-		DataDomains:     []string{"crm"},
+		DataDomains:     []string{dataDomain},
 		DataScopes:      dataScopes,
 		Sensitivity:     sensitivity,
 		RiskLevel:       risk,
@@ -9623,6 +9961,24 @@ func assertMCPToolExecution(t *testing.T, tools []mcpToolResponse, name string, 
 	t.Fatalf("tool %q missing from tools/list", name)
 }
 
+func assertMCPToolInputSchemaHasProperty(t *testing.T, tools []mcpToolResponse, name string, property string) {
+	t.Helper()
+	for _, tool := range tools {
+		if tool.Name != name {
+			continue
+		}
+		properties, ok := tool.InputSchema["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("tool %q input schema has no object properties: %#v", name, tool.InputSchema)
+		}
+		if _, ok := properties[property]; !ok {
+			t.Fatalf("tool %q input schema missing property %q: %#v", name, property, tool.InputSchema)
+		}
+		return
+	}
+	t.Fatalf("tool %q missing from tools/list", name)
+}
+
 func assertMCPToolInputSchemaRequiresConfirmation(t *testing.T, tool mcpToolResponse) {
 	t.Helper()
 	properties, ok := tool.InputSchema["properties"].(map[string]any)
@@ -9755,7 +10111,7 @@ func permissionPackageWorkbenchStepByKey(steps []permissionPackageWorkbenchStep,
 
 func permissionPackageProductionReadinessPath(input map[string]any, approvalRequestID string, subjectID string) string {
 	values := url.Values{}
-	for _, key := range []string{"tenantId", "workspaceId", "templateId", "targetId", "callerInstanceId", "region", "requestText", "subjectSelector"} {
+	for _, key := range []string{"tenantId", "workspaceId", "templateId", "targetId", "callerInstanceId", "requestedCapabilityId", "region", "requestText", "subjectSelector"} {
 		if value, ok := input[key].(string); ok && value != "" {
 			values.Set(key, value)
 		}
@@ -10047,6 +10403,31 @@ func (r *failingAllowedTraceRepository) AppendTrace(ctx context.Context, event d
 
 type failingAuditedAgentRepository struct {
 	store.Repository
+}
+
+type capabilityDriftBeforeApplyRepository struct {
+	store.Repository
+	capabilityID string
+	drifted      bool
+}
+
+func (r *capabilityDriftBeforeApplyRepository) ApplyPermissionPackage(ctx context.Context, mutation store.PermissionPackageApplyMutation) (store.PermissionPackageApplyMutationResult, error) {
+	if !r.drifted {
+		r.drifted = true
+		capability, ok, err := r.Repository.GetCapability(ctx, r.capabilityID)
+		if err != nil {
+			return store.PermissionPackageApplyMutationResult{}, err
+		}
+		if ok {
+			capability.RiskLevel = domain.CapabilityRiskCritical
+			capability.Version++
+			capability.UpdatedAt = capability.UpdatedAt.Add(time.Second)
+			if _, _, err := r.Repository.UpdateCapability(ctx, capability); err != nil {
+				return store.PermissionPackageApplyMutationResult{}, err
+			}
+		}
+	}
+	return r.Repository.ApplyPermissionPackage(ctx, mutation)
 }
 
 func (r *failingAuditedAgentRepository) CreateAgentWithAudit(ctx context.Context, agent domain.Agent, build store.AgentAuditBuilder) (domain.Agent, error) {

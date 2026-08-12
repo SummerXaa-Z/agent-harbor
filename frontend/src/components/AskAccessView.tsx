@@ -1,22 +1,27 @@
-import { AlertCircle, ArrowRight, History, Search, Wrench } from "lucide-react";
+import { AlertCircle, ArrowRight, FileSearch, History, Search, Wrench } from "lucide-react";
 
+import { summarizeDataScopes } from "../accessProfile";
 import type {
   AskAccessSelection,
   AskDecisionRecordRow,
   ExplainRequestBuildResult
 } from "../askJourney";
 import {
+  accessDecisionPrimaryAction,
   accessDecisionSummaryLabel,
   accessDecisionRecordMessageLabel,
-  accessNextActionLabel
+  accessNextActionLabel,
+  askAccessScopeOptions
 } from "../askJourney";
 import {
   capabilityDisplayName,
+  dataScopeValueLabels,
   permissionEntityDisplayName,
   readableIdentifierLabel,
   type Translator
 } from "../consolePresenters";
 import type { AskAccessController, AskAccessHistoryEntry } from "../hooks/useAskAccessController";
+import type { PermissionPackageTemplate } from "../permissionPackages";
 import type { AccessDecisionExplainResult, Agent, Capability, Tenant } from "../types";
 import { ApprovalDropdown, type ApprovalDropdownOption } from "./ApprovalDropdown";
 import { Panel } from "./ConsolePrimitives";
@@ -31,15 +36,19 @@ interface AskAccessViewProps {
   liveDataAvailable: boolean
   loading: boolean
   message: string
+  permissionChangeAvailable: boolean
   onChange: (selection: AskAccessSelection) => void
   onExplain: () => void
   onRunExampleQuery: () => void
+  onOpenAccessProfile: (request: AccessDecisionExplainResult["request"]) => void
+  onReviewCapability: (request: AccessDecisionExplainResult["request"]) => void
   onSelectHistory: (entry: AskAccessHistoryEntry) => void
   onStartPermissionChange: () => void
   recordRows: AskDecisionRecordRow[]
   requestBuild: ExplainRequestBuildResult
   result: AccessDecisionExplainResult | null
   t: Translator
+  templates: PermissionPackageTemplate[]
   tenants: Tenant[]
 }
 
@@ -48,6 +57,8 @@ export function AskAccessPanel({
   capabilities,
   controller,
   liveDataAvailable,
+  onOpenAccessProfile,
+  onReviewCapability,
   t,
   tenants,
   title
@@ -56,6 +67,8 @@ export function AskAccessPanel({
   capabilities: Capability[]
   controller: AskAccessController
   liveDataAvailable: boolean
+  onOpenAccessProfile: (request: AccessDecisionExplainResult["request"]) => void
+  onReviewCapability: (request: AccessDecisionExplainResult["request"]) => void
   t: Translator
   tenants: Tenant[]
   title: string
@@ -71,8 +84,11 @@ export function AskAccessPanel({
         liveDataAvailable={liveDataAvailable}
         loading={controller.loading}
         message={controller.message}
+        permissionChangeAvailable={controller.permissionChangeAvailable}
         onChange={controller.updateSelection}
         onExplain={() => void controller.explain()}
+        onOpenAccessProfile={onOpenAccessProfile}
+        onReviewCapability={onReviewCapability}
         onRunExampleQuery={() => void controller.runExampleQuery()}
         onSelectHistory={controller.selectHistory}
         onStartPermissionChange={controller.startPermissionChange}
@@ -80,6 +96,7 @@ export function AskAccessPanel({
         requestBuild={controller.requestBuild}
         result={controller.result}
         t={t}
+        templates={controller.templates}
         tenants={tenants}
       />
     </Panel>
@@ -95,8 +112,11 @@ export function AskAccessView({
   liveDataAvailable,
   loading,
   message,
+  permissionChangeAvailable,
   onChange,
   onExplain,
+  onOpenAccessProfile,
+  onReviewCapability,
   onRunExampleQuery,
   onSelectHistory,
   onStartPermissionChange,
@@ -104,28 +124,24 @@ export function AskAccessView({
   requestBuild,
   result,
   t,
+  templates,
   tenants
 }: AskAccessViewProps) {
-  const tenantOptions = tenants.map((tenant) => ({
+  const scopedOptions = askAccessScopeOptions({ agents, capabilities, tenants }, effectiveSelection);
+  const tenantOptions = scopedOptions.tenants.map((tenant) => ({
     label: permissionEntityDisplayName(tenant.name, t),
     value: tenant.id
   }));
   const workspaceOptions = uniqueOptions(
-    agents.map((agent) => agent.workspaceId),
+    scopedOptions.workspaceIds,
     (workspaceId) => workspaceLabel(workspaceId, t)
   );
-  const callerOptions = agentOptions(
-    agents.filter((agent) => agent.channelType === "local" || agent.status === "active"),
-    t
-  );
-  const targetIds = new Set(capabilities.map((capability) => capability.targetId));
-  const targetOptions = agentOptions(agents.filter((agent) => targetIds.has(agent.id)), t);
-  const capabilityOptions = capabilities
-    .filter((capability) => !effectiveSelection.targetId || capability.targetId === effectiveSelection.targetId)
-    .map((capability) => ({
-      label: capabilityDisplayName(capability, t),
-      value: capability.id
-    }));
+  const callerOptions = agentOptions(scopedOptions.callers, t);
+  const targetOptions = agentOptions(scopedOptions.targets, t);
+  const capabilityOptions = scopedOptions.capabilities.map((capability) => ({
+    label: capabilityDisplayName(capability, t),
+    value: capability.id
+  }));
   const canExplain = requestBuild.complete && liveDataAvailable && !loading;
   const setupBlocker = askSetupBlocker({
     callerOptions,
@@ -137,6 +153,8 @@ export function AskAccessView({
   const answerHeading = result
     ? result.outcome === "allowed" ? t("ask.allowedTitle") : t("ask.deniedTitle")
     : t("ask.answerPendingTitle");
+  const primaryAction = result ? accessDecisionPrimaryAction(result, capabilities, templates, permissionChangeAvailable) : null;
+  const dataScopeLabels = dataScopeValueLabels(t);
 
   return (
     <div className="ask-access">
@@ -150,7 +168,15 @@ export function AskAccessView({
 
       <div className="ask-workspace">
         <div className="ask-primary-column">
-          <section className="ask-query-panel" aria-label={t("ask.questionLabel")}>
+          <form
+            aria-busy={loading}
+            aria-label={t("ask.questionLabel")}
+            className="ask-query-panel"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (canExplain) onExplain();
+            }}
+          >
             <div className="ask-query-panel-heading">
               <span>{t("ask.questionLabel")}</span>
               <strong>{t("ask.questionTitle")}</strong>
@@ -161,12 +187,14 @@ export function AskAccessView({
                 <div className="ask-query-grid ask-query-grid-context">
                   <QueryField
                     label={t("ask.field.tenant")}
+                    disabled={loading}
                     onChange={(tenantId) => onChange({ tenantId })}
                     options={withEmptyOption(tenantOptions, t("ask.emptyOption.tenant"))}
                     value={effectiveSelection.tenantId ?? ""}
                   />
                   <QueryField
                     label={t("ask.field.workspace")}
+                    disabled={loading}
                     onChange={(workspaceId) => onChange({ workspaceId })}
                     options={withEmptyOption(workspaceOptions, t("ask.emptyOption.workspace"))}
                     value={effectiveSelection.workspaceId ?? ""}
@@ -178,18 +206,21 @@ export function AskAccessView({
                 <div className="ask-query-grid ask-query-grid-access">
                   <QueryField
                     label={t("ask.field.caller")}
+                    disabled={loading}
                     onChange={(callerInstanceId) => onChange({ callerInstanceId })}
                     options={withEmptyOption(callerOptions, t("ask.emptyOption.caller"))}
                     value={effectiveSelection.callerInstanceId ?? ""}
                   />
                   <QueryField
                     label={t("ask.field.target")}
+                    disabled={loading}
                     onChange={(targetId) => onChange({ targetId })}
                     options={withEmptyOption(targetOptions, t("ask.emptyOption.target"))}
                     value={effectiveSelection.targetId ?? ""}
                   />
                   <QueryField
                     label={t("ask.field.capability")}
+                    disabled={loading}
                     onChange={(capabilityId) => onChange({ capabilityId })}
                     options={withEmptyOption(capabilityOptions, t("ask.emptyOption.capability"))}
                     value={effectiveSelection.capabilityId ?? ""}
@@ -215,6 +246,7 @@ export function AskAccessView({
                 <span>{t("ask.field.subject")}</span>
                 <input
                   autoComplete="off"
+                  disabled={loading}
                   name="accessSubject"
                   onChange={(event) => onChange({ subjectId: event.target.value })}
                   placeholder={t("ask.subjectPlaceholder")}
@@ -222,15 +254,19 @@ export function AskAccessView({
                   value={effectiveSelection.subjectId ?? ""}
                 />
               </label>
-              <button className="primary-button" disabled={!canExplain} onClick={onExplain} type="button">
+              <button className="primary-button" disabled={!canExplain} type="submit">
                 <Search aria-hidden="true" size={15} />
                 {loading ? t("action.loading") : t("action.askAccess")}
               </button>
             </div>
-            {message ? <p className="ask-inline-message">{message}</p> : null}
-          </section>
+            {message ? <p className="ask-inline-message" role="status">{message}</p> : null}
+          </form>
 
-          <section className="ask-answer" aria-label={t("ask.answerTitle")}>
+          <section
+            aria-busy={loading}
+            aria-label={t("ask.answerTitle")}
+            className="ask-answer"
+          >
             <header className="ask-answer-heading">
               <span>{t("ask.answerTitle")}</span>
               <strong>{answerHeading}</strong>
@@ -254,17 +290,36 @@ export function AskAccessView({
                   <Badge tone={result.outcome === "allowed" ? "success" : "danger"}>
                     {result.outcome === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
                   </Badge>
-                  <div>
+                  <div aria-atomic="true" aria-live="polite" className="ask-answer-summary" role="status">
                     <strong>{result.outcome === "allowed" ? t("ask.allowedTitle") : t("ask.deniedTitle")}</strong>
                     <p>{accessDecisionSummaryLabel(result, t)}</p>
                   </div>
-                  {result.outcome === "denied" ? (
+                  {primaryAction?.kind === "permission_change" ? (
                     <button className="primary-button" onClick={onStartPermissionChange} type="button">
                       <Wrench aria-hidden="true" size={15} />
-                      {t("action.fixAccessDecision")}
+                      {t(primaryAction.labelKey)}
+                    </button>
+                  ) : primaryAction?.kind === "capability_review" ? (
+                    <button className="primary-button" onClick={() => onReviewCapability(result.request)} type="button">
+                      <FileSearch aria-hidden="true" size={15} />
+                      {t(primaryAction.labelKey)}
+                    </button>
+                  ) : primaryAction?.kind === "access_profile" ? (
+                    <button className="primary-button" onClick={() => onOpenAccessProfile(result.request)} type="button">
+                      <FileSearch aria-hidden="true" size={15} />
+                      {t(primaryAction.labelKey)}
                     </button>
                   ) : null}
                 </div>
+
+                <ResultContext request={result.request} agents={agents} capabilities={capabilities} t={t} tenants={tenants} />
+
+                {result.outcome === "allowed" ? (
+                  <div className="ask-data-scope">
+                    <strong>{t("ask.effectiveDataScope")}</strong>
+                    <span>{summarizeDataScopes(result.dataScopes, t("ask.noEffectiveDataScope"), dataScopeLabels)}</span>
+                  </div>
+                ) : null}
 
                 <div className="ask-chain">
                   <header>
@@ -333,11 +388,13 @@ export function AskAccessView({
 }
 
 function QueryField({
+  disabled,
   label,
   onChange,
   options,
   value
 }: {
+  disabled: boolean
   label: string
   onChange: (value: string) => void
   options: ApprovalDropdownOption[]
@@ -346,9 +403,47 @@ function QueryField({
   return (
     <label className="ask-query-field">
       <span>{label}</span>
-      <ApprovalDropdown label={label} onChange={onChange} options={options} value={value} />
+      <ApprovalDropdown disabled={disabled} label={label} onChange={onChange} options={options} value={value} />
     </label>
   );
+}
+
+function ResultContext({
+  agents,
+  capabilities,
+  request,
+  t,
+  tenants
+}: {
+  agents: Agent[]
+  capabilities: Capability[]
+  request: AccessDecisionExplainResult["request"]
+  t: Translator
+  tenants: Tenant[]
+}) {
+  const rows = [
+    [t("ask.field.tenant"), permissionEntityDisplayName(tenants.find((tenant) => tenant.id === request.tenantId)?.name ?? request.tenantId, t)],
+    [t("ask.field.workspace"), workspaceLabel(request.workspaceId, t)],
+    [t("ask.field.caller"), permissionEntityDisplayName(agents.find((agent) => agent.id === request.callerInstanceId)?.name ?? request.callerInstanceId, t)],
+    [t("ask.field.target"), permissionEntityDisplayName(agents.find((agent) => agent.id === request.targetId)?.name ?? request.targetId, t)],
+    [t("ask.field.capability"), capabilityLabel(request.capabilityId, capabilities, t)],
+    ...(request.subjectId ? [[t("ask.field.subject"), request.subjectId]] : [])
+  ];
+  return (
+    <div className="ask-result-context" aria-label={t("ask.resultContextTitle")}>
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function capabilityLabel(capabilityId: string, capabilities: Capability[], t: Translator) {
+  const capability = capabilities.find((item) => item.id === capabilityId);
+  return capability ? capabilityDisplayName(capability, t) : capabilityId;
 }
 
 function agentOptions(agents: Agent[], t: Translator) {
@@ -360,7 +455,7 @@ function uniqueOptions(values: string[], labelFor: (value: string) => string) {
 }
 
 function withEmptyOption(options: ApprovalDropdownOption[], emptyLabel: string) {
-  return options.length > 0 ? options : [{ label: emptyLabel, value: "" }];
+  return [{ label: emptyLabel, value: "" }, ...options];
 }
 
 interface AskSetupBlockerInput {

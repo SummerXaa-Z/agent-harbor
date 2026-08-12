@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -414,6 +415,23 @@ func (p *Postgres) FindAgentByKeyHash(ctx context.Context, hash string, now time
 	return agent, true, nil
 }
 
+func (p *Postgres) FindAgentKeyByHash(ctx context.Context, hash string, now time.Time) (domain.AgentKey, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select id, agent_id, name, hash, prefix, application_id, template_id,
+			subject_selector, created_for_handoff_id, created_at, expires_at, revoked_at
+		from agent_keys
+		where hash=$1 and revoked_at is null and expires_at > $2
+	`, hash, now)
+	key, err := scanAgentKey(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AgentKey{}, false, nil
+	}
+	if err != nil {
+		return domain.AgentKey{}, false, fmt.Errorf("find agent key by hash: %w", err)
+	}
+	return key, true, nil
+}
+
 func (p *Postgres) CreateAccessGrant(ctx context.Context, grant domain.AccessGrant) (domain.AccessGrant, error) {
 	return p.createAccessGrant(ctx, p.pool, grant)
 }
@@ -640,15 +658,19 @@ func (p *Postgres) updateCapability(ctx context.Context, exec sqlExecutor, capab
 	if err != nil {
 		return domain.Capability{}, false, fmt.Errorf("marshal capability data scopes: %w", err)
 	}
+	dataDomains, err := json.Marshal(capability.DataDomains)
+	if err != nil {
+		return domain.Capability{}, false, fmt.Errorf("marshal capability data domains: %w", err)
+	}
 	row := exec.QueryRow(ctx, `
 		update capabilities
-		set display_name=$2, description=$3, sensitivity=$4, risk_level=$5, discovery_status=$6, data_scopes=$7, updated_at=$8
+		set display_name=$2, description=$3, sensitivity=$4, risk_level=$5, discovery_status=$6, data_scopes=$7, data_domains=$8, updated_at=$9
 		where id=$1
 		returning id, target_agent_id, type, key, display_name, description, action,
 			input_schema, output_schema, native_scopes, data_domains, data_scopes,
 			sensitivity, risk_level, enforcement_mode, discovery_status, version, discovered_at, updated_at
 	`, capability.ID, capability.DisplayName, capability.Description, string(capability.Sensitivity),
-		string(capability.RiskLevel), string(capability.DiscoveryStatus), dataScopes, capability.UpdatedAt)
+		string(capability.RiskLevel), string(capability.DiscoveryStatus), dataScopes, dataDomains, capability.UpdatedAt)
 	updated, err := scanCapability(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Capability{}, false, nil
@@ -868,13 +890,13 @@ func (p *Postgres) createPermissionPackageApplication(ctx context.Context, exec 
 			id, draft_id, template_id, template_version, tenant_id, workspace_id, target_agent_id,
 			caller_instance_id, subject_selector, request_text, region, data_scopes,
 			allowed_capability_ids, allowed_capability_keys, tenant_entitlement_ids,
-			workspace_assignment_ids, instance_assignment_ids, applied_at
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+			workspace_assignment_ids, instance_assignment_ids, applied_at, requested_capability_id
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
 	`, application.ID, application.DraftID, application.TemplateID, application.TemplateVersion,
 		application.TenantID, application.WorkspaceID, application.TargetID, application.CallerInstanceID,
 		application.SubjectSelector, application.RequestText, application.Region, dataScopes,
 		allowedCapabilityIDs, allowedCapabilityKeys, tenantEntitlementIDs, workspaceAssignmentIDs,
-		instanceAssignmentIDs, application.AppliedAt)
+		instanceAssignmentIDs, application.AppliedAt, application.RequestedCapabilityID)
 	if err != nil {
 		return domain.PermissionPackageApplication{}, fmt.Errorf("insert permission package application: %w", err)
 	}
@@ -886,7 +908,7 @@ func (p *Postgres) ListPermissionPackageApplications(ctx context.Context, filter
 		select id, draft_id, template_id, template_version, tenant_id, workspace_id, target_agent_id,
 			caller_instance_id, subject_selector, request_text, region, data_scopes,
 			allowed_capability_ids, allowed_capability_keys, tenant_entitlement_ids,
-			workspace_assignment_ids, instance_assignment_ids, applied_at
+			workspace_assignment_ids, instance_assignment_ids, applied_at, requested_capability_id
 		from permission_package_applications
 		where 1=1
 	`
@@ -917,6 +939,9 @@ func (p *Postgres) ListPermissionPackageApplications(ctx context.Context, filter
 	if strings.TrimSpace(filter.CallerInstanceID) != "" {
 		add("caller_instance_id=$%d", strings.TrimSpace(filter.CallerInstanceID))
 	}
+	if filter.MatchRequestedCapabilityID || strings.TrimSpace(filter.RequestedCapabilityID) != "" {
+		add("requested_capability_id=$%d", strings.TrimSpace(filter.RequestedCapabilityID))
+	}
 	query += " order by applied_at desc, id desc"
 	if filter.Limit > 0 {
 		args = append(args, filter.Limit)
@@ -940,10 +965,8 @@ func (p *Postgres) ApplyPermissionPackage(ctx context.Context, mutation Permissi
 			InstanceAssignments:  make([]domain.InstanceAssignment, 0, len(mutation.InstanceAssignments)),
 		}
 
-		if mutation.ApprovalRequest == nil {
-			if err := p.rejectDuplicatePermissionPackageApplication(ctx, tx, mutation.Application); err != nil {
-				return err
-			}
+		if err := p.rejectDuplicatePermissionPackageApplication(ctx, tx, mutation.Application); err != nil {
+			return err
 		}
 
 		if mutation.ApprovalRequest != nil {
@@ -951,9 +974,36 @@ func (p *Postgres) ApplyPermissionPackage(ctx context.Context, mutation Permissi
 			if err != nil {
 				return err
 			}
+			if !permissionPackageApplyApprovalSnapshotMatches(mutation.ExpectedApproval, approval, mutation.Application) {
+				return ErrPermissionPackageCapabilitySnapshotChanged
+			}
 			result.ApprovalRequest = &approval
+			mutation.ApprovalRequest = &approval
 		}
-		for _, capability := range mutation.Capabilities {
+		capabilitiesByID := make(map[string]domain.Capability, len(mutation.Capabilities))
+		capabilityIDs := make([]string, 0, len(mutation.Capabilities))
+		for _, capabilityMutation := range mutation.Capabilities {
+			capabilityIDs = append(capabilityIDs, capabilityMutation.Capability.ID)
+		}
+		sort.Strings(capabilityIDs)
+		for _, capabilityID := range capabilityIDs {
+			current, ok, err := p.getCapabilityForUpdate(ctx, tx, capabilityID)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return domain.NotFound("capability not found")
+			}
+			capabilitiesByID[capabilityID] = current
+		}
+		if err := validatePermissionPackageApplyCapabilitySnapshots(mutation, func(id string) (domain.Capability, bool) {
+			capability, ok := capabilitiesByID[id]
+			return capability, ok
+		}); err != nil {
+			return err
+		}
+		for _, capabilityMutation := range mutation.Capabilities {
+			capability := capabilityMutation.Capability
 			updated, ok, err := p.updateCapability(ctx, tx, capability)
 			if err != nil {
 				return err
@@ -999,6 +1049,25 @@ func (p *Postgres) ApplyPermissionPackage(ctx context.Context, mutation Permissi
 	return result, err
 }
 
+func (p *Postgres) getCapabilityForUpdate(ctx context.Context, tx pgx.Tx, id string) (domain.Capability, bool, error) {
+	row := tx.QueryRow(ctx, `
+		select id, target_agent_id, type, key, display_name, description, action,
+			input_schema, output_schema, native_scopes, data_domains, data_scopes,
+			sensitivity, risk_level, enforcement_mode, discovery_status, version, discovered_at, updated_at
+		from capabilities
+		where id=$1
+		for update
+	`, id)
+	capability, err := scanCapability(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Capability{}, false, nil
+	}
+	if err != nil {
+		return domain.Capability{}, false, fmt.Errorf("lock permission package capability: %w", err)
+	}
+	return capability, true, nil
+}
+
 func (p *Postgres) rejectDuplicatePermissionPackageApplication(ctx context.Context, tx pgx.Tx, application domain.PermissionPackageApplication) error {
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1::text, 0::bigint))`, permissionPackageApplicationDuplicateLockKey(application)); err != nil {
 		return fmt.Errorf("lock duplicate permission package application: %w", err)
@@ -1007,7 +1076,7 @@ func (p *Postgres) rejectDuplicatePermissionPackageApplication(ctx context.Conte
 		select id, draft_id, template_id, template_version, tenant_id, workspace_id, target_agent_id,
 			caller_instance_id, subject_selector, request_text, region, data_scopes,
 			allowed_capability_ids, allowed_capability_keys, tenant_entitlement_ids,
-			workspace_assignment_ids, instance_assignment_ids, applied_at
+			workspace_assignment_ids, instance_assignment_ids, applied_at, requested_capability_id
 		from permission_package_applications
 		where draft_id=$1
 			and template_id=$2
@@ -1053,15 +1122,15 @@ func (p *Postgres) CreatePermissionPackageApprovalRequest(ctx context.Context, r
 			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
 			policy_gate, status, requested_by,
 			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
-			consumed_at, consumed_by_application_id
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+			consumed_at, consumed_by_application_id, requested_capability_id
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
 	`, request.ID, request.DraftID, request.TemplateID, request.TemplateVersion, request.PolicyVersion,
 			request.TenantID, request.WorkspaceID, request.TargetID, request.CallerInstanceID,
 			request.SubjectSelector, request.RequestText, request.Region, dataScopes, allowedCapabilityIDs,
 			allowedCapabilityKeys, allowedCapabilityFingerprints, policyGate, string(request.Status),
 			request.RequestedBy, request.ReviewedBy, request.ReviewComment, request.CreatedAt, request.UpdatedAt,
 			nullTime(request.ResolvedAt), request.ExpiresAt, nullTime(request.ConsumedAt),
-			request.ConsumedByApplicationID)
+			request.ConsumedByApplicationID, request.RequestedCapabilityID)
 		return err
 	})
 	if err != nil {
@@ -1084,7 +1153,7 @@ func (p *Postgres) rejectDuplicateActivePermissionPackageApprovalRequest(ctx con
 			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
 			policy_gate, status, requested_by,
 			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
-			consumed_at, consumed_by_application_id
+			consumed_at, consumed_by_application_id, requested_capability_id
 		from permission_package_approval_requests
 		where status=$1
 			and draft_id=$2
@@ -1098,11 +1167,12 @@ func (p *Postgres) rejectDuplicateActivePermissionPackageApprovalRequest(ctx con
 			and subject_selector=$10
 			and request_text=$11
 			and region=$12
-			and expires_at > $13
+			and requested_capability_id=$13
+			and expires_at > $14
 	`, string(domain.PermissionPackageApprovalStatusPending), request.DraftID, request.TemplateID,
 		request.TemplateVersion, request.PolicyVersion, request.TenantID, request.WorkspaceID,
 		request.TargetID, request.CallerInstanceID, request.SubjectSelector, request.RequestText,
-		request.Region, referenceTime)
+		request.Region, request.RequestedCapabilityID, referenceTime)
 	if err != nil {
 		return fmt.Errorf("list duplicate permission package approval requests: %w", err)
 	}
@@ -1126,7 +1196,7 @@ func (p *Postgres) ListPermissionPackageApprovalRequests(ctx context.Context, fi
 			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
 			policy_gate, status, requested_by,
 			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
-			consumed_at, consumed_by_application_id
+			consumed_at, consumed_by_application_id, requested_capability_id
 		from permission_package_approval_requests
 		where 1=1
 	`
@@ -1154,6 +1224,9 @@ func (p *Postgres) ListPermissionPackageApprovalRequests(ctx context.Context, fi
 	if strings.TrimSpace(filter.CallerInstanceID) != "" {
 		add("caller_instance_id=$%d", strings.TrimSpace(filter.CallerInstanceID))
 	}
+	if filter.MatchRequestedCapabilityID || strings.TrimSpace(filter.RequestedCapabilityID) != "" {
+		add("requested_capability_id=$%d", strings.TrimSpace(filter.RequestedCapabilityID))
+	}
 	if strings.TrimSpace(string(filter.Status)) != "" {
 		add("status=$%d", string(filter.Status))
 	}
@@ -1177,7 +1250,7 @@ func (p *Postgres) GetPermissionPackageApprovalRequest(ctx context.Context, id s
 			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
 			policy_gate, status, requested_by,
 			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
-			consumed_at, consumed_by_application_id
+			consumed_at, consumed_by_application_id, requested_capability_id
 		from permission_package_approval_requests
 		where id=$1
 	`, id)
@@ -1204,21 +1277,21 @@ func (p *Postgres) UpdatePermissionPackageApprovalRequest(ctx context.Context, r
 			allowed_capability_keys=$15, allowed_capability_fingerprints=$16, policy_gate=$17,
 			status=$18, requested_by=$19, reviewed_by=$20, review_comment=$21, created_at=$22,
 			updated_at=$23, resolved_at=$24, expires_at=$25, consumed_at=$26,
-			consumed_by_application_id=$27
+			consumed_by_application_id=$27, requested_capability_id=$28
 		where id=$1
 		returning id, draft_id, template_id, template_version, policy_version, tenant_id, workspace_id,
 			target_agent_id, caller_instance_id, subject_selector, request_text, region, data_scopes,
 			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
 			policy_gate, status, requested_by,
 			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
-			consumed_at, consumed_by_application_id
+			consumed_at, consumed_by_application_id, requested_capability_id
 	`, request.ID, request.DraftID, request.TemplateID, request.TemplateVersion, request.PolicyVersion,
 		request.TenantID, request.WorkspaceID, request.TargetID, request.CallerInstanceID,
 		request.SubjectSelector, request.RequestText, request.Region, dataScopes, allowedCapabilityIDs,
 		allowedCapabilityKeys, allowedCapabilityFingerprints, policyGate, string(request.Status),
 		request.RequestedBy, request.ReviewedBy, request.ReviewComment, request.CreatedAt, request.UpdatedAt,
 		nullTime(request.ResolvedAt), request.ExpiresAt, nullTime(request.ConsumedAt),
-		request.ConsumedByApplicationID)
+		request.ConsumedByApplicationID, request.RequestedCapabilityID)
 	updated, err := scanPermissionPackageApprovalRequest(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.PermissionPackageApprovalRequest{}, false, nil
@@ -1242,7 +1315,7 @@ func (p *Postgres) TransitionPermissionPackageApprovalRequest(ctx context.Contex
 			allowed_capability_keys=$15, allowed_capability_fingerprints=$16, policy_gate=$17,
 			status=$18, requested_by=$19, reviewed_by=$20, review_comment=$21, created_at=$22,
 			updated_at=$23, resolved_at=$24, expires_at=$25, consumed_at=$26,
-			consumed_by_application_id=$27
+			consumed_by_application_id=$27, requested_capability_id=$30
 		where id=$1
 			and status=$28
 			and consumed_at is null
@@ -1253,14 +1326,15 @@ func (p *Postgres) TransitionPermissionPackageApprovalRequest(ctx context.Contex
 			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
 			policy_gate, status, requested_by,
 			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
-			consumed_at, consumed_by_application_id
+			consumed_at, consumed_by_application_id, requested_capability_id
 	`, request.ID, request.DraftID, request.TemplateID, request.TemplateVersion, request.PolicyVersion,
 		request.TenantID, request.WorkspaceID, request.TargetID, request.CallerInstanceID,
 		request.SubjectSelector, request.RequestText, request.Region, dataScopes, allowedCapabilityIDs,
 		allowedCapabilityKeys, allowedCapabilityFingerprints, policyGate, string(request.Status),
 		request.RequestedBy, request.ReviewedBy, request.ReviewComment, request.CreatedAt, request.UpdatedAt,
 		nullTime(request.ResolvedAt), request.ExpiresAt, nullTime(request.ConsumedAt),
-		request.ConsumedByApplicationID, string(domain.PermissionPackageApprovalStatusPending), now)
+		request.ConsumedByApplicationID, string(domain.PermissionPackageApprovalStatusPending), now,
+		request.RequestedCapabilityID)
 	updated, err := scanPermissionPackageApprovalRequest(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.PermissionPackageApprovalRequest{}, false, nil
@@ -1284,7 +1358,7 @@ func (p *Postgres) consumePermissionPackageApprovalRequest(ctx context.Context, 
 			allowed_capability_ids, allowed_capability_keys, allowed_capability_fingerprints,
 			policy_gate, status, requested_by,
 			reviewed_by, review_comment, created_at, updated_at, resolved_at, expires_at,
-			consumed_at, consumed_by_application_id
+			consumed_at, consumed_by_application_id, requested_capability_id
 	`, request.ID, nullTime(request.ConsumedAt), request.ConsumedByApplicationID, request.UpdatedAt,
 		string(domain.PermissionPackageApprovalStatusApproved))
 	updated, err := scanPermissionPackageApprovalRequest(row)
@@ -2619,7 +2693,7 @@ func scanPermissionPackageApplication(row scanner) (domain.PermissionPackageAppl
 		&application.TargetID, &application.CallerInstanceID, &application.SubjectSelector,
 		&application.RequestText, &application.Region, &dataScopes, &allowedCapabilityIDs,
 		&allowedCapabilityKeys, &tenantEntitlementIDs, &workspaceAssignmentIDs,
-		&instanceAssignmentIDs, &application.AppliedAt); err != nil {
+		&instanceAssignmentIDs, &application.AppliedAt, &application.RequestedCapabilityID); err != nil {
 		return domain.PermissionPackageApplication{}, err
 	}
 	if err := unmarshalJSON(dataScopes, &application.DataScopes, "permission package application data scopes"); err != nil {
@@ -2675,7 +2749,7 @@ func scanPermissionPackageApprovalRequest(row scanner) (domain.PermissionPackage
 		&allowedCapabilityIDs, &allowedCapabilityKeys, &allowedCapabilityFingerprints, &policyGate, &status,
 		&request.RequestedBy, &request.ReviewedBy, &request.ReviewComment,
 		&request.CreatedAt, &request.UpdatedAt, &resolvedAt, &request.ExpiresAt,
-		&consumedAt, &request.ConsumedByApplicationID); err != nil {
+		&consumedAt, &request.ConsumedByApplicationID, &request.RequestedCapabilityID); err != nil {
 		return domain.PermissionPackageApprovalRequest{}, err
 	}
 	request.Status = domain.PermissionPackageApprovalStatus(status)

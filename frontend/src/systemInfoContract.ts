@@ -14,6 +14,8 @@ export interface SystemInfo {
 }
 
 export const requiredConsoleCapabilities = [
+  'capability_data_domain_classification_v1',
+  'permission_package_requested_capability_v1',
   'permission_package_approval_requests',
   'permission_package_approval_withdraw',
   'permission_package_apply_preflight',

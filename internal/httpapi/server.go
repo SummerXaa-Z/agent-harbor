@@ -391,7 +391,7 @@ func localDevCORS(extraOrigins []string, includeDefaultLocalOrigins bool) func(h
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Key, X-Run-Id, X-AgentHarbor-Subject-Id, X-AgentHarbor-CSRF")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Key, X-Run-Id, X-AgentHarbor-Subject-Id, X-AgentHarbor-Task-Result-Memory-Id, X-AgentHarbor-CSRF")
 				w.Header().Set("Vary", "Origin")
 				if r.Method == http.MethodOptions {
 					w.WriteHeader(http.StatusNoContent)
@@ -4982,6 +4982,28 @@ func (s *Server) handleMCPToolCall(w http.ResponseWriter, r *http.Request, info 
 		writeError(w, domain.PermissionDenied(reason))
 		return true
 	}
+	taskResultContext, err := s.resolveVerifiedTaskResultRuntimeContext(r, caller, identity, target, capability, decision)
+	if err != nil {
+		var appErr domain.AppError
+		if errors.As(err, &appErr) && appErr.Code == "MEMORY_CONTEXT_NOT_AVAILABLE" {
+			if _, traceErr := s.recordCapabilityTrace(r, traceRecordInput{
+				Identity:           identity,
+				CallerID:           caller.ID,
+				TargetID:           target.ID,
+				RouteType:          "mcp",
+				RouteKey:           info.Method,
+				Decision:           domain.TraceDecisionDenied,
+				Reason:             appErr.Message,
+				Capability:         capability,
+				CapabilityDecision: decision,
+			}); traceErr != nil {
+				writeError(w, traceErr)
+				return true
+			}
+		}
+		writeError(w, err)
+		return true
+	}
 	recordAllowedTrace := func(result proxyTraceResult) (domain.TraceEvent, error) {
 		return s.recordCapabilityTrace(r, traceRecordInput{
 			Identity:           identity,
@@ -4996,7 +5018,7 @@ func (s *Server) handleMCPToolCall(w http.ResponseWriter, r *http.Request, info 
 			ProxyResult:        result,
 		})
 	}
-	contextHeader, err := agentHarborContextHeaderValue(identity, target.ID, capability, decision, info.ToolName)
+	contextHeader, err := agentHarborContextHeaderValue(identity, target.ID, capability, decision, info.ToolName, taskResultContext)
 	if err != nil {
 		writeError(w, err)
 		return true

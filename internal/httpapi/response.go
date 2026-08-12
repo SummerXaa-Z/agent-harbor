@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -58,26 +60,124 @@ func decodeJSON(r *http.Request, out any) error {
 
 	limitedBody := http.MaxBytesReader(nil, r.Body, maxJSONBodyBytes)
 	defer limitedBody.Close()
-
-	decoder := json.NewDecoder(limitedBody)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(out); err != nil {
+	payload, err := io.ReadAll(limitedBody)
+	if err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
 			return domain.PayloadTooLarge("request body exceeds 1MiB")
 		}
 		return domain.BadRequest("INVALID_JSON", "request body must be valid JSON")
 	}
-
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
-			return domain.PayloadTooLarge("request body exceeds 1MiB")
-		}
-		return domain.BadRequest("INVALID_JSON", "request body must contain a single JSON value")
+	if err := decodeStrictJSON(payload, out); err != nil {
+		return domain.BadRequest("INVALID_JSON", "request body must be valid, unambiguous JSON")
 	}
 	return nil
+}
+
+func decodeStrictJSON(payload []byte, out any) error {
+	if err := validateUnambiguousJSON(payload); err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(out)
+}
+
+type jsonContainer struct {
+	delim     json.Delim
+	keys      map[string]struct{}
+	expectKey bool
+}
+
+// validateUnambiguousJSON rejects multiple top-level values and duplicate
+// object fields. encoding/json otherwise accepts duplicate fields using the
+// last value, which is unsafe at authorization and management boundaries.
+func validateUnambiguousJSON(payload []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	stack := []jsonContainer{}
+	rootSeen := false
+
+	consumeValue := func() error {
+		if len(stack) == 0 {
+			if rootSeen {
+				return errors.New("JSON must contain a single value")
+			}
+			rootSeen = true
+			return nil
+		}
+		container := &stack[len(stack)-1]
+		if container.delim == '{' {
+			if container.expectKey {
+				return errors.New("JSON object field name is required")
+			}
+			container.expectKey = true
+		}
+		return nil
+	}
+
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			if !rootSeen {
+				return errors.New("JSON value is required")
+			}
+			if len(stack) != 0 {
+				return io.ErrUnexpectedEOF
+			}
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		if delim, ok := token.(json.Delim); ok {
+			switch delim {
+			case '{', '[':
+				if err := consumeValue(); err != nil {
+					return err
+				}
+				container := jsonContainer{delim: delim}
+				if delim == '{' {
+					container.keys = map[string]struct{}{}
+					container.expectKey = true
+				}
+				stack = append(stack, container)
+			case '}', ']':
+				if len(stack) == 0 ||
+					(stack[len(stack)-1].delim == '{' && delim != '}') ||
+					(stack[len(stack)-1].delim == '[' && delim != ']') {
+					return fmt.Errorf("unexpected JSON delimiter %q", delim)
+				}
+				container := stack[len(stack)-1]
+				if container.delim == '{' && !container.expectKey {
+					return errors.New("JSON object field value is required")
+				}
+				stack = stack[:len(stack)-1]
+			default:
+				return fmt.Errorf("unexpected JSON delimiter %q", delim)
+			}
+			continue
+		}
+
+		if len(stack) > 0 {
+			container := &stack[len(stack)-1]
+			if container.delim == '{' && container.expectKey {
+				key, ok := token.(string)
+				if !ok {
+					return errors.New("JSON object field name must be a string")
+				}
+				if _, exists := container.keys[key]; exists {
+					return errors.New("JSON object contains a duplicate field")
+				}
+				container.keys[key] = struct{}{}
+				container.expectKey = false
+				continue
+			}
+		}
+		if err := consumeValue(); err != nil {
+			return err
+		}
+	}
 }
 
 func requireJSONContentType(r *http.Request) error {

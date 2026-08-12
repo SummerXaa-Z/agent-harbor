@@ -74,6 +74,8 @@ assert_file_contains "Makefile" '$(PNPM) --dir scripts/real-mcp audit --audit-le
 assert_file_contains "Makefile" 'go test -race ./...'
 assert_file_contains "Makefile" "FuzzEffectiveDataScopes"
 assert_file_contains "Makefile" "FuzzValidateOutboundEndpoint"
+assert_file_contains "Makefile" "FuzzDecodeJSON"
+assert_file_contains "Makefile" "FuzzDecodeManagementMCPArguments"
 assert_file_contains "Makefile" 'go test -race ./internal/store -count=1'
 assert_file_contains "Makefile" '$(PNPM) --dir frontend install --frozen-lockfile'
 assert_file_contains "Makefile" '$(PNPM) --dir scripts/real-mcp start'

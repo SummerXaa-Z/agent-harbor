@@ -387,6 +387,8 @@ AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREA
 make core-journey
 ```
 
+The core journey proves an assigned tool is allowed with its effective inherited data scope, an unassigned tool is denied, and a later capability-scope narrowing fails closed when an older workspace assignment no longer fits the live boundary.
+
 The approval-required permission package journey is part of `make release-check`. By default, `make scenario-permission-package-approval` starts an isolated local API plus the dependency-free mock MCP server. To run the same journey against an already running API and the official SDK MCP demo service, set `BASE_URL` and `MCP_SERVER_MODE=real`:
 
 ```bash

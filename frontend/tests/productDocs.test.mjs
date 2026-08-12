@@ -119,3 +119,10 @@ test("release scenario operator output uses report and record wording", () => {
   assert.doesNotMatch(capabilityGovernanceScript, /trace evidence verified/i);
   assert.doesNotMatch(coreJourneyScript, /trace evidence/i);
 });
+
+test("core journey proves data-scope drift fails closed", () => {
+  assert.match(coreJourneyScript, /narrow-capability/);
+  assert.match(coreJourneyScript, /workspace assignment data scopes exceed tenant entitlement boundary/);
+  assert.match(coreJourneyScript, /data-scope mismatch denied/);
+  assert.match(coreJourneyScript, /effective data-scope boundary verified/);
+});

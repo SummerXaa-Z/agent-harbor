@@ -150,6 +150,16 @@ elif kind == "approve-scoped":
             "tenantFilter": f"tenant_id = '{tenant_id}'",
         }],
     }
+elif kind == "narrow-capability":
+    tenant_id = sys.argv[2]
+    body = {
+        "dataScopes": [{
+            "dataDomain": "crm",
+            "region": "us-east",
+            "table": "contacts",
+            "tenantFilter": f"tenant_id = '{tenant_id}'",
+        }],
+    }
 elif kind == "entitlement":
     tenant_id, target_id, capability_id = sys.argv[2], sys.argv[3], sys.argv[4]
     body = {
@@ -244,6 +254,7 @@ expected_counts = {
     "workspaceAssignmentCount": 1,
     "instanceAssignmentCount": 1,
 }
+
 for key, expected in expected_counts.items():
     if summary.get(key) != expected:
         raise SystemExit(f"summary[{key}]={summary.get(key)} want {expected}; summary={summary}")
@@ -268,6 +279,77 @@ for key, expected in expected_scope.items():
     if scope.get(key) != expected:
         raise SystemExit(f"scope[{key}]={scope.get(key)!r} want {expected!r}; scope={scope}")
 print("tenant access profile grant chain verified")
+PY
+}
+
+assert_scope_denial_response() {
+  RESPONSE_BODY="$HTTP_BODY" python3 - <<'PY'
+import json
+import os
+
+doc = json.loads(os.environ["RESPONSE_BODY"])
+expected_reason = "workspace assignment data scopes exceed tenant entitlement boundary"
+if doc.get("error") != "PERMISSION_DENIED" or doc.get("message") != expected_reason:
+    raise SystemExit(f"unexpected data-scope denial response: {doc}")
+print(f"data-scope mismatch denied: reason={expected_reason}")
+PY
+}
+
+assert_scope_denial_trace() {
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$ALLOWED_CAPABILITY_ID" "$ENTITLEMENT_ID" "$WORKSPACE_ASSIGNMENT_ID" <<'PY'
+import json
+import os
+import sys
+
+capability_id, entitlement_id, workspace_assignment_id = sys.argv[1:4]
+traces = json.loads(os.environ["RESPONSE_BODY"])["data"]
+if len(traces) != 1:
+    raise SystemExit(f"expected one data-scope denial trace, got {traces}")
+trace = traces[0]
+expected_reason = "workspace assignment data scopes exceed tenant entitlement boundary"
+expected = {
+    "decision": "denied",
+    "reason": expected_reason,
+    "capabilityId": capability_id,
+    "entitlementId": entitlement_id,
+    "workspaceAssignmentId": workspace_assignment_id,
+}
+for key, value in expected.items():
+    if trace.get(key) != value:
+        raise SystemExit(f"trace[{key!r}]={trace.get(key)!r}, want {value!r}; trace={trace}")
+if trace.get("instanceAssignmentId"):
+    raise SystemExit(f"workspace denial must occur before instance assignment evaluation: {trace}")
+print("data-scope denial trace verified")
+PY
+}
+
+assert_scope_mismatch_profile() {
+  RESPONSE_BODY="$HTTP_BODY" python3 - "$RUN_ID-scope-denied" <<'PY'
+import json
+import os
+import sys
+
+scope_denied_run_id = sys.argv[1]
+profile = json.loads(os.environ["RESPONSE_BODY"])["data"]
+grant = profile["grants"][0]
+workspace = grant["workspaceAssignments"][0]
+effective_tenant_scopes = grant.get("effectiveTenantDataScopes") or []
+requested_workspace_scopes = workspace["workspaceAssignment"].get("dataScopes") or []
+if len(effective_tenant_scopes) != 1 or effective_tenant_scopes[0].get("table") != "contacts":
+    raise SystemExit(f"expected narrowed contacts boundary, got {effective_tenant_scopes}")
+if len(requested_workspace_scopes) != 1 or requested_workspace_scopes[0].get("table") != "accounts":
+    raise SystemExit(f"expected stale accounts workspace scope, got {requested_workspace_scopes}")
+expected_profile_reason = "workspace assignment dataScopes exceed tenant entitlement dataScopes"
+if workspace.get("scopeStatus") != "invalid" or workspace.get("scopeReason") != expected_profile_reason:
+    raise SystemExit(f"workspace scope mismatch not visible in access profile: {workspace}")
+matching_traces = [trace for trace in profile["recentTraces"] if trace.get("runId") == scope_denied_run_id]
+if len(matching_traces) != 1 or matching_traces[0].get("decision") != "denied":
+    raise SystemExit(f"data-scope denial trace missing from access profile: {profile['recentTraces']}")
+print(
+    "effective data-scope boundary verified: "
+    f"tenant={json.dumps(effective_tenant_scopes[0], sort_keys=True, separators=(',', ':'))} "
+    f"workspace-request={json.dumps(requested_workspace_scopes[0], sort_keys=True, separators=(',', ':'))}"
+)
 PY
 }
 
@@ -365,5 +447,20 @@ echo "allowed assigned tool: $ALLOWED_TOOL"
 request GET "/api/v1/tenants/$CHILD_TENANT_ID/access-profile?traceLimit=10"
 expect_status 200 "fetch tenant access profile"
 assert_profile_chain
+
+request PATCH "/api/v1/capabilities/$ALLOWED_CAPABILITY_ID" "$(json_body narrow-capability "$CHILD_TENANT_ID")"
+expect_status 200 "narrow capability data scope"
+
+request POST "/api/v1/mcp/agents/$TARGET_ID/rpc" "$(json_body tools-call "$ALLOWED_TOOL")" "$AGENT_KEY" "$RUN_ID-scope-denied" "$SUBJECT_ID"
+expect_status 403 "deny data-scope mismatch"
+assert_scope_denial_response
+
+request GET "/api/v1/audit/traces?runId=$RUN_ID-scope-denied"
+expect_status 200 "fetch data-scope denial trace"
+assert_scope_denial_trace
+
+request GET "/api/v1/tenants/$CHILD_TENANT_ID/access-profile?workspaceId=$WORKSPACE_ID&targetId=$TARGET_ID&capabilityId=$ALLOWED_CAPABILITY_ID&callerInstanceId=$CALLER_ID&traceLimit=10"
+expect_status 200 "fetch data-scope mismatch access profile"
+assert_scope_mismatch_profile
 
 echo "core journey scenario complete"

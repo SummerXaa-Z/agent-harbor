@@ -366,11 +366,13 @@ make scenario-scripts-lint
 make github-config-lint
 ```
 
-PostgreSQL integration remains opt-in:
+PostgreSQL integration remains opt-in. Use a fresh isolated test database for each command:
 
 ```bash
 AGENT_HARBOR_TEST_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' \
   make test-postgres
+AGENT_HARBOR_TEST_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' \
+  make test-postgres-race
 ```
 
 ## Scenario Scripts

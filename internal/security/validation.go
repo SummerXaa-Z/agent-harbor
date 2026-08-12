@@ -2,7 +2,6 @@ package security
 
 import (
 	"fmt"
-	"net"
 	"net/netip"
 	"net/url"
 	"strings"
@@ -65,26 +64,30 @@ func ValidateOutboundEndpoint(raw string, options ...EndpointValidationOptions) 
 		return fmt.Errorf("endpoint scheme must be http or https")
 	}
 
-	host := strings.ToLower(parsed.Hostname())
+	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
+	if host == "" {
+		return fmt.Errorf("endpoint must be an absolute URL")
+	}
 	if host == "metadata.google.internal" {
 		return fmt.Errorf("endpoint host is not allowed")
 	}
-	if host == "localhost" {
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		if validation.AllowPrivateHosts {
 			return nil
 		}
 		return fmt.Errorf("endpoint host is not allowed")
 	}
-	if ip := net.ParseIP(host); ip != nil {
-		addr, ok := netip.AddrFromSlice(ip)
-		if ok {
-			normalized := addr.Unmap()
-			if isUnsafeAddress(normalized) {
-				if validation.AllowPrivateHosts && (normalized.IsLoopback() || normalized.IsPrivate()) {
-					return nil
-				}
-				return fmt.Errorf("endpoint host is not allowed")
+	if addr, err := netip.ParseAddr(host); err == nil {
+		normalized := addr.Unmap()
+		// Interface zones route through a local network boundary and are never valid public targets.
+		if normalized.Zone() != "" {
+			return fmt.Errorf("endpoint host is not allowed")
+		}
+		if isUnsafeAddress(normalized) {
+			if validation.AllowPrivateHosts && (normalized.IsLoopback() || normalized.IsPrivate()) {
+				return nil
 			}
+			return fmt.Errorf("endpoint host is not allowed")
 		}
 	}
 	return nil

@@ -358,6 +358,7 @@ make frontend-deps
 make test
 make test-fresh
 make test-race
+make test-fuzz
 make vet
 make build
 make frontend-test

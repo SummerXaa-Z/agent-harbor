@@ -5259,7 +5259,7 @@ func (s *Server) proxyUpstreamIfConfigured(w http.ResponseWriter, r *http.Reques
 				return true
 			}
 		}
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := doUpstreamRequest(req)
 		if err != nil {
 			if shouldRetryUpstreamError(ctx, err) && attempt < retryPolicy.maxAttempts {
 				if !sleepBeforeRetry(ctx, retryPolicy.backoff) {
@@ -5473,7 +5473,7 @@ func (s *Server) callMCPUpstream(r *http.Request, target domain.Agent, body []by
 		return nil, 0, "", proxyTraceResult{}, err
 	}
 	setMCPUpstreamHeaders(req.Header)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doUpstreamRequest(req)
 	if err != nil {
 		classified := classifyUpstreamError(ctx, err)
 		result := proxyTraceResult{
@@ -7050,7 +7050,7 @@ func (s *Server) discoverMCPCapabilities(ctx context.Context, target domain.Agen
 		return nil, err
 	}
 	setMCPUpstreamHeaders(req.Header)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doUpstreamRequest(req)
 	if err != nil {
 		return nil, classifyUpstreamError(ctx, err)
 	}

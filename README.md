@@ -357,6 +357,7 @@ AGENT_HARBOR_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/a
 make frontend-deps
 make test
 make test-fresh
+make test-race
 make vet
 make build
 make frontend-test

@@ -109,6 +109,8 @@ test-race:
 test-fuzz:
 	go test ./internal/domain -run '^$$' -fuzz '^FuzzEffectiveDataScopes$$' -fuzztime=$(FUZZ_TIME)
 	go test ./internal/security -run '^$$' -fuzz '^FuzzValidateOutboundEndpoint$$' -fuzztime=$(FUZZ_TIME)
+	go test ./internal/httpapi -run '^$$' -fuzz '^FuzzDecodeJSON$$' -fuzztime=$(FUZZ_TIME)
+	go test ./internal/httpapi -run '^$$' -fuzz '^FuzzDecodeManagementMCPArguments$$' -fuzztime=$(FUZZ_TIME)
 
 vet:
 	go vet ./...

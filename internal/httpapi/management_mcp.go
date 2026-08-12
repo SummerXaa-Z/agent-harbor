@@ -268,6 +268,9 @@ func managementMCPRequestFromHTTP(r *http.Request) (managementMCPRequest, error)
 	if err != nil {
 		return managementMCPRequest{}, err
 	}
+	if err := validateUnambiguousJSON(body); err != nil {
+		return managementMCPRequest{}, errors.New("request body must be valid, unambiguous MCP JSON-RPC")
+	}
 	var req managementMCPRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		return managementMCPRequest{}, errors.New("request body must be valid MCP JSON-RPC")
@@ -993,6 +996,9 @@ func managementMCPWriteConfirmationForRequest(req managementMCPRequest) (managem
 	if !managementMCPToolRequiresConfirmation(req.Params.Name) {
 		return managementMCPWriteConfirmationAuditContext{}, false, nil
 	}
+	if err := validateUnambiguousJSON(req.Params.Arguments); err != nil {
+		return managementMCPWriteConfirmationAuditContext{}, true, domain.BadRequest("VALIDATION_FAILED", "arguments must contain valid, unambiguous JSON for this write tool")
+	}
 	var args managementMCPWriteConfirmationArgs
 	if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
 		return managementMCPWriteConfirmationAuditContext{}, true, domain.BadRequest("VALIDATION_FAILED", "arguments must include confirmation for this write tool")
@@ -1595,10 +1601,11 @@ func decodeManagementMCPArguments[T any](raw json.RawMessage) (T, error) {
 	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
 		raw = []byte("{}")
 	}
+	if err := validateUnambiguousJSON(raw); err != nil {
+		return out, domain.BadRequest("VALIDATION_FAILED", "tool arguments must contain valid, unambiguous JSON")
+	}
 	raw = managementMCPArgumentsWithoutConfirmation(raw)
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&out); err != nil {
+	if err := decodeStrictJSON(raw, &out); err != nil {
 		return out, domain.BadRequest("VALIDATION_FAILED", "tool arguments are invalid: "+err.Error())
 	}
 	return out, nil

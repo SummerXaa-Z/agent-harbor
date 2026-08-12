@@ -301,7 +301,7 @@ export interface AccessHandoffToken {
   revokedAt?: string;
 }
 
-export interface CreateAccessHandoffTokenRequest extends PermissionPackageProductionReadinessFilter {
+export interface CreateAccessHandoffTokenRequest extends Omit<PermissionPackageProductionReadinessFilter, "traceLimit"> {
   handoffId: string;
   name?: string;
   expiresInSeconds?: number;
@@ -736,6 +736,22 @@ export function subjectIdExampleFromSelector(subjectSelector?: string): string |
   if (!selector) return undefined;
   if (!selector.endsWith("*")) return selector;
   return `${selector.slice(0, -1)}example`;
+}
+
+export function permissionPackageApplicationDraftInput(
+  application: PermissionPackageApplication,
+  fallback: PermissionPackageDraftInput,
+): PermissionPackageDraftInput {
+  return {
+    callerInstanceId: application.callerInstanceId,
+    region: application.region ?? fallback.region,
+    requestText: application.requestText ?? fallback.requestText,
+    subjectSelector: application.subjectSelector ?? fallback.subjectSelector,
+    targetId: application.targetId,
+    templateId: application.templateId,
+    tenantId: application.tenantId,
+    workspaceId: application.workspaceId,
+  };
 }
 
 export function createPermissionPackageDraft(

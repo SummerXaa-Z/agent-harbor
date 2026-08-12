@@ -562,7 +562,9 @@ test("go-live status page starts with acceptance workflow instead of historical 
   assert.match(goLiveAcceptanceOverview, /statusMessage \? <p className="go-live-acceptance-message">\{statusMessage\}<\/p> : null/);
   assert.match(goLiveAcceptanceOverview, /const acceptanceReady = acceptanceCenter\.status === "ready"/);
   assert.match(goLiveAcceptanceOverview, /const primaryAction = renderProductionAcceptanceAction/);
-  assert.match(goLiveAcceptanceOverview, /<section className="go-live-acceptance-main">[\s\S]*<div className="go-live-acceptance-decision">[\s\S]*<section className="go-live-acceptance-blockers"[\s\S]*<section className="go-live-acceptance-checks"[\s\S]*<aside className="go-live-acceptance-context"/);
+  assert.match(goLiveAcceptanceOverview, /<section className="go-live-acceptance-main">[\s\S]*<div className="go-live-acceptance-decision">[\s\S]*<section className="go-live-acceptance-checks"[\s\S]*<aside className="go-live-acceptance-context"/);
+  assert.match(goLiveAcceptanceOverview, /remainingBlockers\.length > 0[\s\S]*go-live-acceptance-blockers/);
+  assert.match(goLiveAcceptanceOverview, /go-live-checks-header/);
   assert.match(goLiveCase, /goLiveAcceptancePanel/);
   assert.match(goLiveCase, /acceptanceHistoryPanel/);
   assert.doesNotMatch(goLiveCase, /evidenceRunsPanel/);
@@ -646,7 +648,8 @@ test("go-live route loads the current permission change preview", () => {
   assert.match(app, /const shouldLoadAiAdminWorkbenchPreview = consoleAccessReady && \(activeNav === "ai-admin" \|\| activeNav === "go-live"\)/);
   assert.match(app, /if \(!shouldLoadAiAdminWorkbenchPreview \|\| !data\?\.loadedFromApi \|\| aiAdminNewDraftMode\)/);
   assert.match(app, /previewPermissionPackageWorkbench\(aiAdminForm, adminKey, controller\.signal\)/);
-  assert.match(app, /const goLiveAcceptanceForm = aiAdminServerDraft\?\.input \?\? aiAdminForm/);
+  assert.match(app, /const goLiveAcceptanceBaseForm = aiAdminServerDraft\?\.input \?\? aiAdminForm/);
+  assert.match(app, /permissionPackageApplicationDraftInput\(aiAdminApplication, goLiveAcceptanceBaseForm\)/);
   assert.match(app, /draft=\{aiAdminServerDraft\}/);
   assert.match(goLiveAcceptanceOverview, /const acceptanceInput = draft\?\.input \?\? form/);
   assert.doesNotMatch(goLiveAcceptanceOverview, /form\.callerInstanceId \|\| t\("text\.unknownCaller"\)/);

@@ -126,6 +126,7 @@ export function GoLiveAcceptanceOverview({
   const totalCount = acceptanceCenter.totalCount;
   const blockerCount = acceptanceCenter.blockingCount;
   const warningCount = acceptanceCenter.checkRows.filter((row) => row.status === "attention").length;
+  const remainingBlockers = acceptanceCenter.blockers.slice(1);
   const acceptanceReady = acceptanceCenter.status === "ready";
   const statusMessage = productionReadinessMessage === t("message.permissionProductionReadinessLoaded")
     ? ""
@@ -182,32 +183,36 @@ export function GoLiveAcceptanceOverview({
           </div>
         </div>
 
-        <section className="go-live-acceptance-blockers" aria-label={t("productionAcceptance.blockers")}>
-          <strong>{acceptanceCenter.blockers.length > 0 ? t("productionAcceptance.blockers") : t("productionAcceptance.noBlockers")}</strong>
-          {acceptanceCenter.blockers.length > 0 ? (
+        {remainingBlockers.length > 0 ? (
+          <section className="go-live-acceptance-blockers" aria-label={t("productionAcceptance.additionalBlockers")}>
+            <strong>{t("productionAcceptance.additionalBlockers")}</strong>
             <ul>
-              {acceptanceCenter.blockers.map((blocker) => (
+              {remainingBlockers.map((blocker) => (
                 <li key={blocker.key}>{t(blocker.labelKey, blocker.detail)}</li>
               ))}
             </ul>
-          ) : (
-            <span>{t("productionAcceptance.noBlockersDetail")}</span>
-          )}
-        </section>
+          </section>
+        ) : null}
 
         <section className="go-live-acceptance-checks" aria-label={t("section.permissionRequestProcess")}>
-          <div className="go-live-acceptance-score">
+          <div className="go-live-checks-header">
             <div>
-              <span>{t("metric.productionReadyChecks")}</span>
-              <strong>{readyCount}/{totalCount}</strong>
+              <strong>{t("productionAcceptance.checksTitle")}</strong>
+              <span>{t("productionAcceptance.checksDetail")}</span>
             </div>
-            <div>
-              <span>{t("metric.productionWarnings")}</span>
-              <strong>{warningCount}</strong>
-            </div>
-            <div>
-              <span>{t("metric.productionBlockers")}</span>
-              <strong>{blockerCount}</strong>
+            <div className="go-live-acceptance-score">
+              <div>
+                <span>{t("metric.productionReadyChecks")}</span>
+                <strong>{readyCount}/{totalCount}</strong>
+              </div>
+              <div>
+                <span>{t("metric.productionWarnings")}</span>
+                <strong>{warningCount}</strong>
+              </div>
+              <div>
+                <span>{t("metric.productionBlockers")}</span>
+                <strong>{blockerCount}</strong>
+              </div>
             </div>
           </div>
           <ol className="go-live-step-list">

@@ -150,6 +150,7 @@ import {
 import {
   createPermissionPackageDraft,
   defaultPermissionPackageDraftInput,
+  permissionPackageApplicationDraftInput,
   permissionPackageApprovalEffectiveStatus,
   permissionPackageTemplates,
   subjectIdExampleFromSelector,
@@ -204,7 +205,6 @@ import {
   PolicyCreateForm,
   TraceFilterBar
 } from "./components/ManagementForms";
-import { GoLiveAcceptanceOverview } from "./components/GoLiveAcceptanceOverview";
 import {
   AgentTable,
   ContractMatrix,
@@ -264,6 +264,9 @@ const AiAdminPermissionWorkbench = lazy(() => import("./components/AiAdminPermis
 })));
 const AccessHandoffPanel = lazy(() => import("./components/AccessHandoffPanel").then((module) => ({
   default: module.AccessHandoffPanel
+})));
+const GoLiveAcceptanceOverview = lazy(() => import("./components/GoLiveAcceptanceOverview").then((module) => ({
+  default: module.GoLiveAcceptanceOverview
 })));
 const CapabilityGovernanceView = lazy(() => import("./components/CapabilityGovernanceView").then((module) => ({
   default: module.CapabilityGovernanceView
@@ -1077,7 +1080,10 @@ export function ConsoleController() {
     }
   }
 
-  async function exportAiAdminAcceptanceReport(formInput: PermissionPackageDraftInput = aiAdminForm) {
+  async function exportAiAdminAcceptanceReport(
+    formInput: PermissionPackageDraftInput = aiAdminForm,
+    subjectId?: string
+  ) {
     if (!data?.loadedFromApi) {
       setAiAdminMessage({ key: "message.acceptanceReportRequiresLiveApi" });
       return null;
@@ -1087,7 +1093,7 @@ export function ConsoleController() {
     setAiAdminProductionReadinessMessage(null);
     try {
       const report = await fetchPermissionPackageAcceptanceReport(
-        aiAdminProductionReadinessFilter(formInput),
+        aiAdminProductionReadinessFilter(formInput, { subjectId }),
         adminKey
       );
       setAiAdminAcceptanceReport(report);
@@ -2300,7 +2306,16 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   const productionJourneyCheckpoint = (
     productionJourney ? <ProductionJourneyCheckpoint journey={productionJourney} t={t} /> : null
   );
-  const goLiveAcceptanceForm = aiAdminServerDraft?.input ?? aiAdminForm;
+  const goLiveAcceptanceBaseForm = aiAdminServerDraft?.input ?? aiAdminForm;
+  const goLiveAcceptanceForm = aiAdminApplication
+    ? permissionPackageApplicationDraftInput(aiAdminApplication, goLiveAcceptanceBaseForm)
+    : goLiveAcceptanceBaseForm;
+  const goLiveAcceptanceSubjectId =
+    aiAdminProductionReadiness?.runtimeEvidence.allowedTrace?.subjectId
+    ?? aiAdminProductionReadiness?.runtimeEvidence.deniedTrace?.subjectId;
+  const goLiveAccessHandoffFilter = aiAdminProductionReadinessFilter(goLiveAcceptanceForm, {
+    subjectId: goLiveAcceptanceSubjectId
+  });
   const sessionActorLabel = consoleAuth.session?.actor
     ? t(`auditActor.${consoleAuth.session.actor}`, consoleAuth.session.actor)
     : t("auth.unknownActor");
@@ -2351,32 +2366,39 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
   );
   const goLiveAcceptancePanel = (
     <Panel className="span-12" icon={<ClipboardCheck size={18} />} title={t("section.goLiveAcceptance")}>
-      <GoLiveAcceptanceOverview
-        agents={agents}
-        connectionDiagnosticsChecking={connectionDiagnostics.checking}
-        connectionStatus={connectionDiagnosticsStatus}
-        draft={aiAdminServerDraft}
-        form={aiAdminForm}
-        liveDataAvailable={Boolean(data?.loadedFromApi)}
-        onExportAcceptanceReport={() => void exportAiAdminAcceptanceReport(goLiveAcceptanceForm)}
-        onOpenPermissionChange={() => setActiveNav("ai-admin")}
-        onRunConnectionDiagnostics={() => void connectionDiagnostics.run()}
-        onRefreshProductionReadiness={() => void refreshAiAdminProductionReadiness(goLiveAcceptanceForm)}
-        acceptanceReportExporting={aiAdminAcceptanceReportExporting}
-        acceptanceReport={aiAdminAcceptanceReport}
-        productionReadiness={aiAdminProductionReadiness}
-        productionReadinessLoading={aiAdminProductionReadinessLoading}
-        productionReadinessMessage={aiAdminProductionReadinessMessage}
-        productionSummary={aiAdminProductionConsoleSummary}
-        templates={aiAdminTemplates}
-        tenants={tenants}
-        t={t}
-      />
+      <Suspense fallback={<div className="access-handoff-loading">{t("status.loadingConsole")}</div>}>
+        <GoLiveAcceptanceOverview
+          agents={agents}
+          connectionDiagnosticsChecking={connectionDiagnostics.checking}
+          connectionStatus={connectionDiagnosticsStatus}
+          draft={aiAdminServerDraft}
+          form={aiAdminForm}
+          liveDataAvailable={Boolean(data?.loadedFromApi)}
+          onExportAcceptanceReport={() => void exportAiAdminAcceptanceReport(
+            goLiveAcceptanceForm,
+            goLiveAcceptanceSubjectId
+          )}
+          onOpenPermissionChange={() => setActiveNav("ai-admin")}
+          onRunConnectionDiagnostics={() => void connectionDiagnostics.run()}
+          onRefreshProductionReadiness={() => void refreshAiAdminProductionReadiness(goLiveAcceptanceForm, {
+            subjectId: goLiveAcceptanceSubjectId
+          })}
+          acceptanceReportExporting={aiAdminAcceptanceReportExporting}
+          acceptanceReport={aiAdminAcceptanceReport}
+          productionReadiness={aiAdminProductionReadiness}
+          productionReadinessLoading={aiAdminProductionReadinessLoading}
+          productionReadinessMessage={aiAdminProductionReadinessMessage}
+          productionSummary={aiAdminProductionConsoleSummary}
+          templates={aiAdminTemplates}
+          tenants={tenants}
+          t={t}
+        />
+      </Suspense>
       <Suspense fallback={<div className="access-handoff-loading">{t("accessHandoff.loading")}</div>}>
         <AccessHandoffPanel
           adminKey={adminKey}
           enabled={consoleAccessReady && activeNav === "go-live" && Boolean(data?.loadedFromApi)}
-          filter={aiAdminProductionReadinessFilter(goLiveAcceptanceForm)}
+          filter={goLiveAccessHandoffFilter}
           language={language}
           refreshKey={aiAdminProductionReadiness?.generatedAt ?? ""}
           t={t}

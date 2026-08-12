@@ -70,6 +70,8 @@ const (
 	defaultAuditLimit                   = 100
 	maxAuditLimit                       = 500
 	defaultPermissionPackageApprovalTTL = 24 * time.Hour
+	defaultAgentKeyTTLSeconds           = int64(1800)
+	maxAgentKeyTTLSeconds               = int64(3600)
 	defaultConsoleSessionTTL            = 12 * time.Hour
 	consoleSessionCookieName            = "agent_harbor_session"
 	developmentAdminActor               = "local-dev"
@@ -84,6 +86,7 @@ var systemCapabilities = []string{
 	"permission_package_application_health",
 	"permission_package_application_impact",
 	"permission_package_production_readiness",
+	"permission_package_access_handoff_v1",
 	"permission_package_consumed_approval_recovery",
 	"management_mcp_tools_metadata_v4",
 }
@@ -255,6 +258,7 @@ func (s *Server) Router() http.Handler {
 			r.Post("/permission-packages/workbench:preview", s.previewPermissionPackageWorkbench)
 			r.Get("/permission-packages/production-readiness/report", s.getPermissionPackageProductionEvidenceReport)
 			r.Get("/permission-packages/production-readiness", s.getPermissionPackageProductionReadiness)
+			r.Get("/permission-packages/access-handoff", s.getPermissionPackageAccessHandoff)
 			r.Get("/permission-packages/applications", s.listPermissionPackageApplications)
 			r.Get("/permission-packages/applications/health", s.listPermissionPackageApplicationHealth)
 			r.Get("/permission-packages/applications/{id}/impact", s.getPermissionPackageApplicationImpact)
@@ -1129,8 +1133,8 @@ func (s *Server) createAgentKey(w http.ResponseWriter, r *http.Request) {
 	}
 	ttl := req.ExpiresInSeconds
 	if ttl == 0 {
-		ttl = 1800
-	} else if ttl < 0 || ttl > 3600 {
+		ttl = defaultAgentKeyTTLSeconds
+	} else if ttl < 0 || ttl > maxAgentKeyTTLSeconds {
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "expiresInSeconds must be between 1 and 3600"))
 		return
 	}

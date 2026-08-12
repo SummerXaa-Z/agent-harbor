@@ -49,6 +49,33 @@ jobs:
       - name: GitHub config lint
         run: make github-config-lint
 
+  dependency-security:
+    name: Dependency security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.30.3
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Scan dependencies
+        run: make dependency-audit
+
   postgres:
     name: PostgreSQL integration
     runs-on: ubuntu-latest
@@ -118,7 +145,7 @@ jobs:
   frontend-required:
     name: Frontend
     runs-on: ubuntu-latest
-    needs: frontend
+    needs: [frontend, dependency-security]
     if: always()
     steps:
       - name: Verify frontend matrix
@@ -127,4 +154,9 @@ jobs:
             echo "Frontend matrix completed with result: ${{ needs.frontend.result }}" >&2
             exit 1
           fi
+          if [[ "${{ needs.dependency-security.result }}" != "success" ]]; then
+            echo "Dependency security completed with result: ${{ needs.dependency-security.result }}" >&2
+            exit 1
+          fi
           echo "Frontend matrix passed"
+          echo "Dependency security passed"

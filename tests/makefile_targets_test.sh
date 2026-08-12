@@ -58,9 +58,14 @@ assert_target_exists "evaluation-readiness"
 assert_target_exists "evaluation-readiness-test"
 assert_target_depends_on "check" "evaluation-readiness-test"
 assert_target_depends_on "release-check" "evaluation-readiness-test"
+assert_target_exists "dependency-audit"
 
 assert_file_contains "Makefile" "scripts/scenario-tenant-permission-center.sh"
 assert_file_contains "Makefile" "PNPM ?= ./scripts/pnpm.sh"
+assert_file_contains "Makefile" "GOVULNCHECK_VERSION ?= v1.6.0"
+assert_file_contains "Makefile" 'govulncheck@$(GOVULNCHECK_VERSION)'
+assert_file_contains "Makefile" '$(PNPM) --dir frontend audit --audit-level=low'
+assert_file_contains "Makefile" '$(PNPM) --dir scripts/real-mcp audit --audit-level=low'
 assert_file_contains "Makefile" '$(PNPM) --dir frontend install --frozen-lockfile'
 assert_file_contains "Makefile" '$(PNPM) --dir scripts/real-mcp start'
 assert_file_contains "Makefile" "scripts/pnpm.sh"
@@ -73,8 +78,13 @@ assert_file_contains "frontend/package.json" '"node": ">=24 <27"'
 assert_file_contains ".github/workflows/ci.yml" "node-version: [24, 26]"
 assert_file_contains ".github/workflows/ci.yml" 'node-version: ${{ matrix.node-version }}'
 assert_file_contains ".github/workflows/ci.yml" "frontend-required:"
-assert_file_contains ".github/workflows/ci.yml" "needs: frontend"
+assert_file_contains ".github/workflows/ci.yml" "needs: [frontend, dependency-security]"
 assert_file_contains ".github/workflows/ci.yml" "Frontend matrix passed"
+assert_file_contains ".github/workflows/ci.yml" "Dependency security passed"
+assert_file_contains ".github/workflows/ci.yml" "dependency-security:"
+assert_file_contains ".github/workflows/ci.yml" "name: Dependency security"
+assert_file_contains ".github/workflows/ci.yml" "run: make dependency-audit"
+assert_file_contains ".github/dependabot.yml" "directory: /scripts/real-mcp"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "authRequired"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "productionAcceptance.ts"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "buildProductionAcceptanceCenter"

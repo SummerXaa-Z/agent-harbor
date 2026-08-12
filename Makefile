@@ -1,6 +1,7 @@
 SHELL := /bin/bash
 
 PNPM ?= ./scripts/pnpm.sh
+GOVULNCHECK_VERSION ?= v1.6.0
 
 GO_FILES := $(shell git ls-files '*.go')
 
@@ -35,13 +36,14 @@ SCENARIO_SCRIPT_LIBS := \
 	scripts/lib/ports.sh \
 	scripts/pnpm.sh
 
-.PHONY: help check release-check fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test evaluation-readiness-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
+.PHONY: help check release-check dependency-audit fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test evaluation-readiness-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
 	@printf '\n'
 	@printf '  make check                 Run local backend, frontend, and scenario-script checks\n'
 	@printf '  make release-check         Run uncached release/merge readiness checks\n'
+	@printf '  make dependency-audit      Scan Go and pnpm lockfiles for known vulnerabilities\n'
 	@printf '  make fmt                   Format Go files with gofmt\n'
 	@printf '  make gofmt-check           Verify Go files are gofmt-formatted\n'
 	@printf '  make test                  Run Go tests\n'
@@ -74,6 +76,11 @@ help:
 check: gofmt-check test vet build makefile-targets-test evaluation-readiness-test frontend-test frontend-build scenario-scripts-lint github-config-lint
 
 release-check: gofmt-check test-fresh vet build production-hardening scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center makefile-targets-test evaluation-readiness-test frontend-test frontend-build scenario-scripts-lint github-config-lint
+
+dependency-audit:
+	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+	$(PNPM) --dir frontend audit --audit-level=low
+	$(PNPM) --dir scripts/real-mcp audit --audit-level=low
 
 fmt:
 	gofmt -w $(GO_FILES)

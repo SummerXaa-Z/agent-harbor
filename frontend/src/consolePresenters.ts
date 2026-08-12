@@ -62,15 +62,15 @@ export function formatConsoleTime(
   });
 }
 
-export function formatDate(value: string) {
+export function formatDate(value: string, language: Language = "zh-CN") {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("zh-CN", {
+  return date.toLocaleString(language === "zh-CN" ? "zh-CN" : "en-US", {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false
+    hour12: language === "en"
   });
 }
 

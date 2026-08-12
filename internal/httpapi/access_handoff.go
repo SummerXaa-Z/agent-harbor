@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,9 +12,15 @@ import (
 	"time"
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
+	"github.com/SummerXaa-Z/agent-harbor/internal/security"
+	"github.com/SummerXaa-Z/agent-harbor/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 const accessHandoffVersion = "access-handoff/v1"
+const accessHandoffNotReadyCode = "ACCESS_HANDOFF_NOT_READY"
+const accessHandoffChangedCode = "ACCESS_HANDOFF_CHANGED"
+const accessHandoffTokenActiveCode = "ACCESS_HANDOFF_TOKEN_ACTIVE"
 
 type accessHandoffResponse struct {
 	HandoffVersion      string                           `json:"handoffVersion"`
@@ -28,6 +35,7 @@ type accessHandoffResponse struct {
 	ProductionReadiness accessHandoffProductionReadiness `json:"productionReadiness"`
 	CopyArtifacts       *accessHandoffCopyArtifacts      `json:"copyArtifacts,omitempty"`
 	TokenEligibility    accessHandoffTokenEligibility    `json:"tokenEligibility"`
+	Tokens              []accessHandoffToken             `json:"tokens"`
 	AuditRefs           accessHandoffAuditRefs           `json:"auditRefs"`
 	NextActionCode      string                           `json:"nextActionCode"`
 	GeneratedAt         time.Time                        `json:"generatedAt"`
@@ -89,6 +97,42 @@ type accessHandoffTokenEligibility struct {
 	BlockerCodes            []string `json:"blockerCodes"`
 }
 
+type accessHandoffToken struct {
+	ID                  string    `json:"id"`
+	AgentID             string    `json:"agentId"`
+	Name                string    `json:"name"`
+	Prefix              string    `json:"prefix"`
+	Status              string    `json:"status"`
+	ApplicationID       string    `json:"applicationId"`
+	TemplateID          string    `json:"templateId"`
+	SubjectSelector     string    `json:"subjectSelector"`
+	CreatedForHandoffID string    `json:"createdForHandoffId"`
+	CreatedAt           time.Time `json:"createdAt"`
+	ExpiresAt           time.Time `json:"expiresAt"`
+	RevokedAt           time.Time `json:"revokedAt,omitempty,omitzero"`
+}
+
+type createAccessHandoffTokenRequest struct {
+	HandoffID         string `json:"handoffId"`
+	TenantID          string `json:"tenantId"`
+	WorkspaceID       string `json:"workspaceId"`
+	TemplateID        string `json:"templateId"`
+	TargetID          string `json:"targetId"`
+	CallerInstanceID  string `json:"callerInstanceId"`
+	SubjectID         string `json:"subjectId"`
+	Region            string `json:"region"`
+	RequestText       string `json:"requestText"`
+	SubjectSelector   string `json:"subjectSelector"`
+	ApprovalRequestID string `json:"approvalRequestId"`
+	Name              string `json:"name"`
+	ExpiresInSeconds  int64  `json:"expiresInSeconds"`
+}
+
+type createAccessHandoffTokenResponse struct {
+	accessHandoffToken
+	Key string `json:"key"`
+}
+
 type accessHandoffAuditRefs struct {
 	ApplicationID          string `json:"applicationId,omitempty"`
 	ApprovalRequestID      string `json:"approvalRequestId,omitempty"`
@@ -128,6 +172,7 @@ func (s *Server) permissionPackageAccessHandoff(ctx context.Context, query permi
 		AllowedCapabilities: []accessHandoffCapability{},
 		BlockedCapabilities: []accessHandoffCapability{},
 		DataScopes:          []domain.DataScope{},
+		Tokens:              []accessHandoffToken{},
 		ProductionReadiness: accessHandoffProductionReadiness{
 			Status:             readiness.Status,
 			BlockingCheckCodes: accessHandoffBlockingCheckCodes(readiness.Checks),
@@ -188,6 +233,12 @@ func (s *Server) permissionPackageAccessHandoff(ctx context.Context, query permi
 	}
 
 	response.AuditRefs = accessHandoffAuditRefsFromReadiness(query, readiness)
+	if response.ID != "" {
+		response.Tokens, err = s.accessHandoffTokens(ctx, query, response.ID)
+		if err != nil {
+			return accessHandoffResponse{}, err
+		}
+	}
 	tokenBlockers, err := accessHandoffTokenBlockers(ctx, s, query.CallerInstanceID, subjectSelector)
 	if err != nil {
 		return accessHandoffResponse{}, err
@@ -211,6 +262,242 @@ func (s *Server) permissionPackageAccessHandoff(ctx context.Context, query permi
 		response.CopyArtifacts = accessHandoffCopyArtifactsFor(response)
 	}
 	return response, nil
+}
+
+func (s *Server) createAccessHandoffToken(w http.ResponseWriter, r *http.Request) {
+	var req createAccessHandoffTokenRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	query, err := req.readinessQuery()
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.requirePermissionPackageQueryScope(r, query); err != nil {
+		writeError(w, err)
+		return
+	}
+	handoff, err := s.permissionPackageAccessHandoff(r.Context(), query)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if handoff.Status != "ready" || !handoff.TokenEligibility.Eligible || handoff.Application == nil {
+		writeError(w, domain.Conflict(accessHandoffNotReadyCode, "access handoff must be ready before creating a token"))
+		return
+	}
+	if handoff.ID != strings.TrimSpace(req.HandoffID) {
+		writeError(w, domain.Conflict(accessHandoffChangedCode, "access handoff changed; refresh before creating a token"))
+		return
+	}
+	ttl := req.ExpiresInSeconds
+	if ttl == 0 {
+		ttl = defaultAgentKeyTTLSeconds
+	} else if ttl < 1 || ttl > maxAgentKeyTTLSeconds {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "expiresInSeconds must be between 1 and 3600"))
+		return
+	}
+	agent, ok, err := s.repo.GetAgent(r.Context(), query.CallerInstanceID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("caller agent not found"))
+		return
+	}
+	if err := s.rejectActiveAccessHandoffToken(r.Context(), query, handoff.ID); err != nil {
+		writeError(w, err)
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = "access-handoff:" + handoff.Template.ID
+	}
+	currentHandoff, err := s.permissionPackageAccessHandoff(r.Context(), query)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if currentHandoff.ID != handoff.ID || currentHandoff.Status != "ready" || !currentHandoff.TokenEligibility.Eligible {
+		writeError(w, domain.Conflict(accessHandoffChangedCode, "access handoff changed; refresh before creating a token"))
+		return
+	}
+	now := s.now()
+	plaintext, prefix := security.NewAgentKey()
+	key := domain.AgentKey{
+		ID:                  security.NewID("key"),
+		AgentID:             query.CallerInstanceID,
+		Name:                name,
+		Hash:                security.HashSecret(plaintext),
+		Prefix:              prefix,
+		ApplicationID:       handoff.Application.ID,
+		TemplateID:          handoff.Template.ID,
+		SubjectSelector:     handoff.Scope.SubjectSelector,
+		CreatedForHandoffID: handoff.ID,
+		CreatedAt:           now,
+		ExpiresAt:           now.Add(time.Duration(ttl) * time.Second),
+	}
+	created, err := s.repo.CreateAccessHandoffAgentKeyWithAudit(r.Context(), key, now, func(created domain.AgentKey) domain.AuditEvent {
+		return s.managementAuditEvent(r, agent.TenantID, agent.WorkspaceID, "access_handoff.token_created", "agent_key", created.ID, "Access handoff token created", map[string]any{
+			"agentId":             created.AgentID,
+			"applicationId":       created.ApplicationID,
+			"createdForHandoffId": created.CreatedForHandoffID,
+			"expiresAt":           created.ExpiresAt,
+			"subjectSelector":     created.SubjectSelector,
+			"templateId":          created.TemplateID,
+		})
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrActiveAccessHandoffToken) {
+			writeError(w, domain.Conflict(accessHandoffTokenActiveCode, "an active token already exists for this access handoff"))
+			return
+		}
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, createAccessHandoffTokenResponse{
+		accessHandoffToken: accessHandoffTokenFromDomain(created, now),
+		Key:                plaintext,
+	})
+}
+
+func (s *Server) revokeAccessHandoffToken(w http.ResponseWriter, r *http.Request) {
+	keyID := strings.TrimSpace(chi.URLParam(r, "id"))
+	keys, err := s.repo.ListAgentKeys(r.Context(), store.ManagementScope{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	var existing domain.AgentKey
+	found := false
+	for _, key := range keys {
+		if key.ID == keyID && key.CreatedForHandoffID != "" {
+			existing = key
+			found = true
+			break
+		}
+	}
+	if !found {
+		writeError(w, domain.NotFound("access handoff token not found"))
+		return
+	}
+	agent, ok, err := s.repo.GetAgent(r.Context(), existing.AgentID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("caller agent not found"))
+		return
+	}
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: agent.TenantID, WorkspaceID: agent.WorkspaceID}); err != nil {
+		writeError(w, err)
+		return
+	}
+	now := s.now()
+	revoked, ok, err := s.repo.RevokeAgentKeyWithAudit(r.Context(), existing.ID, now, func(revoked domain.AgentKey) domain.AuditEvent {
+		return s.managementAuditEvent(r, agent.TenantID, agent.WorkspaceID, "access_handoff.token_revoked", "agent_key", revoked.ID, "Access handoff token revoked", map[string]any{
+			"agentId":             revoked.AgentID,
+			"applicationId":       revoked.ApplicationID,
+			"createdForHandoffId": revoked.CreatedForHandoffID,
+			"templateId":          revoked.TemplateID,
+		})
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("access handoff token not found"))
+		return
+	}
+	writeJSON(w, http.StatusOK, accessHandoffTokenFromDomain(revoked, now))
+}
+
+func (req createAccessHandoffTokenRequest) readinessQuery() (permissionPackageProductionReadinessQuery, error) {
+	query := permissionPackageProductionReadinessQuery{
+		TenantID:          strings.TrimSpace(req.TenantID),
+		WorkspaceID:       strings.TrimSpace(req.WorkspaceID),
+		TemplateID:        strings.TrimSpace(req.TemplateID),
+		TargetID:          strings.TrimSpace(req.TargetID),
+		CallerInstanceID:  strings.TrimSpace(req.CallerInstanceID),
+		SubjectID:         strings.TrimSpace(req.SubjectID),
+		Region:            strings.TrimSpace(req.Region),
+		RequestText:       strings.TrimSpace(req.RequestText),
+		SubjectSelector:   strings.TrimSpace(req.SubjectSelector),
+		ApprovalRequestID: strings.TrimSpace(req.ApprovalRequestID),
+		TraceLimit:        defaultAccessProfileTraceLimit,
+	}
+	for _, required := range []struct {
+		name  string
+		value string
+	}{
+		{name: "handoffId", value: strings.TrimSpace(req.HandoffID)},
+		{name: "tenantId", value: query.TenantID},
+		{name: "workspaceId", value: query.WorkspaceID},
+		{name: "templateId", value: query.TemplateID},
+		{name: "targetId", value: query.TargetID},
+		{name: "callerInstanceId", value: query.CallerInstanceID},
+	} {
+		if required.value == "" {
+			return permissionPackageProductionReadinessQuery{}, domain.BadRequest("VALIDATION_FAILED", required.name+" is required")
+		}
+	}
+	return query, nil
+}
+
+func (s *Server) accessHandoffTokens(ctx context.Context, query permissionPackageProductionReadinessQuery, handoffID string) ([]accessHandoffToken, error) {
+	keys, err := s.repo.ListAgentKeys(ctx, store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID})
+	if err != nil {
+		return nil, err
+	}
+	tokens := make([]accessHandoffToken, 0)
+	now := s.now()
+	for _, key := range keys {
+		if key.AgentID == query.CallerInstanceID && key.CreatedForHandoffID == handoffID {
+			tokens = append(tokens, accessHandoffTokenFromDomain(key, now))
+		}
+	}
+	return tokens, nil
+}
+
+func (s *Server) rejectActiveAccessHandoffToken(ctx context.Context, query permissionPackageProductionReadinessQuery, handoffID string) error {
+	tokens, err := s.accessHandoffTokens(ctx, query, handoffID)
+	if err != nil {
+		return err
+	}
+	for _, token := range tokens {
+		if token.Status == "active" {
+			return domain.Conflict(accessHandoffTokenActiveCode, "an active token already exists for this access handoff")
+		}
+	}
+	return nil
+}
+
+func accessHandoffTokenFromDomain(key domain.AgentKey, now time.Time) accessHandoffToken {
+	status := "active"
+	if !key.RevokedAt.IsZero() {
+		status = "revoked"
+	} else if !key.ExpiresAt.After(now) {
+		status = "expired"
+	}
+	return accessHandoffToken{
+		ID:                  key.ID,
+		AgentID:             key.AgentID,
+		Name:                key.Name,
+		Prefix:              key.Prefix,
+		Status:              status,
+		ApplicationID:       key.ApplicationID,
+		TemplateID:          key.TemplateID,
+		SubjectSelector:     key.SubjectSelector,
+		CreatedForHandoffID: key.CreatedForHandoffID,
+		CreatedAt:           key.CreatedAt,
+		ExpiresAt:           key.ExpiresAt,
+		RevokedAt:           key.RevokedAt,
+	}
 }
 
 func (s *Server) accessHandoffAllowedCapabilities(ctx context.Context, application domain.PermissionPackageApplication) ([]accessHandoffCapability, error) {

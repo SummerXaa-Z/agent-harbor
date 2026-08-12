@@ -508,23 +508,71 @@ func TestPostgresRepositoryRoundTrip(t *testing.T) {
 
 	plaintext, prefix := security.NewAgentKey()
 	key := domain.AgentKey{
-		ID:        security.NewID("key"),
-		AgentID:   caller.ID,
-		Name:      "pg-key",
-		Hash:      security.HashSecret(plaintext),
-		Prefix:    prefix,
-		CreatedAt: now,
-		ExpiresAt: now.Add(time.Hour),
+		ID:              security.NewID("key"),
+		AgentID:         caller.ID,
+		Name:            "pg-key",
+		Hash:            security.HashSecret(plaintext),
+		Prefix:          prefix,
+		ApplicationID:   security.NewID("ppa"),
+		TemplateID:      "support-ticket-triage",
+		SubjectSelector: "user:support-*",
+		CreatedAt:       now,
+		ExpiresAt:       now.Add(time.Hour),
 	}
-	if _, err := repo.CreateAgentKey(ctx, key); err != nil {
-		t.Fatalf("create key: %v", err)
+	key.CreatedForHandoffID = "handoff:" + key.ApplicationID
+	type keyCreateResult struct {
+		key domain.AgentKey
+		err error
 	}
+	startKeyCreate := make(chan struct{})
+	keyCreateResults := make(chan keyCreateResult, 2)
+	for attempt := 0; attempt < 2; attempt++ {
+		candidate := key
+		candidate.ID = security.NewID("key")
+		candidate.Hash = security.HashSecret(candidate.ID)
+		candidate.Prefix = candidate.ID[:min(12, len(candidate.ID))]
+		go func() {
+			<-startKeyCreate
+			created, err := repo.CreateAccessHandoffAgentKeyWithAudit(ctx, candidate, now, func(created domain.AgentKey) domain.AuditEvent {
+				return domain.AuditEvent{
+					ID: security.NewID("aud"), TenantID: caller.TenantID, WorkspaceID: caller.WorkspaceID,
+					Actor: "test", Action: "access_handoff.token_created", ResourceType: "agent_key", ResourceID: created.ID,
+					Summary: "Access handoff token created", CreatedAt: now,
+				}
+			})
+			keyCreateResults <- keyCreateResult{key: created, err: err}
+		}()
+	}
+	close(startKeyCreate)
+	var activeKey domain.AgentKey
+	createdCount := 0
+	conflictCount := 0
+	for attempt := 0; attempt < 2; attempt++ {
+		result := <-keyCreateResults
+		switch {
+		case result.err == nil:
+			createdCount++
+			activeKey = result.key
+		case errors.Is(result.err, store.ErrActiveAccessHandoffToken):
+			conflictCount++
+		default:
+			t.Fatalf("create access handoff key: %v", result.err)
+		}
+	}
+	if createdCount != 1 || conflictCount != 1 {
+		t.Fatalf("expected one atomic access handoff key creation and one conflict, created=%d conflicts=%d", createdCount, conflictCount)
+	}
+	key = activeKey
+	plaintext = key.ID
 	keys, err := repo.ListAgentKeys(ctx, store.ManagementScope{TenantID: "test", WorkspaceID: "ws-pg"})
 	if err != nil {
 		t.Fatalf("list keys: %v", err)
 	}
 	if len(keys) == 0 {
 		t.Fatalf("expected scoped key rows")
+	}
+	if keys[0].ApplicationID != key.ApplicationID || keys[0].TemplateID != key.TemplateID || keys[0].SubjectSelector != key.SubjectSelector || keys[0].CreatedForHandoffID != key.CreatedForHandoffID {
+		t.Fatalf("expected access handoff key metadata round trip, got %#v", keys[0])
 	}
 	found, ok, err := repo.FindAgentByKeyHash(ctx, key.Hash, now)
 	if err != nil {

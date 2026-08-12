@@ -329,9 +329,13 @@ func (p *Postgres) CreateAgentKey(ctx context.Context, key domain.AgentKey) (dom
 
 func (p *Postgres) createAgentKey(ctx context.Context, exec sqlExecutor, key domain.AgentKey) (domain.AgentKey, error) {
 	_, err := exec.Exec(ctx, `
-		insert into agent_keys (id, agent_id, name, hash, prefix, created_at, expires_at, revoked_at)
-		values ($1,$2,$3,$4,$5,$6,$7,$8)
-	`, key.ID, key.AgentID, key.Name, key.Hash, key.Prefix, key.CreatedAt, key.ExpiresAt, nullTime(key.RevokedAt))
+		insert into agent_keys (
+			id, agent_id, name, hash, prefix, application_id, template_id,
+			subject_selector, created_for_handoff_id, created_at, expires_at, revoked_at
+		)
+		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+	`, key.ID, key.AgentID, key.Name, key.Hash, key.Prefix, key.ApplicationID, key.TemplateID,
+		key.SubjectSelector, key.CreatedForHandoffID, key.CreatedAt, key.ExpiresAt, nullTime(key.RevokedAt))
 	if err != nil {
 		return domain.AgentKey{}, fmt.Errorf("insert agent key: %w", err)
 	}
@@ -340,7 +344,8 @@ func (p *Postgres) createAgentKey(ctx context.Context, exec sqlExecutor, key dom
 
 func (p *Postgres) ListAgentKeys(ctx context.Context, scope ManagementScope) ([]domain.AgentKey, error) {
 	query := `
-		select k.id, k.agent_id, k.name, k.hash, k.prefix, k.created_at, k.expires_at, k.revoked_at
+		select k.id, k.agent_id, k.name, k.hash, k.prefix, k.application_id, k.template_id,
+			k.subject_selector, k.created_for_handoff_id, k.created_at, k.expires_at, k.revoked_at
 		from agent_keys k
 		join agents a on a.id = k.agent_id
 		where 1=1
@@ -378,7 +383,8 @@ func (p *Postgres) revokeAgentKey(ctx context.Context, exec sqlExecutor, id stri
 		update agent_keys
 		set revoked_at=$2
 		where id=$1
-		returning id, agent_id, name, hash, prefix, created_at, expires_at, revoked_at
+		returning id, agent_id, name, hash, prefix, application_id, template_id,
+			subject_selector, created_for_handoff_id, created_at, expires_at, revoked_at
 	`, id, now)
 	key, err := scanAgentKey(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -1945,6 +1951,35 @@ func (p *Postgres) CreateAgentKeyWithAudit(ctx context.Context, key domain.Agent
 	return created, err
 }
 
+func (p *Postgres) CreateAccessHandoffAgentKeyWithAudit(ctx context.Context, key domain.AgentKey, now time.Time, build AgentKeyAuditBuilder) (domain.AgentKey, error) {
+	var created domain.AgentKey
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, key.CreatedForHandoffID); err != nil {
+			return fmt.Errorf("lock access handoff token issuance: %w", err)
+		}
+		var active bool
+		if err := tx.QueryRow(ctx, `
+			select exists(
+				select 1 from agent_keys
+				where created_for_handoff_id=$1 and revoked_at is null and expires_at > $2
+			)
+		`, key.CreatedForHandoffID, now).Scan(&active); err != nil {
+			return fmt.Errorf("check active access handoff token: %w", err)
+		}
+		if active {
+			return ErrActiveAccessHandoffToken
+		}
+		var err error
+		created, err = p.createAgentKey(ctx, tx, key)
+		if err != nil {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, build(created))
+		return err
+	})
+	return created, err
+}
+
 func (p *Postgres) RevokeAgentKeyWithAudit(ctx context.Context, id string, now time.Time, build AgentKeyAuditBuilder) (domain.AgentKey, bool, error) {
 	var revoked domain.AgentKey
 	var ok bool
@@ -2351,6 +2386,7 @@ func scanAgentKey(row scanner) (domain.AgentKey, error) {
 	var key domain.AgentKey
 	var revokedAt *time.Time
 	if err := row.Scan(&key.ID, &key.AgentID, &key.Name, &key.Hash, &key.Prefix,
+		&key.ApplicationID, &key.TemplateID, &key.SubjectSelector, &key.CreatedForHandoffID,
 		&key.CreatedAt, &key.ExpiresAt, &revokedAt); err != nil {
 		return domain.AgentKey{}, err
 	}

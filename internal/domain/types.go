@@ -153,14 +153,18 @@ type RotateAdminIdentityKeyResponse struct {
 }
 
 type AgentKey struct {
-	ID        string    `json:"id"`
-	AgentID   string    `json:"agentId"`
-	Name      string    `json:"name"`
-	Hash      string    `json:"-"`
-	Prefix    string    `json:"prefix"`
-	CreatedAt time.Time `json:"createdAt"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	RevokedAt time.Time `json:"revokedAt,omitempty,omitzero"`
+	ID                  string    `json:"id"`
+	AgentID             string    `json:"agentId"`
+	Name                string    `json:"name"`
+	Hash                string    `json:"-"`
+	Prefix              string    `json:"prefix"`
+	ApplicationID       string    `json:"applicationId,omitempty"`
+	TemplateID          string    `json:"templateId,omitempty"`
+	SubjectSelector     string    `json:"subjectSelector,omitempty"`
+	CreatedForHandoffID string    `json:"createdForHandoffId,omitempty"`
+	CreatedAt           time.Time `json:"createdAt"`
+	ExpiresAt           time.Time `json:"expiresAt"`
+	RevokedAt           time.Time `json:"revokedAt,omitempty,omitzero"`
 }
 
 type CreateAgentKeyRequest struct {

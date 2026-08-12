@@ -262,6 +262,9 @@ import type {
 const AiAdminPermissionWorkbench = lazy(() => import("./components/AiAdminPermissionWorkbench").then((module) => ({
   default: module.AiAdminPermissionWorkbench
 })));
+const AccessHandoffPanel = lazy(() => import("./components/AccessHandoffPanel").then((module) => ({
+  default: module.AccessHandoffPanel
+})));
 const CapabilityGovernanceView = lazy(() => import("./components/CapabilityGovernanceView").then((module) => ({
   default: module.CapabilityGovernanceView
 })));
@@ -2369,6 +2372,16 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         tenants={tenants}
         t={t}
       />
+      <Suspense fallback={<div className="access-handoff-loading">{t("accessHandoff.loading")}</div>}>
+        <AccessHandoffPanel
+          adminKey={adminKey}
+          enabled={consoleAccessReady && activeNav === "go-live" && Boolean(data?.loadedFromApi)}
+          filter={aiAdminProductionReadinessFilter(goLiveAcceptanceForm)}
+          language={language}
+          refreshKey={aiAdminProductionReadiness?.generatedAt ?? ""}
+          t={t}
+        />
+      </Suspense>
     </Panel>
   );
   function createPolicyAction(variant: "compact" | "command" = "compact", tone: "primary" | "secondary" = "secondary") {

@@ -28,6 +28,7 @@ type Repository interface {
 	DisableAgentWithAudit(context.Context, string, time.Time, AgentAuditBuilder) (domain.Agent, bool, error)
 	CreateAgentKey(context.Context, domain.AgentKey) (domain.AgentKey, error)
 	CreateAgentKeyWithAudit(context.Context, domain.AgentKey, AgentKeyAuditBuilder) (domain.AgentKey, error)
+	CreateAccessHandoffAgentKeyWithAudit(context.Context, domain.AgentKey, time.Time, AgentKeyAuditBuilder) (domain.AgentKey, error)
 	ListAgentKeys(context.Context, ManagementScope) ([]domain.AgentKey, error)
 	RevokeAgentKey(context.Context, string, time.Time) (domain.AgentKey, bool, error)
 	RevokeAgentKeyWithAudit(context.Context, string, time.Time, AgentKeyAuditBuilder) (domain.AgentKey, bool, error)
@@ -90,6 +91,7 @@ type AdminIdentityAuditBuilder func(domain.AdminIdentity) domain.AuditEvent
 var ErrPermissionPackageApprovalNotConsumable = errors.New("permission package approval request is not consumable")
 var ErrPermissionPackageApprovalAlreadyPending = errors.New("matching permission package approval request already pending")
 var ErrPermissionPackageApplicationAlreadyApplied = errors.New("matching permission package application already applied")
+var ErrActiveAccessHandoffToken = errors.New("active access handoff token already exists")
 
 type PermissionPackageApplyMutation struct {
 	Capabilities         []domain.Capability
@@ -440,6 +442,20 @@ func (m *Memory) CreateAgentKey(_ context.Context, key domain.AgentKey) (domain.
 func (m *Memory) CreateAgentKeyWithAudit(_ context.Context, key domain.AgentKey, build AgentKeyAuditBuilder) (domain.AgentKey, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.keys[key.ID] = key
+	m.audits = append(m.audits, build(key))
+	return key, nil
+}
+
+func (m *Memory) CreateAccessHandoffAgentKeyWithAudit(_ context.Context, key domain.AgentKey, now time.Time, build AgentKeyAuditBuilder) (domain.AgentKey, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, existing := range m.keys {
+		if existing.CreatedForHandoffID == key.CreatedForHandoffID &&
+			existing.RevokedAt.IsZero() && existing.ExpiresAt.After(now) {
+			return domain.AgentKey{}, ErrActiveAccessHandoffToken
+		}
+	}
 	m.keys[key.ID] = key
 	m.audits = append(m.audits, build(key))
 	return key, nil

@@ -5,6 +5,8 @@ export const systemCapabilityLabelKeyByName: Record<string, string> = {
   permission_package_applications: "systemCapability.permissionPackageApplications",
   permission_package_application_health: "systemCapability.permissionPackageApplicationHealth",
   permission_package_application_impact: "systemCapability.permissionPackageApplicationImpact",
+  permission_package_access_handoff_v1: "systemCapability.permissionPackageAccessHandoff",
+  permission_package_access_handoff_tokens_v1: "systemCapability.permissionPackageAccessHandoffTokens",
   permission_package_apply_preflight: "systemCapability.permissionPackageApplyPreflight",
   permission_package_approval_requests: "systemCapability.permissionPackageApprovalRequests",
   permission_package_approval_withdraw: "systemCapability.permissionPackageApprovalWithdraw",

@@ -111,6 +111,17 @@ export function permissionPackageProductionReadinessPath(filter: PermissionPacka
   return `/api/v1/permission-packages/production-readiness${query}`
 }
 
+export function permissionPackageAccessHandoffPath(filter: PermissionPackageProductionReadinessPathFilter): string {
+  return permissionPackageProductionReadinessPath(filter).replace(
+    "/permission-packages/production-readiness",
+    "/permission-packages/access-handoff",
+  )
+}
+
+export function permissionPackageAccessHandoffTokenPath(id: string): string {
+  return `/api/v1/permission-packages/access-handoff/tokens/${encodeURIComponent(id.trim())}`
+}
+
 export function permissionPackageAcceptanceReportPath(filter: PermissionPackageProductionReadinessPathFilter): string {
   const query = queryString({
     approvalRequestId: filter.approvalRequestId,

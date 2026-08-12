@@ -26,6 +26,8 @@ import {
 } from './systemInfoContract'
 import {
   accessDecisionExplainPath,
+  permissionPackageAccessHandoffPath,
+  permissionPackageAccessHandoffTokenPath,
   permissionPackageAcceptanceReportPath,
   permissionPackageApplicationHealthPath,
   permissionPackageApplicationImpactPath,
@@ -36,6 +38,10 @@ import {
   type PermissionPackageApprovalRequestPathFilter,
 } from './apiPaths'
 import type {
+  AccessHandoff,
+  AccessHandoffToken,
+  CreateAccessHandoffTokenRequest,
+  CreateAccessHandoffTokenResponse,
   PermissionPackageApprovalRequest,
   PermissionPackageApprovalStatus,
   PermissionPackageApplyInput,
@@ -733,6 +739,25 @@ export async function fetchPermissionPackageProductionReadiness(
   signal?: AbortSignal,
 ): Promise<PermissionPackageProductionReadiness> {
   return request<PermissionPackageProductionReadiness>(permissionPackageProductionReadinessPath(filter), { adminKey, signal })
+}
+
+export async function fetchAccessHandoff(
+  filter: PermissionPackageProductionReadinessFilter,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<AccessHandoff> {
+  return request<AccessHandoff>(permissionPackageAccessHandoffPath(filter), { adminKey, signal })
+}
+
+export async function createAccessHandoffToken(
+  body: CreateAccessHandoffTokenRequest,
+  adminKey?: string,
+): Promise<CreateAccessHandoffTokenResponse> {
+  return request<CreateAccessHandoffTokenResponse>("/api/v1/permission-packages/access-handoff/tokens", { adminKey, body })
+}
+
+export async function revokeAccessHandoffToken(id: string, adminKey?: string): Promise<AccessHandoffToken> {
+  return request<AccessHandoffToken>(permissionPackageAccessHandoffTokenPath(id), { adminKey, method: "DELETE" })
 }
 
 export async function fetchPermissionPackageAcceptanceReport(

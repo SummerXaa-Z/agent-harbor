@@ -266,6 +266,9 @@ func (s *Server) Router() http.Handler {
 			r.Post("/permission-packages/drafts", s.createPermissionPackageDraft)
 			r.Post("/permission-packages:preflight", s.preflightPermissionPackage)
 			r.Post("/permission-packages:apply", s.applyPermissionPackage)
+			r.Post("/task-result-summaries:preflight", s.preflightVerifiedTaskResultSummary)
+			r.Post("/task-result-summaries", s.createVerifiedTaskResultSummary)
+			r.Get("/task-result-summaries/{id}", s.getVerifiedTaskResultSummary)
 			r.Post("/management/mcp", s.managementMCP)
 			r.Post("/management/mcp/rpc", s.managementMCP)
 			r.Post("/tenant-entitlements", s.createTenantEntitlement)
@@ -5167,6 +5170,10 @@ func (s *Server) recordDataPlaneTrace(r *http.Request, callerID string, targetID
 }
 
 func (s *Server) recordCapabilityTrace(r *http.Request, input traceRecordInput) (domain.TraceEvent, error) {
+	capabilityFingerprint := ""
+	if input.Capability.ID != "" {
+		capabilityFingerprint = domain.CapabilityFingerprint(input.Capability)
+	}
 	trace := domain.TraceEvent{
 		ID:                    security.NewID("trc"),
 		RunID:                 r.Header.Get("X-Run-Id"),
@@ -5180,6 +5187,7 @@ func (s *Server) recordCapabilityTrace(r *http.Request, input traceRecordInput) 
 		SubjectID:             input.Identity.SubjectID,
 		CapabilityID:          input.Capability.ID,
 		CapabilityVersion:     input.Capability.Version,
+		CapabilityFingerprint: capabilityFingerprint,
 		EntitlementID:         input.CapabilityDecision.EntitlementID,
 		WorkspaceAssignmentID: input.CapabilityDecision.WorkspaceAssignmentID,
 		InstanceAssignmentID:  input.CapabilityDecision.InstanceAssignmentID,
@@ -6857,22 +6865,6 @@ func permissionPackageCapabilityIDsAndKeys(capabilities []domain.Capability) ([]
 	return ids, keys
 }
 
-type permissionPackageCapabilityFingerprintPayload struct {
-	ID              string                           `json:"id"`
-	TargetID        string                           `json:"targetId"`
-	Type            domain.CapabilityType            `json:"type"`
-	Key             string                           `json:"key"`
-	Action          domain.CapabilityAction          `json:"action"`
-	NativeScopes    []string                         `json:"nativeScopes,omitempty"`
-	DataDomains     []string                         `json:"dataDomains,omitempty"`
-	DataScopes      []domain.DataScope               `json:"dataScopes,omitempty"`
-	Sensitivity     domain.CapabilitySensitivity     `json:"sensitivity"`
-	RiskLevel       domain.CapabilityRisk            `json:"riskLevel"`
-	EnforcementMode domain.CapabilityEnforcementMode `json:"enforcementMode"`
-	DiscoveryStatus domain.CapabilityDiscoveryStatus `json:"discoveryStatus"`
-	Version         int                              `json:"version"`
-}
-
 func permissionPackageCapabilityFingerprints(capabilities []domain.Capability) []string {
 	fingerprints := make([]string, 0, len(capabilities))
 	for _, capability := range capabilities {
@@ -6883,43 +6875,7 @@ func permissionPackageCapabilityFingerprints(capabilities []domain.Capability) [
 }
 
 func permissionPackageCapabilityFingerprint(capability domain.Capability) string {
-	payload := permissionPackageCapabilityFingerprintPayload{
-		ID:              capability.ID,
-		TargetID:        capability.TargetID,
-		Type:            capability.Type,
-		Key:             capability.Key,
-		Action:          capability.Action,
-		NativeScopes:    sortedStringCopy(capability.NativeScopes),
-		DataDomains:     sortedStringCopy(capability.DataDomains),
-		DataScopes:      sortedDataScopes(capability.DataScopes),
-		Sensitivity:     capability.Sensitivity,
-		RiskLevel:       capability.RiskLevel,
-		EnforcementMode: capability.EnforcementMode,
-		DiscoveryStatus: capability.DiscoveryStatus,
-		Version:         capability.Version,
-	}
-	data, _ := json.Marshal(payload)
-	sum := sha256.Sum256(data)
-	return capability.ID + ":" + hex.EncodeToString(sum[:])
-}
-
-func sortedStringCopy(values []string) []string {
-	out := append([]string(nil), values...)
-	sort.Strings(out)
-	return out
-}
-
-func sortedDataScopes(values []domain.DataScope) []domain.DataScope {
-	out := append([]domain.DataScope(nil), values...)
-	sort.Slice(out, func(i, j int) bool {
-		return dataScopeSortKey(out[i]) < dataScopeSortKey(out[j])
-	})
-	return out
-}
-
-func dataScopeSortKey(scope domain.DataScope) string {
-	data, _ := json.Marshal(scope)
-	return string(data)
+	return domain.CapabilityFingerprint(capability)
 }
 
 func samePermissionPackageDataScopes(left []domain.DataScope, right []domain.DataScope) bool {

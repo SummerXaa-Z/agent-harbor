@@ -67,7 +67,12 @@ type Repository interface {
 	DisableRoutePolicyWithAudit(context.Context, string, time.Time, RoutePolicyAuditBuilder) (domain.RoutePolicy, bool, error)
 	EvaluateRouteAccess(context.Context, string, string, string, string, time.Time) (domain.RouteAccessDecision, error)
 	AppendTrace(context.Context, domain.TraceEvent) (domain.TraceEvent, error)
+	GetTrace(context.Context, string) (domain.TraceEvent, bool, error)
 	ListTraces(context.Context, TraceFilter) ([]domain.TraceEvent, error)
+	CreateVerifiedTaskResultSummaryWithAudit(context.Context, domain.VerifiedTaskResultSummary, VerifiedTaskResultSummaryAuditBuilder) (domain.VerifiedTaskResultSummary, error)
+	GetVerifiedTaskResultSummary(context.Context, string, VerifiedTaskResultSummaryScope) (domain.VerifiedTaskResultSummary, bool, error)
+	FindVerifiedTaskResultSummaryBySource(context.Context, string) (domain.VerifiedTaskResultSummary, bool, error)
+	ListVerifiedTaskResultSummaries(context.Context, VerifiedTaskResultSummaryFilter) ([]domain.VerifiedTaskResultSummary, error)
 	AppendAuditEvent(context.Context, domain.AuditEvent) (domain.AuditEvent, error)
 	ListAuditEvents(context.Context, AuditEventFilter) ([]domain.AuditEvent, error)
 	ListAdminIdentities(context.Context) ([]domain.AdminIdentity, error)
@@ -86,10 +91,15 @@ type AccessGrantAuditBuilder func(domain.AccessGrant) domain.AuditEvent
 type RoutePolicyAuditBuilder func(domain.RoutePolicy) domain.AuditEvent
 type TenantAuditBuilder func(domain.Tenant) domain.AuditEvent
 type AdminIdentityAuditBuilder func(domain.AdminIdentity) domain.AuditEvent
+type VerifiedTaskResultSummaryAuditBuilder func(domain.VerifiedTaskResultSummary) domain.AuditEvent
 
 var ErrPermissionPackageApprovalNotConsumable = errors.New("permission package approval request is not consumable")
 var ErrPermissionPackageApprovalAlreadyPending = errors.New("matching permission package approval request already pending")
 var ErrPermissionPackageApplicationAlreadyApplied = errors.New("matching permission package application already applied")
+var ErrVerifiedTaskResultSummarySourceNotFound = errors.New("verified task result source trace was not found")
+var ErrVerifiedTaskResultSummarySourceAlreadyUsed = errors.New("verified task result source trace is already recorded")
+var ErrVerifiedTaskResultSummaryAlreadyExists = errors.New("verified task result summary already exists")
+var ErrVerifiedTaskResultSummaryScopeRequired = errors.New("verified task result summary requires an exact runtime scope")
 
 type PermissionPackageApplyMutation struct {
 	Capabilities         []domain.Capability
@@ -132,6 +142,30 @@ type TraceFilter struct {
 	CallerID string
 	TargetID string
 	Limit    int
+}
+
+// VerifiedTaskResultSummaryScope is the complete runtime boundary required to
+// load or list a task result summary. Unlike management browse surfaces, a
+// parent tenant does not implicitly receive a child tenant's summary.
+type VerifiedTaskResultSummaryScope struct {
+	TenantID         string
+	WorkspaceID      string
+	CallerInstanceID string
+	SubjectID        string
+}
+
+// VerifiedTaskResultSummaryFilter adds an optional source filter to the exact
+// runtime scope. It is deliberately not a partial management browse filter.
+type VerifiedTaskResultSummaryFilter struct {
+	VerifiedTaskResultSummaryScope
+	SourceTraceID string
+}
+
+func (scope VerifiedTaskResultSummaryScope) Valid() bool {
+	return strings.TrimSpace(scope.TenantID) != "" &&
+		strings.TrimSpace(scope.WorkspaceID) != "" &&
+		strings.TrimSpace(scope.CallerInstanceID) != "" &&
+		strings.TrimSpace(scope.SubjectID) != ""
 }
 
 type AuditEventFilter struct {
@@ -207,6 +241,8 @@ type Memory struct {
 	packageApprovals     map[string]domain.PermissionPackageApprovalRequest
 	policies             map[string]domain.RoutePolicy
 	traces               []domain.TraceEvent
+	verifiedTaskResults  map[string]domain.VerifiedTaskResultSummary
+	verifiedTaskSources  map[string]string
 	audits               []domain.AuditEvent
 	adminIdentities      map[string]domain.AdminIdentity
 	adminIdentityActorID map[string]string
@@ -225,6 +261,8 @@ func NewMemory() *Memory {
 		packageApplications:  make(map[string]domain.PermissionPackageApplication),
 		packageApprovals:     make(map[string]domain.PermissionPackageApprovalRequest),
 		policies:             make(map[string]domain.RoutePolicy),
+		verifiedTaskResults:  make(map[string]domain.VerifiedTaskResultSummary),
+		verifiedTaskSources:  make(map[string]string),
 		adminIdentities:      make(map[string]domain.AdminIdentity),
 		adminIdentityActorID: make(map[string]string),
 	}
@@ -1128,6 +1166,19 @@ func (m *Memory) AppendTrace(_ context.Context, event domain.TraceEvent) (domain
 	return event, nil
 }
 
+func (m *Memory) GetTrace(_ context.Context, id string) (domain.TraceEvent, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, trace := range m.traces {
+		if trace.ID != id {
+			continue
+		}
+		trace.DataScopes = domain.CloneDataScopes(trace.DataScopes)
+		return trace, true, nil
+	}
+	return domain.TraceEvent{}, false, nil
+}
+
 func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.TraceEvent, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1161,6 +1212,94 @@ func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.Tra
 		rows = append([]domain.TraceEvent(nil), rows[len(rows)-filter.Limit:]...)
 	}
 	return rows, nil
+}
+
+func (m *Memory) CreateVerifiedTaskResultSummaryWithAudit(_ context.Context, summary domain.VerifiedTaskResultSummary, build VerifiedTaskResultSummaryAuditBuilder) (domain.VerifiedTaskResultSummary, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	sourceFound := false
+	for _, trace := range m.traces {
+		if trace.ID == summary.SourceTraceID {
+			sourceFound = true
+			break
+		}
+	}
+	if !sourceFound {
+		return domain.VerifiedTaskResultSummary{}, ErrVerifiedTaskResultSummarySourceNotFound
+	}
+	if _, exists := m.verifiedTaskResults[summary.ID]; exists {
+		return domain.VerifiedTaskResultSummary{}, ErrVerifiedTaskResultSummaryAlreadyExists
+	}
+	if _, exists := m.verifiedTaskSources[summary.SourceTraceID]; exists {
+		return domain.VerifiedTaskResultSummary{}, ErrVerifiedTaskResultSummarySourceAlreadyUsed
+	}
+	summary.DataScopes = domain.CloneDataScopes(summary.DataScopes)
+	m.verifiedTaskResults[summary.ID] = summary
+	m.verifiedTaskSources[summary.SourceTraceID] = summary.ID
+	m.audits = append(m.audits, build(summary))
+	return summary, nil
+}
+
+func (m *Memory) GetVerifiedTaskResultSummary(_ context.Context, id string, scope VerifiedTaskResultSummaryScope) (domain.VerifiedTaskResultSummary, bool, error) {
+	if !scope.Valid() {
+		return domain.VerifiedTaskResultSummary{}, false, ErrVerifiedTaskResultSummaryScopeRequired
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	summary, ok := m.verifiedTaskResults[id]
+	if !ok || !verifiedTaskResultSummaryMatchesScope(summary, scope) {
+		return domain.VerifiedTaskResultSummary{}, false, nil
+	}
+	summary.DataScopes = domain.CloneDataScopes(summary.DataScopes)
+	return summary, true, nil
+}
+
+func (m *Memory) FindVerifiedTaskResultSummaryBySource(_ context.Context, sourceTraceID string) (domain.VerifiedTaskResultSummary, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	id, ok := m.verifiedTaskSources[strings.TrimSpace(sourceTraceID)]
+	if !ok {
+		return domain.VerifiedTaskResultSummary{}, false, nil
+	}
+	summary, ok := m.verifiedTaskResults[id]
+	if !ok {
+		return domain.VerifiedTaskResultSummary{}, false, nil
+	}
+	summary.DataScopes = domain.CloneDataScopes(summary.DataScopes)
+	return summary, true, nil
+}
+
+func (m *Memory) ListVerifiedTaskResultSummaries(_ context.Context, filter VerifiedTaskResultSummaryFilter) ([]domain.VerifiedTaskResultSummary, error) {
+	if !filter.VerifiedTaskResultSummaryScope.Valid() {
+		return nil, ErrVerifiedTaskResultSummaryScopeRequired
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rows := make([]domain.VerifiedTaskResultSummary, 0, len(m.verifiedTaskResults))
+	for _, summary := range m.verifiedTaskResults {
+		if !verifiedTaskResultSummaryMatchesScope(summary, filter.VerifiedTaskResultSummaryScope) {
+			continue
+		}
+		if filter.SourceTraceID != "" && summary.SourceTraceID != filter.SourceTraceID {
+			continue
+		}
+		summary.DataScopes = domain.CloneDataScopes(summary.DataScopes)
+		rows = append(rows, summary)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
+	return rows, nil
+}
+
+func verifiedTaskResultSummaryMatchesScope(summary domain.VerifiedTaskResultSummary, scope VerifiedTaskResultSummaryScope) bool {
+	return summary.TenantID == strings.TrimSpace(scope.TenantID) &&
+		summary.WorkspaceID == strings.TrimSpace(scope.WorkspaceID) &&
+		summary.CallerInstanceID == strings.TrimSpace(scope.CallerInstanceID) &&
+		summary.SubjectID == strings.TrimSpace(scope.SubjectID)
 }
 
 func (m *Memory) AppendAuditEvent(_ context.Context, event domain.AuditEvent) (domain.AuditEvent, error) {

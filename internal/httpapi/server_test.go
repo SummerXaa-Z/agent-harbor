@@ -82,6 +82,7 @@ type traceResponse struct {
 	CallerInstanceID      string `json:"callerInstanceId"`
 	CapabilityID          string `json:"capabilityId"`
 	CapabilityVersion     int    `json:"capabilityVersion"`
+	CapabilityFingerprint string `json:"capabilityFingerprint"`
 	EntitlementID         string `json:"entitlementId"`
 	WorkspaceAssignmentID string `json:"workspaceAssignmentId"`
 	InstanceAssignmentID  string `json:"instanceAssignmentId"`
@@ -9258,7 +9259,7 @@ func TestMCPCapabilityGovernanceFiltersToolsListDeniesUnassignedToolAndTracesEvi
 	if trace.TenantID != "tenant-a" || trace.WorkspaceID != "ws-sales" || trace.CallerInstanceID != caller.ID {
 		t.Fatalf("trace missing runtime identity: %#v", trace)
 	}
-	if trace.CapabilityID != search.ID || trace.CapabilityVersion != 1 || trace.EntitlementID != entitlement.ID || trace.WorkspaceAssignmentID != workspaceAssignment.ID || trace.InstanceAssignmentID != instanceAssignment.ID {
+	if trace.CapabilityID != search.ID || trace.CapabilityVersion != 1 || trace.CapabilityFingerprint == "" || trace.EntitlementID != entitlement.ID || trace.WorkspaceAssignmentID != workspaceAssignment.ID || trace.InstanceAssignmentID != instanceAssignment.ID {
 		t.Fatalf("trace missing capability evidence: %#v", trace)
 	}
 }

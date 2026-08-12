@@ -1,7 +1,10 @@
 package domain
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"sort"
 	"strings"
 	"time"
 )
@@ -378,6 +381,61 @@ type Capability struct {
 	UpdatedAt       time.Time                 `json:"updatedAt"`
 }
 
+// CapabilityFingerprint is a canonical, server-computed witness for the
+// capability properties that affect a later authorization decision. It is
+// deliberately independent of Capability.Version: older mutation paths may
+// not have treated Version as a security revision.
+func CapabilityFingerprint(capability Capability) string {
+	payload := struct {
+		ID              string                    `json:"id"`
+		TargetID        string                    `json:"targetId"`
+		Type            CapabilityType            `json:"type"`
+		Key             string                    `json:"key"`
+		Action          CapabilityAction          `json:"action"`
+		NativeScopes    []string                  `json:"nativeScopes,omitempty"`
+		DataDomains     []string                  `json:"dataDomains,omitempty"`
+		DataScopes      []DataScope               `json:"dataScopes,omitempty"`
+		Sensitivity     CapabilitySensitivity     `json:"sensitivity"`
+		RiskLevel       CapabilityRisk            `json:"riskLevel"`
+		EnforcementMode CapabilityEnforcementMode `json:"enforcementMode"`
+		DiscoveryStatus CapabilityDiscoveryStatus `json:"discoveryStatus"`
+		Version         int                       `json:"version"`
+	}{
+		ID:              capability.ID,
+		TargetID:        capability.TargetID,
+		Type:            capability.Type,
+		Key:             capability.Key,
+		Action:          capability.Action,
+		NativeScopes:    sortedStringCopy(capability.NativeScopes),
+		DataDomains:     sortedStringCopy(capability.DataDomains),
+		DataScopes:      sortedDataScopes(capability.DataScopes),
+		Sensitivity:     capability.Sensitivity,
+		RiskLevel:       capability.RiskLevel,
+		EnforcementMode: capability.EnforcementMode,
+		DiscoveryStatus: capability.DiscoveryStatus,
+		Version:         capability.Version,
+	}
+	data, _ := json.Marshal(payload)
+	sum := sha256.Sum256(data)
+	return capability.ID + ":" + hex.EncodeToString(sum[:])
+}
+
+func sortedStringCopy(values []string) []string {
+	out := append([]string(nil), values...)
+	sort.Strings(out)
+	return out
+}
+
+func sortedDataScopes(values []DataScope) []DataScope {
+	out := append([]DataScope(nil), values...)
+	sort.Slice(out, func(i, j int) bool {
+		left, _ := json.Marshal(out[i])
+		right, _ := json.Marshal(out[j])
+		return string(left) < string(right)
+	})
+	return out
+}
+
 type UpdateCapabilityRequest struct {
 	DiscoveryStatus *CapabilityDiscoveryStatus `json:"discoveryStatus"`
 	Sensitivity     *CapabilitySensitivity     `json:"sensitivity"`
@@ -737,6 +795,7 @@ type TraceEvent struct {
 	SubjectID             string        `json:"subjectId,omitempty"`
 	CapabilityID          string        `json:"capabilityId,omitempty"`
 	CapabilityVersion     int           `json:"capabilityVersion,omitempty"`
+	CapabilityFingerprint string        `json:"capabilityFingerprint,omitempty"`
 	EntitlementID         string        `json:"entitlementId,omitempty"`
 	WorkspaceAssignmentID string        `json:"workspaceAssignmentId,omitempty"`
 	InstanceAssignmentID  string        `json:"instanceAssignmentId,omitempty"`
@@ -748,6 +807,67 @@ type TraceEvent struct {
 	UpstreamStatus        int           `json:"upstreamStatus,omitempty"`
 	UpstreamError         string        `json:"upstreamError,omitempty"`
 	CreatedAt             time.Time     `json:"createdAt"`
+}
+
+// TaskResultSummaryVerification records the explicit human attestation that a
+// task result summary was reviewed and redacted before persistence. It is kept
+// deliberately narrow: this first memory slice does not accept preferences,
+// policies, or permission conclusions.
+type TaskResultSummaryVerification string
+
+const (
+	TaskResultSummaryVerificationHumanReviewedRedacted TaskResultSummaryVerification = "human_reviewed_redacted"
+)
+
+type VerifiedTaskResultSummary struct {
+	ID               string                        `json:"id"`
+	TenantID         string                        `json:"tenantId"`
+	WorkspaceID      string                        `json:"workspaceId"`
+	CallerInstanceID string                        `json:"callerInstanceId"`
+	SubjectID        string                        `json:"subjectId"`
+	TargetID         string                        `json:"targetId"`
+	CapabilityID     string                        `json:"capabilityId"`
+	SourceTraceID    string                        `json:"sourceTraceId"`
+	DataScopes       []DataScope                   `json:"dataScopes"`
+	Summary          string                        `json:"summary"`
+	PayloadDigest    string                        `json:"payloadDigest"`
+	Verification     TaskResultSummaryVerification `json:"verification"`
+	VerifiedBy       string                        `json:"verifiedBy"`
+	VerifiedAt       time.Time                     `json:"verifiedAt"`
+	CreatedAt        time.Time                     `json:"createdAt"`
+	ExpiresAt        time.Time                     `json:"expiresAt"`
+}
+
+// CreateVerifiedTaskResultSummaryRequest intentionally does not accept a
+// free-text summary, scope, target, capability, or provenance fields other
+// than sourceTraceId. The stored summary and all scope fields are generated
+// server-side from the immutable runtime trace.
+type CreateVerifiedTaskResultSummaryRequest struct {
+	MemoryKind    string                        `json:"memoryKind,omitempty"`
+	SourceTraceID string                        `json:"sourceTraceId"`
+	Verification  TaskResultSummaryVerification `json:"verification"`
+	ExpiresAt     time.Time                     `json:"expiresAt"`
+}
+
+type TaskResultSummaryGateDecision string
+
+const (
+	TaskResultSummaryGateAllowed          TaskResultSummaryGateDecision = "allowed"
+	TaskResultSummaryGateDenied           TaskResultSummaryGateDecision = "denied"
+	TaskResultSummaryGateApprovalRequired TaskResultSummaryGateDecision = "approval_required"
+)
+
+// TaskResultSummaryGateResult is deliberately safe to return when a request
+// is denied: it has no memory, source trace, digest, or submitted summary.
+type TaskResultSummaryGateResult struct {
+	Decision       TaskResultSummaryGateDecision `json:"decision"`
+	ReasonCode     string                        `json:"reasonCode"`
+	NextActionCode string                        `json:"nextActionCode"`
+}
+
+type TaskResultSummaryReadResponse struct {
+	TaskResultSummaryGateResult
+	Memory *VerifiedTaskResultSummary `json:"memory,omitempty"`
 }
 
 type SystemMetric struct {

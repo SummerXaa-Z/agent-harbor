@@ -1613,18 +1613,38 @@ func (p *Postgres) AppendTrace(ctx context.Context, event domain.TraceEvent) (do
 			duration_ms, upstream_attempts, upstream_status, upstream_error,
 			tenant_id, workspace_id, caller_instance_id, subject_id,
 			capability_id, capability_version, entitlement_id, workspace_assignment_id,
-			instance_assignment_id, data_scopes, created_at
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+			instance_assignment_id, capability_fingerprint, data_scopes, created_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
 	`, event.ID, event.RunID, event.CallerID, event.TargetID, event.RouteType,
 		event.RouteKey, string(event.Decision), event.Reason, event.DurationMs,
 		event.UpstreamAttempts, event.UpstreamStatus, event.UpstreamError,
 		event.TenantID, event.WorkspaceID, event.CallerInstanceID, event.SubjectID,
 		event.CapabilityID, event.CapabilityVersion, event.EntitlementID,
-		event.WorkspaceAssignmentID, event.InstanceAssignmentID, dataScopes, event.CreatedAt)
+		event.WorkspaceAssignmentID, event.InstanceAssignmentID, event.CapabilityFingerprint, dataScopes, event.CreatedAt)
 	if err != nil {
 		return domain.TraceEvent{}, fmt.Errorf("insert trace event: %w", err)
 	}
 	return event, nil
+}
+
+func (p *Postgres) GetTrace(ctx context.Context, id string) (domain.TraceEvent, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select id, run_id, caller_agent_id, target_agent_id, route_type, route_key, decision, reason,
+			duration_ms, upstream_attempts, upstream_status, upstream_error,
+			tenant_id, workspace_id, caller_instance_id, subject_id,
+			capability_id, capability_version, entitlement_id, workspace_assignment_id,
+			instance_assignment_id, capability_fingerprint, data_scopes, created_at
+		from trace_events
+		where id=$1
+	`, strings.TrimSpace(id))
+	trace, err := scanTraceEvent(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.TraceEvent{}, false, nil
+	}
+	if err != nil {
+		return domain.TraceEvent{}, false, fmt.Errorf("get trace: %w", err)
+	}
+	return trace, true, nil
 }
 
 func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain.TraceEvent, error) {
@@ -1633,7 +1653,7 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 			duration_ms, upstream_attempts, upstream_status, upstream_error,
 			tenant_id, workspace_id, caller_instance_id, subject_id,
 			capability_id, capability_version, entitlement_id, workspace_assignment_id,
-			instance_assignment_id, data_scopes, created_at
+			instance_assignment_id, capability_fingerprint, data_scopes, created_at
 		from trace_events
 		where 1=1
 	`
@@ -1844,6 +1864,136 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 	}
 	defer rows.Close()
 	return scanTraceEvents(rows)
+}
+
+func (p *Postgres) CreateVerifiedTaskResultSummaryWithAudit(ctx context.Context, summary domain.VerifiedTaskResultSummary, build VerifiedTaskResultSummaryAuditBuilder) (domain.VerifiedTaskResultSummary, error) {
+	var created domain.VerifiedTaskResultSummary
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		created, err = p.createVerifiedTaskResultSummary(ctx, tx, summary)
+		if err != nil {
+			return err
+		}
+		_, err = p.appendAuditEvent(ctx, tx, build(created))
+		return err
+	})
+	return created, err
+}
+
+func (p *Postgres) createVerifiedTaskResultSummary(ctx context.Context, exec sqlExecutor, summary domain.VerifiedTaskResultSummary) (domain.VerifiedTaskResultSummary, error) {
+	dataScopes, err := json.Marshal(summary.DataScopes)
+	if err != nil {
+		return domain.VerifiedTaskResultSummary{}, fmt.Errorf("marshal verified task result data scopes: %w", err)
+	}
+	_, err = exec.Exec(ctx, `
+		insert into verified_task_result_summaries (
+			id, tenant_id, workspace_id, caller_instance_id, subject_id,
+			target_agent_id, capability_id, source_trace_id, data_scopes,
+			summary, payload_digest, verification, verified_by, verified_at,
+			created_at, expires_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+	`, summary.ID, summary.TenantID, summary.WorkspaceID, summary.CallerInstanceID,
+		summary.SubjectID, summary.TargetID, summary.CapabilityID, summary.SourceTraceID,
+		dataScopes, summary.Summary, summary.PayloadDigest, string(summary.Verification),
+		summary.VerifiedBy, summary.VerifiedAt, summary.CreatedAt, summary.ExpiresAt)
+	if err != nil {
+		if conflict := verifiedTaskResultSummaryInsertConflict(err); conflict != nil {
+			return domain.VerifiedTaskResultSummary{}, conflict
+		}
+		return domain.VerifiedTaskResultSummary{}, fmt.Errorf("insert verified task result summary: %w", err)
+	}
+	return summary, nil
+}
+
+func verifiedTaskResultSummaryInsertConflict(err error) error {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return nil
+	}
+	switch pgErr.ConstraintName {
+	case "verified_task_result_summaries_source_trace_id_key":
+		return ErrVerifiedTaskResultSummarySourceAlreadyUsed
+	case "verified_task_result_summaries_pkey":
+		return ErrVerifiedTaskResultSummaryAlreadyExists
+	case "verified_task_result_summaries_source_trace_id_fkey":
+		return ErrVerifiedTaskResultSummarySourceNotFound
+	default:
+		return nil
+	}
+}
+
+func (p *Postgres) GetVerifiedTaskResultSummary(ctx context.Context, id string, scope VerifiedTaskResultSummaryScope) (domain.VerifiedTaskResultSummary, bool, error) {
+	if !scope.Valid() {
+		return domain.VerifiedTaskResultSummary{}, false, ErrVerifiedTaskResultSummaryScopeRequired
+	}
+	row := p.pool.QueryRow(ctx, `
+		select id, tenant_id, workspace_id, caller_instance_id, subject_id,
+			target_agent_id, capability_id, source_trace_id, data_scopes,
+			summary, payload_digest, verification, verified_by, verified_at,
+			created_at, expires_at
+		from verified_task_result_summaries
+		where id=$1 and tenant_id=$2 and workspace_id=$3 and caller_instance_id=$4 and subject_id=$5
+	`, strings.TrimSpace(id), strings.TrimSpace(scope.TenantID), strings.TrimSpace(scope.WorkspaceID), strings.TrimSpace(scope.CallerInstanceID), strings.TrimSpace(scope.SubjectID))
+	summary, err := scanVerifiedTaskResultSummary(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.VerifiedTaskResultSummary{}, false, nil
+	}
+	if err != nil {
+		return domain.VerifiedTaskResultSummary{}, false, fmt.Errorf("get verified task result summary: %w", err)
+	}
+	return summary, true, nil
+}
+
+func (p *Postgres) FindVerifiedTaskResultSummaryBySource(ctx context.Context, sourceTraceID string) (domain.VerifiedTaskResultSummary, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select id, tenant_id, workspace_id, caller_instance_id, subject_id,
+			target_agent_id, capability_id, source_trace_id, data_scopes,
+			summary, payload_digest, verification, verified_by, verified_at,
+			created_at, expires_at
+		from verified_task_result_summaries
+		where source_trace_id=$1
+	`, strings.TrimSpace(sourceTraceID))
+	summary, err := scanVerifiedTaskResultSummary(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.VerifiedTaskResultSummary{}, false, nil
+	}
+	if err != nil {
+		return domain.VerifiedTaskResultSummary{}, false, fmt.Errorf("find verified task result summary by source: %w", err)
+	}
+	return summary, true, nil
+}
+
+func (p *Postgres) ListVerifiedTaskResultSummaries(ctx context.Context, filter VerifiedTaskResultSummaryFilter) ([]domain.VerifiedTaskResultSummary, error) {
+	if !filter.VerifiedTaskResultSummaryScope.Valid() {
+		return nil, ErrVerifiedTaskResultSummaryScopeRequired
+	}
+	query := `
+		select id, tenant_id, workspace_id, caller_instance_id, subject_id,
+			target_agent_id, capability_id, source_trace_id, data_scopes,
+			summary, payload_digest, verification, verified_by, verified_at,
+			created_at, expires_at
+		from verified_task_result_summaries
+		where 1=1
+	`
+	args := []any{}
+	add := func(sql string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(" and "+sql, len(args))
+	}
+	add("tenant_id=$%d", strings.TrimSpace(filter.TenantID))
+	add("workspace_id=$%d", strings.TrimSpace(filter.WorkspaceID))
+	add("caller_instance_id=$%d", strings.TrimSpace(filter.CallerInstanceID))
+	add("subject_id=$%d", strings.TrimSpace(filter.SubjectID))
+	if value := strings.TrimSpace(filter.SourceTraceID); value != "" {
+		add("source_trace_id=$%d", value)
+	}
+	query += " order by created_at asc, id asc"
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list verified task result summaries: %w", err)
+	}
+	defer rows.Close()
+	return scanVerifiedTaskResultSummaries(rows)
 }
 
 func (p *Postgres) AppendAuditEvent(ctx context.Context, event domain.AuditEvent) (domain.AuditEvent, error) {
@@ -2742,19 +2892,8 @@ func marshalRoutePolicyRetry(retry *domain.RoutePolicyRetry) ([]byte, error) {
 func scanTraceEvents(rows pgx.Rows) ([]domain.TraceEvent, error) {
 	var out []domain.TraceEvent
 	for rows.Next() {
-		var trace domain.TraceEvent
-		var decision string
-		var dataScopes []byte
-		if err := rows.Scan(&trace.ID, &trace.RunID, &trace.CallerID, &trace.TargetID, &trace.RouteType,
-			&trace.RouteKey, &decision, &trace.Reason, &trace.DurationMs, &trace.UpstreamAttempts,
-			&trace.UpstreamStatus, &trace.UpstreamError, &trace.TenantID, &trace.WorkspaceID,
-			&trace.CallerInstanceID, &trace.SubjectID, &trace.CapabilityID, &trace.CapabilityVersion,
-			&trace.EntitlementID, &trace.WorkspaceAssignmentID, &trace.InstanceAssignmentID,
-			&dataScopes, &trace.CreatedAt); err != nil {
-			return nil, err
-		}
-		trace.Decision = domain.TraceDecision(decision)
-		if err := unmarshalJSON(dataScopes, &trace.DataScopes, "trace data scopes"); err != nil {
+		trace, err := scanTraceEvent(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, trace)
@@ -2763,6 +2902,57 @@ func scanTraceEvents(rows pgx.Rows) ([]domain.TraceEvent, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+func scanTraceEvent(row scanner) (domain.TraceEvent, error) {
+	var trace domain.TraceEvent
+	var decision string
+	var dataScopes []byte
+	if err := row.Scan(&trace.ID, &trace.RunID, &trace.CallerID, &trace.TargetID, &trace.RouteType,
+		&trace.RouteKey, &decision, &trace.Reason, &trace.DurationMs, &trace.UpstreamAttempts,
+		&trace.UpstreamStatus, &trace.UpstreamError, &trace.TenantID, &trace.WorkspaceID,
+		&trace.CallerInstanceID, &trace.SubjectID, &trace.CapabilityID, &trace.CapabilityVersion,
+		&trace.EntitlementID, &trace.WorkspaceAssignmentID, &trace.InstanceAssignmentID,
+		&trace.CapabilityFingerprint, &dataScopes, &trace.CreatedAt); err != nil {
+		return domain.TraceEvent{}, err
+	}
+	trace.Decision = domain.TraceDecision(decision)
+	if err := unmarshalJSON(dataScopes, &trace.DataScopes, "trace data scopes"); err != nil {
+		return domain.TraceEvent{}, err
+	}
+	return trace, nil
+}
+
+func scanVerifiedTaskResultSummaries(rows pgx.Rows) ([]domain.VerifiedTaskResultSummary, error) {
+	var out []domain.VerifiedTaskResultSummary
+	for rows.Next() {
+		summary, err := scanVerifiedTaskResultSummary(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, summary)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanVerifiedTaskResultSummary(row scanner) (domain.VerifiedTaskResultSummary, error) {
+	var summary domain.VerifiedTaskResultSummary
+	var verification string
+	var dataScopes []byte
+	if err := row.Scan(&summary.ID, &summary.TenantID, &summary.WorkspaceID, &summary.CallerInstanceID,
+		&summary.SubjectID, &summary.TargetID, &summary.CapabilityID, &summary.SourceTraceID,
+		&dataScopes, &summary.Summary, &summary.PayloadDigest, &verification, &summary.VerifiedBy,
+		&summary.VerifiedAt, &summary.CreatedAt, &summary.ExpiresAt); err != nil {
+		return domain.VerifiedTaskResultSummary{}, err
+	}
+	summary.Verification = domain.TaskResultSummaryVerification(verification)
+	if err := unmarshalJSON(dataScopes, &summary.DataScopes, "verified task result data scopes"); err != nil {
+		return domain.VerifiedTaskResultSummary{}, err
+	}
+	return summary, nil
 }
 
 func scanAuditEvents(rows pgx.Rows) ([]domain.AuditEvent, error) {

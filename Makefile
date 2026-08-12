@@ -36,7 +36,7 @@ SCENARIO_SCRIPT_LIBS := \
 	scripts/lib/ports.sh \
 	scripts/pnpm.sh
 
-.PHONY: help check release-check dependency-audit fmt gofmt-check test test-fresh vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test evaluation-readiness-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
+.PHONY: help check release-check dependency-audit fmt gofmt-check test test-fresh test-race vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test evaluation-readiness-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -48,6 +48,7 @@ help:
 	@printf '  make gofmt-check           Verify Go files are gofmt-formatted\n'
 	@printf '  make test                  Run Go tests\n'
 	@printf '  make test-fresh            Run uncached Go tests\n'
+	@printf '  make test-race             Run Go tests with the race detector\n'
 	@printf '  make vet                   Run go vet\n'
 	@printf '  make build                 Build Go packages\n'
 	@printf '  make frontend-deps         Install pinned frontend dependencies\n'
@@ -75,7 +76,7 @@ help:
 
 check: gofmt-check test vet build makefile-targets-test evaluation-readiness-test frontend-test frontend-build scenario-scripts-lint github-config-lint
 
-release-check: gofmt-check test-fresh vet build production-hardening scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center makefile-targets-test evaluation-readiness-test frontend-test frontend-build scenario-scripts-lint github-config-lint
+release-check: gofmt-check test-fresh test-race vet build production-hardening scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center makefile-targets-test evaluation-readiness-test frontend-test frontend-build scenario-scripts-lint github-config-lint
 
 dependency-audit:
 	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
@@ -98,6 +99,9 @@ test:
 
 test-fresh:
 	go test -count=1 ./...
+
+test-race:
+	go test -race ./...
 
 vet:
 	go vet ./...

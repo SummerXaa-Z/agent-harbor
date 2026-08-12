@@ -37,6 +37,9 @@ jobs:
       - name: Race detector
         run: make test-race
 
+      - name: Security fuzz smoke
+        run: make test-fuzz
+
       - name: Vet
         run: make vet
 

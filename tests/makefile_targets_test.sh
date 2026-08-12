@@ -32,7 +32,7 @@ assert_target_exists() {
 assert_file_contains() {
   local file="$1"
   local needle="$2"
-  if ! grep -Fq "$needle" "$file"; then
+  if ! grep -Fq -- "$needle" "$file"; then
     echo "expected ${file} to contain ${needle}" >&2
     exit 1
   fi
@@ -61,6 +61,8 @@ assert_target_depends_on "release-check" "evaluation-readiness-test"
 assert_target_exists "dependency-audit"
 assert_target_exists "test-race"
 assert_target_depends_on "release-check" "test-race"
+assert_target_exists "test-fuzz"
+assert_target_depends_on "release-check" "test-fuzz"
 assert_target_exists "test-postgres-race"
 
 assert_file_contains "Makefile" "scripts/scenario-tenant-permission-center.sh"
@@ -70,6 +72,8 @@ assert_file_contains "Makefile" 'govulncheck@$(GOVULNCHECK_VERSION)'
 assert_file_contains "Makefile" '$(PNPM) --dir frontend audit --audit-level=low'
 assert_file_contains "Makefile" '$(PNPM) --dir scripts/real-mcp audit --audit-level=low'
 assert_file_contains "Makefile" 'go test -race ./...'
+assert_file_contains "Makefile" "FuzzEffectiveDataScopes"
+assert_file_contains "Makefile" "FuzzValidateOutboundEndpoint"
 assert_file_contains "Makefile" 'go test -race ./internal/store -count=1'
 assert_file_contains "Makefile" '$(PNPM) --dir frontend install --frozen-lockfile'
 assert_file_contains "Makefile" '$(PNPM) --dir scripts/real-mcp start'
@@ -90,6 +94,7 @@ assert_file_contains ".github/workflows/ci.yml" "dependency-security:"
 assert_file_contains ".github/workflows/ci.yml" "name: Dependency security"
 assert_file_contains ".github/workflows/ci.yml" "run: make dependency-audit"
 assert_file_contains ".github/workflows/ci.yml" "run: make test-race"
+assert_file_contains ".github/workflows/ci.yml" "run: make test-fuzz"
 assert_file_contains ".github/workflows/ci.yml" "run: make test-postgres-race"
 assert_file_contains ".github/dependabot.yml" "directory: /scripts/real-mcp"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "authRequired"

@@ -216,6 +216,101 @@ export interface PermissionPackageProductionReadiness {
   generatedAt: string;
 }
 
+export interface AccessHandoff {
+  handoffVersion: "access-handoff/v1";
+  id?: string;
+  status: PermissionPackageProductionReadinessStatus;
+  scope: {
+    tenantId: string;
+    workspaceId: string;
+    callerInstanceId: string;
+    targetId: string;
+    subjectId?: string;
+    subjectSelector?: string;
+    region?: string;
+  };
+  template: {
+    id: string;
+    version: number;
+    name?: string;
+    summary?: string;
+  };
+  application?: {
+    id: string;
+    draftId: string;
+    appliedAt: string;
+  };
+  allowedCapabilities: AccessHandoffCapability[];
+  blockedCapabilities: AccessHandoffCapability[];
+  dataScopes: DataScope[];
+  productionReadiness: {
+    status: PermissionPackageProductionReadinessStatus;
+    blockingCheckCodes: string[];
+    nextActionCode?: string;
+    readyCount: number;
+    warningCount: number;
+    blockingCount: number;
+  };
+  copyArtifacts?: {
+    mcpClientConfig: string;
+    runtimeRequestExample: string;
+    promptTemplate: string;
+    permissionBoundarySummary: string;
+  };
+  tokenEligibility: {
+    eligible: boolean;
+    defaultExpiresInSeconds: number;
+    maxExpiresInSeconds: number;
+    blockerCodes: string[];
+  };
+  tokens: AccessHandoffToken[];
+  auditRefs: {
+    applicationId?: string;
+    approvalRequestId?: string;
+    appliedAuditEventId?: string;
+    allowedTraceId?: string;
+    deniedTraceId?: string;
+    acceptanceReportDigest?: string;
+  };
+  nextActionCode: string;
+  generatedAt: string;
+}
+
+export interface AccessHandoffCapability {
+  id: string;
+  key: string;
+  displayName?: string;
+  action: CapabilityAction;
+  riskLevel: CapabilityRisk;
+  sensitivity: CapabilitySensitivity;
+  dataScopes?: DataScope[];
+}
+
+export interface AccessHandoffToken {
+  id: string;
+  agentId: string;
+  name: string;
+  prefix: string;
+  status: "active" | "expired" | "revoked";
+  applicationId: string;
+  templateId: string;
+  subjectSelector: string;
+  createdForHandoffId: string;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt?: string;
+}
+
+export interface CreateAccessHandoffTokenRequest extends PermissionPackageProductionReadinessFilter {
+  handoffId: string;
+  name?: string;
+  expiresInSeconds?: number;
+}
+
+export interface CreateAccessHandoffTokenResponse extends AccessHandoffToken {
+  key: string;
+}
+
 export type PermissionPackageProductionNextActionCode =
   | "resolve_preflight_blockers"
   | "apply_permission_package"

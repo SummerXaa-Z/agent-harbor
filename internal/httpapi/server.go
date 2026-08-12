@@ -87,6 +87,7 @@ var systemCapabilities = []string{
 	"permission_package_application_impact",
 	"permission_package_production_readiness",
 	"permission_package_access_handoff_v1",
+	"permission_package_access_handoff_tokens_v1",
 	"permission_package_consumed_approval_recovery",
 	"management_mcp_tools_metadata_v4",
 }
@@ -259,6 +260,8 @@ func (s *Server) Router() http.Handler {
 			r.Get("/permission-packages/production-readiness/report", s.getPermissionPackageProductionEvidenceReport)
 			r.Get("/permission-packages/production-readiness", s.getPermissionPackageProductionReadiness)
 			r.Get("/permission-packages/access-handoff", s.getPermissionPackageAccessHandoff)
+			r.Post("/permission-packages/access-handoff/tokens", s.createAccessHandoffToken)
+			r.Delete("/permission-packages/access-handoff/tokens/{id}", s.revokeAccessHandoffToken)
 			r.Get("/permission-packages/applications", s.listPermissionPackageApplications)
 			r.Get("/permission-packages/applications/health", s.listPermissionPackageApplicationHealth)
 			r.Get("/permission-packages/applications/{id}/impact", s.getPermissionPackageApplicationImpact)

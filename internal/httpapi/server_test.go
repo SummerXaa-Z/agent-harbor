@@ -862,6 +862,7 @@ func TestSystemInfoIncludesConsoleCompatibilityContract(t *testing.T) {
 		"permission_package_application_impact",
 		"permission_package_production_readiness",
 		"permission_package_access_handoff_v1",
+		"permission_package_access_handoff_tokens_v1",
 		"permission_package_consumed_approval_recovery",
 		"management_mcp_tools_metadata_v4",
 	} {

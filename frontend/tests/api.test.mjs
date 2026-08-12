@@ -9,6 +9,8 @@ import {
 import * as apiPaths from "../src/apiPaths.ts";
 import {
   accessDecisionExplainPath,
+  permissionPackageAccessHandoffPath,
+  permissionPackageAccessHandoffTokenPath,
   permissionPackageApplicationHealthPath,
   permissionPackageApplicationImpactPath,
   permissionPackageApprovalRequestsPath,
@@ -268,6 +270,32 @@ test("permissionPackageProductionReadinessPath includes status-check filters", (
   assert.equal(url.searchParams.get("tenantId"), "tenant-east");
   assert.equal(url.searchParams.get("traceLimit"), "20");
   assert.equal(url.searchParams.get("workspaceId"), "ws-sales");
+});
+
+test("access handoff paths preserve the permission scope and encode token ids", () => {
+  const path = permissionPackageAccessHandoffPath({
+    callerInstanceId: "caller-1",
+    subjectId: "user:support-001",
+    subjectSelector: "user:support-*",
+    targetId: "target-1",
+    templateId: "support-ticket-triage",
+    tenantId: "tenant-east",
+    workspaceId: "ws-support",
+  });
+  assert.match(path, /^\/api\/v1\/permission-packages\/access-handoff\?/);
+  assert.match(path, /callerInstanceId=caller-1/);
+  assert.match(path, /subjectSelector=user%3Asupport-\*/);
+  assert.equal(
+    permissionPackageAccessHandoffTokenPath("key/one"),
+    "/api/v1/permission-packages/access-handoff/tokens/key%2Fone",
+  );
+});
+
+test("access handoff API keeps token creation and revocation on dedicated endpoints", () => {
+  assert.match(apiSource, /function fetchAccessHandoff\(/);
+  assert.match(apiSource, /function createAccessHandoffToken\(/);
+  assert.match(apiSource, /function revokeAccessHandoffToken\(/);
+  assert.match(apiSource, /permissionPackageAccessHandoffTokenPath\(id\)/);
 });
 
 test("permissionPackageAcceptanceReportPath includes acceptance report filters", () => {

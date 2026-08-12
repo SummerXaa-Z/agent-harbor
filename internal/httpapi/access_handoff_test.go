@@ -1,7 +1,10 @@
 package httpapi_test
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -56,6 +59,13 @@ type accessHandoffResponse struct {
 		MaxExpiresInSeconds     int64    `json:"maxExpiresInSeconds"`
 		BlockerCodes            []string `json:"blockerCodes"`
 	} `json:"tokenEligibility"`
+	Tokens []struct {
+		ID                  string `json:"id"`
+		Status              string `json:"status"`
+		ApplicationID       string `json:"applicationId"`
+		SubjectSelector     string `json:"subjectSelector"`
+		CreatedForHandoffID string `json:"createdForHandoffId"`
+	} `json:"tokens"`
 	AuditRefs struct {
 		ApplicationID          string `json:"applicationId"`
 		ApprovalRequestID      string `json:"approvalRequestId"`
@@ -67,9 +77,25 @@ type accessHandoffResponse struct {
 	NextActionCode string `json:"nextActionCode"`
 }
 
+type accessHandoffTokenCreateResponse struct {
+	ID                  string `json:"id"`
+	Key                 string `json:"key"`
+	Prefix              string `json:"prefix"`
+	Status              string `json:"status"`
+	ApplicationID       string `json:"applicationId"`
+	SubjectSelector     string `json:"subjectSelector"`
+	CreatedForHandoffID string `json:"createdForHandoffId"`
+}
+
 func TestPermissionPackageAccessHandoffBlocksBeforeApplyAndReturnsReadyArtifacts(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":"handoff-call","result":{"ok":true}}`))
+	}))
+	defer upstream.Close()
 	now := time.Now().UTC()
 	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
 	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
@@ -77,7 +103,7 @@ func TestPermissionPackageAccessHandoffBlocksBeforeApplyAndReturnsReadyArtifacts
 	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
 		t.Fatalf("create caller: %v", err)
 	}
-	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, map[string]any{"endpoint": upstream.URL})
 	searchCustomer := createDirectCapabilityWithAction(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
 	updateTicket := createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
 	exportContracts := createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
@@ -101,6 +127,10 @@ func TestPermissionPackageAccessHandoffBlocksBeforeApplyAndReturnsReadyArtifacts
 	}
 	if len(before.TokenEligibility.BlockerCodes) == 0 || before.NextActionCode != "apply_permission_package" {
 		t.Fatalf("expected actionable handoff blockers before apply, got %#v", before)
+	}
+	blockedToken := request(t, router, http.MethodPost, "/api/v1/permission-packages/access-handoff/tokens", accessHandoffTokenRequest(input, "handoff:missing", "user:support-001"), "")
+	if blockedToken.Code != http.StatusConflict || !strings.Contains(blockedToken.Body.String(), "ACCESS_HANDOFF_NOT_READY") {
+		t.Fatalf("expected blocked token issuance before handoff readiness, got status=%d body=%s", blockedToken.Code, blockedToken.Body.String())
 	}
 
 	applyInput := map[string]any{
@@ -153,10 +183,102 @@ func TestPermissionPackageAccessHandoffBlocksBeforeApplyAndReturnsReadyArtifacts
 	if after.NextActionCode != "copy_access_config" || after.ProductionReadiness.Status != "ready" || after.ProductionReadiness.BlockingCount != 0 || len(after.ProductionReadiness.BlockingCheckCodes) != 0 {
 		t.Fatalf("expected ready handoff next action, got %#v", after)
 	}
+
+	tokenRequest := accessHandoffTokenRequest(input, after.ID, "user:support-001")
+	createdRecorder, createdRequest := buildRequest(t, http.MethodPost, "/api/v1/permission-packages/access-handoff/tokens", tokenRequest, "", "", "")
+	conflictRecorder, conflictRequest := buildRequest(t, http.MethodPost, "/api/v1/permission-packages/access-handoff/tokens", tokenRequest, "", "", "")
+	var issueWG sync.WaitGroup
+	issueWG.Add(2)
+	go func() {
+		defer issueWG.Done()
+		router.ServeHTTP(createdRecorder, createdRequest)
+	}()
+	go func() {
+		defer issueWG.Done()
+		router.ServeHTTP(conflictRecorder, conflictRequest)
+	}()
+	issueWG.Wait()
+	if createdRecorder.Code == http.StatusConflict {
+		createdRecorder, conflictRecorder = conflictRecorder, createdRecorder
+	}
+	if createdRecorder.Code != http.StatusCreated || conflictRecorder.Code != http.StatusConflict || !strings.Contains(conflictRecorder.Body.String(), "ACCESS_HANDOFF_TOKEN_ACTIVE") {
+		t.Fatalf("expected exactly one concurrent token creation, got first=%d body=%s second=%d body=%s", createdRecorder.Code, createdRecorder.Body.String(), conflictRecorder.Code, conflictRecorder.Body.String())
+	}
+	created := decodeData[accessHandoffTokenCreateResponse](t, createdRecorder)
+	if created.ID == "" || created.Key == "" || created.Prefix == "" || created.Status != "active" || created.ApplicationID != applied.Application.ID || created.SubjectSelector != "user:support-*" || created.CreatedForHandoffID != after.ID {
+		t.Fatalf("unexpected access handoff token: %#v", created)
+	}
+	allowedCall := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "handoff-allowed",
+		"method":  "tools/call",
+		"params":  map[string]any{"name": "search_customer", "arguments": map[string]any{"query": "Acme"}},
+	}, created.Key, "access-handoff-allowed", "user:support-001")
+	if allowedCall.Code != http.StatusAccepted {
+		t.Fatalf("expected handoff token to call an allowed capability, got status=%d body=%s", allowedCall.Code, allowedCall.Body.String())
+	}
+	deniedCall := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "handoff-denied",
+		"method":  "tools/call",
+		"params":  map[string]any{"name": "export_contracts", "arguments": map[string]any{}},
+	}, created.Key, "access-handoff-denied", "user:support-001")
+	if deniedCall.Code != http.StatusForbidden {
+		t.Fatalf("expected handoff token to remain bounded by denied capabilities, got status=%d body=%s", deniedCall.Code, deniedCall.Body.String())
+	}
+	afterCreate := decodeData[accessHandoffResponse](t, request(t, router, http.MethodGet, permissionPackageAccessHandoffPath(input, "", "user:support-001"), nil, ""))
+	if len(afterCreate.Tokens) != 1 || afterCreate.Tokens[0].ID != created.ID || afterCreate.Tokens[0].Status != "active" {
+		t.Fatalf("expected active token in handoff projection, got %#v", afterCreate.Tokens)
+	}
+	duplicate := request(t, router, http.MethodPost, "/api/v1/permission-packages/access-handoff/tokens", tokenRequest, "")
+	if duplicate.Code != http.StatusConflict || !strings.Contains(duplicate.Body.String(), "ACCESS_HANDOFF_TOKEN_ACTIVE") {
+		t.Fatalf("expected duplicate active token rejection, got status=%d body=%s", duplicate.Code, duplicate.Body.String())
+	}
+	revoked := decodeData[accessHandoffTokenCreateResponse](t, request(t, router, http.MethodDelete, "/api/v1/permission-packages/access-handoff/tokens/"+created.ID, nil, ""))
+	if revoked.ID != created.ID || revoked.Status != "revoked" || revoked.Key != "" {
+		t.Fatalf("expected public revoked token without plaintext, got %#v", revoked)
+	}
+	revokedCall := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "handoff-revoked",
+		"method":  "tools/call",
+		"params":  map[string]any{"name": "search_customer", "arguments": map[string]any{"query": "Acme"}},
+	}, created.Key, "access-handoff-revoked", "user:support-001")
+	if revokedCall.Code != http.StatusUnauthorized {
+		t.Fatalf("expected revoked handoff token to fail authentication, got status=%d body=%s", revokedCall.Code, revokedCall.Body.String())
+	}
+	afterRevoke := decodeData[accessHandoffResponse](t, request(t, router, http.MethodGet, permissionPackageAccessHandoffPath(input, "", "user:support-001"), nil, ""))
+	if len(afterRevoke.Tokens) != 1 || afterRevoke.Tokens[0].Status != "revoked" {
+		t.Fatalf("expected revoked token in handoff projection, got %#v", afterRevoke.Tokens)
+	}
+	rotated := request(t, router, http.MethodPost, "/api/v1/permission-packages/access-handoff/tokens", tokenRequest, "")
+	if rotated.Code != http.StatusCreated {
+		t.Fatalf("expected a new token after revocation, got status=%d body=%s", rotated.Code, rotated.Body.String())
+	}
+	audit := request(t, router, http.MethodGet, "/api/v1/audit/events?resourceId="+created.ID, nil, "")
+	if strings.Contains(audit.Body.String(), created.Key) {
+		t.Fatal("access handoff token plaintext leaked into audit response")
+	}
 }
 
 func permissionPackageAccessHandoffPath(input map[string]any, approvalRequestID string, subjectID string) string {
 	return strings.Replace(permissionPackageProductionReadinessPath(input, approvalRequestID, subjectID), "/production-readiness?", "/access-handoff?", 1)
+}
+
+func accessHandoffTokenRequest(input map[string]any, handoffID string, subjectID string) map[string]any {
+	return map[string]any{
+		"callerInstanceId": input["callerInstanceId"],
+		"expiresInSeconds": 900,
+		"handoffId":        handoffID,
+		"region":           input["region"],
+		"requestText":      input["requestText"],
+		"subjectId":        subjectID,
+		"subjectSelector":  input["subjectSelector"],
+		"targetId":         input["targetId"],
+		"templateId":       input["templateId"],
+		"tenantId":         input["tenantId"],
+		"workspaceId":      input["workspaceId"],
+	}
 }
 
 func accessHandoffCapabilitiesContain(capabilities []struct {

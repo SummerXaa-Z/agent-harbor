@@ -2989,6 +2989,248 @@ button {
   font-size: 12px;
 }
 
+.access-handoff {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line-subtle);
+}
+
+.access-handoff-header,
+.access-handoff-token-heading,
+.access-handoff-token-row,
+.access-handoff-artifacts article > div,
+.access-handoff-one-time-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.access-handoff-header > div:first-child,
+.access-handoff-token-heading > div:first-child,
+.access-handoff-token-row > div:first-child {
+  min-width: 0;
+}
+
+.access-handoff-header h3 {
+  margin: 2px 0 0;
+  color: var(--ink);
+  font-size: var(--text-xl);
+}
+
+.access-handoff-header p,
+.access-handoff-token-heading p {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.access-handoff-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.access-handoff-message,
+.access-handoff-loading {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.access-handoff-blocked {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-card);
+  background: var(--warning-surface);
+  color: var(--warning-strong);
+}
+
+.access-handoff-blocked strong,
+.access-handoff-blocked span,
+.access-handoff-token-heading strong,
+.access-handoff-token-heading span,
+.access-handoff-token-row strong,
+.access-handoff-token-row span {
+  display: block;
+}
+
+.access-handoff-blocked span,
+.access-handoff-token-row span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.access-handoff-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.access-handoff-summary > div {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-muted);
+}
+
+.access-handoff-summary span,
+.access-handoff-summary strong {
+  display: block;
+}
+
+.access-handoff-summary span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.access-handoff-summary strong {
+  overflow: hidden;
+  margin-top: var(--space-1);
+  color: var(--ink);
+  font-size: var(--text-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.access-handoff-capabilities {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.access-handoff-capabilities > div {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.access-handoff-capabilities strong {
+  color: var(--ink);
+  font-size: var(--text-sm);
+}
+
+.access-handoff-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.access-handoff-chip {
+  padding: 4px 8px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-full);
+  background: var(--surface-muted);
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.access-handoff-chip.tone-success {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+  color: var(--success-strong);
+}
+
+.access-handoff-chip.tone-danger {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--danger-strong);
+}
+
+.access-handoff-artifacts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.access-handoff-artifacts article {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.access-handoff-artifacts pre {
+  overflow: auto;
+  max-height: 210px;
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+  color: var(--ink-2);
+  font-family: var(--mono-font);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.access-handoff-token-section {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--brand-border);
+  border-radius: var(--radius-card);
+  background: var(--brand-soft);
+}
+
+.access-handoff-one-time-token {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--success-border);
+  border-radius: var(--radius-card);
+  background: var(--success-surface);
+}
+
+.access-handoff-one-time-token span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.access-handoff-one-time-token code {
+  overflow: auto;
+  padding: var(--space-2);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-family: var(--mono-font);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.access-handoff-token-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.access-handoff-token-list > span {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.access-handoff-token-row {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
 .control-form {
   display: grid;
   gap: 10px;
@@ -7125,6 +7367,14 @@ td code {
     grid-template-columns: 1fr;
   }
 
+  .access-handoff-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .access-handoff-artifacts {
+    grid-template-columns: 1fr;
+  }
+
   .access-query-grid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
@@ -7178,6 +7428,32 @@ td code {
 }
 
 @media (max-width: 760px) {
+  .access-handoff-header,
+  .access-handoff-token-heading,
+  .access-handoff-token-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .access-handoff-header-actions,
+  .access-handoff-one-time-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .access-handoff-summary,
+  .access-handoff-capabilities {
+    grid-template-columns: 1fr;
+  }
+
+  .access-handoff-header-actions button,
+  .access-handoff-token-heading button,
+  .access-handoff-token-row button,
+  .access-handoff-one-time-actions button {
+    justify-content: center;
+    width: 100%;
+  }
+
   .app-shell {
     display: block;
   }

@@ -373,9 +373,9 @@ export function CapabilityGovernanceView({
                   />
                 </label>
                 <label>
-                  <span>{t("table.status")}</span>
+                  <span>{t("table.capabilityGovernanceStatus")}</span>
                   <ApprovalDropdown
-                    label={t("table.status")}
+                    label={t("table.capabilityGovernanceStatus")}
                     options={capabilityStatusOptions}
                     value={capabilityStatusFilter}
                     onChange={setCapabilityStatusFilter}
@@ -483,7 +483,7 @@ export function CapabilityGovernanceView({
                 <span>{t("table.target")}<strong>{agentNames[selectedCatalogCapability.targetId] ?? selectedCatalogCapability.targetId}</strong></span>
                 <span>{t("table.action")}<strong>{translatedValue(t, selectedCatalogCapability.action)}</strong></span>
                 <span>{t("table.risk")}<strong>{translatedValue(t, selectedCatalogCapability.riskLevel)}</strong></span>
-                <span>{t("table.status")}<strong>{capabilityDiscoveryStatusLabel(selectedCatalogCapability.discoveryStatus, t)}</strong></span>
+                <span>{t("table.capabilityGovernanceStatus")}<strong>{capabilityDiscoveryStatusLabel(selectedCatalogCapability.discoveryStatus, t)}</strong></span>
                 <span>{t("section.dataScope")}<strong>{dataScopeText(selectedCatalogCapability.dataScopes, t) || t("text.noDataScope")}</strong></span>
                 <span>{t("text.technicalDetails")}<strong>{selectedCatalogCapability.key}</strong></span>
               </div>

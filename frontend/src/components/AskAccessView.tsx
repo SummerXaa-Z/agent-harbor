@@ -252,7 +252,7 @@ export function AskAccessView({
               <>
                 <div className={`ask-answer-banner status-${result.outcome}`}>
                   <Badge tone={result.outcome === "allowed" ? "success" : "danger"}>
-                    {result.outcome === "allowed" ? t("text.decisionAllowed") : t("text.decisionDenied")}
+                    {result.outcome === "allowed" ? t("ask.outcomeAllowed") : t("ask.outcomeDenied")}
                   </Badge>
                   <div>
                     <strong>{result.outcome === "allowed" ? t("ask.allowedTitle") : t("ask.deniedTitle")}</strong>

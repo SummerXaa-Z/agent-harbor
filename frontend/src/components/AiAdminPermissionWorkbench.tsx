@@ -817,7 +817,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
           </div>
           <section className="approval-process-block" id={permissionRequestStepSectionId("approval")}>
             <header>
-              <strong>{t("section.permissionWizardApproval")}</strong>
+              <strong>{t("section.permissionChangeApproval")}</strong>
               <Badge tone={approvalDisplayTone}>{approvalDisplayLabel}</Badge>
             </header>
             <div className="approval-decision">

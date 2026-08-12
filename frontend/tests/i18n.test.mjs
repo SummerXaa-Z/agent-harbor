@@ -55,7 +55,7 @@ test("English product copy uses acceptance and records wording", () => {
   assert.equal(t("section.aiAdminApprovalJourney"), "Runtime Validation Records");
   assert.doesNotMatch(i18nSource, /text\.cockpitKeyMessageEvidence(?:Detail)?/);
   assert.equal(t("message.acceptanceReportExported"), "Acceptance report exported.");
-  assert.equal(t("ask.recordLayer.capability"), "Capability approval");
+  assert.equal(t("ask.recordLayer.capability"), "Capability governance");
   assert.equal(t("ask.recordLayer.tenant_entitlement"), "Tenant grant");
   assert.equal(t("ask.recordLayer.workspace_assignment"), "Workspace assignment");
   assert.equal(t("ask.recordMessage.tenantBlocked"), "Tenant grant is missing or blocks this tool capability.");
@@ -413,6 +413,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("section.permissionWizardScope"), "选择对象");
   assert.equal(t("section.permissionWizardTemplate"), "选择权限");
   assert.equal(t("section.permissionWizardApproval"), "审批处理");
+  assert.equal(t("section.permissionChangeApproval"), "变更审批");
   assert.equal(t("permissionWorkbench.step.request"), "配置范围");
   assert.equal(t("permissionWorkbench.step.approval"), "审批处理");
   assert.equal(t("text.permissionProcessStepAria"), "第 {index} 步：{label}，{detail}");
@@ -480,7 +481,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("section.permissionRequestReview"), "配置复核");
   assert.equal(t("text.permissionRequestReviewHelp"), "复核本次生效的租户、调用方、工具服务、访问角色和权限包；需要调整时请新建变更。");
   assert.equal(t("text.permissionRequestTemplateHelp"), "从模板开始，系统会自动带出允许工具、阻断工具和数据范围。");
-  assert.equal(t("text.permissionRequestApprovalHelp"), "系统会判断是否需要审批；审批通过后再应用到生产授权链。");
+  assert.equal(t("text.permissionRequestApprovalHelp"), "变更审批只授权这份匹配的权限变更，不会改变工具能力的治理状态；审批就绪后才能应用。");
   assert.equal(t("text.permissionRequestApplyHelp"), "应用已批准的权限包，并确认权限已经生效。");
   assert.equal(t("text.permissionApplyReadyTitle"), "可以应用权限");
   assert.equal(t("text.permissionApplyWaitingTitle"), "等待审批");
@@ -619,7 +620,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("message.permissionApplicationHealthLoaded"), "落地状态已加载。");
   assert.equal(t("message.permissionProductionReadinessLoaded"), "状态检查结果已加载。");
   assert.equal(t("message.acceptanceReportExported"), "上线状态报告已导出。");
-  assert.equal(t("ask.recordLayer.capability"), "能力审批");
+  assert.equal(t("ask.recordLayer.capability"), "能力治理");
   assert.equal(t("ask.recordLayer.tenant_entitlement"), "租户授权");
   assert.equal(t("ask.recordLayer.workspace_assignment"), "工作区分配");
   assert.equal(t("ask.recordMessage.tenantBlocked"), "租户授权缺失，或正在阻断这个工具能力。");
@@ -674,7 +675,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("permissionPreflight.detail.unknown"), "应用前请先复核这项预检结果。");
   assert.equal(t("permissionPreflight.next.unknown"), "请复核预检结果后选择下一步安全动作。");
   assert.equal(t("status.directApplyAllowed"), "可直接应用");
-  assert.equal(t("status.approvalRequired"), "需要审批");
+  assert.equal(t("status.approvalRequired"), "变更需要审批");
   assert.equal(t("status.applicationHealthReady"), "健康");
   assert.equal(t("status.applicationHealthDrifted"), "已漂移");
   assert.equal(t("status.applicationHealthNeedsReview"), "需复核");
@@ -687,7 +688,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("productionCheck.unknown"), "状态检查项");
   assert.equal(t("productionCheck.detail.unknown"), "确认上线前请先复核这项状态检查。");
   assert.equal(t("empty.permissionProductionReadiness.detail"), "应用权限并采集运行、审计和落地记录后执行状态检查。");
-  assert.equal(t("status.approvalPending"), "待审批");
+  assert.equal(t("status.approvalPending"), "变更待审批");
   assert.equal(t("status.stepMissing"), "待完成");
   assert.equal(t("message.permissionApprovalAlreadyPending"), "当前申请已有待审批请求，请先查看或批准现有请求后再继续。");
   assert.equal(t("message.permissionApprovalPending"), "审批请求仍在待审，请先批准再应用。");
@@ -698,8 +699,8 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
     t("message.permissionApprovalAlreadyConsumedRecovery"),
     "审批已被使用。请先刷新状态检查或查看当前权限变更，确认是否已应用；不要重复提交。"
   );
-  assert.equal(t("status.approvalWithdrawn"), "已撤回");
-  assert.equal(t("status.approvalExpired"), "已过期");
+  assert.equal(t("status.approvalWithdrawn"), "变更已撤回");
+  assert.equal(t("status.approvalExpired"), "变更审批已过期");
   assert.equal(t("permissionSimulation.guardrailFinance"), "销售只读权限包不包含财务字段访问。");
   assert.equal(t("permissionPolicy.riskApprovalRequired"), "{capability} 是 {risk} 风险能力，需要先审批。");
   assert.equal(t("message.permissionPackageApprovalRequired"), "该申请需要先审批：{detail}。");

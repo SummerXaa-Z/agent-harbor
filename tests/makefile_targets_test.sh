@@ -61,6 +61,7 @@ assert_target_depends_on "release-check" "evaluation-readiness-test"
 assert_target_exists "dependency-audit"
 assert_target_exists "test-race"
 assert_target_depends_on "release-check" "test-race"
+assert_target_exists "test-postgres-race"
 
 assert_file_contains "Makefile" "scripts/scenario-tenant-permission-center.sh"
 assert_file_contains "Makefile" "PNPM ?= ./scripts/pnpm.sh"
@@ -69,6 +70,7 @@ assert_file_contains "Makefile" 'govulncheck@$(GOVULNCHECK_VERSION)'
 assert_file_contains "Makefile" '$(PNPM) --dir frontend audit --audit-level=low'
 assert_file_contains "Makefile" '$(PNPM) --dir scripts/real-mcp audit --audit-level=low'
 assert_file_contains "Makefile" 'go test -race ./...'
+assert_file_contains "Makefile" 'go test -race ./internal/store -count=1'
 assert_file_contains "Makefile" '$(PNPM) --dir frontend install --frozen-lockfile'
 assert_file_contains "Makefile" '$(PNPM) --dir scripts/real-mcp start'
 assert_file_contains "Makefile" "scripts/pnpm.sh"
@@ -88,6 +90,7 @@ assert_file_contains ".github/workflows/ci.yml" "dependency-security:"
 assert_file_contains ".github/workflows/ci.yml" "name: Dependency security"
 assert_file_contains ".github/workflows/ci.yml" "run: make dependency-audit"
 assert_file_contains ".github/workflows/ci.yml" "run: make test-race"
+assert_file_contains ".github/workflows/ci.yml" "run: make test-postgres-race"
 assert_file_contains ".github/dependabot.yml" "directory: /scripts/real-mcp"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "authRequired"
 assert_file_contains "scripts/scenario-web-console-production-journey.sh" "productionAcceptance.ts"

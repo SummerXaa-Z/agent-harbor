@@ -109,8 +109,8 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
-      - name: Store integration tests
-        run: make test-postgres
+      - name: Store integration tests with race detector
+        run: make test-postgres-race
 
   frontend:
     name: Frontend

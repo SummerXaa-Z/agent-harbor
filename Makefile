@@ -36,7 +36,7 @@ SCENARIO_SCRIPT_LIBS := \
 	scripts/lib/ports.sh \
 	scripts/pnpm.sh
 
-.PHONY: help check release-check dependency-audit fmt gofmt-check test test-fresh test-race vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test evaluation-readiness-test scenario-scripts-lint github-config-lint test-postgres run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
+.PHONY: help check release-check dependency-audit fmt gofmt-check test test-fresh test-race vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test evaluation-readiness-test scenario-scripts-lint github-config-lint test-postgres test-postgres-race run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -59,6 +59,7 @@ help:
 	@printf '  make scenario-scripts-lint Syntax-check scenario scripts\n'
 	@printf '  make github-config-lint    Parse-check GitHub YAML configuration\n'
 	@printf '  make test-postgres         Run store tests using AGENT_HARBOR_TEST_DATABASE_URL\n'
+	@printf '  make test-postgres-race    Run PostgreSQL store tests with the race detector\n'
 	@printf '  make run                   Start the local API server\n'
 	@printf '  make mock-mcp              Start the dependency-free mock MCP server for low-level tests\n'
 	@printf '  make real-mcp              Start the local official SDK MCP demo server\n'
@@ -139,6 +140,13 @@ test-postgres:
 		exit 2; \
 	fi
 	go test ./internal/store -count=1
+
+test-postgres-race:
+	@if [[ -z "$$AGENT_HARBOR_TEST_DATABASE_URL" ]]; then \
+		echo "AGENT_HARBOR_TEST_DATABASE_URL is required for make test-postgres-race" >&2; \
+		exit 2; \
+	fi
+	go test -race ./internal/store -count=1
 
 run:
 	go run ./cmd/agent-harbor

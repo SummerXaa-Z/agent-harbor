@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
+  Braces,
+  CheckCircle2,
   Copy,
   KeyRound,
+  MessageSquareText,
   RefreshCw,
   ShieldCheck,
   Trash2,
@@ -64,10 +67,15 @@ export function AccessHandoffPanel({
   return (
     <section className="access-handoff" aria-label={t("accessHandoff.title")}>
       <div className="access-handoff-header">
-        <div>
-          <span className="section-kicker">{t("accessHandoff.kicker")}</span>
-          <h3>{t("accessHandoff.title")}</h3>
-          <p>{ready ? t("accessHandoff.readyDetail") : t("accessHandoff.blockedDetail")}</p>
+        <div className="access-handoff-title-group">
+          <span className={`access-handoff-title-icon tone-${ready ? "success" : "warning"}`} aria-hidden="true">
+            {ready ? <CheckCircle2 size={20} /> : <ShieldCheck size={20} />}
+          </span>
+          <div>
+            <span className="section-kicker">{t("accessHandoff.kicker")}</span>
+            <h3>{t("accessHandoff.title")}</h3>
+            <p>{ready ? t("accessHandoff.readyDetail") : t("accessHandoff.blockedDetail")}</p>
+          </div>
         </div>
         <div className="access-handoff-header-actions">
           <Badge tone={ready ? "success" : status === "needs_review" ? "warning" : "danger"}>
@@ -94,67 +102,92 @@ export function AccessHandoffPanel({
 
       {handoff && ready ? (
         <>
-          <div className="access-handoff-summary">
-            <div>
-              <span>{t("accessHandoff.allowedCapabilities")}</span>
-              <strong>{handoff.allowedCapabilities.length}</strong>
-            </div>
-            <div>
-              <span>{t("accessHandoff.blockedCapabilities")}</span>
-              <strong>{handoff.blockedCapabilities.length}</strong>
-            </div>
-            <div>
-              <span>{t("accessHandoff.subject")}</span>
-              <strong>{handoff.scope.subjectSelector || t("text.notSpecified")}</strong>
-            </div>
-            <div>
-              <span>{t("section.dataScope")}</span>
-              <strong>{dataScopeText(handoff.dataScopes, t) || t("text.noDataScope")}</strong>
-            </div>
-          </div>
-
-          <div className="access-handoff-capabilities">
-            <div>
-              <strong>{t("accessHandoff.availableResources")}</strong>
-              <div className="access-handoff-chips">
-                {handoff.allowedCapabilities.map((capability) => (
-                  <span className="access-handoff-chip tone-success" key={capability.id}>
-                    {capability.displayName || readableIdentifierLabel(capability.key)}
-                  </span>
-                ))}
+          <section className="access-handoff-section access-handoff-boundary" aria-labelledby="access-handoff-boundary-title">
+            <div className="access-handoff-section-heading">
+              <span className="access-handoff-step-number">1</span>
+              <div>
+                <span className="section-kicker">{t("accessHandoff.boundaryKicker")}</span>
+                <strong id="access-handoff-boundary-title">{t("accessHandoff.boundaryTitle")}</strong>
+                <p>{t("accessHandoff.boundaryDetail")}</p>
               </div>
             </div>
-            {handoff.blockedCapabilities.length > 0 ? (
+
+            <div className="access-handoff-summary">
               <div>
-                <strong>{t("accessHandoff.unavailableResources")}</strong>
+                <span>{t("accessHandoff.allowedCapabilities")}</span>
+                <strong>{handoff.allowedCapabilities.length}</strong>
+              </div>
+              <div>
+                <span>{t("accessHandoff.blockedCapabilities")}</span>
+                <strong>{handoff.blockedCapabilities.length}</strong>
+              </div>
+              <div>
+                <span>{t("accessHandoff.subject")}</span>
+                <strong>{handoff.scope.subjectSelector || t("text.notSpecified")}</strong>
+              </div>
+              <div>
+                <span>{t("section.dataScope")}</span>
+                <strong>{dataScopeText(handoff.dataScopes, t) || t("text.noDataScope")}</strong>
+              </div>
+            </div>
+
+            <div className="access-handoff-capabilities">
+              <div>
+                <strong>{t("accessHandoff.availableResources")}</strong>
                 <div className="access-handoff-chips">
-                  {handoff.blockedCapabilities.map((capability) => (
-                    <span className="access-handoff-chip tone-danger" key={capability.id}>
+                  {handoff.allowedCapabilities.map((capability) => (
+                    <span className="access-handoff-chip tone-success" key={capability.id}>
                       {capability.displayName || readableIdentifierLabel(capability.key)}
                     </span>
                   ))}
                 </div>
               </div>
-            ) : null}
-          </div>
+              {handoff.blockedCapabilities.length > 0 ? (
+                <div>
+                  <strong>{t("accessHandoff.unavailableResources")}</strong>
+                  <div className="access-handoff-chips">
+                    {handoff.blockedCapabilities.map((capability) => (
+                      <span className="access-handoff-chip tone-danger" key={capability.id}>
+                        {capability.displayName || readableIdentifierLabel(capability.key)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
 
           {handoff.copyArtifacts ? (
-            <div className="access-handoff-artifacts">
-              <AccessHandoffArtifact
-                copied={copied === "mcp"}
-                label={t("accessHandoff.mcpConfig")}
-                onCopy={() => void copyValue("mcp", handoff.copyArtifacts?.mcpClientConfig ?? "")}
-                value={handoff.copyArtifacts.mcpClientConfig}
-                t={t}
-              />
-              <AccessHandoffArtifact
-                copied={copied === "prompt"}
-                label={t("accessHandoff.promptTemplate")}
-                onCopy={() => void copyValue("prompt", handoff.copyArtifacts?.promptTemplate ?? "")}
-                value={handoff.copyArtifacts.promptTemplate}
-                t={t}
-              />
-            </div>
+            <section className="access-handoff-section access-handoff-connect" aria-labelledby="access-handoff-connect-title">
+              <div className="access-handoff-section-heading">
+                <span className="access-handoff-step-number">2</span>
+                <div>
+                  <span className="section-kicker">{t("accessHandoff.connectKicker")}</span>
+                  <strong id="access-handoff-connect-title">{t("accessHandoff.connectTitle")}</strong>
+                  <p>{t("accessHandoff.connectDetail")}</p>
+                </div>
+              </div>
+              <div className="access-handoff-artifacts">
+                <AccessHandoffArtifact
+                  copied={copied === "mcp"}
+                  detail={t("accessHandoff.mcpConfigDetail")}
+                  icon={<Braces size={18} />}
+                  label={t("accessHandoff.mcpConfig")}
+                  onCopy={() => void copyValue("mcp", handoff.copyArtifacts?.mcpClientConfig ?? "")}
+                  value={handoff.copyArtifacts.mcpClientConfig}
+                  t={t}
+                />
+                <AccessHandoffArtifact
+                  copied={copied === "prompt"}
+                  detail={t("accessHandoff.promptTemplateDetail")}
+                  icon={<MessageSquareText size={18} />}
+                  label={t("accessHandoff.promptTemplate")}
+                  onCopy={() => void copyValue("prompt", handoff.copyArtifacts?.promptTemplate ?? "")}
+                  value={handoff.copyArtifacts.promptTemplate}
+                  t={t}
+                />
+              </div>
+            </section>
           ) : null}
 
         </>
@@ -207,10 +240,13 @@ function AccessHandoffTokenSection({
   return (
     <section className="access-handoff-token-section">
       <div className="access-handoff-token-heading">
-        <div>
-          <span className="section-kicker">{t("accessHandoff.tokenKicker")}</span>
-          <strong>{t("accessHandoff.tokenTitle")}</strong>
-          <p>{canCreate ? t("accessHandoff.tokenDetail") : t("accessHandoff.tokenBlockedDetail")}</p>
+        <div className="access-handoff-section-heading">
+          <span className="access-handoff-step-number">3</span>
+          <div>
+            <span className="section-kicker">{t("accessHandoff.tokenKicker")}</span>
+            <strong>{t("accessHandoff.tokenTitle")}</strong>
+            <p>{canCreate ? t("accessHandoff.tokenDetail") : t("accessHandoff.tokenBlockedDetail")}</p>
+          </div>
         </div>
         {canCreate ? (
           <button
@@ -267,27 +303,38 @@ function AccessHandoffTokenSection({
 
 function AccessHandoffArtifact({
   copied,
+  detail,
+  icon,
   label,
   onCopy,
   t,
   value
 }: {
   copied: boolean;
+  detail: string;
+  icon: ReactNode;
   label: string;
   onCopy: () => void;
   t: Translator;
   value: string;
 }) {
   return (
-    <article>
-      <div>
-        <strong>{label}</strong>
+    <article className="access-handoff-artifact">
+      <div className="access-handoff-artifact-heading">
+        <span className="access-handoff-artifact-icon" aria-hidden="true">{icon}</span>
+        <div>
+          <strong>{label}</strong>
+          <span>{detail}</span>
+        </div>
         <button className="secondary-button" onClick={onCopy} type="button">
           <Copy size={14} />
           {copied ? t("action.copied") : t("action.copy")}
         </button>
       </div>
-      <pre><code translate="no">{value}</code></pre>
+      <details>
+        <summary>{t("accessHandoff.previewArtifact")}</summary>
+        <pre><code translate="no">{value}</code></pre>
+      </details>
     </article>
   );
 }

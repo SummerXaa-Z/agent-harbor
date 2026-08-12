@@ -753,7 +753,9 @@ export async function createAccessHandoffToken(
   body: CreateAccessHandoffTokenRequest,
   adminKey?: string,
 ): Promise<CreateAccessHandoffTokenResponse> {
-  return request<CreateAccessHandoffTokenResponse>("/api/v1/permission-packages/access-handoff/tokens", { adminKey, body })
+  const requestBody: Record<string, unknown> = { ...body }
+  delete requestBody.traceLimit
+  return request<CreateAccessHandoffTokenResponse>("/api/v1/permission-packages/access-handoff/tokens", { adminKey, body: requestBody })
 }
 
 export async function revokeAccessHandoffToken(id: string, adminKey?: string): Promise<AccessHandoffToken> {

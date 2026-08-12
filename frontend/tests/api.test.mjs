@@ -294,6 +294,7 @@ test("access handoff paths preserve the permission scope and encode token ids", 
 test("access handoff API keeps token creation and revocation on dedicated endpoints", () => {
   assert.match(apiSource, /function fetchAccessHandoff\(/);
   assert.match(apiSource, /function createAccessHandoffToken\(/);
+  assert.match(apiSource, /delete requestBody\.traceLimit/);
   assert.match(apiSource, /function revokeAccessHandoffToken\(/);
   assert.match(apiSource, /permissionPackageAccessHandoffTokenPath\(id\)/);
 });

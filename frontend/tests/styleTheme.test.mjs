@@ -575,7 +575,7 @@ test("tenant organization workspace is a first-class resource entry", () => {
 });
 
 test("desktop sidebar keeps text labels at review viewport widths", () => {
-  assert.match(styles, /\.app-shell\s*\{[^}]*grid-template-columns:\s*220px minmax\(0,\s*1fr\);/s);
+  assert.match(styles, /\.app-shell\s*\{[^}]*grid-template-columns:\s*240px minmax\(0,\s*1fr\);/s);
   assert.match(styles, /@media \(max-width: 1120px\)\s*\{[\s\S]*\.app-shell\s*\{[^}]*grid-template-columns:\s*200px minmax\(0,\s*1fr\);/s);
   assert.doesNotMatch(styles, /@media \(max-width: 1120px\)\s*\{[\s\S]*\.nav-item span\s*\{[^}]*display:\s*none;/s);
   assert.match(styles, /\.section-kicker\s*\{[^}]*white-space:\s*nowrap;/s);
@@ -778,7 +778,7 @@ test("runtime record views are split from the app shell", () => {
 });
 
 test("go-live acceptance overview is split from the app shell", () => {
-  assert.match(app, /from "\.\/components\/GoLiveAcceptanceOverview"/);
+  assert.match(app, /lazy\(\(\) => import\("\.\/components\/GoLiveAcceptanceOverview"\)/);
   assert.match(app, /GoLiveStatusView/);
   assert.doesNotMatch(consoleViews, /export function EvidenceView/);
   assert.match(app, /const acceptanceHistoryRuns = data\?\.evidenceRuns \?\? \[\]/);

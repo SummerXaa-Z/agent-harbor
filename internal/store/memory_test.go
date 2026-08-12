@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
+	"github.com/SummerXaa-Z/agent-harbor/internal/permissionpack"
 	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 )
 
@@ -239,6 +240,7 @@ func TestMemoryPermissionPackageApplicationRoundTrip(t *testing.T) {
 		WorkspaceID:            "ws-sales",
 		TargetID:               "agt_mcp",
 		CallerInstanceID:       "agt_caller",
+		RequestedCapabilityID:  "cap_search",
 		SubjectSelector:        "user:sales-*",
 		RequestText:            "old request",
 		Region:                 "us-east",
@@ -256,7 +258,15 @@ func TestMemoryPermissionPackageApplicationRoundTrip(t *testing.T) {
 	newer.WorkspaceID = "ws-support"
 	newer.CallerInstanceID = "agt_support"
 	newer.AppliedAt = now.Add(time.Minute)
+	legacy := older
+	legacy.ID = "ppa_legacy"
+	legacy.DraftID = "ppd_legacy"
+	legacy.RequestedCapabilityID = ""
+	legacy.AppliedAt = now.Add(-time.Minute)
 
+	if _, err := repo.CreatePermissionPackageApplication(ctx, legacy); err != nil {
+		t.Fatalf("create legacy application: %v", err)
+	}
 	if _, err := repo.CreatePermissionPackageApplication(ctx, older); err != nil {
 		t.Fatalf("create older application: %v", err)
 	}
@@ -277,13 +287,15 @@ func TestMemoryPermissionPackageApplicationRoundTrip(t *testing.T) {
 	}
 	rows[0].AllowedCapabilityIDs[0] = "mutated"
 	again, err := repo.ListPermissionPackageApplications(ctx, PermissionPackageApplicationFilter{
-		ManagementScope:  ManagementScope{TenantID: "tenant-root", WorkspaceID: "ws-support"},
-		CallerInstanceID: "agt_support",
+		ManagementScope:       ManagementScope{TenantID: "tenant-root", WorkspaceID: "ws-support"},
+		CallerInstanceID:      "agt_support",
+		RequestedCapabilityID: "cap_search",
 	})
 	if err != nil {
 		t.Fatalf("list applications again: %v", err)
 	}
-	if len(again) != 1 || again[0].ID != newer.ID || again[0].AllowedCapabilityIDs[0] != "cap_search" {
+	if len(again) != 1 || again[0].ID != newer.ID || again[0].AllowedCapabilityIDs[0] != "cap_search" ||
+		again[0].RequestedCapabilityID != "cap_search" {
 		t.Fatalf("expected cloned workspace/caller application, got %#v", again)
 	}
 	byID, err := repo.ListPermissionPackageApplications(ctx, PermissionPackageApplicationFilter{
@@ -295,6 +307,22 @@ func TestMemoryPermissionPackageApplicationRoundTrip(t *testing.T) {
 	}
 	if len(byID) != 1 || byID[0].ID != older.ID || byID[0].DraftID != older.DraftID {
 		t.Fatalf("expected exact application by id, got %#v", byID)
+	}
+	strictLegacy, err := repo.ListPermissionPackageApplications(ctx, PermissionPackageApplicationFilter{
+		ManagementScope:            ManagementScope{TenantID: "tenant-root"},
+		RequestedCapabilityID:      "",
+		MatchRequestedCapabilityID: true,
+	})
+	if err != nil || len(strictLegacy) != 1 || strictLegacy[0].ID != legacy.ID {
+		t.Fatalf("strict empty requested capability must return only legacy application: rows=%#v err=%v", strictLegacy, err)
+	}
+	strictExact, err := repo.ListPermissionPackageApplications(ctx, PermissionPackageApplicationFilter{
+		ManagementScope:            ManagementScope{TenantID: "tenant-root"},
+		RequestedCapabilityID:      "cap_search",
+		MatchRequestedCapabilityID: true,
+	})
+	if err != nil || len(strictExact) != 2 {
+		t.Fatalf("strict exact requested capability must exclude legacy application: rows=%#v err=%v", strictExact, err)
 	}
 }
 
@@ -310,20 +338,21 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 	}
 
 	older := domain.PermissionPackageApprovalRequest{
-		ID:                   "ppar_old",
-		DraftID:              "ppd_old",
-		TemplateID:           "support-ticket-triage",
-		TemplateVersion:      1,
-		PolicyVersion:        1,
-		TenantID:             "tenant-east",
-		WorkspaceID:          "ws-support",
-		TargetID:             "agt_mcp",
-		CallerInstanceID:     "agt_caller",
-		SubjectSelector:      "user:support-*",
-		RequestText:          "old request",
-		Region:               "us-east",
-		DataScopes:           []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
-		AllowedCapabilityIDs: []string{"cap_update"},
+		ID:                    "ppar_old",
+		DraftID:               "ppd_old",
+		TemplateID:            "support-ticket-triage",
+		TemplateVersion:       1,
+		PolicyVersion:         1,
+		TenantID:              "tenant-east",
+		WorkspaceID:           "ws-support",
+		TargetID:              "agt_mcp",
+		CallerInstanceID:      "agt_caller",
+		RequestedCapabilityID: "cap_update",
+		SubjectSelector:       "user:support-*",
+		RequestText:           "old request",
+		Region:                "us-east",
+		DataScopes:            []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		AllowedCapabilityIDs:  []string{"cap_update"},
 		AllowedCapabilityKeys: []string{
 			"update_ticket",
 		},
@@ -362,7 +391,17 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 	newer.CreatedAt = now.Add(time.Minute)
 	newer.UpdatedAt = now.Add(time.Minute)
 	newer.ExpiresAt = now.Add(25 * time.Hour)
+	legacy := older
+	legacy.ID = "ppar_legacy"
+	legacy.DraftID = "ppd_legacy"
+	legacy.RequestedCapabilityID = ""
+	legacy.Status = domain.PermissionPackageApprovalStatusApproved
+	legacy.CreatedAt = now.Add(-time.Minute)
+	legacy.UpdatedAt = now.Add(-time.Minute)
 
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, legacy); err != nil {
+		t.Fatalf("create legacy approval request: %v", err)
+	}
 	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, older); err != nil {
 		t.Fatalf("create older approval request: %v", err)
 	}
@@ -371,17 +410,18 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 	}
 
 	rows, err := repo.ListPermissionPackageApprovalRequests(ctx, PermissionPackageApprovalRequestFilter{
-		ManagementScope: ManagementScope{TenantID: "tenant-root"},
-		TemplateID:      "support-ticket-triage",
-		Status:          domain.PermissionPackageApprovalStatusApproved,
-		Limit:           1,
+		ManagementScope:       ManagementScope{TenantID: "tenant-root"},
+		TemplateID:            "support-ticket-triage",
+		RequestedCapabilityID: "cap_update",
+		Status:                domain.PermissionPackageApprovalStatusApproved,
+		Limit:                 1,
 	})
 	if err != nil {
 		t.Fatalf("list approval requests: %v", err)
 	}
 	if len(rows) != 1 || rows[0].ID != newer.ID || rows[0].ReviewedBy != "security-admin" ||
 		rows[0].ConsumedByApplicationID != "ppa_new" || rows[0].ConsumedAt.IsZero() ||
-		!rows[0].ExpiresAt.Equal(newer.ExpiresAt) {
+		!rows[0].ExpiresAt.Equal(newer.ExpiresAt) || rows[0].RequestedCapabilityID != "cap_update" {
 		t.Fatalf("expected newest approved request, got %#v", rows)
 	}
 	rows[0].AllowedCapabilityIDs[0] = "mutated"
@@ -419,6 +459,22 @@ func TestMemoryPermissionPackageApprovalRequestRoundTrip(t *testing.T) {
 		finalRows[0].PolicyGate.Reasons[0].ReasonValues["capability"] != "update_ticket" {
 		t.Fatalf("expected cloned rejected request, got %#v", finalRows)
 	}
+	strictLegacy, err := repo.ListPermissionPackageApprovalRequests(ctx, PermissionPackageApprovalRequestFilter{
+		ManagementScope:            ManagementScope{TenantID: "tenant-root"},
+		RequestedCapabilityID:      "",
+		MatchRequestedCapabilityID: true,
+	})
+	if err != nil || len(strictLegacy) != 1 || strictLegacy[0].ID != legacy.ID {
+		t.Fatalf("strict empty requested capability must return only legacy approval: rows=%#v err=%v", strictLegacy, err)
+	}
+	strictExact, err := repo.ListPermissionPackageApprovalRequests(ctx, PermissionPackageApprovalRequestFilter{
+		ManagementScope:            ManagementScope{TenantID: "tenant-root"},
+		RequestedCapabilityID:      "cap_update",
+		MatchRequestedCapabilityID: true,
+	})
+	if err != nil || len(strictExact) != 2 {
+		t.Fatalf("strict exact requested capability must exclude legacy approval: rows=%#v err=%v", strictExact, err)
+	}
 }
 
 func TestMemoryPermissionPackageApprovalRequestRejectsDuplicateActivePending(t *testing.T) {
@@ -435,6 +491,7 @@ func TestMemoryPermissionPackageApprovalRequestRejectsDuplicateActivePending(t *
 		WorkspaceID:                   "ws-support",
 		TargetID:                      "agt_mcp",
 		CallerInstanceID:              "agt_caller",
+		RequestedCapabilityID:         "cap_update",
 		SubjectSelector:               "user:support-*",
 		RequestText:                   "grant support access",
 		Region:                        "us-east",
@@ -450,6 +507,14 @@ func TestMemoryPermissionPackageApprovalRequestRejectsDuplicateActivePending(t *
 	}
 	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, request); err != nil {
 		t.Fatalf("create original approval request: %v", err)
+	}
+	differentRequestedCapability := request
+	differentRequestedCapability.ID = "ppar_different_capability"
+	differentRequestedCapability.RequestedCapabilityID = "cap_search"
+	differentRequestedCapability.CreatedAt = now.Add(30 * time.Second)
+	differentRequestedCapability.UpdatedAt = now.Add(30 * time.Second)
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, differentRequestedCapability); err != nil {
+		t.Fatalf("different requested capability should be a distinct approval: %v", err)
 	}
 
 	duplicate := request
@@ -484,6 +549,7 @@ func TestMemoryTransitionPermissionPackageApprovalRequestRejectsStaleState(t *te
 		WorkspaceID:           "ws-support",
 		TargetID:              "agt_mcp",
 		CallerInstanceID:      "agt_caller",
+		RequestedCapabilityID: "cap_update",
 		SubjectSelector:       "user:support-*",
 		RequestText:           "grant support access",
 		Region:                "us-east",
@@ -504,7 +570,8 @@ func TestMemoryTransitionPermissionPackageApprovalRequestRejectsStaleState(t *te
 	approved.ReviewedBy = "security-one"
 	approved.UpdatedAt = now.Add(time.Minute)
 	approved.ResolvedAt = now.Add(time.Minute)
-	if saved, ok, err := repo.TransitionPermissionPackageApprovalRequest(ctx, approved, approved.UpdatedAt); err != nil || !ok || saved.Status != domain.PermissionPackageApprovalStatusApproved {
+	if saved, ok, err := repo.TransitionPermissionPackageApprovalRequest(ctx, approved, approved.UpdatedAt); err != nil || !ok ||
+		saved.Status != domain.PermissionPackageApprovalStatusApproved || saved.RequestedCapabilityID != request.RequestedCapabilityID {
 		t.Fatalf("approve transition: ok=%v saved=%#v err=%v", ok, saved, err)
 	}
 
@@ -520,7 +587,8 @@ func TestMemoryTransitionPermissionPackageApprovalRequestRejectsStaleState(t *te
 	if err != nil || !ok {
 		t.Fatalf("get approval request: ok=%v err=%v", ok, err)
 	}
-	if loaded.Status != domain.PermissionPackageApprovalStatusApproved || loaded.ReviewedBy != "security-one" {
+	if loaded.Status != domain.PermissionPackageApprovalStatusApproved || loaded.ReviewedBy != "security-one" ||
+		loaded.RequestedCapabilityID != request.RequestedCapabilityID {
 		t.Fatalf("stale transition overwrote first resolution: %#v", loaded)
 	}
 }
@@ -558,12 +626,16 @@ func TestMemoryPermissionPackageApplyConsumesApprovalOnce(t *testing.T) {
 		WorkspaceID:           "ws-support",
 		TargetID:              "agt_mcp",
 		CallerInstanceID:      "agt_caller",
+		RequestedCapabilityID: capability.ID,
 		SubjectSelector:       "user:support-*",
 		RequestText:           "need write access",
 		Region:                "us-east",
 		DataScopes:            []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
 		AllowedCapabilityIDs:  []string{capability.ID},
 		AllowedCapabilityKeys: []string{capability.Key},
+		AllowedCapabilityFingerprints: []string{
+			permissionpack.CapabilityFingerprint(capability),
+		},
 		PolicyGate: domain.PermissionPackagePolicyGate{
 			Decision:         domain.PermissionPackagePolicyDecisionApprovalRequired,
 			CanApplyDirectly: false,
@@ -629,6 +701,7 @@ func TestMemoryPermissionPackageApplyConsumesApprovalOnce(t *testing.T) {
 		WorkspaceID:            approval.WorkspaceID,
 		TargetID:               approval.TargetID,
 		CallerInstanceID:       approval.CallerInstanceID,
+		RequestedCapabilityID:  approval.RequestedCapabilityID,
 		SubjectSelector:        approval.SubjectSelector,
 		RequestText:            approval.RequestText,
 		Region:                 approval.Region,
@@ -646,12 +719,16 @@ func TestMemoryPermissionPackageApplyConsumesApprovalOnce(t *testing.T) {
 	consumedApproval.UpdatedAt = now.Add(time.Minute)
 
 	mutation := PermissionPackageApplyMutation{
-		Capabilities:         []domain.Capability{updatedCapability},
+		Capabilities: []PermissionPackageApplyCapabilityMutation{{
+			ExpectedFingerprint: permissionpack.CapabilityFingerprint(capability),
+			Capability:          updatedCapability,
+		}},
 		TenantEntitlements:   []domain.TenantEntitlement{entitlement},
 		WorkspaceAssignments: []domain.WorkspaceAssignment{workspaceAssignment},
 		InstanceAssignments:  []domain.InstanceAssignment{instanceAssignment},
 		Application:          application,
 		ApprovalRequest:      &consumedApproval,
+		ExpectedApproval:     &approval,
 		AuditEvent: domain.AuditEvent{
 			ID:           "aud_apply",
 			TenantID:     approval.TenantID,
@@ -663,19 +740,37 @@ func TestMemoryPermissionPackageApplyConsumesApprovalOnce(t *testing.T) {
 			CreatedAt:    now.Add(time.Minute),
 		},
 	}
+	driftedApproval := approval
+	driftedApproval.SubjectSelector = "user:finance-*"
+	driftedApproval.DataScopes = []domain.DataScope{{DataDomain: "support", Region: "eu-west"}}
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(ctx, driftedApproval); err != nil || !ok {
+		t.Fatalf("drift approval snapshot: ok=%v err=%v", ok, err)
+	}
+	if _, err := repo.ApplyPermissionPackage(ctx, mutation); !errors.Is(err, ErrPermissionPackageCapabilitySnapshotChanged) {
+		t.Fatalf("expected approval snapshot conflict, got %v", err)
+	}
+	loadedDriftedApproval, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, approval.ID)
+	if err != nil || !ok || !loadedDriftedApproval.ConsumedAt.IsZero() || loadedDriftedApproval.ConsumedByApplicationID != "" {
+		t.Fatalf("approval snapshot conflict must roll back consumption: ok=%v approval=%#v err=%v", ok, loadedDriftedApproval, err)
+	}
+	if _, ok, err := repo.UpdatePermissionPackageApprovalRequest(ctx, approval); err != nil || !ok {
+		t.Fatalf("restore approval snapshot: ok=%v err=%v", ok, err)
+	}
 	applied, err := repo.ApplyPermissionPackage(ctx, mutation)
 	if err != nil {
 		t.Fatalf("apply permission package: %v", err)
 	}
 	if applied.Application.ID != application.ID || applied.ApprovalRequest == nil ||
-		applied.ApprovalRequest.ConsumedByApplicationID != application.ID || applied.ApprovalRequest.ConsumedAt.IsZero() {
+		applied.ApprovalRequest.ConsumedByApplicationID != application.ID || applied.ApprovalRequest.ConsumedAt.IsZero() ||
+		applied.Application.RequestedCapabilityID != capability.ID || applied.ApprovalRequest.RequestedCapabilityID != capability.ID {
 		t.Fatalf("unexpected apply result: %#v", applied)
 	}
 	loadedApproval, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, approval.ID)
 	if err != nil || !ok {
 		t.Fatalf("get consumed approval request: ok=%v err=%v", ok, err)
 	}
-	if loadedApproval.ConsumedByApplicationID != application.ID || loadedApproval.ConsumedAt.IsZero() {
+	if loadedApproval.ConsumedByApplicationID != application.ID || loadedApproval.ConsumedAt.IsZero() ||
+		loadedApproval.RequestedCapabilityID != capability.ID {
 		t.Fatalf("approval request should be consumed once, got %#v", loadedApproval)
 	}
 	events, err := repo.ListAuditEvents(ctx, AuditEventFilter{Action: "permission_package.applied"})
@@ -690,8 +785,8 @@ func TestMemoryPermissionPackageApplyConsumesApprovalOnce(t *testing.T) {
 	secondConsumedApproval := consumedApproval
 	secondConsumedApproval.ConsumedByApplicationID = secondApplication.ID
 	secondMutation.ApprovalRequest = &secondConsumedApproval
-	if _, err := repo.ApplyPermissionPackage(ctx, secondMutation); !errors.Is(err, ErrPermissionPackageApprovalNotConsumable) {
-		t.Fatalf("expected consumed approval error on retry, got %v", err)
+	if _, err := repo.ApplyPermissionPackage(ctx, secondMutation); !errors.Is(err, ErrPermissionPackageApplicationAlreadyApplied) {
+		t.Fatalf("expected duplicate application error on retry, got %v", err)
 	}
 	applications, err := repo.ListPermissionPackageApplications(ctx, PermissionPackageApplicationFilter{})
 	if err != nil || len(applications) != 1 || applications[0].ID != application.ID {
@@ -730,6 +825,7 @@ func TestMemoryPermissionPackageApplyRejectsDuplicateApplication(t *testing.T) {
 		WorkspaceID:            "ws-support",
 		TargetID:               capability.TargetID,
 		CallerInstanceID:       "agt_direct_caller",
+		RequestedCapabilityID:  capability.ID,
 		SubjectSelector:        "user:support-*",
 		RequestText:            "grant support write access",
 		Region:                 "us-east",
@@ -742,21 +838,23 @@ func TestMemoryPermissionPackageApplyRejectsDuplicateApplication(t *testing.T) {
 		AppliedAt:              now.Add(time.Minute),
 	}
 	mutation := PermissionPackageApplyMutation{
-		Capabilities: []domain.Capability{{
-			ID:              capability.ID,
-			TargetID:        capability.TargetID,
-			Type:            capability.Type,
-			Key:             capability.Key,
-			DisplayName:     capability.DisplayName,
-			Action:          capability.Action,
-			DataScopes:      application.DataScopes,
-			Sensitivity:     capability.Sensitivity,
-			RiskLevel:       capability.RiskLevel,
-			DiscoveryStatus: domain.CapabilityDiscoveryApproved,
-			Version:         capability.Version,
-			DiscoveredAt:    capability.DiscoveredAt,
-			UpdatedAt:       application.AppliedAt,
-		}},
+		Capabilities: []PermissionPackageApplyCapabilityMutation{{
+			ExpectedFingerprint: permissionpack.CapabilityFingerprint(capability),
+			Capability: domain.Capability{
+				ID:              capability.ID,
+				TargetID:        capability.TargetID,
+				Type:            capability.Type,
+				Key:             capability.Key,
+				DisplayName:     capability.DisplayName,
+				Action:          capability.Action,
+				DataScopes:      application.DataScopes,
+				Sensitivity:     capability.Sensitivity,
+				RiskLevel:       capability.RiskLevel,
+				DiscoveryStatus: domain.CapabilityDiscoveryApproved,
+				Version:         capability.Version,
+				DiscoveredAt:    capability.DiscoveredAt,
+				UpdatedAt:       application.AppliedAt,
+			}}},
 		TenantEntitlements: []domain.TenantEntitlement{{
 			ID:           application.TenantEntitlementIDs[0],
 			TenantID:     application.TenantID,
@@ -810,6 +908,7 @@ func TestMemoryPermissionPackageApplyRejectsDuplicateApplication(t *testing.T) {
 	}
 	retry := mutation
 	retry.Application.ID = "ppa_direct_apply_retry"
+	retry.Application.RequestedCapabilityID = "cap_same_grant_different_request"
 	retry.Application.TenantEntitlementIDs = []string{"ent_direct_update_retry"}
 	retry.Application.WorkspaceAssignmentIDs = []string{"wsa_direct_update_retry"}
 	retry.Application.InstanceAssignmentIDs = []string{"ina_direct_update_retry"}
@@ -838,6 +937,127 @@ func TestMemoryPermissionPackageApplyRejectsDuplicateApplication(t *testing.T) {
 	events, err := repo.ListAuditEvents(ctx, AuditEventFilter{Action: "permission_package.applied"})
 	if err != nil || len(events) != 1 || events[0].ID != mutation.AuditEvent.ID {
 		t.Fatalf("retry should not create duplicate audit events, events=%#v err=%v", events, err)
+	}
+}
+
+func TestMemoryPermissionPackageApplyRejectsCapabilitySnapshotDriftBeforeWrites(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	capability := domain.Capability{
+		ID:              "cap_snapshot_drift",
+		TargetID:        "agt_snapshot_target",
+		Type:            domain.CapabilityTypeMCPTool,
+		Key:             "update_ticket",
+		DisplayName:     "Update ticket",
+		Action:          domain.CapabilityActionWrite,
+		InputSchema:     map[string]any{"type": "object", "required": []any{"ticketId"}},
+		DataDomains:     []string{"support"},
+		DataScopes:      []domain.DataScope{{DataDomain: "support", Region: "us-east"}},
+		Sensitivity:     domain.CapabilitySensitivityConfidential,
+		RiskLevel:       domain.CapabilityRiskHigh,
+		DiscoveryStatus: domain.CapabilityDiscoveryPendingReview,
+		Version:         1,
+		DiscoveredAt:    now,
+		UpdatedAt:       now,
+	}
+	if _, err := repo.UpsertCapability(ctx, capability); err != nil {
+		t.Fatalf("upsert capability: %v", err)
+	}
+	fingerprint := permissionpack.CapabilityFingerprint(capability)
+	approval := domain.PermissionPackageApprovalRequest{
+		ID:                            "ppar_snapshot_drift",
+		DraftID:                       "ppd_snapshot_drift",
+		TemplateID:                    "support-ticket-triage",
+		TemplateVersion:               2,
+		PolicyVersion:                 1,
+		TenantID:                      "tenant-east",
+		WorkspaceID:                   "ws-support",
+		TargetID:                      capability.TargetID,
+		CallerInstanceID:              "agt_snapshot_caller",
+		RequestedCapabilityID:         capability.ID,
+		SubjectSelector:               "user:support-*",
+		DataScopes:                    capability.DataScopes,
+		AllowedCapabilityIDs:          []string{capability.ID},
+		AllowedCapabilityKeys:         []string{capability.Key},
+		AllowedCapabilityFingerprints: []string{fingerprint},
+		Status:                        domain.PermissionPackageApprovalStatusApproved,
+		CreatedAt:                     now,
+		UpdatedAt:                     now,
+		ResolvedAt:                    now,
+		ExpiresAt:                     now.Add(time.Hour),
+	}
+	if _, err := repo.CreatePermissionPackageApprovalRequest(ctx, approval); err != nil {
+		t.Fatalf("create approval: %v", err)
+	}
+	application := domain.PermissionPackageApplication{
+		ID:                    "ppa_snapshot_drift",
+		DraftID:               approval.DraftID,
+		TemplateID:            approval.TemplateID,
+		TemplateVersion:       approval.TemplateVersion,
+		TenantID:              approval.TenantID,
+		WorkspaceID:           approval.WorkspaceID,
+		TargetID:              approval.TargetID,
+		CallerInstanceID:      approval.CallerInstanceID,
+		RequestedCapabilityID: capability.ID,
+		SubjectSelector:       approval.SubjectSelector,
+		DataScopes:            approval.DataScopes,
+		AllowedCapabilityIDs:  []string{capability.ID},
+		AllowedCapabilityKeys: []string{capability.Key},
+		AppliedAt:             now.Add(time.Minute),
+	}
+	consumedApproval := approval
+	consumedApproval.ConsumedAt = application.AppliedAt
+	consumedApproval.ConsumedByApplicationID = application.ID
+	consumedApproval.UpdatedAt = application.AppliedAt
+	updatedCapability := capability
+	updatedCapability.DiscoveryStatus = domain.CapabilityDiscoveryApproved
+	updatedCapability.UpdatedAt = application.AppliedAt
+	mutation := PermissionPackageApplyMutation{
+		Capabilities: []PermissionPackageApplyCapabilityMutation{{
+			ExpectedFingerprint: fingerprint,
+			Capability:          updatedCapability,
+		}},
+		Application:      application,
+		ApprovalRequest:  &consumedApproval,
+		ExpectedApproval: &approval,
+		AuditEvent: domain.AuditEvent{
+			ID:           "aud_snapshot_drift",
+			TenantID:     application.TenantID,
+			WorkspaceID:  application.WorkspaceID,
+			Action:       "permission_package.applied",
+			ResourceType: "permission_package",
+			ResourceID:   application.ID,
+			CreatedAt:    application.AppliedAt,
+		},
+	}
+
+	drifted := capability
+	drifted.RiskLevel = domain.CapabilityRiskCritical
+	drifted.InputSchema = map[string]any{"type": "object", "required": []any{"ticketId", "confirm"}}
+	drifted.Version = 2
+	drifted.UpdatedAt = now.Add(30 * time.Second)
+	if _, ok, err := repo.UpdateCapability(ctx, drifted); err != nil || !ok {
+		t.Fatalf("drift capability: ok=%v err=%v", ok, err)
+	}
+	if _, err := repo.ApplyPermissionPackage(ctx, mutation); !errors.Is(err, ErrPermissionPackageCapabilitySnapshotChanged) {
+		t.Fatalf("expected capability snapshot conflict, got %v", err)
+	}
+	current, ok, err := repo.GetCapability(ctx, capability.ID)
+	if err != nil || !ok || current.RiskLevel != domain.CapabilityRiskCritical || current.Version != 2 || current.DiscoveryStatus != domain.CapabilityDiscoveryPendingReview {
+		t.Fatalf("drifted capability must not be overwritten: ok=%v capability=%#v err=%v", ok, current, err)
+	}
+	storedApproval, ok, err := repo.GetPermissionPackageApprovalRequest(ctx, approval.ID)
+	if err != nil || !ok || !storedApproval.ConsumedAt.IsZero() || storedApproval.ConsumedByApplicationID != "" {
+		t.Fatalf("snapshot conflict must not consume approval: ok=%v approval=%#v err=%v", ok, storedApproval, err)
+	}
+	applications, err := repo.ListPermissionPackageApplications(ctx, PermissionPackageApplicationFilter{})
+	if err != nil || len(applications) != 0 {
+		t.Fatalf("snapshot conflict must not create application: rows=%#v err=%v", applications, err)
+	}
+	events, err := repo.ListAuditEvents(ctx, AuditEventFilter{ResourceID: application.ID})
+	if err != nil || len(events) != 0 {
+		t.Fatalf("snapshot conflict must not append audit: events=%#v err=%v", events, err)
 	}
 }
 

@@ -103,12 +103,14 @@ export function ApprovalDropdown({
                 className={`approval-dropdown-option ${selected ? "is-selected" : ""} ${index === activeIndex ? "is-active" : ""}`}
                 id={`${rootId}-option-${index}`}
                 key={option.value || "empty-option"}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
                   onChange(option.value);
                   setOpen(false);
                 }}
                 onMouseEnter={() => setActiveIndex(index)}
                 role="option"
+                tabIndex={-1}
                 type="button"
               >
                 <span>{option.label}</span>

@@ -165,6 +165,7 @@ function accessHandoffFilterKey(filter: PermissionPackageProductionReadinessFilt
     filter.callerInstanceId,
     filter.region ?? "",
     filter.requestText ?? "",
+    filter.requestedCapabilityId ?? "",
     filter.subjectId ?? "",
     filter.subjectSelector ?? "",
     filter.targetId,

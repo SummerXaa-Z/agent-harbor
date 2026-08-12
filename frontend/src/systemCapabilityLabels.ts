@@ -1,6 +1,7 @@
 import type { Translator } from "./consolePresenters";
 
 export const systemCapabilityLabelKeyByName: Record<string, string> = {
+  capability_data_domain_classification_v1: "systemCapability.capabilityDataDomainClassification",
   management_mcp_tools_metadata_v4: "systemCapability.managementMcpToolsMetadataV4",
   permission_package_applications: "systemCapability.permissionPackageApplications",
   permission_package_application_health: "systemCapability.permissionPackageApplicationHealth",
@@ -11,7 +12,8 @@ export const systemCapabilityLabelKeyByName: Record<string, string> = {
   permission_package_approval_requests: "systemCapability.permissionPackageApprovalRequests",
   permission_package_approval_withdraw: "systemCapability.permissionPackageApprovalWithdraw",
   permission_package_consumed_approval_recovery: "systemCapability.permissionPackageConsumedApprovalRecovery",
-  permission_package_production_readiness: "systemCapability.permissionPackageProductionReadiness"
+  permission_package_production_readiness: "systemCapability.permissionPackageProductionReadiness",
+  permission_package_requested_capability_v1: "systemCapability.permissionPackageRequestedCapability"
 };
 
 export function systemCapabilityLabelKeys(capabilities: string[] | undefined): string[] {

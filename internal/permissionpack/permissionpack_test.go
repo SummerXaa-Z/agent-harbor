@@ -32,7 +32,7 @@ func TestBuildDraftPolicyGateAllowsLowRiskRead(t *testing.T) {
 
 func TestBuildDraftPolicyGateRequiresApprovalForRiskyAllowedCapability(t *testing.T) {
 	draft, err := BuildDraft(permissionPackageTestInput("support-ticket-triage"), []domain.Capability{
-		permissionPackageTestCapability("cap-write", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential),
+		permissionPackageTestCapabilityWithDomain("cap-write", "support", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential),
 	})
 	if err != nil {
 		t.Fatalf("build draft: %v", err)
@@ -69,7 +69,7 @@ func TestBuildDraftRejectsUnboundedSubjectSelector(t *testing.T) {
 		input := permissionPackageTestInput("support-ticket-triage")
 		input.SubjectSelector = subjectSelector
 		draft, err := BuildDraft(input, []domain.Capability{
-			permissionPackageTestCapability("cap-write", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential),
+			permissionPackageTestCapabilityWithDomain("cap-write", "support", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential),
 		})
 		if err != nil {
 			t.Fatalf("build draft with subjectSelector %q: %v", subjectSelector, err)
@@ -80,6 +80,105 @@ func TestBuildDraftRejectsUnboundedSubjectSelector(t *testing.T) {
 		if !containsString(draft.Readiness.MissingFields, "subjectSelector") {
 			t.Fatalf("subjectSelector %q should be reported as missing, got %#v", subjectSelector, draft.Readiness)
 		}
+	}
+}
+
+func TestBuildDraftBlocksCapabilitiesOutsideTemplateDomain(t *testing.T) {
+	draft, err := BuildDraft(permissionPackageTestInput("support-ticket-triage"), []domain.Capability{
+		permissionPackageTestCapabilityWithDomain("cap-support", "support", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal),
+		permissionPackageTestCapabilityWithDomain("cap-crm", "crm", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal),
+	})
+	if err != nil {
+		t.Fatalf("build draft: %v", err)
+	}
+	if len(draft.AllowedCapabilities) != 1 || draft.AllowedCapabilities[0].ID != "cap-support" {
+		t.Fatalf("expected only support capability allowed, got %#v", draft.AllowedCapabilities)
+	}
+	if len(draft.BlockedCapabilities) != 1 || draft.BlockedCapabilities[0].ID != "cap-crm" {
+		t.Fatalf("expected CRM capability blocked, got %#v", draft.BlockedCapabilities)
+	}
+}
+
+func TestBuildDraftBlocksCapabilityWithoutDomain(t *testing.T) {
+	capability := permissionPackageTestCapabilityWithDomain("cap-unknown-domain", "", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal)
+	draft, err := BuildDraft(permissionPackageTestInput("sales-readonly"), []domain.Capability{capability})
+	if err != nil {
+		t.Fatalf("build draft: %v", err)
+	}
+	if len(draft.AllowedCapabilities) != 0 || len(draft.BlockedCapabilities) != 1 {
+		t.Fatalf("expected unknown-domain capability to fail closed, got allowed=%#v blocked=%#v", draft.AllowedCapabilities, draft.BlockedCapabilities)
+	}
+	if draft.Readiness.CanApply {
+		t.Fatal("expected unknown-domain draft not ready")
+	}
+}
+
+func TestBuildDraftEnforcesDenyGuardrail(t *testing.T) {
+	capability := permissionPackageTestCapabilityWithDomain("cap-delete-ticket", "support", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal)
+	capability.Key = "delete-ticket"
+	draft, err := BuildDraft(permissionPackageTestInput("support-ticket-triage"), []domain.Capability{capability})
+	if err != nil {
+		t.Fatalf("build draft: %v", err)
+	}
+	if len(draft.AllowedCapabilities) != 0 || len(draft.BlockedCapabilities) != 1 {
+		t.Fatalf("expected deny guardrail capability blocked, got allowed=%#v blocked=%#v", draft.AllowedCapabilities, draft.BlockedCapabilities)
+	}
+}
+
+func TestBuildDraftNarrowsRequestedCapabilityToExactAllowBoundary(t *testing.T) {
+	input := permissionPackageTestInput("support-ticket-triage")
+	input.RequestedCapabilityID = "cap-update-ticket"
+	draft, err := BuildDraft(input, []domain.Capability{
+		permissionPackageTestCapabilityWithDomain("cap-read-ticket", "support", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal),
+		permissionPackageTestCapabilityWithDomain("cap-update-ticket", "support", domain.CapabilityActionWrite, domain.CapabilityRiskMedium, domain.CapabilitySensitivityInternal),
+	})
+	if err != nil {
+		t.Fatalf("build exact capability draft: %v", err)
+	}
+	if !draft.Readiness.CanApply {
+		t.Fatalf("expected requested capability draft to be structurally ready: %#v", draft.Readiness)
+	}
+	if len(draft.AllowedCapabilities) != 1 || draft.AllowedCapabilities[0].ID != input.RequestedCapabilityID {
+		t.Fatalf("expected only requested capability allowed, got %#v", draft.AllowedCapabilities)
+	}
+	if len(draft.BlockedCapabilities) != 1 || draft.BlockedCapabilities[0].ID != "cap-read-ticket" {
+		t.Fatalf("expected sibling capability retained as blocked evidence, got %#v", draft.BlockedCapabilities)
+	}
+}
+
+func TestBuildDraftFailsClosedWhenRequestedCapabilityIsNotSafelyCovered(t *testing.T) {
+	tests := []struct {
+		name       string
+		capability domain.Capability
+	}{
+		{
+			name:       "missing",
+			capability: permissionPackageTestCapabilityWithDomain("cap-other", "support", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal),
+		},
+		{
+			name:       "wrong domain",
+			capability: permissionPackageTestCapabilityWithDomain("cap-export", "crm", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal),
+		},
+		{
+			name:       "disallowed action",
+			capability: permissionPackageTestCapabilityWithDomain("cap-export", "support", domain.CapabilityActionExport, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input := permissionPackageTestInput("support-ticket-triage")
+			input.RequestedCapabilityID = "cap-export"
+			draft, err := BuildDraft(input, []domain.Capability{test.capability})
+			if err != nil {
+				t.Fatalf("build exact capability draft: %v", err)
+			}
+			if draft.Readiness.CanApply || len(draft.AllowedCapabilities) != 0 {
+				t.Fatalf("unsafe requested capability must fail closed: %#v", draft)
+			}
+			if !containsString(draft.Readiness.Warnings, "The requested capability is not safely covered by this permission package.") {
+				t.Fatalf("expected exact capability blocker, got %#v", draft.Readiness.Warnings)
+			}
+		})
 	}
 }
 
@@ -106,6 +205,10 @@ func containsString(values []string, want string) bool {
 }
 
 func permissionPackageTestCapability(id string, action domain.CapabilityAction, risk domain.CapabilityRisk, sensitivity domain.CapabilitySensitivity) domain.Capability {
+	return permissionPackageTestCapabilityWithDomain(id, "crm", action, risk, sensitivity)
+}
+
+func permissionPackageTestCapabilityWithDomain(id string, dataDomain string, action domain.CapabilityAction, risk domain.CapabilityRisk, sensitivity domain.CapabilitySensitivity) domain.Capability {
 	now := time.Date(2026, 6, 5, 10, 0, 0, 0, time.UTC)
 	return domain.Capability{
 		ID:              id,
@@ -114,8 +217,8 @@ func permissionPackageTestCapability(id string, action domain.CapabilityAction, 
 		Key:             id + "-key",
 		DisplayName:     id,
 		Action:          action,
-		DataDomains:     []string{"crm"},
-		DataScopes:      []domain.DataScope{{DataDomain: "crm", Region: "us-east", TenantFilter: "tenant_id = 'tenant-east'"}},
+		DataDomains:     []string{dataDomain},
+		DataScopes:      []domain.DataScope{{DataDomain: dataDomain, Region: "us-east", TenantFilter: "tenant_id = 'tenant-east'"}},
 		Sensitivity:     sensitivity,
 		RiskLevel:       risk,
 		EnforcementMode: domain.CapabilityEnforcementGateway,

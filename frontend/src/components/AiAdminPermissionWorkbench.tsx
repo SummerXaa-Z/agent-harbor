@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   ClipboardCheck,
@@ -16,6 +16,9 @@ import {
   normalizeAccessSubjectOptions,
   type AccessSubjectOption
 } from "../accessSubjects";
+import {
+  accessDecisionReasonLabel
+} from "../askJourney";
 import {
   aiAdminApprovalReadinessRows,
   type AiAdminApprovalReadinessState
@@ -259,9 +262,19 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
         workspace: permissionHandoffContext.workspaceName ?? permissionHandoffContext.workspaceId
       })
       : tx(t, "text.permissionHandoffDetail", {
-        caller: permissionHandoffContext.callerName ?? permissionHandoffContext.callerInstanceId ?? "-",
-        target: permissionHandoffContext.targetName ?? permissionHandoffContext.targetId ?? "-"
+        caller: permissionEntityDisplayName(permissionHandoffContext.callerName ?? permissionHandoffContext.callerInstanceId ?? "-", t),
+        capability: permissionHandoffContext.capabilityName ?? permissionHandoffContext.capabilityId ?? "-",
+        subject: permissionHandoffContext.subjectId ?? t("text.permissionHandoffNoSubject"),
+        target: permissionEntityDisplayName(permissionHandoffContext.targetName ?? permissionHandoffContext.targetId ?? "-", t)
       })
+    : "";
+  const permissionHandoffReason = permissionHandoffContext?.decisionReason
+    ? tx(t, "text.permissionHandoffReason", {
+      layer: permissionHandoffContext.brokenLayer
+        ? t(`ask.recordLayer.${permissionHandoffContext.brokenLayer}`, permissionHandoffContext.brokenLayer)
+        : t("text.permissionHandoffUnknownLayer"),
+      reason: accessDecisionReasonLabel(permissionHandoffContext.decisionReason, t)
+    })
     : "";
   const tenantPath = permissionTenantPathLabel(form.tenantId, tenants, t);
   const workspaceName = permissionWorkspaceDisplayName(form.workspaceId, agents, t);
@@ -281,10 +294,19 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     { value: "", label: t("form.allMcpTargets") },
     ...targetOptions.map((agent) => ({ value: agent.id, label: agent.label }))
   ];
-  const templateDropdownOptions = templates.map((template) => ({
-    value: template.id,
-    label: permissionPackageTemplateName(template, t)
-  }));
+  const templateDropdownOptions = [
+    { value: "", label: t("form.selectPermissionPackage") },
+    ...templates.map((template) => ({
+      value: template.id,
+      label: permissionPackageTemplateName(template, t)
+    }))
+  ];
+  const handoffTemplateMissing = permissionHandoffContext?.sourceView === "ask"
+    && (!permissionHandoffContext.templateId || !templates.some((template) => template.id === permissionHandoffContext.templateId));
+
+  useEffect(() => {
+    if (handoffTemplateMissing) setPermissionDraftSheet("edit");
+  }, [handoffTemplateMissing, permissionHandoffContext]);
   const approvalRequestEffectiveStatus = approvalRequest ? permissionPackageApprovalEffectiveStatus(approvalRequest) : null;
   const hasApprovedRequest = approvalRequestEffectiveStatus === "approved";
   const canApply = draft.readiness.canApply && (draft.policyGate.canApplyDirectly || hasApprovedRequest);
@@ -708,6 +730,12 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
           <div>
             <strong>{permissionHandoffTitle}</strong>
             <span>{permissionHandoffDetail}</span>
+            {permissionHandoffReason ? <span>{permissionHandoffReason}</span> : null}
+            {handoffTemplateMissing ? (
+              <span className="permission-handoff-template-warning" role="alert">
+                {t("text.permissionHandoffNoTemplate")}
+              </span>
+            ) : null}
           </div>
           <button className="secondary-button" onClick={onDismissPermissionHandoff} type="button">
             <X aria-hidden="true" size={14} />

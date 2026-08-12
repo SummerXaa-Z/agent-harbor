@@ -3,12 +3,14 @@ package store
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
+	"github.com/SummerXaa-Z/agent-harbor/internal/permissionpack"
 )
 
 type Repository interface {
@@ -32,6 +34,7 @@ type Repository interface {
 	ListAgentKeys(context.Context, ManagementScope) ([]domain.AgentKey, error)
 	RevokeAgentKey(context.Context, string, time.Time) (domain.AgentKey, bool, error)
 	RevokeAgentKeyWithAudit(context.Context, string, time.Time, AgentKeyAuditBuilder) (domain.AgentKey, bool, error)
+	FindAgentKeyByHash(context.Context, string, time.Time) (domain.AgentKey, bool, error)
 	FindAgentByKeyHash(context.Context, string, time.Time) (domain.Agent, bool, error)
 	CreateAccessGrant(context.Context, domain.AccessGrant) (domain.AccessGrant, error)
 	CreateAccessGrantWithAudit(context.Context, domain.AccessGrant, AccessGrantAuditBuilder) (domain.AccessGrant, error)
@@ -91,15 +94,22 @@ type AdminIdentityAuditBuilder func(domain.AdminIdentity) domain.AuditEvent
 var ErrPermissionPackageApprovalNotConsumable = errors.New("permission package approval request is not consumable")
 var ErrPermissionPackageApprovalAlreadyPending = errors.New("matching permission package approval request already pending")
 var ErrPermissionPackageApplicationAlreadyApplied = errors.New("matching permission package application already applied")
+var ErrPermissionPackageCapabilitySnapshotChanged = errors.New("permission package capability snapshot changed")
 var ErrActiveAccessHandoffToken = errors.New("active access handoff token already exists")
 
+type PermissionPackageApplyCapabilityMutation struct {
+	ExpectedFingerprint string
+	Capability          domain.Capability
+}
+
 type PermissionPackageApplyMutation struct {
-	Capabilities         []domain.Capability
+	Capabilities         []PermissionPackageApplyCapabilityMutation
 	TenantEntitlements   []domain.TenantEntitlement
 	WorkspaceAssignments []domain.WorkspaceAssignment
 	InstanceAssignments  []domain.InstanceAssignment
 	Application          domain.PermissionPackageApplication
 	ApprovalRequest      *domain.PermissionPackageApprovalRequest
+	ExpectedApproval     *domain.PermissionPackageApprovalRequest
 	AuditEvent           domain.AuditEvent
 }
 
@@ -169,20 +179,24 @@ type InstanceAssignmentFilter struct {
 
 type PermissionPackageApplicationFilter struct {
 	ManagementScope
-	ID               string
-	TemplateID       string
-	TargetID         string
-	CallerInstanceID string
-	Limit            int
+	ID                         string
+	TemplateID                 string
+	TargetID                   string
+	CallerInstanceID           string
+	RequestedCapabilityID      string
+	MatchRequestedCapabilityID bool
+	Limit                      int
 }
 
 type PermissionPackageApprovalRequestFilter struct {
 	ManagementScope
-	TemplateID       string
-	TargetID         string
-	CallerInstanceID string
-	Status           domain.PermissionPackageApprovalStatus
-	Limit            int
+	TemplateID                 string
+	TargetID                   string
+	CallerInstanceID           string
+	RequestedCapabilityID      string
+	MatchRequestedCapabilityID bool
+	Status                     domain.PermissionPackageApprovalStatus
+	Limit                      int
 }
 
 type CapabilityAccessRequest struct {
@@ -526,6 +540,21 @@ func (m *Memory) FindAgentByKeyHash(_ context.Context, hash string, now time.Tim
 	return domain.Agent{}, false, nil
 }
 
+func (m *Memory) FindAgentKeyByHash(_ context.Context, hash string, now time.Time) (domain.AgentKey, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, key := range m.keys {
+		if key.Hash != hash {
+			continue
+		}
+		if !key.RevokedAt.IsZero() || !now.Before(key.ExpiresAt) {
+			return domain.AgentKey{}, false, nil
+		}
+		return key, true, nil
+	}
+	return domain.AgentKey{}, false, nil
+}
+
 func (m *Memory) CreateAccessGrant(_ context.Context, grant domain.AccessGrant) (domain.AccessGrant, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -768,8 +797,8 @@ func (m *Memory) ApplyPermissionPackage(_ context.Context, mutation PermissionPa
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for _, capability := range mutation.Capabilities {
-		if _, ok := m.capabilities[capability.ID]; !ok {
+	for _, capabilityMutation := range mutation.Capabilities {
+		if _, ok := m.capabilities[capabilityMutation.Capability.ID]; !ok {
 			return PermissionPackageApplyMutationResult{}, domain.NotFound("capability not found")
 		}
 	}
@@ -781,12 +810,32 @@ func (m *Memory) ApplyPermissionPackage(_ context.Context, mutation PermissionPa
 		InstanceAssignments:  make([]domain.InstanceAssignment, 0, len(mutation.InstanceAssignments)),
 	}
 
-	if mutation.ApprovalRequest == nil {
-		for _, existing := range m.packageApplications {
-			if permissionPackageApplicationsShareDuplicateKey(existing, mutation.Application) {
-				return PermissionPackageApplyMutationResult{}, ErrPermissionPackageApplicationAlreadyApplied
-			}
+	for _, existing := range m.packageApplications {
+		if permissionPackageApplicationsShareDuplicateKey(existing, mutation.Application) {
+			return PermissionPackageApplyMutationResult{}, ErrPermissionPackageApplicationAlreadyApplied
 		}
+	}
+
+	if mutation.ApprovalRequest != nil {
+		existing, ok := m.packageApprovals[mutation.ApprovalRequest.ID]
+		if !ok || !permissionPackageApprovalRequestCanConsume(existing, mutation.ApprovalRequest.ConsumedAt) {
+			return PermissionPackageApplyMutationResult{}, ErrPermissionPackageApprovalNotConsumable
+		}
+		storedApproval := existing
+		storedApproval.ConsumedAt = mutation.ApprovalRequest.ConsumedAt
+		storedApproval.ConsumedByApplicationID = mutation.ApprovalRequest.ConsumedByApplicationID
+		storedApproval.UpdatedAt = mutation.ApprovalRequest.UpdatedAt
+		mutation.ApprovalRequest = &storedApproval
+		if !permissionPackageApplyApprovalSnapshotMatches(mutation.ExpectedApproval, storedApproval, mutation.Application) {
+			return PermissionPackageApplyMutationResult{}, ErrPermissionPackageCapabilitySnapshotChanged
+		}
+	}
+
+	if err := validatePermissionPackageApplyCapabilitySnapshots(mutation, func(id string) (domain.Capability, bool) {
+		capability, ok := m.capabilities[id]
+		return capability, ok
+	}); err != nil {
+		return PermissionPackageApplyMutationResult{}, err
 	}
 
 	if mutation.ApprovalRequest != nil {
@@ -804,7 +853,8 @@ func (m *Memory) ApplyPermissionPackage(_ context.Context, mutation PermissionPa
 		result.ApprovalRequest = &clonedApproval
 	}
 
-	for _, capability := range mutation.Capabilities {
+	for _, capabilityMutation := range mutation.Capabilities {
+		capability := capabilityMutation.Capability
 		existing := m.capabilities[capability.ID]
 		capability.TargetID = existing.TargetID
 		capability.Type = existing.Type
@@ -836,6 +886,117 @@ func (m *Memory) ApplyPermissionPackage(_ context.Context, mutation PermissionPa
 	m.audits = append(m.audits, mutation.AuditEvent)
 	result.AuditEvent = mutation.AuditEvent
 	return result, nil
+}
+
+func permissionPackageApplyApprovalSnapshotMatches(expected *domain.PermissionPackageApprovalRequest, actual domain.PermissionPackageApprovalRequest, application domain.PermissionPackageApplication) bool {
+	if expected == nil || expected.ID == "" || actual.ID != expected.ID {
+		return false
+	}
+	return actual.DraftID == expected.DraftID &&
+		actual.TemplateID == expected.TemplateID &&
+		actual.TemplateVersion == expected.TemplateVersion &&
+		actual.PolicyVersion == expected.PolicyVersion &&
+		actual.TenantID == expected.TenantID &&
+		actual.WorkspaceID == expected.WorkspaceID &&
+		actual.TargetID == expected.TargetID &&
+		actual.CallerInstanceID == expected.CallerInstanceID &&
+		actual.RequestedCapabilityID == expected.RequestedCapabilityID &&
+		actual.SubjectSelector == expected.SubjectSelector &&
+		actual.RequestText == expected.RequestText &&
+		actual.Region == expected.Region &&
+		actual.Status == expected.Status &&
+		actual.RequestedBy == expected.RequestedBy &&
+		actual.ReviewedBy == expected.ReviewedBy &&
+		actual.ReviewComment == expected.ReviewComment &&
+		actual.CreatedAt.Equal(expected.CreatedAt) &&
+		actual.ResolvedAt.Equal(expected.ResolvedAt) &&
+		actual.ExpiresAt.Equal(expected.ExpiresAt) &&
+		samePermissionPackageApprovalDataScopes(actual.DataScopes, expected.DataScopes) &&
+		samePermissionPackageApprovalStringSet(actual.AllowedCapabilityIDs, expected.AllowedCapabilityIDs) &&
+		samePermissionPackageApprovalStringSet(actual.AllowedCapabilityKeys, expected.AllowedCapabilityKeys) &&
+		samePermissionPackageApprovalStringSet(actual.AllowedCapabilityFingerprints, expected.AllowedCapabilityFingerprints) &&
+		reflect.DeepEqual(actual.PolicyGate, expected.PolicyGate) &&
+		actual.DraftID == application.DraftID &&
+		actual.TemplateID == application.TemplateID &&
+		actual.TemplateVersion == application.TemplateVersion &&
+		actual.TenantID == application.TenantID &&
+		actual.WorkspaceID == application.WorkspaceID &&
+		actual.TargetID == application.TargetID &&
+		actual.CallerInstanceID == application.CallerInstanceID &&
+		actual.RequestedCapabilityID == application.RequestedCapabilityID &&
+		actual.SubjectSelector == application.SubjectSelector &&
+		actual.RequestText == application.RequestText &&
+		actual.Region == application.Region &&
+		samePermissionPackageApprovalDataScopes(actual.DataScopes, application.DataScopes) &&
+		actual.ConsumedByApplicationID == application.ID &&
+		actual.ConsumedAt.Truncate(time.Microsecond).Equal(application.AppliedAt.Truncate(time.Microsecond))
+}
+
+func validatePermissionPackageApplyCapabilitySnapshots(
+	mutation PermissionPackageApplyMutation,
+	getCapability func(string) (domain.Capability, bool),
+) error {
+	if len(mutation.Capabilities) == 0 || len(mutation.Capabilities) != len(mutation.Application.AllowedCapabilityIDs) {
+		return ErrPermissionPackageCapabilitySnapshotChanged
+	}
+	allowedIDs := make(map[string]struct{}, len(mutation.Application.AllowedCapabilityIDs))
+	for _, id := range mutation.Application.AllowedCapabilityIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return ErrPermissionPackageCapabilitySnapshotChanged
+		}
+		if _, exists := allowedIDs[id]; exists {
+			return ErrPermissionPackageCapabilitySnapshotChanged
+		}
+		allowedIDs[id] = struct{}{}
+	}
+	if requestedID := strings.TrimSpace(mutation.Application.RequestedCapabilityID); requestedID != "" {
+		if len(allowedIDs) != 1 {
+			return ErrPermissionPackageCapabilitySnapshotChanged
+		}
+		if _, ok := allowedIDs[requestedID]; !ok {
+			return ErrPermissionPackageCapabilitySnapshotChanged
+		}
+	}
+	fingerprints := make([]string, 0, len(mutation.Capabilities))
+	seen := make(map[string]struct{}, len(mutation.Capabilities))
+	for _, capabilityMutation := range mutation.Capabilities {
+		id := strings.TrimSpace(capabilityMutation.Capability.ID)
+		if id == "" || strings.TrimSpace(capabilityMutation.ExpectedFingerprint) == "" {
+			return ErrPermissionPackageCapabilitySnapshotChanged
+		}
+		if _, ok := allowedIDs[id]; !ok {
+			return ErrPermissionPackageCapabilitySnapshotChanged
+		}
+		if _, duplicate := seen[id]; duplicate {
+			return ErrPermissionPackageCapabilitySnapshotChanged
+		}
+		seen[id] = struct{}{}
+		current, ok := getCapability(id)
+		if !ok || permissionpack.CapabilityFingerprint(current) != capabilityMutation.ExpectedFingerprint {
+			return ErrPermissionPackageCapabilitySnapshotChanged
+		}
+		fingerprints = append(fingerprints, capabilityMutation.ExpectedFingerprint)
+	}
+	sort.Strings(fingerprints)
+	if mutation.ApprovalRequest != nil {
+		expected := append([]string(nil), mutation.ApprovalRequest.AllowedCapabilityFingerprints...)
+		sort.Strings(expected)
+		if len(expected) != len(fingerprints) {
+			return ErrPermissionPackageCapabilitySnapshotChanged
+		}
+		for i := range expected {
+			if expected[i] != fingerprints[i] {
+				return ErrPermissionPackageCapabilitySnapshotChanged
+			}
+		}
+		if mutation.ApprovalRequest.RequestedCapabilityID != mutation.Application.RequestedCapabilityID ||
+			!samePermissionPackageApplicationStringSet(mutation.ApprovalRequest.AllowedCapabilityIDs, mutation.Application.AllowedCapabilityIDs) ||
+			!samePermissionPackageApplicationStringSet(mutation.ApprovalRequest.AllowedCapabilityKeys, mutation.Application.AllowedCapabilityKeys) {
+			return ErrPermissionPackageCapabilitySnapshotChanged
+		}
+	}
+	return nil
 }
 
 func (m *Memory) CreatePermissionPackageApprovalRequest(_ context.Context, request domain.PermissionPackageApprovalRequest) (domain.PermissionPackageApprovalRequest, error) {
@@ -1556,6 +1717,9 @@ func permissionPackageApplicationMatchesFilter(application domain.PermissionPack
 	if filter.CallerInstanceID != "" && application.CallerInstanceID != filter.CallerInstanceID {
 		return false
 	}
+	if (filter.MatchRequestedCapabilityID || filter.RequestedCapabilityID != "") && application.RequestedCapabilityID != filter.RequestedCapabilityID {
+		return false
+	}
 	return true
 }
 
@@ -1573,6 +1737,9 @@ func permissionPackageApprovalRequestMatchesFilter(request domain.PermissionPack
 		return false
 	}
 	if filter.CallerInstanceID != "" && request.CallerInstanceID != filter.CallerInstanceID {
+		return false
+	}
+	if (filter.MatchRequestedCapabilityID || filter.RequestedCapabilityID != "") && request.RequestedCapabilityID != filter.RequestedCapabilityID {
 		return false
 	}
 	if filter.Status != "" && request.Status != filter.Status {

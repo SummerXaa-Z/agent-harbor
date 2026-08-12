@@ -36,6 +36,7 @@ import (
 )
 
 type callerContextKey struct{}
+type agentKeyContextKey struct{}
 type adminActorContextKey struct{}
 
 type AdminIdentity struct {
@@ -79,6 +80,8 @@ const (
 )
 
 var systemCapabilities = []string{
+	"capability_data_domain_classification_v1",
+	"permission_package_requested_capability_v1",
 	"permission_package_approval_requests",
 	"permission_package_approval_withdraw",
 	"permission_package_apply_preflight",
@@ -1721,6 +1724,17 @@ func (s *Server) updateCapability(w http.ResponseWriter, r *http.Request) {
 	if req.DataScopes != nil {
 		updated.DataScopes = req.DataScopes
 	}
+	if req.DataDomains != nil {
+		updated.DataDomains = normalizedCapabilityDataDomains(req.DataDomains)
+		if !validPermissionPackageDataDomains(updated.DataDomains) {
+			writeError(w, domain.BadRequest("VALIDATION_FAILED", "dataDomains must use a supported permission package data domain"))
+			return
+		}
+	}
+	if !capabilityDataDomainsConsistent(updated.DataDomains, updated.DataScopes) {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "dataDomains must match the dataDomain values in dataScopes"))
+		return
+	}
 	updated.UpdatedAt = s.now()
 	saved, ok, err := s.repo.UpdateCapability(r.Context(), updated)
 	if err != nil {
@@ -1739,6 +1753,8 @@ func (s *Server) updateCapability(w http.ResponseWriter, r *http.Request) {
 			"targetId":        saved.TargetID,
 			"capabilityKey":   saved.Key,
 			"discoveryStatus": saved.DiscoveryStatus,
+			"dataDomains":     append([]string(nil), saved.DataDomains...),
+			"dataScopes":      domain.CloneDataScopes(saved.DataScopes),
 			"sensitivity":     saved.Sensitivity,
 			"riskLevel":       saved.RiskLevel,
 		})); err != nil {
@@ -1768,12 +1784,14 @@ func (s *Server) listPermissionPackageApplications(w http.ResponseWriter, r *htt
 		writeError(w, err)
 		return
 	}
+	requestedCapabilityID := strings.TrimSpace(r.URL.Query().Get("requestedCapabilityId"))
 	rows, err := s.repo.ListPermissionPackageApplications(r.Context(), store.PermissionPackageApplicationFilter{
-		ManagementScope:  scope,
-		TemplateID:       strings.TrimSpace(r.URL.Query().Get("templateId")),
-		TargetID:         strings.TrimSpace(r.URL.Query().Get("targetId")),
-		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
-		Limit:            limit,
+		ManagementScope:       scope,
+		TemplateID:            strings.TrimSpace(r.URL.Query().Get("templateId")),
+		TargetID:              strings.TrimSpace(r.URL.Query().Get("targetId")),
+		CallerInstanceID:      strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
+		RequestedCapabilityID: requestedCapabilityID,
+		Limit:                 limit,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -1784,6 +1802,7 @@ func (s *Server) listPermissionPackageApplications(w http.ResponseWriter, r *htt
 		writeError(w, err)
 		return
 	}
+	rows = permissionPackageApplicationsForRequestedCapability(rows, requestedCapabilityID)
 	writeJSON(w, http.StatusOK, rows)
 }
 
@@ -1820,12 +1839,14 @@ func (s *Server) listPermissionPackageApplicationHealth(w http.ResponseWriter, r
 		writeError(w, err)
 		return
 	}
+	requestedCapabilityID := strings.TrimSpace(r.URL.Query().Get("requestedCapabilityId"))
 	applications, err := s.repo.ListPermissionPackageApplications(r.Context(), store.PermissionPackageApplicationFilter{
-		ManagementScope:  scope,
-		TemplateID:       strings.TrimSpace(r.URL.Query().Get("templateId")),
-		TargetID:         strings.TrimSpace(r.URL.Query().Get("targetId")),
-		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
-		Limit:            limit,
+		ManagementScope:       scope,
+		TemplateID:            strings.TrimSpace(r.URL.Query().Get("templateId")),
+		TargetID:              strings.TrimSpace(r.URL.Query().Get("targetId")),
+		CallerInstanceID:      strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
+		RequestedCapabilityID: requestedCapabilityID,
+		Limit:                 limit,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -1836,6 +1857,7 @@ func (s *Server) listPermissionPackageApplicationHealth(w http.ResponseWriter, r
 		writeError(w, err)
 		return
 	}
+	applications = permissionPackageApplicationsForRequestedCapability(applications, requestedCapabilityID)
 	response := permissionPackageApplicationHealthResponse{
 		Applications: []permissionPackageApplicationHealthRow{},
 	}
@@ -1889,17 +1911,18 @@ func permissionPackageApplicationBlockerCodesContain(blockerCodes []string, want
 }
 
 type permissionPackageProductionReadinessQuery struct {
-	TenantID          string
-	WorkspaceID       string
-	TemplateID        string
-	TargetID          string
-	CallerInstanceID  string
-	SubjectID         string
-	Region            string
-	RequestText       string
-	SubjectSelector   string
-	ApprovalRequestID string
-	TraceLimit        int
+	TenantID              string
+	WorkspaceID           string
+	TemplateID            string
+	TargetID              string
+	CallerInstanceID      string
+	RequestedCapabilityID string
+	SubjectID             string
+	Region                string
+	RequestText           string
+	SubjectSelector       string
+	ApprovalRequestID     string
+	TraceLimit            int
 }
 
 type permissionPackageWorkbenchPreviewResponse struct {
@@ -2014,14 +2037,15 @@ type permissionPackageProductionManagementMcpToolCatalogStamp struct {
 }
 
 type permissionPackageProductionEvidenceScope struct {
-	TenantID         string `json:"tenantId"`
-	WorkspaceID      string `json:"workspaceId"`
-	TemplateID       string `json:"templateId"`
-	TargetID         string `json:"targetId"`
-	CallerInstanceID string `json:"callerInstanceId"`
-	SubjectID        string `json:"subjectId,omitempty"`
-	Region           string `json:"region,omitempty"`
-	SubjectSelector  string `json:"subjectSelector,omitempty"`
+	TenantID              string `json:"tenantId"`
+	WorkspaceID           string `json:"workspaceId"`
+	TemplateID            string `json:"templateId"`
+	TargetID              string `json:"targetId"`
+	CallerInstanceID      string `json:"callerInstanceId"`
+	RequestedCapabilityID string `json:"requestedCapabilityId,omitempty"`
+	SubjectID             string `json:"subjectId,omitempty"`
+	Region                string `json:"region,omitempty"`
+	SubjectSelector       string `json:"subjectSelector,omitempty"`
 }
 
 type permissionPackageProductionEvidenceRefs struct {
@@ -2037,6 +2061,7 @@ type permissionPackageProductionApplicationEvidence struct {
 	Present               bool               `json:"present"`
 	ID                    string             `json:"id,omitempty"`
 	DraftID               string             `json:"draftId,omitempty"`
+	RequestedCapabilityID string             `json:"requestedCapabilityId,omitempty"`
 	TemplateVersion       int                `json:"templateVersion,omitempty"`
 	AppliedAt             *time.Time         `json:"appliedAt,omitempty"`
 	AllowedCapabilityIDs  []string           `json:"allowedCapabilityIds,omitempty"`
@@ -2115,17 +2140,18 @@ func (s *Server) getPermissionPackageProductionEvidenceReport(w http.ResponseWri
 func permissionPackageProductionReadinessQueryFromRequest(r *http.Request) (permissionPackageProductionReadinessQuery, error) {
 	values := r.URL.Query()
 	query := permissionPackageProductionReadinessQuery{
-		TenantID:          strings.TrimSpace(values.Get("tenantId")),
-		WorkspaceID:       strings.TrimSpace(values.Get("workspaceId")),
-		TemplateID:        strings.TrimSpace(values.Get("templateId")),
-		TargetID:          strings.TrimSpace(values.Get("targetId")),
-		CallerInstanceID:  strings.TrimSpace(values.Get("callerInstanceId")),
-		SubjectID:         strings.TrimSpace(values.Get("subjectId")),
-		Region:            strings.TrimSpace(values.Get("region")),
-		RequestText:       strings.TrimSpace(values.Get("requestText")),
-		SubjectSelector:   strings.TrimSpace(values.Get("subjectSelector")),
-		ApprovalRequestID: strings.TrimSpace(values.Get("approvalRequestId")),
-		TraceLimit:        defaultAccessProfileTraceLimit,
+		TenantID:              strings.TrimSpace(values.Get("tenantId")),
+		WorkspaceID:           strings.TrimSpace(values.Get("workspaceId")),
+		TemplateID:            strings.TrimSpace(values.Get("templateId")),
+		TargetID:              strings.TrimSpace(values.Get("targetId")),
+		CallerInstanceID:      strings.TrimSpace(values.Get("callerInstanceId")),
+		RequestedCapabilityID: strings.TrimSpace(values.Get("requestedCapabilityId")),
+		SubjectID:             strings.TrimSpace(values.Get("subjectId")),
+		Region:                strings.TrimSpace(values.Get("region")),
+		RequestText:           strings.TrimSpace(values.Get("requestText")),
+		SubjectSelector:       strings.TrimSpace(values.Get("subjectSelector")),
+		ApprovalRequestID:     strings.TrimSpace(values.Get("approvalRequestId")),
+		TraceLimit:            defaultAccessProfileTraceLimit,
 	}
 	for _, required := range []struct {
 		name  string
@@ -2197,16 +2223,17 @@ func permissionPackageWorkbenchShouldCheckReadiness(draft domain.PermissionPacka
 func permissionPackageProductionReadinessQueryFromApplyRequest(req domain.PermissionPackageApplyRequest) permissionPackageProductionReadinessQuery {
 	input := trimPermissionPackageDraftRequest(req.PermissionPackageDraftRequest)
 	return permissionPackageProductionReadinessQuery{
-		TenantID:          input.TenantID,
-		WorkspaceID:       input.WorkspaceID,
-		TemplateID:        input.TemplateID,
-		TargetID:          input.TargetID,
-		CallerInstanceID:  input.CallerInstanceID,
-		Region:            input.Region,
-		RequestText:       input.RequestText,
-		SubjectSelector:   input.SubjectSelector,
-		ApprovalRequestID: strings.TrimSpace(req.ApprovalRequestID),
-		TraceLimit:        defaultAccessProfileTraceLimit,
+		TenantID:              input.TenantID,
+		WorkspaceID:           input.WorkspaceID,
+		TemplateID:            input.TemplateID,
+		TargetID:              input.TargetID,
+		CallerInstanceID:      input.CallerInstanceID,
+		RequestedCapabilityID: input.RequestedCapabilityID,
+		Region:                input.Region,
+		RequestText:           input.RequestText,
+		SubjectSelector:       input.SubjectSelector,
+		ApprovalRequestID:     strings.TrimSpace(req.ApprovalRequestID),
+		TraceLimit:            defaultAccessProfileTraceLimit,
 	}
 }
 
@@ -2241,11 +2268,13 @@ func (s *Server) permissionPackageWorkbenchApprovalRequest(ctx context.Context, 
 		return &approval, nil
 	}
 	rows, err := s.repo.ListPermissionPackageApprovalRequests(ctx, store.PermissionPackageApprovalRequestFilter{
-		ManagementScope:  store.ManagementScope{TenantID: draft.Input.TenantID, WorkspaceID: draft.Input.WorkspaceID},
-		TemplateID:       draft.Template.ID,
-		TargetID:         draft.Input.TargetID,
-		CallerInstanceID: draft.Input.CallerInstanceID,
-		Limit:            20,
+		ManagementScope:            store.ManagementScope{TenantID: draft.Input.TenantID, WorkspaceID: draft.Input.WorkspaceID},
+		TemplateID:                 draft.Template.ID,
+		TargetID:                   draft.Input.TargetID,
+		CallerInstanceID:           draft.Input.CallerInstanceID,
+		RequestedCapabilityID:      draft.Input.RequestedCapabilityID,
+		MatchRequestedCapabilityID: true,
+		Limit:                      20,
 	})
 	if err != nil {
 		return nil, err
@@ -2298,6 +2327,7 @@ func permissionPackageApprovalRequestMatchesDraftSnapshot(approval domain.Permis
 		approval.WorkspaceID == draft.Input.WorkspaceID &&
 		approval.TargetID == draft.Input.TargetID &&
 		approval.CallerInstanceID == draft.Input.CallerInstanceID &&
+		approval.RequestedCapabilityID == draft.Input.RequestedCapabilityID &&
 		approval.SubjectSelector == draft.Input.SubjectSelector &&
 		approval.RequestText == draft.Input.RequestText &&
 		approval.Region == draft.Input.Region &&
@@ -2320,7 +2350,7 @@ func permissionPackageWorkbenchSummaryFor(draft domain.PermissionPackageDraft, a
 		(approval.Status == domain.PermissionPackageApprovalStatusRejected || approval.Status == domain.PermissionPackageApprovalStatusWithdrawn)
 	applied := readiness != nil && readiness.LatestApplication != nil
 	approvalApproved := !approvalRequired || applied || approval != nil && approval.Status == domain.PermissionPackageApprovalStatusApproved
-	runtimeEvidenceReady := readiness != nil && readiness.Summary.HasAllowedTrace && readiness.Summary.HasDeniedTrace
+	runtimeEvidenceReady := permissionPackageProductionRuntimeEvidenceReady(readiness)
 	productionReady := readiness != nil && readiness.Status == "ready"
 	canApply := draft.Readiness.CanApply && approvalApproved && !approvalResolvedWithoutApproval
 	summary := permissionPackageWorkbenchSummary{
@@ -2454,11 +2484,13 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 		GeneratedAt: s.now(),
 	}
 	applications, err := s.repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
-		ManagementScope:  store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID},
-		TemplateID:       query.TemplateID,
-		TargetID:         query.TargetID,
-		CallerInstanceID: query.CallerInstanceID,
-		Limit:            1,
+		ManagementScope:            store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID},
+		TemplateID:                 query.TemplateID,
+		TargetID:                   query.TargetID,
+		CallerInstanceID:           query.CallerInstanceID,
+		RequestedCapabilityID:      query.RequestedCapabilityID,
+		MatchRequestedCapabilityID: true,
+		Limit:                      1,
 	})
 	if err != nil {
 		return permissionPackageProductionReadinessResponse{}, err
@@ -2471,7 +2503,52 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 		if len(visibleApplications) == 0 {
 			applications = nil
 		} else {
-			applications = visibleApplications
+			applications = permissionPackageApplicationsForRequestedCapability(visibleApplications, query.RequestedCapabilityID)
+		}
+	}
+	legacyExactEquivalent := false
+	if len(applications) == 0 && query.RequestedCapabilityID != "" {
+		legacyApplications, err := s.repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
+			ManagementScope:            store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID},
+			TemplateID:                 query.TemplateID,
+			TargetID:                   query.TargetID,
+			CallerInstanceID:           query.CallerInstanceID,
+			MatchRequestedCapabilityID: true,
+		})
+		if err != nil {
+			return permissionPackageProductionReadinessResponse{}, err
+		}
+		visibleLegacyApplications, err := s.visiblePermissionPackageApplications(ctx, legacyApplications, store.ManagementScope{TenantID: query.TenantID, WorkspaceID: query.WorkspaceID})
+		if err != nil {
+			return permissionPackageProductionReadinessResponse{}, err
+		}
+		for _, application := range visibleLegacyApplications {
+			if len(application.AllowedCapabilityIDs) != 1 || application.AllowedCapabilityIDs[0] != query.RequestedCapabilityID {
+				continue
+			}
+			candidateQuery := permissionPackageProductionReadinessQueryWithApplicationDefaults(query, application)
+			candidatePreflight, err := s.preflightPermissionPackageRequest(ctx, domain.PermissionPackageApplyRequest{
+				PermissionPackageDraftRequest: domain.PermissionPackageDraftRequest{
+					CallerInstanceID:      candidateQuery.CallerInstanceID,
+					Region:                candidateQuery.Region,
+					RequestText:           candidateQuery.RequestText,
+					RequestedCapabilityID: candidateQuery.RequestedCapabilityID,
+					SubjectSelector:       candidateQuery.SubjectSelector,
+					TargetID:              candidateQuery.TargetID,
+					TemplateID:            candidateQuery.TemplateID,
+					TenantID:              candidateQuery.TenantID,
+					WorkspaceID:           candidateQuery.WorkspaceID,
+				},
+				ApprovalRequestID: candidateQuery.ApprovalRequestID,
+			})
+			if err != nil {
+				return permissionPackageProductionReadinessResponse{}, err
+			}
+			if permissionPackageProductionLegacyApplicationMatchesExactDraft(candidateQuery, application, candidatePreflight.Draft) {
+				applications = []domain.PermissionPackageApplication{application}
+				legacyExactEquivalent = true
+				break
+			}
 		}
 	}
 	if len(applications) > 0 {
@@ -2479,17 +2556,26 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 		result.LatestApplication = &latest
 		query = permissionPackageProductionReadinessQueryWithApplicationDefaults(query, latest)
 	}
+	if query.SubjectID != "" {
+		if subjectSelectorMatchesRuntime(query.SubjectSelector, query.SubjectID) {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("subject_scope_match", domain.PermissionPackagePreflightPassed, "Production subject is covered by the requested subject selector.", query.SubjectID))
+		} else {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("subject_scope_match", domain.PermissionPackagePreflightBlocking, "Production subject is outside the requested subject selector.", query.SubjectID))
+			permissionPackageProductionAddNextAction(&result, "review_subject_scope", "Use the application subject selector and a production subject that it covers.")
+		}
+	}
 
 	preflight, err := s.preflightPermissionPackageRequest(ctx, domain.PermissionPackageApplyRequest{
 		PermissionPackageDraftRequest: domain.PermissionPackageDraftRequest{
-			CallerInstanceID: query.CallerInstanceID,
-			Region:           query.Region,
-			RequestText:      query.RequestText,
-			SubjectSelector:  query.SubjectSelector,
-			TargetID:         query.TargetID,
-			TemplateID:       query.TemplateID,
-			TenantID:         query.TenantID,
-			WorkspaceID:      query.WorkspaceID,
+			CallerInstanceID:      query.CallerInstanceID,
+			Region:                query.Region,
+			RequestText:           query.RequestText,
+			RequestedCapabilityID: query.RequestedCapabilityID,
+			SubjectSelector:       query.SubjectSelector,
+			TargetID:              query.TargetID,
+			TemplateID:            query.TemplateID,
+			TenantID:              query.TenantID,
+			WorkspaceID:           query.WorkspaceID,
 		},
 		ApprovalRequestID: query.ApprovalRequestID,
 	})
@@ -2510,11 +2596,26 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 	} else {
 		result.Summary.HasApplication = true
 		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_present", domain.PermissionPackagePreflightPassed, "Permission package application record is present.", result.LatestApplication.ID))
-		if permissionPackageProductionApplicationScopeMatches(query, *result.LatestApplication) {
+		if permissionPackageProductionApplicationMatchesDraft(query, *result.LatestApplication, preflight.Draft) {
 			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_scope_match", domain.PermissionPackagePreflightPassed, "Latest application matches the requested production scope.", result.LatestApplication.ID))
+		} else if legacyExactEquivalent && permissionPackageProductionLegacyApplicationMatchesExactDraft(query, *result.LatestApplication, preflight.Draft) {
+			result.Checks = append(result.Checks,
+				permissionPackageProductionReadinessCheckFor("application_scope_match", domain.PermissionPackagePreflightPassed, "Legacy application has the same exact single-capability boundary as this request.", result.LatestApplication.ID),
+				permissionPackageProductionReadinessCheckFor("legacy_exact_equivalent", domain.PermissionPackagePreflightInfo, "Legacy application provenance is package-level, but its effective boundary is exactly the requested capability.", result.LatestApplication.ID),
+			)
 		} else {
 			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_scope_match", domain.PermissionPackagePreflightBlocking, "Latest application does not match the requested production scope.", result.LatestApplication.ID))
 			permissionPackageProductionAddNextAction(&result, "review_application_scope", "Inspect the latest permission package application scope before go-live.")
+		}
+		capabilitiesCurrent, err := s.permissionPackageApplicationCapabilitiesCurrent(ctx, *result.LatestApplication)
+		if err != nil {
+			return permissionPackageProductionReadinessResponse{}, err
+		}
+		if capabilitiesCurrent {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_capabilities_current", domain.PermissionPackagePreflightPassed, "Applied capabilities have not changed since this permission package was applied.", result.LatestApplication.ID))
+		} else {
+			result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("application_capabilities_current", domain.PermissionPackagePreflightBlocking, "One or more applied capabilities changed after this permission package was applied.", result.LatestApplication.ID))
+			permissionPackageProductionAddNextAction(&result, "reapply_permission_package", "Review the changed capability contract and apply a fresh permission package approval.")
 		}
 		impact, err := s.permissionPackageApplicationImpact(ctx, *result.LatestApplication)
 		if err != nil {
@@ -2577,8 +2678,10 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 			return permissionPackageProductionReadinessResponse{}, err
 		}
 	}
-	result.RuntimeEvidence.AllowedTrace = permissionPackageProductionLatestTrace(traces, domain.TraceDecisionAllowed, query.SubjectID)
-	result.RuntimeEvidence.DeniedTrace = permissionPackageProductionLatestTrace(traces, domain.TraceDecisionDenied, query.SubjectID)
+	allowedEvidenceCapabilityIDs := permissionPackageCapabilityIDSet(preflight.Draft.AllowedCapabilities)
+	blockedEvidenceCapabilityIDs := permissionPackageCapabilityIDSet(preflight.Draft.BlockedCapabilities)
+	result.RuntimeEvidence.AllowedTrace = permissionPackageProductionLatestTrace(traces, domain.TraceDecisionAllowed, query.SubjectID, allowedEvidenceCapabilityIDs)
+	result.RuntimeEvidence.DeniedTrace = permissionPackageProductionLatestTrace(traces, domain.TraceDecisionDenied, query.SubjectID, blockedEvidenceCapabilityIDs)
 	if result.RuntimeEvidence.AllowedTrace != nil {
 		result.Summary.HasAllowedTrace = true
 		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_allowed_trace_present", domain.PermissionPackagePreflightPassed, "Runtime allowed record is present for this caller and target.", result.RuntimeEvidence.AllowedTrace.ID))
@@ -2589,6 +2692,8 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 	if result.RuntimeEvidence.DeniedTrace != nil {
 		result.Summary.HasDeniedTrace = true
 		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_denied_trace_present", domain.PermissionPackagePreflightPassed, "Runtime denied record is present for this caller and target.", result.RuntimeEvidence.DeniedTrace.ID))
+	} else if len(blockedEvidenceCapabilityIDs) == 0 {
+		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_denied_trace_not_applicable", domain.PermissionPackagePreflightPassed, "No blocked catalog capability exists for this exact request, so a denied runtime call is not applicable.", ""))
 	} else {
 		result.Checks = append(result.Checks, permissionPackageProductionReadinessCheckFor("runtime_denied_trace_present", domain.PermissionPackagePreflightBlocking, "Runtime denied record is missing for this caller and target.", ""))
 		permissionPackageProductionAddNextAction(&result, "run_denied_runtime_call", "Run a denied MCP call that proves blocked tools stay blocked.")
@@ -2629,6 +2734,21 @@ func (s *Server) permissionPackageProductionReadiness(ctx context.Context, query
 	return result, nil
 }
 
+func permissionPackageProductionRuntimeEvidenceReady(readiness *permissionPackageProductionReadinessResponse) bool {
+	if readiness == nil || !readiness.Summary.HasAllowedTrace {
+		return false
+	}
+	if readiness.Summary.HasDeniedTrace {
+		return true
+	}
+	for _, check := range readiness.Checks {
+		if check.Code == "runtime_denied_trace_not_applicable" && check.Severity == domain.PermissionPackagePreflightPassed {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) permissionPackageProductionEvidenceReport(ctx context.Context, query permissionPackageProductionReadinessQuery, generatedBy string) (permissionPackageProductionEvidenceReportResponse, error) {
 	readiness, err := s.permissionPackageProductionReadiness(ctx, query)
 	if err != nil {
@@ -2639,14 +2759,15 @@ func (s *Server) permissionPackageProductionEvidenceReport(ctx context.Context, 
 
 func permissionPackageProductionEvidenceReportFromReadiness(query permissionPackageProductionReadinessQuery, readiness permissionPackageProductionReadinessResponse, generatedBy string) permissionPackageProductionEvidenceReportResponse {
 	scope := permissionPackageProductionEvidenceScope{
-		TenantID:         query.TenantID,
-		WorkspaceID:      query.WorkspaceID,
-		TemplateID:       query.TemplateID,
-		TargetID:         query.TargetID,
-		CallerInstanceID: query.CallerInstanceID,
-		SubjectID:        query.SubjectID,
-		Region:           query.Region,
-		SubjectSelector:  query.SubjectSelector,
+		TenantID:              query.TenantID,
+		WorkspaceID:           query.WorkspaceID,
+		TemplateID:            query.TemplateID,
+		TargetID:              query.TargetID,
+		CallerInstanceID:      query.CallerInstanceID,
+		RequestedCapabilityID: query.RequestedCapabilityID,
+		SubjectID:             query.SubjectID,
+		Region:                query.Region,
+		SubjectSelector:       query.SubjectSelector,
 	}
 	evidence := permissionPackageProductionEvidenceRefs{
 		AccessProfile:     permissionPackageProductionEvidenceState{Present: readiness.Summary.AccessProfileReady},
@@ -2670,6 +2791,7 @@ func permissionPackageProductionEvidenceReportFromReadiness(query permissionPack
 			Present:               true,
 			ID:                    application.ID,
 			DraftID:               application.DraftID,
+			RequestedCapabilityID: application.RequestedCapabilityID,
 			TemplateVersion:       application.TemplateVersion,
 			AppliedAt:             &appliedAt,
 			AllowedCapabilityIDs:  append([]string(nil), application.AllowedCapabilityIDs...),
@@ -2777,12 +2899,63 @@ func permissionPackageProductionApplicationScopeMatches(query permissionPackageP
 		application.WorkspaceID == query.WorkspaceID &&
 		application.TemplateID == query.TemplateID &&
 		application.TargetID == query.TargetID &&
-		application.CallerInstanceID == query.CallerInstanceID
+		application.CallerInstanceID == query.CallerInstanceID &&
+		application.RequestedCapabilityID == query.RequestedCapabilityID &&
+		application.SubjectSelector == query.SubjectSelector &&
+		application.Region == query.Region
+}
+
+func permissionPackageProductionApplicationMatchesDraft(query permissionPackageProductionReadinessQuery, application domain.PermissionPackageApplication, draft domain.PermissionPackageDraft) bool {
+	allowedIDs, allowedKeys := permissionPackageCapabilityIDsAndKeys(draft.AllowedCapabilities)
+	return permissionPackageProductionApplicationScopeMatches(query, application) &&
+		application.RequestedCapabilityID == draft.Input.RequestedCapabilityID &&
+		application.SubjectSelector == draft.Input.SubjectSelector &&
+		application.Region == draft.Input.Region &&
+		application.TemplateVersion == draft.Template.Version &&
+		samePermissionPackageDataScopes(application.DataScopes, draft.DataScopes) &&
+		sameStringSet(application.AllowedCapabilityIDs, allowedIDs) &&
+		sameStringSet(application.AllowedCapabilityKeys, allowedKeys)
+}
+
+func permissionPackageProductionLegacyApplicationMatchesExactDraft(query permissionPackageProductionReadinessQuery, application domain.PermissionPackageApplication, draft domain.PermissionPackageDraft) bool {
+	if query.RequestedCapabilityID == "" || application.RequestedCapabilityID != "" || draft.Input.RequestedCapabilityID != query.RequestedCapabilityID {
+		return false
+	}
+	allowedIDs, allowedKeys := permissionPackageCapabilityIDsAndKeys(draft.AllowedCapabilities)
+	return application.TenantID == query.TenantID &&
+		application.WorkspaceID == query.WorkspaceID &&
+		application.TemplateID == query.TemplateID &&
+		application.TargetID == query.TargetID &&
+		application.CallerInstanceID == query.CallerInstanceID &&
+		application.SubjectSelector == query.SubjectSelector &&
+		application.Region == query.Region &&
+		application.TemplateVersion == draft.Template.Version &&
+		samePermissionPackageDataScopes(application.DataScopes, draft.DataScopes) &&
+		sameStringSet(application.AllowedCapabilityIDs, allowedIDs) &&
+		sameStringSet(application.AllowedCapabilityKeys, allowedKeys)
+}
+
+func (s *Server) permissionPackageApplicationCapabilitiesCurrent(ctx context.Context, application domain.PermissionPackageApplication) (bool, error) {
+	if application.AppliedAt.IsZero() || len(application.AllowedCapabilityIDs) == 0 {
+		return false, nil
+	}
+	for _, capabilityID := range application.AllowedCapabilityIDs {
+		capability, ok, err := s.repo.GetCapability(ctx, capabilityID)
+		if err != nil {
+			return false, err
+		}
+		if !ok || capability.TargetID != application.TargetID || capability.UpdatedAt.After(application.AppliedAt) {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func permissionPackageProductionAccessProfileEvidenceID(profile tenantAccessProfileResponse, query permissionPackageProductionReadinessQuery, application *domain.PermissionPackageApplication) string {
 	allowedCapabilityIDs := map[string]struct{}{}
-	if application != nil {
+	if query.RequestedCapabilityID != "" {
+		allowedCapabilityIDs[query.RequestedCapabilityID] = struct{}{}
+	} else if application != nil {
 		for _, capabilityID := range application.AllowedCapabilityIDs {
 			allowedCapabilityIDs[capabilityID] = struct{}{}
 		}
@@ -2810,13 +2983,29 @@ func permissionPackageProductionAccessProfileEvidenceID(profile tenantAccessProf
 	return ""
 }
 
-func permissionPackageProductionLatestTrace(traces []domain.TraceEvent, decision domain.TraceDecision, subjectID string) *domain.TraceEvent {
+func permissionPackageCapabilityIDSet(capabilities []domain.Capability) map[string]struct{} {
+	result := make(map[string]struct{}, len(capabilities))
+	for _, capability := range capabilities {
+		if capability.ID != "" {
+			result[capability.ID] = struct{}{}
+		}
+	}
+	return result
+}
+
+func permissionPackageProductionLatestTrace(traces []domain.TraceEvent, decision domain.TraceDecision, subjectID string, capabilityIDs map[string]struct{}) *domain.TraceEvent {
+	if len(capabilityIDs) == 0 {
+		return nil
+	}
 	for index := len(traces) - 1; index >= 0; index-- {
 		trace := traces[index]
 		if trace.Decision != decision {
 			continue
 		}
 		if subjectID != "" && trace.SubjectID != subjectID {
+			continue
+		}
+		if _, ok := capabilityIDs[trace.CapabilityID]; !ok {
 			continue
 		}
 		return &trace
@@ -3240,7 +3429,24 @@ func (s *Server) permissionPackageApplicationWithVisibleCapabilities(ctx context
 func permissionPackageApplicationWithVisibleCapabilities(application domain.PermissionPackageApplication, capabilityIDs []string, capabilityKeys []string) domain.PermissionPackageApplication {
 	application.AllowedCapabilityIDs = append([]string(nil), capabilityIDs...)
 	application.AllowedCapabilityKeys = append([]string(nil), capabilityKeys...)
+	if application.RequestedCapabilityID != "" && !stringSliceContains(capabilityIDs, application.RequestedCapabilityID) {
+		application.RequestedCapabilityID = ""
+	}
 	return application
+}
+
+func permissionPackageApplicationsForRequestedCapability(applications []domain.PermissionPackageApplication, requestedCapabilityID string) []domain.PermissionPackageApplication {
+	requestedCapabilityID = strings.TrimSpace(requestedCapabilityID)
+	if requestedCapabilityID == "" {
+		return applications
+	}
+	filtered := applications[:0]
+	for _, application := range applications {
+		if application.RequestedCapabilityID == requestedCapabilityID {
+			filtered = append(filtered, application)
+		}
+	}
+	return filtered
 }
 
 func (s *Server) visibleAuditEvents(ctx context.Context, events []domain.AuditEvent, scope store.ManagementScope) ([]domain.AuditEvent, error) {
@@ -3341,6 +3547,7 @@ func permissionPackageAppliedAuditMetadataForVisibleApplication(application doma
 		"templateVersion":        application.TemplateVersion,
 		"targetId":               application.TargetID,
 		"callerInstanceId":       application.CallerInstanceID,
+		"requestedCapabilityId":  application.RequestedCapabilityID,
 		"subjectSelector":        application.SubjectSelector,
 		"allowedCapabilityIds":   auditMetadataStrings(application.AllowedCapabilityIDs),
 		"allowedCapabilityKeys":  auditMetadataStrings(application.AllowedCapabilityKeys),
@@ -3405,6 +3612,10 @@ func (s *Server) permissionPackageApprovalAuditMetadataForVisibleRequest(ctx con
 		}
 		allowedCapabilityIDs = append(allowedCapabilityIDs, capability.ID)
 	}
+	requestedCapabilityID := approval.RequestedCapabilityID
+	if requestedCapabilityID != "" && !stringSliceContains(allowedCapabilityIDs, requestedCapabilityID) {
+		requestedCapabilityID = ""
+	}
 	return map[string]any{
 		"approvalRequestId":       approval.ID,
 		"draftId":                 approval.DraftID,
@@ -3413,6 +3624,7 @@ func (s *Server) permissionPackageApprovalAuditMetadataForVisibleRequest(ctx con
 		"policyVersion":           approval.PolicyVersion,
 		"targetId":                approval.TargetID,
 		"callerInstanceId":        approval.CallerInstanceID,
+		"requestedCapabilityId":   requestedCapabilityID,
 		"status":                  approval.Status,
 		"requestedBy":             approval.RequestedBy,
 		"reviewedBy":              approval.ReviewedBy,
@@ -3504,6 +3716,9 @@ func (s *Server) permissionPackageApprovalRequestWithVisibleCapabilities(ctx con
 	approval.AllowedCapabilityKeys = allowedCapabilityKeys
 	approval.AllowedCapabilityFingerprints = permissionPackageCapabilityFingerprints(visibleCapabilities)
 	approval.PolicyGate = permissionPackagePolicyGateWithVisibleCapabilities(approval.PolicyGate, visibleCapabilities)
+	if approval.RequestedCapabilityID != "" && !stringSliceContains(allowedCapabilityIDs, approval.RequestedCapabilityID) {
+		approval.RequestedCapabilityID = ""
+	}
 	return approval, nil
 }
 
@@ -3686,12 +3901,13 @@ func (s *Server) listPermissionPackageApprovalRequests(w http.ResponseWriter, r 
 		return
 	}
 	filter := store.PermissionPackageApprovalRequestFilter{
-		ManagementScope:  scope,
-		TemplateID:       strings.TrimSpace(r.URL.Query().Get("templateId")),
-		TargetID:         strings.TrimSpace(r.URL.Query().Get("targetId")),
-		CallerInstanceID: strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
-		Status:           status,
-		Limit:            limit,
+		ManagementScope:       scope,
+		TemplateID:            strings.TrimSpace(r.URL.Query().Get("templateId")),
+		TargetID:              strings.TrimSpace(r.URL.Query().Get("targetId")),
+		CallerInstanceID:      strings.TrimSpace(r.URL.Query().Get("callerInstanceId")),
+		RequestedCapabilityID: strings.TrimSpace(r.URL.Query().Get("requestedCapabilityId")),
+		Status:                status,
+		Limit:                 limit,
 	}
 	rows, err := s.listPermissionPackageApprovalRequestsForRequest(r.Context(), r, filter, reviewer, limit)
 	if err != nil {
@@ -4018,7 +4234,7 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 	tenantEntitlementIDs := make([]string, 0, len(draft.AllowedCapabilities))
 	workspaceAssignmentIDs := make([]string, 0, len(draft.AllowedCapabilities))
 	instanceAssignmentIDs := make([]string, 0, len(draft.AllowedCapabilities))
-	capabilityMutations := make([]domain.Capability, 0, len(draft.AllowedCapabilities))
+	capabilityMutations := make([]store.PermissionPackageApplyCapabilityMutation, 0, len(draft.AllowedCapabilities))
 	tenantEntitlements := make([]domain.TenantEntitlement, 0, len(draft.AllowedCapabilities))
 	workspaceAssignments := make([]domain.WorkspaceAssignment, 0, len(draft.AllowedCapabilities))
 	instanceAssignments := make([]domain.InstanceAssignment, 0, len(draft.AllowedCapabilities))
@@ -4032,7 +4248,10 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		updatedCapability.DiscoveryStatus = domain.CapabilityDiscoveryApproved
 		updatedCapability.DataScopes = effectiveScopes
 		updatedCapability.UpdatedAt = now
-		capabilityMutations = append(capabilityMutations, updatedCapability)
+		capabilityMutations = append(capabilityMutations, store.PermissionPackageApplyCapabilityMutation{
+			ExpectedFingerprint: permissionpack.CapabilityFingerprint(capability),
+			Capability:          updatedCapability,
+		})
 
 		entitlement := domain.TenantEntitlement{
 			ID:           security.NewID("ent"),
@@ -4090,6 +4309,7 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		WorkspaceID:            draft.Input.WorkspaceID,
 		TargetID:               draft.Input.TargetID,
 		CallerInstanceID:       draft.Input.CallerInstanceID,
+		RequestedCapabilityID:  draft.Input.RequestedCapabilityID,
 		SubjectSelector:        draft.Input.SubjectSelector,
 		RequestText:            draft.Input.RequestText,
 		Region:                 draft.Input.Region,
@@ -4117,6 +4337,7 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		"templateVersion":        draft.Template.Version,
 		"targetId":               draft.Input.TargetID,
 		"callerInstanceId":       draft.Input.CallerInstanceID,
+		"requestedCapabilityId":  draft.Input.RequestedCapabilityID,
 		"subjectSelector":        draft.Input.SubjectSelector,
 		"allowedCapabilityIds":   appliedCapabilityIDs,
 		"allowedCapabilityKeys":  appliedCapabilityKeys,
@@ -4139,6 +4360,7 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		InstanceAssignments:  instanceAssignments,
 		Application:          application,
 		ApprovalRequest:      consumedApproval,
+		ExpectedApproval:     approvalForApply,
 		AuditEvent:           s.managementAuditEvent(r, draft.Input.TenantID, draft.Input.WorkspaceID, "permission_package.applied", "permission_package", application.ID, "Permission package applied", auditMetadata),
 	})
 	if err != nil {
@@ -4147,6 +4369,9 @@ func (s *Server) applyPermissionPackageRequest(r *http.Request, req domain.Permi
 		}
 		if errors.Is(err, store.ErrPermissionPackageApplicationAlreadyApplied) {
 			return domain.PermissionPackageApplyResponse{}, permissionPackageApplicationAlreadyAppliedError()
+		}
+		if errors.Is(err, store.ErrPermissionPackageCapabilitySnapshotChanged) {
+			return domain.PermissionPackageApplyResponse{}, domain.Conflict("PERMISSION_PACKAGE_CAPABILITY_CHANGED", "capability changed after this permission request was reviewed; rebuild the draft and request approval again")
 		}
 		return domain.PermissionPackageApplyResponse{}, err
 	}
@@ -4279,6 +4504,7 @@ func permissionPackagePreflightApplicationCandidate(draft domain.PermissionPacka
 		WorkspaceID:           draft.Input.WorkspaceID,
 		TargetID:              draft.Input.TargetID,
 		CallerInstanceID:      draft.Input.CallerInstanceID,
+		RequestedCapabilityID: draft.Input.RequestedCapabilityID,
 		SubjectSelector:       draft.Input.SubjectSelector,
 		Region:                draft.Input.Region,
 		DataScopes:            draft.DataScopes,
@@ -4764,7 +4990,17 @@ func (s *Server) requireAgentKey(next http.Handler) http.Handler {
 			writeError(w, domain.Unauthorized("invalid or expired bearer token"))
 			return
 		}
+		key, ok, err := s.repo.FindAgentKeyByHash(r.Context(), security.HashSecret(token), s.now())
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		if !ok || key.AgentID != caller.ID {
+			writeError(w, domain.Unauthorized("invalid or expired bearer token"))
+			return
+		}
 		ctx := context.WithValue(r.Context(), callerContextKey{}, caller)
+		ctx = context.WithValue(ctx, agentKeyContextKey{}, key)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -4772,6 +5008,87 @@ func (s *Server) requireAgentKey(next http.Handler) http.Handler {
 func callerFromContext(ctx context.Context) domain.Agent {
 	caller, _ := ctx.Value(callerContextKey{}).(domain.Agent)
 	return caller
+}
+
+func agentKeyFromContext(ctx context.Context) domain.AgentKey {
+	key, _ := ctx.Value(agentKeyContextKey{}).(domain.AgentKey)
+	return key
+}
+
+func (s *Server) validateAccessHandoffKey(ctx context.Context, key domain.AgentKey, capabilityID string, subjectID string) error {
+	application, err := s.accessHandoffApplicationForKey(ctx, key, subjectID)
+	if err != nil || application == nil {
+		return err
+	}
+	if !stringSliceContains(application.AllowedCapabilityIDs, strings.TrimSpace(capabilityID)) {
+		return domain.PermissionDenied("access handoff token does not allow this capability")
+	}
+	return nil
+}
+
+func (s *Server) accessHandoffApplicationForKey(ctx context.Context, key domain.AgentKey, subjectID string) (*domain.PermissionPackageApplication, error) {
+	if strings.TrimSpace(key.CreatedForHandoffID) == "" {
+		return nil, nil
+	}
+	if !subjectSelectorMatchesRuntime(key.SubjectSelector, subjectID) {
+		return nil, domain.PermissionDenied("access handoff token does not allow this subject")
+	}
+	applications, err := s.repo.ListPermissionPackageApplications(ctx, store.PermissionPackageApplicationFilter{
+		ID:    strings.TrimSpace(key.ApplicationID),
+		Limit: 1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(applications) != 1 {
+		return nil, domain.PermissionDenied("access handoff token does not allow this capability")
+	}
+	application := applications[0]
+	templateVersion, ok := currentPermissionPackageTemplateVersion(application.TemplateID)
+	if !ok || application.CallerInstanceID != key.AgentID ||
+		application.TemplateID != key.TemplateID ||
+		application.TemplateVersion != templateVersion ||
+		application.SubjectSelector != key.SubjectSelector {
+		return nil, domain.PermissionDenied("access handoff token does not allow this capability")
+	}
+	capabilitiesCurrent, err := s.permissionPackageApplicationCapabilitiesCurrent(ctx, application)
+	if err != nil {
+		return nil, err
+	}
+	if !capabilitiesCurrent {
+		return nil, domain.PermissionDenied("access handoff token references a stale permission package application")
+	}
+	return &application, nil
+}
+
+func currentPermissionPackageTemplateVersion(templateID string) (int, bool) {
+	for _, template := range permissionpack.Templates() {
+		if template.ID == templateID {
+			return template.Version, true
+		}
+	}
+	return 0, false
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func subjectSelectorMatchesRuntime(selector string, subjectID string) bool {
+	selector = strings.TrimSpace(selector)
+	subjectID = strings.TrimSpace(subjectID)
+	if selector == "" || subjectID == "" {
+		return false
+	}
+	if selector == subjectID {
+		return true
+	}
+	return strings.HasSuffix(selector, "*") && strings.HasPrefix(subjectID, strings.TrimSuffix(selector, "*"))
 }
 
 func (s *Server) mcpRPC(w http.ResponseWriter, r *http.Request) {
@@ -4809,6 +5126,10 @@ func (s *Server) openapiRelativePath(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDataPlane(w http.ResponseWriter, r *http.Request, routeType string, routeKey string) {
 	caller := callerFromContext(r.Context())
+	if strings.TrimSpace(agentKeyFromContext(r.Context()).CreatedForHandoffID) != "" {
+		writeError(w, domain.PermissionDenied("access handoff token only allows listed MCP tool capabilities"))
+		return
+	}
 	targetID := chi.URLParam(r, "targetId")
 	decision, err := s.repo.EvaluateRouteAccess(r.Context(), caller.ID, targetID, routeType, routeKey, s.now())
 	if err != nil {
@@ -4927,6 +5248,23 @@ func (s *Server) handleMCPToolCall(w http.ResponseWriter, r *http.Request, info 
 		writeError(w, domain.PermissionDenied(reason))
 		return true
 	}
+	if err := s.validateAccessHandoffKey(r.Context(), agentKeyFromContext(r.Context()), capability.ID, identity.SubjectID); err != nil {
+		if _, traceErr := s.recordCapabilityTrace(r, traceRecordInput{
+			Identity:   identity,
+			CallerID:   caller.ID,
+			TargetID:   targetID,
+			RouteType:  "mcp",
+			RouteKey:   info.Method,
+			Decision:   domain.TraceDecisionDenied,
+			Reason:     err.Error(),
+			Capability: capability,
+		}); traceErr != nil {
+			writeError(w, traceErr)
+			return true
+		}
+		writeError(w, err)
+		return true
+	}
 	decision, err := s.repo.EvaluateCapabilityAccess(r.Context(), store.CapabilityAccessRequest{
 		TenantID:         identity.TenantID,
 		WorkspaceID:      identity.WorkspaceID,
@@ -5029,6 +5367,28 @@ func (s *Server) handleMCPToolCall(w http.ResponseWriter, r *http.Request, info 
 func (s *Server) handleMCPToolsList(w http.ResponseWriter, r *http.Request, info mcpRequestInfo) bool {
 	caller := callerFromContext(r.Context())
 	targetID := chi.URLParam(r, "targetId")
+	identity := identityFromRequest(r, caller)
+	key := agentKeyFromContext(r.Context())
+	handoffApplication, err := s.accessHandoffApplicationForKey(r.Context(), key, identity.SubjectID)
+	if err == nil && handoffApplication != nil && handoffApplication.TargetID != targetID {
+		err = domain.PermissionDenied("access handoff token does not allow this capability")
+	}
+	if err != nil {
+		if _, traceErr := s.recordCapabilityTrace(r, traceRecordInput{
+			Identity:  identity,
+			CallerID:  caller.ID,
+			TargetID:  targetID,
+			RouteType: "mcp",
+			RouteKey:  info.Method,
+			Decision:  domain.TraceDecisionDenied,
+			Reason:    err.Error(),
+		}); traceErr != nil {
+			writeError(w, traceErr)
+			return true
+		}
+		writeError(w, err)
+		return true
+	}
 	capabilities, err := s.repo.ListCapabilities(r.Context(), store.CapabilityFilter{TargetID: targetID})
 	if err != nil {
 		writeError(w, err)
@@ -5049,7 +5409,7 @@ func (s *Server) handleMCPToolsList(w http.ResponseWriter, r *http.Request, info
 	if target.Status != domain.AgentStatusActive {
 		reason := "target agent is not active"
 		if _, err := s.recordCapabilityTrace(r, traceRecordInput{
-			Identity:  identityFromRequest(r, caller),
+			Identity:  identity,
 			CallerID:  caller.ID,
 			TargetID:  targetID,
 			RouteType: "mcp",
@@ -5063,10 +5423,12 @@ func (s *Server) handleMCPToolsList(w http.ResponseWriter, r *http.Request, info
 		writeError(w, domain.PermissionDenied(reason))
 		return true
 	}
-	identity := identityFromRequest(r, caller)
 	allowedTools := map[string]domain.Capability{}
 	for _, capability := range capabilities {
 		if capability.Type != domain.CapabilityTypeMCPTool {
+			continue
+		}
+		if handoffApplication != nil && !stringSliceContains(handoffApplication.AllowedCapabilityIDs, capability.ID) {
 			continue
 		}
 		decision, err := s.repo.EvaluateCapabilityAccess(r.Context(), store.CapabilityAccessRequest{
@@ -6354,6 +6716,7 @@ func trimPermissionPackageDraftRequest(req domain.PermissionPackageDraftRequest)
 	req.CallerInstanceID = strings.TrimSpace(req.CallerInstanceID)
 	req.Region = strings.TrimSpace(req.Region)
 	req.RequestText = strings.TrimSpace(req.RequestText)
+	req.RequestedCapabilityID = strings.TrimSpace(req.RequestedCapabilityID)
 	req.SubjectSelector = strings.TrimSpace(req.SubjectSelector)
 	req.TargetID = strings.TrimSpace(req.TargetID)
 	req.TemplateID = strings.TrimSpace(req.TemplateID)
@@ -6438,8 +6801,23 @@ func (s *Server) listPermissionPackageApprovalRequestsForRequest(ctx context.Con
 	if err != nil {
 		return nil, err
 	}
+	rows = permissionPackageApprovalRequestsForRequestedCapability(rows, filter.RequestedCapabilityID)
 	rows = permissionPackageApprovalRequestsWithoutExpiredPending(rows, filter.Status, s.now())
 	return limitPermissionPackageApprovalRequests(rows, limit), nil
+}
+
+func permissionPackageApprovalRequestsForRequestedCapability(rows []domain.PermissionPackageApprovalRequest, requestedCapabilityID string) []domain.PermissionPackageApprovalRequest {
+	requestedCapabilityID = strings.TrimSpace(requestedCapabilityID)
+	if requestedCapabilityID == "" {
+		return rows
+	}
+	filtered := rows[:0]
+	for _, row := range rows {
+		if row.RequestedCapabilityID == requestedCapabilityID {
+			filtered = append(filtered, row)
+		}
+	}
+	return filtered
 }
 
 func (s *Server) permissionPackageApprovalListReviewer(r *http.Request, reviewer string) (string, bool, error) {
@@ -6625,11 +7003,13 @@ func (s *Server) createPermissionPackageApprovalRequestRecord(ctx context.Contex
 
 func (s *Server) rejectDuplicateActivePermissionPackageApprovalRequest(ctx context.Context, draft domain.PermissionPackageDraft, now time.Time) error {
 	rows, err := s.repo.ListPermissionPackageApprovalRequests(ctx, store.PermissionPackageApprovalRequestFilter{
-		ManagementScope:  store.ManagementScope{TenantID: draft.Input.TenantID, WorkspaceID: draft.Input.WorkspaceID},
-		TemplateID:       draft.Template.ID,
-		TargetID:         draft.Input.TargetID,
-		CallerInstanceID: draft.Input.CallerInstanceID,
-		Status:           domain.PermissionPackageApprovalStatusPending,
+		ManagementScope:            store.ManagementScope{TenantID: draft.Input.TenantID, WorkspaceID: draft.Input.WorkspaceID},
+		TemplateID:                 draft.Template.ID,
+		TargetID:                   draft.Input.TargetID,
+		CallerInstanceID:           draft.Input.CallerInstanceID,
+		RequestedCapabilityID:      draft.Input.RequestedCapabilityID,
+		MatchRequestedCapabilityID: true,
+		Status:                     domain.PermissionPackageApprovalStatusPending,
 	})
 	if err != nil {
 		return err
@@ -6738,6 +7118,7 @@ func permissionPackageApprovalRequestFromDraft(draft domain.PermissionPackageDra
 		WorkspaceID:                   draft.Input.WorkspaceID,
 		TargetID:                      draft.Input.TargetID,
 		CallerInstanceID:              draft.Input.CallerInstanceID,
+		RequestedCapabilityID:         draft.Input.RequestedCapabilityID,
 		SubjectSelector:               draft.Input.SubjectSelector,
 		RequestText:                   draft.Input.RequestText,
 		Region:                        draft.Input.Region,
@@ -6817,6 +7198,7 @@ func validatePermissionPackageApprovalForDraft(approval domain.PermissionPackage
 		approval.WorkspaceID != draft.Input.WorkspaceID ||
 		approval.TargetID != draft.Input.TargetID ||
 		approval.CallerInstanceID != draft.Input.CallerInstanceID ||
+		approval.RequestedCapabilityID != draft.Input.RequestedCapabilityID ||
 		approval.SubjectSelector != draft.Input.SubjectSelector ||
 		approval.RequestText != draft.Input.RequestText ||
 		approval.Region != draft.Input.Region ||
@@ -6864,69 +7246,13 @@ func permissionPackageCapabilityIDsAndKeys(capabilities []domain.Capability) ([]
 	return ids, keys
 }
 
-type permissionPackageCapabilityFingerprintPayload struct {
-	ID              string                           `json:"id"`
-	TargetID        string                           `json:"targetId"`
-	Type            domain.CapabilityType            `json:"type"`
-	Key             string                           `json:"key"`
-	Action          domain.CapabilityAction          `json:"action"`
-	NativeScopes    []string                         `json:"nativeScopes,omitempty"`
-	DataDomains     []string                         `json:"dataDomains,omitempty"`
-	DataScopes      []domain.DataScope               `json:"dataScopes,omitempty"`
-	Sensitivity     domain.CapabilitySensitivity     `json:"sensitivity"`
-	RiskLevel       domain.CapabilityRisk            `json:"riskLevel"`
-	EnforcementMode domain.CapabilityEnforcementMode `json:"enforcementMode"`
-	DiscoveryStatus domain.CapabilityDiscoveryStatus `json:"discoveryStatus"`
-	Version         int                              `json:"version"`
-}
-
 func permissionPackageCapabilityFingerprints(capabilities []domain.Capability) []string {
 	fingerprints := make([]string, 0, len(capabilities))
 	for _, capability := range capabilities {
-		fingerprints = append(fingerprints, permissionPackageCapabilityFingerprint(capability))
+		fingerprints = append(fingerprints, permissionpack.CapabilityFingerprint(capability))
 	}
 	sort.Strings(fingerprints)
 	return fingerprints
-}
-
-func permissionPackageCapabilityFingerprint(capability domain.Capability) string {
-	payload := permissionPackageCapabilityFingerprintPayload{
-		ID:              capability.ID,
-		TargetID:        capability.TargetID,
-		Type:            capability.Type,
-		Key:             capability.Key,
-		Action:          capability.Action,
-		NativeScopes:    sortedStringCopy(capability.NativeScopes),
-		DataDomains:     sortedStringCopy(capability.DataDomains),
-		DataScopes:      sortedDataScopes(capability.DataScopes),
-		Sensitivity:     capability.Sensitivity,
-		RiskLevel:       capability.RiskLevel,
-		EnforcementMode: capability.EnforcementMode,
-		DiscoveryStatus: capability.DiscoveryStatus,
-		Version:         capability.Version,
-	}
-	data, _ := json.Marshal(payload)
-	sum := sha256.Sum256(data)
-	return capability.ID + ":" + hex.EncodeToString(sum[:])
-}
-
-func sortedStringCopy(values []string) []string {
-	out := append([]string(nil), values...)
-	sort.Strings(out)
-	return out
-}
-
-func sortedDataScopes(values []domain.DataScope) []domain.DataScope {
-	out := append([]domain.DataScope(nil), values...)
-	sort.Slice(out, func(i, j int) bool {
-		return dataScopeSortKey(out[i]) < dataScopeSortKey(out[j])
-	})
-	return out
-}
-
-func dataScopeSortKey(scope domain.DataScope) string {
-	data, _ := json.Marshal(scope)
-	return string(data)
 }
 
 func samePermissionPackageDataScopes(left []domain.DataScope, right []domain.DataScope) bool {
@@ -6966,6 +7292,7 @@ func permissionPackageApprovalAuditMetadata(request domain.PermissionPackageAppr
 		"policyVersion":           request.PolicyVersion,
 		"targetId":                request.TargetID,
 		"callerInstanceId":        request.CallerInstanceID,
+		"requestedCapabilityId":   request.RequestedCapabilityID,
 		"status":                  request.Status,
 		"requestedBy":             request.RequestedBy,
 		"reviewedBy":              request.ReviewedBy,
@@ -7101,9 +7428,15 @@ func (s *Server) discoverMCPCapabilities(ctx context.Context, target domain.Agen
 			capability.DiscoveredAt = current.DiscoveredAt
 			capability.Version = current.Version
 			capability.DiscoveryStatus = current.DiscoveryStatus
+			capability.DataDomains = append([]string(nil), current.DataDomains...)
+			capability.DataScopes = append([]domain.DataScope(nil), current.DataScopes...)
+			capability.Sensitivity = current.Sensitivity
+			capability.RiskLevel = current.RiskLevel
 			if mcpCapabilityChanged(current, capability) {
 				capability.Version++
 				capability.DiscoveryStatus = domain.CapabilityDiscoveryPendingReview
+			} else {
+				capability.UpdatedAt = current.UpdatedAt
 			}
 		}
 		saved, err := s.repo.UpsertCapability(ctx, capability)
@@ -7162,6 +7495,66 @@ func mcpCapabilityChanged(left domain.Capability, right domain.Capability) bool 
 		left.Action != right.Action ||
 		jsonStable(left.InputSchema) != jsonStable(right.InputSchema) ||
 		jsonStable(left.OutputSchema) != jsonStable(right.OutputSchema)
+}
+
+func normalizedCapabilityDataDomains(values []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func validPermissionPackageDataDomains(values []string) bool {
+	allowed := map[string]struct{}{}
+	for _, template := range permissionpack.Templates() {
+		if value := strings.TrimSpace(template.DefaultDataDomain); value != "" {
+			allowed[value] = struct{}{}
+		}
+	}
+	for _, value := range values {
+		if _, ok := allowed[value]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func capabilityDataDomainsConsistent(dataDomains []string, dataScopes []domain.DataScope) bool {
+	domainSet := map[string]struct{}{}
+	for _, value := range dataDomains {
+		if value = strings.TrimSpace(value); value != "" {
+			domainSet[value] = struct{}{}
+		}
+	}
+	scopeSet := map[string]struct{}{}
+	for _, scope := range dataScopes {
+		if value := strings.TrimSpace(scope.DataDomain); value != "" {
+			scopeSet[value] = struct{}{}
+		}
+	}
+	if len(domainSet) == 0 || len(scopeSet) == 0 {
+		return true
+	}
+	if len(domainSet) != len(scopeSet) {
+		return false
+	}
+	for value := range domainSet {
+		if _, ok := scopeSet[value]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func inferCapabilityAction(name string) domain.CapabilityAction {

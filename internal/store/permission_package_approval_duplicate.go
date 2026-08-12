@@ -40,6 +40,7 @@ func permissionPackageApprovalRequestsShareDuplicateKey(left domain.PermissionPa
 		left.WorkspaceID == right.WorkspaceID &&
 		left.TargetID == right.TargetID &&
 		left.CallerInstanceID == right.CallerInstanceID &&
+		left.RequestedCapabilityID == right.RequestedCapabilityID &&
 		left.SubjectSelector == right.SubjectSelector &&
 		left.RequestText == right.RequestText &&
 		left.Region == right.Region &&
@@ -59,6 +60,7 @@ func permissionPackageApprovalRequestDuplicateLockKey(request domain.PermissionP
 		WorkspaceID                   string             `json:"workspaceId"`
 		TargetID                      string             `json:"targetId"`
 		CallerInstanceID              string             `json:"callerInstanceId"`
+		RequestedCapabilityID         string             `json:"requestedCapabilityId"`
 		SubjectSelector               string             `json:"subjectSelector"`
 		RequestText                   string             `json:"requestText"`
 		Region                        string             `json:"region"`
@@ -75,6 +77,7 @@ func permissionPackageApprovalRequestDuplicateLockKey(request domain.PermissionP
 		WorkspaceID:                   request.WorkspaceID,
 		TargetID:                      request.TargetID,
 		CallerInstanceID:              request.CallerInstanceID,
+		RequestedCapabilityID:         request.RequestedCapabilityID,
 		SubjectSelector:               request.SubjectSelector,
 		RequestText:                   request.RequestText,
 		Region:                        request.Region,

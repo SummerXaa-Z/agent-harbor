@@ -386,6 +386,7 @@ type UpdateCapabilityRequest struct {
 	DiscoveryStatus *CapabilityDiscoveryStatus `json:"discoveryStatus"`
 	Sensitivity     *CapabilitySensitivity     `json:"sensitivity"`
 	RiskLevel       *CapabilityRisk            `json:"riskLevel"`
+	DataDomains     []string                   `json:"dataDomains"`
 	DataScopes      []DataScope                `json:"dataScopes"`
 }
 
@@ -504,14 +505,15 @@ type PermissionPackageAccessSubject struct {
 }
 
 type PermissionPackageDraftRequest struct {
-	CallerInstanceID string `json:"callerInstanceId"`
-	Region           string `json:"region"`
-	RequestText      string `json:"requestText"`
-	SubjectSelector  string `json:"subjectSelector"`
-	TargetID         string `json:"targetId"`
-	TemplateID       string `json:"templateId"`
-	TenantID         string `json:"tenantId"`
-	WorkspaceID      string `json:"workspaceId"`
+	CallerInstanceID      string `json:"callerInstanceId"`
+	Region                string `json:"region"`
+	RequestText           string `json:"requestText"`
+	RequestedCapabilityID string `json:"requestedCapabilityId,omitempty"`
+	SubjectSelector       string `json:"subjectSelector"`
+	TargetID              string `json:"targetId"`
+	TemplateID            string `json:"templateId"`
+	TenantID              string `json:"tenantId"`
+	WorkspaceID           string `json:"workspaceId"`
 }
 
 type PermissionPackageApplyRequest struct {
@@ -658,6 +660,7 @@ type PermissionPackageApprovalRequest struct {
 	WorkspaceID                   string                          `json:"workspaceId"`
 	TargetID                      string                          `json:"targetId"`
 	CallerInstanceID              string                          `json:"callerInstanceId"`
+	RequestedCapabilityID         string                          `json:"requestedCapabilityId,omitempty"`
 	SubjectSelector               string                          `json:"subjectSelector,omitempty"`
 	RequestText                   string                          `json:"requestText,omitempty"`
 	Region                        string                          `json:"region,omitempty"`
@@ -698,6 +701,7 @@ type PermissionPackageApplication struct {
 	WorkspaceID            string      `json:"workspaceId"`
 	TargetID               string      `json:"targetId"`
 	CallerInstanceID       string      `json:"callerInstanceId"`
+	RequestedCapabilityID  string      `json:"requestedCapabilityId,omitempty"`
 	SubjectSelector        string      `json:"subjectSelector,omitempty"`
 	RequestText            string      `json:"requestText,omitempty"`
 	Region                 string      `json:"region,omitempty"`

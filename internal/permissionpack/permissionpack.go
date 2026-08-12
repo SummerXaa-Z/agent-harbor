@@ -1,7 +1,11 @@
 package permissionpack
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
@@ -9,10 +13,69 @@ import (
 
 const policyGateVersion = 1
 
+type capabilityFingerprintPayload struct {
+	ID              string                           `json:"id"`
+	TargetID        string                           `json:"targetId"`
+	Type            domain.CapabilityType            `json:"type"`
+	Key             string                           `json:"key"`
+	Action          domain.CapabilityAction          `json:"action"`
+	InputSchema     map[string]any                   `json:"inputSchema,omitempty"`
+	OutputSchema    map[string]any                   `json:"outputSchema,omitempty"`
+	NativeScopes    []string                         `json:"nativeScopes,omitempty"`
+	DataDomains     []string                         `json:"dataDomains,omitempty"`
+	DataScopes      []domain.DataScope               `json:"dataScopes,omitempty"`
+	Sensitivity     domain.CapabilitySensitivity     `json:"sensitivity"`
+	RiskLevel       domain.CapabilityRisk            `json:"riskLevel"`
+	EnforcementMode domain.CapabilityEnforcementMode `json:"enforcementMode"`
+	DiscoveryStatus domain.CapabilityDiscoveryStatus `json:"discoveryStatus"`
+	Version         int                              `json:"version"`
+}
+
+// CapabilityFingerprint is the canonical authorization and contract witness used
+// by approval snapshots and the atomic apply boundary.
+func CapabilityFingerprint(capability domain.Capability) string {
+	payload := capabilityFingerprintPayload{
+		ID:              capability.ID,
+		TargetID:        capability.TargetID,
+		Type:            capability.Type,
+		Key:             capability.Key,
+		Action:          capability.Action,
+		InputSchema:     capability.InputSchema,
+		OutputSchema:    capability.OutputSchema,
+		NativeScopes:    sortedStrings(capability.NativeScopes),
+		DataDomains:     sortedStrings(capability.DataDomains),
+		DataScopes:      sortedScopes(capability.DataScopes),
+		Sensitivity:     capability.Sensitivity,
+		RiskLevel:       capability.RiskLevel,
+		EnforcementMode: capability.EnforcementMode,
+		DiscoveryStatus: capability.DiscoveryStatus,
+		Version:         capability.Version,
+	}
+	data, _ := json.Marshal(payload)
+	sum := sha256.Sum256(data)
+	return capability.ID + ":" + hex.EncodeToString(sum[:])
+}
+
+func sortedStrings(values []string) []string {
+	out := append([]string(nil), values...)
+	sort.Strings(out)
+	return out
+}
+
+func sortedScopes(values []domain.DataScope) []domain.DataScope {
+	out := append([]domain.DataScope(nil), values...)
+	sort.Slice(out, func(i, j int) bool {
+		left, _ := json.Marshal(out[i])
+		right, _ := json.Marshal(out[j])
+		return string(left) < string(right)
+	})
+	return out
+}
+
 var templates = []domain.PermissionPackageTemplate{
 	{
 		ID:                   "sales-readonly",
-		Version:              1,
+		Version:              2,
 		Name:                 "Sales read-only",
 		Summary:              "Allow CRM reads for a scoped sales tenant while blocking exports, deletes, admin actions, and restricted data.",
 		AllowedActions:       []domain.CapabilityAction{domain.CapabilityActionRead},
@@ -39,7 +102,7 @@ var templates = []domain.PermissionPackageTemplate{
 	},
 	{
 		ID:                   "support-ticket-triage",
-		Version:              1,
+		Version:              2,
 		Name:                 "Support ticket triage",
 		Summary:              "Allow ticket reads and bounded updates while blocking exports, deletes, and admin operations.",
 		AllowedActions:       []domain.CapabilityAction{domain.CapabilityActionRead, domain.CapabilityActionWrite},
@@ -59,7 +122,7 @@ var templates = []domain.PermissionPackageTemplate{
 	},
 	{
 		ID:                   "analytics-sandbox",
-		Version:              1,
+		Version:              2,
 		Name:                 "Analytics sandbox",
 		Summary:              "Allow read and execute capabilities for sandbox analysis while blocking writes, exports, and production admin actions.",
 		AllowedActions:       []domain.CapabilityAction{domain.CapabilityActionRead, domain.CapabilityActionExecute},
@@ -79,7 +142,7 @@ var templates = []domain.PermissionPackageTemplate{
 	},
 	{
 		ID:                   "audit-readonly",
-		Version:              1,
+		Version:              2,
 		Name:                 "Audit read-only",
 		Summary:              "Allow low-risk reads for audit review while blocking mutations, exports, and restricted data.",
 		AllowedActions:       []domain.CapabilityAction{domain.CapabilityActionRead},
@@ -118,7 +181,9 @@ func BuildDraft(input domain.PermissionPackageDraftRequest, capabilities []domai
 	allowedCapabilities := make([]domain.Capability, 0, len(targetCapabilities))
 	blockedCapabilities := make([]domain.Capability, 0, len(targetCapabilities))
 	for _, capability := range targetCapabilities {
-		if isBlockedByTemplate(capability, template) {
+		if (input.RequestedCapabilityID != "" && capability.ID != input.RequestedCapabilityID) ||
+			isBlockedByTemplate(capability, template) ||
+			(input.RequestedCapabilityID != "" && !containsAction(template.AllowedActions, capability.Action)) {
 			blockedCapabilities = append(blockedCapabilities, capability)
 			continue
 		}
@@ -146,6 +211,7 @@ func normalizeInput(input domain.PermissionPackageDraftRequest) domain.Permissio
 	input.CallerInstanceID = strings.TrimSpace(input.CallerInstanceID)
 	input.Region = strings.TrimSpace(input.Region)
 	input.RequestText = strings.TrimSpace(input.RequestText)
+	input.RequestedCapabilityID = strings.TrimSpace(input.RequestedCapabilityID)
 	input.SubjectSelector = strings.TrimSpace(input.SubjectSelector)
 	input.TargetID = strings.TrimSpace(input.TargetID)
 	input.TemplateID = strings.TrimSpace(input.TemplateID)
@@ -164,9 +230,49 @@ func templateByID(id string) (domain.PermissionPackageTemplate, bool) {
 }
 
 func isBlockedByTemplate(capability domain.Capability, template domain.PermissionPackageTemplate) bool {
-	return containsAction(template.BlockedActions, capability.Action) ||
+	return !capabilityMatchesTemplateDomain(capability, template) ||
+		containsAction(template.BlockedActions, capability.Action) ||
 		containsRisk(template.BlockedRisks, capability.RiskLevel) ||
-		containsSensitivity(template.BlockedSensitivities, capability.Sensitivity)
+		containsSensitivity(template.BlockedSensitivities, capability.Sensitivity) ||
+		templateDeniesCapability(template, capability.Key)
+}
+
+func capabilityMatchesTemplateDomain(capability domain.Capability, template domain.PermissionPackageTemplate) bool {
+	want := strings.TrimSpace(template.DefaultDataDomain)
+	if want == "" {
+		return false
+	}
+	domains := map[string]struct{}{}
+	for _, value := range capability.DataDomains {
+		if normalized := strings.TrimSpace(value); normalized != "" {
+			domains[normalized] = struct{}{}
+		}
+	}
+	for _, scope := range capability.DataScopes {
+		if normalized := strings.TrimSpace(scope.DataDomain); normalized != "" {
+			domains[normalized] = struct{}{}
+		}
+	}
+	if len(domains) == 0 {
+		return false
+	}
+	for value := range domains {
+		if value != want {
+			return false
+		}
+	}
+	return true
+}
+
+func templateDeniesCapability(template domain.PermissionPackageTemplate, capabilityKey string) bool {
+	capabilityKey = strings.TrimSpace(capabilityKey)
+	for _, guardrail := range template.Guardrails {
+		if strings.TrimSpace(guardrail.CapabilityKey) == capabilityKey &&
+			guardrail.ExpectedDecision == domain.PermissionPackageDecisionDeny {
+			return true
+		}
+	}
+	return false
 }
 
 func buildDataScopes(input domain.PermissionPackageDraftRequest, template domain.PermissionPackageTemplate, allowedCapabilities []domain.Capability) []domain.DataScope {
@@ -226,7 +332,14 @@ func buildReadiness(input domain.PermissionPackageDraftRequest, allowedCapabilit
 	}
 	warnings := []string{}
 	if len(allowedCapabilities) == 0 {
-		warnings = append(warnings, "No matching allowed capabilities for the selected target.")
+		if input.RequestedCapabilityID != "" {
+			warnings = append(warnings, "The requested capability is not safely covered by this permission package.")
+		} else {
+			warnings = append(warnings, "No matching allowed capabilities for the selected target.")
+		}
+	}
+	if input.RequestedCapabilityID != "" && (len(allowedCapabilities) != 1 || allowedCapabilities[0].ID != input.RequestedCapabilityID) {
+		warnings = appendUniqueString(warnings, "The requested capability is not safely covered by this permission package.")
 	}
 	for _, capability := range allowedCapabilities {
 		if _, ok := domain.EffectiveDataScopes(capability.DataScopes, dataScopes); !ok {
@@ -238,6 +351,15 @@ func buildReadiness(input domain.PermissionPackageDraftRequest, allowedCapabilit
 		MissingFields: missingFields,
 		Warnings:      warnings,
 	}
+}
+
+func appendUniqueString(values []string, value string) []string {
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 func buildPolicyGate(allowedCapabilities []domain.Capability) domain.PermissionPackagePolicyGate {

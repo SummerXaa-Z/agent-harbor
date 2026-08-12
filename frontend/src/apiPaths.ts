@@ -12,6 +12,7 @@ function queryString(params: Record<string, string | undefined>): string {
 export interface PermissionPackageApprovalRequestPathFilter {
   callerInstanceId?: string
   limit?: number
+  requestedCapabilityId?: string
   reviewer?: string
   status?: PermissionPackageApprovalStatus
   targetId?: string
@@ -23,6 +24,7 @@ export interface PermissionPackageApprovalRequestPathFilter {
 export interface PermissionPackageApplicationHealthPathFilter {
   callerInstanceId?: string
   limit?: number
+  requestedCapabilityId?: string
   targetId?: string
   templateId?: string
   tenantId?: string
@@ -34,6 +36,7 @@ export interface PermissionPackageProductionReadinessPathFilter {
   callerInstanceId?: string
   region?: string
   requestText?: string
+  requestedCapabilityId?: string
   subjectId?: string
   subjectSelector?: string
   targetId?: string
@@ -86,6 +89,7 @@ export function permissionPackageApplicationHealthPath(filter: PermissionPackage
   const query = queryString({
     callerInstanceId: filter.callerInstanceId,
     limit: filter.limit ? String(filter.limit) : undefined,
+    requestedCapabilityId: filter.requestedCapabilityId,
     targetId: filter.targetId,
     templateId: filter.templateId,
     tenantId: filter.tenantId,
@@ -100,6 +104,7 @@ export function permissionPackageProductionReadinessPath(filter: PermissionPacka
     callerInstanceId: filter.callerInstanceId,
     region: filter.region,
     requestText: filter.requestText,
+    requestedCapabilityId: filter.requestedCapabilityId,
     subjectId: filter.subjectId,
     subjectSelector: filter.subjectSelector,
     targetId: filter.targetId,
@@ -128,6 +133,7 @@ export function permissionPackageAcceptanceReportPath(filter: PermissionPackageP
     callerInstanceId: filter.callerInstanceId,
     region: filter.region,
     requestText: filter.requestText,
+    requestedCapabilityId: filter.requestedCapabilityId,
     subjectId: filter.subjectId,
     subjectSelector: filter.subjectSelector,
     targetId: filter.targetId,
@@ -146,6 +152,7 @@ export function permissionPackageApprovalRequestsPath(filter: PermissionPackageA
   const query = queryString({
     callerInstanceId: filter.callerInstanceId,
     limit: filter.limit ? String(filter.limit) : undefined,
+    requestedCapabilityId: filter.requestedCapabilityId,
     reviewer: filter.reviewer,
     status: filter.status,
     targetId: filter.targetId,

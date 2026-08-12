@@ -91,6 +91,8 @@ test("English product copy uses acceptance and records wording", () => {
     "API compatibility contract is incompatible with this console. Upgrade the AgentHarbor API before continuing."
   );
   assert.equal(t("systemCapability.permissionPackageApprovalRequests"), "Permission approval queue");
+  assert.equal(t("systemCapability.capabilityDataDomainClassification"), "Capability data-domain classification");
+  assert.equal(t("systemCapability.permissionPackageRequestedCapability"), "Exact capability permission requests");
   assert.equal(t("systemCapability.permissionPackageApprovalWithdraw"), "Approval withdrawal");
   assert.equal(t("systemCapability.permissionPackageApplyPreflight"), "Apply preflight");
   assert.equal(t("systemCapability.permissionPackageApplications"), "Permission application records");
@@ -519,6 +521,8 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("message.apiContractIncompatibleManagementCatalog"), "Management MCP 工具目录摘要与当前控制台不兼容。请先升级 AgentHarbor API。");
   assert.equal(t("message.apiContractIncompatibleUnknown"), "API 兼容契约与当前控制台不兼容。请先升级 AgentHarbor API。");
   assert.equal(t("systemCapability.permissionPackageApprovalRequests"), "权限审批队列");
+  assert.equal(t("systemCapability.capabilityDataDomainClassification"), "能力数据域分类");
+  assert.equal(t("systemCapability.permissionPackageRequestedCapability"), "精确能力权限申请");
   assert.equal(t("systemCapability.permissionPackageApprovalWithdraw"), "审批撤回");
   assert.equal(t("systemCapability.permissionPackageApplyPreflight"), "应用前预检");
   assert.equal(t("systemCapability.permissionPackageApplications"), "权限应用记录");

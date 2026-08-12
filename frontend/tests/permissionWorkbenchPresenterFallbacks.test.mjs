@@ -55,6 +55,7 @@ test("permission preflight and policy fallbacks do not expose raw service wordin
   assert.doesNotMatch(policyGateBlock, /nextActions/);
   assert.match(policyBlock, /if \(!reason\.reasonKey\) return t\("permissionPolicy\.unknownReason"\)/);
   assert.doesNotMatch(policyBlock, /return reason\.message/);
+  assert.match(readinessBlock, /t\("message\.requestedCapabilityNotCovered"\)/);
   assert.match(readinessBlock, /t\("message\.permissionPackageReadinessWarning"\)/);
   assert.doesNotMatch(readinessBlock, /: warning/);
 });

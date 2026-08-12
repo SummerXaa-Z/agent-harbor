@@ -301,7 +301,8 @@ function reportMatchesAcceptanceScope(
     report.scope.workspaceId === input.workspaceId &&
     report.scope.templateId === input.templateId &&
     report.scope.targetId === input.targetId &&
-    report.scope.callerInstanceId === input.callerInstanceId;
+    report.scope.callerInstanceId === input.callerInstanceId &&
+    (report.scope.requestedCapabilityId ?? "") === (input.requestedCapabilityId ?? "");
 }
 
 function formatAcceptanceReportDigest(report: PermissionPackageAcceptanceReport) {

@@ -70,6 +70,7 @@ import {
   normalizeAccessSubjectOptions,
   type AccessSubjectOption
 } from "./accessSubjects";
+import { permissionChangeHandoffDraftInput } from "./askJourney";
 import {
   createTranslator,
   resolveInitialLanguage,
@@ -709,8 +710,64 @@ export function ConsoleController() {
     setScope,
     t
   });
+  function openAskCapabilityReview(request: AccessDecisionExplainRequest) {
+    const selectedTarget = agents.find((agent) => agent.id === request.targetId);
+    capabilityGovernance.setForm({
+      ...capabilityGovernance.form,
+      callerInstanceId: request.callerInstanceId,
+      capabilityId: request.capabilityId,
+      targetId: request.targetId,
+      tenantId: request.tenantId,
+      workspaceId: request.workspaceId
+    });
+    setHandoffContexts((current) => ({
+      ...current,
+      capabilityGovernance: {
+        capabilityId: request.capabilityId,
+        sourceView: "ask",
+        targetId: request.targetId,
+        targetName: selectedTarget ? permissionEntityDisplayName(selectedTarget.name, t) : request.targetId,
+        tenantId: request.tenantId,
+        tenantName: permissionTenantPathLabel(request.tenantId, tenants, t).primary,
+        workspaceId: request.workspaceId,
+        workspaceName: permissionWorkspaceDisplayName(request.workspaceId, agents, t)
+      }
+    }));
+    userSelectedNavRef.current = true;
+    setActiveNav("capabilities");
+  }
+  function openAskAccessProfile(request: AccessDecisionExplainRequest) {
+    const tenantPath = permissionTenantPathLabel(request.tenantId, tenants, t);
+    const selectedCaller = agents.find((agent) => agent.id === request.callerInstanceId);
+    const selectedTarget = agents.find((agent) => agent.id === request.targetId);
+    const selectedCapability = capabilities.find((capability) => capability.id === request.capabilityId);
+    setScope({ tenantId: request.tenantId, workspaceId: request.workspaceId });
+    accessProfileController.clearForPermissionChangeHandoff({
+      ...accessProfileController.filters,
+      capabilityId: request.capabilityId,
+      callerInstanceId: request.callerInstanceId,
+      subjectId: request.subjectId,
+      targetId: request.targetId,
+      traceLimit: accessProfileController.filters.traceLimit || "20",
+      workspaceId: request.workspaceId
+    }, {
+      capabilityId: request.capabilityId,
+      capabilityName: selectedCapability ? capabilityDisplayName(selectedCapability, t) : request.capabilityId,
+      callerInstanceId: request.callerInstanceId,
+      callerName: selectedCaller ? permissionEntityDisplayName(selectedCaller.name, t) : request.callerInstanceId,
+      targetId: request.targetId,
+      targetName: selectedTarget ? permissionEntityDisplayName(selectedTarget.name, t) : request.targetId,
+      tenantId: request.tenantId,
+      tenantName: tenantPath.primary,
+      tenantPath: tenantPath.path,
+      workspaceId: request.workspaceId,
+      workspaceName: permissionWorkspaceDisplayName(request.workspaceId, agents, t)
+    });
+    userSelectedNavRef.current = true;
+    setActiveNav("access");
+  }
   const askAccess = useAskAccessController({
-    adminKey, consoleData: data, handoffContext: handoffContexts.ask, language, liveDataAvailable: Boolean(data?.loadedFromApi),
+    adminKey, adminRole: consoleAuth.session?.role, consoleData: data, handoffContext: handoffContexts.ask, language, liveDataAvailable: Boolean(data?.loadedFromApi),
     onConsumeHandoff: () => setHandoffContexts((current) => ({ ...current, ask: null })),
     onStartPermissionChange: (context) => { setHandoffContexts((current) => ({ ...current, permissionChange: context })); userSelectedNavRef.current = true; setActiveNav("ai-admin"); },
     t, templates: aiAdminTemplates
@@ -719,16 +776,7 @@ export function ConsoleController() {
     const context = handoffContexts.permissionChange;
     if (!context) return;
     setAiAdminNewDraftMode(true);
-    setAiAdminForm((current) => ({
-      ...current,
-      callerInstanceId: context.callerInstanceId ?? current.callerInstanceId,
-      requestText: context.intentText ?? current.requestText,
-      subjectSelector: context.subjectId ?? current.subjectSelector,
-      targetId: context.targetId ?? current.targetId,
-      templateId: context.templateId ?? current.templateId,
-      tenantId: context.tenantId,
-      workspaceId: context.workspaceId
-    }));
+    setAiAdminForm((current) => permissionChangeHandoffDraftInput(context, current));
     setAiAdminServerDraft(null);
     setAiAdminWorkbenchPreview(null);
     setAiAdminApplication(null);
@@ -993,6 +1041,7 @@ export function ConsoleController() {
         {
           callerInstanceId: formInput.callerInstanceId,
           limit: 10,
+          requestedCapabilityId: formInput.requestedCapabilityId,
           targetId: formInput.targetId,
           templateId: formInput.templateId,
           tenantId: formInput.tenantId,
@@ -1023,6 +1072,7 @@ export function ConsoleController() {
       callerInstanceId: formInput.callerInstanceId,
       region: formInput.region,
       requestText: formInput.requestText,
+      requestedCapabilityId: formInput.requestedCapabilityId,
       subjectId: options.subjectId ?? subjectIdExampleFromSelector(formInput.subjectSelector),
       subjectSelector: formInput.subjectSelector,
       targetId: formInput.targetId,
@@ -1169,6 +1219,7 @@ export function ConsoleController() {
       ...defaultAiAdminForm,
       callerInstanceId: current.callerInstanceId,
       region: current.region,
+      requestedCapabilityId: undefined,
       subjectSelector: current.subjectSelector,
       targetId: current.targetId,
       templateId: current.templateId,
@@ -1606,6 +1657,7 @@ export function ConsoleController() {
       {
         callerInstanceId: draft.input.callerInstanceId,
         limit: 8,
+        requestedCapabilityId: draft.input.requestedCapabilityId,
         targetId: draft.input.targetId,
         templateId: draft.template.id,
         tenantId: draft.input.tenantId,
@@ -1670,6 +1722,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         {
           callerInstanceId: aiAdminDraft.input.callerInstanceId,
           limit: 10,
+          requestedCapabilityId: aiAdminDraft.input.requestedCapabilityId,
           reviewer,
           status: "pending",
           targetId: aiAdminDraft.input.targetId,
@@ -2502,11 +2555,13 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         message={capabilityGovernance.message}
         mcpTargets={mcpTargets}
         onApprove={capabilityGovernance.handleApproveCapability}
+        onClassify={capabilityGovernance.handleClassifyCapability}
         onChange={handleCapabilityGovernanceFormChange}
         onCreateGrantChain={capabilityGovernance.submitCapabilityGrantChain}
         onDismissHandoff={() => setHandoffContexts((current) => ({ ...current, capabilityGovernance: null }))}
         onQueryAccess={openAskAccess}
         onRefreshTarget={capabilityGovernance.handleRefreshTargetCapabilities}
+        permissionPackageDataDomains={Array.from(new Set(aiAdminTemplates.map((template) => template.defaultDataDomain).filter(Boolean)))}
         t={t}
         tenants={tenants}
         tenantEntitlements={tenantEntitlements}
@@ -2515,7 +2570,17 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     </Panel>
   );
   const askAccessPanel = (
-    <AskAccessPanel agents={agents} capabilities={capabilities} controller={askAccess} liveDataAvailable={Boolean(data?.loadedFromApi)} t={t} tenants={tenants} title={t("panel.askAccess")} />
+    <AskAccessPanel
+      agents={agents}
+      capabilities={capabilities}
+      controller={askAccess}
+      liveDataAvailable={Boolean(data?.loadedFromApi)}
+      onOpenAccessProfile={openAskAccessProfile}
+      onReviewCapability={openAskCapabilityReview}
+      t={t}
+      tenants={tenants}
+      title={t("panel.askAccess")}
+    />
   );
   const accessProfilePanel = (
     <Panel className="span-12" icon={<LockKeyhole size={18} />} title={t("panel.accessProfile")}>
@@ -3269,6 +3334,7 @@ function permissionPackageApprovalRequestMatchesDraft(
     && request.workspaceId === draft.input.workspaceId
     && request.targetId === draft.input.targetId
     && request.callerInstanceId === draft.input.callerInstanceId
+    && (request.requestedCapabilityId ?? "") === (draft.input.requestedCapabilityId ?? "")
     && (request.subjectSelector ?? "") === (draft.input.subjectSelector ?? "")
     && (request.requestText ?? "") === draft.input.requestText
     && (request.region ?? "") === draft.input.region
@@ -3297,6 +3363,7 @@ function shallowEqualAiAdminForm(
     left.callerInstanceId === right.callerInstanceId &&
     left.region === right.region &&
     left.requestText === right.requestText &&
+    left.requestedCapabilityId === right.requestedCapabilityId &&
     left.subjectSelector === right.subjectSelector &&
     left.targetId === right.targetId &&
     left.templateId === right.templateId &&

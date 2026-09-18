@@ -5,6 +5,7 @@ import {
   Download,
   FileSearch,
   RefreshCw,
+  Tags,
   TriangleAlert,
   Undo2,
   Workflow,
@@ -105,9 +106,6 @@ interface AiAdminPermissionWorkbenchProps {
   approvalAuditEvent: AuditEvent | null;
   approvalJourneyConfig: AiAdminApprovalJourneyConfig;
   approvalJourneyEvaluation: AiAdminApprovalJourneyEvaluation;
-  approvalJourneyMessage: string;
-  approvalJourneyResult: AiAdminApprovalJourneyResult | null;
-  approvalJourneyRunning: boolean;
   approvalReadiness: AiAdminApprovalReadinessState;
   approvalReadinessChecking: boolean;
   approvalReadinessMessage: string;
@@ -139,6 +137,10 @@ interface AiAdminPermissionWorkbenchProps {
   liveDataAvailable: boolean;
   message: string;
   mcpTargets: Agent[];
+  runtimeValidationMessage: string;
+  runtimeValidationResult: AiAdminApprovalJourneyResult | null;
+  runtimeValidationRunning: boolean;
+  unclassifiedCapabilityCount: number;
   onApply: () => void;
   onApprovalReviewerChange: (reviewer: string) => void;
   onApproveApprovalRequest: (requestId?: string, comment?: string) => void;
@@ -146,6 +148,7 @@ interface AiAdminPermissionWorkbenchProps {
   onCreateApprovalRequest: () => void;
   onExplainAccessDecision: () => void;
   onOpenAccessProfile: () => void;
+  onOpenCapabilityGovernance: () => void;
   onRefreshApplyPreflight: () => void;
   onRefreshApprovalReadiness: () => void;
   onRefreshApplicationHealth: () => void;
@@ -156,7 +159,7 @@ interface AiAdminPermissionWorkbenchProps {
   onRehearseApplicationDrift: () => void;
   onReviewApplicationHealthRow: (application: PermissionPackageApplication) => void;
   onReviewApplicationImpact: () => void;
-  onRunApprovalJourney: () => void;
+  onRunRuntimeValidation: () => void;
   onSelectApprovalRequest: (requestId: string) => void;
   onStartNewPermissionChange: () => void;
   onDismissPermissionHandoff: () => void;
@@ -178,9 +181,6 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     approvalAction,
     approvalAuditEvent,
     approvalJourneyEvaluation,
-    approvalJourneyMessage,
-    approvalJourneyResult,
-    approvalJourneyRunning,
     approvalReadiness,
     approvalReadinessChecking,
     approvalReadinessMessage,
@@ -212,6 +212,10 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     liveDataAvailable,
     message,
     mcpTargets,
+    runtimeValidationMessage,
+    runtimeValidationResult,
+    runtimeValidationRunning,
+    unclassifiedCapabilityCount,
     onApply,
     onApprovalReviewerChange,
     onApproveApprovalRequest,
@@ -219,6 +223,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     onCreateApprovalRequest,
     onExplainAccessDecision,
     onOpenAccessProfile,
+    onOpenCapabilityGovernance,
     onRefreshApplyPreflight,
     onRefreshApprovalReadiness,
     onRefreshApplicationHealth,
@@ -229,7 +234,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     onRehearseApplicationDrift,
     onReviewApplicationHealthRow,
     onReviewApplicationImpact,
-    onRunApprovalJourney,
+    onRunRuntimeValidation,
     onSelectApprovalRequest,
     onStartNewPermissionChange,
     onDismissPermissionHandoff,
@@ -329,7 +334,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const reviewerQueueReadOnly = Boolean(application) || goLiveReady;
   const reviewerQueueTitleKey = reviewerQueueReadOnly ? "section.permissionApprovalTrace" : "section.permissionReviewerQueue";
   const reviewerQueueRefreshKey = reviewerQueueReadOnly ? "action.refreshApprovalTrace" : "action.refreshReviewerQueue";
-  const runtimeValidationReady = Boolean(approvalJourneyResult) || goLiveReady;
+  const runtimeValidationReady = Boolean(runtimeValidationResult) || goLiveReady;
   const goLivePrerequisitesReady = Boolean(application) || goLiveReady;
   const approvalEffectivelyResolved = !draft.policyGate.canApplyDirectly
     && (approvalRequestEffectiveStatus === "approved" || Boolean(application) || goLiveReady);
@@ -373,7 +378,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const accessDecisionExplanationMessageTone = permissionInlineMessageTone(accessDecisionExplanationMessage);
   const applicationHealthMessageTone = permissionInlineMessageTone(applicationHealthMessage);
   const applicationImpactMessageTone = permissionInlineMessageTone(applicationImpactMessage);
-  const permissionRequestBusy = approvalJourneyRunning
+  const permissionRequestBusy = runtimeValidationRunning
     || applying
     || Boolean(approvalAction)
     || approvalResolutionBlocked
@@ -450,7 +455,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       return;
     }
     if (primaryActionCode === "run_runtime_validation") {
-      onRunApprovalJourney();
+      onRunRuntimeValidation();
       return;
     }
     if (isAcceptanceReportActionCode(primaryActionCode) || productionSummary.primaryActionKey === "action.exportAcceptanceReport") {
@@ -608,7 +613,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     ? t("action.exportingAcceptanceReport")
     : goLivePrimaryActionKey === "action.checkProductionReadiness" && productionReadinessLoading
       ? t("action.checkingProductionReadiness")
-      : goLivePrimaryActionKey === "action.runApprovalJourney" && approvalJourneyRunning
+      : goLivePrimaryActionKey === "action.runApprovalJourney" && runtimeValidationRunning
         ? t("action.runningApprovalJourney")
         : t(goLivePrimaryActionKey);
   const runGoLivePrimaryAction = () => {
@@ -624,7 +629,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       onRefreshProductionReadiness();
       return;
     }
-    onRunApprovalJourney();
+    onRunRuntimeValidation();
   };
   const approvalDecisionConfirmation = pendingApprovalDecision ? (
     <div className="approval-decision-confirmation" role="group" aria-label={t("text.approvalDecisionConfirmTitle")}>
@@ -928,6 +933,15 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
               )}
             </div>
             {message ? <span className={`approval-inline-message status-${messageTone}`}>{message}</span> : null}
+            {unclassifiedCapabilityCount > 0 && !application ? (
+              <div className="approval-reviewer-context">
+                <span>{tx(t, "text.permissionUnclassifiedCapabilityHint", { count: unclassifiedCapabilityCount })}</span>
+                <button className="secondary-button" disabled={permissionRequestBusy} onClick={onOpenCapabilityGovernance} type="button">
+                  <Tags size={14} />
+                  {t("action.openCapabilityGovernance")}
+                </button>
+              </div>
+            ) : null}
           </section>
 
           <section className="approval-process-block approval-go-live-block" id={permissionRequestStepSectionId("goLive")}>
@@ -980,7 +994,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             <div className="approval-runtime" id={permissionRequestStepSectionId("validation")}>
               <strong>{t("text.runtimeValidationResultTitle")}</strong>
               <span>{runtimeValidationText}</span>
-              {approvalJourneyMessage ? <em>{approvalJourneyMessage}</em> : null}
+              {runtimeValidationMessage ? <em>{runtimeValidationMessage}</em> : null}
             </div>
           </section>
         </aside>

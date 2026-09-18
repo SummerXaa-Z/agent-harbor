@@ -745,7 +745,7 @@ test("permission request uses effective approval status for expired requests", (
 
 test("permission request primary operations share one busy guard", () => {
   assert.match(workbench, /const permissionRequestBusy =/);
-  assert.match(workbench, /approvalJourneyRunning/);
+  assert.match(workbench, /runtimeValidationRunning/);
   assert.match(workbench, /approvalReadinessChecking/);
   assert.match(workbench, /applyPreflightLoading/);
   assert.match(workbench, /productionReadinessLoading/);
@@ -765,7 +765,7 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /productionSummary\.status === "ready"/);
   assert.match(workbench, /const approvalEffectivelyResolved = !draft\.policyGate\.canApplyDirectly/);
   assert.match(workbench, /approvalRequestEffectiveStatus === "approved" \|\| Boolean\(application\) \|\| goLiveReady/);
-  assert.match(workbench, /const runtimeValidationReady = Boolean\(approvalJourneyResult\) \|\| goLiveReady/);
+  assert.match(workbench, /const runtimeValidationReady = Boolean\(runtimeValidationResult\) \|\| goLiveReady/);
   assert.match(workbench, /const runtimeValidationText = runtimeValidationReady/);
   assert.match(workbench, /<span>\{runtimeValidationText\}<\/span>/);
   assert.match(workbench, /application \? \(/);

@@ -30,6 +30,7 @@ No changes recorded yet.
 - Permission-package apply now binds the reviewed approval and capability fingerprints inside the repository transaction, using row locks in PostgreSQL so concurrent drift rolls back approval consumption, grants, application, and audit writes.
 - Access Handoff tokens now fail closed on subject, target, template-version, allowed-capability, and live capability drift, including `tools/list`, tool calls, generic MCP methods, and OpenAPI routes.
 - JSON, MCP input, upstream redirect, data-scope, race-detector, fuzz, PostgreSQL race, and dependency-vulnerability gates were expanded for the release path.
+- Go toolchain bumped to 1.25.13 to remediate standard-library advisories GO-2026-6089, GO-2026-6090, and GO-2026-6218 reported by release dependency scanning.
 
 ### Fixed
 

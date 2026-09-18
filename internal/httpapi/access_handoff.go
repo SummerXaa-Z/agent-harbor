@@ -620,12 +620,18 @@ func accessHandoffCopyArtifactsFor(handoff accessHandoffResponse) *accessHandoff
 	if len(allowedKeys) > 0 {
 		toolName = allowedKeys[0]
 	}
+	// The handoff query already validated the concrete subject against the
+	// selector, so copy artifacts can carry it instead of a placeholder.
+	subjectHeader := strings.TrimSpace(handoff.Scope.SubjectID)
+	if subjectHeader == "" {
+		subjectHeader = "<subject-id-matching-selector>"
+	}
 	config, _ := json.MarshalIndent(map[string]any{
 		"transport": "streamable-http",
 		"url":       runtimePath,
 		"headers": map[string]string{
 			"Authorization":            "Bearer ${AGENT_HARBOR_TOKEN}",
-			"X-AgentHarbor-Subject-Id": "<subject-id-matching-selector>",
+			"X-AgentHarbor-Subject-Id": subjectHeader,
 		},
 	}, "", "  ")
 	requestExample, _ := json.MarshalIndent(map[string]any{
@@ -634,7 +640,7 @@ func accessHandoffCopyArtifactsFor(handoff accessHandoffResponse) *accessHandoff
 		"headers": map[string]string{
 			"Authorization":            "Bearer ${AGENT_HARBOR_TOKEN}",
 			"Content-Type":             "application/json",
-			"X-AgentHarbor-Subject-Id": "<subject-id-matching-selector>",
+			"X-AgentHarbor-Subject-Id": subjectHeader,
 		},
 		"body": map[string]any{
 			"jsonrpc": "2.0",

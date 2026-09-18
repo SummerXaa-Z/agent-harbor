@@ -209,6 +209,12 @@ func TestPermissionPackageAccessHandoffBlocksBeforeApplyAndReturnsReadyArtifacts
 		after.CopyArtifacts.PermissionBoundarySummary == "" {
 		t.Fatalf("expected safe copy artifacts, got %#v", after.CopyArtifacts)
 	}
+	if !strings.Contains(after.CopyArtifacts.MCPClientConfig, `"X-AgentHarbor-Subject-Id": "user:support-001"`) ||
+		!strings.Contains(after.CopyArtifacts.RuntimeRequestExample, `"X-AgentHarbor-Subject-Id": "user:support-001"`) ||
+		strings.Contains(after.CopyArtifacts.MCPClientConfig, "<subject-id-matching-selector>") ||
+		strings.Contains(after.CopyArtifacts.RuntimeRequestExample, "<subject-id-matching-selector>") {
+		t.Fatalf("expected copy artifacts to carry the concrete handoff subject, got mcpClientConfig=%s runtimeRequestExample=%s", after.CopyArtifacts.MCPClientConfig, after.CopyArtifacts.RuntimeRequestExample)
+	}
 	if after.AuditRefs.ApplicationID != applied.Application.ID || after.AuditRefs.ApprovalRequestID != approved.ID || after.AuditRefs.AppliedAuditEventID == "" || after.AuditRefs.AllowedTraceID == "" || after.AuditRefs.DeniedTraceID == "" || !isSHA256Hex(after.AuditRefs.AcceptanceReportDigest) {
 		t.Fatalf("expected complete handoff audit references, got %#v", after.AuditRefs)
 	}

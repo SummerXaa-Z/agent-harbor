@@ -14,15 +14,15 @@ AgentHarbor supports MCP gateway capabilities, but its primary product surface i
 
 AgentHarbor 支持 MCP 网关能力，但主要产品界面不是通用 MCP 聚合。核心用户旅程是权限运营：描述一个租户范围的访问需求，生成权限包草案，模拟有效访问结果，在风险需要时进入审批路由，通过现有授权链落地，并在事后查看记录。
 
-## Current Developer Preview / 当前开发者预览
+## Current v0.3 Developer Preview / 当前 v0.3 开发者预览
 
-The current v0.2 developer preview is scoped to local evaluation, design feedback, and early contribution. It is not recommended for production traffic.
+The v0.3 developer preview is scoped to local evaluation, design feedback, and early integration work. It is not recommended for production traffic.
 
-当前 v0.2 开发者预览范围是本地评估、设计反馈和早期贡献；暂不建议承载生产流量。
+当前 v0.3 开发者预览范围是本地评估、设计反馈和早期集成；暂不建议承载生产流量。
 
-v0.3 development is now underway with the first Access Handoff product slice. This does not change the production-readiness status of the developer preview.
+v0.3 Phase 1 completes the answer-first access-change journey and the first Access Handoff product slice. This does not change the production-readiness status of the developer preview.
 
-v0.3 已进入开发阶段，首个产品切片是接入交付；这不会改变当前开发者预览尚未面向生产流量的定位。
+v0.3 Phase 1 已完成从访问查询、精确权限修复到接入交付的首个完整切片；这不会改变当前开发者预览尚未面向生产流量的定位。
 
 - Permission Changes supports deterministic package drafts, allow/deny simulation, policy gates, approval-required apply, read-only preflight, application health, impact review, go-live status, and bounded acceptance-report export.
   权限变更已支持确定性权限包草案、允许/拒绝模拟、策略门禁、需审批应用、只读预检、落地状态、影响复核、上线状态和有边界的验收报告导出。
@@ -32,6 +32,8 @@ v0.3 已进入开发阶段，首个产品切片是接入交付；这不会改变
   Management MCP 已暴露带安全、访问、生命周期、执行和确认元数据的权限运营工具，便于管理 Agent 在写入前检查边界。
 - Access Handoff extends a ready permission application into copyable MCP configuration, prompt guidance, explicit permission boundaries, and administrator-issued one-time short-lived tokens with revocation and audit references.
   接入交付把已就绪的权限应用延伸为可复制的 MCP 配置、提示词指引、明确的权限边界，以及由管理员签发、一次展示、可撤销且带审计引用的短期 Token。
+- Access Query can preserve one exact requested capability through approval, application, readiness, handoff, and governed runtime use without silently expanding to a template bundle.
+  访问查询可以把一项精确申请能力持续传递到审批、应用、上线状态、接入交付和受治理运行时，不会静默扩展为整个权限包。
 - Local validation is anchored by `make check`, `make release-check`, `make evaluation-readiness`, PR CI, and main-branch CI.
   本地验收以 `make check`、`make release-check`、`make evaluation-readiness`、PR CI 和 main 分支 CI 为准。
 
@@ -43,13 +45,13 @@ v0.3 已进入开发阶段，首个产品切片是接入交付；这不会改变
   新增产品界面前，先修复外部评估中重复出现的阻塞点。
 - Keep release-candidate hardening limited to setup reliability, Permission Changes comprehension, report trust, security regressions, and documentation gaps.
   发布候选加固只覆盖启动可靠性、权限变更可理解性、报告可信度、安全回归和文档缺口。
-- Prepare the v0.2 developer-preview tag and short release notes after local gates, PR CI, and main CI pass.
-  本地门禁、PR CI 和 main CI 通过后，准备 v0.2 开发者预览标签和简短发布说明。
+- Publish the `v0.3.0-dev-preview` tag only after release-preparation review, local gates, PR CI, and main CI pass on the final source tree.
+  只有在发布准备评审、本地门禁、PR CI 和 main CI 都在最终源码树上通过后，才发布 `v0.3.0-dev-preview` 标签。
 
 ## Next / 下一阶段
 
-- Stabilize Access Handoff through evaluator runs, browser review, PR CI, and a v0.3 release candidate before opening the My Access self-service slice.
-  通过外部评估、浏览器复核、PR CI 和 v0.3 发布候选继续稳定接入交付，再开启 My Access 自助视图。
+- Run the external evaluator loop on the v0.3 developer preview before opening the My Access self-service slice.
+  在开启 My Access 自助视图前，先基于 v0.3 开发者预览完成外部评估闭环。
 - Add package version conflict remediation and data-scope repair flows before apply when evaluator feedback shows these block real usage.
   当外部评估显示版本冲突或数据范围修复阻碍真实使用时，再补应用前修复流程。
 - Add OpenAPI capability discovery and assignment semantics alongside MCP tools.

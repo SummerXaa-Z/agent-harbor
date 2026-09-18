@@ -74,8 +74,11 @@ Start here:
 3. Start the product with `make demo`.
 4. Follow `docs/product/evaluation-readiness.md` in the repository.
 5. Export the production acceptance report from the web console.
-6. Record the session in `feedback-log.csv`.
-7. Summarize the exported report in `acceptance-report-notes.md`.
+6. Complete the untimed consumer leg: issue a handoff token, then verify one
+   governed call and `GET /api/v1/self/access-profile` from outside the console
+   using only the copied card artifacts.
+7. Record the session in `feedback-log.csv`.
+8. Summarize the exported report in `acceptance-report-notes.md`.
 
 Keep secrets out of these files. Record actor names, report digests, blocker
 codes, and route names instead of admin keys, agent keys, bearer tokens, or
@@ -105,10 +108,17 @@ cat > "$OUTPUT_DIR/fresh-run-checklist.md" <<'EOF'
 - The evaluator reached Permission Changes from Getting Started or Access Query.
 - The evaluator exported a production acceptance report.
 - The evaluator recorded time-to-first-report and the first blocker, if any.
+- The evaluator issued a short-lived handoff token and observed the one-time
+  plaintext display.
+- The evaluator completed one governed call and read
+  `GET /api/v1/self/access-profile` from outside the console, using only the
+  copied handoff card artifacts.
+- Consumer-leg blockers and the upgrade-friction count were recorded, or marked
+  not-applicable with a reason.
 EOF
 
 cat > "$OUTPUT_DIR/feedback-log.csv" <<'EOF'
-date,evaluator_role,environment,branch,commit,time-to-first-report,result,first_blocker,confusing_term,report_digest,notes
+date,evaluator_role,environment,branch,commit,time-to-first-report,result,first_blocker,confusing_term,report_digest,notes,handoff_consumer_leg,upgrade_friction_steps,upgrade_friction_minutes
 EOF
 
 cat > "$OUTPUT_DIR/acceptance-report-notes.md" <<'EOF'
@@ -142,6 +152,23 @@ cat > "$OUTPUT_DIR/acceptance-report-notes.md" <<'EOF'
 - Runtime allow record:
 - Runtime deny record:
 - Audit record:
+
+## Handoff And Consumer Leg
+
+- Short-lived token created (one-time plaintext display observed):
+- Token or handoff audit reference:
+- Governed call succeeded using only the copied card artifacts:
+- `GET /api/v1/self/access-profile` read by the credential holder:
+- Boundary the credential holder can state (subject / target / capability / expiry):
+- Failure diagnosis observed (revoked / expired / unknown), if exercised:
+- Client kind used (copied example / standard MCP client):
+- First consumer-leg blocker, if any:
+
+## Upgrade Friction
+
+- Applicable (a v1 baseline exists in this session):
+- Manual steps from v1 application to v2 usable token:
+- Wall minutes:
 
 ## Feedback
 
@@ -178,6 +205,24 @@ answer these questions:
 - Which capability was allowed?
 - Which capability was denied?
 - Which report digest should a reviewer compare?
+
+After the timed pass, continue without a clock (consumer leg):
+
+1. Open the Access Handoff view for the ready application and issue a
+   short-lived token. The plaintext is shown once.
+2. Copy the MCP client config and the runtime request example from the card.
+3. From outside the web console, complete one governed call and read
+   `GET /api/v1/self/access-profile` using the issued token.
+4. Record observations, blockers, and the upgrade-friction count (or
+   not-applicable with a reason) in `acceptance-report-notes.md` and
+   `feedback-log.csv`.
+
+At the end of the consumer leg you should also be able to answer:
+
+- Which boundary does the issued token carry (subject, target, capability,
+  expiry)?
+- What can the credential holder learn from `/api/v1/self/access-profile`?
+- How do revoked and expired tokens fail differently?
 EOF
 
 cat <<EOF

@@ -31,6 +31,7 @@ No changes recorded yet.
 - Access Handoff tokens now fail closed on subject, target, template-version, allowed-capability, and live capability drift, including `tools/list`, tool calls, generic MCP methods, and OpenAPI routes.
 - JSON, MCP input, upstream redirect, data-scope, race-detector, fuzz, PostgreSQL race, and dependency-vulnerability gates were expanded for the release path.
 - Go toolchain bumped to 1.25.13 to remediate standard-library advisories GO-2026-6089, GO-2026-6090, and GO-2026-6218 reported by release dependency scanning.
+- Demo MCP service transitive dependencies `fast-uri`, `qs`, and `hono` pinned to patched versions through pnpm workspace overrides after the same scan.
 
 ### Fixed
 

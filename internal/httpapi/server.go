@@ -5108,7 +5108,147 @@ func (s *Server) mcpRPC(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if isMCPProtocolLifecycleMethod(info.Method) {
+		if s.handleMCPProtocolLifecycle(w, r, info) {
+			return
+		}
+	}
 	s.handleDataPlane(w, r, "mcp", info.Method)
+}
+
+// mcpSynthesizedProtocolVersion is answered for initialize requests that do
+// not carry a client-requested protocolVersion.
+const mcpSynthesizedProtocolVersion = "2025-03-26"
+
+// isMCPProtocolLifecycleMethod reports whether the method is an MCP protocol
+// handshake or lifecycle method rather than a capability invocation.
+func isMCPProtocolLifecycleMethod(method string) bool {
+	return method == "initialize" || method == "ping" || strings.HasPrefix(method, "notifications/")
+}
+
+// handleMCPProtocolLifecycle answers MCP protocol lifecycle methods so
+// standards-compliant clients can complete their handshake against governed
+// targets without an upstream round trip. Synthesized responses are local and
+// never forwarded upstream. Explicit route-policy decisions still win: an
+// allow falls through to the existing proxied path and an explicit deny falls
+// through to the regular denied path. Access-handoff keys are bounded by their
+// application binding (subject and target) instead of route policies, matching
+// the other handoff-governed methods.
+func (s *Server) handleMCPProtocolLifecycle(w http.ResponseWriter, r *http.Request, info mcpRequestInfo) bool {
+	caller := callerFromContext(r.Context())
+	targetID := chi.URLParam(r, "targetId")
+	identity := identityFromRequest(r, caller)
+	key := agentKeyFromContext(r.Context())
+	handoffApplication, err := s.accessHandoffApplicationForKey(r.Context(), key, identity.SubjectID)
+	if err == nil && handoffApplication != nil && handoffApplication.TargetID != targetID {
+		err = domain.PermissionDenied("access handoff token does not allow this capability")
+	}
+	if err != nil {
+		if _, traceErr := s.recordCapabilityTrace(r, traceRecordInput{
+			Identity:  identity,
+			CallerID:  caller.ID,
+			TargetID:  targetID,
+			RouteType: "mcp",
+			RouteKey:  info.Method,
+			Decision:  domain.TraceDecisionDenied,
+			Reason:    err.Error(),
+		}); traceErr != nil {
+			writeError(w, traceErr)
+			return true
+		}
+		writeError(w, err)
+		return true
+	}
+	target, ok, err := s.repo.GetAgent(r.Context(), targetID)
+	if err != nil {
+		writeError(w, err)
+		return true
+	}
+	if !ok {
+		writeError(w, domain.NotFound("target agent not found"))
+		return true
+	}
+	if target.Status != domain.AgentStatusActive {
+		reason := "target agent is not active"
+		if _, err := s.recordCapabilityTrace(r, traceRecordInput{
+			Identity:  identity,
+			CallerID:  caller.ID,
+			TargetID:  targetID,
+			RouteType: "mcp",
+			RouteKey:  info.Method,
+			Decision:  domain.TraceDecisionDenied,
+			Reason:    reason,
+		}); err != nil {
+			writeError(w, err)
+			return true
+		}
+		writeError(w, domain.PermissionDenied(reason))
+		return true
+	}
+	if handoffApplication == nil {
+		decision, err := s.repo.EvaluateRouteAccess(r.Context(), caller.ID, targetID, "mcp", info.Method, s.now())
+		if err != nil {
+			writeError(w, err)
+			return true
+		}
+		if decision.Allowed || decision.Source == "route_policy" {
+			return false
+		}
+	}
+	if info.Method == "initialize" {
+		if _, traceErr := s.recordCapabilityTrace(r, traceRecordInput{
+			Identity:  identity,
+			CallerID:  caller.ID,
+			TargetID:  targetID,
+			RouteType: "mcp",
+			RouteKey:  info.Method,
+			Decision:  domain.TraceDecisionAllowed,
+			Reason:    "synthesized mcp initialize response",
+		}); traceErr != nil {
+			writeError(w, traceErr)
+			return true
+		}
+	}
+	writeMCPSynthesizedProtocolResponse(w, info)
+	return true
+}
+
+func writeMCPSynthesizedProtocolResponse(w http.ResponseWriter, info mcpRequestInfo) {
+	if strings.HasPrefix(info.Method, "notifications/") {
+		setJSONResponseHeaders(w)
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	var payload struct {
+		Params struct {
+			ProtocolVersion string `json:"protocolVersion"`
+		} `json:"params"`
+	}
+	if err := json.Unmarshal(info.Body, &payload); err != nil {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "mcp request body must be valid JSON"))
+		return
+	}
+	var result map[string]any
+	if info.Method == "initialize" {
+		protocolVersion := strings.TrimSpace(payload.Params.ProtocolVersion)
+		if protocolVersion == "" {
+			protocolVersion = mcpSynthesizedProtocolVersion
+		}
+		result = map[string]any{
+			"protocolVersion": protocolVersion,
+			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
+			"serverInfo":      map[string]any{"name": "agent-harbor", "version": systemAPIVersion},
+			"instructions":    "AgentHarbor governed access: only authorized tool capabilities are available on this endpoint.",
+		}
+	} else {
+		result = map[string]any{}
+	}
+	// The JSON-RPC envelope is written raw, matching the proxied tools/list
+	// path, so standards-compliant MCP clients can parse the response.
+	setJSONResponseHeaders(w)
+	w.WriteHeader(http.StatusOK)
+	response := map[string]any{"jsonrpc": "2.0", "id": requestJSONRPCID(info.Body), "result": result}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (s *Server) openapiOperation(w http.ResponseWriter, r *http.Request) {

@@ -440,6 +440,265 @@ func TestPermissionPackageAccessHandoffBlocksBeforeApplyAndReturnsReadyArtifacts
 	assertAccessHandoffDeniedWithTrace(t, repo, driftedToolsList, "handoff-stale-capability-tools-list", "access handoff token references a stale permission package application")
 }
 
+func TestMCPRPCProtocolLifecycleHandshakeSynthesizesWithoutUpstream(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	var upstreamMutex sync.Mutex
+	upstreamRequests := []string{}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var requestBody struct {
+			ID     any    `json:"id"`
+			Method string `json:"method"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			http.Error(w, "invalid JSON-RPC request", http.StatusBadRequest)
+			return
+		}
+		upstreamMutex.Lock()
+		upstreamRequests = append(upstreamRequests, requestBody.Method)
+		upstreamMutex.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if requestBody.Method == "tools/list" {
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      requestBody.ID,
+				"result": map[string]any{"tools": []map[string]any{
+					{"name": "update_ticket"},
+					{"name": "export_contracts"},
+				}},
+			})
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      requestBody.ID,
+			"result":  map[string]any{"ok": true},
+		})
+	}))
+	defer upstream.Close()
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := createDirectAgent(t, repo, "Support Assistant", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	target := createDirectAgent(t, repo, "Support MCP", "tenant-east", "ws-support", "mcp", domain.AgentStatusActive, map[string]any{"endpoint": upstream.URL})
+	updateTicket := createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	exportContracts := createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId":      caller.ID,
+		"region":                "us-east",
+		"requestText":           "Allow only ticket updates for this tenant.",
+		"requestedCapabilityId": updateTicket.ID,
+		"subjectSelector":       "user:support-*",
+		"targetId":              target.ID,
+		"templateId":            "support-ticket-triage",
+		"tenantId":              "tenant-east",
+		"workspaceId":           "ws-support",
+	}
+	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, "POST", "/api/v1/permission-packages/approval-requests", input, ""))
+	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, "POST", "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", map[string]any{"reviewer": "security"}, ""))
+	applyInput := map[string]any{
+		"approvalRequestId":     approved.ID,
+		"callerInstanceId":      caller.ID,
+		"region":                input["region"],
+		"requestText":           input["requestText"],
+		"requestedCapabilityId": input["requestedCapabilityId"],
+		"subjectSelector":       input["subjectSelector"],
+		"targetId":              target.ID,
+		"templateId":            input["templateId"],
+		"tenantId":              input["tenantId"],
+		"workspaceId":           input["workspaceId"],
+	}
+	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, "POST", "/api/v1/permission-packages:apply", applyInput, ""))
+	if applied.Application == nil || applied.Application.ID == "" {
+		t.Fatalf("expected applied permission package application for lifecycle handshake checks, got %#v", applied)
+	}
+	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionDenied, caller, target, exportContracts, "export_contracts", "user:support-001", now.Add(time.Minute))
+	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionAllowed, caller, target, updateTicket, "update_ticket", "user:support-001", now.Add(2*time.Minute))
+	ready := decodeData[accessHandoffResponse](t, request(t, router, "GET", permissionPackageAccessHandoffPath(input, "", "user:support-001"), nil, ""))
+	if ready.Status != "ready" || ready.TokenEligibility.Eligible != true {
+		t.Fatalf("expected ready handoff before lifecycle handshake checks, got %#v", ready)
+	}
+	created := decodeData[accessHandoffTokenCreateResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/access-handoff/tokens", accessHandoffTokenRequest(input, ready.ID, "user:support-001"), ""))
+	if created.Key == "" {
+		t.Fatalf("expected access handoff token for lifecycle handshake checks, got %#v", created)
+	}
+	regularKey := createDirectTestAgentKey(t, repo, caller.ID, now)
+
+	handoffInitialize := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "handoff-initialize",
+		"method":  "initialize",
+		"params": map[string]any{
+			"protocolVersion": "2025-06-18",
+			"capabilities":    map[string]any{},
+			"clientInfo":      map[string]any{"name": "standard-mcp-client", "version": "1.0"},
+		},
+	}, created.Key, "handoff-initialize", "user:support-001")
+	assertMCPSynthesizedInitialize(t, repo, handoffInitialize, "handoff-initialize", "2025-06-18")
+	handoffInitializeNoVersion := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "handoff-initialize-default",
+		"method":  "initialize",
+		"params":  map[string]any{"capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "standard-mcp-client", "version": "1.0"}},
+	}, created.Key, "handoff-initialize-default", "user:support-001")
+	assertMCPSynthesizedInitialize(t, repo, handoffInitializeNoVersion, "handoff-initialize-default", "2025-03-26")
+	handoffInitializedNotification := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "notifications/initialized",
+	}, created.Key, "handoff-initialized-notification", "user:support-001")
+	if handoffInitializedNotification.Code != http.StatusAccepted || handoffInitializedNotification.Body.Len() != 0 {
+		t.Fatalf("expected accepted empty notification response, got status=%d body=%s", handoffInitializedNotification.Code, handoffInitializedNotification.Body.String())
+	}
+	handoffPing := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "handoff-ping",
+		"method":  "ping",
+	}, created.Key, "handoff-ping", "user:support-001")
+	if handoffPing.Code != http.StatusOK {
+		t.Fatalf("expected synthesized ping response, got status=%d body=%s", handoffPing.Code, handoffPing.Body.String())
+	}
+	var pingPayload struct {
+		JSONRPC string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
+		Result  map[string]any  `json:"result"`
+	}
+	if err := json.Unmarshal(handoffPing.Body.Bytes(), &pingPayload); err != nil || pingPayload.JSONRPC != "2.0" || string(pingPayload.ID) != `"handoff-ping"` || len(pingPayload.Result) != 0 {
+		t.Fatalf("expected empty synthesized ping result with echoed id, got err=%v payload=%#v", err, pingPayload)
+	}
+	wrongSubjectInitialize := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "handoff-initialize-wrong-subject",
+		"method":  "initialize",
+		"params":  map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "standard-mcp-client", "version": "1.0"}},
+	}, created.Key, "handoff-initialize-wrong-subject", "user:sales-001")
+	assertAccessHandoffDeniedWithTrace(t, repo, wrongSubjectInitialize, "handoff-initialize-wrong-subject", "access handoff token does not allow this subject")
+
+	regularInitialize := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "regular-initialize",
+		"method":  "initialize",
+		"params":  map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "standard-mcp-client", "version": "1.0"}},
+	}, regularKey, "regular-initialize", "user:support-001")
+	assertMCPSynthesizedInitialize(t, repo, regularInitialize, "regular-initialize", "2025-06-18")
+	upstreamMutex.Lock()
+	synthesizedUpstreamRequests := len(upstreamRequests)
+	upstreamMutex.Unlock()
+	if synthesizedUpstreamRequests != 0 {
+		t.Fatalf("expected synthesized lifecycle responses to stay local, upstream saw %d requests", synthesizedUpstreamRequests)
+	}
+
+	denyPolicy := domain.RoutePolicy{
+		ID:          security.NewID("rpl"),
+		TenantID:    caller.TenantID,
+		WorkspaceID: caller.WorkspaceID,
+		Name:        "Deny initialize handshake",
+		CallerID:    caller.ID,
+		TargetID:    target.ID,
+		RouteType:   "mcp",
+		RouteKey:    "initialize",
+		Effect:      domain.RoutePolicyEffectDeny,
+		Status:      domain.RoutePolicyStatusEnabled,
+		Priority:    100,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if _, err := repo.CreateRoutePolicy(t.Context(), denyPolicy); err != nil {
+		t.Fatalf("create deny initialize route policy: %v", err)
+	}
+	deniedInitialize := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "regular-initialize-denied",
+		"method":  "initialize",
+		"params":  map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "standard-mcp-client", "version": "1.0"}},
+	}, regularKey, "regular-initialize-denied", "user:support-001")
+	if deniedInitialize.Code != http.StatusForbidden || !strings.Contains(deniedInitialize.Body.String(), "route policy denied") {
+		t.Fatalf("expected explicit deny route policy to keep rejecting initialize, got status=%d body=%s", deniedInitialize.Code, deniedInitialize.Body.String())
+	}
+
+	proactiveCaller := createDirectAgent(t, repo, "Proactive Assistant", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	proactiveKey := createDirectTestAgentKey(t, repo, proactiveCaller.ID, now)
+	allowPolicy := domain.RoutePolicy{
+		ID:          security.NewID("rpl"),
+		TenantID:    proactiveCaller.TenantID,
+		WorkspaceID: proactiveCaller.WorkspaceID,
+		Name:        "Proxy initialize handshake",
+		CallerID:    proactiveCaller.ID,
+		TargetID:    target.ID,
+		RouteType:   "mcp",
+		RouteKey:    "initialize",
+		Effect:      domain.RoutePolicyEffectAllow,
+		Status:      domain.RoutePolicyStatusEnabled,
+		Priority:    100,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if _, err := repo.CreateRoutePolicy(t.Context(), allowPolicy); err != nil {
+		t.Fatalf("create allow initialize route policy: %v", err)
+	}
+	proxiedInitialize := requestWithRunIDAndSubject(t, router, http.MethodPost, "/api/v1/mcp/agents/"+target.ID+"/rpc", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "proactive-initialize",
+		"method":  "initialize",
+		"params":  map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "standard-mcp-client", "version": "1.0"}},
+	}, proactiveKey, "proactive-initialize", "user:support-001")
+	if proxiedInitialize.Code != http.StatusAccepted || !strings.Contains(proxiedInitialize.Body.String(), `"ok":true`) {
+		t.Fatalf("expected allow route policy to keep proxying initialize upstream, got status=%d body=%s", proxiedInitialize.Code, proxiedInitialize.Body.String())
+	}
+	upstreamMutex.Lock()
+	defer upstreamMutex.Unlock()
+	if len(upstreamRequests) != 1 || upstreamRequests[0] != "initialize" {
+		t.Fatalf("expected only the allow-policy initialize to reach upstream, got %#v", upstreamRequests)
+	}
+}
+
+func assertMCPSynthesizedInitialize(t *testing.T, repo store.Repository, recorder *httptest.ResponseRecorder, runID string, protocolVersion string) {
+	t.Helper()
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected synthesized initialize response for %q, got status=%d body=%s", runID, recorder.Code, recorder.Body.String())
+	}
+	var payload struct {
+		JSONRPC string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
+		Result  struct {
+			ProtocolVersion string `json:"protocolVersion"`
+			Capabilities    struct {
+				Tools *struct {
+					ListChanged bool `json:"listChanged"`
+				} `json:"tools"`
+			} `json:"capabilities"`
+			ServerInfo struct {
+				Name    string `json:"name"`
+				Version string `json:"version"`
+			} `json:"serverInfo"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode synthesized initialize response for %q: %v body=%s", runID, err, recorder.Body.String())
+	}
+	if payload.JSONRPC != "2.0" || string(payload.ID) != `"`+runID+`"` {
+		t.Fatalf("expected jsonrpc envelope with echoed id for %q, got %#v", runID, payload)
+	}
+	if payload.Result.ProtocolVersion != protocolVersion {
+		t.Fatalf("expected echoed protocolVersion %q for %q, got %q", protocolVersion, runID, payload.Result.ProtocolVersion)
+	}
+	if payload.Result.Capabilities.Tools == nil || payload.Result.Capabilities.Tools.ListChanged {
+		t.Fatalf("expected advertised tools capability without listChanged for %q, got %#v", runID, payload.Result.Capabilities)
+	}
+	if payload.Result.ServerInfo.Name != "agent-harbor" || payload.Result.ServerInfo.Version == "" {
+		t.Fatalf("expected agent-harbor serverInfo for %q, got %#v", runID, payload.Result.ServerInfo)
+	}
+	traces, err := repo.ListTraces(t.Context(), store.TraceFilter{RunID: runID})
+	if err != nil || len(traces) != 1 {
+		t.Fatalf("load synthesized initialize trace %q: traces=%#v err=%v", runID, traces, err)
+	}
+	if traces[0].Decision != domain.TraceDecisionAllowed || traces[0].RouteKey != "initialize" || !strings.Contains(traces[0].Reason, "synthesized mcp initialize response") {
+		t.Fatalf("expected allowed synthesized initialize trace for %q, got %#v", runID, traces[0])
+	}
+}
+
 func permissionPackageAccessHandoffPath(input map[string]any, approvalRequestID string, subjectID string) string {
 	return strings.Replace(permissionPackageProductionReadinessPath(input, approvalRequestID, subjectID), "/production-readiness?", "/access-handoff?", 1)
 }

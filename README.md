@@ -520,6 +520,8 @@ Web 控制台会在 `/healthz` 之后读取 `GET /api/v1/system/info`，先确�
 
 Route policies match `routeType` and optional `routeKey`; for MCP, route keys include `initialize`, `tools/list`, and `tools/call`. Higher priority wins, `deny` wins ties, disabled policies are ignored, and direct access grants remain as a compatibility fallback when no route policy matches.
 
+MCP protocol lifecycle methods (`initialize`, `ping`, and `notifications/*`) are answered by the gateway itself so standards-compliant MCP clients can complete their handshake: the response is synthesized locally, never forwarded upstream, and `tools/list` remains filtered to the capabilities the caller is actually authorized for. An explicit route policy still takes precedence — an `allow` policy on `initialize` proxies it upstream and a `deny` policy keeps rejecting it. Access Handoff tokens receive synthesized lifecycle responses within their application's subject and target binding; every other method still requires an authorized capability or route.
+
 MCP capabilities must be approved before they can be granted. Tenant entitlements, workspace assignments, and caller instance assignments form the effective grant chain for capability-aware MCP calls.
 
 `dataScopes` are hierarchical OR alternatives. A child assignment may fill an empty parent dimension, but it cannot change a fixed parent dimension such as `region` or `tenantFilter`. Runtime traces record the effective inherited scope list, and governed MCP `tools/call` forwards the same list in `X-AgentHarbor-Context`. Caller-supplied, static target, and credential-backed values for `X-AgentHarbor-Context` are reserved and not forwarded.

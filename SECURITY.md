@@ -8,7 +8,8 @@ Security fixes target the latest tagged developer-preview release and the latest
 
 | Version | Supported |
 | --- | --- |
-| `0.1.x` | Yes |
+| `0.3.x` developer preview | Yes |
+| `0.2.x` and earlier previews | No |
 | `main` | Yes |
 
 ## Reporting a Vulnerability

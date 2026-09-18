@@ -2,9 +2,9 @@
 
 Use this checklist before merging larger behavior changes, cutting a tagged release, or declaring `main` ready for downstream integration.
 
-For the current v0.2.0 local validation record, see `docs/engineering/0.2.0-local-validation-record.md`.
+For the current v0.3.0 release validation record, see `docs/engineering/0.3.0-release-validation-record.md`.
 
-当前 v0.2.0 本地验收材料见 `docs/engineering/0.2.0-local-validation-record.md`。
+当前 v0.3.0 发布验收材料见 `docs/engineering/0.3.0-release-validation-record.md`。
 
 ## Required Local Checks
 
@@ -101,7 +101,7 @@ MOCK_MCP_PORT=18787 \
 
 如果默认本地端口已被开发服务占用，可以使用上面的隔离端口运行同一个浏览器门禁。
 
-Before declaring v0.2.0 permission-package work or a permission-package release candidate ready, `make release-check` must include the dependency-free approval-required journey. When you need SDK-service parity records, run the same journey against a local API with private upstreams enabled:
+Before declaring permission-package work or a permission-package release candidate ready, `make release-check` must include the dependency-free approval-required journey. When you need SDK-service parity records, run the same journey against a local API with private upstreams enabled:
 
 ```bash
 AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
@@ -159,6 +159,6 @@ Then update the phase closeout record with:
 - known limitations that do not block developer preview
 - next-stage entry criteria
 
-Developer-preview tags must avoid stable or production-ready language. Use a name such as `v0.2.0-dev-preview`, and only push it after the closeout PR is merged and main CI is green.
+Developer-preview tags must avoid stable or production-ready language. Use a name such as `v0.3.0-dev-preview`, and only push it after the closeout PR is merged and main CI is green.
 
-开发者预览阶段封口时，应冻结范围并记录交接材料，不再新增产品行为。标签命名不要使用 stable 或 production-ready 口径；建议使用 `v0.2.0-dev-preview`，并且只在封口 PR 合入且 main CI 通过后推送。
+开发者预览阶段封口时，应冻结范围并记录交接材料，不再新增产品行为。标签命名不要使用 stable 或 production-ready 口径；建议使用 `v0.3.0-dev-preview`，并且只在封口 PR 合入且 main CI 通过后推送。

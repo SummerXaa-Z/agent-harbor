@@ -6,6 +6,41 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ## [Unreleased]
 
+No changes recorded yet.
+
+## [0.3.0-dev-preview] - 2026-09-18
+
+### Added
+
+- Access Query now answers tenant/workspace-scoped access questions with a readable decision chain, effective data scopes, recent-query refresh, and a safe handoff into Permission Changes.
+- Access Handoff now delivers bounded MCP configuration, prompt guidance, one-time short-lived tokens, revocation controls, and audit references from a ready permission-package application.
+- Exact `requestedCapabilityId` provenance now stays attached from permission draft and approval through application, readiness, report, handoff, token creation, and governed runtime use.
+- Capability governance now supports explicit permission-package data-domain classification for `crm`, `support`, `analytics`, and `audit`.
+- PostgreSQL migrations 014 and 015 persist Access Handoff token bindings and exact requested-capability provenance.
+
+### Changed
+
+- Permission Changes now presents one primary operator journey with field-level readiness guidance, safer Access Query handoff context, responsive command sheets, and clearer completion exits.
+- Built-in permission-package templates are version 2 and fail closed for missing, unsupported, mixed, contradictory, or explicitly denied capability domains.
+- Tenant administrators may diagnose active ancestor-owned targets, but only administrators with the required management scope can start the corresponding permission change.
+- Legacy empty `requestedCapabilityId` requests remain bundle-scoped; a legacy single-capability application is reused for an exact query only when its immutable capability and scope boundary is fully equivalent.
+
+### Security
+
+- Permission-package apply now binds the reviewed approval and capability fingerprints inside the repository transaction, using row locks in PostgreSQL so concurrent drift rolls back approval consumption, grants, application, and audit writes.
+- Access Handoff tokens now fail closed on subject, target, template-version, allowed-capability, and live capability drift, including `tools/list`, tool calls, generic MCP methods, and OpenAPI routes.
+- JSON, MCP input, upstream redirect, data-scope, race-detector, fuzz, PostgreSQL race, and dependency-vulnerability gates were expanded for the release path.
+- Go toolchain bumped to 1.25.13 to remediate standard-library advisories GO-2026-6089, GO-2026-6090, and GO-2026-6218 reported by release dependency scanning.
+- Demo MCP service transitive dependencies `fast-uri`, `qs`, and `hono` pinned to patched versions through pnpm workspace overrides after the same scan.
+
+### Fixed
+
+- Access Query selection no longer silently replaces stale explicit resources or combines callers, targets, and capabilities from incompatible scopes.
+- Stale or invalid Access Handoff tokens no longer return a misleading successful empty tool list or reach the upstream target before rejection.
+- Permission-package history, readiness, and handoff lookups no longer mix exact capability applications with legacy bundle applications.
+
+## [0.2.0-dev-preview] - 2026-07-09
+
 ### Added
 
 - 2026-07-09: Added v0.2 developer-preview phase closeout docs and draft release notes, and updated the roadmap to separate current developer-preview scope from the next Access Handoff stage.

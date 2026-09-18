@@ -42,13 +42,15 @@ function blockFromIndex(name, start, source) {
 }
 
 test("runtime validation keeps the edited permission request draft isolated", () => {
-  const block = functionBlock("runAiAdminApprovalJourney");
+  const block = functionBlock("runAiAdminRuntimeValidation");
 
-  assert.match(block, /const validationForm: PermissionPackageDraftInput/);
-  assert.match(block, /createPermissionPackageDraftFromApi\(validationForm/);
+  assert.match(block, /buildAiAdminRuntimeValidationReadiness\(/);
   assert.doesNotMatch(block, /setAiAdminForm\(/);
+  assert.doesNotMatch(block, /setAiAdminApplication\(null\)/);
   assert.doesNotMatch(block, /setScope\(/);
   assert.doesNotMatch(block, /setAccessFilters\(/);
+  assert.doesNotMatch(block, /createTenant\(/);
+  assert.doesNotMatch(block, /createAgent\(/);
 });
 
 test("approval request creation blocks blank and duplicate submissions before the network call", () => {
@@ -218,7 +220,7 @@ test("AI Admin status messages keep translation descriptors instead of language 
     "ProductionReadiness",
     "ReviewerQueue",
     "AccessDecisionExplain",
-    "ApprovalJourney",
+    "RuntimeValidation",
     "ApprovalReadiness"
   ].forEach((name) => {
     assert.match(
@@ -263,7 +265,7 @@ test("permission journey mutation handlers require live API before network write
   assert.match(app, /\bfetchPermissionPackageAcceptanceReport\b/);
   assert.doesNotMatch(app, /\bfetchPermissionPackageProductionReport\b/);
   [
-    ["runAiAdminApprovalJourney", "message.fallbackDataModeActionBlocked", "createTenant("],
+    ["runAiAdminRuntimeValidation", "message.fallbackDataModeActionBlocked", "createAgentKey("],
     ["createAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "createPermissionPackageApprovalRequest("],
     ["approveAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "approvePermissionPackageApprovalRequest("],
     ["rejectAiAdminApprovalRequest", "message.permissionApprovalRequiresLiveApi", "rejectPermissionPackageApprovalRequest("],

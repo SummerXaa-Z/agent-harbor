@@ -685,7 +685,9 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("status.productionReady"), "可上线");
   assert.equal(t("status.productionNeedsReview"), "需复核");
   assert.equal(t("status.productionBlocked"), "阻断");
-  assert.equal(t("default.aiAdminApprovalJourneyRequestText"), "给客服分诊助手开通当前租户的客户查询和工单有限更新权限，禁止导出合同。");
+  assert.equal(t("message.aiAdminRuntimeValidationRequiresApplication"), "请先应用权限包，再执行运行验证。");
+  assert.equal(tx(t, "text.permissionUnclassifiedCapabilityHint", { count: 2 }), "所选目标有 2 个能力尚未设置数据域，权限包模板不会将它们纳入允许能力。");
+  assert.equal(t("action.openCapabilityGovernance"), "去设置数据域");
   assert.equal(t("productionCheck.runtime_allowed_trace_present"), "允许运行记录");
   assert.equal(t("productionCheck.runtime_denied_trace_present"), "拒绝运行记录");
   assert.equal(t("productionCheck.unknown"), "状态检查项");

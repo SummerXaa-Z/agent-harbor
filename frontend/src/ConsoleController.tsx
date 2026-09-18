@@ -131,6 +131,11 @@ import {
   type AiAdminApprovalJourneyResult,
 } from "./aiAdminApprovalJourney";
 import {
+  aiAdminRuntimeValidationBlockerMessageKey,
+  buildAiAdminRuntimeValidationReadiness,
+  countUnclassifiedTargetCapabilities,
+} from "./aiAdminRuntimeValidation";
+import {
   aiAdminApprovalReadinessCanRun,
   aiAdminApprovalReadinessRows,
   defaultAiAdminApprovalReadiness,
@@ -553,24 +558,23 @@ export function ConsoleController() {
   const [aiAdminAccessDecisionExplainLoading, setAiAdminAccessDecisionExplainLoading] = useState(false);
   const [aiAdminAccessDecisionExplainMessageState, setAiAdminAccessDecisionExplainMessage] =
     useState<LocalizedMessage | null>(null);
-  const [aiAdminApprovalJourneyConfig, setAiAdminApprovalJourneyConfig] = useState<AiAdminApprovalJourneyConfig>(() =>
+  const [aiAdminApprovalJourneyConfig] = useState<AiAdminApprovalJourneyConfig>(() =>
     createAiAdminApprovalJourneyConfig()
   );
-  const [aiAdminApprovalJourneyRunning, setAiAdminApprovalJourneyRunning] = useState(false);
-  const [aiAdminApprovalJourneyMessageState, setAiAdminApprovalJourneyMessage] =
+  const [aiAdminRuntimeValidationRunning, setAiAdminRuntimeValidationRunning] = useState(false);
+  const [aiAdminRuntimeValidationMessageState, setAiAdminRuntimeValidationMessage] =
     useState<LocalizedMessage | null>(null);
+  const runtimeValidationMcpEndpoint =
+    (data?.agents.find((agent) => agent.id === aiAdminForm.targetId)?.channelConfig as { endpoint?: string } | undefined)
+      ?.endpoint
+    ?? aiAdminApprovalJourneyConfig.mcpEndpoint;
   const connectionDiagnostics = useConnectionDiagnostics({
     liveDataLoaded: Boolean(data?.loadedFromApi),
     loadError,
-    mcpEndpoint: aiAdminApprovalJourneyConfig.mcpEndpoint
+    mcpEndpoint: runtimeValidationMcpEndpoint
   });
-  const [aiAdminApprovalJourneyResult, setAiAdminApprovalJourneyResult] =
+  const [aiAdminRuntimeValidationResult, setAiAdminRuntimeValidationResult] =
     useState<AiAdminApprovalJourneyResult | null>(null);
-  const [aiAdminApprovalAuditEvent, setAiAdminApprovalAuditEvent] = useState<AuditEvent | null>(null);
-  const [aiAdminApprovalJourneyAccessProfile, setAiAdminApprovalJourneyAccessProfile] =
-    useState<TenantAccessProfileData | null>(null);
-  const [aiAdminApprovalJourneyApprovalRequest, setAiAdminApprovalJourneyApprovalRequest] =
-    useState<PermissionPackageApprovalRequest | null>(null);
   const [aiAdminApprovalReadiness, setAiAdminApprovalReadiness] =
     useState<AiAdminApprovalReadinessState>(defaultAiAdminApprovalReadiness);
   const [aiAdminApprovalReadinessChecking, setAiAdminApprovalReadinessChecking] = useState(false);
@@ -585,7 +589,7 @@ export function ConsoleController() {
   const aiAdminProductionReadinessMessage = localizedMessageText(aiAdminProductionReadinessMessageState, t, language);
   const aiAdminReviewerQueueMessage = localizedMessageText(aiAdminReviewerQueueMessageState, t, language);
   const aiAdminAccessDecisionExplainMessage = localizedMessageText(aiAdminAccessDecisionExplainMessageState, t, language);
-  const aiAdminApprovalJourneyMessage = localizedMessageText(aiAdminApprovalJourneyMessageState, t, language);
+  const aiAdminRuntimeValidationMessage = localizedMessageText(aiAdminRuntimeValidationMessageState, t, language);
   const aiAdminApprovalReadinessMessage = localizedMessageText(aiAdminApprovalReadinessMessageState, t, language);
   const consoleAccessReady = consoleAuth.accessReady;
   function setTenantOrganizationSelectedTenantId(tenantId: string) {
@@ -642,6 +646,28 @@ export function ConsoleController() {
     ) {
       setHandoffContexts((current) => ({ ...current, capabilityGovernance: null }));
     }
+  }
+  function openCapabilityGovernanceForPermissionTarget() {
+    if (!aiAdminForm.targetId) return;
+    const targetAgent = agents.find((agent) => agent.id === aiAdminForm.targetId);
+    capabilityGovernance.setForm({
+      ...capabilityGovernance.form,
+      targetId: aiAdminForm.targetId
+    });
+    setHandoffContexts((current) => ({
+      ...current,
+      capabilityGovernance: {
+        sourceView: "ai-admin",
+        targetId: aiAdminForm.targetId,
+        targetName: targetAgent ? permissionEntityDisplayName(targetAgent.name, t) : aiAdminForm.targetId,
+        tenantId: aiAdminForm.tenantId,
+        tenantName: permissionTenantPathLabel(aiAdminForm.tenantId, tenants, t).primary,
+        workspaceId: aiAdminForm.workspaceId,
+        workspaceName: permissionWorkspaceDisplayName(aiAdminForm.workspaceId, agents, t)
+      }
+    }));
+    userSelectedNavRef.current = true;
+    setActiveNav("capabilities");
   }
   function handleResourceLifecycleAction(item: ResourceLifecycleItem) {
     const plan = planResourceLifecycleAction({
@@ -1241,11 +1267,8 @@ export function ConsoleController() {
     setAiAdminSelectedApprovalRequestId("");
     setAiAdminAccessDecisionExplanation(null);
     setAiAdminAccessDecisionExplainMessage(null);
-    setAiAdminApprovalJourneyMessage(null);
-    setAiAdminApprovalJourneyResult(null);
-    setAiAdminApprovalAuditEvent(null);
-    setAiAdminApprovalJourneyAccessProfile(null);
-    setAiAdminApprovalJourneyApprovalRequest(null);
+    setAiAdminRuntimeValidationMessage(null);
+    setAiAdminRuntimeValidationResult(null);
     setAiAdminMessage(null);
     setHandoffContexts((current) => ({ ...current, permissionChange: null, permissionNotice: null }));
   }
@@ -1361,290 +1384,115 @@ export function ConsoleController() {
     }
   }
 
-  async function runAiAdminApprovalJourney() {
+  async function runAiAdminRuntimeValidation() {
     if (!data?.loadedFromApi) {
-      setAiAdminApprovalJourneyMessage({ key: "message.fallbackDataModeActionBlocked" });
+      setAiAdminRuntimeValidationMessage({ key: "message.fallbackDataModeActionBlocked" });
       return;
     }
-    const nextConfig = {
-      ...createAiAdminApprovalJourneyConfig(),
-      requestText: t("default.aiAdminApprovalJourneyRequestText")
-    };
-    setAiAdminApprovalJourneyConfig(nextConfig);
-    setAiAdminApprovalJourneyResult(null);
-    setAiAdminApprovalAuditEvent(null);
-    setAiAdminApprovalJourneyAccessProfile(null);
-    setAiAdminApprovalJourneyApprovalRequest(null);
-    setAiAdminApplicationHealth(null);
-    setAiAdminApplicationHealthMessage(null);
-    setAiAdminApplyPreflight(null);
-    setAiAdminApplyPreflightMessage(null);
-    setAiAdminApplicationImpact(null);
-    setAiAdminApplicationImpactMessage(null);
-    setAiAdminApprovalJourneyRunning(true);
-    setAiAdminApprovalJourneyMessage({ key: "message.aiAdminApprovalJourneyRunning" });
-    setAiAdminMessage(null);
+    const formInput = aiAdminApplication
+      ? permissionPackageApplicationDraftInput(aiAdminApplication, aiAdminForm)
+      : aiAdminForm;
+    const runId = `ui-validation-${Date.now().toString(36)}`;
+    const readiness = buildAiAdminRuntimeValidationReadiness({
+      allowedCapabilities: aiAdminDraft.allowedCapabilities,
+      blockedCapabilities: aiAdminDraft.blockedCapabilities,
+      form: formInput,
+      hasApplication: Boolean(aiAdminApplication),
+      liveDataAvailable: Boolean(data?.loadedFromApi),
+      runId
+    });
+    const blocker = readiness.blockers[0];
+    if (blocker || !readiness.plan) {
+      setAiAdminRuntimeValidationMessage({
+        key: blocker ? aiAdminRuntimeValidationBlockerMessageKey(blocker) : "message.aiAdminRuntimeValidationNoAllowedCapability"
+      });
+      return;
+    }
+    const plan = readiness.plan;
+    setAiAdminRuntimeValidationRunning(true);
+    setAiAdminRuntimeValidationMessage({ key: "message.aiAdminRuntimeValidationRunning" });
+    setAiAdminRuntimeValidationResult(null);
     try {
-      const readinessResult = await refreshAiAdminApprovalReadiness(nextConfig);
-      if (!aiAdminApprovalReadinessCanRun(readinessResult.state)) {
-        const detail = readinessResult.detail;
-        throw new Error(tx(t, "message.aiAdminApprovalJourneyPreflightFailed", { detail: detail || "unknown" }));
-      }
-
-      await createTenant(
-        {
-          id: nextConfig.rootTenantId,
-          name: "Permission Request Approval Root",
-          status: "active"
-        },
-        adminKey
-      );
-      await createTenant(
-        {
-          id: nextConfig.childTenantId,
-          name: "Permission Request Approval Team",
-          parentTenantId: nextConfig.rootTenantId,
-          status: "active"
-        },
-        adminKey
-      );
-      await createTenant(
-        {
-          id: nextConfig.grandchildTenantId,
-          name: "Permission Request Approval Project",
-          parentTenantId: nextConfig.childTenantId,
-          status: "active"
-        },
-        adminKey
-      );
-
-      const caller = await createAgent(
-        {
-          channelType: "local",
-          description: "Permission request approval browser caller",
-          name: "Permission Request Approval Caller",
-          status: "active",
-          tenantId: nextConfig.childTenantId,
-          workspaceId: nextConfig.workspaceId
-        },
-        adminKey
-      );
       const callerKey = await createAgentKey(
         {
-          agentId: caller.id,
+          agentId: plan.callerInstanceId,
           expiresInSeconds: 900,
-          name: "permission request approval key"
+          name: "runtime validation key"
         },
         adminKey
       );
-      const target = await createAgent(
-        {
-          channelConfig: {
-            endpoint: nextConfig.mcpEndpoint,
-            transport: "streamable-http"
-          },
-          channelType: "mcp",
-          description: "Permission request approval MCP target",
-          name: "Permission Request Approval MCP Target",
-          status: "active",
-          tenantId: nextConfig.rootTenantId,
-          workspaceId: nextConfig.workspaceId
-        },
-        adminKey
-      );
-
-      const discovered = await refreshTargetCapabilities(target.id, adminKey);
-      const readCapability = discovered.find((capability) => capability.key === nextConfig.readTool);
-      const writeCapability = discovered.find((capability) => capability.key === nextConfig.writeTool);
-      const deniedCapability = discovered.find((capability) => capability.key === nextConfig.deniedTool);
-      if (!readCapability || !writeCapability || !deniedCapability) {
-        throw new Error(
-          tx(t, "message.aiAdminApprovalJourneyMissingTools", {
-            denied: nextConfig.deniedTool,
-            read: nextConfig.readTool,
-            write: nextConfig.writeTool
-          })
-        );
-      }
-
-      const validationForm: PermissionPackageDraftInput = {
-        callerInstanceId: caller.id,
-        region: nextConfig.region,
-        requestText: nextConfig.requestText,
-        subjectSelector: nextConfig.subjectSelector,
-        targetId: target.id,
-        templateId: nextConfig.templateId,
-        tenantId: nextConfig.childTenantId,
-        workspaceId: nextConfig.workspaceId
-      };
-      setAiAdminApplication(null);
-      setAiAdminApplicationHealth(null);
-      setAiAdminApplicationHealthMessage(null);
-      setAiAdminApplyPreflight(null);
-      setAiAdminApplyPreflightMessage(null);
-      setAiAdminApplicationImpact(null);
-      setAiAdminApplicationImpactMessage(null);
-      const draft = await createPermissionPackageDraftFromApi(validationForm, adminKey);
-      if (!draft.readiness.canApply) {
-        throw new Error(tx(t, "message.permissionPackageNotReady", { detail: permissionReadinessMessages(draft.readiness, t).join(", ") }));
-      }
-      if (draft.policyGate.canApplyDirectly) {
-        throw new Error(t("message.aiAdminApprovalJourneyApprovalGateMissing"));
-      }
-
-      const pendingApproval = await createPermissionPackageApprovalRequest(validationForm, adminKey);
-      const approvedApproval = await approvePermissionPackageApprovalRequest(
-        pendingApproval.id,
-        {
-          comment: "Approved from permission package approval journey",
-          reviewer: "Security Reviewer"
-        },
-        adminKey
-      );
-      setAiAdminApprovalJourneyApprovalRequest(approvedApproval);
-
-      const journeyPreflight = await preflightPermissionPackage(
-        {
-          ...validationForm,
-          approvalRequestId: approvedApproval.id
-        },
-        adminKey
-      );
-      setAiAdminApplyPreflight(journeyPreflight);
-      setAiAdminApplyPreflightMessage(permissionPackagePreflightMessageState(journeyPreflight));
-      if (!journeyPreflight.summary.canApply) {
-        throw new Error(
-          tx(t, "message.permissionPackagePreflightBlocked", {
-            detail: permissionApplyPreflightCheckMessage(firstBlockingApplyPreflightCheck(journeyPreflight), t)
-          })
-        );
-      }
-
-      const applied = await applyPermissionPackage(
-        {
-          ...validationForm,
-          approvalRequestId: approvedApproval.id
-        },
-        adminKey
-      );
-      const application = applied.application ?? null;
-      if (!application) {
-        throw new Error(t("message.aiAdminApprovalJourneyMissingApplication"));
-      }
-      setAiAdminApplication(application);
-      setAiAdminApplicationHealth(null);
-      setAiAdminApplicationHealthMessage(null);
-      setAiAdminApplicationImpact(null);
-      setAiAdminApplicationImpactMessage(null);
-      setAiAdminProductionReadiness(null);
-      setAiAdminProductionReadinessMessage(null);
-
       const toolList = await callMcpRpc(
-        target.id,
+        plan.targetId,
         mcpToolsListPayload(),
         callerKey.key,
-        nextConfig.runId,
+        plan.runId,
         adminKey,
-        nextConfig.subjectId
+        plan.subjectId
       );
-      if (!toolList.ok) throw new Error(tx(t, "message.aiAdminApprovalJourneyRpcUnexpected", { status: toolList.status }));
-      const listedTools = toolNamesFromPayload(toolList.payload);
-      if (
-        !listedTools.includes(nextConfig.readTool) ||
-        !listedTools.includes(nextConfig.writeTool) ||
-        listedTools.includes(nextConfig.deniedTool)
-      ) {
-        throw new Error(t("message.aiAdminApprovalJourneyToolsListInvalid"));
+      if (!toolList.ok) {
+        throw new Error(tx(t, "message.aiAdminRuntimeValidationRpcUnexpected", { status: toolList.status }));
       }
       const deniedCall = await callMcpRpc(
-        target.id,
-        mcpToolCallPayload(nextConfig.deniedTool),
+        plan.targetId,
+        mcpToolCallPayload(plan.blockedCapabilityKey),
         callerKey.key,
-        nextConfig.runId,
+        plan.runId,
         adminKey,
-        nextConfig.subjectId
+        plan.subjectId
       );
       if (deniedCall.status !== 403) {
-        throw new Error(tx(t, "message.aiAdminApprovalJourneyDeniedUnexpected", { status: deniedCall.status }));
+        throw new Error(tx(t, "message.aiAdminRuntimeValidationDeniedUnexpected", { status: deniedCall.status }));
       }
       const allowedCall = await callMcpRpc(
-        target.id,
-        mcpToolCallPayload(nextConfig.writeTool),
+        plan.targetId,
+        mcpToolCallPayload(plan.allowedCapabilityKey),
         callerKey.key,
-        nextConfig.runId,
+        plan.runId,
         adminKey,
-        nextConfig.subjectId
+        plan.subjectId
       );
-      if (!allowedCall.ok) throw new Error(tx(t, "message.aiAdminApprovalJourneyRpcUnexpected", { status: allowedCall.status }));
+      if (!allowedCall.ok) {
+        throw new Error(tx(t, "message.aiAdminRuntimeValidationRpcUnexpected", { status: allowedCall.status }));
+      }
 
       const nextTraceFilters = {
-        callerAgentId: caller.id,
+        callerAgentId: plan.callerInstanceId,
         decision: "" as TraceDecision | "",
-        runId: nextConfig.runId,
-        targetAgentId: target.id
-      };
-      const validationAccessFilters = {
-        callerInstanceId: caller.id,
-        capabilityId: "",
-        targetId: target.id,
-        traceLimit: "10",
-        workspaceId: nextConfig.workspaceId
+        runId: plan.runId,
+        targetAgentId: plan.targetId
       };
       setTraceFilters(nextTraceFilters);
-      setAiAdminApprovalJourneyResult({
+      setAiAdminRuntimeValidationResult({
         allowedStatus: allowedCall.status,
-        applicationId: application.id,
-        approvalRequestId: approvedApproval.id,
-        callerId: caller.id,
+        applicationId: aiAdminApplication?.id ?? "",
+        approvalRequestId: aiAdminApprovalRequest?.status === "approved" ? aiAdminApprovalRequest.id : "",
+        callerId: plan.callerInstanceId,
         deniedStatus: deniedCall.status,
-        targetId: target.id,
+        targetId: plan.targetId,
         toolListStatus: toolList.status
       });
       const refreshResult = await refreshAfterJourneyCompletion({
         onRefresh: async () => {
-          const [nextData, nextProfile, auditRows] = await Promise.all([
-            loadConsoleData(adminKey, nextTraceFilters),
-            loadTenantAccessProfile(nextConfig.childTenantId, adminKey, {
-              ...validationAccessFilters,
-              traceLimit: 10
-            }),
-            fetchAuditEvents(
-              {
-                action: "permission_package.applied",
-                resourceId: application.id,
-                tenantId: nextConfig.childTenantId,
-                workspaceId: nextConfig.workspaceId
-              },
-              adminKey
-            )
-          ]);
-          const appliedAudit = auditRows.find((event) => event.metadata?.approvalRequestId === approvedApproval.id) ?? auditRows[0] ?? null;
-          return { appliedAudit, nextData, nextProfile };
+          const nextData = await loadConsoleData(adminKey, nextTraceFilters);
+          return { nextData };
         }
       });
       if (refreshResult.ok) {
-        const { appliedAudit, nextData, nextProfile } = refreshResult.value;
-        setData(appliedAudit ? { ...nextData, auditEvents: [appliedAudit, ...nextData.auditEvents.filter((event) => event.id !== appliedAudit.id)] } : nextData);
-        setAiAdminApprovalJourneyAccessProfile(nextProfile);
-        setAiAdminApprovalAuditEvent(appliedAudit);
+        setData(refreshResult.value.nextData);
         setLastRefresh(new Date());
       }
-      await Promise.allSettled([
-        refreshAiAdminApplicationHealth(validationForm, { requireLiveApi: false }),
-        refreshAiAdminProductionReadiness(validationForm, {
-          approvalRequestId: approvedApproval.id,
-          requireLiveApi: false,
-          subjectId: nextConfig.subjectId
-        })
-      ]);
-      setAiAdminApprovalJourneyMessage(
-        { key: refreshResult.ok ? "message.aiAdminApprovalJourneyComplete" : journeyCompletionRefreshFailedMessageKey("ai_admin_approval") }
+      await refreshAiAdminProductionReadiness(formInput, {
+        approvalRequestId: aiAdminApprovalRequest?.status === "approved" ? aiAdminApprovalRequest.id : undefined,
+        requireLiveApi: false,
+        subjectId: plan.subjectId
+      });
+      setAiAdminRuntimeValidationMessage(
+        { key: refreshResult.ok ? "message.aiAdminRuntimeValidationComplete" : journeyCompletionRefreshFailedMessageKey("ai_admin_approval") }
       );
-      setAiAdminMessage({ key: "message.permissionPackageApplied", params: { count: applied.tenantEntitlements.length } });
     } catch (error) {
-      setAiAdminApprovalJourneyMessage(localizedErrorMessageState(error, "error.permissionPackageApprovalJourneyFailed"));
+      setAiAdminRuntimeValidationMessage(localizedErrorMessageState(error, "error.permissionRuntimeValidationFailed"));
     } finally {
-      setAiAdminApprovalJourneyRunning(false);
+      setAiAdminRuntimeValidationRunning(false);
     }
   }
 
@@ -2301,26 +2149,35 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
     () => evaluateCoreJourney(data, accessProfileController.profile, coreJourney.config),
     [accessProfileController.profile, coreJourney.config, data]
   );
+  const aiAdminApplicationAuditEvent = useMemo(
+    () =>
+      data && aiAdminApplication
+        ? data.auditEvents.find((event) => event.metadata?.applicationId === aiAdminApplication.id) ?? null
+        : null,
+    [aiAdminApplication, data]
+  );
+  const aiAdminUnclassifiedCapabilityCount = useMemo(
+    () => (data ? countUnclassifiedTargetCapabilities(data.capabilities, aiAdminForm.targetId) : 0),
+    [aiAdminForm.targetId, data]
+  );
   const aiAdminApprovalJourneyEvaluation = useMemo(
     () =>
       evaluateAiAdminApprovalJourney({
-        accessProfile: aiAdminApprovalJourneyAccessProfile ?? accessProfileController.profile,
+        accessProfile: accessProfileController.profile,
         application: aiAdminApplication,
-        approvalRequest: aiAdminApprovalJourneyApprovalRequest ?? aiAdminApprovalRequest,
-        auditEvent: aiAdminApprovalAuditEvent,
+        approvalRequest: aiAdminApprovalRequest,
+        auditEvent: aiAdminApplicationAuditEvent,
         config: aiAdminApprovalJourneyConfig,
         data,
-        result: aiAdminApprovalJourneyResult
+        result: aiAdminRuntimeValidationResult
       }),
     [
       accessProfileController.profile,
-      aiAdminApprovalJourneyAccessProfile,
-      aiAdminApprovalJourneyApprovalRequest,
       aiAdminApplication,
-      aiAdminApprovalAuditEvent,
+      aiAdminApplicationAuditEvent,
       aiAdminApprovalJourneyConfig,
-      aiAdminApprovalJourneyResult,
       aiAdminApprovalRequest,
+      aiAdminRuntimeValidationResult,
       data
     ]
   );
@@ -2628,12 +2485,9 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         accessSubjects={aiAdminAccessSubjects}
         agents={agents}
         approvalAction={aiAdminApprovalAction}
-        approvalAuditEvent={aiAdminApprovalAuditEvent}
+        approvalAuditEvent={aiAdminApplicationAuditEvent}
         approvalJourneyConfig={aiAdminApprovalJourneyConfig}
         approvalJourneyEvaluation={aiAdminApprovalJourneyEvaluation}
-        approvalJourneyMessage={aiAdminApprovalJourneyMessage}
-        approvalJourneyResult={aiAdminApprovalJourneyResult}
-        approvalJourneyRunning={aiAdminApprovalJourneyRunning}
         approvalReadiness={aiAdminApprovalReadiness}
         approvalReadinessChecking={aiAdminApprovalReadinessChecking}
         approvalReadinessMessage={aiAdminApprovalReadinessMessage}
@@ -2666,6 +2520,10 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         application={aiAdminApplication}
         message={renderedAiAdminMessage}
         mcpTargets={mcpTargets}
+        runtimeValidationMessage={aiAdminRuntimeValidationMessage}
+        runtimeValidationResult={aiAdminRuntimeValidationResult}
+        runtimeValidationRunning={aiAdminRuntimeValidationRunning}
+        unclassifiedCapabilityCount={aiAdminUnclassifiedCapabilityCount}
         onApply={() => void applyAiAdminPermissionPackage()}
         onApprovalReviewerChange={setAiAdminApprovalReviewer}
         onApproveApprovalRequest={(requestId, comment) => void approveAiAdminApprovalRequest(requestId, comment)}
@@ -2681,8 +2539,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
           setAiAdminApplicationImpactMessage(null);
           setAiAdminProductionReadiness(null);
           setAiAdminProductionReadinessMessage(null);
-          setAiAdminApprovalAuditEvent(null);
-          setAiAdminApprovalJourneyResult(null);
+          setAiAdminRuntimeValidationResult(null);
           setAiAdminApprovalRequests([]);
           setAiAdminSelectedApprovalRequestId("");
           setAiAdminAccessDecisionExplanation(null);
@@ -2691,6 +2548,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onCreateApprovalRequest={() => void createAiAdminApprovalRequest()}
         onExplainAccessDecision={() => void explainAiAdminAccessDecision()}
         onOpenAccessProfile={openAiAdminAccessProfile}
+        onOpenCapabilityGovernance={openCapabilityGovernanceForPermissionTarget}
         onRefreshApplyPreflight={() => void refreshAiAdminApplyPreflight()}
         onRefreshApprovalReadiness={() => void refreshAiAdminApprovalReadiness()}
         onRefreshApplicationHealth={() => void refreshAiAdminApplicationHealth()}
@@ -2701,7 +2559,7 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         onRehearseApplicationDrift={() => void rehearseAiAdminApplicationDrift()}
         onReviewApplicationHealthRow={(application) => void reviewAiAdminApplicationImpact(application)}
         onReviewApplicationImpact={() => void reviewAiAdminApplicationImpact()}
-        onRunApprovalJourney={() => void runAiAdminApprovalJourney()}
+        onRunRuntimeValidation={() => void runAiAdminRuntimeValidation()}
         onSelectApprovalRequest={(requestId) => {
           setAiAdminSelectedApprovalRequestId(requestId);
           setAiAdminApplicationImpact(null);

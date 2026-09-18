@@ -123,6 +123,7 @@ export function useCapabilityGovernanceController({
   async function handleApproveCapability(capability: Capability) {
     setMessage(null);
     setActionId(capability.id);
+    const needsDataDomain = (capability.dataDomains?.length ?? 0) === 0;
     try {
       const updated = await updateCapability(capability.id, { discoveryStatus: "approved" }, adminKey);
       setData((current) =>
@@ -134,9 +135,15 @@ export function useCapabilityGovernanceController({
             }
           : current
       );
-      setMessage({
-        render: (t) => tx(t, "message.capabilityApproved", { name: capabilityDisplayName(capability, t) })
-      });
+      setMessage(
+        needsDataDomain
+          ? {
+              render: (t) => tx(t, "message.capabilityApprovedNeedsDataDomain", { name: capabilityDisplayName(capability, t) })
+            }
+          : {
+              render: (t) => tx(t, "message.capabilityApproved", { name: capabilityDisplayName(capability, t) })
+            }
+      );
     } catch (error) {
       if (shouldUseLocalCapabilityFallback(error, data)) {
         setData((current) =>
@@ -151,9 +158,15 @@ export function useCapabilityGovernanceController({
               }
             : current
         );
-        setMessage({
-          render: (t) => tx(t, "message.capabilityApprovedFallback", { name: capabilityDisplayName(capability, t) })
-        });
+        setMessage(
+          needsDataDomain
+            ? {
+                render: (t) => tx(t, "message.capabilityApprovedNeedsDataDomain", { name: capabilityDisplayName(capability, t) })
+              }
+            : {
+                render: (t) => tx(t, "message.capabilityApprovedFallback", { name: capabilityDisplayName(capability, t) })
+              }
+        );
         return;
       }
       setMessage(localizedErrorMessageState(error, "error.approveCapability"));

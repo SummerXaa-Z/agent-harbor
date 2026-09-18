@@ -451,7 +451,7 @@ export interface CapabilityGovernanceHandoffContext {
   targetId: string
   targetName?: string
   capabilityId?: string
-  sourceView: 'registry' | 'ask'
+  sourceView: 'registry' | 'ask' | 'ai-admin'
 }
 
 export interface AskHandoffContext {

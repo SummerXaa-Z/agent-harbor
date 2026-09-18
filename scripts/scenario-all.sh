@@ -25,6 +25,7 @@ scripts=(
   scripts/scenario-tenant-hierarchy.sh
   scripts/scenario-admin-tenant-boundary.sh
   scripts/scenario-tenant-access-profile.sh
+  scripts/scenario-self-access-profile.sh
 )
 
 echo "AgentHarbor full scenario suite"

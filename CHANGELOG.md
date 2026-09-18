@@ -6,12 +6,17 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ## [Unreleased]
 
+### Added
+
+- `GET /api/v1/self/access-profile` gives any agent key a read-only view of its own effective boundary: caller identity, key kind and expiry, per-target capability lists evaluated with the same decision engine as the governed data plane, and for Access Handoff tokens the application binding (target, subject selector, allowed capabilities). A non-matching subject stays rejected, so a handoff token can never discover capabilities beyond its binding.
+
 ### Changed
 
 - Governed MCP routes now answer protocol lifecycle methods locally: `initialize`, `ping`, and `notifications/*` receive gateway-synthesized responses so standards-compliant MCP clients can connect, while `tools/list` stays filtered to authorized capabilities and no lifecycle request is forwarded upstream. Explicit route-policy decisions keep precedence (an `allow` policy on `initialize` still proxies upstream, a `deny` policy still rejects), and Access Handoff tokens stay bounded by their application's subject and target binding.
 
 ### Fixed
 
+- Data-plane authentication failures are now diagnosable: a token that matches a stored key but is dead reports whether it has been revoked or has expired, so developer tooling can distinguish the recovery path. Guessed tokens keep the generic invalid message.
 - Access Handoff copy artifacts now carry the concrete `subjectId` from the validated handoff query in `mcpClientConfig` and `runtimeRequestExample` headers instead of a `<subject-id-matching-selector>` placeholder, so a developer can issue their first governed request from the card alone.
 
 ## [0.3.0-dev-preview] - 2026-09-18

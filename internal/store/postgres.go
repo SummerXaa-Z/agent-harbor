@@ -432,6 +432,26 @@ func (p *Postgres) FindAgentKeyByHash(ctx context.Context, hash string, now time
 	return key, true, nil
 }
 
+// LookupAgentKeyByHash returns the key for a hash regardless of lifecycle
+// state, so authentication failures can name the concrete reason (revoked vs
+// expired) for callers that provably held the token.
+func (p *Postgres) LookupAgentKeyByHash(ctx context.Context, hash string) (domain.AgentKey, bool, error) {
+	row := p.pool.QueryRow(ctx, `
+		select id, agent_id, name, hash, prefix, application_id, template_id,
+			subject_selector, created_for_handoff_id, created_at, expires_at, revoked_at
+		from agent_keys
+		where hash=$1
+	`, hash)
+	key, err := scanAgentKey(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AgentKey{}, false, nil
+	}
+	if err != nil {
+		return domain.AgentKey{}, false, fmt.Errorf("lookup agent key by hash: %w", err)
+	}
+	return key, true, nil
+}
+
 func (p *Postgres) CreateAccessGrant(ctx context.Context, grant domain.AccessGrant) (domain.AccessGrant, error) {
 	return p.createAccessGrant(ctx, p.pool, grant)
 }

@@ -31,7 +31,8 @@ SCENARIO_SCRIPTS := \
 	scripts/scenario-tenant-permission-center.sh \
 	scripts/demo.sh \
 	scripts/evaluation-readiness.sh \
-	scripts/scenario-tenant-access-profile.sh
+	scripts/scenario-tenant-access-profile.sh \
+	scripts/scenario-self-access-profile.sh
 
 SCENARIO_SCRIPT_LIBS := \
 	scripts/lib/ports.sh \

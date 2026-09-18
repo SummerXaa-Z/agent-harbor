@@ -505,6 +505,7 @@ Web 控制台会在 `/healthz` 之后读取 `GET /api/v1/system/info`，先确�
 
 ### Data Plane
 
+- `GET /api/v1/self/access-profile`
 - `POST /api/v1/mcp/agents/{targetId}`
 - `POST /api/v1/mcp/agents/{targetId}/rpc`
 - `POST /api/v1/openapi/agents/{targetId}/operations/{operationId}`
@@ -527,6 +528,8 @@ MCP capabilities must be approved before they can be granted. Tenant entitlement
 `dataScopes` are hierarchical OR alternatives. A child assignment may fill an empty parent dimension, but it cannot change a fixed parent dimension such as `region` or `tenantFilter`. Runtime traces record the effective inherited scope list, and governed MCP `tools/call` forwards the same list in `X-AgentHarbor-Context`. Caller-supplied, static target, and credential-backed values for `X-AgentHarbor-Context` are reserved and not forwarded.
 
 The tenant access profile endpoint is read-only. It returns configured grants, effective scope calculations, invalid historical scope records, and recent trace records for a registered tenant subtree. `traceLimit=0` disables recent traces.
+
+`GET /api/v1/self/access-profile` is the caller-facing counterpart: any agent key (with `X-AgentHarbor-Subject-Id` when applicable) can read its own effective boundary — caller identity, key kind and expiry, and per-target capability lists evaluated exactly like the governed data plane evaluates them. Access Handoff tokens are bounded by their application binding, so the profile shows only the bound target and allowed capabilities, and a non-matching subject stays rejected. Authentication failures are diagnosable: a hash-matched token that is dead reports whether it was revoked or expired, while guessed tokens keep the generic invalid message. The endpoint is read-only — renewing an expired or revoked token still goes through the administrator-issued handoff flow, pending the My Access self-service loop.
 
 ## Project Docs
 

@@ -291,6 +291,7 @@ func (s *Server) Router() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(sensitiveResponseHeaders)
 			r.Use(s.requireAgentKey)
+			r.Get("/self/access-profile", s.getSelfAccessProfile)
 			r.Post("/mcp/agents/{targetId}", s.mcpRPC)
 			r.Post("/mcp/agents/{targetId}/rpc", s.mcpRPC)
 			r.Post("/openapi/agents/{targetId}/operations/{operationId}", s.openapiOperation)
@@ -4987,7 +4988,7 @@ func (s *Server) requireAgentKey(next http.Handler) http.Handler {
 			return
 		}
 		if !ok {
-			writeError(w, domain.Unauthorized("invalid or expired bearer token"))
+			writeError(w, s.agentKeyAuthenticationError(r.Context(), token))
 			return
 		}
 		key, ok, err := s.repo.FindAgentKeyByHash(r.Context(), security.HashSecret(token), s.now())
@@ -5003,6 +5004,27 @@ func (s *Server) requireAgentKey(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, agentKeyContextKey{}, key)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// agentKeyAuthenticationError distinguishes revoked and expired tokens from
+// unknown ones. A hash match proves the caller held the token, so naming the
+// concrete reason leaks nothing to guessed tokens, which stay on the generic
+// invalid message.
+func (s *Server) agentKeyAuthenticationError(ctx context.Context, token string) error {
+	key, ok, err := s.repo.LookupAgentKeyByHash(ctx, security.HashSecret(token))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return domain.Unauthorized("invalid or expired bearer token")
+	}
+	if !key.RevokedAt.IsZero() {
+		return domain.Unauthorized("bearer token has been revoked")
+	}
+	if s.now().After(key.ExpiresAt) {
+		return domain.Unauthorized("bearer token has expired")
+	}
+	return domain.Unauthorized("caller agent is not active")
 }
 
 func callerFromContext(ctx context.Context) domain.Agent {

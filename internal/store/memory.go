@@ -35,6 +35,7 @@ type Repository interface {
 	RevokeAgentKey(context.Context, string, time.Time) (domain.AgentKey, bool, error)
 	RevokeAgentKeyWithAudit(context.Context, string, time.Time, AgentKeyAuditBuilder) (domain.AgentKey, bool, error)
 	FindAgentKeyByHash(context.Context, string, time.Time) (domain.AgentKey, bool, error)
+	LookupAgentKeyByHash(context.Context, string) (domain.AgentKey, bool, error)
 	FindAgentByKeyHash(context.Context, string, time.Time) (domain.Agent, bool, error)
 	CreateAccessGrant(context.Context, domain.AccessGrant) (domain.AccessGrant, error)
 	CreateAccessGrantWithAudit(context.Context, domain.AccessGrant, AccessGrantAuditBuilder) (domain.AccessGrant, error)
@@ -551,6 +552,20 @@ func (m *Memory) FindAgentKeyByHash(_ context.Context, hash string, now time.Tim
 			return domain.AgentKey{}, false, nil
 		}
 		return key, true, nil
+	}
+	return domain.AgentKey{}, false, nil
+}
+
+// LookupAgentKeyByHash returns the key for a hash regardless of lifecycle
+// state, so authentication failures can name the concrete reason (revoked vs
+// expired) for callers that provably held the token.
+func (m *Memory) LookupAgentKeyByHash(_ context.Context, hash string) (domain.AgentKey, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, key := range m.keys {
+		if key.Hash == hash {
+			return key, true, nil
+		}
 	}
 	return domain.AgentKey{}, false, nil
 }

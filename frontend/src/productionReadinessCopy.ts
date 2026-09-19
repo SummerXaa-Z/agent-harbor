@@ -1,24 +1,32 @@
-import type { Translator } from "./consolePresenters"
+import type { Translator } from "./consolePresenters";
+import type { PermissionPackageProductionNextActionCode } from "./permissionPackages";
 
-const knownProductionReadinessActions: Record<string, string> = {
-  "Apply the approved permission package before production readiness.": "productionNext.applyApproved",
-  "Inspect the latest permission package application scope before go-live.": "productionNext.inspectScope",
-  "Production readiness evidence is complete.": "productionNext.complete",
-  "Production readiness is complete.": "productionNext.complete",
-  "Resolve apply preflight blockers before claiming production readiness.": "productionNext.resolvePreflight",
-  "Resolve impact review blockers before production readiness.": "productionNext.resolveImpact",
-  "Review application health and drift blockers before production readiness.": "productionNext.reviewHealth",
-  "Run a denied MCP call that proves blocked tools stay blocked.": "productionNext.runDenied",
-  "Run an allowed MCP call with the production subject before go-live.": "productionNext.runAllowed",
-  "Verify permission package applied audit evidence before production readiness.": "productionNext.verifyAudit",
-  "Verify the permission package applied audit record before production readiness.": "productionNext.verifyAudit",
-  "Verify tenant entitlement, workspace assignment, and caller assignment evidence.": "productionNext.verifyGrantChain",
-  "Verify tenant entitlement, workspace assignment, and caller assignment records.": "productionNext.verifyGrantChain"
-}
+// Keyed by the backend nextActionCode contract (the readiness API returns codes
+// alongside the English messages), never by matching the message text itself.
+export const productionReadinessNextActionKeys: Partial<
+  Record<PermissionPackageProductionNextActionCode, string>
+> = {
+  apply_permission_package: "productionNext.applyApproved",
+  export_acceptance_report: "productionNext.complete",
+  reapply_permission_package: "productionNext.reapplyPermissionPackage",
+  resolve_impact_blockers: "productionNext.resolveImpact",
+  resolve_preflight_blockers: "productionNext.resolvePreflight",
+  review_application_health: "productionNext.reviewHealth",
+  review_application_scope: "productionNext.inspectScope",
+  review_subject_scope: "productionNext.reviewSubjectScope",
+  run_allowed_runtime_call: "productionNext.runAllowed",
+  run_denied_runtime_call: "productionNext.runDenied",
+  verify_access_profile: "productionNext.verifyGrantChain",
+  verify_applied_audit: "productionNext.verifyAudit"
+};
 
-export function permissionProductionReadinessNextAction(action: string, t: Translator) {
-  const key = knownProductionReadinessActions[action]
-  return key ? t(key) : sanitizeProductionReadinessAction(action)
+export function permissionProductionReadinessNextAction(
+  code: string,
+  fallbackMessage: string,
+  t: Translator
+) {
+  const key = productionReadinessNextActionKeys[code as PermissionPackageProductionNextActionCode];
+  return key ? t(key) : sanitizeProductionReadinessAction(fallbackMessage);
 }
 
 export function sanitizeProductionReadinessAction(action: string) {

@@ -10,7 +10,7 @@ import {
   accessDecisionPrimaryAction,
   accessDecisionSummaryLabel,
   accessDecisionRecordMessageLabel,
-  accessNextActionLabel,
+  accessNextActionLabelByCode,
   askAccessScopeOptions,
   implicitDefaultTenantId
 } from "../askJourney";
@@ -346,7 +346,11 @@ export function AskAccessView({
                   <div className="ask-next-actions">
                     <strong>{t("ask.nextActions")}</strong>
                     <ul>
-                      {result.nextActions.map((action) => <li key={action}>{accessNextActionLabel(action, t)}</li>)}
+                      {result.nextActions.map((action, index) => (
+                        <li key={action}>
+                          {accessNextActionLabelByCode(result.nextActionCodes?.[index] ?? "", action, t)}
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 ) : null}

@@ -32,6 +32,8 @@ export interface AskDecisionRecordRow {
   layer: string
   layerKey: string
   message: string
+  messageKey?: string
+  messageValues?: Record<string, string>
   status: string
   tone: "danger" | "neutral" | "success" | "warning"
 }
@@ -399,6 +401,8 @@ export function decisionRecordRows(result: AccessDecisionExplainResult): AskDeci
     layer: record.layer,
     layerKey: `ask.recordLayer.${record.layer}`,
     message: record.message,
+    messageKey: record.messageKey,
+    messageValues: record.messageValues,
     status: record.status,
     tone: recordTone(record)
   }));
@@ -409,7 +413,13 @@ export function accessDecisionSummaryLabel(result: AccessDecisionExplainResult, 
   return tx(t, result.outcome === "allowed" ? "ask.summaryAllowed" : "ask.summaryDenied", { reason });
 }
 
-export function accessDecisionRecordMessageLabel(row: Pick<AskDecisionRecordRow, "message">, t: Translator) {
+export function accessDecisionRecordMessageLabel(
+  row: Pick<AskDecisionRecordRow, "message" | "messageKey" | "messageValues">,
+  t: Translator
+) {
+  if (row.messageKey) {
+    return tx(t, `ask.evidence.${row.messageKey}`, row.messageValues ?? {});
+  }
   const key = knownDecisionRecordMessages[row.message];
   return key ? t(key) : sanitizeAccessGuidance(row.message);
 }
@@ -417,6 +427,25 @@ export function accessDecisionRecordMessageLabel(row: Pick<AskDecisionRecordRow,
 export function accessNextActionLabel(action: string, t: Translator) {
   const key = knownNextActions[action];
   return key ? t(key) : sanitizeAccessGuidance(action);
+}
+
+// Keyed by the backend nextActionCode contract (the explain API returns codes
+// alongside the English sentences), mirroring productionReadinessCopy.ts.
+export const accessNextActionKeys: Record<string, string> = {
+  approve_capability: "ask.nextAction.approveCapability",
+  create_caller_assignment: "ask.nextAction.createCallerAssignment",
+  create_workspace_assignment: "ask.nextAction.createWorkspaceAssignment",
+  inspect_access_profile: "ask.nextAction.inspectProfile",
+  narrow_data_scope: "ask.nextAction.narrowDataScope",
+  no_change_required: "ask.nextAction.noChangeRequired",
+  refresh_capabilities: "ask.nextAction.refreshCapabilities",
+  review_deny: "ask.nextAction.reviewDeny",
+  use_permission_package: "ask.nextAction.usePermissionPackage"
+};
+
+export function accessNextActionLabelByCode(code: string, fallbackAction: string, t: Translator) {
+  const key = accessNextActionKeys[code];
+  return key ? t(key) : accessNextActionLabel(fallbackAction, t);
 }
 
 export function accessDecisionReasonLabel(reason: string, t: Translator) {

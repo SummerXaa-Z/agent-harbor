@@ -127,3 +127,7 @@ make release-check
 ```
 
 The evaluator pack is intentionally lightweight. It does not replace scenario gates; it captures whether the current product can be understood by a new evaluator.
+
+## Past Evaluation Records
+
+- 2026-09-19 — Doubao (豆包) browser agent, full console journey + consumer leg + freestyle pass: [`0.3.x-doubao-console-eval.md`](./0.3.x-doubao-console-eval.md). No blockers; follow-up fixes landed in #375 and #376.

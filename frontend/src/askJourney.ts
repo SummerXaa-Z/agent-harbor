@@ -101,14 +101,30 @@ export function buildExplainRequest(selection: AskAccessSelection): ExplainReque
   };
 }
 
+export const implicitDefaultTenantId = "default";
+
+export function withImplicitDefaultTenant(tenants: Tenant[], agents: Agent[]): Tenant[] {
+  if (tenants.some((tenant) => tenant.id === implicitDefaultTenantId)) return tenants;
+  if (!agents.some((agent) => agent.tenantId === implicitDefaultTenantId)) return tenants;
+  return [...tenants, {
+    createdAt: "1970-01-01T00:00:00.000Z",
+    id: implicitDefaultTenantId,
+    level: 1,
+    name: implicitDefaultTenantId,
+    status: "active",
+    updatedAt: "1970-01-01T00:00:00.000Z"
+  }];
+}
+
 export function askAccessScopeOptions(
   inventory: AskAccessInventory,
   selection: AskAccessSelection
 ): AskAccessScopeOptions {
+  const tenants = withImplicitDefaultTenant(inventory.tenants, inventory.agents);
   const tenantId = normalizeOptional(selection.tenantId);
   const workspaceId = normalizeOptional(selection.workspaceId);
   const targetId = normalizeOptional(selection.targetId);
-  const activeTenants = inventory.tenants.filter((tenant) => tenant.status === "active");
+  const activeTenants = tenants.filter((tenant) => tenant.status === "active");
   const activeTenantIds = new Set(activeTenants.map((tenant) => tenant.id));
   const activeAgents = inventory.agents.filter((agent) => (
     agent.status === "active" && activeTenantIds.has(agent.tenantId)
@@ -118,7 +134,7 @@ export function askAccessScopeOptions(
   const scopedAgents = tenantAgents.filter((agent) => !workspaceId || agent.workspaceId === workspaceId);
   const targets = activeAgents.filter((agent) => (
     targetIdsWithCapabilities.has(agent.id)
-    && askAccessTargetVisibleToScope(agent, tenantId, workspaceId, inventory.tenants)
+    && askAccessTargetVisibleToScope(agent, tenantId, workspaceId, tenants)
   ));
   const visibleTargetIds = new Set(targets.map((agent) => agent.id));
 
@@ -167,7 +183,8 @@ export function resolveAskAccessSelection(
   selection: AskAccessSelection,
   inventory: AskAccessInventory
 ): AskAccessSelection {
-  const activeTenants = inventory.tenants.filter((tenant) => tenant.status === "active");
+  const tenants = withImplicitDefaultTenant(inventory.tenants, inventory.agents);
+  const activeTenants = tenants.filter((tenant) => tenant.status === "active");
   const activeTenantIds = new Set(activeTenants.map((tenant) => tenant.id));
   const activeAgents = inventory.agents.filter((agent) => (
     agent.status === "active" && activeTenantIds.has(agent.tenantId)
@@ -178,7 +195,7 @@ export function resolveAskAccessSelection(
     .map((caller) => ({ tenantId: caller.tenantId, workspaceId: caller.workspaceId }))
     .filter((scope) => activeAgents.some((agent) => (
       targetIdsWithCapabilities.has(agent.id)
-      && askAccessTargetVisibleToScope(agent, scope.tenantId, scope.workspaceId, inventory.tenants)
+      && askAccessTargetVisibleToScope(agent, scope.tenantId, scope.workspaceId, tenants)
     )));
   const selectedCaller = activeAgents.find((agent) => (
     agent.id === selection.callerInstanceId && agent.channelType === "local"
@@ -215,7 +232,7 @@ export function resolveAskAccessSelection(
   const callers = scopedAgents.filter((agent) => agent.channelType === "local");
   const targets = activeAgents.filter((agent) => (
     targetIdsWithCapabilities.has(agent.id)
-    && askAccessTargetVisibleToScope(agent, tenantId, workspaceId, inventory.tenants)
+    && askAccessTargetVisibleToScope(agent, tenantId, workspaceId, tenants)
   ));
   const caller = callers.find((agent) => agent.id === selection.callerInstanceId)
     ?? (explicitCaller ? undefined : callers[0]);

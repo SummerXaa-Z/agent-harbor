@@ -76,3 +76,11 @@ test("access handoff presents a three-step builder journey with progressive disc
   assert.match(styles, /\.access-handoff-section-heading\s*\{/);
   assert.match(styles, /\.access-handoff-artifact-heading\s*\{/);
 });
+
+test("access handoff keeps token state fresh while the delivery panel is open", () => {
+  assert.match(hook, /const silentLoad = \(\) => \{/);
+  assert.match(hook, /if \(tokenMutationRef\.current \|\| document\.visibilityState !== "visible"\) return;/);
+  assert.match(hook, /window\.setInterval\(silentLoad, accessHandoffSilentRefreshMs\)/);
+  assert.match(hook, /document\.addEventListener\("visibilitychange", onVisibilityChange\)/);
+  assert.match(hook, /window\.clearInterval\(interval\)/);
+});

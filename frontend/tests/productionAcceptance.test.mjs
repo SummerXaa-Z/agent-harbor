@@ -104,7 +104,7 @@ test("production acceptance center sends blocked permission changes back to the 
   assert.equal(center.blockers[0]?.labelKey, "productionAcceptance.blocker.runtime_denied_trace_present");
 });
 
-test("production acceptance center routes connection warnings to diagnostics", () => {
+test("production acceptance center routes connection warnings to diagnostics without blocking", () => {
   const center = buildProductionAcceptanceCenter({
     connectionStatus: "warning",
     liveDataAvailable: true,
@@ -114,7 +114,24 @@ test("production acceptance center routes connection warnings to diagnostics", (
 
   assert.equal(center.status, "attention");
   assert.equal(center.primaryAction, "run_diagnostics");
-  assert.equal(center.blockers[0]?.key, "connection");
+  assert.equal(center.blockingCount, 0);
+  assert.deepEqual(center.blockers, []);
+  assert.equal(center.readyCount, center.totalCount - 1);
+});
+
+test("production acceptance center does not block data-level readiness on unrun session diagnostics", () => {
+  const center = buildProductionAcceptanceCenter({
+    connectionStatus: null,
+    liveDataAvailable: true,
+    productionReadiness: productionReadiness(),
+    productionSummary: productionSummary({ status: "ready" })
+  });
+
+  assert.equal(center.status, "attention");
+  assert.equal(center.primaryAction, "run_diagnostics");
+  assert.equal(center.blockingCount, 0);
+  assert.equal(center.readyCount, 3);
+  assert.equal(center.totalCount, 4);
 });
 
 test("production acceptance center blocks fallback data from production actions", () => {

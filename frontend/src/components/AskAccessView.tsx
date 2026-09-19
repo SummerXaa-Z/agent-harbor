@@ -11,7 +11,8 @@ import {
   accessDecisionSummaryLabel,
   accessDecisionRecordMessageLabel,
   accessNextActionLabel,
-  askAccessScopeOptions
+  askAccessScopeOptions,
+  implicitDefaultTenantId
 } from "../askJourney";
 import {
   capabilityDisplayName,
@@ -129,7 +130,9 @@ export function AskAccessView({
 }: AskAccessViewProps) {
   const scopedOptions = askAccessScopeOptions({ agents, capabilities, tenants }, effectiveSelection);
   const tenantOptions = scopedOptions.tenants.map((tenant) => ({
-    label: permissionEntityDisplayName(tenant.name, t),
+    label: tenant.id === implicitDefaultTenantId && tenant.name.trim() === implicitDefaultTenantId
+      ? t("text.defaultTenantName")
+      : permissionEntityDisplayName(tenant.name, t),
     value: tenant.id
   }));
   const workspaceOptions = uniqueOptions(

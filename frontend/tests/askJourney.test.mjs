@@ -621,3 +621,43 @@ test("buildPermissionChangeHandoff keeps template unset when no permission packa
   assert.equal(result.templateId, undefined);
   assert.match(result.intentText, /Export contracts/);
 });
+
+test("ask scope options keep the implicit default tenant usable when the API lists no tenants", () => {
+  const implicitCaller = { ...caller, tenantId: "default", workspaceId: "workspace-sandbox" };
+  const implicitTarget = { ...target, tenantId: "default", workspaceId: "workspace-sandbox" };
+  const inventory = { agents: [implicitCaller, implicitTarget], capabilities: [readCapability], tenants: [] };
+
+  const options = askAccessScopeOptions(inventory, {
+    targetId: implicitTarget.id,
+    tenantId: "default",
+    workspaceId: "workspace-sandbox"
+  });
+
+  assert.deepEqual(options.tenants.map((item) => item.id), ["default"]);
+  assert.ok(options.callers.some((agent) => agent.id === implicitCaller.id));
+  assert.ok(options.targets.some((agent) => agent.id === implicitTarget.id));
+  assert.deepEqual(options.capabilities.map((capability) => capability.id), [readCapability.id]);
+});
+
+test("ask scope options leave an explicitly listed tenant inventory untouched", () => {
+  const options = askAccessScopeOptions(
+    { agents: [caller, target], capabilities: [readCapability], tenants: [tenant] },
+    { tenantId: tenant.id, workspaceId: caller.workspaceId }
+  );
+
+  assert.equal(options.tenants.length, 1);
+});
+
+test("ask example selection resolves a full scope against the implicit default tenant", () => {
+  const implicitCaller = { ...caller, tenantId: "default", workspaceId: "workspace-sandbox" };
+  const implicitTarget = { ...target, tenantId: "default", workspaceId: "workspace-sandbox" };
+  const resolved = resolveAskAccessSelection(
+    {},
+    { agents: [implicitCaller, implicitTarget], capabilities: [readCapability], tenants: [] }
+  );
+
+  assert.equal(resolved.tenantId, "default");
+  assert.equal(resolved.callerInstanceId, implicitCaller.id);
+  assert.equal(resolved.targetId, implicitTarget.id);
+  assert.equal(resolved.capabilityId, readCapability.id);
+});

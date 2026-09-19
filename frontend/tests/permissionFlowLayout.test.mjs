@@ -544,6 +544,9 @@ test("go-live status page starts with acceptance workflow instead of historical 
   assert.match(goLiveAcceptanceOverview, /buildProductionAcceptanceCenter\(/);
   assert.match(goLiveAcceptanceOverview, /connectionStatus/);
   assert.match(goLiveAcceptanceOverview, /onRunConnectionDiagnostics/);
+  assert.match(goLiveAcceptanceOverview, /if \(!liveDataAvailable \|\| connectionStatus !== null \|\| connectionDiagnosticsChecking\) return;/);
+  assert.match(goLiveAcceptanceOverview, /\}, \[liveDataAvailable, connectionStatus, connectionDiagnosticsChecking, onRunConnectionDiagnostics\]\);/);
+  assert.match(goLiveAcceptanceOverview, /productionAcceptance\.connectionSessionNote/);
   assert.match(goLiveAcceptanceOverview, /onRefreshProductionReadiness/);
   assert.match(goLiveAcceptanceOverview, /onExportAcceptanceReport/);
   assert.doesNotMatch(goLiveAcceptanceOverview, /onExportProductionEvidence/);

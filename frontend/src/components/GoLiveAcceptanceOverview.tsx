@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import {
   Copy,
   Download,
@@ -144,6 +146,13 @@ export function GoLiveAcceptanceOverview({
     productionReadinessLoading,
     t
   });
+  const diagnosticsAutoStarted = useRef(false);
+  useEffect(() => {
+    if (!liveDataAvailable || connectionStatus !== null || connectionDiagnosticsChecking) return;
+    if (diagnosticsAutoStarted.current) return;
+    diagnosticsAutoStarted.current = true;
+    onRunConnectionDiagnostics();
+  }, [liveDataAvailable, connectionStatus, connectionDiagnosticsChecking, onRunConnectionDiagnostics]);
 
   return (
     <div className="go-live-acceptance">
@@ -157,6 +166,9 @@ export function GoLiveAcceptanceOverview({
             <strong className="go-live-acceptance-headline">{t(acceptanceCenter.headlineKey)}</strong>
             <p>{nextAction}</p>
             {!liveDataAvailable ? <p className="go-live-acceptance-warning">{t("message.fallbackDataModeDetail")}</p> : null}
+            {liveDataAvailable && connectionStatus === null ? (
+              <p className="go-live-acceptance-message">{t("productionAcceptance.connectionSessionNote")}</p>
+            ) : null}
             {statusMessage ? <p className="go-live-acceptance-message">{statusMessage}</p> : null}
           </div>
           <div className="go-live-acceptance-actions">

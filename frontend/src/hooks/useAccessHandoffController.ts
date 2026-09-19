@@ -27,6 +27,8 @@ interface UseAccessHandoffControllerArgs {
   t: Translator;
 }
 
+const accessHandoffSilentRefreshMs = 20000;
+
 export function useAccessHandoffController({
   adminKey,
   enabled,
@@ -63,7 +65,23 @@ export function useAccessHandoffController({
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
-    return () => controller.abort();
+    // Tokens can be revoked or expire outside this console (API, CLI), so keep
+    // the delivery list fresh while the panel is open. Silent: no loading or
+    // message churn, and never concurrent with a create/revoke mutation.
+    const silentLoad = () => {
+      if (tokenMutationRef.current || document.visibilityState !== "visible") return;
+      fetchAccessHandoff(filter, adminKey).then(setHandoff).catch(() => undefined);
+    };
+    const interval = window.setInterval(silentLoad, accessHandoffSilentRefreshMs);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") silentLoad();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      controller.abort();
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [adminKey, enabled, filterKey, refreshKey]);
 
   async function refresh() {

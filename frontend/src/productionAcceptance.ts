@@ -176,20 +176,14 @@ function connectionBlockers(
       labelKey: "productionAcceptance.blocker.liveData"
     }];
   }
-  if (connectionStatus && connectionStatus !== "ok") {
+  // Only a failed probe blocks go-live: "not run yet in this browser session"
+  // and "passed with warnings" are session-level attention items, not blockers,
+  // so the data-level readiness verdict and this checklist cannot disagree.
+  if (connectionStatus === "error") {
     return [{
       detail: "",
       key: "connection",
-      labelKey: connectionStatus === "error"
-        ? "productionAcceptance.blocker.connectionError"
-        : "productionAcceptance.blocker.connectionWarning"
-    }];
-  }
-  if (!connectionStatus) {
-    return [{
-      detail: "",
-      key: "connection",
-      labelKey: "productionAcceptance.blocker.connectionUnknown"
+      labelKey: "productionAcceptance.blocker.connectionError"
     }];
   }
   return [];

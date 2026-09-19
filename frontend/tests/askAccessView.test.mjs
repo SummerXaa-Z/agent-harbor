@@ -140,7 +140,7 @@ test("ask access view keeps the primary path answer-first and business-readable"
   assert.doesNotMatch(view, /EmptyRow/);
   assert.doesNotMatch(view, /ask-sentence-text/);
   assert.match(presenters, /"Policy Router": t\("demo\.policyRouterTarget"\)/);
-  assert.match(presenters, /"Sandbox": t\("demo\.workspaceSandbox"\)/);
+  assert.match(presenters, /"Sandbox": t\("text\.defaultWorkspaceName"\)/);
 });
 
 test("ask access shows the data-source mode once in the context card", () => {

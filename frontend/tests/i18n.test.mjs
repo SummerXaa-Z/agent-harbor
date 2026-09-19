@@ -406,7 +406,7 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("action.checkApprovalReadiness"), "检查环境");
   assert.equal(t("text.aiAdminApprovalJourneyCompletion"), "状态检查进度");
   assert.equal(t("text.aiAdminGoLiveReadyTitle"), "已满足上线条件");
-  assert.equal(t("text.aiAdminGoLiveRemainingBadge"), "还差 {count}");
+  assert.equal(t("text.aiAdminGoLiveRemainingBadge"), "还差 {count} 步");
   assert.equal(t("text.aiAdminGoLiveWaitingTitle"), "暂不能上线，还差 {count} 步");
   assert.equal(t("text.aiAdminGoLiveWaitingDetail"), "按下一步补齐审批、应用、运行验证和审计记录。");
   assert.equal(t("journey.aiAdmin.next.approvalRequest"), "先发起并批准审批请求。");

@@ -171,7 +171,7 @@ export function permissionEntityDisplayName(value: string, t: Translator) {
     "Permission Request Approval Caller": t("demo.permissionRequestApprovalCaller"),
     "Permission Request Approval MCP Target": t("demo.permissionRequestApprovalTarget"),
     "Security Reviewer": t("accessSubject.securityReviewer.name"),
-    "Sandbox": t("demo.workspaceSandbox")
+    "Sandbox": t("text.defaultWorkspaceName")
   };
   if (demoNames[normalized]) return demoNames[normalized];
   if (normalized.startsWith("MCP Capability Caller")) return t("demo.mcpCapabilityCaller");

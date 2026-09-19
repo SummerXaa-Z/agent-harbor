@@ -540,6 +540,8 @@ export interface AccessDecisionExplainEvidence {
   status: string
   id?: string
   message: string
+  messageKey?: string
+  messageValues?: Record<string, string>
 }
 
 export interface AccessDecisionExplainResult {

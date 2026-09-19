@@ -7,6 +7,7 @@ import {
   accessDecisionRecordMessageLabel,
   accessDecisionPrimaryAction,
   accessNextActionLabel,
+  accessNextActionLabelByCode,
   askAccessScopeOptions,
   askAccessTargetVisibleToScope,
   buildExplainRequest,
@@ -204,6 +205,76 @@ test("access query presentation localizes backend decision guidance at render ti
   assert.equal(accessDecisionRecordMessageLabel(rows[0], t), "租户授权缺失，或正在阻断这个工具能力。");
   assert.equal(accessDecisionRecordMessageLabel(rows[1], t), "工作区分配已匹配。");
   assert.equal(accessNextActionLabel(result.nextActions[0], t), "发起权限包变更，一次性创建租户、工作区和调用方授权。");
+});
+
+test("decision record messages resolve by messageKey with interpolated values", () => {
+  for (const language of ["en", "zh-CN"]) {
+    const t = createTranslator(language);
+    const rows = decisionRecordRows({
+      dataScopes: [],
+      decision: { allowed: true, reason: "access grant matched", source: "access_profile" },
+      evidence: [
+        {
+          id: "agt-caller",
+          layer: "caller_instance",
+          message: "Caller instance Support Caller matches tenant default and workspace workspace-sandbox.",
+          messageKey: "caller_instance.matched",
+          messageValues: { callerName: "Support Caller", tenantId: "default", workspaceId: "workspace-sandbox" },
+          status: "matched"
+        },
+        {
+          id: "cap-search",
+          layer: "capability",
+          message: "Capability search_customer is approved for the target.",
+          messageKey: "capability.matched",
+          messageValues: { capabilityKey: "search_customer" },
+          status: "matched"
+        }
+      ],
+      nextActions: [],
+      nextActionCodes: [],
+      outcome: "allowed",
+      request: {
+        capabilityId: "cap-search",
+        callerInstanceId: "agt-caller",
+        targetId: "agt-ticket-mcp",
+        tenantId: "default",
+        workspaceId: "workspace-sandbox"
+      },
+      summary: "Allowed."
+    });
+
+    assert.equal(rows[0].messageKey, "caller_instance.matched");
+    assert.equal(
+      accessDecisionRecordMessageLabel(rows[0], t),
+      language === "zh-CN"
+        ? "调用方实例 Support Caller 属于租户 default 和工作区 workspace-sandbox。"
+        : "Caller instance Support Caller matches tenant default and workspace workspace-sandbox."
+    );
+    assert.equal(
+      accessDecisionRecordMessageLabel(rows[1], t),
+      language === "zh-CN"
+        ? "能力 search_customer 已在该目标下批准。"
+        : "Capability search_customer is approved for the target."
+    );
+  }
+});
+
+test("access next actions resolve by next action code with sentence fallback", () => {
+  const t = createTranslator("zh-CN");
+
+  assert.equal(
+    accessNextActionLabelByCode("use_permission_package", "", t),
+    "发起权限包变更，一次性创建租户、工作区和调用方授权。"
+  );
+  assert.equal(
+    accessNextActionLabelByCode(
+      "some_future_action",
+      "Inspect get_tenant_access_profile for this tenant.",
+      t
+    ),
+    "Inspect tenant access profile for this tenant."
+  );
 });
 
 test("access query presentation sanitizes unknown technical guidance", () => {

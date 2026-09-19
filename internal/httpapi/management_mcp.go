@@ -213,10 +213,12 @@ type managementMCPExplainAccessArgs struct {
 }
 
 type managementMCPExplainEvidence struct {
-	Layer   string `json:"layer"`
-	Status  string `json:"status"`
-	ID      string `json:"id,omitempty"`
-	Message string `json:"message"`
+	Layer         string            `json:"layer"`
+	Status        string            `json:"status"`
+	ID            string            `json:"id,omitempty"`
+	Message       string            `json:"message"`
+	MessageKey    string            `json:"messageKey,omitempty"`
+	MessageValues map[string]string `json:"messageValues,omitempty"`
 }
 
 type managementMCPExplainPermissionPackageResult struct {
@@ -1487,11 +1489,11 @@ func (s *Server) managementMCPAccessEvidence(ctx context.Context, args managemen
 		return nil, err
 	}
 	if !ok {
-		evidence = append(evidence, managementMCPExplainEvidence{Layer: "caller_instance", Status: "missing", Message: "Caller instance was not found."})
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "caller_instance", Status: "missing", Message: "Caller instance was not found.", MessageKey: "caller_instance.not_found"})
 	} else if caller.TenantID != args.TenantID || caller.WorkspaceID != args.WorkspaceID {
-		evidence = append(evidence, managementMCPExplainEvidence{Layer: "caller_instance", Status: "mismatch", ID: caller.ID, Message: "Caller instance tenant or workspace does not match the requested scope."})
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "caller_instance", Status: "mismatch", ID: caller.ID, Message: "Caller instance tenant or workspace does not match the requested scope.", MessageKey: "caller_instance.scope_mismatch"})
 	} else {
-		evidence = append(evidence, managementMCPExplainEvidence{Layer: "caller_instance", Status: "matched", ID: caller.ID, Message: fmt.Sprintf("Caller instance %s matches tenant %s and workspace %s.", caller.Name, args.TenantID, args.WorkspaceID)})
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "caller_instance", Status: "matched", ID: caller.ID, Message: fmt.Sprintf("Caller instance %s matches tenant %s and workspace %s.", caller.Name, args.TenantID, args.WorkspaceID), MessageKey: "caller_instance.matched", MessageValues: map[string]string{"callerName": caller.Name, "tenantId": args.TenantID, "workspaceId": args.WorkspaceID}})
 	}
 
 	target, ok, err := s.repo.GetAgent(ctx, args.TargetID)
@@ -1499,11 +1501,11 @@ func (s *Server) managementMCPAccessEvidence(ctx context.Context, args managemen
 		return nil, err
 	}
 	if !ok {
-		evidence = append(evidence, managementMCPExplainEvidence{Layer: "target", Status: "missing", Message: "Target agent was not found."})
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "target", Status: "missing", Message: "Target agent was not found.", MessageKey: "target.not_found"})
 	} else if target.Status != domain.AgentStatusActive {
-		evidence = append(evidence, managementMCPExplainEvidence{Layer: "target", Status: "inactive", ID: target.ID, Message: "Target agent is not active."})
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "target", Status: "inactive", ID: target.ID, Message: "Target agent is not active.", MessageKey: "target.inactive"})
 	} else {
-		evidence = append(evidence, managementMCPExplainEvidence{Layer: "target", Status: "matched", ID: target.ID, Message: fmt.Sprintf("Target %s is active.", target.Name)})
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "target", Status: "matched", ID: target.ID, Message: fmt.Sprintf("Target %s is active.", target.Name), MessageKey: "target.matched", MessageValues: map[string]string{"targetName": target.Name}})
 	}
 
 	capability, ok, err := s.repo.GetCapability(ctx, args.CapabilityID)
@@ -1511,33 +1513,35 @@ func (s *Server) managementMCPAccessEvidence(ctx context.Context, args managemen
 		return nil, err
 	}
 	if !ok {
-		evidence = append(evidence, managementMCPExplainEvidence{Layer: "capability", Status: "missing", Message: "Capability was not found."})
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "capability", Status: "missing", Message: "Capability was not found.", MessageKey: "capability.not_found"})
 	} else if capability.TargetID != args.TargetID {
-		evidence = append(evidence, managementMCPExplainEvidence{Layer: "capability", Status: "mismatch", ID: capability.ID, Message: "Capability is registered on a different target."})
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "capability", Status: "mismatch", ID: capability.ID, Message: "Capability is registered on a different target.", MessageKey: "capability.target_mismatch"})
 	} else if capability.DiscoveryStatus != domain.CapabilityDiscoveryApproved {
-		evidence = append(evidence, managementMCPExplainEvidence{Layer: "capability", Status: "not_approved", ID: capability.ID, Message: fmt.Sprintf("Capability %s is not approved.", capability.Key)})
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "capability", Status: "not_approved", ID: capability.ID, Message: fmt.Sprintf("Capability %s is not approved.", capability.Key), MessageKey: "capability.not_approved", MessageValues: map[string]string{"capabilityKey": capability.Key}})
 	} else {
-		evidence = append(evidence, managementMCPExplainEvidence{Layer: "capability", Status: "matched", ID: capability.ID, Message: fmt.Sprintf("Capability %s is approved for the target.", capability.Key)})
+		evidence = append(evidence, managementMCPExplainEvidence{Layer: "capability", Status: "matched", ID: capability.ID, Message: fmt.Sprintf("Capability %s is approved for the target.", capability.Key), MessageKey: "capability.matched", MessageValues: map[string]string{"capabilityKey": capability.Key}})
 	}
 
-	evidence = appendDecisionEvidence(evidence, "tenant_entitlement", decision.EntitlementID, decision.Source, decision.Allowed, "Tenant entitlement matched.", "Tenant entitlement is missing or blocking this capability.")
-	evidence = appendDecisionEvidence(evidence, "workspace_assignment", decision.WorkspaceAssignmentID, decision.Source, decision.Allowed, "Workspace assignment matched.", "Workspace assignment is missing or blocking this capability.")
-	evidence = appendDecisionEvidence(evidence, "instance_assignment", decision.InstanceAssignmentID, decision.Source, decision.Allowed, "Caller instance assignment matched.", "Caller instance assignment is missing or blocking this capability.")
+	evidence = appendDecisionEvidence(evidence, "tenant_entitlement", decision.EntitlementID, decision.Source, decision.Allowed, "Tenant entitlement matched.", "Tenant entitlement is missing or blocking this capability.", "tenant_entitlement.matched", "tenant_entitlement.blocked")
+	evidence = appendDecisionEvidence(evidence, "workspace_assignment", decision.WorkspaceAssignmentID, decision.Source, decision.Allowed, "Workspace assignment matched.", "Workspace assignment is missing or blocking this capability.", "workspace_assignment.matched", "workspace_assignment.blocked")
+	evidence = appendDecisionEvidence(evidence, "instance_assignment", decision.InstanceAssignmentID, decision.Source, decision.Allowed, "Caller instance assignment matched.", "Caller instance assignment is missing or blocking this capability.", "instance_assignment.matched", "instance_assignment.blocked")
 	return evidence, nil
 }
 
-func appendDecisionEvidence(rows []managementMCPExplainEvidence, layer string, id string, source string, allowed bool, matchedMessage string, blockedMessage string) []managementMCPExplainEvidence {
+func appendDecisionEvidence(rows []managementMCPExplainEvidence, layer string, id string, source string, allowed bool, matchedMessage string, blockedMessage string, matchedKey string, blockedKey string) []managementMCPExplainEvidence {
 	if id != "" {
 		status := "matched"
 		message := matchedMessage
+		messageKey := matchedKey
 		if !allowed && source == layer {
 			status = "blocking"
 			message = blockedMessage
+			messageKey = blockedKey
 		}
-		return append(rows, managementMCPExplainEvidence{Layer: layer, Status: status, ID: id, Message: message})
+		return append(rows, managementMCPExplainEvidence{Layer: layer, Status: status, ID: id, Message: message, MessageKey: messageKey})
 	}
 	if source == layer {
-		return append(rows, managementMCPExplainEvidence{Layer: layer, Status: "missing", Message: blockedMessage})
+		return append(rows, managementMCPExplainEvidence{Layer: layer, Status: "missing", Message: blockedMessage, MessageKey: blockedKey})
 	}
 	return rows
 }

@@ -118,7 +118,11 @@ export function GoLiveAcceptanceOverview({
   const nextAction = acceptanceCenter.blockers[0]
     ? t(acceptanceCenter.blockers[0].labelKey, acceptanceCenter.blockers[0].detail)
     : productionReadiness?.nextActions[0]
-    ? permissionProductionReadinessNextAction(productionReadiness.nextActions[0], t)
+    ? permissionProductionReadinessNextAction(
+        productionReadiness.nextActionCode ?? "",
+        productionReadiness.nextActions[0],
+        t
+      )
     : productionReadiness?.status === "ready"
       ? t("text.productionReadinessReadyDetail")
       : productionReadiness

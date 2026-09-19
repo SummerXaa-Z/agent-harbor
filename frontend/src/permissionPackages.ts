@@ -321,6 +321,8 @@ export type PermissionPackageProductionNextActionCode =
   | "review_application_scope"
   | "review_application_health"
   | "resolve_impact_blockers"
+  | "review_subject_scope"
+  | "reapply_permission_package"
   | "verify_access_profile"
   | "run_allowed_runtime_call"
   | "run_denied_runtime_call"

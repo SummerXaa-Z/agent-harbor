@@ -2018,9 +2018,12 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
         if (!active) return;
         setTenantOrganizationState({
           permissionCenter: null,
-          permissionCenterError: error instanceof Error
-            ? error.message
-            : createTranslator(language)("error.loadTenantPermissionCenter")
+          permissionCenterError: localizedErrorMessage(
+            createTranslator(language),
+            language,
+            error,
+            "error.loadTenantPermissionCenter"
+          )
         });
       })
       .finally(() => {

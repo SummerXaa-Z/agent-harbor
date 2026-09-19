@@ -512,7 +512,9 @@ function defaultTranslateIntent(_key: string, values: Record<string, string>) {
   return `Open ${values.capabilityName} access from ${values.callerName} to ${values.targetName}`;
 }
 
-const knownDecisionReasons: Record<string, string> = {
+// Sentence-matched fallback inventory for access decision reasons; the
+// localization guard test asserts this covers every backend reason literal.
+export const knownDecisionReasons: Record<string, string> = {
   "access grant matched": "ask.reason.accessGrantMatched",
   "caller has no route policy or access grant for target route": "ask.reason.routeGrantMissing",
   "caller instance assignment data scopes exceed workspace assignment boundary": "ask.reason.instanceScopeExceeded",

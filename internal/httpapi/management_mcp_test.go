@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -48,5 +49,15 @@ func TestManagementMCPWriteConfirmationFallsBackToSafetyMetadata(t *testing.T) {
 		managementMCPToolExecution{Idempotency: "safe_repeat"},
 	) {
 		t.Fatalf("read-only metadata should not require confirmation")
+	}
+}
+
+func TestExplainAccessDecisionToolSchemaRequiresSubject(t *testing.T) {
+	required, ok := explainAccessDecisionSchema()["required"].([]string)
+	if !ok {
+		t.Fatalf("explain tool schema has no required list: %#v", explainAccessDecisionSchema()["required"])
+	}
+	if !slices.Contains(required, "subjectId") {
+		t.Fatalf("explain tool schema should require subjectId: %#v", required)
 	}
 }

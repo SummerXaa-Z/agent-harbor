@@ -12,6 +12,7 @@ import {
   accessDecisionRecordMessageLabel,
   accessNextActionLabelByCode,
   askAccessScopeOptions,
+  explainMissingOnlySubject,
   implicitDefaultTenantId
 } from "../askJourney";
 import {
@@ -256,6 +257,11 @@ export function AskAccessView({
                   type="text"
                   value={effectiveSelection.subjectId ?? ""}
                 />
+                {explainMissingOnlySubject(requestBuild) ? (
+                  <span className="ask-subject-required-hint" role="note">
+                    {t("ask.subjectRequiredHint")}
+                  </span>
+                ) : null}
               </label>
               <button className="primary-button" disabled={!canExplain} type="submit">
                 <Search aria-hidden="true" size={15} />

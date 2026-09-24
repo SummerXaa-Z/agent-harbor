@@ -1469,6 +1469,7 @@ func validateManagementMCPExplainAccessArgs(args managementMCPExplainAccessArgs)
 		{name: "tenantId", value: args.TenantID},
 		{name: "workspaceId", value: args.WorkspaceID},
 		{name: "callerInstanceId", value: args.CallerInstanceID},
+		{name: "subjectId", value: args.SubjectID},
 		{name: "targetId", value: args.TargetID},
 		{name: "capabilityId", value: args.CapabilityID},
 	} {
@@ -1795,10 +1796,10 @@ func explainAccessDecisionSchema() map[string]any {
 		"tenantId":         stringSchema("Tenant scope to evaluate."),
 		"workspaceId":      stringSchema("Workspace scope to evaluate."),
 		"callerInstanceId": stringSchema("Caller agent instance requesting access."),
-		"subjectId":        stringSchema("Optional subject id for subject-specific assignments."),
+		"subjectId":        stringSchema("Subject id to evaluate. Required: subject-scoped assignments only match a concrete subject id."),
 		"targetId":         stringSchema("Target agent id."),
 		"capabilityId":     stringSchema("Capability id to evaluate."),
-	}, []string{"tenantId", "workspaceId", "callerInstanceId", "targetId", "capabilityId"})
+	}, []string{"tenantId", "workspaceId", "callerInstanceId", "subjectId", "targetId", "capabilityId"})
 }
 
 func scopedListSchema() map[string]any {

@@ -6464,10 +6464,10 @@ func shouldRetryUpstreamError(ctx context.Context, err error) bool {
 
 func classifyUpstreamError(ctx context.Context, err error) domain.AppError {
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
-		return domain.UpstreamTimeout("upstream request timed out")
+		return domain.UpstreamTimeout(upstreamErrorWithCause("upstream request timed out", err))
 	}
 	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {
-		return domain.UpstreamError("upstream request canceled")
+		return domain.UpstreamError(upstreamErrorWithCause("upstream request canceled", err))
 	}
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
@@ -6475,7 +6475,7 @@ func classifyUpstreamError(ctx context.Context, err error) domain.AppError {
 	}
 	var dnsErr *net.DNSError
 	if errors.As(err, &dnsErr) {
-		return domain.UpstreamDNSError("upstream DNS lookup failed")
+		return domain.UpstreamDNSError(upstreamErrorWithCause("upstream DNS lookup failed", err))
 	}
 	var unknownAuthority x509.UnknownAuthorityError
 	var certificateInvalid x509.CertificateInvalidError
@@ -6486,7 +6486,7 @@ func classifyUpstreamError(ctx context.Context, err error) domain.AppError {
 		errors.As(err, &hostnameInvalid) ||
 		errors.As(err, &tlsRecord) ||
 		strings.Contains(strings.ToLower(err.Error()), "tls:") {
-		return domain.UpstreamTLSError("upstream TLS handshake failed")
+		return domain.UpstreamTLSError(upstreamErrorWithCause("upstream TLS handshake failed", err))
 	}
 	if errors.Is(err, syscall.ECONNREFUSED) ||
 		errors.Is(err, syscall.ECONNRESET) ||
@@ -6494,9 +6494,23 @@ func classifyUpstreamError(ctx context.Context, err error) domain.AppError {
 		errors.Is(err, syscall.EPIPE) ||
 		strings.Contains(strings.ToLower(err.Error()), "connection refused") ||
 		strings.Contains(strings.ToLower(err.Error()), "connection reset") {
-		return domain.UpstreamConnectError("upstream connection failed")
+		return domain.UpstreamConnectError(upstreamErrorWithCause("upstream connection failed", err))
 	}
-	return domain.UpstreamError("upstream request failed")
+	return domain.UpstreamError(upstreamErrorWithCause("upstream request failed", err))
+}
+
+// upstreamErrorWithCause keeps the stable classification prefix while appending
+// the underlying transport error (dial/refused/DNS host), which is what lets an
+// administrator tell a wrong URL from a wrong port or a credential problem.
+func upstreamErrorWithCause(message string, err error) string {
+	if err == nil {
+		return message
+	}
+	cause := strings.TrimSpace(err.Error())
+	if cause == "" || cause == message {
+		return message
+	}
+	return message + ": " + cause
 }
 
 func sleepBeforeRetry(ctx context.Context, backoff time.Duration) bool {

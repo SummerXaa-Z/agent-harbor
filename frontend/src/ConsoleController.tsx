@@ -871,7 +871,19 @@ export function ConsoleController() {
     if (!data) return;
     setAiAdminForm((current) => {
       const requestScope = normalizedScope(scope);
-      const mcpTarget = data.agents.find((agent) => agent.channelType === "mcp" && agent.status === "active")
+      // Prefer a target that already has approved capabilities: defaulting to a
+      // zero-capability target makes the workbench read as "nothing to do" and
+      // previously surfaced a misleading direct-apply verdict.
+      const approvedTargetIds = new Set(
+        data.capabilities
+          .filter((capability) => capability.discoveryStatus === "approved")
+          .map((capability) => capability.targetId)
+      );
+      const mcpTarget = data.agents.find(
+        (agent) => agent.channelType === "mcp" && agent.status === "active" && approvedTargetIds.has(agent.id)
+      )
+        ?? data.agents.find((agent) => agent.channelType === "mcp" && approvedTargetIds.has(agent.id))
+        ?? data.agents.find((agent) => agent.channelType === "mcp" && agent.status === "active")
         ?? data.agents.find((agent) => agent.channelType === "mcp");
       const targetId = current.targetId || mcpTarget?.id || "";
       const capabilityRegion = data.capabilities

@@ -314,7 +314,12 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   }, [handoffTemplateMissing, permissionHandoffContext]);
   const approvalRequestEffectiveStatus = approvalRequest ? permissionPackageApprovalEffectiveStatus(approvalRequest) : null;
   const hasApprovedRequest = approvalRequestEffectiveStatus === "approved";
-  const canApply = draft.readiness.canApply && (draft.policyGate.canApplyDirectly || hasApprovedRequest);
+  const zeroAllowedCapabilities = draft.allowedCapabilities.length === 0;
+  // The policy gate alone would green-light an empty draft ("all allowed are
+  // read" holds vacuously); with no capabilities there is nothing to apply, so
+  // the workbench must not present that as a direct-apply verdict.
+  const directApplyEligible = draft.policyGate.canApplyDirectly && !zeroAllowedCapabilities;
+  const canApply = draft.readiness.canApply && (directApplyEligible || hasApprovedRequest);
   const reviewerQueueRequests = approvalRequests.filter((request) => permissionPackageApprovalEffectiveStatus(request) === "pending");
   const goLiveReadiness = summarizeAiAdminGoLiveReadiness(approvalJourneyEvaluation);
   const productionReady = productionReadiness?.status === "ready"
@@ -336,21 +341,27 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const reviewerQueueRefreshKey = reviewerQueueReadOnly ? "action.refreshApprovalTrace" : "action.refreshReviewerQueue";
   const runtimeValidationReady = Boolean(runtimeValidationResult) || goLiveReady;
   const goLivePrerequisitesReady = Boolean(application) || goLiveReady;
-  const approvalEffectivelyResolved = !draft.policyGate.canApplyDirectly
+  const approvalEffectivelyResolved = !directApplyEligible
     && (approvalRequestEffectiveStatus === "approved" || Boolean(application) || goLiveReady);
   const approvalDisplayStatus = approvalEffectivelyResolved
     ? "approved"
     : approvalRequestEffectiveStatus;
-  const approvalDisplayTone = draft.policyGate.canApplyDirectly
-    ? "success"
-    : approvalDisplayStatus ? permissionApprovalStatusTone(approvalDisplayStatus) : "warning";
-  const approvalDisplayLabel = draft.policyGate.canApplyDirectly
-    ? t("status.directApplyAllowed")
-    : approvalDisplayStatus ? permissionApprovalStatusLabel(approvalDisplayStatus, t) : t("status.approvalNotRequested");
-  const approvalGateDetailKey = permissionPolicyGateDetailKey(draft.policyGate.canApplyDirectly, approvalDisplayStatus);
-  const showPolicyGateReasons = !draft.policyGate.canApplyDirectly
+  const approvalDisplayTone = zeroAllowedCapabilities
+    ? "warning"
+    : directApplyEligible
+      ? "success"
+      : approvalDisplayStatus ? permissionApprovalStatusTone(approvalDisplayStatus) : "warning";
+  const approvalDisplayLabel = zeroAllowedCapabilities
+    ? t("status.noAllowedCapabilities")
+    : directApplyEligible
+      ? t("status.directApplyAllowed")
+      : approvalDisplayStatus ? permissionApprovalStatusLabel(approvalDisplayStatus, t) : t("status.approvalNotRequested");
+  const approvalGateDetailKey = zeroAllowedCapabilities
+    ? "text.policyGateNoCapabilitiesDetail"
+    : permissionPolicyGateDetailKey(directApplyEligible, approvalDisplayStatus);
+  const showPolicyGateReasons = !zeroAllowedCapabilities && !directApplyEligible
     && (!approvalDisplayStatus || approvalDisplayStatus === "pending");
-  const showCreateApprovalAction = !application && !goLiveReady
+  const showCreateApprovalAction = !zeroAllowedCapabilities && !application && !goLiveReady
     && (!approvalRequest || (approvalRequestEffectiveStatus !== "pending" && approvalRequestEffectiveStatus !== "approved"));
   const showPendingApprovalActions = !application && !goLiveReady && approvalRequestEffectiveStatus === "pending";
   const currentWizardStep = currentPermissionRequestWizardStep({
@@ -483,10 +494,12 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       labelKey: "section.permissionWizardTemplate"
     },
     {
-      complete: draft.policyGate.canApplyDirectly || approvalRequestEffectiveStatus === "approved",
-      detail: draft.policyGate.canApplyDirectly
-        ? t("status.directApplyAllowed")
-        : approvalRequestEffectiveStatus ? permissionApprovalStatusLabel(approvalRequestEffectiveStatus, t) : t("status.approvalNotRequested"),
+      complete: directApplyEligible || approvalRequestEffectiveStatus === "approved",
+      detail: zeroAllowedCapabilities
+        ? t("status.noAllowedCapabilities")
+        : directApplyEligible
+          ? t("status.directApplyAllowed")
+          : approvalRequestEffectiveStatus ? permissionApprovalStatusLabel(approvalRequestEffectiveStatus, t) : t("status.approvalNotRequested"),
       key: "approval",
       labelKey: "section.permissionWizardApproval"
     },
@@ -513,9 +526,11 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       return `${draft.allowedCapabilities.length} ${t("detail.allowed")} / ${draft.blockedCapabilities.length} ${t("detail.denied")}`;
     }
     if (step.key === "approval") {
-      return draft.policyGate.canApplyDirectly
-        ? t("productionConsole.approvalNotRequired")
-        : approvalRequestEffectiveStatus ? permissionApprovalStatusLabel(approvalRequestEffectiveStatus, t) : t("status.approvalNotRequested");
+      return zeroAllowedCapabilities
+        ? t("status.noAllowedCapabilities")
+        : directApplyEligible
+          ? t("productionConsole.approvalNotRequired")
+          : approvalRequestEffectiveStatus ? permissionApprovalStatusLabel(approvalRequestEffectiveStatus, t) : t("status.approvalNotRequested");
     }
     if (step.key === "application") {
       return application ? t("status.stepComplete") : t("status.stepMissing");
@@ -542,7 +557,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
   const fallbackProcessSteps = permissionRequestProcessStepStatuses(flowSteps, currentWizardStep);
   const processSteps = workbenchPreview?.summary.steps.map((step) => {
     const detailCode = permissionWorkbenchStepDisplayDetailCode(step, {
-      approvalRequired: !draft.policyGate.canApplyDirectly,
+      approvalRequired: !zeroAllowedCapabilities && !directApplyEligible,
       approvalStatus: approvalDisplayStatus,
       applicationReady: Boolean(application),
       goLiveReady,
@@ -554,7 +569,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
       key: step.key,
       labelKey: permissionWorkbenchStepLabelKey(step.key),
       status: permissionWorkbenchStepDisplayStatus(step, {
-        approvalComplete: approvalDisplayStatus === "approved" || draft.policyGate.canApplyDirectly,
+        approvalComplete: approvalDisplayStatus === "approved" || directApplyEligible,
         applicationReady: Boolean(application),
         goLiveReady,
         runtimeValidationReady

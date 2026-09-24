@@ -9378,6 +9378,31 @@ func TestAccessDecisionExplain(t *testing.T) {
 	}
 }
 
+func TestAccessDecisionExplainRequiresSubject(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-east", WorkspaceID: "ws-sales", Name: "Sales Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "CRM MCP", "tenant-root", "ws-sales", "mcp", domain.AgentStatusActive, nil)
+	search := createDirectCapabilityWithAction(t, repo, target.ID, "search_customer", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+
+	// A subjectless query can never match subject-scoped assignments, so it must be
+	// rejected up front instead of returning a confident-looking deny.
+	path := "/api/v1/access-decisions:explain?tenantId=tenant-east&workspaceId=ws-sales&callerInstanceId=" + caller.ID + "&targetId=" + target.ID + "&capabilityId=" + search.ID
+	resp := request(t, router, http.MethodGet, path, nil, "")
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("subjectless explain should fail validation, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), "subjectId") {
+		t.Fatalf("validation error should name the missing subjectId, body=%s", resp.Body.String())
+	}
+}
+
 func TestCapabilityAssignmentDataScopesMustNarrowHierarchy(t *testing.T) {
 	repo := store.NewMemory()
 	router := newRouterWithRepo(repo)

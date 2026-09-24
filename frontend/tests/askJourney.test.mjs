@@ -10,10 +10,12 @@ import {
   accessNextActionLabelByCode,
   askAccessScopeOptions,
   askAccessTargetVisibleToScope,
+  askSubjectExample,
   buildExplainRequest,
   buildPermissionChangeHandoff,
   canStartPermissionChangeForAdmin,
   decisionRecordRows,
+  explainMissingOnlySubject,
   permissionChangeHandoffDraftInput,
   resolveAskAccessSelection
 } from "../src/askJourney.ts";
@@ -104,7 +106,7 @@ test("buildExplainRequest validates and normalizes required access query fields"
     buildExplainRequest({ tenantId: "tenant-root", workspaceId: " ", callerInstanceId: "", targetId: "agt-ticket-mcp" }),
     {
       complete: false,
-      missingFields: ["workspaceId", "callerInstanceId", "capabilityId"],
+      missingFields: ["workspaceId", "callerInstanceId", "capabilityId", "subjectId"],
       request: null
     }
   );
@@ -131,6 +133,39 @@ test("buildExplainRequest validates and normalizes required access query fields"
       }
     }
   );
+});
+
+test("buildExplainRequest requires a concrete access subject before completing", () => {
+  const build = buildExplainRequest({
+    capabilityId: "cap-search",
+    callerInstanceId: "agt-support",
+    subjectId: "  ",
+    targetId: "agt-ticket-mcp",
+    tenantId: "tenant-root",
+    workspaceId: "ws-support"
+  });
+
+  assert.equal(build.complete, false);
+  assert.deepEqual(build.missingFields, ["subjectId"]);
+  assert.equal(build.request, null);
+  assert.equal(explainMissingOnlySubject(build), true);
+  assert.equal(explainMissingOnlySubject(buildExplainRequest({})), false);
+});
+
+test("askSubjectExample derives a subject sample from the caller's enabled assignments", () => {
+  const consoleData = {
+    instanceAssignments: [
+      { callerInstanceId: "agt-other", status: "enabled", subjectSelector: "user:other-*" },
+      { callerInstanceId: "agt-support", status: "disabled", subjectSelector: "user:disabled-*" },
+      { callerInstanceId: "agt-support", status: "enabled", subjectSelector: "user:support-*" },
+      { callerInstanceId: "agt-support", status: "enabled", subjectSelector: "" }
+    ]
+  };
+
+  assert.equal(askSubjectExample(consoleData, { callerInstanceId: "agt-support" }), "user:support-example");
+  assert.equal(askSubjectExample(consoleData, { callerInstanceId: "agt-unknown" }), "");
+  assert.equal(askSubjectExample(null, { callerInstanceId: "agt-support" }), "");
+  assert.equal(askSubjectExample(consoleData, {}), "");
 });
 
 test("decisionRecordRows marks the first denied record layer as the broken ring", () => {

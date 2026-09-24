@@ -118,6 +118,16 @@ test("ask access copy is bilingual", () => {
   }
 });
 
+test("the access subject is required before a decision can be evaluated", () => {
+  assert.match(askJourney, /const requiredExplainFields[\s\S]*?"subjectId"[\s\S]*?\];/);
+  assert.match(view, /explainMissingOnlySubject\(requestBuild\)/);
+  assert.match(view, /className="ask-subject-required-hint"/);
+  assert.match(view, /t\("ask\.subjectRequiredHint"\)/);
+  assert.match(hook, /askSubjectExample\(consoleData, base\)/);
+  assert.match(hook, /message\.accessDecisionExplainMissingSubject/);
+  assert.match(styles, /\.ask-subject-field \.ask-subject-required-hint\s*\{/);
+});
+
 test("ask access view keeps the primary path answer-first and business-readable", () => {
   assert.match(view, /className="ask-workspace"/);
   assert.match(view, /className="ask-context-column"/);

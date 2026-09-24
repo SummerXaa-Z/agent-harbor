@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchAccessDecisionExplanation } from "../api";
 import {
+  askSubjectExample,
   buildExplainRequest,
   buildPermissionChangeHandoff,
   canStartPermissionChangeForAdmin,
   decisionRecordRows,
+  explainMissingOnlySubject,
   resolveAskAccessSelection,
   type AskAccessSelection
 } from "../askJourney";
@@ -76,10 +78,10 @@ export function useAskAccessController({
     [adminRole, consoleData, requestBuild.request, result]
   );
   const recordRows = useMemo(() => result ? decisionRecordRows(result) : [], [result]);
-  const exampleSelection = useMemo(
-    () => consoleData ? resolveAskAccessSelection({}, consoleData) : {},
-    [consoleData]
-  );
+  const exampleSelection = useMemo(() => {
+    const base = consoleData ? resolveAskAccessSelection({}, consoleData) : {};
+    return { ...base, subjectId: base.subjectId || askSubjectExample(consoleData, base) };
+  }, [consoleData]);
   const exampleAvailable = buildExplainRequest(exampleSelection).complete;
 
   useEffect(() => {
@@ -119,7 +121,11 @@ export function useAskAccessController({
     const nextSelection = selectionOverride ?? effectiveSelection;
     const build = buildExplainRequest(nextSelection);
     if (!build.complete || !build.request) {
-      setMessage({ key: "message.accessDecisionExplainMissingFields" });
+      setMessage({
+        key: explainMissingOnlySubject(build)
+          ? "message.accessDecisionExplainMissingSubject"
+          : "message.accessDecisionExplainMissingFields"
+      });
       return;
     }
     const request = build.request;

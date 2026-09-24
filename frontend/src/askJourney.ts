@@ -1,3 +1,4 @@
+import { subjectIdExampleFromSelector } from "./permissionPackages.ts";
 import type { PermissionPackageDraftInput, PermissionPackageTemplate } from "./permissionPackages";
 import type { Translator } from "./consolePresenters";
 import type {
@@ -68,7 +69,8 @@ const requiredExplainFields: Array<keyof AccessDecisionExplainRequest> = [
   "workspaceId",
   "callerInstanceId",
   "targetId",
-  "capabilityId"
+  "capabilityId",
+  "subjectId"
 ];
 
 export function buildExplainRequest(selection: AskAccessSelection): ExplainRequestBuildResult {
@@ -95,12 +97,29 @@ export function buildExplainRequest(selection: AskAccessSelection): ExplainReque
     request: {
       capabilityId: normalized.capabilityId,
       callerInstanceId: normalized.callerInstanceId,
+      subjectId: normalized.subjectId,
       targetId: normalized.targetId,
       tenantId: normalized.tenantId,
-      workspaceId: normalized.workspaceId,
-      ...(normalized.subjectId ? { subjectId: normalized.subjectId } : {})
+      workspaceId: normalized.workspaceId
     }
   };
+}
+
+export function explainMissingOnlySubject(build: ExplainRequestBuildResult): boolean {
+  return build.missingFields.length === 1 && build.missingFields[0] === "subjectId";
+}
+
+export function askSubjectExample(
+  consoleData: Pick<ConsoleData, "instanceAssignments"> | null,
+  selection: Pick<AskAccessSelection, "callerInstanceId">
+): string {
+  const callerInstanceId = normalizeOptional(selection.callerInstanceId);
+  if (!consoleData || !callerInstanceId) return "";
+  const selectors = consoleData.instanceAssignments
+    .filter((assignment) => assignment.callerInstanceId === callerInstanceId && assignment.status === "enabled")
+    .map((assignment) => normalizeOptional(assignment.subjectSelector ?? ""))
+    .filter(Boolean);
+  return subjectIdExampleFromSelector(selectors[0]) ?? "";
 }
 
 export const implicitDefaultTenantId = "default";

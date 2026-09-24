@@ -4531,6 +4531,9 @@ func TestProxyUpstreamDNSFailureReturnsDNSError(t *testing.T) {
 	if env.Error != "UPSTREAM_DNS_ERROR" {
 		t.Fatalf("expected UPSTREAM_DNS_ERROR, got %#v", env)
 	}
+	if !strings.Contains(env.Message, "nonexistent.invalid") || !strings.Contains(env.Message, "no such host") {
+		t.Fatalf("upstream error message should carry the underlying cause, got %q", env.Message)
+	}
 	if got := resp.Header().Get("X-AgentHarbor-Upstream-Attempts"); got != "1" {
 		t.Fatalf("expected attempts header 1, got %q", got)
 	}

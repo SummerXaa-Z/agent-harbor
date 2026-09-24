@@ -7,6 +7,16 @@ import {
   mergeCapabilityGrantChainIntoConsoleData,
   refreshAfterCapabilityGrantMutation
 } from "../src/capabilityGrantRefresh.ts";
+import { localizedUpstreamErrorMessage } from "../src/localizedMessages.ts";
+import { createTranslator } from "../src/i18n.ts";
+
+class UpstreamApiError extends Error {
+  code;
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+  }
+}
 
 const hook = readFileSync(new URL("../src/hooks/useCapabilityGovernanceController.ts", import.meta.url), "utf8");
 const i18n = readFileSync(new URL("../src/i18n.ts", import.meta.url), "utf8");
@@ -122,4 +132,40 @@ test("capability grant creation separates write success from follow-up refresh f
 test("capability grant refresh failure message is bilingual", () => {
   assert.match(i18n, /"message\.grantChainCreatedRefreshFailed": "Grant chain created, but the grant list could not be refreshed\. Refresh before continuing\."/);
   assert.match(i18n, /"message\.grantChainCreatedRefreshFailed": "授权链已创建，但授权清单未能刷新。继续前请先刷新。"/);
+});
+
+test("capability refresh failures surface the upstream classification and cause", () => {
+  assert.match(hook, /setMessage\(localizedUpstreamErrorMessageState\(error, "error\.refreshCapabilities"\)\)/);
+  assert.doesNotMatch(hook, /setMessage\(localizedErrorMessageState\(error, "error\.refreshCapabilities"\)\)/);
+});
+
+test("upstream error message composes localized classification plus technical cause", () => {
+  const error = new UpstreamApiError(
+    "UPSTREAM_CONNECT_ERROR",
+    "upstream connection failed: dial tcp 127.0.0.1:9999: connect: connection refused"
+  );
+  const zh = createTranslator("zh-CN");
+  const en = createTranslator("en");
+
+  assert.equal(
+    localizedUpstreamErrorMessage(zh, "zh-CN", error, "error.refreshCapabilities"),
+    "无法刷新能力。上游连接失败（upstream connection failed: dial tcp 127.0.0.1:9999: connect: connection refused）"
+  );
+  assert.equal(
+    localizedUpstreamErrorMessage(en, "en", error, "error.refreshCapabilities"),
+    error.message
+  );
+  assert.equal(
+    localizedUpstreamErrorMessage(zh, "zh-CN", new Error("boom"), "error.refreshCapabilities"),
+    "无法刷新能力。"
+  );
+  assert.equal(
+    localizedUpstreamErrorMessage(
+      zh,
+      "zh-CN",
+      new UpstreamApiError("UPSTREAM_TIMEOUT", "upstream request timed out: context deadline exceeded"),
+      "error.refreshCapabilities"
+    ),
+    "无法刷新能力。上游请求超时（upstream request timed out: context deadline exceeded）"
+  );
 });

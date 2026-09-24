@@ -766,7 +766,7 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(workbench, /productionReadiness\?\.status === "ready"/);
   assert.match(workbench, /workbenchPreview\?\.summary\.productionReady/);
   assert.match(workbench, /productionSummary\.status === "ready"/);
-  assert.match(workbench, /const approvalEffectivelyResolved = !draft\.policyGate\.canApplyDirectly/);
+  assert.match(workbench, /const approvalEffectivelyResolved = !directApplyEligible/);
   assert.match(workbench, /approvalRequestEffectiveStatus === "approved" \|\| Boolean\(application\) \|\| goLiveReady/);
   assert.match(workbench, /const runtimeValidationReady = Boolean\(runtimeValidationResult\) \|\| goLiveReady/);
   assert.match(workbench, /const runtimeValidationText = runtimeValidationReady/);
@@ -780,7 +780,7 @@ test("permission request shows a concrete completion state with three exits", ()
   assert.match(styles, /\.approval-action-status\.is-complete\s*\{/);
   assert.match(workbench, /const approvalDisplayStatus = approvalEffectivelyResolved/);
   assert.match(workbench, /const showPendingApprovalActions = !application && !goLiveReady && approvalRequestEffectiveStatus === "pending"/);
-  assert.match(workbench, /permissionPolicyGateDetailKey\(draft\.policyGate\.canApplyDirectly, approvalDisplayStatus\)/);
+  assert.match(workbench, /permissionPolicyGateDetailKey\(directApplyEligible, approvalDisplayStatus\)/);
   assert.match(workbench, /showPolicyGateReasons && draft\.policyGate\.reasons\.length > 0/);
   assert.doesNotMatch(workbench, /<Badge tone=\{draft\.policyGate\.canApplyDirectly \? "success" : approvalRequest \? approvalStatusTone : "warning"\}>/);
   assert.match(workbench, /className="approval-completion"/);
@@ -1095,4 +1095,20 @@ test("capability governance uses business pickers instead of native select menus
   assert.match(capabilityGovernanceView, /<details className="capability-grant-advanced"/);
   assert.match(capabilityGovernanceHook, /subjectSelector: "user:support-\*"/);
   assert.doesNotMatch(app, /subjectSelector: "user:ops-\*"/);
+});
+
+test("zero-capability targets never read as direct-apply ready", () => {
+  assert.match(workbench, /const zeroAllowedCapabilities = draft\.allowedCapabilities\.length === 0/);
+  assert.match(workbench, /const directApplyEligible = draft\.policyGate\.canApplyDirectly && !zeroAllowedCapabilities/);
+  assert.match(workbench, /const canApply = draft\.readiness\.canApply && \(directApplyEligible \|\| hasApprovedRequest\)/);
+  assert.match(workbench, /\? t\("status\.noAllowedCapabilities"\)/);
+  assert.match(workbench, /\? "text\.policyGateNoCapabilitiesDetail"/);
+  assert.match(workbench, /const showCreateApprovalAction = !zeroAllowedCapabilities && !application/);
+  assert.doesNotMatch(workbench, /permissionPolicyGateDetailKey\(draft\.policyGate\.canApplyDirectly/);
+});
+
+test("the permission workbench defaults to a target with approved capabilities", () => {
+  assert.match(app, /const approvedTargetIds = new Set\(/);
+  assert.match(app, /capability\.discoveryStatus === "approved"/);
+  assert.match(app, /agent\.channelType === "mcp" && agent\.status === "active" && approvedTargetIds\.has\(agent\.id\)/);
 });

@@ -20,6 +20,7 @@ import type { Language } from "../i18n";
 import {
   localizedErrorMessageState,
   localizedMessageText,
+  localizedUpstreamErrorMessageState,
   tx,
   type LocalizedMessage
 } from "../localizedMessages";
@@ -114,7 +115,7 @@ export function useCapabilityGovernanceController({
         setMessage({ key: "message.capabilityFallback" });
         return;
       }
-      setMessage(localizedErrorMessageState(error, "error.refreshCapabilities"));
+      setMessage(localizedUpstreamErrorMessageState(error, "error.refreshCapabilities"));
     } finally {
       setActionId("");
     }

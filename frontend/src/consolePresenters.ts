@@ -27,7 +27,18 @@ export function accessTraceReasonLabel(reason: string | undefined, effect: "allo
     "capability assignment matched": t("traceReason.capabilityAssignmentMatched"),
     "workspace assignment matched": t("traceReason.workspaceAssignmentMatched"),
     "filtered tools/list by capability assignments": t("traceReason.filteredToolsListByCapabilityAssignments"),
-    "capability is not approved": t("traceReason.capabilityNotApproved")
+    "capability is not approved": t("traceReason.capabilityNotApproved"),
+    "capability is not registered for target": t("traceReason.capabilityNotRegisteredForTarget"),
+    "caller instance lookup failed": t("traceReason.callerInstanceLookupFailed"),
+    "tenant has no entitlement for capability": t("traceReason.tenantNoEntitlement"),
+    "workspace has no assignment for capability": t("traceReason.workspaceNoAssignment"),
+    "caller instance has no assignment for capability": t("traceReason.callerInstanceNoAssignment"),
+    "tenant entitlement denies capability": t("traceReason.tenantEntitlementDeniesCapability"),
+    "workspace assignment denies capability": t("traceReason.workspaceAssignmentDeniesCapability"),
+    "caller instance assignment denies capability": t("traceReason.callerInstanceAssignmentDeniesCapability"),
+    "tenant entitlement data scopes exceed capability boundary": t("traceReason.tenantScopesExceedCapability"),
+    "workspace assignment data scopes exceed tenant entitlement boundary": t("traceReason.workspaceScopesExceedTenantEntitlement"),
+    "caller instance assignment data scopes exceed workspace assignment boundary": t("traceReason.callerScopesExceedWorkspaceAssignment")
   };
 
   return reasonLabels[normalized.toLowerCase()] ?? normalized;

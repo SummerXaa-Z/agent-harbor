@@ -11,6 +11,7 @@ import type {
   PermissionPackageApprovalEffectiveStatus,
   PermissionPackageApprovalRequest,
 } from "./permissionPackages";
+import { defaultJourneyMcpEndpoint } from "./connectionDiagnostics.ts";
 
 export type AiAdminApprovalJourneyStepKey =
   | "tenantTree"
@@ -87,7 +88,7 @@ export function createAiAdminApprovalJourneyConfig(
     childTenantId: `tenant-child-${runId}`,
     grandchildTenantId: `tenant-grandchild-${runId}`,
     workspaceId: "ws-ai-admin-approval",
-    mcpEndpoint: "http://127.0.0.1:8787/mcp",
+    mcpEndpoint: defaultJourneyMcpEndpoint,
     readTool: "search_customer",
     writeTool: "update_ticket",
     deniedTool: "export_contracts",

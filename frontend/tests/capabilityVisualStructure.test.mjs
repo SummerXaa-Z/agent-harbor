@@ -64,3 +64,16 @@ test("navigation descriptions stay compact by default", () => {
 test("capability panel avoids protocol-first title copy", () => {
   assert.match(controller, /title=\{t\("panel\.mcpCapabilities"\)\}/);
 });
+
+
+test("the existing-grants panel follows the selected target scope", () => {
+  assert.match(
+    capabilityView,
+    /const targetTenantEntitlements = useMemo\(\(\) => \{[\s\S]*?tenantEntitlements\.filter\(\(entitlement\) => entitlement\.targetId === targetId\)/
+  );
+  assert.match(capabilityView, /\{targetTenantEntitlements\.length\} \{t\("table\.grants"\)\}/);
+  assert.match(capabilityView, /\{targetTenantEntitlements\.map\(\(entitlement\) => \{/);
+  assert.match(capabilityView, /\{targetTenantEntitlements\.length === 0 \? \(/);
+  assert.doesNotMatch(capabilityView, /\{tenantEntitlements\.map\(\(entitlement\) => \{/);
+  assert.doesNotMatch(capabilityView, /\{tenantEntitlements\.length\} \{t\("table\.grants"\)\}/);
+});

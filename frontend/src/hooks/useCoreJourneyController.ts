@@ -30,6 +30,7 @@ import {
   type CoreJourneyPreflightState
 } from "../coreJourneyPreflight";
 import type { Translator } from "../consolePresenters";
+import { resolveJourneyMcpEndpoint } from "../connectionDiagnostics";
 import type { Language } from "../i18n";
 import {
   localizedErrorMessage,
@@ -44,6 +45,8 @@ import {
 } from "../journeyCompletionRefresh";
 import type {
   AccessProfileFilters,
+  Agent,
+  Capability,
   ConsoleData,
   DataScope,
   ManagementScope,
@@ -65,6 +68,8 @@ const coreJourneyTargetName = "Core Journey MCP Target";
 
 interface UseCoreJourneyControllerArgs {
   adminKey: string;
+  agents: Agent[];
+  capabilities: Capability[];
   defaultAccessFilters: AccessProfileFilters;
   defaultScope: ManagementScope;
   defaultTraceFilters: TraceFilters;
@@ -82,6 +87,8 @@ interface UseCoreJourneyControllerArgs {
 
 export function useCoreJourneyController({
   adminKey,
+  agents,
+  capabilities,
   defaultAccessFilters,
   defaultScope,
   defaultTraceFilters,
@@ -107,10 +114,15 @@ export function useCoreJourneyController({
   const message = localizedMessageText(messageState, t, language);
   const preflightMessage = localizedMessageText(preflightMessageState, t, language);
 
+  // Re-probe when the endpoint the probe would actually use changes (console
+  // data arriving, a target being registered); keying the effect on the
+  // resolved endpoint keeps the message from going stale after the first run.
+  const journeyProbeEndpoint = resolveJourneyMcpEndpoint(agents, capabilities, form.mcpEndpoint);
+
   useEffect(() => {
     if (!enabled) return;
     void refreshPreflight();
-  }, [enabled]);
+  }, [enabled, journeyProbeEndpoint]);
 
   async function refreshPreflight() {
     if (!enabled) return;
@@ -123,7 +135,7 @@ export function useCoreJourneyController({
     }));
     const [apiHealth, mockMcpHealth] = await Promise.all([
       checkApiHealth(),
-      checkMockMcpHealth(mockMcpHealthUrlFromEndpoint(form.mcpEndpoint))
+      checkMockMcpHealth(mockMcpHealthUrlFromEndpoint(journeyProbeEndpoint))
     ]);
     const nextPreflight: CoreJourneyPreflightState = {
       api: apiHealth.status === "ok" ? "ok" : "error",

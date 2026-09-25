@@ -6,8 +6,10 @@ import {
   buildConnectionDiagnosticRows,
   connectionDiagnosticDetail,
   connectionDiagnosticsSummaryStatus,
+  defaultJourneyMcpEndpoint,
   managementMcpCatalogDiagnosticFromResult,
-  requiredManagementMcpToolNames
+  requiredManagementMcpToolNames,
+  resolveJourneyMcpEndpoint
 } from "../src/connectionDiagnostics.ts";
 
 const managementMcpSource = readFileSync(new URL("../../internal/httpapi/management_mcp.go", import.meta.url), "utf8");
@@ -308,4 +310,59 @@ test("management MCP catalog diagnostic flags incomplete or unknown metadata con
     "error"
   );
   assert.equal(managementMcpCatalogDiagnosticFromResult({ tools: [catalogTool] }).message, "missing metadataVersion");
+});
+
+
+function mcpAgent(id, status, endpoint) {
+  return { channelConfig: endpoint ? { endpoint } : {}, channelType: "mcp", id, status };
+}
+
+function approvedCapability(targetId) {
+  return { discoveryStatus: "approved", targetId };
+}
+
+test("journey readiness probes a registered target endpoint over the stock demo default", () => {
+  const agents = [
+    mcpAgent("dead", "active", "http://127.0.0.1:9999/mcp"),
+    { channelConfig: {}, channelType: "local", id: "caller", status: "active" }
+  ];
+  const capabilities = [approvedCapability("dead")];
+
+  assert.equal(resolveJourneyMcpEndpoint(agents, capabilities, defaultJourneyMcpEndpoint), "http://127.0.0.1:9999/mcp");
+  assert.equal(resolveJourneyMcpEndpoint([], [], defaultJourneyMcpEndpoint), defaultJourneyMcpEndpoint);
+  assert.equal(
+    resolveJourneyMcpEndpoint(agents, capabilities, "http://127.0.0.1:18787/mcp"),
+    "http://127.0.0.1:18787/mcp",
+    "an explicitly configured endpoint still wins"
+  );
+  assert.equal(
+    resolveJourneyMcpEndpoint([mcpAgent("paused", "disabled", "http://127.0.0.1:9999/mcp"), mcpAgent("live", "active", "http://127.0.0.1:18787/mcp")], [], defaultJourneyMcpEndpoint),
+    "http://127.0.0.1:18787/mcp",
+    "active targets win over disabled ones"
+  );
+});
+
+test("the readiness probe prefers the registered target with approved capabilities", () => {
+  const agents = [
+    mcpAgent("dead", "active", "http://127.0.0.1:9999/mcp"),
+    mcpAgent("healthy", "active", "http://127.0.0.1:18787/mcp")
+  ];
+  const capabilities = [approvedCapability("healthy")];
+
+  assert.equal(
+    resolveJourneyMcpEndpoint(agents, capabilities, defaultJourneyMcpEndpoint),
+    "http://127.0.0.1:18787/mcp",
+    "a dead first-registered target must not flunk the probe for the approved one"
+  );
+});
+
+test("environment checks resolve the probe endpoint from registered targets", () => {
+  const controller = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
+  const coreJourney = readFileSync(new URL("../src/hooks/useCoreJourneyController.ts", import.meta.url), "utf8");
+
+  assert.match(controller, /checkMockMcpHealth\(mockMcpHealthUrlFromEndpoint\(resolveJourneyMcpEndpoint\(agents, capabilities, config\.mcpEndpoint\)\)\)/);
+  assert.match(coreJourney, /const journeyProbeEndpoint = resolveJourneyMcpEndpoint\(agents, capabilities, form\.mcpEndpoint\)/);
+  assert.match(coreJourney, /checkMockMcpHealth\(mockMcpHealthUrlFromEndpoint\(journeyProbeEndpoint\)\)/);
+  assert.match(coreJourney, /\}, \[enabled, journeyProbeEndpoint\]\)/);
+  assert.match(controller, /enabled: consoleAccessReady && \(data !== null \|\| loadError !== ""\)/);
 });

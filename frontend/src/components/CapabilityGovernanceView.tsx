@@ -103,6 +103,12 @@ export function CapabilityGovernanceView({
     const targetId = form.targetId.trim();
     return targetId ? capabilities.filter((capability) => capability.targetId === targetId) : capabilities;
   }, [capabilities, form.targetId]);
+  // Entitlements for other targets read as approvals this target never earned,
+  // so the grant panel follows the same target scope as the capability list.
+  const targetTenantEntitlements = useMemo(() => {
+    const targetId = form.targetId.trim();
+    return targetId ? tenantEntitlements.filter((entitlement) => entitlement.targetId === targetId) : tenantEntitlements;
+  }, [form.targetId, tenantEntitlements]);
   const hasTargetCapabilities = targetCapabilities.length > 0;
   const approvedCapabilities = targetCapabilities.filter((capability) => capability.discoveryStatus === "approved");
   const firstPendingCapability = targetCapabilities.find((capability) => capability.discoveryStatus === "pending_review");
@@ -573,9 +579,9 @@ export function CapabilityGovernanceView({
         <div className="assignment-list">
           <div className="assignment-list-heading">
             <span className="section-kicker">{t("section.existingGrantChains")}</span>
-            <strong>{tenantEntitlements.length} {t("table.grants")}</strong>
+            <strong>{targetTenantEntitlements.length} {t("table.grants")}</strong>
           </div>
-          {tenantEntitlements.length === 0 ? (
+          {targetTenantEntitlements.length === 0 ? (
             <EmptyRow
               title={t("empty.grantChains.title")}
               detail={t("empty.grantChains.assignmentDetail")}
@@ -583,7 +589,7 @@ export function CapabilityGovernanceView({
               actionHash="#ai-admin"
             />
           ) : null}
-          {tenantEntitlements.map((entitlement) => {
+          {targetTenantEntitlements.map((entitlement) => {
             const capability = capabilities.find((item) => item.id === entitlement.capabilityId);
             const children = workspaceAssignments.filter((item) => item.tenantEntitlementId === entitlement.id);
             const instanceCount = children.reduce(

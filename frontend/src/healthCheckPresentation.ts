@@ -26,7 +26,10 @@ export function healthCheckFailureDetail(t: Translator, label: string, result: H
       capabilities: capabilityLabels.join(", ")
     });
   }
-  return `${label}: ${result.message}`;
+  // Technical causes stay readable for engineers while the zh label keeps the
+  // failure classified, matching the upstream-error message convention.
+  const detail = result.message.trim();
+  return detail ? `${label} (${detail})` : label;
 }
 
 function hasOnlyManagementMcpCatalogContractIssues(

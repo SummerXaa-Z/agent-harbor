@@ -638,7 +638,9 @@ test("createTranslator returns Chinese labels for AI admin permission packages",
   assert.equal(t("message.permissionApplicationHealthRequiresLiveApi"), "落地状态巡检需要实时 API。");
   assert.equal(t("message.permissionApplicationDriftRehearsalLoaded"), "漂移演练已加载。");
   assert.equal(t("message.permissionApplicationImpactRequiresLiveApi"), "影响复核需要实时 API。");
-  assert.equal(t("metric.productionReadyChecks"), "通过检查");
+  assert.equal(t("metric.productionReadyChecks"), "上线环节");
+  assert.equal(t("text.readinessChecks"), "项就绪检查");
+  assert.equal(t("text.journeySteps"), "环节");
   assert.equal(t("metric.productionBlockers"), "上线阻断");
   assert.equal(t("metric.productionWarnings"), "上线提示");
   assert.equal(t("metric.activeObjects"), "有效对象");

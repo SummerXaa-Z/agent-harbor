@@ -128,3 +128,13 @@ test("every backend management audit action, resource, and summary maps to local
     }
   }
 });
+
+test("every backend production readiness check code maps to localized copy", () => {
+  const serverSource = readFileSync(new URL("../../internal/httpapi/server.go", import.meta.url), "utf8");
+  const codes = unique([...serverSource.matchAll(/permissionPackageProductionReadinessCheckFor\("([a-z_]+)"/g)].map((m) => m[1]));
+  assert.ok(codes.length >= 13, `expected a real readiness-check inventory, found ${codes.length}`);
+  for (const code of codes) {
+    translatorResolves(`productionCheck.${code}`);
+    translatorResolves(`productionCheck.detail.${code}`);
+  }
+});

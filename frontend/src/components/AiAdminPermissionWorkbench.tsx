@@ -552,8 +552,22 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
     productionStatus: productionSummary.status,
     workbenchStatus: workbenchPreview?.summary.status
   });
-  const readinessReadyCount = workbenchPreview?.summary.readinessReadyCount ?? productionSummary.readyCount;
-  const readinessTotalCount = workbenchPreview?.summary.readinessTotalCount || productionSummary.totalCount;
+  // Three different denominators used to hide behind one 「项检查」 label: the
+  // report's readiness checks (subject-scope check included), the preview's
+  // server-side readiness checks (always without a subject), and the 5 journey
+  // steps. Prefer the readiness response the exported report and the advanced
+  // checklist are built from, and label whichever denominator is shown.
+  const readinessCountsFromResponse = productionReadiness
+    ? { ready: productionReadiness.summary.readyCount, total: productionReadiness.checks.length, labelKey: "text.readinessChecks" as const }
+    : null;
+  const readinessCountsFromPreview = workbenchPreview?.summary.readinessTotalCount
+    ? { ready: workbenchPreview.summary.readinessReadyCount, total: workbenchPreview.summary.readinessTotalCount, labelKey: "text.readinessChecks" as const }
+    : null;
+  const readinessCounts = readinessCountsFromResponse ?? readinessCountsFromPreview ?? {
+    ready: productionSummary.readyCount,
+    total: productionSummary.totalCount,
+    labelKey: "text.journeySteps" as const
+  };
   const fallbackProcessSteps = permissionRequestProcessStepStatuses(flowSteps, currentWizardStep);
   const processSteps = workbenchPreview?.summary.steps.map((step) => {
     const detailCode = permissionWorkbenchStepDisplayDetailCode(step, {
@@ -796,7 +810,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
           <article>
             <span>{t("text.permissionRequestNextAction")}</span>
             <strong>{t(journeyStatus.nextActionKey)}</strong>
-            <small>{readinessReadyCount}/{readinessTotalCount} {t("text.checks")}</small>
+            <small>{readinessCounts.ready}/{readinessCounts.total} {t(readinessCounts.labelKey)}</small>
           </article>
         </div>
       </section>
@@ -1022,7 +1036,7 @@ export function AiAdminPermissionWorkbench(props: AiAdminPermissionWorkbenchProp
             <span>{t("text.permissionRequestAdvancedSummary")}</span>
           </div>
           <Badge tone={productionConsoleStatusTone(productionSummary.status)}>
-            {productionSummary.readyCount}/{productionSummary.totalCount}
+            {t("text.journeySteps")} {productionSummary.readyCount}/{productionSummary.totalCount}
           </Badge>
         </summary>
         <div className="approval-record-grid">

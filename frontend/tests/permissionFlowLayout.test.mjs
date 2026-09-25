@@ -1123,3 +1123,21 @@ test("duplicate pending approval requests reconcile instead of dead-ending", () 
   assert.match(app, /localizedApiErrorMessageState\(error, "error\.createApprovalRequest"\)/);
   assert.doesNotMatch(app, /localizedErrorMessageState\(error, "error\.createApprovalRequest"\)/);
 });
+
+test("check-count denominators are labeled per scope (#23)", () => {
+  // The suggestion card must prefer the readiness response the exported report
+  // and the advanced checklist are built from, and the label must say which
+  // denominator is shown instead of one generic "项检查".
+  assert.match(workbench, /readinessCountsFromResponse = productionReadiness[\s\S]*?productionReadiness\.summary\.readyCount, total: productionReadiness\.checks\.length/);
+  assert.match(workbench, /readinessCountsFromPreview = workbenchPreview\?\.summary\.readinessTotalCount/);
+  assert.match(workbench, /\?\? readinessCountsFromPreview \?\?\s*\{[\s\S]*?labelKey: "text\.journeySteps" as const[\s\S]*?\};/);
+  assert.match(workbench, /\{readinessCounts\.ready\}\/\{readinessCounts\.total\} \{t\(readinessCounts\.labelKey\)\}/);
+  assert.doesNotMatch(workbench, /\{t\("text\.checks"\)\}/);
+  // The advanced-checks badge counts the 5 journey steps, so it says so.
+  assert.match(workbench, /\{t\("text\.journeySteps"\)\} \{productionSummary\.readyCount\}\/\{productionSummary\.totalCount\}/);
+  // The go-live page's fixed 4-row score is a leg count, not a readiness count.
+  assert.match(goLiveAcceptanceOverview, /metric\.productionReadyChecks[\s\S]*?\{readyCount\}\/\{totalCount\}/);
+  assert.match(i18n, /"metric\.productionReadyChecks": "上线环节"/);
+  assert.match(i18n, /"text\.readinessChecks": "项就绪检查"/);
+  assert.match(i18n, /"text\.journeySteps": "环节"/);
+});

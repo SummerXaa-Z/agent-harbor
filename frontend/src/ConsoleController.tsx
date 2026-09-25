@@ -77,6 +77,7 @@ import {
   type Language
 } from "./i18n";
 import {
+  localizedApiErrorMessageState,
   localizedErrorMessage,
   localizedErrorMessageState,
   localizedMessageText,
@@ -1661,13 +1662,63 @@ function aiAdminPermissionPackageApplyInput(): PermissionPackageApplyInput {
       setAiAdminMessage({ key: "message.permissionApprovalCreated", params: { id: request.id } });
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === "PERMISSION_PACKAGE_APPROVAL_ALREADY_PENDING") {
-        setAiAdminMessage({ key: "message.permissionApprovalAlreadyPending" });
+        await reconcileAiAdminPendingApprovalRequest();
         return;
       }
-      setAiAdminMessage(localizedErrorMessageState(error, "error.createApprovalRequest"));
+      setAiAdminMessage(localizedApiErrorMessageState(error, "error.createApprovalRequest"));
     } finally {
       approvalCreateInFlightRef.current = false;
       setAiAdminApprovalAction("");
+    }
+  }
+
+  // The server snapshot-dedups approval requests, but a draft composed in
+  // new-draft mode sets the reconciliation list aside — a duplicate create then
+  // dead-ends with a bare error. Re-fetch by scope, bind the workbench to the
+  // existing pending request, and leave new-draft mode so the approval card
+  // shows it (the preview effect reloads the applied-state panels).
+  async function reconcileAiAdminPendingApprovalRequest() {
+    try {
+      const rows = await fetchPermissionPackageApprovalRequests(
+        {
+          callerInstanceId: aiAdminForm.callerInstanceId,
+          limit: 8,
+          requestedCapabilityId: aiAdminForm.requestedCapabilityId,
+          targetId: aiAdminForm.targetId,
+          templateId: aiAdminForm.templateId,
+          tenantId: aiAdminForm.tenantId,
+          workspaceId: aiAdminForm.workspaceId
+        },
+        adminKey
+      );
+      const pendingRows = rows.filter((request) => permissionPackageApprovalEffectiveStatus(request) === "pending");
+      const existing =
+        pendingRows.find(
+          (request) =>
+            (request.subjectSelector ?? "") === (aiAdminForm.subjectSelector ?? "") &&
+            (request.requestText ?? "") === aiAdminForm.requestText &&
+            (request.region ?? "") === aiAdminForm.region
+        ) ?? pendingRows[0];
+      if (!existing) {
+        setAiAdminMessage({ key: "message.permissionApprovalAlreadyPending" });
+        return;
+      }
+      setAiAdminNewDraftMode(false);
+      upsertAiAdminApprovalRequest(existing);
+      setAiAdminSelectedApprovalRequestId(existing.id);
+      setAiAdminWorkbenchPreview(null);
+      setAiAdminApplyPreflight(null);
+      setAiAdminApplyPreflightMessage(null);
+      setAiAdminApplication(null);
+      setAiAdminApplicationHealth(null);
+      setAiAdminApplicationHealthMessage(null);
+      setAiAdminApplicationImpact(null);
+      setAiAdminApplicationImpactMessage(null);
+      setAiAdminProductionReadiness(null);
+      setAiAdminProductionReadinessMessage(null);
+      setAiAdminMessage({ key: "message.permissionApprovalAlreadyPendingReconciled", params: { id: existing.id } });
+    } catch {
+      setAiAdminMessage({ key: "message.permissionApprovalAlreadyPending" });
     }
   }
 

@@ -1112,3 +1112,14 @@ test("the permission workbench defaults to a target with approved capabilities",
   assert.match(app, /capability\.discoveryStatus === "approved"/);
   assert.match(app, /agent\.channelType === "mcp" && agent\.status === "active" && approvedTargetIds\.has\(agent\.id\)/);
 });
+
+
+test("duplicate pending approval requests reconcile instead of dead-ending", () => {
+  assert.match(app, /error\.code === "PERMISSION_PACKAGE_APPROVAL_ALREADY_PENDING"[\s\S]*?await reconcileAiAdminPendingApprovalRequest\(\)/);
+  assert.match(app, /async function reconcileAiAdminPendingApprovalRequest\(/);
+  assert.match(app, /permissionPackageApprovalEffectiveStatus\(request\) === "pending"/);
+  assert.match(app, /setAiAdminNewDraftMode\(false\);[\s\S]*?setAiAdminSelectedApprovalRequestId\(existing\.id\)/);
+  assert.match(app, /"message\.permissionApprovalAlreadyPendingReconciled", params: \{ id: existing\.id \}/);
+  assert.match(app, /localizedApiErrorMessageState\(error, "error\.createApprovalRequest"\)/);
+  assert.doesNotMatch(app, /localizedErrorMessageState\(error, "error\.createApprovalRequest"\)/);
+});

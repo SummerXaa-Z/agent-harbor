@@ -8,7 +8,7 @@ import {
   normalizeLanguage,
   resolveInitialLanguage
 } from "../src/i18n.ts";
-import { tx } from "../src/localizedMessages.ts";
+import { localizedApiErrorMessage, tx } from "../src/localizedMessages.ts";
 
 const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
 const i18nSource = readFileSync(new URL("../src/i18n.ts", import.meta.url), "utf8");
@@ -727,4 +727,30 @@ test("UI error fallbacks are localized instead of hard-coded English strings", (
   assert.equal(app.includes('"Core journey failed"'), false);
   assert.equal(app.includes('"Permission package approval journey failed"'), false);
   assert.equal(app.includes('"console data unavailable"'), false);
+});
+
+
+class ApiError extends Error {
+  code;
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+  }
+}
+
+test("api error messages keep the zh classification with code and cause in parentheses", () => {
+  const zh = createTranslator("zh-CN");
+  const en = createTranslator("en");
+  const error = new ApiError("VALIDATION_FAILED", "permission package draft is not ready to request approval");
+
+  assert.equal(
+    localizedApiErrorMessage(zh, "zh-CN", error, "error.createApprovalRequest"),
+    "无法创建审批请求。（VALIDATION_FAILED: permission package draft is not ready to request approval）"
+  );
+  assert.equal(localizedApiErrorMessage(en, "en", error, "error.createApprovalRequest"), error.message);
+  assert.equal(localizedApiErrorMessage(zh, "zh-CN", new Error("boom"), "error.createApprovalRequest"), "无法创建审批请求。");
+  assert.match(
+    createTranslator("zh-CN")("message.permissionApprovalAlreadyPendingReconciled"),
+    /已为你选中/
+  );
 });

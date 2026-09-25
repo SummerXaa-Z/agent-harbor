@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { accessTraceReasonLabel } from "../src/consolePresenters.ts";
 import { createTranslator } from "../src/i18n.ts";
 import { accessNextActionKeys } from "../src/askJourney.ts";
 
@@ -90,4 +91,40 @@ test("the ask view resolves record messages by messageKey, not sentence text", (
   assert.match(askJourney, /ask\.evidence\.\$\{row\.messageKey\}/);
   const askView = readFileSync(new URL("../src/components/AskAccessView.tsx", import.meta.url), "utf8");
   assert.match(askView, /accessNextActionLabelByCode\(result\.nextActionCodes\?\.\[index\]/);
+});
+
+
+test("every backend trace deny reason maps to localized runtime audit copy", () => {
+  const storeSources = ["../../internal/store/memory.go", "../../internal/store/postgres.go", "../../internal/httpapi/access_profile.go"]
+    .map((name) => readFileSync(new URL(name, import.meta.url), "utf8"))
+    .join("\n");
+  const reasons = unique([...storeSources.matchAll(/Reason: "([^"]+)"/g)].map((m) => m[1]));
+  assert.ok(reasons.length >= 11, `expected a real deny-reason inventory, found ${reasons.length}`);
+  for (const reason of reasons) {
+    for (const language of ["en", "zh-CN"]) {
+      const t = createTranslator(language);
+      const label = accessTraceReasonLabel(reason, "deny", t);
+      assert.notEqual(label, reason, `${reason} is not localized in ${language}`);
+    }
+  }
+});
+
+test("every backend management audit action, resource, and summary maps to localized copy", () => {
+  const serverSource = readFileSync(new URL("../../internal/httpapi/server.go", import.meta.url), "utf8");
+  const literalPairs = [
+    ...serverSource.matchAll(/"([a-z_]+\.[a-z_]+)", "([a-z_]+)", [^,]+, "([^"]+)"/g)
+  ].map((m) => ({ action: m[1], resource: m[2], summary: m[3] }));
+  // The approval resolution handler writes its action/summary through variables.
+  const variablePairs = [
+    { action: "permission_package.approval_approved", resource: "permission_package_approval_request", summary: "Permission package approval approved" },
+    { action: "permission_package.approval_rejected", resource: "permission_package_approval_request", summary: "Permission package approval rejected" }
+  ];
+  const pairs = [...literalPairs, ...variablePairs];
+  assert.ok(pairs.length >= 20, `expected a real audit-event inventory, found ${pairs.length}`);
+  for (const pair of pairs) {
+    const summaryKey = pair.summary.trim().replaceAll(" ", "_").toLowerCase();
+    for (const base of [`auditAction.${pair.action}`, `auditResource.${pair.resource}`, `auditSummary.${summaryKey}`]) {
+      translatorResolves(base);
+    }
+  }
 });

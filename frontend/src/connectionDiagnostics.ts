@@ -2,7 +2,7 @@ import type { HealthCheckResult } from "./api";
 import type { Translator } from "./consolePresenters";
 import { systemCapabilityLabelKeys } from "./systemCapabilityLabels.ts";
 import { isManagementMcpToolCatalogContractIssue } from "./systemInfoContract.ts";
-import type { ConsoleSession, JsonObject, JsonValue } from "./types";
+import type { Agent, Capability, ConsoleSession, JsonObject, JsonValue } from "./types";
 
 export type ConnectionDiagnosticKey = "session" | "api" | "dataSource" | "mcp" | "mcpCatalog";
 export type ConnectionDiagnosticStatus = "ok" | "warning" | "error";
@@ -104,6 +104,41 @@ export function buildConnectionDiagnosticRows(input: ConnectionDiagnosticInput):
     mcpDiagnosticRow(input.mcpHealth),
     mcpCatalogDiagnosticRow(input.mcpCatalog)
   ];
+}
+
+export const defaultJourneyMcpEndpoint = "http://127.0.0.1:8787/mcp";
+
+function agentMcpEndpoint(agent: Agent): string {
+  const endpoint = (agent.channelConfig as { endpoint?: string } | undefined)?.endpoint;
+  return typeof endpoint === "string" ? endpoint.trim() : "";
+}
+
+// Journey forms default their MCP endpoint to the stock demo port, but the
+// environment actually runs whatever endpoints were registered as targets.
+// Readiness probes must follow the registered endpoints, otherwise they
+// condemn a healthy stack just because the form was never edited. Among
+// registered targets the probe prefers the one carrying approved capabilities
+// — the same target the permission workbench defaults to — so one dead
+// experimental registration cannot flunk the check for a healthy stack.
+export function resolveJourneyMcpEndpoint(
+  agents: Agent[],
+  capabilities: Capability[],
+  configuredEndpoint: string
+): string {
+  const configured = configuredEndpoint.trim();
+  const approvedTargetIds = new Set(
+    capabilities
+      .filter((capability) => capability.discoveryStatus === "approved")
+      .map((capability) => capability.targetId)
+  );
+  const registeredAgent =
+    agents.find((agent) => agent.channelType === "mcp" && agent.status === "active" && approvedTargetIds.has(agent.id) && agentMcpEndpoint(agent)) ??
+    agents.find((agent) => agent.channelType === "mcp" && approvedTargetIds.has(agent.id) && agentMcpEndpoint(agent)) ??
+    agents.find((agent) => agent.channelType === "mcp" && agent.status === "active" && agentMcpEndpoint(agent)) ??
+    agents.find((agent) => agent.channelType === "mcp" && agentMcpEndpoint(agent));
+  const registered = registeredAgent ? agentMcpEndpoint(registeredAgent) : "";
+  if (configured && configured !== defaultJourneyMcpEndpoint) return configured;
+  return registered || configured;
 }
 
 export function connectionDiagnosticsSummaryStatus(rows: ConnectionDiagnosticRow[]): ConnectionDiagnosticStatus {

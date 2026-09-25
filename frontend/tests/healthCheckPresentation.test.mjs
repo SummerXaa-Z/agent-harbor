@@ -54,3 +54,16 @@ test("health check presentation hides unknown raw API contract issue keys", () =
   assert.equal(detail, "API compatibility contract is incompatible.");
   assert.doesNotMatch(detail, /futureContract/);
 });
+
+
+test("generic health failures keep the zh label classified with the technical cause in parentheses", () => {
+  assert.equal(
+    healthCheckFailureDetail(t, "MCP tool service", { status: "error", message: "Failed to fetch" }),
+    "MCP tool service (Failed to fetch)"
+  );
+  assert.equal(
+    healthCheckFailureDetail(t, "API", { status: "error", message: "HTTP 503" }),
+    "API (HTTP 503)"
+  );
+  assert.equal(healthCheckFailureDetail(t, "API", { status: "error", message: "  " }), "API");
+});

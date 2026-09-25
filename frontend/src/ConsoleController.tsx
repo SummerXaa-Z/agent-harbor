@@ -57,7 +57,7 @@ import {
 import {
   runtimeRecordMetric
 } from "./consoleMetrics";
-import { connectionDiagnosticDetail } from "./connectionDiagnostics";
+import { connectionDiagnosticDetail, resolveJourneyMcpEndpoint } from "./connectionDiagnostics";
 import {
   capabilityDisplayName,
   formatConsoleTime,
@@ -816,10 +816,14 @@ export function ConsoleController() {
   }, [handoffContexts.permissionChange]);
   const coreJourney = useCoreJourneyController({
     adminKey,
+    agents: data?.agents ?? [],
+    capabilities: data?.capabilities ?? [],
+    // Waiting for the first load attempt keeps the auto preflight from probing
+    // the stock demo port before registered target endpoints are known.
+    enabled: consoleAccessReady && (data !== null || loadError !== ""),
     defaultAccessFilters: defaultAccessProfileFilters,
     defaultScope: defaultManagementScope,
     defaultTraceFilters,
-    enabled: consoleAccessReady,
     language,
     setAccessFilters: accessProfileController.updateFilters,
     setAccessProfile: accessProfileController.setProfile,
@@ -1349,7 +1353,7 @@ export function ConsoleController() {
   async function checkAiAdminApprovalReadiness(config: AiAdminApprovalJourneyConfig) {
     const [apiHealth, mockMcpHealth, subjectHeaderHealth] = await Promise.all([
       checkApiHealth(),
-      checkMockMcpHealth(mockMcpHealthUrlFromEndpoint(config.mcpEndpoint)),
+      checkMockMcpHealth(mockMcpHealthUrlFromEndpoint(resolveJourneyMcpEndpoint(agents, capabilities, config.mcpEndpoint))),
       checkSubjectHeaderCors()
     ]);
     const nextReadiness: AiAdminApprovalReadinessState = {

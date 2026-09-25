@@ -6,6 +6,7 @@ import type {
   TenantEntitlement,
   TraceEvent,
 } from "./types";
+import { defaultJourneyMcpEndpoint } from "./connectionDiagnostics.ts";
 
 export type CoreJourneyStepKey =
   | "tenantTree"
@@ -54,7 +55,7 @@ export interface CoreJourneyEvaluation {
 export const defaultCoreJourneyForm: CoreJourneyForm = {
   allowedTool: "search_customer",
   deniedTool: "export_contracts",
-  mcpEndpoint: "http://127.0.0.1:8787/mcp",
+  mcpEndpoint: defaultJourneyMcpEndpoint,
   workspaceId: "ws-core-journey",
 };
 

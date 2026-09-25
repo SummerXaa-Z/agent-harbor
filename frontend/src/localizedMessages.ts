@@ -62,6 +62,27 @@ export function localizedUpstreamErrorMessage(t: Translator, language: Language,
     : `${t(fallbackKey)}${t(key)}`;
 }
 
+export function localizedApiErrorMessageState(error: unknown, fallbackKey: string): LocalizedMessage {
+  return {
+    render: (t, language) => localizedApiErrorMessage(t, language, error, fallbackKey)
+  };
+}
+
+// API errors without a dedicated handler still carry a machine code and a
+// server sentence; zh keeps the localized classification and defers the raw
+// cause to parentheses instead of dropping it entirely. Code-less errors keep
+// the plain fallback, matching the upstream-error convention.
+export function localizedApiErrorMessage(t: Translator, language: Language, error: unknown, fallbackKey: string) {
+  const fallback = localizedErrorMessage(t, language, error, fallbackKey);
+  if (!(error instanceof Error) || language === "en") return fallback;
+  const code = typeof (error as { code?: unknown }).code === "string"
+    ? (error as { code?: unknown }).code as string
+    : "";
+  if (!code) return fallback;
+  const detail = error.message.trim();
+  return detail ? `${t(fallbackKey)}\uff08${code}: ${detail}\uff09` : `${t(fallbackKey)}\uff08${code}\uff09`;
+}
+
 export function tx(t: Translator, key: string, values: Record<string, string | number>) {
   return Object.entries(values).reduce(
     (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),

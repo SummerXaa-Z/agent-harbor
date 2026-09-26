@@ -93,6 +93,8 @@ var systemCapabilities = []string{
 	"permission_package_access_handoff_tokens_v1",
 	"permission_package_consumed_approval_recovery",
 	"management_mcp_tools_metadata_v4",
+	"metrics_daily_v1",
+	"target_probe_v1",
 }
 
 type proxyRetryPolicy struct {
@@ -255,6 +257,7 @@ func (s *Server) Router() http.Handler {
 			r.Patch("/route-policies/{id}", s.updateRoutePolicy)
 			r.Delete("/route-policies/{id}", s.disableRoutePolicy)
 			r.Post("/targets/{targetId}/capabilities:refresh", s.refreshTargetCapabilities)
+			r.Post("/targets/{targetId}:probe", s.probeTarget)
 			r.Get("/capabilities", s.listCapabilities)
 			r.Patch("/capabilities/{id}", s.updateCapability)
 			r.Get("/permission-packages/templates", s.listPermissionPackageTemplates)
@@ -287,6 +290,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/audit/events", s.listAuditEvents)
 			r.Get("/audit/traces", s.listTraces)
 			r.Get("/metrics/runtime", s.runtimeMetrics)
+			r.Get("/metrics/daily", s.dailyMetrics)
 		})
 		r.Group(func(r chi.Router) {
 			r.Use(sensitiveResponseHeaders)
@@ -6549,6 +6553,16 @@ func (s *Server) listTraces(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.BadRequest("VALIDATION_FAILED", "decision must be allowed or denied"))
 		return
 	}
+	filter.Since, filter.Until, err = timeWindowFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	filter.Limit, err = optionalTraceLimitFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	rows, err := s.repo.ListTraces(r.Context(), filter)
 	if err != nil {
 		writeError(w, err)
@@ -6575,6 +6589,11 @@ func (s *Server) listAuditEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filter.Limit = limit
+	filter.Since, filter.Until, err = timeWindowFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	rows, err := s.repo.ListAuditEvents(r.Context(), filter)
 	if err != nil {
 		writeError(w, err)
@@ -6828,6 +6847,44 @@ func (s *Server) requirePermissionPackageApprovalRequestResourceScope(r *http.Re
 		}
 	}
 	return nil
+}
+
+// optionalTraceLimitFromRequest keeps trace listing unbounded by default for
+// existing callers; an explicit limit returns the newest traces.
+func optionalTraceLimitFromRequest(r *http.Request) (int, error) {
+	if strings.TrimSpace(r.URL.Query().Get("limit")) == "" {
+		return 0, nil
+	}
+	return auditLimitFromRequest(r)
+}
+
+// timeWindowFromRequest parses the optional RFC3339 since (inclusive) and
+// until (exclusive) bounds shared by audit event and trace listing.
+func timeWindowFromRequest(r *http.Request) (time.Time, time.Time, error) {
+	since, err := rfc3339QueryParam(r, "since")
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	until, err := rfc3339QueryParam(r, "until")
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	if !since.IsZero() && !until.IsZero() && !since.Before(until) {
+		return time.Time{}, time.Time{}, domain.BadRequest("VALIDATION_FAILED", "since must be before until")
+	}
+	return since, until, nil
+}
+
+func rfc3339QueryParam(r *http.Request, name string) (time.Time, error) {
+	raw := strings.TrimSpace(r.URL.Query().Get(name))
+	if raw == "" {
+		return time.Time{}, nil
+	}
+	value, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return time.Time{}, domain.BadRequest("VALIDATION_FAILED", name+" must be an RFC3339 timestamp")
+	}
+	return value.UTC(), nil
 }
 
 func auditLimitFromRequest(r *http.Request) (int, error) {
@@ -7512,6 +7569,41 @@ func managementActor(r *http.Request) string {
 	return developmentAdminActor
 }
 
+var errMCPToolsListRequestPrepare = errors.New("mcp tools/list request could not be prepared")
+
+func mcpTargetEndpoint(target domain.Agent) string {
+	endpoint, _ := target.ChannelConfig["endpoint"].(string)
+	return strings.TrimSpace(endpoint)
+}
+
+// newMCPToolsListRequest builds the tools/list call shared by capability
+// discovery and the read-only target probe, so a probe always exercises the
+// exact headers and credentials a capability refresh would send.
+func newMCPToolsListRequest(ctx context.Context, target domain.Agent, endpoint string, requestID string) (*http.Request, error) {
+	body, err := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      requestID,
+		"method":  "tools/list",
+		"params":  map[string]any{},
+	})
+	if err != nil {
+		return nil, errMCPToolsListRequestPrepare
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, errMCPToolsListRequestPrepare
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if err := copyConfiguredHeaders(req.Header, target.ChannelConfig); err != nil {
+		return nil, err
+	}
+	if err := copyCredentialHeaders(req.Header, target.ChannelConfig, target.Credentials); err != nil {
+		return nil, err
+	}
+	setMCPUpstreamHeaders(req.Header)
+	return req, nil
+}
+
 type mcpToolsListResponse struct {
 	Result struct {
 		Tools []mcpToolDescription `json:"tools"`
@@ -7527,20 +7619,9 @@ type mcpToolDescription struct {
 }
 
 func (s *Server) discoverMCPCapabilities(ctx context.Context, target domain.Agent) ([]domain.Capability, error) {
-	endpoint, ok := target.ChannelConfig["endpoint"].(string)
-	endpoint = strings.TrimSpace(endpoint)
-	if !ok || endpoint == "" {
+	endpoint := mcpTargetEndpoint(target)
+	if endpoint == "" {
 		return nil, domain.BadRequest("VALIDATION_FAILED", "mcp target requires channelConfig.endpoint for capability discovery")
-	}
-	payload := map[string]any{
-		"jsonrpc": "2.0",
-		"id":      "capability-discovery",
-		"method":  "tools/list",
-		"params":  map[string]any{},
-	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, domain.UpstreamError("capability discovery request could not be prepared")
 	}
 	timeout, err := proxyTimeoutFromConfig(target.ChannelConfig)
 	if err != nil {
@@ -7548,18 +7629,13 @@ func (s *Server) discoverMCPCapabilities(ctx context.Context, target domain.Agen
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
+	req, err := newMCPToolsListRequest(ctx, target, endpoint, "capability-discovery")
+	if errors.Is(err, errMCPToolsListRequestPrepare) {
 		return nil, domain.UpstreamError("capability discovery request could not be prepared")
 	}
-	req.Header.Set("Content-Type", "application/json")
-	if err := copyConfiguredHeaders(req.Header, target.ChannelConfig); err != nil {
+	if err != nil {
 		return nil, err
 	}
-	if err := copyCredentialHeaders(req.Header, target.ChannelConfig, target.Credentials); err != nil {
-		return nil, err
-	}
-	setMCPUpstreamHeaders(req.Header)
 	resp, err := doUpstreamRequest(req)
 	if err != nil {
 		return nil, classifyUpstreamError(ctx, err)

@@ -8,6 +8,9 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- `GET /api/v1/metrics/daily` counts gateway decisions (allowed, denied, deny rate) and audit events per local day for 1–30 days with a caller-supplied UTC offset. Counting runs server-side over the same visibility rules as the audit and trace lists, days without activity are zero-filled, and a `truncated` flag marks windows past the row cap. Advertised as `metrics_daily_v1`.
+- `POST /api/v1/targets/{targetId}:probe` checks a registered MCP target with the same `tools/list` request as a capability refresh, without writing capabilities or audit events. Reachability failures come back as results with a classified `UPSTREAM_*` code, HTTP status, tool count, and duration, and the reported endpoint drops any userinfo. Advertised as `target_probe_v1`.
+- `GET /api/v1/audit/events` and `GET /api/v1/audit/traces` accept RFC3339 `since` (inclusive) and `until` (exclusive) bounds; trace listing also accepts an optional `limit` (1–500) that keeps the newest traces.
 - `GET /api/v1/self/access-profile` gives any agent key a read-only view of its own effective boundary: caller identity, key kind and expiry, per-target capability lists evaluated with the same decision engine as the governed data plane, and for Access Handoff tokens the application binding (target, subject selector, allowed capabilities). A non-matching subject stays rejected, so a handoff token can never discover capabilities beyond its binding.
 
 ### Changed
@@ -16,6 +19,7 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Fixed
 
+- A limited audit event list now returns the newest events (still in ascending order) instead of the oldest ones, so recent-activity views no longer freeze at the first events ever written.
 - Data-plane authentication failures are now diagnosable: a token that matches a stored key but is dead reports whether it has been revoked or has expired, so developer tooling can distinguish the recovery path. Guessed tokens keep the generic invalid message.
 - Access Handoff copy artifacts now carry the concrete `subjectId` from the validated handoff query in `mcpClientConfig` and `runtimeRequestExample` headers instead of a `<subject-id-matching-selector>` placeholder, so a developer can issue their first governed request from the card alone.
 

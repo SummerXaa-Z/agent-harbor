@@ -138,12 +138,17 @@ type AgentFilter struct {
 	ManagementScope
 }
 
+// Since is inclusive and Until is exclusive; zero values leave that side of
+// the window open. A positive Limit keeps the newest rows in the window while
+// the result stays in ascending time order.
 type TraceFilter struct {
 	ManagementScope
 	RunID    string
 	Decision domain.TraceDecision
 	CallerID string
 	TargetID string
+	Since    time.Time
+	Until    time.Time
 	Limit    int
 }
 
@@ -152,6 +157,8 @@ type AuditEventFilter struct {
 	Action       string
 	ResourceType string
 	ResourceID   string
+	Since        time.Time
+	Until        time.Time
 	Limit        int
 }
 
@@ -1338,6 +1345,9 @@ func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.Tra
 		if filter.TargetID != "" && trace.TargetID != filter.TargetID {
 			continue
 		}
+		if !createdAtInWindow(trace.CreatedAt, filter.Since, filter.Until) {
+			continue
+		}
 		if !m.traceMatchesScope(trace, filter.ManagementScope, tenantIDs) {
 			continue
 		}
@@ -1377,6 +1387,9 @@ func (m *Memory) ListAuditEvents(_ context.Context, filter AuditEventFilter) ([]
 		if filter.ResourceID != "" && event.ResourceID != filter.ResourceID {
 			continue
 		}
+		if !createdAtInWindow(event.CreatedAt, filter.Since, filter.Until) {
+			continue
+		}
 		if !auditEventMatchesScope(event, filter.ManagementScope, tenantIDs) {
 			continue
 		}
@@ -1388,10 +1401,23 @@ func (m *Memory) ListAuditEvents(_ context.Context, filter AuditEventFilter) ([]
 		}
 		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
 	})
+	// Keep the newest window, matching ListTraces: a capped audit list that
+	// kept the oldest rows would freeze "recent activity" views at the first
+	// events ever written.
 	if filter.Limit > 0 && len(rows) > filter.Limit {
-		rows = rows[:filter.Limit]
+		rows = append([]domain.AuditEvent(nil), rows[len(rows)-filter.Limit:]...)
 	}
 	return rows, nil
+}
+
+func createdAtInWindow(createdAt time.Time, since time.Time, until time.Time) bool {
+	if !since.IsZero() && createdAt.Before(since) {
+		return false
+	}
+	if !until.IsZero() && !createdAt.Before(until) {
+		return false
+	}
+	return true
 }
 
 func (m *Memory) ListAdminIdentities(_ context.Context) ([]domain.AdminIdentity, error) {

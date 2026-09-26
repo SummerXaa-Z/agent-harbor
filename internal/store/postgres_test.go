@@ -1772,3 +1772,95 @@ func postgresAuditActions(events []domain.AuditEvent) []string {
 	}
 	return actions
 }
+
+func TestPostgresAuditAndTraceWindowsKeepNewestRows(t *testing.T) {
+	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set AGENT_HARBOR_TEST_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	defer pool.Close()
+	if err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	repo := store.NewPostgresWithCredentialKey(pool, []byte("0123456789abcdef0123456789abcdef"))
+	base := time.Date(2026, 9, 20, 8, 0, 0, 0, time.UTC)
+	resourceID := security.NewID("agt")
+	runID := security.NewID("run")
+	auditIDs := make([]string, 5)
+	traceIDs := make([]string, 5)
+	// Appended out of order so the result order comes from the query.
+	for _, minute := range []int{4, 0, 3, 1, 2} {
+		auditIDs[minute] = security.NewID("aud")
+		if _, err := repo.AppendAuditEvent(ctx, domain.AuditEvent{
+			ID:           auditIDs[minute],
+			TenantID:     "tenant-pg-window",
+			WorkspaceID:  "ws-pg-window",
+			Action:       "agent.updated",
+			ResourceType: "agent",
+			ResourceID:   resourceID,
+			CreatedAt:    base.Add(time.Duration(minute) * time.Minute),
+		}); err != nil {
+			t.Fatalf("append audit event %d: %v", minute, err)
+		}
+		traceIDs[minute] = security.NewID("trc")
+		if _, err := repo.AppendTrace(ctx, domain.TraceEvent{
+			ID:        traceIDs[minute],
+			RunID:     runID,
+			TargetID:  resourceID,
+			RouteType: "mcp",
+			RouteKey:  "tools/call",
+			Decision:  domain.TraceDecisionAllowed,
+			CreatedAt: base.Add(time.Duration(minute) * time.Minute),
+		}); err != nil {
+			t.Fatalf("append trace %d: %v", minute, err)
+		}
+	}
+
+	limited, err := repo.ListAuditEvents(ctx, store.AuditEventFilter{ResourceID: resourceID, Limit: 3})
+	if err != nil {
+		t.Fatalf("list limited audit events: %v", err)
+	}
+	if got := postgresAuditIDs(limited); !reflect.DeepEqual(got, auditIDs[2:]) {
+		t.Fatalf("limit should keep the newest three events ascending, got %#v want %#v", got, auditIDs[2:])
+	}
+	windowed, err := repo.ListAuditEvents(ctx, store.AuditEventFilter{
+		ResourceID: resourceID,
+		Since:      base.Add(time.Minute),
+		Until:      base.Add(3 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("list windowed audit events: %v", err)
+	}
+	if got := postgresAuditIDs(windowed); !reflect.DeepEqual(got, auditIDs[1:3]) {
+		t.Fatalf("since is inclusive and until exclusive, got %#v want %#v", got, auditIDs[1:3])
+	}
+
+	traces, err := repo.ListTraces(ctx, store.TraceFilter{RunID: runID, Since: base.Add(time.Minute), Until: base.Add(4 * time.Minute), Limit: 2})
+	if err != nil {
+		t.Fatalf("list windowed traces: %v", err)
+	}
+	if got := postgresTraceIDs(traces); !reflect.DeepEqual(got, traceIDs[2:4]) {
+		t.Fatalf("trace window should keep the newest rows ascending, got %#v want %#v", got, traceIDs[2:4])
+	}
+}
+
+func postgresAuditIDs(events []domain.AuditEvent) []string {
+	ids := make([]string, 0, len(events))
+	for _, event := range events {
+		ids = append(ids, event.ID)
+	}
+	return ids
+}
+
+func postgresTraceIDs(traces []domain.TraceEvent) []string {
+	ids := make([]string, 0, len(traces))
+	for _, trace := range traces {
+		ids = append(ids, trace.ID)
+	}
+	return ids
+}

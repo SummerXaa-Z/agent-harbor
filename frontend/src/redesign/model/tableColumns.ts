@@ -76,10 +76,11 @@ export const tableColumns = {
     { key: "actions", labelKey: "rd.col.actions", width: 9 },
   ],
   adminAdmins: [
-    { key: "member", labelKey: "rd.col.member", width: 34 },
-    { key: "role", labelKey: "rd.col.role", width: 28 },
-    { key: "scope", labelKey: "rd.col.scope", width: 22 },
-    { key: "status", labelKey: "rd.col.status", width: 16 },
+    { key: "member", labelKey: "rd.col.member", width: 28 },
+    { key: "role", labelKey: "rd.col.role", width: 22 },
+    { key: "scope", labelKey: "rd.col.scope", width: 20 },
+    { key: "status", labelKey: "rd.col.status", width: 14 },
+    { key: "actions", labelKey: "rd.col.actions", width: 16 },
   ],
 } as const satisfies Record<string, readonly TableColumn[]>;
 

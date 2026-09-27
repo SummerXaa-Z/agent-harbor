@@ -32,6 +32,10 @@ const capabilityGovernanceHook = readFileSync(
   new URL("../src/hooks/useCapabilityGovernanceController.ts", import.meta.url),
   "utf8"
 );
+const capabilityGrantChain = readFileSync(
+  new URL("../src/capabilityGrantChain.ts", import.meta.url),
+  "utf8"
+);
 
 test("permission request journey renders as one production workspace instead of a demo board", () => {
   assert.match(workbench, /export function AiAdminPermissionWorkbench\(props/);
@@ -1071,9 +1075,10 @@ test("permission request chooses access objects instead of raw subject selectors
 
 test("access profile and capability governance are split from the app shell", () => {
   assert.match(app, /import \{ TenantAccessProfileView \} from "\.\/components\/TenantAccessProfileView"/);
-  assert.match(app, /import type \{ CapabilityGrantForm \} from "\.\/components\/CapabilityGovernanceView"/);
+  assert.match(app, /import type \{ CapabilityGrantForm \} from "\.\/capabilityGrantChain"/);
   assert.match(app, /const CapabilityGovernanceView = lazy\(\(\) => import\("\.\/components\/CapabilityGovernanceView"\)/);
-  assert.match(capabilityGovernanceHook, /import type \{ CapabilityGrantForm \} from "\.\.\/components\/CapabilityGovernanceView"/);
+  assert.match(capabilityGovernanceHook, /from "\.\.\/capabilityGrantChain"/);
+  assert.match(capabilityGovernanceView, /from "\.\.\/capabilityGrantChain"/);
   assert.doesNotMatch(app, /function TenantAccessProfileView\(/);
   assert.doesNotMatch(app, /function CapabilityGovernanceView\(/);
   assert.match(accessProfileView, /export function TenantAccessProfileView/);
@@ -1093,7 +1098,7 @@ test("capability governance uses business pickers instead of native select menus
   assert.doesNotMatch(capabilityGovernanceView, /<input required value=\{form\.workspaceId\}/);
   assert.match(capabilityGovernanceView, /selectedAccessSubject\.id === customAccessSubjectOption\.id/);
   assert.match(capabilityGovernanceView, /<details className="capability-grant-advanced"/);
-  assert.match(capabilityGovernanceHook, /subjectSelector: "user:support-\*"/);
+  assert.match(capabilityGrantChain, /subjectSelector: "user:support-\*"/);
   assert.doesNotMatch(app, /subjectSelector: "user:ops-\*"/);
 });
 

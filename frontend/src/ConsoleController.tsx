@@ -181,7 +181,7 @@ import {
   currentPermissionRequestWizardStep,
   type PermissionRequestWizardStep
 } from "./permissionRequestJourney";
-import type { CapabilityGrantForm } from "./components/CapabilityGovernanceView";
+import type { CapabilityGrantForm } from "./capabilityGrantChain";
 import { ActionModalButton, Panel } from "./components/ConsolePrimitives";
 import { ProductionJourneyCheckpoint } from "./components/ProductionJourneyCheckpoint";
 import {

@@ -7,6 +7,7 @@ import {
   accessSubjectOptions,
   customAccessSubjectOption
 } from "../accessSubjects";
+import { capabilityGrantBlockerKey, type CapabilityGrantForm } from "../capabilityGrantChain";
 import {
   capabilityDisplayName,
   capabilityDiscoveryStatusLabel,
@@ -33,15 +34,6 @@ import type {
 import { tx } from "../localizedMessages";
 import { ApprovalDropdown } from "./ApprovalDropdown";
 import { Badge, EmptyRow } from "./ui";
-
-export interface CapabilityGrantForm {
-  callerInstanceId: string;
-  capabilityId: string;
-  subjectSelector: string;
-  targetId: string;
-  tenantId: string;
-  workspaceId: string;
-}
 
 export function CapabilityGovernanceView({
   actionId,
@@ -145,24 +137,9 @@ export function CapabilityGovernanceView({
     setSelectedCapabilityId(capability.id);
   }, [capabilities, handoffContext]);
   const currentTargetLabel = form.targetId ? agentNames[form.targetId] ?? form.targetId : t("form.allMcpTargets");
-  const normalizedSubjectSelector = form.subjectSelector.trim();
-  const grantFormReady = Boolean(
-    selectedCapability &&
-    form.tenantId.trim() &&
-    form.workspaceId.trim() &&
-    form.callerInstanceId.trim() &&
-    normalizedSubjectSelector &&
-    normalizedSubjectSelector !== "*"
-  );
-  const grantFormBlocker = !selectedCapability
-    ? t("message.validationCapabilityRequired")
-    : !form.tenantId.trim() || !form.workspaceId.trim()
-      ? t("message.validationTenantWorkspaceCaller")
-      : !form.callerInstanceId.trim()
-        ? t("message.capabilityGrantCallerRequired")
-        : !normalizedSubjectSelector || normalizedSubjectSelector === "*"
-          ? t("message.validationSubjectSelectorRequired")
-          : "";
+  const grantBlockerKey = capabilityGrantBlockerKey(form, selectedCapability);
+  const grantFormReady = grantBlockerKey === null;
+  const grantFormBlocker = grantBlockerKey ? t(grantBlockerKey) : "";
   const capabilityEmptyActionLabel = targetCapabilities.length > 0
     ? undefined
     : mcpTargets.length === 0

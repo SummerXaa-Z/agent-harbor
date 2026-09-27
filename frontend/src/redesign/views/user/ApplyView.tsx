@@ -17,10 +17,11 @@ import { usePermissionCatalog } from "../../hooks/usePermissionCatalog";
 import { usePermissionChangeFlow, type PermissionChangeFlow } from "../../hooks/usePermissionChangeFlow";
 import { useRedesignI18n } from "../../hooks/useRedesignI18n";
 import { accessContextFromApprovalRequest, accessContextRouteParams, type AccessContext } from "../../model/accessContext";
+import { splitBlockedCapabilities } from "../../model/capabilityGovernance";
 import { permissionChangeStepKeys, type PermissionChangeAction } from "../../model/approvalStateMachine";
 import { rankTemplates } from "../../model/templateMatch";
 import { workbenchActor } from "../../model/userWorkbench";
-import { userHash, viewLabelKey } from "../../router";
+import { adminHash, userHash, viewLabelKey } from "../../router";
 import { DataStatusBanner, DataStatusChip } from "../../shell/DataStatusBanner";
 import { Banner, Notice } from "../../ui/Banner";
 import { Button } from "../../ui/Button";
@@ -56,26 +57,31 @@ export function ApplyView({ data, onRetry, params, session }: UserViewProps) {
   const { bindApproval } = flow;
   const replaceContext = accessContext.replace;
   const [boundRequestId, setBoundRequestId] = useState("");
+  const [bindMissing, setBindMissing] = useState(false);
 
+  // Bind by id only: filtering the list by the URL's caller/target/template
+  // params missed requests whose scope differed from the current context,
+  // leaving the page stuck on "fields incomplete" instead of the approval's
+  // real state (eval round 4, journey step 7).
   useEffect(() => {
     const requestId = params.approval ?? "";
     if (!live || !requestId || boundRequestId === requestId) return;
     const controller = new AbortController();
-    fetchPermissionPackageApprovalRequests(
-      { callerInstanceId: params.caller, limit: 50, targetId: params.target, templateId: params.template },
-      "",
-      controller.signal,
-    )
+    setBindMissing(false);
+    fetchPermissionPackageApprovalRequests({ limit: 50 }, "", controller.signal)
       .then((rows) => {
         const request = rows.find((row) => row.id === requestId);
         setBoundRequestId(requestId);
-        if (!request) return;
+        if (!request) {
+          setBindMissing(true);
+          return;
+        }
         replaceContext(accessContextFromApprovalRequest(request));
         bindApproval(request);
       })
       .catch(() => undefined);
     return () => controller.abort();
-  }, [bindApproval, boundRequestId, live, params.approval, params.caller, params.target, params.template, replaceContext]);
+  }, [bindApproval, boundRequestId, live, params.approval, replaceContext]);
   const state = presentation.state;
   const locked = state === "submitted";
   const agents = useMemo(() => consoleData?.agents ?? [], [consoleData]);
@@ -220,6 +226,8 @@ export function ApplyView({ data, onRetry, params, session }: UserViewProps) {
     }
   }
 
+  const governance = preview ? splitBlockedCapabilities(preview.draft.blockedCapabilities) : { blockedByDesign: [], missingDomain: [] };
+
   const bannerDesc = (() => {
     if (state === "rejected" && approval?.reviewComment) {
       return tx(t, "rd.apply.rejectedReason", { reason: approval.reviewComment });
@@ -244,6 +252,7 @@ export function ApplyView({ data, onRetry, params, session }: UserViewProps) {
         </div>
       </div>
       <DataStatusBanner data={data} onRetry={onRetry} />
+      {bindMissing ? <Notice tone="warn">{t("rd.apply.approvalNotFound")}</Notice> : null}
       {!consoleData ? (
         <LoadingState label={t("rd.data.loading")} />
       ) : (
@@ -372,6 +381,9 @@ export function ApplyView({ data, onRetry, params, session }: UserViewProps) {
                       <p className="tpl-desc">{match.template.summary}</p>
                       <div className="tpl-meta">
                         <span>{tx(t, "rd.apply.matchCounts", { allowed: match.allowedCount, blocked: match.blockedCount })}</span>
+                        {match.missingDomainBlockedCount > 0 ? (
+                          <Chip tone="warning">{tx(t, "rd.apply.missingDomainChip", { count: match.missingDomainBlockedCount })}</Chip>
+                        ) : null}
                         {selected ? (
                           <Chip tone="info">{t("rd.apply.templateInUse")}</Chip>
                         ) : (
@@ -397,6 +409,22 @@ export function ApplyView({ data, onRetry, params, session }: UserViewProps) {
                 <LoadingState label={t("rd.apply.previewLoading")} />
               ) : preview ? (
                 <div className="stack">
+                  {governance.missingDomain.length > 0 ? (
+                    <Notice tone="warn">
+                      <div className="stack">
+                        <span>{tx(t, "rd.apply.missingDomainNotice", { count: governance.missingDomain.length })}</span>
+                        <div>
+                          <Button
+                            href={context.targetId ? adminHash("capabilities", { target: context.targetId }) : adminHash("capabilities")}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            {t("rd.apply.goGovernance")}
+                          </Button>
+                        </div>
+                      </div>
+                    </Notice>
+                  ) : null}
                   <div>
                     <div className="field-label">{tx(t, "rd.apply.allowedCaps", { count: preview.draft.allowedCapabilities.length })}</div>
                     <div className="chip-row">
@@ -412,8 +440,13 @@ export function ApplyView({ data, onRetry, params, session }: UserViewProps) {
                     <div className="field-label">{tx(t, "rd.apply.blockedCaps", { count: preview.draft.blockedCapabilities.length })}</div>
                     <div className="chip-row">
                       {preview.draft.blockedCapabilities.length === 0 ? <span className="muted small">{t("rd.common.none")}</span> : null}
-                      {preview.draft.blockedCapabilities.map((capability) => (
+                      {governance.blockedByDesign.map((capability) => (
                         <TagOutline key={capability.id}>{capability.displayName || capability.key}</TagOutline>
+                      ))}
+                      {governance.missingDomain.map((capability) => (
+                        <Chip key={capability.id} tone="warning">
+                          {capability.displayName || capability.key}
+                        </Chip>
                       ))}
                     </div>
                   </div>

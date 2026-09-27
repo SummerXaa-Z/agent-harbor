@@ -1,4 +1,4 @@
-import { Copy, FileDown, KeyRound, RefreshCw } from "lucide-react";
+import { Copy, FileDown, KeyRound, Play, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiBase, fetchPermissionPackageProductionReadiness } from "../../../api";
 import { useAccessHandoffController } from "../../../hooks/useAccessHandoffController";
@@ -8,8 +8,10 @@ import type { PermissionPackageProductionReadiness } from "../../../permissionPa
 import { useAccessContext } from "../../hooks/useAccessContext";
 import { usePermissionCatalog } from "../../hooks/usePermissionCatalog";
 import { usePermissionChangeFlow } from "../../hooks/usePermissionChangeFlow";
+import { useRuntimeValidation } from "../../hooks/useRuntimeValidation";
 import { useRedesignI18n } from "../../hooks/useRedesignI18n";
 import { accessContextComplete, readinessFilterFromContext } from "../../model/accessContext";
+import type { RuntimeValidationBlocker } from "../../model/runtimeValidation";
 import { apiErrorPresentation } from "../../model/apiErrorCategory";
 import { defaultTokenTtl, goLiveLegs, handoffShellSnippet, readinessCheckCount, tokenTtlOptions } from "../../model/goLive";
 import { maskSecret } from "../../model/secretMask";
@@ -21,6 +23,7 @@ import { Card } from "../../ui/Card";
 import { Chip, TagOutline } from "../../ui/Chip";
 import { CodeBlock } from "../../ui/CodeBlock";
 import { Field } from "../../ui/Field";
+import { KvList } from "../../ui/KvList";
 import { Modal } from "../../ui/Modal";
 import { EmptyState, LoadingState } from "../../ui/StateViews";
 import { Table } from "../../ui/Table";
@@ -62,6 +65,7 @@ export function GoLiveView({ data, onRetry, params }: UserViewProps) {
     refreshKey: String(readinessKey),
     t,
   });
+  const validation = useRuntimeValidation({ context, live, preview: flow.preview });
   const [ttl, setTtl] = useState(defaultTokenTtl(null));
   const [copyOpen, setCopyOpen] = useState(false);
   const [revokeId, setRevokeId] = useState("");
@@ -110,6 +114,13 @@ export function GoLiveView({ data, onRetry, params }: UserViewProps) {
     readiness,
   });
   const checks = readinessCheckCount(readiness, flow.preview);
+  const blockedCapabilityCount = flow.preview?.draft.blockedCapabilities.length ?? 0;
+  // The runtime-evidence leg: allowed record always required, denied record
+  // only when the draft actually blocks something (backend "not applicable").
+  const runtimePending = readiness
+    ? !(readiness.summary.hasAllowedTrace && (readiness.summary.hasDeniedTrace || blockedCapabilityCount === 0))
+    : Boolean(flow.preview && !flow.preview.summary.runtimeEvidenceReady);
+  const showValidationCard = live && complete && flow.preview !== null && (runtimePending || validation.running);
   const agents = consoleData?.agents ?? [];
   const shell = handoff.handoff
     ? handoffShellSnippet({
@@ -125,6 +136,17 @@ export function GoLiveView({ data, onRetry, params }: UserViewProps) {
     void diagnostics.run();
     void handoff.refresh();
   }
+
+  async function runValidation() {
+    if (await validation.run()) recheck();
+  }
+
+  const validationBlockerKeys: Record<RuntimeValidationBlocker, string> = {
+    requiresAllowedCapability: "message.aiAdminRuntimeValidationNoAllowedCapability",
+    requiresApplication: "message.aiAdminRuntimeValidationRequiresApplication",
+    requiresLiveApi: "message.fallbackDataModeActionBlocked",
+    requiresSubject: "rd.golive.validationRequiresSubject",
+  };
 
   async function copyConfig() {
     const raw = handoff.handoff?.copyArtifacts?.mcpClientConfig ?? "";
@@ -240,6 +262,41 @@ export function GoLiveView({ data, onRetry, params }: UserViewProps) {
               <EmptyState desc={t("rd.golive.noScopeDesc")} title={t("rd.golive.legsTitle")} />
             )}
           </Card>
+
+          {showValidationCard ? (
+            <Card sub={t("rd.golive.validationDesc")} title={t("rd.golive.validationTitle")}>
+              {validation.plan ? (
+                <div className="stack">
+                  <KvList
+                    items={[
+                      { key: "subject", label: t("rd.apply.subject"), value: <span className="mono small">{validation.plan.subjectId}</span> },
+                      { key: "allowed", label: t("rd.golive.validationAllowedTool"), value: <span className="mono small">{validation.plan.allowedCapabilityKey}</span> },
+                      {
+                        key: "blocked",
+                        label: t("rd.golive.validationBlockedTool"),
+                        value: validation.plan.blockedCapabilityKey
+                          ? <span className="mono small">{validation.plan.blockedCapabilityKey}</span>
+                          : t("rd.golive.validationNoBlocked"),
+                      },
+                    ]}
+                  />
+                  <div className="form-actions">
+                    <Button disabled={validation.running} icon={<Play aria-hidden="true" size={15} />} onClick={() => void runValidation()}>
+                      {validation.running ? t("rd.golive.validationRunning") : t("rd.golive.validationRun")}
+                    </Button>
+                  </div>
+                  <p className="hint">{t("rd.golive.validationPlanNote")}</p>
+                </div>
+              ) : (
+                <div className="stack">
+                  <Notice tone="warn">
+                    {validation.blockers.map((blocker) => t(validationBlockerKeys[blocker])).join(" ")}
+                  </Notice>
+                  <p className="hint">{t("rd.golive.validationPlanNote")}</p>
+                </div>
+              )}
+            </Card>
+          ) : null}
 
           <Card title={t("rd.golive.handoffTitle")}>
             {!handoff.handoff ? (

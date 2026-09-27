@@ -24,9 +24,10 @@ import { useRedesignI18n } from "../../hooks/useRedesignI18n";
 import { usePermissionCatalog } from "../../hooks/usePermissionCatalog";
 import { apiErrorPresentation } from "../../model/apiErrorCategory";
 import { capabilityDomainSegments, capabilityGrantRows } from "../../model/capabilityCatalog";
+import { unclassifiedCapabilities } from "../../model/capabilityGovernance";
 import { adminHash } from "../../router";
 import { DataStatusBanner, DataStatusChip } from "../../shell/DataStatusBanner";
-import { Banner } from "../../ui/Banner";
+import { Banner, Notice } from "../../ui/Banner";
 import { Button } from "../../ui/Button";
 import { Card } from "../../ui/Card";
 import { Chip, TagOutline } from "../../ui/Chip";
@@ -83,6 +84,12 @@ export function CapabilitiesView({ data, onRetry, params }: AdminViewProps) {
     [capabilities, targetId]
   );
   const segments = useMemo(() => capabilityDomainSegments(targetCapabilities), [targetCapabilities]);
+  // Approved but unclassified: template matching needs a data domain, so these
+  // stay blocked in every permission preview until governance fills one in.
+  const unclassifiedApproved = useMemo(
+    () => unclassifiedCapabilities(targetCapabilities.filter((capability) => capability.discoveryStatus === "approved")),
+    [targetCapabilities],
+  );
   const grants = useMemo(
     () =>
       capabilityGrantRows({
@@ -268,6 +275,11 @@ export function CapabilitiesView({ data, onRetry, params }: AdminViewProps) {
       </div>
       <DataStatusBanner data={data} onRetry={onRetry} />
       <div className="stack">
+        {unclassifiedApproved.length > 0 ? (
+          <Notice tone="warn">
+            {tx(t, "rd.cap.unclassifiedBanner", { count: unclassifiedApproved.length })}
+          </Notice>
+        ) : null}
         <Card>
           <div className="form-grid form-grid-4">
             <Field htmlFor="cap-target" label={t("rd.cap.target")}>

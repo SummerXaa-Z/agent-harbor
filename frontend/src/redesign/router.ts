@@ -47,7 +47,7 @@ const viewParams: Record<RedesignView, readonly string[]> = {
   approvals: ["id", "status"],
   traces: ["range", "type", "result"],
   tenants: ["tenant", "tab"],
-  registry: ["agent"],
+  registry: ["agent", "tenant", "workspace"],
   capabilities: ["target"],
   policies: ["template"],
   routes: [],

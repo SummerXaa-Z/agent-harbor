@@ -5,6 +5,7 @@ import test from "node:test";
 import { translationKeys } from "../src/i18n.ts";
 
 const capabilityView = readFileSync(new URL("../src/components/CapabilityGovernanceView.tsx", import.meta.url), "utf8");
+const grantChain = readFileSync(new URL("../src/capabilityGrantChain.ts", import.meta.url), "utf8");
 const controller = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
@@ -22,7 +23,8 @@ test("capability governance page prioritizes catalog and opens grant creation on
   assert.match(capabilityView, /disabled=\{!grantFormReady \|\| actionId === `grant:\$\{form\.capabilityId\}`\}/);
   assert.match(capabilityView, /t\("empty\.capabilities\.actionRefresh"\)/);
   assert.match(capabilityView, /t\("action\.reviewCapabilityApproval"\)/);
-  assert.match(capabilityView, /message\.capabilityGrantCallerRequired/);
+  assert.match(grantChain, /message\.capabilityGrantCallerRequired/);
+  assert.match(capabilityView, /capabilityGrantBlockerKey/);
   assert.match(capabilityView, /const \[grantPanelOpen, setGrantPanelOpen\] = useState\(false\)/);
   assert.match(capabilityView, /className="capability-grant-sheet"/);
   assert.match(capabilityView, /className="assignment-list-heading"/);

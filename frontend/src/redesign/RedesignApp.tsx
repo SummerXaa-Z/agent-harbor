@@ -13,6 +13,8 @@ import { LoadingState } from "./ui/StateViews";
 import { ToastProvider, useToast } from "./ui/Toast";
 import { EntryPage } from "./views/EntryPage";
 import { PlaceholderView } from "./views/PlaceholderView";
+import { AdminView } from "./views/admin/AdminView";
+import type { AdminViewProps } from "./views/admin/adminViewProps";
 import { ApplyView } from "./views/user/ApplyView";
 import { AskView } from "./views/user/AskView";
 import { GoLiveView } from "./views/user/GoLiveView";
@@ -119,7 +121,7 @@ function SurfaceShell({
             {route.surface === "user" ? (
               <UserView data={data} onRetry={() => void refresh()} params={route.params} session={auth.session} view={route.view} />
             ) : (
-              <PlaceholderView data={data} onRetry={() => void refresh()} view={route.view} />
+              <AdminView data={data} onRetry={() => void refresh()} params={route.params} session={auth.session} view={route.view} />
             )}
           </div>
         </main>

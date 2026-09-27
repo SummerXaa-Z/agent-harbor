@@ -21,11 +21,12 @@ import { SurfaceSwitch } from "./SurfaceSwitch";
 interface SidebarProps {
   activeView: RedesignView;
   onSignOut: () => void;
+  otherSurfaceUnread: number;
   session: ConsoleSession | null;
   surface: Surface;
 }
 
-export function Sidebar({ activeView, onSignOut, session, surface }: SidebarProps) {
+export function Sidebar({ activeView, onSignOut, otherSurfaceUnread, session, surface }: SidebarProps) {
   const { t } = useRedesignI18n();
   const sections = surface === "user" ? userNavSections : adminNavSections;
   const identity = sessionIdentity(session);

@@ -17,6 +17,9 @@ const focusableSelector = [
 ].join(",");
 
 interface ModalProps {
+  // Selector for the element that should receive initial focus; defaults to
+  // the first focusable child (usually the footer's cancel button).
+  autoFocusQuery?: string;
   children: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
@@ -31,7 +34,7 @@ export function Modal(props: ModalProps) {
   return createPortal(<ModalDialog {...props} />, overlayRoot);
 }
 
-function ModalDialog({ children, footer, onClose, size = "default", title }: ModalProps) {
+function ModalDialog({ autoFocusQuery, children, footer, onClose, size = "default", title }: ModalProps) {
   const { t } = useRedesignI18n();
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -39,7 +42,8 @@ function ModalDialog({ children, footer, onClose, size = "default", title }: Mod
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = dialogRef.current;
-    const first = dialog?.querySelector<HTMLElement>(focusableSelector);
+    const preferred = autoFocusQuery ? dialog?.querySelector<HTMLElement>(autoFocusQuery) : null;
+    const first = preferred ?? dialog?.querySelector<HTMLElement>(focusableSelector);
     (first ?? dialog)?.focus();
     return () => previouslyFocused?.focus();
   }, []);

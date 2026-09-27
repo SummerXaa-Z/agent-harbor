@@ -254,6 +254,10 @@ make production-hardening
 
 ## Web Console
 
+0.4.0 ships a redesigned console at the same URL. The empty hash opens an entry page that picks between two surfaces: the **user workbench** (apply for permissions, access query, go-live check, my records) and the **admin console** (cockpit, approvals, capability governance, resource registry, tenants & workspaces, access policies, route rules, runtime audit, administrators & boundaries). Press ⌘K / Ctrl+K anywhere for the command palette — every page, high-frequency actions, and recently updated agents and approval requests are two keystrokes away. The top-bar bell opens the notification center: new pending approvals for admins, approval outcomes for the requester, and environment-check failures, all derived from live APIs with 15-second polling that pauses while the tab is hidden; read state is shared across browser tabs. On screens up to 860px wide the shell collapses to a compact mobile layout. The legacy console stays one click away from the entry page during the transition.
+
+0.4.0 起同一地址进入重设计控制台。空 hash 打开入口页，在两个面之间选择：**用户工作台**（申请权限、访问查询、上线检查、我的记录）和**管理控制台**（驾驶舱、变更审批、能力治理、资源管理、租户与组织、访问策略、路由规则、运行审计、管理员与边界）。任意页面按 ⌘K / Ctrl+K 打开命令面板，两个面的全部页面、高频动作、最近更新的 Agent 与审批单都在两次按键之内。顶栏铃铛打开通知中心：面向管理侧的新待审批申请、面向申请人的审批结果、以及环境检查失败，全部由实时 API 派生，15 秒轮询且页面隐藏时暂停，已读状态跨标签页同步。860px 以下自动收为移动布局。过渡期内，旧版控制台仍可从入口页一键进入。
+
 For the first browser evaluation, run:
 
 ```bash

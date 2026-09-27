@@ -195,6 +195,34 @@ export interface EnvCheckSummary {
   warning: number;
 }
 
+// Notifications (plan P5) consume "the latest useEnvChecks result" instead of
+// probing on their own 15s cadence. A module-level single-flight cache keeps
+// that shared per tab: whichever surface ran the checks last wins.
+export interface EnvCheckSnapshot {
+  rows: readonly EnvCheckRow[];
+  summary: EnvCheckSummary;
+}
+
+let latestSnapshot: EnvCheckSnapshot | null = null;
+const listeners = new Set<() => void>();
+
+export function rememberEnvCheckSnapshot(rows: readonly EnvCheckRow[]): EnvCheckSnapshot {
+  latestSnapshot = { rows, summary: envCheckSummary(rows) };
+  for (const listener of listeners) listener();
+  return latestSnapshot;
+}
+
+export function latestEnvCheckSnapshot(): EnvCheckSnapshot | null {
+  return latestSnapshot;
+}
+
+// useSyncExternalStore wiring so derived consumers re-run when a surface
+// finishes its checks; the snapshot reference is stable between updates.
+export function subscribeEnvCheckSnapshot(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 export function envCheckSummary(rows: readonly EnvCheckRow[]): EnvCheckSummary {
   const error = rows.filter((row) => row.status === "error").length;
   const warning = rows.filter((row) => row.status === "warning").length;

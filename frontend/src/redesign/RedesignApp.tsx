@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiBase } from "../api";
 import { useConsoleAuth } from "../hooks/useConsoleAuth";
 import "../styles/redesign.css";
 import { RedesignI18nContext, useRedesignI18n, useRedesignLanguage } from "./hooks/useRedesignI18n";
+import { useNotifications } from "./hooks/useNotifications";
 import { useRedesignData, type RedesignData } from "./hooks/useRedesignData";
-import { parseRedesignHash, type RedesignRoute, type SurfaceRoute, type UserView as UserViewName } from "./router";
+import { recentItems } from "./model/paletteIndex";
+import { otherSurface, parseRedesignHash, type RedesignRoute, type SurfaceRoute, type UserView as UserViewName } from "./router";
 import { LoginCard } from "./shell/LoginCard";
+import { CommandPalette } from "./shell/CommandPalette";
 import { Sidebar } from "./shell/Sidebar";
 import { Topbar } from "./shell/Topbar";
 import { OverlayRootContext } from "./ui/Modal";
@@ -101,21 +104,54 @@ function SurfaceShell({
 }) {
   const { t } = useRedesignI18n();
   const showToast = useToast();
+  const notifications = useNotifications(data, auth.session);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ left: 0, top: 0 });
   }, [routeKey]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   async function refresh() {
     const live = await data.reload();
     showToast(live ? t("rd.toast.refreshed") : t("rd.toast.refreshFailed"), live ? "success" : "danger");
   }
 
+  const recent = useMemo(
+    () => recentItems({ agents: data.data?.agents ?? [], approvals: notifications.approvals }),
+    [data.data, notifications.approvals],
+  );
+  const otherUnread = notifications.unread[otherSurface(route.surface)];
+
   return (
     <>
-      <Sidebar activeView={route.view} onSignOut={() => void auth.logout()} session={auth.session} surface={route.surface} />
+      <Sidebar
+        activeView={route.view}
+        onSignOut={() => void auth.logout()}
+        otherSurfaceUnread={otherUnread}
+        session={auth.session}
+        surface={route.surface}
+      />
       <div className="main">
-        <Topbar onRefresh={() => void refresh()} refreshing={data.loading} surface={route.surface} view={route.view} />
+        <Topbar
+          notifications={notifications}
+          onOpenPalette={() => setPaletteOpen(true)}
+          onRefresh={() => void refresh()}
+          otherSurfaceUnread={otherUnread}
+          refreshing={data.loading}
+          surface={route.surface}
+          view={route.view}
+        />
         <main className="content">
           <div className="view" key={routeKey}>
             {route.surface === "user" ? (
@@ -126,6 +162,7 @@ function SurfaceShell({
           </div>
         </main>
       </div>
+      <CommandPalette onClose={() => setPaletteOpen(false)} open={paletteOpen} recent={recent} />
     </>
   );
 }

@@ -18,10 +18,18 @@ import {
   userViews,
 } from "../src/redesign/router.ts";
 
-test("legacy and empty hashes stay with the legacy console", () => {
+test("the empty hash is the redesign entry page since P5", () => {
+  assert.deepEqual(parseRedesignHash(""), {
+    canonicalHash: "#/",
+    redirected: true,
+    route: { surface: "entry" },
+  });
+  assert.equal(isRedesignHash(""), true);
+  assert.equal(isRedesignHash("#"), true);
+});
+
+test("legacy hashes stay with the legacy console", () => {
   for (const hash of [
-    "",
-    "#",
     "#ask",
     "#/ask",
     "#getting-started",

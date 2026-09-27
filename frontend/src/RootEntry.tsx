@@ -13,8 +13,8 @@ function currentHash() {
   return window.location.hash;
 }
 
-// The empty hash and every legacy hash keep the legacy console until the
-// redesign replaces it (D1); `#/`, `#user/*` and `#admin/*` load the new UI.
+// Since P5 the empty hash loads the redesign entry page (D1); explicit
+// legacy hashes (#ask, #getting-started, …) keep the legacy console.
 export function RootEntry() {
   const hash = useSyncExternalStore(subscribeToHash, currentHash, () => "");
   return <Suspense fallback={null}>{isRedesignHash(hash) ? <RedesignApp hash={hash} /> : <LegacyEntry />}</Suspense>;

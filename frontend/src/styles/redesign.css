@@ -840,9 +840,10 @@ body:has(.ah2) {
 
 .ah2 .b-actions {
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   gap: 10px;
+  min-width: 0;
 }
 
 .ah2 .banner-info {
@@ -2257,8 +2258,33 @@ body:has(.ah2) {
 }
 
 @media (max-width: 860px) {
+  .ah2 .tb-kbtn-text,
+  .ah2 .tb-kbd {
+    display: none;
+  }
+
   .ah2 .trend-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Card headers wrap instead of letting the 240px access-context bar
+     stretch narrow viewports (P5 responsive pass). */
+  .ah2 .card-h {
+    flex-wrap: wrap;
+  }
+
+  .ah2 .card-right {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .ah2 .ctx-bar {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .ah2 .ctx-bar .select {
+    width: 100%;
   }
 }
 
@@ -2563,4 +2589,205 @@ body:has(.ah2) {
   .ah2 .entry-cards {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* ============ P5 cross-cutting: palette, notifications, entry ============ */
+
+.ah2 .tb-kbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ah2 .tb-kbtn-text {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.ah2 .tb-kbd {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-3);
+  background: var(--bg-1);
+}
+
+.ah2 .pal-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  font-size: 14px;
+  background: var(--bg-1);
+  color: var(--text-1);
+  margin-bottom: 10px;
+}
+
+.ah2 .pal-input:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: -1px;
+}
+
+.ah2 .pal-list {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ah2 .pal-group {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.ah2 .pal-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text-1);
+}
+
+.ah2 .pal-item:hover,
+.ah2 .pal-active {
+  background: var(--fill);
+}
+
+.ah2 .pal-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.ah2 .pal-surface {
+  font-size: 11px;
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 7px;
+  line-height: 1.5;
+}
+
+.ah2 .pal-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ah2 .pal-empty {
+  padding: 14px 10px;
+  text-align: center;
+}
+
+.ah2 .pal-hint {
+  margin: 10px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.ah2 .nt-badge,
+.ah2 .app-switch-badge {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: var(--on-accent);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  padding: 0 4px;
+}
+
+.ah2 .icon-btn,
+.ah2 .app-switch {
+  position: relative;
+}
+
+.ah2 .nt-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ah2 .nt-item {
+  display: flex;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--text-1);
+}
+
+.ah2 .nt-item:hover {
+  background: var(--fill);
+}
+
+.ah2 .nt-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--text-3);
+}
+
+.ah2 .nt-dot-live {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.ah2 .nt-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ah2 .nt-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ah2 .nt-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ah2 .nt-empty {
+  padding: 12px 0;
+  text-align: center;
+}
+
+.ah2 .entry-legacy {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text-3);
+  text-decoration: underline;
+}
+
+.ah2 .entry-legacy:hover {
+  color: var(--text-1);
 }

@@ -31,6 +31,16 @@ export interface PermissionPackageApplicationHealthPathFilter {
   workspaceId?: string
 }
 
+export interface PermissionPackageApplicationsPathFilter {
+  callerInstanceId?: string
+  limit?: number
+  requestedCapabilityId?: string
+  targetId?: string
+  templateId?: string
+  tenantId?: string
+  workspaceId?: string
+}
+
 export interface PermissionPackageProductionReadinessPathFilter {
   approvalRequestId?: string
   callerInstanceId?: string
@@ -96,6 +106,19 @@ export function permissionPackageApplicationHealthPath(filter: PermissionPackage
     workspaceId: filter.workspaceId,
   })
   return `/api/v1/permission-packages/applications/health${query}`
+}
+
+export function permissionPackageApplicationsPath(filter: PermissionPackageApplicationsPathFilter = {}): string {
+  const query = queryString({
+    callerInstanceId: filter.callerInstanceId,
+    limit: filter.limit ? String(filter.limit) : undefined,
+    requestedCapabilityId: filter.requestedCapabilityId,
+    targetId: filter.targetId,
+    templateId: filter.templateId,
+    tenantId: filter.tenantId,
+    workspaceId: filter.workspaceId,
+  })
+  return `/api/v1/permission-packages/applications${query}`
 }
 
 export function permissionPackageProductionReadinessPath(filter: PermissionPackageProductionReadinessPathFilter): string {

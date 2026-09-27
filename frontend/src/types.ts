@@ -73,6 +73,10 @@ export interface AgentKey {
   agentId: string
   name: string
   prefix: string
+  applicationId?: string
+  templateId?: string
+  subjectSelector?: string
+  createdForHandoffId?: string
   createdAt: string
   expiresAt: string
   revokedAt?: string
@@ -131,6 +135,16 @@ export interface RoutePolicyRetry {
   maxAttempts: number
   backoffMs: number
   statusCodes: number[]
+}
+
+export interface UpdateRoutePolicyRequest {
+  name?: string
+  routeType?: string
+  routeKey?: string
+  effect?: RoutePolicyEffect
+  status?: RoutePolicyStatus
+  priority?: number
+  retry?: RoutePolicyRetry | null
 }
 
 export interface TraceEvent {
@@ -560,6 +574,57 @@ export interface TraceFilters {
   decision?: TraceDecision | ''
   callerAgentId?: string
   targetAgentId?: string
+  limit?: number
+  since?: string
+  until?: string
+}
+
+export interface DailyMetricsParams {
+  days?: number
+  tzOffsetMinutes?: number
+  tenantId?: string
+  workspaceId?: string
+}
+
+export interface DailyMetricsTotals {
+  calls: number
+  allowedCalls: number
+  deniedCalls: number
+  auditEvents: number
+}
+
+export interface DailyMetricsBucket {
+  date: string
+  calls: number
+  allowedCalls: number
+  deniedCalls: number
+  denyRate: number | null
+  auditEvents: number
+}
+
+export interface DailyMetrics {
+  days: number
+  tzOffsetMinutes: number
+  from: string
+  to: string
+  generatedAt: string
+  truncated: boolean
+  totals: DailyMetricsTotals
+  buckets: DailyMetricsBucket[]
+}
+
+export type TargetProbeStatus = 'ok' | 'error'
+
+export interface TargetProbeResult {
+  targetId: string
+  endpoint: string
+  status: TargetProbeStatus
+  errorCode?: string
+  message?: string
+  httpStatus: number
+  toolCount: number
+  durationMs: number
+  checkedAt: string
 }
 
 export interface McpRpcCallResult {

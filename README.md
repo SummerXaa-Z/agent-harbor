@@ -474,6 +474,7 @@ Web 控制台会在 `/healthz` 之后读取 `GET /api/v1/system/info`，先确�
 ### Capabilities and Assignments
 
 - `POST /api/v1/targets/{targetId}/capabilities:refresh`
+- `POST /api/v1/targets/{targetId}:probe`
 - `GET /api/v1/capabilities?tenantId=&workspaceId=&targetId=&status=`
 - `PATCH /api/v1/capabilities/{id}`
 - `GET /api/v1/access-decisions:explain?tenantId=&workspaceId=&callerInstanceId=&targetId=&capabilityId=&subjectId=`
@@ -513,9 +514,14 @@ Web 控制台会在 `/healthz` 之后读取 `GET /api/v1/system/info`，先确�
 
 ### Audit, Traces, and Metrics
 
-- `GET /api/v1/audit/events?tenantId=&workspaceId=&action=&resourceType=&resourceId=&limit=`
-- `GET /api/v1/audit/traces?tenantId=&workspaceId=&runId=&decision=&callerAgentId=&targetAgentId=`
+- `GET /api/v1/audit/events?tenantId=&workspaceId=&action=&resourceType=&resourceId=&since=&until=&limit=`
+- `GET /api/v1/audit/traces?tenantId=&workspaceId=&runId=&decision=&callerAgentId=&targetAgentId=&since=&until=&limit=`
 - `GET /api/v1/metrics/runtime?tenantId=&workspaceId=`
+- `GET /api/v1/metrics/daily?tenantId=&workspaceId=&days=&tzOffsetMinutes=`
+
+Audit and trace lists return rows in ascending time order. `limit` keeps the newest rows (audit events default to 100, traces are unbounded unless `limit` is set, both cap at 500); `since` is inclusive and `until` exclusive, both RFC3339. Daily metrics count gateway decisions and audit events per local day (`days` 1–30, `tzOffsetMinutes` −720–840) with the same visibility rules as the lists, zero-filled days, `denyRate: null` on days without calls, and `truncated: true` when a window exceeds the server row cap.
+
+`POST /api/v1/targets/{targetId}:probe` sends the same `tools/list` request as a capability refresh but writes neither capabilities nor audit events. A reachability failure is returned as a `200` result with `status: "error"` and an `UPSTREAM_*` `errorCode` (connect, DNS, TLS, timeout, or generic); only an unknown target (`404`), a target outside the caller's management scope (`403`), a non-MCP target, or an invalid agent configuration (`400`) is an HTTP error.
 
 ## Policy and Data Scope Semantics
 

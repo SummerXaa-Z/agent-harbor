@@ -877,6 +877,11 @@ func TestSystemInfoIncludesConsoleCompatibilityContract(t *testing.T) {
 			t.Fatalf("system info missing required console capability %q: %#v", capability, info.Capabilities)
 		}
 	}
+	for _, capability := range []string{"metrics_daily_v1", "target_probe_v1"} {
+		if !capabilities[capability] {
+			t.Fatalf("system info missing redesigned console capability %q: %#v", capability, info.Capabilities)
+		}
+	}
 	if info.ManagementMcpToolCatalog.MetadataVersion != 4 {
 		t.Fatalf("management MCP catalog metadata version = %d, want 4", info.ManagementMcpToolCatalog.MetadataVersion)
 	}

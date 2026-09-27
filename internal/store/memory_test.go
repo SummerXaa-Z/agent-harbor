@@ -1326,3 +1326,104 @@ func agentIDs(rows []domain.Agent) []string {
 	}
 	return ids
 }
+
+func TestMemoryAuditEventLimitKeepsNewestWindowInAscendingOrder(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	base := time.Date(2026, 9, 20, 8, 0, 0, 0, time.UTC)
+	// Appended out of order so the result order comes from sorting, not
+	// from insertion order.
+	for _, minute := range []int{4, 0, 3, 1, 2} {
+		if _, err := repo.AppendAuditEvent(ctx, domain.AuditEvent{
+			ID:           "aud_" + string(rune('a'+minute)),
+			TenantID:     "tenant-window",
+			WorkspaceID:  "ws-window",
+			Action:       "agent.updated",
+			ResourceType: "agent",
+			ResourceID:   "agt_window",
+			CreatedAt:    base.Add(time.Duration(minute) * time.Minute),
+		}); err != nil {
+			t.Fatalf("append audit event %d: %v", minute, err)
+		}
+	}
+
+	limited, err := repo.ListAuditEvents(ctx, AuditEventFilter{ManagementScope: ManagementScope{TenantID: "tenant-window"}, Limit: 3})
+	if err != nil {
+		t.Fatalf("list limited audit events: %v", err)
+	}
+	if got := auditIDsForStore(limited); !reflect.DeepEqual(got, []string{"aud_c", "aud_d", "aud_e"}) {
+		t.Fatalf("limit should keep the newest three events ascending, got %#v", got)
+	}
+
+	windowed, err := repo.ListAuditEvents(ctx, AuditEventFilter{
+		Since: base.Add(time.Minute),
+		Until: base.Add(3 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("list windowed audit events: %v", err)
+	}
+	if got := auditIDsForStore(windowed); !reflect.DeepEqual(got, []string{"aud_b", "aud_c"}) {
+		t.Fatalf("since is inclusive and until exclusive, got %#v", got)
+	}
+
+	windowedLimited, err := repo.ListAuditEvents(ctx, AuditEventFilter{Since: base.Add(time.Minute), Limit: 2})
+	if err != nil {
+		t.Fatalf("list windowed limited audit events: %v", err)
+	}
+	if got := auditIDsForStore(windowedLimited); !reflect.DeepEqual(got, []string{"aud_d", "aud_e"}) {
+		t.Fatalf("limit inside a window should keep the newest rows, got %#v", got)
+	}
+}
+
+func TestMemoryTraceTimeWindow(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	base := time.Date(2026, 9, 20, 8, 0, 0, 0, time.UTC)
+	for minute := range 4 {
+		if _, err := repo.AppendTrace(ctx, domain.TraceEvent{
+			ID:          "trc_" + string(rune('a'+minute)),
+			RunID:       "run-window",
+			TargetID:    "agt_window",
+			RouteType:   "mcp",
+			RouteKey:    "tools/call",
+			TenantID:    "tenant-window",
+			WorkspaceID: "ws-window",
+			Decision:    domain.TraceDecisionAllowed,
+			CreatedAt:   base.Add(time.Duration(minute) * time.Minute),
+		}); err != nil {
+			t.Fatalf("append trace %d: %v", minute, err)
+		}
+	}
+
+	windowed, err := repo.ListTraces(ctx, TraceFilter{Since: base.Add(time.Minute), Until: base.Add(3 * time.Minute)})
+	if err != nil {
+		t.Fatalf("list windowed traces: %v", err)
+	}
+	if got := traceIDsForStore(windowed); !reflect.DeepEqual(got, []string{"trc_b", "trc_c"}) {
+		t.Fatalf("since is inclusive and until exclusive, got %#v", got)
+	}
+
+	limited, err := repo.ListTraces(ctx, TraceFilter{Since: base.Add(time.Minute), Limit: 2})
+	if err != nil {
+		t.Fatalf("list windowed limited traces: %v", err)
+	}
+	if got := traceIDsForStore(limited); !reflect.DeepEqual(got, []string{"trc_c", "trc_d"}) {
+		t.Fatalf("limit inside a window should keep the newest traces ascending, got %#v", got)
+	}
+}
+
+func auditIDsForStore(events []domain.AuditEvent) []string {
+	ids := make([]string, 0, len(events))
+	for _, event := range events {
+		ids = append(ids, event.ID)
+	}
+	return ids
+}
+
+func traceIDsForStore(traces []domain.TraceEvent) []string {
+	ids := make([]string, 0, len(traces))
+	for _, trace := range traces {
+		ids = append(ids, trace.ID)
+	}
+	return ids
+}

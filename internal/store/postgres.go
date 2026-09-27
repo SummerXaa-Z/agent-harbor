@@ -1754,6 +1754,12 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 	if filter.TargetID != "" {
 		add("target_agent_id=$%d", filter.TargetID)
 	}
+	if !filter.Since.IsZero() {
+		add("created_at >= $%d", filter.Since)
+	}
+	if !filter.Until.IsZero() {
+		add("created_at < $%d", filter.Until)
+	}
 	if strings.TrimSpace(filter.TenantID) != "" || strings.TrimSpace(filter.WorkspaceID) != "" {
 		var tenantIDs []string
 		if strings.TrimSpace(filter.TenantID) != "" {
@@ -2198,10 +2204,21 @@ func (p *Postgres) ListAuditEvents(ctx context.Context, filter AuditEventFilter)
 	if strings.TrimSpace(filter.ResourceID) != "" {
 		add("resource_id=$%d", strings.TrimSpace(filter.ResourceID))
 	}
-	query += " order by created_at asc, id asc"
+	if !filter.Since.IsZero() {
+		add("created_at >= $%d", filter.Since)
+	}
+	if !filter.Until.IsZero() {
+		add("created_at < $%d", filter.Until)
+	}
 	if filter.Limit > 0 {
 		args = append(args, filter.Limit)
-		query += fmt.Sprintf(" limit $%d", len(args))
+		query = fmt.Sprintf(`
+			select *
+			from (%s order by created_at desc, id desc limit $%d) recent_audit_events
+			order by created_at asc, id asc
+		`, query, len(args))
+	} else {
+		query += " order by created_at asc, id asc"
 	}
 	rows, err := p.pool.Query(ctx, query, args...)
 	if err != nil {

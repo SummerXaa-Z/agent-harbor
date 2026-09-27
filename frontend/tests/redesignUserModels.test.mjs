@@ -36,6 +36,8 @@ import {
   tokenTtlOptions,
 } from "../src/redesign/model/goLive.ts";
 import { rankTemplates, recommendedTemplateId, templateMatch } from "../src/redesign/model/templateMatch.ts";
+import { splitBlockedCapabilities, unclassifiedCapabilities } from "../src/redesign/model/capabilityGovernance.ts";
+import { buildRuntimeValidationReadiness } from "../src/redesign/model/runtimeValidation.ts";
 import {
   DEMO_ACTOR,
   keyStatus,
@@ -239,6 +241,61 @@ test("template match scores recommended, partial and none", () => {
   assert.equal(rankTemplates(permissionPackageTemplates, capabilities)[0].template.id, "support-ticket-triage");
   assert.equal(recommendedTemplateId(permissionPackageTemplates, capabilities, "cap-read"), "support-ticket-triage");
   assert.equal(recommendedTemplateId(permissionPackageTemplates, capabilities, "cap-delete"), "");
+});
+
+test("template match counts capabilities blocked only by a missing data domain", () => {
+  const triage = permissionPackageTemplates.find((template) => template.id === "support-ticket-triage");
+  const classified = capabilities;
+  const unclassifiedRead = capability({ id: "cap-fresh", key: "search-crm", dataDomains: [] });
+  // The read stays blocked until governed, but it is not a least-privilege block.
+  assert.equal(templateMatch(triage, [...classified, unclassifiedRead]).missingDomainBlockedCount, 1);
+  assert.equal(templateMatch(triage, classified).missingDomainBlockedCount, 0);
+  // A denied-by-design capability without a domain does not count: the
+  // template would refuse it anyway.
+  const unclassifiedDelete = capability({ id: "cap-fresh-del", key: "purge-crm", action: "delete", riskLevel: "high", dataDomains: [] });
+  assert.equal(templateMatch(triage, [unclassifiedDelete]).missingDomainBlockedCount, 0);
+  // dataScopes domains count as classification too.
+  const scopedRead = capability({ id: "cap-scoped", key: "search-scoped", dataDomains: [], dataScopes: [{ dataDomain: "support" }] });
+  assert.equal(templateMatch(triage, [scopedRead]).missingDomainBlockedCount, 0);
+});
+
+test("blocked capabilities split into missing-domain and by-design", () => {
+  const blocked = [
+    capability({ id: "cap-a", key: "a", dataDomains: [] }),
+    capability({ id: "cap-b", key: "b", dataDomains: ["support"] }),
+    capability({ id: "cap-c", key: "c", dataDomains: [], dataScopes: [{ dataDomain: "support" }] }),
+  ];
+  const split = splitBlockedCapabilities(blocked);
+  assert.deepEqual(split.missingDomain.map((capability) => capability.id), ["cap-a"]);
+  assert.deepEqual(split.blockedByDesign.map((capability) => capability.id), ["cap-b", "cap-c"]);
+  assert.deepEqual(unclassifiedCapabilities(blocked).map((capability) => capability.id), ["cap-a"]);
+});
+
+test("runtime validation readiness plans probes and lists blockers in order", () => {
+  const base = {
+    allowedCapabilities: [capability({ id: "cap-read", key: "search-tickets" })],
+    blockedCapabilities: [capability({ id: "cap-export", key: "export-tickets", action: "export", riskLevel: "high" })],
+    context: { callerInstanceId: "caller-a", subjectSelector: "user:support-*", targetId: "target-a" },
+    hasApplication: true,
+    liveDataAvailable: true,
+    runId: "run-1",
+  };
+  const ready = buildRuntimeValidationReadiness(base);
+  assert.deepEqual(ready.blockers, []);
+  assert.equal(ready.plan.allowedCapabilityKey, "search-tickets");
+  assert.equal(ready.plan.blockedCapabilityKey, "export-tickets");
+  assert.equal(ready.plan.subjectId, "user:support-example");
+
+  // No blocked capability: the denied probe is skipped, not a blocker.
+  const noBlocked = buildRuntimeValidationReadiness({ ...base, blockedCapabilities: [] });
+  assert.equal(noBlocked.plan.blockedCapabilityKey, null);
+
+  const notReady = buildRuntimeValidationReadiness({ ...base, allowedCapabilities: [], hasApplication: false, liveDataAvailable: false });
+  assert.deepEqual(notReady.blockers, ["requiresLiveApi", "requiresApplication", "requiresAllowedCapability"]);
+  assert.equal(notReady.plan, null);
+
+  const noSubject = buildRuntimeValidationReadiness({ ...base, context: { callerInstanceId: "caller-a", subjectSelector: "", targetId: "target-a" } });
+  assert.deepEqual(noSubject.blockers, ["requiresSubject"]);
 });
 
 test("access context persists, defaults to the latest application and honours deep links", () => {

@@ -51,6 +51,14 @@ AgentHarbor rejects loopback, link-local, metadata, and private-network upstream
 
 `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true` exists only for local development scenarios that use a mock MCP server on `127.0.0.1`. Do not enable it for production or shared environments.
 
+## Deployment Boundary
+
+The gateway is the governed entry point: authorization, subject scoping, and audit happen on gateway calls. The gateway does not, and cannot, protect an MCP upstream that is itself reachable from the caller's network — a client that can reach the upstream directly with a valid MCP `Accept` header bypasses every policy and audit record. Treat the boundary as a deployment requirement, not an application guarantee:
+
+- bind each MCP upstream to an address only the gateway can reach (loopback, a private subnet, or a container network), never a public interface;
+- when network isolation is not possible, put authentication in front of the upstream and give only the gateway the credential;
+- verify the boundary as part of deployment checks: a direct `initialize` / `tools/call` against the upstream from outside the gateway network must fail.
+
 ## Fix Handling
 
 Security fixes should stay narrow and include verification evidence. At minimum, run:

@@ -919,6 +919,10 @@ export async function createAgentKey(
   return request<CreateAgentKeyResponse>('/api/v1/agent-keys', { adminKey, body })
 }
 
+export async function revokeAgentKey(id: string, adminKey?: string): Promise<AgentKey> {
+  return request<AgentKey>(`/api/v1/api-keys/${encodeURIComponent(id)}`, { adminKey, method: 'DELETE' })
+}
+
 // Lists key metadata in the management scope; callers filter by agentId.
 export async function fetchAgentKeys(
   scope?: Partial<ManagementScope>,

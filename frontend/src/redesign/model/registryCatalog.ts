@@ -25,12 +25,19 @@ export function agentEndpoint(agent: Agent): string {
 }
 
 export interface RegistrySummary {
+  // Active = enabled and draft resources; disabled ones are counted
+  // separately so the header can show "5 targets · 1 active".
+  activeCallers: number;
+  activeTargets: number;
   callers: number;
   targets: number;
 }
 
 export function registrySummary(rows: readonly RegistryRow[]): RegistrySummary {
+  const active = rows.filter((row) => row.agent.status !== "disabled");
   return {
+    activeCallers: active.filter((row) => row.kind === "caller").length,
+    activeTargets: active.filter((row) => row.kind === "target").length,
     callers: rows.filter((row) => row.kind === "caller").length,
     targets: rows.filter((row) => row.kind === "target").length
   };

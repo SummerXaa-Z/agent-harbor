@@ -181,9 +181,14 @@ function renderAuditCell(
       if (row.kind === "trace") {
         const trace = row.event as { decision: "allowed" | "denied"; reason?: string };
         return (
-          <span className="small muted">
-            {accessTraceReasonLabel(trace.reason, trace.decision === "allowed" ? "allow" : "deny", t)}
-          </span>
+          <div className="trace-summary">
+            <span className="small muted">
+              {accessTraceReasonLabel(trace.reason, trace.decision === "allowed" ? "allow" : "deny", t)}
+            </span>
+            <Button onClick={() => onDetail(row)} size="sm" variant="link">
+              {t("rd.audit.detail")}
+            </Button>
+          </div>
         );
       }
       return (

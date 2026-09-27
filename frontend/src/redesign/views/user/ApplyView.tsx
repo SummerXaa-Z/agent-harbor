@@ -19,7 +19,7 @@ import { useRedesignI18n } from "../../hooks/useRedesignI18n";
 import { accessContextFromApprovalRequest, accessContextRouteParams, type AccessContext } from "../../model/accessContext";
 import { splitBlockedCapabilities } from "../../model/capabilityGovernance";
 import { permissionChangeStepKeys, type PermissionChangeAction } from "../../model/approvalStateMachine";
-import { rankTemplates } from "../../model/templateMatch";
+import { rankTemplates, templateSummary } from "../../model/templateMatch";
 import { workbenchActor } from "../../model/userWorkbench";
 import { adminHash, userHash, viewLabelKey } from "../../router";
 import { DataStatusBanner, DataStatusChip } from "../../shell/DataStatusBanner";
@@ -39,7 +39,7 @@ const templateLevelTone = { none: "neutral", partial: "warning", recommended: "s
 const directApplyCodes = new Set(["apply_permission_package", "reapply_permission_package"]);
 
 export function ApplyView({ data, onRetry, params, session }: UserViewProps) {
-  const { t } = useRedesignI18n();
+  const { language, t } = useRedesignI18n();
   const live = Boolean(data.data?.loadedFromApi);
   const consoleData = data.data;
   const accessContext = useAccessContext(data, params);
@@ -378,7 +378,7 @@ export function ApplyView({ data, onRetry, params, session }: UserViewProps) {
                         <span className="tpl-name">{match.template.name}</span>
                         <Chip tone={templateLevelTone[match.level]}>{t(`rd.apply.match.${match.level}`)}</Chip>
                       </div>
-                      <p className="tpl-desc">{match.template.summary}</p>
+                      <p className="tpl-desc">{templateSummary(match.template, language)}</p>
                       <div className="tpl-meta">
                         <span>{tx(t, "rd.apply.matchCounts", { allowed: match.allowedCount, blocked: match.blockedCount })}</span>
                         {match.missingDomainBlockedCount > 0 ? (

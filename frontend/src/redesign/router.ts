@@ -19,10 +19,11 @@ export type RouteParams = Record<string, string>;
 
 export type RedesignRoute =
   | { surface: "entry" }
+  | { surface: "notfound"; attempted: string }
   | { surface: "user"; view: UserView; params: RouteParams }
   | { surface: "admin"; view: AdminView; params: RouteParams };
 
-export type SurfaceRoute = Exclude<RedesignRoute, { surface: "entry" }>;
+export type SurfaceRoute = Extract<RedesignRoute, { surface: "user" | "admin" }>;
 
 export interface ParsedRedesignHash {
   canonicalHash: string;
@@ -132,7 +133,12 @@ export function isAdminView(value: string): value is AdminView {
 
 // Returns null for every hash the legacy console owns. Since P5 the empty
 // hash belongs to the redesign entry page (decision D1); explicit legacy
-// hashes (#ask, #getting-started, …) keep loading the legacy console.
+// hashes (bare #ask, #getting-started, …) keep loading the legacy console.
+// Everything else that is shaped like a redesign route — multi-segment paths
+// such as #user/apply, the #/-prefixed form, or an unknown surface/view —
+// resolves inside the redesign, ending in its not-found page instead of
+// falling through to the legacy console or silently resetting to the default
+// view (round 4, #27).
 export function parseRedesignHash(hash: string): ParsedRedesignHash | null {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
   const queryIndex = raw.indexOf("?");
@@ -143,19 +149,44 @@ export function parseRedesignHash(hash: string): ParsedRedesignHash | null {
     return withCanonicalHash(raw, { surface: "entry" });
   }
 
-  const segments = path.replace(/^\//, "").split("/");
+  const slashPrefixed = path.startsWith("/");
+  const stripped = path.replace(/^\//, "");
+  const segments = stripped.split("/");
+  if (segments.length === 1) {
+    const [only] = segments;
+    if (only === "user") {
+      return withCanonicalHash(raw, { surface: "user", view: defaultUserView, params: {} });
+    }
+    if (only === "admin") {
+      return withCanonicalHash(raw, { surface: "admin", view: defaultAdminView, params: {} });
+    }
+    // Bare single-segment hashes belong to the legacy console; the same
+    // segment behind a slash is redesign territory and 404s.
+    return slashPrefixed ? keepRawHash(raw, { surface: "notfound", attempted: path }) : null;
+  }
+
   const [surface, requestedView = ""] = segments;
-  if (surface === "user") {
-    const view = isUserView(requestedView) ? requestedView : defaultUserView;
-    const params = view === requestedView ? normalizeParams(view, new URLSearchParams(query)) : {};
-    return withCanonicalHash(raw, { surface, view, params });
+  if (surface === "user" || surface === "admin") {
+    if (requestedView === "") {
+      return surface === "user"
+        ? withCanonicalHash(raw, { surface, view: defaultUserView, params: {} })
+        : withCanonicalHash(raw, { surface, view: defaultAdminView, params: {} });
+    }
+    if (surface === "user" && isUserView(requestedView)) {
+      return withCanonicalHash(raw, { surface, view: requestedView, params: normalizeParams(requestedView, new URLSearchParams(query)) });
+    }
+    if (surface === "admin" && isAdminView(requestedView)) {
+      return withCanonicalHash(raw, { surface, view: requestedView, params: normalizeParams(requestedView, new URLSearchParams(query)) });
+    }
+    return keepRawHash(raw, { surface: "notfound", attempted: path });
   }
-  if (surface === "admin") {
-    const view = isAdminView(requestedView) ? requestedView : defaultAdminView;
-    const params = view === requestedView ? normalizeParams(view, new URLSearchParams(query)) : {};
-    return withCanonicalHash(raw, { surface, view, params });
-  }
-  return null;
+  return keepRawHash(raw, { surface: "notfound", attempted: path });
+}
+
+// A not-found route keeps the attempted hash in the address bar so the user
+// (and support) can still read what went wrong.
+function keepRawHash(raw: string, route: Extract<RedesignRoute, { surface: "notfound" }>): ParsedRedesignHash {
+  return { canonicalHash: `#${raw}`, redirected: false, route };
 }
 
 export function isRedesignHash(hash: string): boolean {
@@ -165,6 +196,9 @@ export function isRedesignHash(hash: string): boolean {
 export function redesignHash(route: RedesignRoute): string {
   if (route.surface === "entry") {
     return entryHash;
+  }
+  if (route.surface === "notfound") {
+    return `#${route.attempted}`;
   }
   const query = serializeParams(route.view, route.params);
   return `#${route.surface}/${route.view}${query ? `?${query}` : ""}`;

@@ -239,3 +239,34 @@ export function isApprovalNotRequiredError(error: unknown): boolean {
 export function isCapabilityChangedError(error: unknown): boolean {
   return (error as ApiErrorLike | null)?.code === "PERMISSION_PACKAGE_CAPABILITY_CHANGED";
 }
+
+// The key covers the full request snapshot, not just the resource scope:
+// once region, subject, requested capability, or request text diverges from
+// the bound approval, the approval describes a different change and must not
+// speak for the edited draft (round 4, #33 — editing an applied package now
+// falls back to the normal submit flow instead of a dead "needs approval").
+export interface ApprovalScopeSource {
+  callerInstanceId: string;
+  region?: string;
+  requestedCapabilityId?: string;
+  requestText?: string;
+  subjectSelector?: string;
+  targetId: string;
+  templateId: string;
+  tenantId: string;
+  workspaceId: string;
+}
+
+export function approvalScopeKey(scope: ApprovalScopeSource) {
+  return [
+    scope.tenantId,
+    scope.workspaceId,
+    scope.callerInstanceId,
+    scope.targetId,
+    scope.templateId,
+    scope.requestedCapabilityId ?? "",
+    scope.subjectSelector ?? "",
+    scope.region ?? "",
+    scope.requestText ?? "",
+  ].join("|");
+}

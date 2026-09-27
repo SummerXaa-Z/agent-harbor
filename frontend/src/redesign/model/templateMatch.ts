@@ -2,6 +2,7 @@ import { templateAllowsCapability } from "../../askJourney.ts";
 import type { PermissionPackageTemplate } from "../../permissionPackages.ts";
 import type { Capability } from "../../types.ts";
 import { capabilityNeedsDataDomain } from "./capabilityGovernance.ts";
+import { zhTemplateSummaries } from "../../i18n.ts";
 
 export type TemplateMatchLevel = "recommended" | "partial" | "none";
 
@@ -88,4 +89,16 @@ export function templateAllowsCapabilityIgnoringDomain(
       guardrail.capabilityKey === capability.key && guardrail.expectedDecision === "deny"
     ))
   );
+}
+
+// Display-layer translations for the built-in template summaries. Templates
+// are a server catalog whose summaries are English data; the zh UI shows the
+// translated copy for the four built-in ids and falls back to the raw
+// summary for anything else (round 4, #35).
+export function templateSummary(
+  template: Pick<PermissionPackageTemplate, "id" | "summary">,
+  language: string,
+): string {
+  if (!language.startsWith("zh")) return template.summary;
+  return zhTemplateSummaries[template.id] ?? template.summary;
 }

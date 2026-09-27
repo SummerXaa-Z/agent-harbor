@@ -25,7 +25,7 @@ interface PaletteBase {
 export type PaletteItem =
   | (PaletteBase & { group: "pages"; labelKey: string; view: RedesignView })
   | (PaletteBase & { group: "actions"; labelKey: string })
-  | (PaletteBase & { group: "recent"; label: string; sub: string });
+  | (PaletteBase & { group: "recent"; label: string; state?: "draft" | "disabled"; sub: string });
 
 interface PaletteActionSpec {
   id: string;
@@ -99,6 +99,9 @@ export function recentItems(input: {
       hash: `#admin/registry?agent=${agent.id}`,
       id: `recent:agent:${agent.id}`,
       label: agent.name,
+      // Drafts and disabled resources stay reachable but visibly weaker so
+      // stale entries from the recent list don't read as production-ready.
+      state: agent.status === "disabled" ? ("disabled" as const) : agent.status === "draft" ? ("draft" as const) : undefined,
       sub: agent.channelType === "local" ? agent.id : agentEndpoint(agent) || agent.id,
       surface: "admin" as const,
     }));

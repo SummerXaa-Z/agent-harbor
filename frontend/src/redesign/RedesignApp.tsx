@@ -15,6 +15,7 @@ import { OverlayRootContext } from "./ui/Modal";
 import { LoadingState } from "./ui/StateViews";
 import { ToastProvider, useToast } from "./ui/Toast";
 import { EntryPage } from "./views/EntryPage";
+import { NotFoundView } from "./views/NotFoundView";
 import { PlaceholderView } from "./views/PlaceholderView";
 import { AdminView } from "./views/admin/AdminView";
 import type { AdminViewProps } from "./views/admin/adminViewProps";
@@ -69,6 +70,9 @@ function RouteOutlet({
   const { t } = useRedesignI18n();
   if (route.surface === "entry") {
     return <EntryPage apiBase={apiBase} session={auth.session} />;
+  }
+  if (route.surface === "notfound") {
+    return <NotFoundView attempted={route.attempted} />;
   }
   if (!auth.session && auth.sessionLoading) {
     return (

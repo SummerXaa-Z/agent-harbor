@@ -245,7 +245,9 @@ test("registryRows classifies callers and targets with endpoints", () => {
     ["target", "Alpha target"],
   ]);
   assert.equal(agentEndpoint(rows[2].agent), "http://a.example/sse");
-  assert.deepEqual(registrySummary(rows), { callers: 2, targets: 1 });
+  // Active counts exclude disabled agents so the header chip can say how many
+  // registered entries are actually live (round 4, #31).
+  assert.deepEqual(registrySummary(rows), { activeCallers: 1, activeTargets: 1, callers: 2, targets: 1 });
 });
 
 test("capabilityDomainSegments sorts domains and buckets the unclassified", () => {

@@ -31,7 +31,6 @@ test("the empty hash is the redesign entry page since P5", () => {
 test("legacy hashes stay with the legacy console", () => {
   for (const hash of [
     "#ask",
-    "#/ask",
     "#getting-started",
     "#go-live",
     "#evidence",
@@ -39,12 +38,24 @@ test("legacy hashes stay with the legacy console", () => {
     "#users",
     "#user-guide",
     "#administrator",
-    "#User/home",
-    "#//user/home",
   ]) {
     assert.equal(parseRedesignHash(hash), null, hash);
     assert.equal(isRedesignHash(hash), false, hash);
   }
+});
+
+test("unknown slash-shaped hashes resolve to the redesign not-found page", () => {
+  for (const hash of ["#/ask", "#//user/home", "#/nonsense", "#/user/nope", "#/admin/nope", "#/user/nope?caller=agt_1", "#User/home", "#nonsense/foo"]) {
+    const parsed = parseRedesignHash(hash);
+    assert.ok(parsed, hash);
+    assert.equal(parsed.route.surface, "notfound", hash);
+    assert.equal(parsed.redirected, false, hash);
+    assert.equal(isRedesignHash(hash), true, hash);
+  }
+  // The attempted path rides along so the 404 page can show it.
+  assert.equal(parseRedesignHash("#/user/nope").route.attempted, "/user/nope");
+  // The attempted hash is kept in the address bar rather than rewritten.
+  assert.equal(parseRedesignHash("#/nonsense?x=1").canonicalHash, "#/nonsense?x=1");
 });
 
 test("entry hash opens the redesigned entry page", () => {
@@ -56,15 +67,12 @@ test("entry hash opens the redesigned entry page", () => {
   });
 });
 
-test("unknown or missing sub-routes redirect to each surface home", () => {
+test("missing sub-routes redirect to each surface home", () => {
   for (const [hash, canonicalHash] of [
     ["#user", "#user/home"],
     ["#user/", "#user/home"],
-    ["#user/nope", "#user/home"],
-    ["#user/nope?caller=agt_1", "#user/home"],
     ["#admin", "#admin/cockpit"],
     ["#admin/", "#admin/cockpit"],
-    ["#admin/nope", "#admin/cockpit"],
   ]) {
     const parsed = parseRedesignHash(hash);
     assert.ok(parsed, hash);

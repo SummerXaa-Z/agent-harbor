@@ -1930,6 +1930,11 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.context.none": "No recent application yet",
     "rd.context.option": "{caller} → {target} · {template}",
     "rd.status.active": "Active",
+    "rd.status.draft": "Draft",
+    "rd.notfound.title": "Page not found",
+    "rd.notfound.desc": "No page matches {hash}. Check the link, or start again from the workbench.",
+    "rd.notfound.backHome": "Back to workbench",
+    "rd.notfound.entry": "Entry page",
     "rd.status.inactive": "Inactive",
     "rd.chain.passed": "Passed",
     "rd.chain.failed": "Denied here",
@@ -2247,6 +2252,7 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.apr.notice.highRisk": "This request includes {highRisk} high-risk capabilities; review the impact before approving.",
     "rd.apr.notice.matchesTemplate": "Capabilities match the template guardrails.",
     "rd.apr.selfReview": "The requester cannot review their own request (segregation of duties).",
+    "rd.apr.idNotFound": "Approval {id} from the link was not found; showing the list selection.",
     "rd.apr.approve": "Approve",
     "rd.apr.reject": "Reject",
     "rd.apr.reviewedBy": "Reviewed by",
@@ -2338,7 +2344,9 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.tenants.profile.valid": "valid",
     "rd.tenants.profile.invalid": "invalid",
     "rd.registry.tableTitle": "Registered resources",
+    "rd.registry.probe.disabledNote": "This resource is disabled in the control plane. The probe only verifies network reachability; governed calls stay rejected until it is enabled.",
     "rd.registry.countCallers": "{count} callers",
+    "rd.registry.countActive": " · {count} active",
     "rd.registry.countTargets": "{count} targets",
     "rd.registry.register": "Register resource",
     "rd.registry.registerTitle": "Register resource",
@@ -2364,6 +2372,7 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.registry.duplicate": "A resource with this name already exists in the workspace",
     "rd.registry.validation.name": "Name and workspace are required",
     "rd.registry.validation.endpoint": "MCP targets need an endpoint",
+    "rd.registry.validation.tenant": "Tenant is required; create it under Tenants & organization first if it does not exist yet",
     "rd.registry.validation.credential": "Credential name and value are required",
     "rd.registry.status.draft": "draft",
     "rd.registry.credentialVersion": "credential version {version}",
@@ -2429,6 +2438,7 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.cap.domain": "Data domain",
     "rd.cap.domainUnset": "Unclassified",
     "rd.cap.unclassifiedBanner": "{count} approved capabilities have no data domain. Permission templates match capabilities by data domain, so these stay blocked in every request preview until they are classified.",
+    "rd.cap.targetNotFound": "Target {target} was not found; showing the first available target.",
     "rd.cap.domainsTitle": "Data-domain distribution",
     "rd.cap.donutCapabilities": "capabilities",
     "rd.cap.grantsTitle": "Existing grants",
@@ -4492,6 +4502,11 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.context.none": "还没有最近一次应用",
     "rd.context.option": "{caller} → {target} · {template}",
     "rd.status.active": "启用",
+    "rd.status.draft": "草稿",
+    "rd.notfound.title": "未找到页面",
+    "rd.notfound.desc": "没有与 {hash} 对应的页面。请检查链接，或从工作台重新开始。",
+    "rd.notfound.backHome": "返回工作台",
+    "rd.notfound.entry": "入口页",
     "rd.status.inactive": "停用",
     "rd.chain.passed": "已通过",
     "rd.chain.failed": "在此拒绝",
@@ -4809,6 +4824,7 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.apr.notice.highRisk": "本次申请包含 {highRisk} 项高风险能力,批准前请确认影响范围。",
     "rd.apr.notice.matchesTemplate": "能力范围与模板护栏一致。",
     "rd.apr.selfReview": "申请人不能审批自己的申请(职责分离)。",
+    "rd.apr.idNotFound": "未找到链接指向的审批 {id}，已显示列表默认选中项。",
     "rd.apr.approve": "批准",
     "rd.apr.reject": "拒绝",
     "rd.apr.reviewedBy": "审批人",
@@ -4900,7 +4916,9 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.tenants.profile.valid": "有效",
     "rd.tenants.profile.invalid": "失效",
     "rd.registry.tableTitle": "已注册资源",
+    "rd.registry.probe.disabledNote": "该资源已在控制平面停用。探测仅验证网络连通性;重新启用前,受治理的调用仍会被拒绝。",
     "rd.registry.countCallers": "{count} 调用方",
+    "rd.registry.countActive": " · {count} 启用",
     "rd.registry.countTargets": "{count} 目标",
     "rd.registry.register": "注册资源",
     "rd.registry.registerTitle": "注册资源",
@@ -4926,6 +4944,7 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.registry.duplicate": "同一工作区内已存在同名资源",
     "rd.registry.validation.name": "名称与工作区必填",
     "rd.registry.validation.endpoint": "MCP 目标必须填写端点",
+    "rd.registry.validation.tenant": "租户必填;若租户尚不存在,请先在“租户与组织”中创建",
     "rd.registry.validation.credential": "凭据名与凭据值必填",
     "rd.registry.status.draft": "草稿",
     "rd.registry.credentialVersion": "凭据版本 {version}",
@@ -4991,6 +5010,7 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.cap.domain": "数据域",
     "rd.cap.domainUnset": "未分类",
     "rd.cap.unclassifiedBanner": "{count} 项已批准能力尚未设置数据域。权限模板按数据域匹配能力,未分类的能力在申请预览中会一直按阻止处理。",
+    "rd.cap.targetNotFound": "未找到目标 {target}，已显示第一个可用目标。",
     "rd.cap.domainsTitle": "数据域分布",
     "rd.cap.donutCapabilities": "能力",
     "rd.cap.grantsTitle": "已有授权",
@@ -5150,6 +5170,17 @@ export function resolveInitialLanguage(storedLanguage?: string | null, browserLa
 export function translationKeys(language: Language): string[] {
   return Object.keys(translations[language]).sort()
 }
+
+// zh-CN copy for the built-in permission template summaries. The server
+// catalog carries English summaries as data; the redesigned console shows the
+// translation for the four built-in template ids and falls back to the raw
+// summary for anything else (round 4, #35).
+export const zhTemplateSummaries: Record<string, string> = {
+  "analytics-sandbox": "允许沙箱分析的读取与执行能力，阻止写入、导出和生产管理操作。",
+  "audit-readonly": "允许低风险的审计查阅读取，阻止变更、导出和受限数据。",
+  "sales-readonly": "允许限定销售租户内的 CRM 读取，阻止导出、删除、管理操作和受限数据。",
+  "support-ticket-triage": "允许工单读取和有界更新，阻止导出、删除和管理操作。",
+};
 
 export function createTranslator(language: Language) {
   return (key: string, fallback?: string): string => {

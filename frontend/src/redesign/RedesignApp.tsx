@@ -4,7 +4,7 @@ import { useConsoleAuth } from "../hooks/useConsoleAuth";
 import "../styles/redesign.css";
 import { RedesignI18nContext, useRedesignI18n, useRedesignLanguage } from "./hooks/useRedesignI18n";
 import { useRedesignData, type RedesignData } from "./hooks/useRedesignData";
-import { parseRedesignHash, type RedesignRoute, type SurfaceRoute } from "./router";
+import { parseRedesignHash, type RedesignRoute, type SurfaceRoute, type UserView as UserViewName } from "./router";
 import { LoginCard } from "./shell/LoginCard";
 import { Sidebar } from "./shell/Sidebar";
 import { Topbar } from "./shell/Topbar";
@@ -13,6 +13,12 @@ import { LoadingState } from "./ui/StateViews";
 import { ToastProvider, useToast } from "./ui/Toast";
 import { EntryPage } from "./views/EntryPage";
 import { PlaceholderView } from "./views/PlaceholderView";
+import { ApplyView } from "./views/user/ApplyView";
+import { AskView } from "./views/user/AskView";
+import { GoLiveView } from "./views/user/GoLiveView";
+import { HomeView } from "./views/user/HomeView";
+import { MineView } from "./views/user/MineView";
+import type { UserViewProps } from "./views/user/userViewProps";
 
 type ConsoleAuth = ReturnType<typeof useConsoleAuth>;
 
@@ -110,10 +116,29 @@ function SurfaceShell({
         <Topbar onRefresh={() => void refresh()} refreshing={data.loading} surface={route.surface} view={route.view} />
         <main className="content">
           <div className="view" key={routeKey}>
-            <PlaceholderView data={data} onRetry={() => void refresh()} view={route.view} />
+            {route.surface === "user" ? (
+              <UserView data={data} onRetry={() => void refresh()} params={route.params} session={auth.session} view={route.view} />
+            ) : (
+              <PlaceholderView data={data} onRetry={() => void refresh()} view={route.view} />
+            )}
           </div>
         </main>
       </div>
     </>
   );
+}
+
+function UserView({ view, ...props }: UserViewProps & { view: UserViewName }) {
+  switch (view) {
+    case "home":
+      return <HomeView {...props} />;
+    case "ask":
+      return <AskView {...props} />;
+    case "mine":
+      return <MineView {...props} />;
+    case "apply":
+      return <ApplyView {...props} />;
+    case "golive":
+      return <GoLiveView {...props} />;
+  }
 }

@@ -491,7 +491,7 @@ function findTemplateForCapability(
   return templates.find((template) => templateAllowsCapability(capability, template));
 }
 
-function templateAllowsCapability(capability: Capability, template: PermissionPackageTemplate) {
+export function templateAllowsCapability(capability: Capability, template: PermissionPackageTemplate) {
   const capabilityDomains = uniqueStrings([
     ...(capability.dataDomains ?? []),
     ...(capability.dataScopes ?? []).map((scope) => scope.dataDomain ?? "")

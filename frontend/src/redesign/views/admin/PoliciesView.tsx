@@ -4,6 +4,7 @@ import { tx } from "../../../localizedMessages";
 import { useRedesignI18n } from "../../hooks/useRedesignI18n";
 import { usePermissionCatalog } from "../../hooks/usePermissionCatalog";
 import { normalizeTemplateId, templateRuleRows } from "../../model/policyTemplates";
+import { templateSummary } from "../../model/templateMatch";
 import { adminHash, userHash } from "../../router";
 import { DataStatusBanner, DataStatusChip } from "../../shell/DataStatusBanner";
 import { Button } from "../../ui/Button";
@@ -15,7 +16,7 @@ import type { AdminViewProps } from "./adminViewProps";
 // Templates are a static, read-only catalog (difference #7): the only real
 // action per template is starting an application derived from it.
 export function PoliciesView({ data, onRetry, params }: AdminViewProps) {
-  const { t } = useRedesignI18n();
+  const { language, t } = useRedesignI18n();
   const live = data.status === "live";
   const catalog = usePermissionCatalog(live);
   const [selectedId, setSelectedId] = useState<string | null>(() => normalizeTemplateId(params.template, catalog.templates));
@@ -60,7 +61,7 @@ export function PoliciesView({ data, onRetry, params }: AdminViewProps) {
                     <span className="tpl-name">{template.name}</span>
                     <span className="mono small">{template.id}</span>
                   </div>
-                  <p className="tpl-desc">{template.summary}</p>
+                  <p className="tpl-desc">{templateSummary(template, language)}</p>
                   <div className="chip-row">
                     <TagOutline>{t("rd.pol.meta.domain")}: {template.defaultDataDomain}</TagOutline>
                     <TagOutline>{t("rd.pol.meta.allow")}: {template.allowedActions.map((action) => translatedValue(t, action)).join(" / ")}</TagOutline>

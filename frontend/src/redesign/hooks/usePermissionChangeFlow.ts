@@ -28,6 +28,7 @@ import {
   permissionChangeState,
   pickPendingApproval,
   type PermissionChangePresentation,
+  approvalScopeKey,
 } from "../model/approvalStateMachine";
 import { useToast } from "../ui/Toast";
 import { useRedesignI18n } from "./useRedesignI18n";
@@ -55,10 +56,6 @@ export interface PermissionChangeFlow {
 const previewPollMs = 10_000;
 const previewDebounceMs = 300;
 const reeditableStatuses = new Set(["rejected", "withdrawn", "expired"]);
-
-function approvalScopeKey(scope: Pick<AccessContext, "tenantId" | "workspaceId" | "callerInstanceId" | "targetId" | "templateId">) {
-  return [scope.tenantId, scope.workspaceId, scope.callerInstanceId, scope.targetId, scope.templateId].join("|");
-}
 
 function downloadJson(value: unknown, filename: string) {
   const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
@@ -150,7 +147,23 @@ export function usePermissionChangeFlow({
 
   const approval = effectiveApproval(preview?.approvalRequest, localApproval);
   const hideSettledApproval = reediting && approval !== null && reeditableStatuses.has(permissionPackageApprovalEffectiveStatus(approval));
-  const stateInput = hideSettledApproval && preview ? { ...preview, approvalRequest: undefined } : preview;
+  // The readiness list behind preview.latestApplication matches the request
+  // scope, not the snapshot: once region, subject, requested capability, or
+  // request text drift from the applied application, the stale application
+  // must not keep the page in the applied state — the user is back to a draft
+  // that can raise a fresh approval (round 4, #33).
+  const snapshotApplication = preview?.latestApplication ?? null;
+  const statePreview = snapshotApplication && preview
+    ? (
+        (snapshotApplication.requestText ?? "") === draftInput.requestText &&
+        (snapshotApplication.region ?? "") === draftInput.region &&
+        (snapshotApplication.subjectSelector ?? "") === (draftInput.subjectSelector ?? "") &&
+        (snapshotApplication.requestedCapabilityId ?? "") === (draftInput.requestedCapabilityId ?? "")
+      )
+      ? preview
+      : { ...preview, latestApplication: undefined, summary: { ...preview.summary, applied: false } }
+    : preview;
+  const stateInput = hideSettledApproval && statePreview ? { ...statePreview, approvalRequest: undefined } : statePreview;
   const localMissing = context.requestText.trim() ? [] : ["requestText"];
   const state = permissionChangeState({
     approval: hideSettledApproval ? null : localApproval,

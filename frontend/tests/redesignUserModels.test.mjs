@@ -18,6 +18,7 @@ import {
 } from "../src/redesign/model/accessContext.ts";
 import {
   approvalReconcileFilter,
+  approvalScopeKey,
   effectiveApproval,
   isApprovalAlreadyPendingError,
   isApprovalNotRequiredError,
@@ -461,6 +462,30 @@ test("go-live counts are named and come from readiness or the preview", () => {
   assert.equal(legs.totalCount, 4);
   assert.deepEqual(legs.checkRows.map((row) => row.key), ["connection", "permission_change", "runtime", "handoff"]);
   assert.equal(goLiveLegs({ approval: null, connectionStatus: null, liveDataAvailable: true, preview: null, readiness: null }), null);
+});
+
+test("approval scope key detaches a bound approval when snapshot fields change", () => {
+  const base = {
+    callerInstanceId: "agt-caller",
+    region: "cn-north",
+    requestedCapabilityId: "cap-1",
+    requestText: "支持工单读改。",
+    subjectSelector: "user:support-*",
+    targetId: "agt-target",
+    templateId: "support-ticket-triage",
+    tenantId: "tenant",
+    workspaceId: "ws",
+  };
+  // the approval request echoes the submitted snapshot, so context and its
+  // request must hash to the same key
+  assert.equal(approvalScopeKey(base), approvalScopeKey({ ...base, id: "ppar-1", status: "approved" }));
+  for (const field of ["region", "requestedCapabilityId", "requestText", "subjectSelector"]) {
+    assert.notEqual(approvalScopeKey({ ...base, [field]: `changed-${field}` }), approvalScopeKey(base));
+  }
+  // optional snapshot fields absent on both sides still match
+  const sparseA = { ...base, requestedCapabilityId: undefined, subjectSelector: undefined, requestText: undefined, region: undefined };
+  const sparseB = { ...base, requestedCapabilityId: undefined, subjectSelector: undefined, requestText: undefined, region: undefined, id: "ppar-2" };
+  assert.equal(approvalScopeKey(sparseA), approvalScopeKey(sparseB));
 });
 
 test("handoff token TTL stays within 15, 30 and 60 minutes", () => {

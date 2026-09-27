@@ -220,7 +220,17 @@ export function GoLiveView({ data, onRetry, params }: UserViewProps) {
             <Banner
               actions={
                 <>
-                  <Button disabled={flow.busy !== "" || !live} icon={<FileDown aria-hidden="true" size={15} />} onClick={() => void flow.exportReport()}>
+                  <Button
+                    disabled={flow.busy !== "" || !live}
+                    icon={<FileDown aria-hidden="true" size={15} />}
+                    // The report is always fetched fresh; the re-check first
+                    // keeps the on-page snapshot from lagging what was just
+                    // exported (round 4, #32).
+                    onClick={() => {
+                      recheck();
+                      void flow.exportReport();
+                    }}
+                  >
                     {t("action.exportAcceptanceReport")}
                   </Button>
                   <Button icon={<RefreshCw aria-hidden="true" size={15} />} onClick={recheck} variant="ghost">

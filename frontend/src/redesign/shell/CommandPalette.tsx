@@ -90,7 +90,7 @@ export function CommandPalette({ onClose, open, recent }: CommandPaletteProps) {
                 return (
                   <a
                     aria-selected={isActive}
-                    className={isActive ? "pal-item pal-active" : "pal-item"}
+                    className={`${isActive ? "pal-item pal-active" : "pal-item"}${item.group === "recent" && item.state === "disabled" ? " pal-item-muted" : ""}`}
                     data-active={isActive}
                     href={item.hash}
                     key={item.id}
@@ -104,9 +104,12 @@ export function CommandPalette({ onClose, open, recent }: CommandPaletteProps) {
                   >
                     <span className="pal-label">
                       {item.group === "recent" ? item.label : t(item.labelKey)}
+                      {item.group === "recent" && item.state ? (
+                        <span className="pal-state">{t(item.state === "disabled" ? "rd.status.inactive" : "rd.status.draft")}</span>
+                      ) : null}
                       <span className="pal-surface">{t(`rd.surface.${item.surface}`)}</span>
                     </span>
-                    {item.group === "recent" ? <span className="pal-sub mono">{item.sub}</span> : null}
+                    {item.group === "recent" ? <span className={`pal-sub mono${item.state === "disabled" ? " pal-sub-muted" : ""}`}>{item.sub}</span> : null}
                   </a>
                 );
               })}

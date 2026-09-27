@@ -50,6 +50,14 @@ export function ApprovalsView({ data, onRetry, params, session }: AdminViewProps
   const [actionError, setActionError] = useState<string | null>(null);
 
   const entries = useMemo(() => approvalList(approvals.requests), [approvals.requests]);
+  // A deep-linked approval id that no loaded request matches falls back to the
+  // list's own selection; say so instead of silently swapping it (round 4,
+  // #27). The miss is derived at render time and only governs while the deep
+  // link is still the selection — picking a row clears it and resyncs.
+  const deepLinkId = params.id ?? "";
+  const listReady = live && !approvals.loading;
+  const deepLinkMiss =
+    listReady && deepLinkId !== "" && selectedId === deepLinkId && !entries.some((entry) => entry.request.id === deepLinkId);
   const counts = approvalTabCounts(entries);
   const filtered = useMemo(() => filterApprovalList(entries, tab), [entries, tab]);
   const selected = entries.find((entry) => entry.request.id === selectedId) ?? filtered[0] ?? entries[0] ?? null;
@@ -57,7 +65,11 @@ export function ApprovalsView({ data, onRetry, params, session }: AdminViewProps
 
   // Selection and tab live in local state; the hash is only synced (no
   // hashchange) so picking rows does not remount the page or refetch the list.
+  // Sync waits until the list can resolve a deep-linked id — rewriting earlier
+  // would drop the id from the URL before the miss notice can explain it.
   useEffect(() => {
+    if (deepLinkId && !listReady) return;
+    if (deepLinkMiss) return;
     const next = adminHash("approvals", {
       ...(selected?.request.id ? { id: selected.request.id } : {}),
       status: tab,
@@ -65,7 +77,7 @@ export function ApprovalsView({ data, onRetry, params, session }: AdminViewProps
     if (window.location.hash !== next) {
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${next}`);
     }
-  }, [selected, tab]);
+  }, [selected, tab, deepLinkId, listReady, deepLinkMiss]);
 
   const consoleData = data.data;
   const capabilityRows = request
@@ -118,6 +130,7 @@ export function ApprovalsView({ data, onRetry, params, session }: AdminViewProps
         </div>
       </div>
       <DataStatusBanner data={data} onRetry={onRetry} />
+      {deepLinkMiss ? <Notice tone="warn">{tx(t, "rd.apr.idNotFound", { id: deepLinkId })}</Notice> : null}
       {!live && !consoleData ? (
         <LoadingState label={t("rd.data.loading")} />
       ) : (

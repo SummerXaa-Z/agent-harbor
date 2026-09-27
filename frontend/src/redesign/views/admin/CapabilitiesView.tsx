@@ -66,17 +66,29 @@ export function CapabilitiesView({ data, onRetry, params }: AdminViewProps) {
     () => (consoleData?.agents ?? []).filter((agent) => agent.channelType === "mcp" && agent.status !== "disabled"),
     [consoleData?.agents]
   );
-  const [targetId, setTargetId] = useState(() => {
-    const initial = params.target ?? "";
-    return mcpTargets.some((agent) => agent.id === initial) ? initial : mcpTargets[0]?.id ?? "";
-  });
+  // The deep-link target can arrive before the agent list loads, so the URL
+  // param is resolved at render time against whatever is loaded: a param no
+  // loaded target matches surfaces a notice instead of silently resetting to
+  // the first target (round 4, #27). Everything is derived — effect-ordered
+  // state would race the hash sync below on the commit where data lands.
+  const [selectedTargetId, setSelectedTargetId] = useState("");
+  const paramsTarget = params.target ?? "";
+  const targetsLoaded = mcpTargets.length > 0;
+  const paramsTargetValid = targetsLoaded && mcpTargets.some((agent) => agent.id === paramsTarget);
+  const missedTarget =
+    targetsLoaded && paramsTarget !== "" && !paramsTargetValid && selectedTargetId === "" ? paramsTarget : "";
+  const targetId = selectedTargetId || (paramsTargetValid ? paramsTarget : "") || mcpTargets[0]?.id || "";
 
+  // On a miss the URL keeps the stale target: rewriting it would re-key the
+  // view (any re-render re-reads location.hash) and wipe the notice that
+  // explains the fallback. Picking a target clears the miss and syncs again.
   useEffect(() => {
-    const next = adminHash("capabilities", targetId ? { target: targetId } : {});
+    if (!targetId || missedTarget) return;
+    const next = adminHash("capabilities", { target: targetId });
     if (window.location.hash !== next) {
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${next}`);
     }
-  }, [targetId]);
+  }, [targetId, missedTarget]);
 
   const capabilities = consoleData?.capabilities ?? [];
   const targetCapabilities = useMemo(
@@ -280,13 +292,16 @@ export function CapabilitiesView({ data, onRetry, params }: AdminViewProps) {
             {tx(t, "rd.cap.unclassifiedBanner", { count: unclassifiedApproved.length })}
           </Notice>
         ) : null}
+        {missedTarget ? (
+          <Notice tone="warn">{tx(t, "rd.cap.targetNotFound", { target: missedTarget })}</Notice>
+        ) : null}
         <Card>
           <div className="form-grid form-grid-4">
             <Field htmlFor="cap-target" label={t("rd.cap.target")}>
               <select
                 className="select"
                 id="cap-target"
-                onChange={(event) => setTargetId(event.target.value)}
+                onChange={(event) => setSelectedTargetId(event.target.value)}
                 value={targetId}
               >
                 {mcpTargets.map((agent) => (

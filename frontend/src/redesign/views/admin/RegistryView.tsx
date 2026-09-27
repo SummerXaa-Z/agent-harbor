@@ -15,7 +15,7 @@ import { useRedesignI18n } from "../../hooks/useRedesignI18n";
 import { apiErrorPresentation } from "../../model/apiErrorCategory";
 import { agentEndpoint, registryRows, registrySummary } from "../../model/registryCatalog";
 import { DataStatusBanner, DataStatusChip } from "../../shell/DataStatusBanner";
-import { Banner } from "../../ui/Banner";
+import { Banner, Notice } from "../../ui/Banner";
 import { Button } from "../../ui/Button";
 import { Card } from "../../ui/Card";
 import { Chip } from "../../ui/Chip";
@@ -108,6 +108,12 @@ export function RegistryView({ data, onRetry, params }: AdminViewProps) {
     const workspaceId = registerForm.workspaceId.trim();
     if (!name || !workspaceId) {
       setRegisterError(t("rd.registry.validation.name"));
+      return;
+    }
+    if (!registerForm.tenantId.trim()) {
+      // A missing tenant silently lands the resource in the implicit default
+      // tenant, which reads as a shadow duplicate in the registry (round 4, #30).
+      setRegisterError(t("rd.registry.validation.tenant"));
       return;
     }
     const endpoint = registerEndpoint.trim();
@@ -289,7 +295,13 @@ export function RegistryView({ data, onRetry, params }: AdminViewProps) {
           flush
           right={
             <>
-              <Chip tone="neutral">{tx(t, "rd.registry.countCallers", { count: summary.callers })} · {tx(t, "rd.registry.countTargets", { count: summary.targets })}</Chip>
+              <Chip tone="neutral">
+                  {tx(t, "rd.registry.countCallers", { count: summary.callers })}
+                  {summary.callers !== summary.activeCallers ? tx(t, "rd.registry.countActive", { count: summary.activeCallers }) : ""}
+                  {" · "}
+                  {tx(t, "rd.registry.countTargets", { count: summary.targets })}
+                  {summary.targets !== summary.activeTargets ? tx(t, "rd.registry.countActive", { count: summary.activeTargets }) : ""}
+                </Chip>
               <Button onClick={openCreate} size="sm" variant="primary">{t("rd.registry.register")}</Button>
             </>
           }
@@ -565,7 +577,10 @@ export function RegistryView({ data, onRetry, params }: AdminViewProps) {
         title={probe ? tx(t, "rd.registry.probe.title", { name: probe.agent.name }) : ""}
       >
         {probe ? (
-          <ProbeResult result={probe.result} t={t} />
+          <div className="stack">
+            {probe.agent.status === "disabled" ? <Notice tone="warn">{t("rd.registry.probe.disabledNote")}</Notice> : null}
+            <ProbeResult result={probe.result} t={t} />
+          </div>
         ) : null}
       </Modal>
     </>

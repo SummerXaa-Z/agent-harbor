@@ -130,15 +130,16 @@ export function isAdminView(value: string): value is AdminView {
   return (adminViews as readonly string[]).includes(value);
 }
 
-// Returns null for every hash the legacy console owns (including the empty
-// hash), so the two trees never fight over a URL.
+// Returns null for every hash the legacy console owns. Since P5 the empty
+// hash belongs to the redesign entry page (decision D1); explicit legacy
+// hashes (#ask, #getting-started, …) keep loading the legacy console.
 export function parseRedesignHash(hash: string): ParsedRedesignHash | null {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
   const queryIndex = raw.indexOf("?");
   const path = queryIndex === -1 ? raw : raw.slice(0, queryIndex);
   const query = queryIndex === -1 ? "" : raw.slice(queryIndex + 1);
 
-  if (path === "/") {
+  if (path === "/" || path === "") {
     return withCanonicalHash(raw, { surface: "entry" });
   }
 

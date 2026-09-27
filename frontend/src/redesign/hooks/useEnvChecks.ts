@@ -11,17 +11,7 @@ import { managementMcpCatalogDiagnosticFromResult, type ManagementMcpCatalogDiag
 import type { PermissionPackageApplication } from "../../permissionPackages";
 import type { Agent, TargetProbeResult } from "../../types";
 import type { RedesignData } from "./useRedesignData";
-import {
-  apiServiceCheck,
-  corePathCheck,
-  envCheckSummary,
-  envHealthCheck,
-  mcpServiceCheck,
-  preferredProbeTarget,
-  registeredMcpTargets,
-  type EnvCheckRow,
-  type EnvCheckSummary,
-} from "../model/envChecks";
+import { apiServiceCheck, corePathCheck, envCheckSummary, envHealthCheck, mcpServiceCheck, preferredProbeTarget, rememberEnvCheckSnapshot, registeredMcpTargets, type EnvCheckRow, type EnvCheckSummary } from "../model/envChecks";
 import { readinessCheckCount, type ReadinessCheckCount } from "../model/goLive";
 
 export interface UnreachableTarget {
@@ -133,6 +123,7 @@ export function useEnvChecks(data: RedesignData): EnvChecksState {
     ];
 
     setChecking(false);
+    rememberEnvCheckSnapshot(rows);
     setResult({ latestApplication, readinessCount: readinessCheckCount(readiness, null), rows, unreachableTargets });
   }, [probeSupported, snapshot]);
 

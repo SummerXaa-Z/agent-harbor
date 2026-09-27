@@ -79,6 +79,24 @@ export function RefreshIcon({ className, size = 17 }: IconProps) {
   );
 }
 
+export function BellIcon({ className, size = 17 }: IconProps) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" height={size} stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24" width={size}>
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+    </svg>
+  );
+}
+
+export function SearchIcon({ className, size = 16 }: IconProps) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" height={size} stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24" width={size}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.8-3.8" />
+    </svg>
+  );
+}
+
 export function CloseIcon({ className, size = 16 }: IconProps) {
   return (
     <Svg className={className} size={size}>

@@ -1,0 +1,194 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  filterPaletteItems,
+  paletteItems,
+  recentItems,
+} from "../src/redesign/model/paletteIndex.ts";
+import {
+  deriveNotifications,
+  effectiveReadIds,
+  emptyReadState,
+  parseReadState,
+  serializeReadState,
+  unreadCounts,
+} from "../src/redesign/model/notifications.ts";
+import { adminViews, userViews, isRedesignHash } from "../src/redesign/router.ts";
+import { permissionPackageTemplates } from "../src/permissionPackages.ts";
+
+function agent(overrides = {}) {
+  return {
+    channelConfig: { endpoint: "http://a.example/sse" },
+    channelType: "mcp",
+    createdAt: "2026-09-20T08:00:00Z",
+    credentialVersion: 1,
+    id: "agt-a",
+    name: "Target A",
+    status: "active",
+    tenantId: "t1",
+    updatedAt: "2026-09-20T08:00:00Z",
+    workspaceId: "w1",
+    ...overrides,
+  };
+}
+
+function capability(overrides = {}) {
+  return {
+    action: "read",
+    discoveredAt: "2026-09-20T08:00:00Z",
+    discoveryStatus: "approved",
+    displayName: "Cap",
+    id: "cap-1",
+    key: "search_customer",
+    riskLevel: "low",
+    sensitivity: "internal",
+    targetId: "agt-a",
+    type: "mcp_tool",
+    updatedAt: "2026-09-20T08:00:00Z",
+    version: 1,
+    ...overrides,
+  };
+}
+
+function approval(overrides = {}) {
+  return {
+    allowedCapabilityIds: ["cap-1"],
+    allowedCapabilityKeys: ["search_customer"],
+    allowedCapabilityFingerprints: [],
+    callerInstanceId: "agt-caller",
+    createdAt: "2026-09-24T08:00:00Z",
+    expiresAt: "2026-09-25T08:00:00Z",
+    id: "apr-1",
+    policyGate: { reasons: [], required: true },
+    status: "pending",
+    targetId: "agt-a",
+    templateId: "support-ticket-triage",
+    templateVersion: 1,
+    policyVersion: 1,
+    tenantId: "t1",
+    updatedAt: "2026-09-24T08:00:00Z",
+    workspaceId: "w1",
+    ...overrides,
+  };
+}
+
+test("paletteItems covers every page of both surfaces plus actions", () => {
+  const items = paletteItems();
+  const pageIds = items.filter((item) => item.group === "pages").map((item) => item.id.split(":")[1]);
+  for (const view of [...userViews, ...adminViews]) assert.ok(pageIds.includes(view), view);
+  assert.equal(new Set(pageIds).size, userViews.length + adminViews.length);
+  const actions = items.filter((item) => item.group === "actions");
+  assert.ok(actions.length >= 8);
+  assert.ok(actions.every((item) => item.hash.startsWith("#")));
+  const hashes = items.map((item) => item.hash);
+  assert.ok(hashes.every((hash) => isRedesignHash(hash)));
+  assert.equal(new Set(items.map((item) => item.id)).size, items.length, "ids are unique");
+  // Actions may share a hash with their page — that is the deep link.
+});
+
+test("recentItems interleaves agents and approvals with deep links", () => {
+  const agents = [
+    agent({ id: "a1", name: "Old", updatedAt: "2026-09-01T00:00:00Z" }),
+    agent({ id: "a2", name: "New", updatedAt: "2026-09-26T00:00:00Z" }),
+    agent({ channelConfig: {}, channelType: "local", id: "a3", name: "Caller", updatedAt: "2026-09-25T00:00:00Z" }),
+  ];
+  const approvals = [
+    approval({ id: "apr-old", updatedAt: "2026-09-01T00:00:00Z" }),
+    approval({ id: "apr-new", status: "approved", updatedAt: "2026-09-27T00:00:00Z" }),
+  ];
+  const items = recentItems({ agents, approvals });
+  assert.equal(items.length, 5);
+  // Interleaving keeps both kinds visible; agents lead at equal rank.
+  assert.equal(items[0].label, "New");
+  assert.equal(items[0].sub, "http://a.example/sse");
+  assert.equal(items[1].id, "recent:approval:apr-new");
+  assert.equal(items[1].hash, "#admin/approvals?id=apr-new");
+  const callerItem = items.find((item) => item.id === "recent:agent:a3");
+  assert.equal(callerItem.sub, "a3", "local callers fall back to their id");
+});
+
+test("filterPaletteItems matches labels and sub lines, case-insensitively", () => {
+  const pages = paletteItems();
+  const label = (item) => (item.group === "pages" ? item.id.split(":")[1] : item.group === "actions" ? item.id : item.label);
+  const needle = (q) => filterPaletteItems(pages, q, label);
+  assert.equal(needle("").length, pages.length);
+  assert.deepEqual(needle("COCKPIT").map((i) => i.id), ["page:cockpit"]);
+  assert.deepEqual(needle("action:apply").map((i) => i.id), ["action:apply"]);
+  const recent = [
+    { group: "recent", hash: "#x", id: "r", label: "Knowledge MCP", sub: "http://127.0.0.1:8787/mcp", surface: "admin" },
+  ];
+  assert.equal(filterPaletteItems(recent, "8787", (i) => i.label).length, 1, "sub line is searchable");
+  assert.equal(filterPaletteItems(recent, "nope", (i) => i.label).length, 0);
+});
+
+test("deriveNotifications splits surfaces and filters by the session actor", () => {
+  const base = {
+    agents: [agent({}), agent({ channelConfig: {}, channelType: "local", id: "agt-caller", name: "Caller" })],
+    approvals: [
+      approval({ id: "apr-pending" }),
+      approval({ id: "apr-mine", requestedBy: "local-dev", resolvedAt: "2026-09-26T09:00:00Z", reviewedBy: "reviewer@x", reviewComment: "ok", status: "approved", updatedAt: "2026-09-26T09:00:00Z" }),
+      approval({ id: "apr-other", requestedBy: "someone-else", resolvedAt: "2026-09-26T09:00:00Z", reviewedBy: "reviewer@x", status: "rejected", updatedAt: "2026-09-26T09:00:00Z" }),
+    ],
+    capabilities: [capability()],
+    envRows: [
+      { detail: "", fixKeys: [], key: "api", status: "ok", subKey: "rd.envcheck.api.ok" },
+      { detail: "refused", fixKeys: [], key: "mcp", status: "error", subKey: "rd.envcheck.mcp.error" },
+    ],
+    sessionActor: "local-dev",
+    templates: permissionPackageTemplates,
+  };
+  const items = deriveNotifications(base);
+  assert.deepEqual(
+    items.map((item) => item.dedupeId),
+    ["approval:apr-mine:approved", "approval:apr-pending:pending", "env:mcp:error"],
+  );
+  const pending = items[1];
+  assert.equal(pending.surface, "admin");
+  assert.equal(pending.hash, "#admin/approvals?id=apr-pending");
+  assert.equal(pending.params.caller, "Caller");
+  assert.equal(pending.params.target, "Target A");
+  const mine = items[0];
+  assert.equal(mine.surface, "user");
+  assert.equal(mine.hash, "#user/apply?approval=apr-mine");
+  assert.ok(!items.some((item) => item.dedupeId.includes("apr-other")), "other actors' requests stay out");
+
+  const rejected = deriveNotifications({
+    ...base,
+    approvals: [approval({ id: "apr-r", requestedBy: "local-dev", resolvedAt: "2026-09-26T09:00:00Z", reviewedBy: "reviewer@x", reviewComment: "window", status: "rejected", updatedAt: "2026-09-26T09:00:00Z" })],
+  })[0];
+  assert.equal(rejected.subKey, "rd.nt.rejected.subReason");
+  assert.equal(rejected.params.comment, "window");
+});
+
+test("read state: baseline, storage round-trip and unread counts", () => {
+  const items = deriveNotifications({
+    agents: [],
+    approvals: [
+      approval({ id: "apr-old", createdAt: "2026-09-01T00:00:00Z", requestedBy: "local-dev", resolvedAt: "2026-09-01T00:00:00Z", reviewedBy: "r", status: "approved", updatedAt: "2026-09-01T00:00:00Z" }),
+      approval({ id: "apr-new", createdAt: "2026-09-26T00:00:00Z" }),
+    ],
+    capabilities: [],
+    envRows: [],
+    sessionActor: "local-dev",
+    templates: [],
+  });
+  const state = { baselineAt: "2026-09-20T00:00:00Z", readIds: [] };
+  const read = effectiveReadIds(items, state);
+  assert.ok(read.has("approval:apr-old:approved"), "resolved items before the baseline count as read");
+  assert.ok(!read.has("approval:apr-new:pending"), "pending items never auto-read");
+  assert.deepEqual(unreadCounts(items, read), { admin: 1, user: 0 });
+
+  const state2 = { baselineAt: "2026-09-20T00:00:00Z", readIds: ["approval:apr-new:pending"] };
+  assert.deepEqual(unreadCounts(items, effectiveReadIds(items, state2)), { admin: 0, user: 0 });
+
+  const roundTrip = parseReadState(serializeReadState(state), "x");
+  assert.deepEqual(roundTrip, state);
+  assert.deepEqual(parseReadState(null, "now"), emptyReadState("now"));
+  assert.deepEqual(parseReadState("{bogus", "now"), emptyReadState("now"));
+  assert.deepEqual(
+    parseReadState('{"baselineAt":"b","readIds":[1,"a"]}', "now"),
+    { baselineAt: "b", readIds: ["a"] },
+  );
+  assert.deepEqual(parseReadState('{"readIds":[1,"a"]}', "now"), emptyReadState("now"), "missing baseline resets");
+});

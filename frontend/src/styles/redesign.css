@@ -1,0 +1,1709 @@
+/*
+ * AgentHarbor 0.4.0 console. Every rule is scoped under .ah2 so the redesign
+ * can coexist with the legacy console, whose global styles stay loaded after
+ * a runtime switch. Raw colors live only in this first token block; rules
+ * below use var(--*). Selectors must out-rank legacy element rules
+ * (th, td, td span, button, ...), so element resets are written as .ah2 X.
+ */
+.ah2,
+:root:has(.ah2) {
+  --bg: #F6F8FB;
+  --card: #FFFFFF;
+  --border: #E6EAF1;
+  --border-strong: #D8DEE9;
+  --primary: #2456E6;
+  --primary-hover: #1E47C4;
+  --primary-soft: #EAF0FE;
+  --text: #0F1B2D;
+  --text-2: #4A5A70;
+  --text-3: #8A97A8;
+  --success: #16A36A;
+  --success-soft: #E6F6EF;
+  --warning: #D98324;
+  --warning-soft: #FCF1E2;
+  --danger: #D64545;
+  --danger-soft: #FBEAEA;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 2px 8px rgba(16, 24, 40, .05);
+  --sidebar-w: 232px;
+  --topbar-h: 58px;
+  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --mono: "SF Mono", Menlo, Consolas, monospace;
+
+  --on-accent: #FFFFFF;
+  --hover-bg: #F1F4F9;
+  --neutral-bg: #F1F4F8;
+  --row-hover: #FAFBFD;
+  --line-soft: #F0F3F8;
+  --muted-fill: #E7EBF2;
+  --crumb-sep: #C2CAD6;
+  --scroll-thumb: #D4DBE6;
+  --success-hover: #128C5C;
+  --danger-border: #EBB4B4;
+  --danger-ink: #A53838;
+  --switch-off: #CBD3DF;
+  --entry-hover-border: #C9D6F7;
+  --avatar-gradient: linear-gradient(135deg, #5B8DEF, #2456E6);
+  --topbar-bg: rgba(246, 248, 251, .88);
+  --mask: rgba(15, 27, 45, .42);
+  --toast-bg: #0F1B2D;
+  --code-bg: #111827;
+  --code-text: #D6DEEC;
+  --code-key: #9DB8F5;
+  --code-comment: #6E7E96;
+  --code-string: #9ED5AE;
+  --code-copy-bg: rgba(255, 255, 255, .08);
+  --code-copy-bg-hover: rgba(255, 255, 255, .16);
+  --code-copy-text: #C8D2E2;
+  --banner-info-border: #CFE0FA;
+  --banner-info-icon: #D7E7FC;
+  --banner-info-desc: #3E6796;
+  --banner-success-border: #BFE8D7;
+  --banner-success-icon: #CDEEDF;
+  --banner-success-desc: #2E7A58;
+  --banner-warning-border: #F2DCB6;
+  --banner-warning-icon: #F6E1C0;
+  --banner-warning-desc: #9A641F;
+  --banner-danger-border: #F2C7C7;
+  --banner-danger-icon: #F5CCCC;
+  --notice-text: #3A5390;
+  --notice-warn-text: #92601D;
+  --shadow-entry: 0 1px 2px rgba(16, 24, 40, .04), 0 4px 16px rgba(16, 24, 40, .06);
+  --shadow-entry-hover: 0 6px 24px rgba(36, 86, 230, .10);
+  --shadow-modal: 0 20px 60px rgba(15, 27, 45, .25);
+  --shadow-toast: 0 8px 28px rgba(15, 27, 45, .3);
+  --shadow-knob: 0 1px 3px rgba(0, 0, 0, .2);
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%238A97A8' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+/* ============ Base and element resets ============ */
+body:has(.ah2) {
+  margin: 0;
+  background: var(--bg);
+}
+
+.ah2 {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ah2 *,
+.ah2 *::before,
+.ah2 *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.ah2 h1,
+.ah2 h2,
+.ah2 h3,
+.ah2 h4 {
+  font-size: inherit;
+  font-weight: 700;
+}
+
+.ah2 ul,
+.ah2 ol {
+  list-style: none;
+}
+
+.ah2 button {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ah2 input,
+.ah2 select,
+.ah2 textarea {
+  color: inherit;
+  font: inherit;
+}
+
+.ah2 a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.ah2 svg {
+  flex: none;
+}
+
+.ah2 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.ah2 table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+
+.ah2 th,
+.ah2 td {
+  height: auto;
+  overflow: visible;
+  border: 0;
+  color: inherit;
+  font-size: inherit;
+  text-overflow: clip;
+  text-transform: none;
+  white-space: normal;
+}
+
+.ah2 td span,
+.ah2 td strong,
+.ah2 td code {
+  display: revert;
+  max-width: none;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-overflow: clip;
+  vertical-align: baseline;
+  white-space: inherit;
+}
+
+.ah2 td strong {
+  font-weight: 600;
+}
+
+.ah2 td code {
+  font-family: var(--mono);
+}
+
+.ah2 ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ah2 ::-webkit-scrollbar-thumb {
+  border: 2px solid var(--bg);
+  border-radius: 6px;
+  background: var(--scroll-thumb);
+}
+
+.ah2 ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ah2 .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ============ Layout ============ */
+.ah2 .sb {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-w);
+  border-right: 1px solid var(--border);
+  background: var(--card);
+}
+
+.ah2 .main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  margin-left: var(--sidebar-w);
+}
+
+.ah2 .tb {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--topbar-h);
+  padding: 0 26px;
+  border-bottom: 1px solid var(--border);
+  background: var(--topbar-bg);
+  backdrop-filter: blur(8px);
+}
+
+.ah2 .content {
+  flex: 1;
+  padding: 26px 28px 48px;
+}
+
+.ah2 .view {
+  animation: ah2-fade .22s ease;
+}
+
+@keyframes ah2-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============ Sidebar ============ */
+.ah2 .sb-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 16px 14px;
+  color: var(--text);
+}
+
+.ah2 .sb-logo {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--primary);
+  color: var(--on-accent);
+}
+
+.ah2 .sb-name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.ah2 .sb-tag {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.ah2 .sb-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 12px 12px;
+}
+
+.ah2 .sb-group-label {
+  padding: 14px 10px 6px;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .4px;
+}
+
+.ah2 .nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 13.5px;
+  text-align: left;
+  transition: background .13s, color .13s;
+}
+
+.ah2 .nav-link svg {
+  color: var(--text-3);
+  transition: color .13s;
+}
+
+.ah2 .nav-link:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+
+.ah2 .nav-link:hover svg {
+  color: var(--text-2);
+}
+
+.ah2 .nav-link.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.ah2 .nav-link.active svg {
+  color: var(--primary);
+}
+
+.ah2 .sb-bottom {
+  padding: 10px 12px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.ah2 .sb-bottom .nav-link {
+  margin-bottom: 6px;
+}
+
+.ah2 .sb-switch {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.ah2 .sb-switch:hover {
+  background: var(--hover-bg);
+  color: var(--text-2);
+}
+
+.ah2 .sb-user {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.ah2 .avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--avatar-gradient);
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ah2 .u-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ah2 .u-name {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ah2 .u-role {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+/* ============ Topbar ============ */
+.ah2 .crumb {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--text-3);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ah2 .crumb b {
+  overflow: hidden;
+  color: var(--text-2);
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.ah2 .crumb-sep {
+  color: var(--crumb-sep);
+}
+
+.ah2 .spacer {
+  flex: 1;
+}
+
+.ah2 .app-switch {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ah2 .app-switch:hover {
+  border-color: var(--border-strong);
+}
+
+.ah2 .lang {
+  display: flex;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 12.5px;
+}
+
+.ah2 .lang button {
+  padding: 7px 11px;
+  color: var(--text-2);
+}
+
+.ah2 .lang button[aria-pressed="true"] {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.ah2 .icon-btn {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-2);
+}
+
+.ah2 .icon-btn:hover:not([disabled]) {
+  border-color: var(--border);
+  background: var(--card);
+}
+
+.ah2 .icon-btn[disabled] {
+  cursor: progress;
+  opacity: .6;
+}
+
+.ah2 .icon-btn.sm {
+  width: 28px;
+  height: 28px;
+}
+
+.ah2 .spin {
+  animation: ah2-spin 1s linear infinite;
+}
+
+@keyframes ah2-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============ Cards and typography ============ */
+.ah2 .card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.ah2 .card-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ah2 .card-h h3 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ah2 .card-sub {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.ah2 .card-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.ah2 .card-b {
+  padding: 20px;
+}
+
+.ah2 .grid {
+  display: grid;
+  gap: 18px;
+}
+
+.ah2 .grid > * {
+  min-width: 0;
+}
+
+.ah2 .grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ah2 .grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ah2 .grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ah2 .stack {
+  display: grid;
+  gap: 18px;
+}
+
+.ah2 .page-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.ah2 .page-head-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ah2 .page-head h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -.2px;
+}
+
+.ah2 .page-head p {
+  margin-top: 5px;
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+
+.ah2 .page-head-aside {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ah2 .muted {
+  color: var(--text-3);
+}
+
+.ah2 .small {
+  font-size: 12px;
+}
+
+.ah2 .mono {
+  font-family: var(--mono);
+}
+
+.ah2 .text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ============ Buttons ============ */
+.ah2 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background .14s, border-color .14s, color .14s;
+}
+
+.ah2 .btn-primary {
+  background: var(--primary);
+  color: var(--on-accent);
+}
+
+.ah2 .btn-primary:hover:not([disabled]) {
+  background: var(--primary-hover);
+}
+
+.ah2 .btn-success {
+  background: var(--success);
+  color: var(--on-accent);
+}
+
+.ah2 .btn-success:hover:not([disabled]) {
+  background: var(--success-hover);
+}
+
+.ah2 .btn-ghost {
+  border: 1px solid var(--border-strong);
+  background: var(--card);
+  color: var(--text);
+}
+
+.ah2 .btn-ghost:hover:not([disabled]) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.ah2 .btn-danger-ghost {
+  border: 1px solid var(--danger-border);
+  background: var(--card);
+  color: var(--danger);
+}
+
+.ah2 .btn-danger-ghost:hover:not([disabled]) {
+  background: var(--danger-soft);
+}
+
+.ah2 .btn-sm {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+
+.ah2 .btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px;
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ah2 .btn[disabled],
+.ah2 .btn-link[disabled] {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+/* ============ Chips, tags and risk ============ */
+.ah2 .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ah2 .chip-success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.ah2 .chip-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.ah2 .chip-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.ah2 .chip-info {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.ah2 .chip-neutral {
+  background: var(--neutral-bg);
+  color: var(--text-2);
+}
+
+.ah2 .tag-outline {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ah2 .risk {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ah2 .risk-low {
+  background: var(--muted-fill);
+  color: var(--text-2);
+}
+
+.ah2 .risk-mid {
+  background: var(--warning);
+}
+
+.ah2 .risk-high {
+  background: var(--danger);
+}
+
+/* ============ Banners and notices ============ */
+.ah2 .banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 15px 18px;
+  border: 1px solid;
+  border-radius: var(--radius);
+}
+
+.ah2 .b-ico {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+}
+
+.ah2 .b-main {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.ah2 .b-title {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+.ah2 .b-desc {
+  margin-top: 2px;
+  font-size: 12.5px;
+}
+
+.ah2 .b-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ah2 .banner-info {
+  border-color: var(--banner-info-border);
+  background: var(--primary-soft);
+}
+
+.ah2 .banner-info .b-ico {
+  background: var(--banner-info-icon);
+  color: var(--primary);
+}
+
+.ah2 .banner-info .b-desc {
+  color: var(--banner-info-desc);
+}
+
+.ah2 .banner-success {
+  border-color: var(--banner-success-border);
+  background: var(--success-soft);
+}
+
+.ah2 .banner-success .b-ico {
+  background: var(--banner-success-icon);
+  color: var(--success);
+}
+
+.ah2 .banner-success .b-desc {
+  color: var(--banner-success-desc);
+}
+
+.ah2 .banner-warning {
+  border-color: var(--banner-warning-border);
+  background: var(--warning-soft);
+}
+
+.ah2 .banner-warning .b-ico {
+  background: var(--banner-warning-icon);
+  color: var(--warning);
+}
+
+.ah2 .banner-warning .b-desc {
+  color: var(--banner-warning-desc);
+}
+
+.ah2 .banner-danger {
+  border-color: var(--banner-danger-border);
+  background: var(--danger-soft);
+}
+
+.ah2 .banner-danger .b-ico {
+  background: var(--banner-danger-icon);
+  color: var(--danger);
+}
+
+.ah2 .banner-danger .b-desc {
+  color: var(--danger-ink);
+}
+
+.ah2 .notice {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: var(--primary-soft);
+  color: var(--notice-text);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.ah2 .notice svg {
+  margin-top: 1px;
+}
+
+.ah2 .notice-warn {
+  background: var(--warning-soft);
+  color: var(--notice-warn-text);
+}
+
+.ah2 .notice-danger {
+  background: var(--danger-soft);
+  color: var(--danger-ink);
+}
+
+/* ============ Stepper ============ */
+.ah2 .stepper {
+  display: flex;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+}
+
+.ah2 .step {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  min-width: 110px;
+}
+
+.ah2 .step::before {
+  content: "";
+  position: absolute;
+  top: 15px;
+  left: calc(-50% + 15px);
+  z-index: 1;
+  width: calc(100% - 30px);
+  height: 2px;
+  background: var(--muted-fill);
+}
+
+.ah2 .step:first-child::before {
+  display: none;
+}
+
+.ah2 .step-dot {
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--muted-fill);
+  border-radius: 50%;
+  background: var(--muted-fill);
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ah2 .step-label {
+  margin-top: 8px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.ah2 .step-state {
+  margin-top: 2px;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.ah2 .step-done::before {
+  background: var(--success);
+}
+
+.ah2 .step-done .step-dot {
+  border-color: var(--success);
+  background: var(--success);
+  color: var(--on-accent);
+}
+
+.ah2 .step-done .step-label {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.ah2 .step-current .step-dot {
+  border-color: var(--primary);
+  background: var(--card);
+  color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-soft);
+}
+
+.ah2 .step-current .step-label {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.ah2 .step-blocked .step-dot {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--on-accent);
+}
+
+.ah2 .step-blocked .step-label {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.ah2 .step-skipped .step-dot {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: var(--card);
+}
+
+/* ============ Forms ============ */
+.ah2 .form-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.ah2 .form-grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ah2 .field-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ah2 .input,
+.ah2 .select {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.ah2 select.select {
+  padding-right: 30px;
+  background-image: var(--select-arrow);
+  background-position: right 11px center;
+  background-repeat: no-repeat;
+  appearance: none;
+}
+
+.ah2 textarea.input {
+  height: auto;
+  min-height: 84px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.ah2 .input::placeholder {
+  color: var(--text-3);
+}
+
+.ah2 .input:focus,
+.ah2 .select:focus {
+  border-color: var(--primary);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.ah2 .input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.ah2 .hint {
+  margin-top: 6px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.ah2 .field-error {
+  margin-top: 6px;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.ah2 .switch {
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 22px;
+  border-radius: 12px;
+  background: var(--switch-off);
+  transition: background .15s;
+}
+
+.ah2 .switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: var(--shadow-knob);
+  transition: left .15s;
+}
+
+.ah2 .switch[aria-checked="true"] {
+  background: var(--success);
+}
+
+.ah2 .switch[aria-checked="true"]::after {
+  left: 18px;
+}
+
+.ah2 .switch[disabled] {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+/* ============ Tables ============ */
+.ah2 .tbl-wrap {
+  overflow-x: auto;
+}
+
+.ah2 .tbl th {
+  overflow: hidden;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ah2 .tbl td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+  vertical-align: middle;
+  word-break: break-word;
+}
+
+.ah2 .tbl tr:last-child td {
+  border-bottom: 0;
+}
+
+.ah2 .tbl tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.ah2 .tbl td.tbl-empty {
+  padding: 0;
+}
+
+.ah2 .tbl tbody tr.tbl-empty-row:hover {
+  background: none;
+}
+
+.ah2 .cell-main {
+  font-weight: 600;
+}
+
+.ah2 .cell-sub {
+  margin-top: 2px;
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+/* ============ Code, key-value, KPI ============ */
+.ah2 .codeblock-wrap {
+  position: relative;
+}
+
+.ah2 .codeblock {
+  overflow-x: auto;
+  padding: 16px 18px;
+  border-radius: 10px;
+  background: var(--code-bg);
+  color: var(--code-text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.85;
+  white-space: pre;
+}
+
+.ah2 .codeblock-wrap .codeblock {
+  padding-right: 92px;
+}
+
+.ah2 .ck-key {
+  color: var(--code-key);
+}
+
+.ah2 .ck-cm {
+  color: var(--code-comment);
+}
+
+.ah2 .ck-str {
+  color: var(--code-string);
+}
+
+.ah2 .copy-mini {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: var(--code-copy-bg);
+  color: var(--code-copy-text);
+  font-size: 11.5px;
+}
+
+.ah2 .copy-mini:hover {
+  background: var(--code-copy-bg-hover);
+}
+
+.ah2 .kv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 24px;
+}
+
+.ah2 .kv-k {
+  margin-bottom: 3px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.ah2 .kv-v {
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ah2 .kpi {
+  padding: 16px 18px;
+}
+
+.ah2 .kpi-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ah2 .kpi-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--neutral-bg);
+  color: var(--text-2);
+}
+
+.ah2 .kpi-num {
+  margin-top: 10px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -.4px;
+}
+
+.ah2 .kpi-label {
+  margin-top: 2px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+/* ============ Modal and toast ============ */
+.ah2 .modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--mask);
+}
+
+.ah2 .modal {
+  width: 100%;
+  max-width: 500px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--shadow-modal);
+  animation: ah2-pop .18s ease;
+}
+
+.ah2 .modal-narrow {
+  max-width: 480px;
+}
+
+.ah2 .modal-wide {
+  max-width: 720px;
+}
+
+@keyframes ah2-pop {
+  from {
+    opacity: 0;
+    transform: scale(.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ah2 .modal-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ah2 .modal-h h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ah2 .modal-x {
+  margin-left: auto;
+  color: var(--text-3);
+}
+
+.ah2 .modal-b {
+  padding: 22px;
+}
+
+.ah2 .modal-f {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 22px;
+  border-top: 1px solid var(--border);
+}
+
+.ah2 .toast-wrap {
+  position: fixed;
+  top: 74px;
+  left: 50%;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.ah2 .toast {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 18px;
+  border-radius: 10px;
+  background: var(--toast-bg);
+  box-shadow: var(--shadow-toast);
+  color: var(--on-accent);
+  font-size: 13px;
+  animation: ah2-toast-in .2s ease;
+  pointer-events: auto;
+}
+
+.ah2 .toast-success svg {
+  color: var(--success);
+}
+
+.ah2 .toast-danger svg {
+  color: var(--danger);
+}
+
+.ah2 .toast-warning svg {
+  color: var(--warning);
+}
+
+@keyframes ah2-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============ Loading, empty and error states ============ */
+.ah2 .state-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 36px 20px;
+  color: var(--text-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.ah2 .state-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--neutral-bg);
+  color: var(--text-2);
+}
+
+.ah2 .state-error .state-ico {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.ah2 .state-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ah2 .state-desc {
+  max-width: 440px;
+}
+
+.ah2 .state-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* ============ Entry and sign-in pages ============ */
+.ah2 .entry,
+.ah2 .login {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 100vh;
+  padding: 48px 24px;
+}
+
+.ah2 .entry-tools {
+  position: absolute;
+  top: 18px;
+  right: 24px;
+}
+
+.ah2 .entry-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ah2 .entry-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--primary);
+  color: var(--on-accent);
+}
+
+.ah2 .entry-brand h1 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -.3px;
+}
+
+.ah2 .entry-sub {
+  margin-bottom: 40px;
+  color: var(--text-2);
+  font-size: 15px;
+}
+
+.ah2 .entry-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  width: 100%;
+  max-width: 880px;
+}
+
+.ah2 .entry-card {
+  display: flex;
+  flex-direction: column;
+  padding: 30px 28px 26px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--shadow-entry);
+  transition: transform .18s, box-shadow .18s, border-color .18s;
+}
+
+.ah2 .entry-card:hover {
+  border-color: var(--entry-hover-border);
+  box-shadow: var(--shadow-entry-hover);
+  transform: translateY(-3px);
+}
+
+.ah2 .entry-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 18px;
+  border-radius: 12px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.ah2 .entry-card h2 {
+  margin-bottom: 8px;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.ah2 .entry-desc {
+  margin-bottom: 16px;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.ah2 .entry-card ul {
+  flex: 1;
+  margin-bottom: 22px;
+}
+
+.ah2 .entry-card li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.ah2 .entry-card li svg {
+  color: var(--primary);
+}
+
+.ah2 .entry-go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: var(--on-accent);
+  font-size: 14.5px;
+  font-weight: 600;
+  transition: background .15s;
+}
+
+.ah2 .entry-go:hover {
+  background: var(--primary-hover);
+}
+
+.ah2 .entry-go-ghost {
+  border: 1px solid var(--entry-hover-border);
+  background: var(--card);
+  color: var(--primary);
+}
+
+.ah2 .entry-go-ghost:hover {
+  background: var(--primary-soft);
+}
+
+.ah2 .entry-foot {
+  margin-top: 36px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 1.8;
+  text-align: center;
+}
+
+.ah2 .login-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 28px;
+}
+
+.ah2 .login-card h1 {
+  margin-top: 16px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.ah2 .login-card p {
+  margin-top: 6px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.ah2 .signin-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+/* ============ Responsive ============ */
+@media (max-width: 1100px) {
+  .ah2 .form-grid,
+  .ah2 .form-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ah2 .kv {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ah2 .grid-3,
+  .ah2 .grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .ah2 {
+    --sidebar-w: 64px;
+  }
+
+  .ah2 .sb-brand-text,
+  .ah2 .sb-group-label,
+  .ah2 .nav-label,
+  .ah2 .sb-switch-label,
+  .ah2 .u-info,
+  .ah2 .crumb-surface,
+  .ah2 .crumb-sep,
+  .ah2 .app-switch-label {
+    display: none;
+  }
+
+  .ah2 .nav-link {
+    justify-content: center;
+    padding: 9px;
+  }
+
+  .ah2 .sb-switch {
+    justify-content: center;
+  }
+
+  .ah2 .sb-user {
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .ah2 .form-grid,
+  .ah2 .form-grid-4,
+  .ah2 .grid-2,
+  .ah2 .grid-3,
+  .ah2 .grid-4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ah2 .tbl {
+    min-width: 640px;
+  }
+
+  .ah2 .tb {
+    gap: 10px;
+    padding: 0 16px;
+  }
+
+  .ah2 .content {
+    padding: 18px 16px 40px;
+  }
+
+  .ah2 .page-head {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 720px) {
+  .ah2 .entry-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

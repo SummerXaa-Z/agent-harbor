@@ -31,10 +31,12 @@ import {
   permissionPackageAcceptanceReportPath,
   permissionPackageApplicationHealthPath,
   permissionPackageApplicationImpactPath,
+  permissionPackageApplicationsPath,
   permissionPackageApprovalRequestsPath,
   permissionPackageProductionReadinessPath,
   type PermissionPackageApplicationHealthPathFilter,
   type PermissionPackageApplicationImpactPathScope,
+  type PermissionPackageApplicationsPathFilter,
   type PermissionPackageApprovalRequestPathFilter,
 } from './apiPaths'
 import type {
@@ -47,6 +49,7 @@ import type {
   PermissionPackageApplyInput,
   PermissionPackageApplyPreflight,
   PermissionPackageApplyResult,
+  PermissionPackageApplication,
   PermissionPackageApplicationHealth,
   PermissionPackageApplicationImpact,
   PermissionPackageDraft,
@@ -64,6 +67,7 @@ import type {
   AccessProfileFilters,
   AdminIdentity,
   Agent,
+  AgentKey,
   ApiEnvelope,
   AuditEvent,
   Capability,
@@ -83,6 +87,8 @@ import type {
   CreateTenantRequest,
   CreateTenantEntitlementRequest,
   CreateWorkspaceAssignmentRequest,
+  DailyMetrics,
+  DailyMetricsParams,
   InstanceAssignment,
   ManagementScope,
   McpRpcCallResult,
@@ -91,6 +97,7 @@ import type {
   RotateAgentCredentialsRequest,
   RoutePolicy,
   SystemMetric,
+  TargetProbeResult,
   Tenant,
   TenantAccessProfile,
   TenantAccessProfileData,
@@ -100,6 +107,7 @@ import type {
   TraceFilters,
   UpdateAgentRequest,
   UpdateCapabilityRequest,
+  UpdateRoutePolicyRequest,
   WorkspaceAssignment,
 } from './types'
 
@@ -472,9 +480,12 @@ export async function fetchTraces(
   const query = queryString({
     callerAgentId: filters.callerAgentId,
     decision: filters.decision || undefined,
+    limit: filters.limit ? String(filters.limit) : undefined,
     runId: filters.runId,
+    since: filters.since,
     targetAgentId: filters.targetAgentId,
     tenantId: scope?.tenantId,
+    until: filters.until,
     workspaceId: scope?.workspaceId,
   })
   return request<TraceEvent[]>(`/api/v1/audit/traces${query}`, { adminKey, signal })
@@ -484,6 +495,9 @@ type AuditEventScope = Partial<ManagementScope> & {
   action?: string
   resourceType?: string
   resourceId?: string
+  limit?: number
+  since?: string
+  until?: string
 }
 
 type CapabilityFilter = {
@@ -512,12 +526,30 @@ export async function fetchAuditEvents(
 ): Promise<AuditEvent[]> {
   const query = queryString({
     action: scope?.action,
+    limit: scope?.limit ? String(scope.limit) : undefined,
     resourceId: scope?.resourceId,
     resourceType: scope?.resourceType,
+    since: scope?.since,
     tenantId: scope?.tenantId,
+    until: scope?.until,
     workspaceId: scope?.workspaceId,
   })
   return request<AuditEvent[]>(`/api/v1/audit/events${query}`, { adminKey, signal })
+}
+
+// Requires the metrics_daily_v1 capability; older backends answer 404.
+export async function fetchDailyMetrics(
+  params: DailyMetricsParams = {},
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<DailyMetrics> {
+  const query = queryString({
+    days: params.days === undefined ? undefined : String(params.days),
+    tenantId: params.tenantId,
+    tzOffsetMinutes: params.tzOffsetMinutes === undefined ? undefined : String(params.tzOffsetMinutes),
+    workspaceId: params.workspaceId,
+  })
+  return request<DailyMetrics>(`/api/v1/metrics/daily${query}`, { adminKey, signal })
 }
 
 export async function fetchRuntimeMetrics(
@@ -713,6 +745,15 @@ export async function fetchPermissionPackageApprovalRequests(
   return Array.isArray(rows) ? rows as PermissionPackageApprovalRequest[] : []
 }
 
+export async function fetchPermissionPackageApplications(
+  filter: PermissionPackageApplicationsPathFilter = {},
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<PermissionPackageApplication[]> {
+  const rows = await request<unknown>(permissionPackageApplicationsPath(filter), { adminKey, signal })
+  return Array.isArray(rows) ? rows as PermissionPackageApplication[] : []
+}
+
 export async function fetchPermissionPackageApplicationHealth(
   filter: PermissionPackageApplicationHealthPathFilter,
   adminKey?: string,
@@ -878,6 +919,20 @@ export async function createAgentKey(
   return request<CreateAgentKeyResponse>('/api/v1/agent-keys', { adminKey, body })
 }
 
+// Lists key metadata in the management scope; callers filter by agentId.
+export async function fetchAgentKeys(
+  scope?: Partial<ManagementScope>,
+  adminKey?: string,
+  signal?: AbortSignal,
+): Promise<AgentKey[]> {
+  const query = queryString({
+    tenantId: scope?.tenantId,
+    workspaceId: scope?.workspaceId,
+  })
+  const rows = await request<unknown>(`/api/v1/api-keys${query}`, { adminKey, signal })
+  return Array.isArray(rows) ? rows as AgentKey[] : []
+}
+
 export async function createAccessGrant(
   body: CreateAccessGrantRequest,
   adminKey?: string,
@@ -936,6 +991,27 @@ export async function disableRoutePolicy(id: string, adminKey?: string): Promise
   return request<RoutePolicy>(`/api/v1/route-policies/${encodeURIComponent(id)}`, {
     adminKey,
     method: 'DELETE',
+  })
+}
+
+export async function updateRoutePolicy(
+  id: string,
+  body: UpdateRoutePolicyRequest,
+  adminKey?: string,
+): Promise<RoutePolicy> {
+  return request<RoutePolicy>(`/api/v1/route-policies/${encodeURIComponent(id)}`, {
+    adminKey,
+    body,
+    method: 'PATCH',
+  })
+}
+
+// Requires the target_probe_v1 capability. Unreachable targets come back as
+// status "error" results with an UPSTREAM_* code, not as request failures.
+export async function probeTarget(targetId: string, adminKey?: string): Promise<TargetProbeResult> {
+  return request<TargetProbeResult>(`/api/v1/targets/${encodeURIComponent(targetId)}:probe`, {
+    adminKey,
+    method: 'POST',
   })
 }
 

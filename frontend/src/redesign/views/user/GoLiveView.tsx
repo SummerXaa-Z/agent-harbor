@@ -13,7 +13,7 @@ import { useRedesignI18n } from "../../hooks/useRedesignI18n";
 import { accessContextComplete, readinessFilterFromContext } from "../../model/accessContext";
 import type { RuntimeValidationBlocker } from "../../model/runtimeValidation";
 import { apiErrorPresentation } from "../../model/apiErrorCategory";
-import { defaultTokenTtl, goLiveLegs, handoffShellSnippet, readinessCheckCount, tokenTtlOptions } from "../../model/goLive";
+import { absolutizeHandoffConfig, defaultTokenTtl, goLiveLegs, handoffShellSnippet, readinessCheckCount, tokenTtlOptions } from "../../model/goLive";
 import { maskSecret } from "../../model/secretMask";
 import { userHash, viewLabelKey } from "../../router";
 import { DataStatusBanner, DataStatusChip } from "../../shell/DataStatusBanner";
@@ -149,7 +149,7 @@ export function GoLiveView({ data, onRetry, params }: UserViewProps) {
   };
 
   async function copyConfig() {
-    const raw = handoff.handoff?.copyArtifacts?.mcpClientConfig ?? "";
+    const raw = absolutizeHandoffConfig(handoff.handoff?.copyArtifacts?.mcpClientConfig ?? "", apiBase);
     if (!raw) {
       showToast(t("rd.golive.copyConfigMissing"), "warning");
       return;

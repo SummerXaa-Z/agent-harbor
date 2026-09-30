@@ -314,6 +314,43 @@ test("approvalCapabilityRows without a template shows only allowed keys", () => 
   assert.ok(rows.every((row) => row.allowed));
 });
 
+test("approvalCapabilityRows merges snapshot allowed keys with deny-only guardrails", () => {
+  // Built-in templates deny by guardrail only; the concrete allow list lives
+  // in the request snapshot and must still reach the approver.
+  const denyOnly = {
+    guardrails: [{ capabilityKey: "delete-ticket", expectedDecision: "deny" }],
+    id: "tpl-1",
+    name: "Support package",
+    summary: "",
+    version: 1,
+  };
+  const supportRegistry = [
+    capability({ displayName: "Update ticket", id: "cap-u", key: "update-ticket" }),
+    capability({ displayName: "Delete ticket", id: "cap-d", key: "delete-ticket", riskLevel: "critical" }),
+  ];
+  const rows = approvalCapabilityRows(
+    approvalRequest({
+      allowedCapabilityIds: ["cap-u"],
+      allowedCapabilityKeys: ["update-ticket"],
+      requestedCapabilityId: "cap-u",
+    }),
+    denyOnly,
+    supportRegistry,
+  );
+  assert.deepEqual(
+    rows.map((row) => ({ allowed: row.allowed, isRequested: row.isRequested, key: row.key })),
+    [
+      { allowed: false, isRequested: false, key: "delete-ticket" },
+      { allowed: true, isRequested: true, key: "update-ticket" },
+    ],
+  );
+  assert.deepEqual(approvalRiskSummary(rows), { deniedCount: 1, highRiskCount: 1 });
+
+  // Keys already covered by a guardrail are not duplicated from the snapshot.
+  const deduped = approvalCapabilityRows(approvalRequest(), template, registry);
+  assert.deepEqual(deduped.map((row) => row.key), ["mcp.tool.echo", "http.invoice.write"]);
+});
+
 test("approvalList sorts newest first and honors effectiveStatus", () => {
   const entries = approvalList([
     approvalRequest({ createdAt: "2026-09-25T08:00:00Z", id: "req-old" }),

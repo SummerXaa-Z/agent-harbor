@@ -6,6 +6,22 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-30
+
+### Fixed
+
+- The approval detail now lists the capabilities a request allows, not only the template's denied guardrails. The built-in templates carry deny-only guardrails while the concrete allow list lives in the request snapshot, so the snapshot's allowed keys are merged in as success rows next to the guardrails, and the pending-approval notification's allow/deny counts match (external evaluation round 5, finding #38, PR #406).
+- The MCP client config copied from Access Handoff now carries a full URL with the console's configured API base instead of a relative path, matching the shell snippet on the same card. The `${AGENT_HARBOR_TOKEN}` placeholder is untouched and the backend artifact stays origin-agnostic (round 5, finding #39, PR #406).
+- Scenario and demo gates no longer leak their servers. The Makefile wrapper and scenario scripts build the API once and run the binary directly instead of `go run` (whose parent-only kill orphans the compiled server holding its port), node subprocesses exec, and port-listener TERM/KILL fallbacks run after every scenario, so local gates are re-runnable without sweeping orphaned processes (PR #405).
+
+### Changed
+
+- Dependency updates (PRs #383–#385): chi 5.3.2 and a pgx minor bump on the Go side; vite 8.3.1, React 19.3, @vitejs/plugin-react 6.1.1, lucide-react 1.48 with matching @types on the frontend; and TypeScript 7.0.2, whose production build output is byte-identical to the TypeScript 6 build.
+
+### Added
+
+- The round-5 external evaluation record is archived with its same-day triage in `docs/product/0.4.0-console-eval.md`: verdict 通过, measured time-to-first-report ≈ 17m54s against the 30-minute goal, all ten regression checks passing, and mobile 375/390px covered page by page.
+
 ## [0.4.0] - 2026-09-30
 
 ### Added

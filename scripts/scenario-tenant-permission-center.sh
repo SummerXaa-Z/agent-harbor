@@ -21,7 +21,11 @@ cleanup() {
   for pid in "${PIDS[@]:-}"; do
     kill "${pid}" >/dev/null 2>&1 || true
   done
+  kill_port_listener "${API_PORT}" TERM
+  kill_port_listener "${MOCK_MCP_PORT}" TERM
   wait >/dev/null 2>&1 || true
+  kill_port_listener "${API_PORT}" KILL
+  kill_port_listener "${MOCK_MCP_PORT}" KILL
 }
 trap cleanup EXIT
 
@@ -65,6 +69,11 @@ PIDS+=("$!")
 wait_url "http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/healthz" "mock MCP server"
 
 cd "${ROOT_DIR}"
+
+# Build once and run the binary directly: killing a `go run` pid only kills
+# the go-run parent and orphans the compiled server on its port.
+go build -o "/tmp/agent-harbor-tenant-center-${RUN_ID}-server" ./cmd/agent-harbor
+
 AGENT_HARBOR_ADDR="${API_ADDR}" \
 AGENT_HARBOR_ADMIN_IDENTITIES="platform=${PLATFORM_KEY}|role=platform_admin" \
 AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true \
@@ -72,7 +81,7 @@ AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true \
 AGENT_HARBOR_SESSION_SECRET="scenario-session-${RUN_ID}" \
 AGENT_HARBOR_DATABASE_URL= \
 AGENT_HARBOR_CREDENTIAL_KEY= \
-  go run ./cmd/agent-harbor >"/tmp/agent-harbor-tenant-center-${RUN_ID}.log" 2>&1 &
+  "/tmp/agent-harbor-tenant-center-${RUN_ID}-server" >"/tmp/agent-harbor-tenant-center-${RUN_ID}.log" 2>&1 &
 PIDS+=("$!")
 wait_url "${BASE_URL}/healthz" "AgentHarbor API"
 

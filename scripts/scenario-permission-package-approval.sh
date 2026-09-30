@@ -1331,7 +1331,7 @@ start_mcp_server() {
       need node
       need "${PNPM_CMD[0]}"
       "${PNPM_CMD[@]}" --dir scripts/real-mcp install --frozen-lockfile >/dev/null
-      (cd scripts/real-mcp && REAL_MCP_HOST="$MOCK_MCP_HOST" REAL_MCP_PORT="$MOCK_MCP_PORT" node server.mjs) &
+      (cd scripts/real-mcp && exec env REAL_MCP_HOST="$MOCK_MCP_HOST" REAL_MCP_PORT="$MOCK_MCP_PORT" node server.mjs) &
       MOCK_MCP_PID="$!"
       ;;
     *)

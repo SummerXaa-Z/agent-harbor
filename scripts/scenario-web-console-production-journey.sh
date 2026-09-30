@@ -115,10 +115,13 @@ echo "FRONTEND_ORIGIN=$FRONTEND_ORIGIN"
 echo "MCP=http://${MCP_HOST}:${MCP_PORT}/mcp"
 echo "RUN_ID=$RUN_ID"
 
-AGENT_HARBOR_ADDR="$API_ADDR" AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true go run ./cmd/agent-harbor > "$LOG_DIR/api.log" 2>&1 &
+# Build once and run the binary directly: killing a `go run` pid only kills
+# the go-run parent and orphans the compiled server on its port.
+go build -o "$LOG_DIR/api-server" ./cmd/agent-harbor
+AGENT_HARBOR_ADDR="$API_ADDR" AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true "$LOG_DIR/api-server" > "$LOG_DIR/api.log" 2>&1 &
 track_pid "$!"
 
-(cd scripts/real-mcp && REAL_MCP_HOST="$MCP_HOST" REAL_MCP_PORT="$MCP_PORT" node server.mjs) > "$LOG_DIR/mcp.log" 2>&1 &
+(cd scripts/real-mcp && exec env REAL_MCP_HOST="$MCP_HOST" REAL_MCP_PORT="$MCP_PORT" node server.mjs) > "$LOG_DIR/mcp.log" 2>&1 &
 track_pid "$!"
 
 VITE_API_BASE="$BASE_URL" "${PNPM_CMD[@]}" --dir frontend dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort > "$LOG_DIR/frontend.log" 2>&1 &

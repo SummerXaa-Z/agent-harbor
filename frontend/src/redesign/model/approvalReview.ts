@@ -21,31 +21,37 @@ export interface ApprovalCapabilityRow {
   isRequested: boolean;
 }
 
-// Per-capability allow/deny comes from the template guardrails: the template
-// fixes which capabilities the package allows and which it denies by design
-// (least privilege), and the request snapshot carries the allowed keys.
+// Allow/deny rows for one request. Guardrails come first — the template fixes
+// which capabilities the package denies by design (least privilege) — then the
+// request snapshot's allowed keys fill in what the guardrails don't cover,
+// because the built-in templates carry deny-only guardrails while the concrete
+// allow list lives only in the snapshot.
 export function approvalCapabilityRows(
   request: PermissionPackageApprovalRequest,
   template: PermissionPackageTemplate | null,
   capabilities: readonly Capability[],
 ): ApprovalCapabilityRow[] {
   const byKey = new Map(capabilities.map((capability) => [capability.key, capability] as const));
+  const requestedKey = capabilityKeyById(capabilities, request.requestedCapabilityId);
+  const row = (key: string, allowed: boolean): ApprovalCapabilityRow => ({
+    allowed,
+    capability: byKey.get(key) ?? null,
+    isRequested: key === requestedKey,
+    key,
+  });
   if (template) {
-    return template.guardrails.map((guardrail) => ({
-      allowed: guardrail.expectedDecision === "allow",
-      capability: byKey.get(guardrail.capabilityKey) ?? null,
-      isRequested: guardrail.capabilityKey === capabilityKeyById(capabilities, request.requestedCapabilityId),
-      key: guardrail.capabilityKey,
-    }));
+    const rows = template.guardrails.map((guardrail) => row(guardrail.capabilityKey, guardrail.expectedDecision === "allow"));
+    const covered = new Set(rows.map((covered) => covered.key));
+    for (const key of request.allowedCapabilityKeys) {
+      if (covered.has(key)) continue;
+      covered.add(key);
+      rows.push(row(key, true));
+    }
+    return rows;
   }
   // Without the template catalog (sample data or older backend) every key in
   // the request snapshot is an allowed one; nothing is invented as denied.
-  return request.allowedCapabilityKeys.map((key) => ({
-    allowed: true,
-    capability: byKey.get(key) ?? null,
-    isRequested: key === capabilityKeyById(capabilities, request.requestedCapabilityId),
-    key,
-  }));
+  return request.allowedCapabilityKeys.map((key) => row(key, true));
 }
 
 function capabilityKeyById(capabilities: readonly Capability[], id?: string): string | null {

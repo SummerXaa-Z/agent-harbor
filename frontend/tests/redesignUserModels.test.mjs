@@ -29,6 +29,7 @@ import {
 } from "../src/redesign/model/approvalStateMachine.ts";
 import { buildDecisionChain, decisionChainLayers, decisionRemediation } from "../src/redesign/model/decisionChain.ts";
 import {
+  absolutizeHandoffConfig,
   defaultTokenTtl,
   goLiveLegs,
   handoffShellSnippet,
@@ -513,6 +514,28 @@ test("handoff shell snippet is valid shell with one command per line and no toke
   assert.equal(shellQuote("it's"), `'it'\\''s'`);
   execFileSync("bash", ["-n"], { input: snippet });
   execFileSync("sh", ["-n"], { input: snippet });
+});
+
+test("copied MCP client config url becomes absolute with the configured API base", () => {
+  const config = JSON.stringify({
+    transport: "streamable-http",
+    url: "/api/v1/mcp/agents/target%20a/rpc",
+    headers: {
+      Authorization: "Bearer ${AGENT_HARBOR_TOKEN}",
+      "X-AgentHarbor-Subject-Id": "user:support-example",
+    },
+  });
+  const absolute = JSON.parse(absolutizeHandoffConfig(config, "http://127.0.0.1:19090/"));
+  assert.equal(absolute.url, "http://127.0.0.1:19090/api/v1/mcp/agents/target%20a/rpc");
+  // Placeholders survive the round trip untouched.
+  assert.equal(absolute.headers.Authorization, "Bearer ${AGENT_HARBOR_TOKEN}");
+
+  // Already-absolute urls, non-JSON payloads, and bases that change nothing
+  // pass through byte-for-byte.
+  const absoluteUrl = JSON.stringify({ url: "https://harbor.example/rpc" });
+  assert.equal(absolutizeHandoffConfig(absoluteUrl, "http://127.0.0.1:19090"), absoluteUrl);
+  assert.equal(absolutizeHandoffConfig("not json", "http://127.0.0.1:19090"), "not json");
+  assert.equal(absolutizeHandoffConfig(config, ""), config);
 });
 
 test("user workbench derives onboarding, requests, resources and permissions", () => {

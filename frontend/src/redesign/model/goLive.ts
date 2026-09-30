@@ -73,6 +73,26 @@ export function runtimeRpcPath(targetId: string): string {
   return `/api/v1/mcp/agents/${encodeURIComponent(targetId)}/rpc`;
 }
 
+// The backend emits the MCP client config origin-agnostic (a relative url);
+// only the console knows the API base the operator actually uses, so the copy
+// button absolutizes the url the same way the shell snippet does. Anything
+// that is not a JSON object with a relative url passes through untouched.
+export function absolutizeHandoffConfig(config: string, apiBase: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(config);
+  } catch {
+    return config;
+  }
+  if (typeof parsed !== "object" || parsed === null) return config;
+  const record = parsed as { url?: unknown };
+  if (typeof record.url !== "string" || !record.url.startsWith("/")) return config;
+  const absolute = `${apiBase.replace(/\/+$/, "")}${record.url}`;
+  if (absolute === record.url) return config;
+  record.url = absolute;
+  return JSON.stringify(parsed, null, 2);
+}
+
 // One command per line; values are single-quoted so any selector or tool
 // name stays literal, and the token is read from the prompt, never inlined.
 export function handoffShellSnippet({

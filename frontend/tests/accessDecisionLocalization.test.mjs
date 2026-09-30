@@ -86,11 +86,9 @@ test("every backend access next action code maps to localized copy", () => {
   }
 });
 
-test("the ask view resolves record messages by messageKey, not sentence text", () => {
+test("the ask record renderer resolves evidence copy by messageKey, not sentence text", () => {
   const askJourney = readFileSync(new URL("../src/askJourney.ts", import.meta.url), "utf8");
   assert.match(askJourney, /ask\.evidence\.\$\{row\.messageKey\}/);
-  const askView = readFileSync(new URL("../src/components/AskAccessView.tsx", import.meta.url), "utf8");
-  assert.match(askView, /accessNextActionLabelByCode\(result\.nextActionCodes\?\.\[index\]/);
 });
 
 

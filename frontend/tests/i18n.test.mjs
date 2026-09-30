@@ -10,7 +10,6 @@ import {
 } from "../src/i18n.ts";
 import { localizedApiErrorMessage, tx } from "../src/localizedMessages.ts";
 
-const app = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
 const i18nSource = readFileSync(new URL("../src/i18n.ts", import.meta.url), "utf8");
 
 test("normalizeLanguage supports English and Simplified Chinese", () => {
@@ -722,13 +721,6 @@ test("createTranslator falls back to English for missing keys", () => {
 
 test("English and Simplified Chinese translation maps expose the same keys", () => {
   assert.deepEqual(translationKeys("zh-CN"), translationKeys("en"));
-});
-
-test("UI error fallbacks are localized instead of hard-coded English strings", () => {
-  assert.equal(app.includes('"Unable to'), false);
-  assert.equal(app.includes('"Core journey failed"'), false);
-  assert.equal(app.includes('"Permission package approval journey failed"'), false);
-  assert.equal(app.includes('"console data unavailable"'), false);
 });
 
 

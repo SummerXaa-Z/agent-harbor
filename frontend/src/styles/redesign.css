@@ -2802,14 +2802,3 @@ body:has(.ah2) {
   text-align: center;
 }
 
-.ah2 .entry-legacy {
-  display: inline-block;
-  margin-top: 14px;
-  font-size: 13px;
-  color: var(--text-3);
-  text-decoration: underline;
-}
-
-.ah2 .entry-legacy:hover {
-  color: var(--text-1);
-}

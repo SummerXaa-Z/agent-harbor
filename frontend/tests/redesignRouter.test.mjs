@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { navKeyFromHash } from "../src/consoleNavigation.ts";
 import { translationKeys } from "../src/i18n.ts";
 import {
   adminFooterNav,
@@ -9,7 +8,6 @@ import {
   adminNavSections,
   adminViews,
   isRedesignHash,
-  legacyHashForView,
   otherSurface,
   parseRedesignHash,
   redesignHash,
@@ -28,24 +26,42 @@ test("the empty hash is the redesign entry page since P5", () => {
   assert.equal(isRedesignHash("#"), true);
 });
 
-test("legacy hashes stay with the legacy console", () => {
-  for (const hash of [
-    "#ask",
-    "#getting-started",
-    "#go-live",
-    "#evidence",
-    "#admin-access",
-    "#users",
-    "#user-guide",
-    "#administrator",
+test("retired legacy hashes redirect to their redesign successors", () => {
+  for (const [hash, canonicalHash] of [
+    ["#ask", "#user/ask"],
+    ["#/ask", "#user/ask"],
+    ["#access", "#user/mine"],
+    ["#getting-started", "#user/home"],
+    ["#go-live", "#user/golive"],
+    ["#evidence", "#user/golive"],
+    ["#ai-admin", "#admin/approvals"],
+    ["#admin-access", "#admin/admin"],
+    ["#cockpit", "#admin/cockpit"],
+    ["#traces", "#admin/traces"],
+    ["#tenants", "#admin/tenants"],
+    ["#registry", "#admin/registry"],
+    ["#capabilities", "#admin/capabilities"],
+    ["#policies", "#admin/policies"],
+    ["#routes", "#admin/routes"],
   ]) {
-    assert.equal(parseRedesignHash(hash), null, hash);
-    assert.equal(isRedesignHash(hash), false, hash);
+    const parsed = parseRedesignHash(hash);
+    assert.ok(parsed, hash);
+    assert.equal(parsed.canonicalHash, canonicalHash, hash);
+    assert.equal(parsed.redirected, true, hash);
+    assert.notEqual(parsed.route.surface, "notfound", hash);
+    assert.equal(isRedesignHash(hash), true, hash);
+  }
+  // Legacy hashes that never had a redesign successor land on the 404 page
+  // with the attempted hash kept.
+  for (const hash of ["#users", "#user-guide", "#administrator"]) {
+    const parsed = parseRedesignHash(hash);
+    assert.ok(parsed, hash);
+    assert.deepEqual(parsed, { canonicalHash: hash, redirected: false, route: { surface: "notfound", attempted: hash.slice(1) } }, hash);
   }
 });
 
 test("unknown slash-shaped hashes resolve to the redesign not-found page", () => {
-  for (const hash of ["#/ask", "#//user/home", "#/nonsense", "#/user/nope", "#/admin/nope", "#/user/nope?caller=agt_1", "#User/home", "#nonsense/foo"]) {
+  for (const hash of ["#//user/home", "#/nonsense", "#/user/nope", "#/admin/nope", "#/user/nope?caller=agt_1", "#User/home", "#nonsense/foo"]) {
     const parsed = parseRedesignHash(hash);
     assert.ok(parsed, hash);
     assert.equal(parsed.route.surface, "notfound", hash);
@@ -155,14 +171,6 @@ test("every view has exactly one navigation entry with translated labels", () =>
   for (const key of labelKeys) {
     assert.ok(en.has(key), `missing en label ${key}`);
     assert.ok(zh.has(key), `missing zh-CN label ${key}`);
-  }
-});
-
-test("legacy fallbacks point at real legacy pages", () => {
-  for (const view of [...userViews, ...adminViews]) {
-    const hash = legacyHashForView[view];
-    assert.equal(parseRedesignHash(hash), null, hash);
-    assert.ok(navKeyFromHash(hash), `${view} -> ${hash} is not a legacy page`);
   }
 });
 

@@ -1,4 +1,3 @@
-import { PlaceholderView } from "../PlaceholderView";
 import type { AdminView as AdminViewName } from "../../router";
 import type { AdminViewProps } from "./adminViewProps";
 import { AdminAccessView } from "./AdminAccessView";
@@ -13,7 +12,7 @@ import { TracesView } from "./TracesView";
 
 // Cockpit, approvals and traces landed in P3; the six governance pages
 // (tenants, registry, capabilities, policies, routes, admin boundaries)
-// landed in P4. Nothing here falls back to the legacy console anymore.
+// landed in P4. The switch is exhaustive over AdminViewName.
 export function AdminView({ view, ...props }: AdminViewProps & { view: AdminViewName }) {
   switch (view) {
     case "cockpit":
@@ -34,7 +33,5 @@ export function AdminView({ view, ...props }: AdminViewProps & { view: AdminView
       return <RoutesView {...props} />;
     case "admin":
       return <AdminAccessView {...props} />;
-    default:
-      return <PlaceholderView data={props.data} onRetry={props.onRetry} view={view} />;
   }
 }

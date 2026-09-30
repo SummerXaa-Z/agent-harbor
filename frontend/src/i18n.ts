@@ -2573,7 +2573,6 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.nt.env.title": "Environment check failed",
     "rd.nt.kind.approval": "Approval",
     "rd.nt.kind.env": "Environment",
-    "rd.entry.legacy": "Still using the legacy console →",
   },
   "zh-CN": {
     "action.activate": "启用",
@@ -5145,7 +5144,6 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.nt.env.title": "环境检查失败",
     "rd.nt.kind.approval": "审批",
     "rd.nt.kind.env": "环境",
-    "rd.entry.legacy": "仍然使用旧版控制台 →",
   },
 }
 

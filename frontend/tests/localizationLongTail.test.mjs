@@ -45,27 +45,20 @@ test("every backend access decision reason has localized copy", () => {
 
 test("the go-live readiness path renders blocker labels by key, not raw check messages", () => {
   const presentation = readSource("../src/productionAcceptance.ts");
-  const overview = readSource("../src/components/GoLiveAcceptanceOverview.tsx");
+  const goLiveView = readSource("../src/redesign/views/user/GoLiveView.tsx");
 
   assert.match(presentation, /labelKey: `productionAcceptance\.blocker\.\$\{check\.code\}`/);
   // check.message is only allowed as the unknown-code fallback detail.
   assert.doesNotMatch(presentation, /labelKey: check\.message/);
-  assert.doesNotMatch(overview, />\{[^}]*blockers\[0\]\.detail\}</);
-  assert.doesNotMatch(overview, /labelKey:\s*[^,]*\.message/);
+  assert.match(goLiveView, /t\(validationBlockerKeys\[blocker\]\)/);
+  assert.doesNotMatch(goLiveView, /\{[^}]*blocker\.(?:detail|message)\}/);
 });
 
 test("the ask decision chain renders record messages through the label resolver", () => {
-  const view = readSource("../src/components/AskAccessView.tsx");
+  const view = readSource("../src/redesign/views/user/AskView.tsx");
 
-  assert.match(view, /accessDecisionRecordMessageLabel\(row, t\)/);
+  assert.match(view, /accessDecisionRecordMessageLabel\(node\.evidence, t\)/);
   for (const forbidden of [">{row.message}<", ">{record.message}<", ">{result.summary}<", ">{evidence.message}<"]) {
     assert.ok(!view.includes(forbidden), `raw backend text rendered: ${forbidden}`);
   }
-});
-
-test("tenant permission center errors resolve through the localized error path", () => {
-  const controller = readSource("../src/ConsoleController.tsx");
-
-  assert.match(controller, /permissionCenterError: localizedErrorMessage\(/);
-  assert.doesNotMatch(controller, /permissionCenterError: error instanceof Error/);
 });

@@ -37,9 +37,6 @@ export function EntryPage({ apiBase, session }: { apiBase: string; session: Cons
           </>
         ) : null}
       </p>
-      <a className="entry-legacy" href="#getting-started">
-        {t("rd.entry.legacy")}
-      </a>
     </div>
   );
 }

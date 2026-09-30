@@ -356,13 +356,8 @@ test("the readiness probe prefers the registered target with approved capabiliti
   );
 });
 
-test("environment checks resolve the probe endpoint from registered targets", () => {
-  const controller = readFileSync(new URL("../src/ConsoleController.tsx", import.meta.url), "utf8");
-  const coreJourney = readFileSync(new URL("../src/hooks/useCoreJourneyController.ts", import.meta.url), "utf8");
+test("redesign environment checks resolve the probe endpoint from registered targets", () => {
+  const envChecks = readFileSync(new URL("../src/redesign/model/envChecks.ts", import.meta.url), "utf8");
 
-  assert.match(controller, /checkMockMcpHealth\(mockMcpHealthUrlFromEndpoint\(resolveJourneyMcpEndpoint\(agents, capabilities, config\.mcpEndpoint\)\)\)/);
-  assert.match(coreJourney, /const journeyProbeEndpoint = resolveJourneyMcpEndpoint\(agents, capabilities, form\.mcpEndpoint\)/);
-  assert.match(coreJourney, /checkMockMcpHealth\(mockMcpHealthUrlFromEndpoint\(journeyProbeEndpoint\)\)/);
-  assert.match(coreJourney, /\}, \[enabled, journeyProbeEndpoint\]\)/);
-  assert.match(controller, /enabled: consoleAccessReady && \(data !== null \|\| loadError !== ""\)/);
+  assert.match(envChecks, /const endpoint = resolveJourneyMcpEndpoint\(/);
 });

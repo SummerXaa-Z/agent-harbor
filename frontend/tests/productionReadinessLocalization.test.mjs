@@ -58,10 +58,10 @@ test("every backend readiness next action code maps to localized copy", () => {
   }
 });
 
-test("the go-live overview resolves the next action by code, not message text", () => {
-  const overview = readFileSync(
-    new URL("../src/components/GoLiveAcceptanceOverview.tsx", import.meta.url),
+test("the apply view resolves the next action by code, not message text", () => {
+  const applyView = readFileSync(
+    new URL("../src/redesign/views/user/ApplyView.tsx", import.meta.url),
     "utf8"
   );
-  assert.match(overview, /permissionProductionReadinessNextAction\(\s*productionReadiness\.nextActionCode/);
+  assert.match(applyView, /permissionProductionReadinessNextAction\(nextActionCode, readinessNext, t\)/);
 });

@@ -96,25 +96,6 @@ export const adminNavSections: readonly NavSection<AdminView>[] = [
 // Administrators & boundaries sits in the sidebar footer, as in the prototype.
 export const adminFooterNav: NavEntry<AdminView> = { labelKey: viewLabelKey("admin"), view: "admin" };
 
-// Until each redesigned page lands, placeholders link to the legacy page that
-// still does the job.
-export const legacyHashForView: Record<RedesignView, string> = {
-  home: "#getting-started",
-  ask: "#ask",
-  mine: "#access",
-  apply: "#ai-admin",
-  golive: "#go-live",
-  cockpit: "#cockpit",
-  approvals: "#ai-admin",
-  traces: "#traces",
-  tenants: "#tenants",
-  registry: "#registry",
-  capabilities: "#capabilities",
-  policies: "#policies",
-  routes: "#routes",
-  admin: "#admin-access",
-};
-
 export function viewLabelKey(view: RedesignView): string {
   return `rd.nav.${view}`;
 }
@@ -131,14 +112,30 @@ export function isAdminView(value: string): value is AdminView {
   return (adminViews as readonly string[]).includes(value);
 }
 
-// Returns null for every hash the legacy console owns. Since P5 the empty
-// hash belongs to the redesign entry page (decision D1); explicit legacy
-// hashes (bare #ask, #getting-started, …) keep loading the legacy console.
-// Everything else that is shaped like a redesign route — multi-segment paths
-// such as #user/apply, the #/-prefixed form, or an unknown surface/view —
-// resolves inside the redesign, ending in its not-found page instead of
-// falling through to the legacy console or silently resetting to the default
-// view (round 4, #27).
+// The legacy console is retired (D1). Its bare hash routes live on as
+// redirects into the redesign so old bookmarks keep working; anything else
+// bare falls to the not-found page instead of a dead console.
+const legacyHashRedirects: Record<string, () => string> = {
+  "admin-access": () => adminHash("admin"),
+  "ai-admin": () => adminHash("approvals"),
+  ask: () => userHash("ask"),
+  capabilities: () => adminHash("capabilities"),
+  cockpit: () => adminHash("cockpit"),
+  evidence: () => userHash("golive"),
+  "getting-started": () => userHash("home"),
+  "go-live": () => userHash("golive"),
+  access: () => userHash("mine"),
+  policies: () => adminHash("policies"),
+  registry: () => adminHash("registry"),
+  routes: () => adminHash("routes"),
+  tenants: () => adminHash("tenants"),
+  traces: () => adminHash("traces"),
+};
+
+// Every hash resolves inside the redesign: the empty hash is the entry page
+// (D1), slash-shaped routes match their views or end in the not-found page
+// (round 4, #27), and bare legacy hashes redirect to their redesign
+// successor.
 export function parseRedesignHash(hash: string): ParsedRedesignHash | null {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
   const queryIndex = raw.indexOf("?");
@@ -149,7 +146,6 @@ export function parseRedesignHash(hash: string): ParsedRedesignHash | null {
     return withCanonicalHash(raw, { surface: "entry" });
   }
 
-  const slashPrefixed = path.startsWith("/");
   const stripped = path.replace(/^\//, "");
   const segments = stripped.split("/");
   if (segments.length === 1) {
@@ -160,9 +156,11 @@ export function parseRedesignHash(hash: string): ParsedRedesignHash | null {
     if (only === "admin") {
       return withCanonicalHash(raw, { surface: "admin", view: defaultAdminView, params: {} });
     }
-    // Bare single-segment hashes belong to the legacy console; the same
-    // segment behind a slash is redesign territory and 404s.
-    return slashPrefixed ? keepRawHash(raw, { surface: "notfound", attempted: path }) : null;
+    const legacyRedirect = legacyHashRedirects[only];
+    if (legacyRedirect) {
+      return redirectHash(raw, legacyRedirect());
+    }
+    return keepRawHash(raw, { surface: "notfound", attempted: path });
   }
 
   const [surface, requestedView = ""] = segments;
@@ -187,6 +185,14 @@ export function parseRedesignHash(hash: string): ParsedRedesignHash | null {
 // (and support) can still read what went wrong.
 function keepRawHash(raw: string, route: Extract<RedesignRoute, { surface: "notfound" }>): ParsedRedesignHash {
   return { canonicalHash: `#${raw}`, redirected: false, route };
+}
+
+// A retired legacy hash points at its living successor; the URL is rewritten
+// to the canonical redirect target.
+function redirectHash(raw: string, targetHash: string): ParsedRedesignHash {
+  const route = parseRedesignHash(targetHash);
+  if (!route) throw new Error(`legacy redirect target did not resolve: ${targetHash}`);
+  return { canonicalHash: targetHash, redirected: targetHash !== `#${raw}`, route: route.route };
 }
 
 export function isRedesignHash(hash: string): boolean {

@@ -16,7 +16,6 @@ import { LoadingState } from "./ui/StateViews";
 import { ToastProvider, useToast } from "./ui/Toast";
 import { EntryPage } from "./views/EntryPage";
 import { NotFoundView } from "./views/NotFoundView";
-import { PlaceholderView } from "./views/PlaceholderView";
 import { AdminView } from "./views/admin/AdminView";
 import type { AdminViewProps } from "./views/admin/adminViewProps";
 import { ApplyView } from "./views/user/ApplyView";

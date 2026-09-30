@@ -229,23 +229,28 @@ test("redesign never renders secrets or real bearer values", () => {
   }
 });
 
-test("the entry split keeps legacy styles in the legacy chunk", () => {
+test("the legacy console is fully retired (D1)", () => {
   const main = read("../src/main.tsx");
   const rootEntry = read("../src/RootEntry.tsx");
-  const legacyEntry = read("../src/LegacyEntry.tsx");
   const redesignApp = read("../src/redesign/RedesignApp.tsx");
 
   assert.match(main, /<RootEntry \/>/);
   assert.doesNotMatch(main, /["']\.\/App["']|styles\.css/);
-  assert.match(rootEntry, /lazy\(\(\) => import\("\.\/redesign\/RedesignApp"\)\)/);
-  assert.match(rootEntry, /lazy\(\(\) => import\("\.\/LegacyEntry"\)\)/);
-  assert.doesNotMatch(rootEntry, /^import .*(?:\.\/App|styles\.css)/m);
-  assert.match(legacyEntry, /import "\.\/styles\.css";/);
-  assert.match(legacyEntry, /return <App \/>;/);
+  assert.match(rootEntry, /import RedesignApp from "\.\/redesign\/RedesignApp";/);
+  assert.match(rootEntry, /<RedesignApp hash=\{hash\} \/>/);
   assert.match(redesignApp, /import "\.\.\/styles\/redesign\.css";/);
+
+  // No legacy entry, controller, or stylesheet may creep back into src/.
+  const retired = ["App.tsx", "LegacyEntry.tsx", "ConsoleController.tsx", "styles.css", "permission-workbench.css"];
+  const srcEntries = readdirSync(new URL("../src", import.meta.url), { recursive: true }).map(String);
+  for (const name of retired) {
+    assert.ok(!srcEntries.some((entry) => entry === name || entry.endsWith(`/${name}`)), `${name} still exists under src/`);
+  }
+  assert.ok(!srcEntries.some((entry) => entry === "components" || entry.startsWith("components/")), "src/components should not exist");
+
   for (const { path, source } of redesignSources) {
-    assert.doesNotMatch(source, /["'](?:\.\.\/)+styles\.css["']/, `${path} imports legacy styles`);
-    assert.doesNotMatch(source, /from ["'](?:\.\.\/)+(?:App|ConsoleController)["']/, `${path} imports the legacy tree`);
+    assert.doesNotMatch(source, /["'](?:\.\.\/)+styles(?:\/permission-workbench)?\.css["']/, `${path} imports legacy styles`);
+    assert.doesNotMatch(source, /from ["'](?:\.\.\/)+(?:App|ConsoleController|LegacyEntry)["']/, `${path} imports the legacy tree`);
   }
 });
 

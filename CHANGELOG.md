@@ -6,6 +6,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-30
+
 ### Added
 
 - The web console ships a redesigned dual-surface console (0.4.0). The empty hash now opens an entry page choosing between the user workbench (permission apply, access query, go-live check, my records) and the admin console (cockpit, approvals, capability governance, resource registry, tenants, access policies, route rules, runtime audit, administrators). A ⌘K / Ctrl+K command palette reaches every page, high-frequency actions, and recently updated agents and approval requests. A notification center derives pending approvals (admin side), approval outcomes (requester side), and environment-check failures from live APIs: 15-second polling paused while the tab is hidden, read state persisted locally and synced across tabs, unread counts on the bell and the surface switch. The layout collapses below 860px. Token values stay masked everywhere; the redesign never renders one-time secrets.

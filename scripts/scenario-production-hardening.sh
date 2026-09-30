@@ -29,7 +29,11 @@ cleanup() {
   for pid in "${PIDS[@]:-}"; do
     kill "$pid" >/dev/null 2>&1 || true
   done
+  kill_port_listener "$API_PORT" TERM
+  kill_port_listener "$UNAUTH_API_PORT" TERM
   wait >/dev/null 2>&1 || true
+  kill_port_listener "$API_PORT" KILL
+  kill_port_listener "$UNAUTH_API_PORT" KILL
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -245,11 +249,15 @@ echo "RUN_ID=$RUN_ID"
 echo "ADMIN_KEY=provided"
 echo "AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false"
 
+# Build once and run the binary directly: killing a `go run` pid only kills
+# the go-run parent and orphans the compiled server on its port.
+go build -o "$LOG_DIR/api-server" ./cmd/agent-harbor
+
 AGENT_HARBOR_ADDR="${API_HOST}:${UNAUTH_API_PORT}" \
 AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
 AGENT_HARBOR_DATABASE_URL= \
 AGENT_HARBOR_CREDENTIAL_KEY= \
-  go run ./cmd/agent-harbor > "$LOG_DIR/api-unauth.log" 2>&1 &
+  "$LOG_DIR/api-server" > "$LOG_DIR/api-unauth.log" 2>&1 &
 UNAUTH_PID="$!"
 PIDS+=("$UNAUTH_PID")
 
@@ -726,7 +734,7 @@ AGENT_HARBOR_ADMIN_KEY="$ADMIN_KEY" \
 AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
 AGENT_HARBOR_DATABASE_URL= \
 AGENT_HARBOR_CREDENTIAL_KEY= \
-  go run ./cmd/agent-harbor > "$LOG_DIR/api.log" 2>&1 &
+  "$LOG_DIR/api-server" > "$LOG_DIR/api.log" 2>&1 &
 PIDS+=("$!")
 
 wait_http "API" "$BASE_URL/healthz"

@@ -199,10 +199,11 @@ scenario-permission-package-approval:
 			fi; \
 		}; \
 		trap cleanup EXIT; \
+		go build -o "$$log_dir/api-server" ./cmd/agent-harbor || exit 1; \
 		AGENT_HARBOR_ADDR="$$api_addr" \
 		AGENT_HARBOR_ADMIN_IDENTITIES="requester=$$requester_key;security-reviewer=$$reviewer_key" \
 		AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true \
-			go run ./cmd/agent-harbor >"$$log_dir/api.log" 2>&1 & \
+			"$$log_dir/api-server" >"$$log_dir/api.log" 2>&1 & \
 		api_pid="$$!"; \
 		for _ in $$(seq 1 80); do \
 			if curl -fsS "$$base_url/healthz" >/dev/null 2>&1; then \

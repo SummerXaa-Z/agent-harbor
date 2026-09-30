@@ -33,7 +33,9 @@ cleanup() {
   for pid in "${PIDS[@]:-}"; do
     kill "$pid" >/dev/null 2>&1 || true
   done
+  kill_port_listener "$API_PORT" TERM
   wait >/dev/null 2>&1 || true
+  kill_port_listener "$API_PORT" KILL
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -349,6 +351,10 @@ assert_port_free "API" "$API_PORT"
 mkdir -p "$LOG_DIR"
 cd "$ROOT_DIR"
 
+# Build once and run the binary directly: killing a `go run` pid only kills
+# the go-run parent and orphans the compiled server on its port.
+go build -o "$LOG_DIR/api-server" ./cmd/agent-harbor
+
 echo "AgentHarbor admin access management scenario"
 echo "BASE_URL=$BASE_URL"
 echo "RUN_ID=$RUN_ID"
@@ -360,7 +366,7 @@ AGENT_HARBOR_SESSION_SECRET="admin-access-session-secret-${RUN_ID}" \
 AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=false \
 AGENT_HARBOR_DATABASE_URL= \
 AGENT_HARBOR_CREDENTIAL_KEY= \
-  go run ./cmd/agent-harbor > "$LOG_DIR/api.log" 2>&1 &
+  "$LOG_DIR/api-server" > "$LOG_DIR/api.log" 2>&1 &
 PIDS+=("$!")
 
 wait_http "API" "$BASE_URL/healthz"

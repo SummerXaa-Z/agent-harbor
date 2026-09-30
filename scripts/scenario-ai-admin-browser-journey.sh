@@ -31,12 +31,18 @@ cleanup() {
   for pid in "${PIDS[@]:-}"; do
     kill "$pid" >/dev/null 2>&1 || true
   done
+  kill_port_listener "$API_PORT" TERM
+  kill_port_listener "$MOCK_MCP_PORT" TERM
+  kill_port_listener "$FRONTEND_PORT" TERM
   sleep 0.5
   for pid in "${PIDS[@]:-}"; do
     if kill -0 "$pid" >/dev/null 2>&1; then
       kill -KILL "$pid" >/dev/null 2>&1 || true
     fi
   done
+  kill_port_listener "$API_PORT" KILL
+  kill_port_listener "$MOCK_MCP_PORT" KILL
+  kill_port_listener "$FRONTEND_PORT" KILL
   for pid in "${PIDS[@]:-}"; do
     wait "$pid" >/dev/null 2>&1 || true
   done
@@ -124,13 +130,16 @@ echo "MCP=http://${MOCK_MCP_HOST}:${MOCK_MCP_PORT}/mcp (${MCP_SERVER_MODE})"
 echo "ADMIN_IDENTITIES=${REQUESTER_ACTOR}/${REVIEWER_ACTOR}"
 echo "RUN_ID=$RUN_ID"
 
-AGENT_HARBOR_ADDR="$API_ADDR" AGENT_HARBOR_ADMIN_IDENTITIES="$ADMIN_IDENTITIES" AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true AGENT_HARBOR_CORS_ORIGINS="$FRONTEND_ORIGIN" go run ./cmd/agent-harbor > "$LOG_DIR/api.log" 2>&1 &
+# Build once and run the binary directly: killing a `go run` pid only kills
+# the go-run parent and orphans the compiled server on its port.
+go build -o "$LOG_DIR/api-server" ./cmd/agent-harbor
+AGENT_HARBOR_ADDR="$API_ADDR" AGENT_HARBOR_ADMIN_IDENTITIES="$ADMIN_IDENTITIES" AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true AGENT_HARBOR_CORS_ORIGINS="$FRONTEND_ORIGIN" "$LOG_DIR/api-server" > "$LOG_DIR/api.log" 2>&1 &
 PIDS+=("$!")
 
 case "$MCP_SERVER_MODE" in
   real)
     "${PNPM_CMD[@]}" --dir scripts/real-mcp install --frozen-lockfile >/dev/null
-    (cd scripts/real-mcp && REAL_MCP_HOST="$MOCK_MCP_HOST" REAL_MCP_PORT="$MOCK_MCP_PORT" node server.mjs) > "$LOG_DIR/mcp.log" 2>&1 &
+    (cd scripts/real-mcp && exec env REAL_MCP_HOST="$MOCK_MCP_HOST" REAL_MCP_PORT="$MOCK_MCP_PORT" node server.mjs) > "$LOG_DIR/mcp.log" 2>&1 &
     PIDS+=("$!")
     ;;
   mock)

@@ -142,19 +142,22 @@ if data.get("authRequired") is not True:
     raise SystemExit(f"expected authRequired=true for production journey smoke gate, got {data.get('authRequired')!r}")
 PY
 
-production_journey_source="$(curl -fsS "$FRONTEND_ORIGIN/src/productionJourney.ts")"
+# The legacy console is retired (0.4.0 D1): the production journey lives in
+# the redesign's go-live model and view, the environment checks (formerly
+# connection diagnostics UI) in the cockpit model and view.
+go_live_model_source="$(curl -fsS "$FRONTEND_ORIGIN/src/redesign/model/goLive.ts")"
 production_acceptance_source="$(curl -fsS "$FRONTEND_ORIGIN/src/productionAcceptance.ts")"
-checkpoint_source="$(curl -fsS "$FRONTEND_ORIGIN/src/components/ProductionJourneyCheckpoint.tsx")"
-go_live_acceptance_source="$(curl -fsS "$FRONTEND_ORIGIN/src/components/GoLiveAcceptanceOverview.tsx")"
+go_live_view_source="$(curl -fsS "$FRONTEND_ORIGIN/src/redesign/views/user/GoLiveView.tsx")"
+env_checks_source="$(curl -fsS "$FRONTEND_ORIGIN/src/redesign/model/envChecks.ts")"
+cockpit_view_source="$(curl -fsS "$FRONTEND_ORIGIN/src/redesign/views/admin/CockpitView.tsx")"
 connection_diagnostics_source="$(curl -fsS "$FRONTEND_ORIGIN/src/connectionDiagnostics.ts")"
-console_controller_source="$(curl -fsS "$FRONTEND_ORIGIN/src/ConsoleController.tsx")"
-assert_contains "production journey model" "productionJourneyStages" "$production_journey_source"
+assert_contains "go-live journey model" "goLiveLegs" "$go_live_model_source"
 assert_contains "production acceptance model" "buildProductionAcceptanceCenter" "$production_acceptance_source"
-assert_contains "production journey checkpoint" "production-journey-checkpoint" "$checkpoint_source"
-assert_contains "go-live acceptance model wiring" "buildProductionAcceptanceCenter" "$go_live_acceptance_source"
+assert_contains "go-live acceptance model wiring" "buildProductionAcceptanceCenter" "$go_live_model_source"
+assert_contains "go-live journey view" "goLiveLegs" "$go_live_view_source"
 assert_contains "connection diagnostics model" "buildConnectionDiagnosticRows" "$connection_diagnostics_source"
-assert_contains "connection diagnostics UI action" "connection-diagnostics-action" "$console_controller_source"
-assert_contains "connection diagnostics UI list" "connection-diagnostics-list" "$console_controller_source"
+assert_contains "environment check model" "preferredProbeTarget" "$env_checks_source"
+assert_contains "environment check UI" "rowDetail" "$cockpit_view_source"
 
 for hash in getting-started registry ask ai-admin go-live; do
   curl -fsS "$FRONTEND_ORIGIN/#$hash" >/dev/null
@@ -164,9 +167,9 @@ done
 "${PNPM_CMD[@]}" --dir frontend exec node --test \
   tests/connectionDiagnostics.test.mjs \
   tests/productionAcceptance.test.mjs \
-  tests/productionJourney.test.mjs \
   tests/productionLanguage.test.mjs \
-  tests/consoleNavigation.test.mjs
+  tests/redesignUserModels.test.mjs \
+  tests/redesignAdminModels.test.mjs
 
 echo "Web console production journey smoke complete"
 cleanup

@@ -108,18 +108,19 @@ type auditEventResponse struct {
 }
 
 type adminIdentityResponse struct {
-	ID          string         `json:"id"`
-	Actor       string         `json:"actor"`
-	DisplayName string         `json:"displayName"`
-	Role        string         `json:"role"`
-	TenantID    string         `json:"tenantId"`
-	WorkspaceID string         `json:"workspaceId"`
-	Status      string         `json:"status"`
-	Source      string         `json:"source"`
-	KeyPrefix   string         `json:"keyPrefix"`
-	CreatedBy   string         `json:"createdBy"`
-	UpdatedBy   string         `json:"updatedBy"`
-	Metadata    map[string]any `json:"metadata,omitempty"`
+	ID            string         `json:"id"`
+	Actor         string         `json:"actor"`
+	DisplayName   string         `json:"displayName"`
+	Role          string         `json:"role"`
+	TenantID      string         `json:"tenantId"`
+	WorkspaceID   string         `json:"workspaceId"`
+	Status        string         `json:"status"`
+	Source        string         `json:"source"`
+	KeyPrefix     string         `json:"keyPrefix"`
+	CreatedBy     string         `json:"createdBy"`
+	UpdatedBy     string         `json:"updatedBy"`
+	OwnedAgentIDs []string       `json:"ownedAgentIds,omitempty"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
 }
 
 type createAdminIdentityResponse struct {

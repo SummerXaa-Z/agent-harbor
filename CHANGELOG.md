@@ -4,6 +4,12 @@ All notable public changes to AgentHarbor will be documented in this file.
 
 This project uses Keep a Changelog-style sections and semantic versioning for tagged releases.
 
+## [Unreleased]
+
+### Added
+
+- Per-holder views, backend core (issue #16 family): a managed admin identity can be bound to a set of caller agents via `ownedAgentIds` on `POST /api/v1/admin-identities` and `PATCH /api/v1/admin-identities/{id}` (whole replacement, platform administrators only). Once bound, that identity's user surface is narrowed server-side to its owned callers — every permission-package journey endpoint (drafts, preflight, apply, approval requests, readiness, access handoff, tokens) and the management access-profile variant return `403 HOLDER_SCOPE_DENIED` for callers outside the binding, and the approval-request / application / agent-key lists are post-filtered to owned callers. Rebinding takes effect on the next request (no session caching). Empty bindings keep the existing tenant-scope semantics, so upgrading is non-breaking; `security_reviewer` identities can also be bound (their approval queue stays management-wide). Bindings validate that every agent exists inside the identity's own management range (platform unrestricted, tenant-scoped roles limited to their tenant), each change emits an `admin_identity.updated` audit event carrying added/removed agent ids and the owned count (no key material), and the console session response reports `holderAgentIds` for bound non-platform identities. Demo mode and platform administrators are unaffected. Adds schema migration 016 (`admin_identities.owned_agent_ids`).
+
 ## [0.5.3] - 2026-10-01
 
 ### Added

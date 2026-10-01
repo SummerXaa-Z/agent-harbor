@@ -122,29 +122,39 @@ type AdminIdentity struct {
 	WorkspaceID string              `json:"workspaceId,omitempty"`
 	Status      AdminIdentityStatus `json:"status"`
 	Source      AdminIdentitySource `json:"source"`
-	KeyHash     string              `json:"-"`
-	KeyPrefix   string              `json:"keyPrefix,omitempty"`
-	CreatedAt   time.Time           `json:"createdAt"`
-	UpdatedAt   time.Time           `json:"updatedAt"`
-	LastUsedAt  time.Time           `json:"lastUsedAt,omitempty,omitzero"`
-	RotatedAt   time.Time           `json:"rotatedAt,omitempty,omitzero"`
-	DisabledAt  time.Time           `json:"disabledAt,omitempty,omitzero"`
-	CreatedBy   string              `json:"createdBy,omitempty"`
-	UpdatedBy   string              `json:"updatedBy,omitempty"`
-	DisabledBy  string              `json:"disabledBy,omitempty"`
+	// Per-holder views (docs/engineering/0.6.0-per-holder-views-design.md):
+	// caller agents this identity may act as on the user surface. Empty keeps
+	// the existing tenant-scope semantics; binding opts into holder narrowing.
+	OwnedAgentIDs []string  `json:"ownedAgentIds,omitempty"`
+	KeyHash       string    `json:"-"`
+	KeyPrefix     string    `json:"keyPrefix,omitempty"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	LastUsedAt    time.Time `json:"lastUsedAt,omitempty,omitzero"`
+	RotatedAt     time.Time `json:"rotatedAt,omitempty,omitzero"`
+	DisabledAt    time.Time `json:"disabledAt,omitempty,omitzero"`
+	CreatedBy     string    `json:"createdBy,omitempty"`
+	UpdatedBy     string    `json:"updatedBy,omitempty"`
+	DisabledBy    string    `json:"disabledBy,omitempty"`
 }
 
 type CreateAdminIdentityRequest struct {
-	Actor       string            `json:"actor"`
-	DisplayName string            `json:"displayName"`
-	Role        AdminIdentityRole `json:"role"`
-	TenantID    string            `json:"tenantId"`
-	WorkspaceID string            `json:"workspaceId"`
+	Actor         string            `json:"actor"`
+	DisplayName   string            `json:"displayName"`
+	Role          AdminIdentityRole `json:"role"`
+	TenantID      string            `json:"tenantId"`
+	WorkspaceID   string            `json:"workspaceId"`
+	OwnedAgentIDs []string          `json:"ownedAgentIds"`
 }
 
 type CreateAdminIdentityResponse struct {
 	Identity AdminIdentity `json:"identity"`
 	Key      string        `json:"key"`
+}
+
+// UpdateAdminIdentityOwnedAgentsRequest replaces the whole binding list.
+type UpdateAdminIdentityOwnedAgentsRequest struct {
+	OwnedAgentIDs []string `json:"ownedAgentIds"`
 }
 
 type RotateAdminIdentityKeyResponse struct {

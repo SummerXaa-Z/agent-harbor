@@ -231,6 +231,7 @@ func (s *Server) Router() http.Handler {
 			r.Use(s.requireAdmin)
 			r.Get("/admin-identities", s.listAdminIdentities)
 			r.Post("/admin-identities", s.createAdminIdentity)
+			r.Patch("/admin-identities/{id}", s.updateAdminIdentityOwnedAgents)
 			r.Post("/admin-identities/{id}/key:rotate", s.rotateAdminIdentityKey)
 			r.Post("/admin-identities/{id}:disable", s.disableAdminIdentity)
 			r.Post("/tenants", s.createTenant)
@@ -1201,6 +1202,12 @@ func (s *Server) listAgentKeys(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	if owned, active, err := s.holderOwnedAgentIDs(r); err != nil {
+		writeError(w, err)
+		return
+	} else if active {
+		rows = agentKeysOwnedBy(rows, owned)
+	}
 	writeJSON(w, http.StatusOK, rows)
 }
 
@@ -1805,6 +1812,12 @@ func (s *Server) listPermissionPackageApplications(w http.ResponseWriter, r *htt
 	if err != nil {
 		writeError(w, err)
 		return
+	}
+	if owned, active, err := s.holderOwnedAgentIDs(r); err != nil {
+		writeError(w, err)
+		return
+	} else if active {
+		rows = applicationsOwnedBy(rows, owned)
 	}
 	rows, err = s.visiblePermissionPackageApplications(r.Context(), rows, scope)
 	if err != nil {
@@ -3922,6 +3935,12 @@ func (s *Server) listPermissionPackageApprovalRequests(w http.ResponseWriter, r 
 	if err != nil {
 		writeError(w, err)
 		return
+	}
+	if owned, active, err := s.holderOwnedAgentIDs(r); err != nil {
+		writeError(w, err)
+		return
+	} else if active {
+		rows = approvalRequestsOwnedBy(rows, owned)
 	}
 	writeJSON(w, http.StatusOK, permissionPackageApprovalRequestResponses(rows, s.now()))
 }
@@ -6973,6 +6992,9 @@ func (s *Server) requirePermissionPackageDraftScope(r *http.Request, req domain.
 			return domain.NotFound("caller instance not found")
 		}
 		if err := s.requireAgentManagementScope(r, caller); err != nil {
+			return err
+		}
+		if err := s.requireHolderScope(r, req.CallerInstanceID); err != nil {
 			return err
 		}
 	}

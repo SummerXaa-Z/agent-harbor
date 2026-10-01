@@ -2343,7 +2343,7 @@ func (p *Postgres) ListAuditEvents(ctx context.Context, filter AuditEventFilter)
 const adminIdentityColumns = `
 	id, actor, display_name, role, tenant_id, workspace_id, status, source,
 	key_hash, key_prefix, created_at, updated_at, last_used_at, rotated_at,
-	disabled_at, created_by, updated_by, disabled_by
+	disabled_at, created_by, updated_by, disabled_by, owned_agent_ids
 `
 
 func (p *Postgres) ListAdminIdentities(ctx context.Context) ([]domain.AdminIdentity, error) {
@@ -2422,16 +2422,24 @@ func (p *Postgres) CreateAdminIdentityWithAudit(ctx context.Context, identity do
 }
 
 func (p *Postgres) createAdminIdentity(ctx context.Context, exec sqlExecutor, identity domain.AdminIdentity) (domain.AdminIdentity, error) {
+	ownedAgentIDs := []byte("[]")
+	if identity.OwnedAgentIDs != nil {
+		encoded, err := json.Marshal(identity.OwnedAgentIDs)
+		if err != nil {
+			return domain.AdminIdentity{}, fmt.Errorf("marshal admin identity owned agent ids: %w", err)
+		}
+		ownedAgentIDs = encoded
+	}
 	_, err := exec.Exec(ctx, `
 		insert into admin_identities (
 			id, actor, display_name, role, tenant_id, workspace_id, status, source,
 			key_hash, key_prefix, created_at, updated_at, last_used_at, rotated_at,
-			disabled_at, created_by, updated_by, disabled_by
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+			disabled_at, created_by, updated_by, disabled_by, owned_agent_ids
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
 	`, identity.ID, identity.Actor, identity.DisplayName, string(identity.Role), identity.TenantID, identity.WorkspaceID,
 		string(identity.Status), string(identity.Source), identity.KeyHash, identity.KeyPrefix, identity.CreatedAt, identity.UpdatedAt,
 		nullTime(identity.LastUsedAt), nullTime(identity.RotatedAt), nullTime(identity.DisabledAt),
-		identity.CreatedBy, identity.UpdatedBy, identity.DisabledBy)
+		identity.CreatedBy, identity.UpdatedBy, identity.DisabledBy, ownedAgentIDs)
 	if err != nil {
 		if conflict := adminIdentityInsertConflict(err); conflict != nil {
 			return domain.AdminIdentity{}, conflict
@@ -2506,6 +2514,40 @@ func (p *Postgres) DisableAdminIdentityWithAudit(ctx context.Context, id string,
 		return err
 	})
 	return disabled, ok, err
+}
+
+func (p *Postgres) UpdateAdminIdentityOwnedAgentsWithAudit(ctx context.Context, id string, ownedAgentIDs []string, now time.Time, actor string, build AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error) {
+	var updated domain.AdminIdentity
+	var ok bool
+	encoded := []byte("[]")
+	if ownedAgentIDs != nil {
+		marshalled, err := json.Marshal(ownedAgentIDs)
+		if err != nil {
+			return domain.AdminIdentity{}, false, fmt.Errorf("marshal admin identity owned agent ids: %w", err)
+		}
+		encoded = marshalled
+	}
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx, `
+			update admin_identities
+			set owned_agent_ids=$2, updated_at=$3, updated_by=$4
+			where id=$1
+			returning `+adminIdentityColumns+`
+		`, strings.TrimSpace(id), encoded, now, strings.TrimSpace(actor))
+		var err error
+		updated, err = scanAdminIdentity(row)
+		if errors.Is(err, pgx.ErrNoRows) {
+			ok = false
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("update admin identity owned agents: %w", err)
+		}
+		ok = true
+		_, err = p.appendAuditEvent(ctx, tx, build(updated))
+		return err
+	})
+	return updated, ok, err
 }
 
 func (p *Postgres) TouchAdminIdentityLastUsed(ctx context.Context, id string, now time.Time) error {
@@ -3072,6 +3114,7 @@ func scanAdminIdentity(row scanner) (domain.AdminIdentity, error) {
 	var lastUsedAt *time.Time
 	var rotatedAt *time.Time
 	var disabledAt *time.Time
+	var ownedAgentIDs []byte
 	if err := row.Scan(
 		&identity.ID,
 		&identity.Actor,
@@ -3091,7 +3134,11 @@ func scanAdminIdentity(row scanner) (domain.AdminIdentity, error) {
 		&identity.CreatedBy,
 		&identity.UpdatedBy,
 		&identity.DisabledBy,
+		&ownedAgentIDs,
 	); err != nil {
+		return domain.AdminIdentity{}, err
+	}
+	if err := unmarshalJSON(ownedAgentIDs, &identity.OwnedAgentIDs, "admin identity owned agent ids"); err != nil {
 		return domain.AdminIdentity{}, err
 	}
 	identity.Role = domain.AdminIdentityRole(role)

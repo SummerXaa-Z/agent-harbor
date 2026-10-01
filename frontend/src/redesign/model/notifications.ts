@@ -1,14 +1,16 @@
 import type { PermissionPackageApprovalRequest, PermissionPackageTemplate } from "../../permissionPackages";
-import type { Agent, Capability } from "../../types";
+import type { Agent, AgentKey, Capability } from "../../types";
 import type { EnvCheckRow } from "./envChecks";
+import { maskSecret } from "./secretMask.ts";
+import { keyStatus } from "./userWorkbench.ts";
 import { approvalCapabilityRows, approvalRiskSummary } from "./approvalReview.ts";
 import type { Surface } from "../router.ts";
 
-// Notification derivation (plan §8, first phase: front-end derived).
-// Dedupe id is `${kind}:${resourceId}:${status}`; read state lives in
-// localStorage and syncs across tabs via the storage event.
+// Notification derivation (plan §8; phase 2 adds handoff-token lifecycle and
+// live structural environment rows). Dedupe id is `${kind}:${resourceId}:${status}`;
+// read state lives in localStorage and syncs across tabs via the storage event.
 
-export type NotificationKind = "approval" | "env";
+export type NotificationKind = "approval" | "env" | "token";
 
 export interface NotificationItem {
   createdAt: string;
@@ -27,7 +29,13 @@ export interface NotificationDeriveInput {
   approvals: readonly PermissionPackageApprovalRequest[];
   capabilities: readonly Capability[];
   envRows: readonly EnvCheckRow[];
+  keys?: readonly AgentKey[];
+  now?: number;
   sessionActor: string | null;
+  // Live counts for the two structural empty-state environment rows; when
+  // provided they replace the snapshot-derived noTarget/noApp rows so the
+  // notifications resolve the moment the condition clears (round 5, #40).
+  structuralEnv?: { applicationCount: number; registeredTargetCount: number } | null;
   templates: readonly PermissionPackageTemplate[];
 }
 
@@ -84,6 +92,7 @@ export function deriveNotifications(input: NotificationDeriveInput): Notificatio
 
   for (const row of input.envRows) {
     if (row.status !== "error" && row.status !== "warning") continue;
+    if (input.structuralEnv && structuralEnvSubKeys.has(row.subKey)) continue;
     items.push({
       createdAt: "",
       dedupeId: `env:${row.key}:${row.status}`,
@@ -98,7 +107,52 @@ export function deriveNotifications(input: NotificationDeriveInput): Notificatio
     });
   }
 
+  if (input.structuralEnv) {
+    if (input.structuralEnv.registeredTargetCount === 0) {
+      items.push(structuralEnvItem("mcp", "rd.envcheck.mcp.noTarget"));
+    }
+    if (input.structuralEnv.applicationCount === 0) {
+      items.push(structuralEnvItem("corePath", "rd.envcheck.corePath.noApp"));
+    }
+  }
+
+  for (const key of input.keys ?? []) {
+    if (!key.createdForHandoffId) continue;
+    const status = keyStatus(key, input.now ?? Date.now());
+    if (status === "active") continue;
+    items.push({
+      createdAt: status === "revoked" ? (key.revokedAt ?? key.expiresAt) : key.expiresAt,
+      dedupeId: `token:${key.id}:${status}`,
+      hash: "#user/golive",
+      kind: "token",
+      params: { prefix: maskSecret(key.prefix) },
+      status,
+      subKey: "rd.nt.token.sub",
+      surface: "user",
+      titleKey: `rd.nt.token.${status}.title`,
+    });
+  }
+
   return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// The two snapshot rows structuralEnv replaces, keyed by their sub copy.
+const structuralEnvSubKeys = new Set(["rd.envcheck.mcp.noTarget", "rd.envcheck.corePath.noApp"]);
+
+// Same dedupe ids and copy as the snapshot-derived rows, so read state and
+// wording carry over unchanged while the condition becomes live.
+function structuralEnvItem(rowKey: "mcp" | "corePath", subKey: string): NotificationItem {
+  return {
+    createdAt: "",
+    dedupeId: `env:${rowKey}:warning`,
+    hash: "#admin/cockpit",
+    kind: "env",
+    params: {},
+    status: "warning",
+    subKey,
+    surface: "admin",
+    titleKey: "rd.nt.env.title",
+  };
 }
 
 export const NOTIFICATION_STORAGE_KEY = "agent-harbor-notifications-v1";

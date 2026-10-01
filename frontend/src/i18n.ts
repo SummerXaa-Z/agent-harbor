@@ -2571,8 +2571,12 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.nt.rejected.sub": "Reviewer {reviewer}",
     "rd.nt.rejected.subReason": "Reviewer {reviewer}: {comment}",
     "rd.nt.env.title": "Environment check failed",
+    "rd.nt.token.expired.title": "Handoff token expired",
+    "rd.nt.token.revoked.title": "Handoff token revoked",
+    "rd.nt.token.sub": "Token {prefix}",
     "rd.nt.kind.approval": "Approval",
     "rd.nt.kind.env": "Environment",
+    "rd.nt.kind.token": "Token",
   },
   "zh-CN": {
     "action.activate": "启用",
@@ -5142,8 +5146,12 @@ const translations: Record<Language, Record<string, string>> = {
     "rd.nt.rejected.sub": "审批人 {reviewer}",
     "rd.nt.rejected.subReason": "审批人 {reviewer}:{comment}",
     "rd.nt.env.title": "环境检查失败",
+    "rd.nt.token.expired.title": "交接令牌已过期",
+    "rd.nt.token.revoked.title": "交接令牌已撤销",
+    "rd.nt.token.sub": "令牌 {prefix}",
     "rd.nt.kind.approval": "审批",
     "rd.nt.kind.env": "环境",
+    "rd.nt.kind.token": "令牌",
   },
 }
 

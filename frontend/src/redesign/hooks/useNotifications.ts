@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { fetchPermissionPackageApprovalRequests } from "../../api";
+import {
+  fetchAgents,
+  fetchAgentKeys,
+  fetchPermissionPackageApplications,
+  fetchPermissionPackageApprovalRequests,
+} from "../../api";
+import type { Agent, AgentKey, ConsoleSession } from "../../types";
 import type { PermissionPackageApprovalRequest } from "../../permissionPackages";
-import type { ConsoleSession } from "../../types";
 import { usePermissionCatalog } from "./usePermissionCatalog";
-import { latestEnvCheckSnapshot, subscribeEnvCheckSnapshot } from "../model/envChecks";
+import { latestEnvCheckSnapshot, registeredMcpTargets, subscribeEnvCheckSnapshot } from "../model/envChecks";
 import {
   deriveNotifications,
   effectiveReadIds,
@@ -26,14 +31,19 @@ export interface NotificationsState {
 
 const pollIntervalMs = 15_000;
 
-// First-phase notifications (plan §8): the approval list is the source of
-// truth (newest first, carries reviewComment), polled every 15s and paused
-// while the tab is hidden; environment failures come from the latest env-check
-// snapshot instead of re-probing. Read state persists in localStorage and
-// syncs across tabs through the storage event.
+// Notifications (plan §8; phase 2 adds token lifecycle and live structural
+// environment rows): the 15s poll fetches approvals, agents, agent keys, and
+// applications in parallel (each source fails independently — a restricted
+// session simply loses that source's items) and pauses while the tab is
+// hidden; probe-dependent environment failures still come from the latest
+// env-check snapshot instead of re-probing. Read state persists in
+// localStorage and syncs across tabs through the storage event.
 export function useNotifications(data: RedesignData, session: ConsoleSession | null): NotificationsState {
   const catalog = usePermissionCatalog(true);
   const [approvals, setApprovals] = useState<readonly PermissionPackageApprovalRequest[]>([]);
+  const [agents, setAgents] = useState<readonly Agent[]>([]);
+  const [keys, setKeys] = useState<readonly AgentKey[]>([]);
+  const [applicationCount, setApplicationCount] = useState(0);
   const [readState, setReadState] = useState<NotificationReadState>(() =>
     parseReadState(readStored(), new Date().toISOString()),
   );
@@ -42,13 +52,19 @@ export function useNotifications(data: RedesignData, session: ConsoleSession | n
 
   const reload = useCallback(async () => {
     const runId = ++runIdRef.current;
-    try {
-      const rows = await fetchPermissionPackageApprovalRequests({ limit: 100 });
-      if (runId === runIdRef.current) setApprovals(rows);
-    } catch {
-      // Unreachable or forbidden (a non-admin session): no notifications to
-      // derive from, the shell keeps working without them.
-    }
+    const [approvalResult, agentResult, keyResult, applicationResult] = await Promise.allSettled([
+      fetchPermissionPackageApprovalRequests({ limit: 100 }),
+      fetchAgents(),
+      fetchAgentKeys(),
+      fetchPermissionPackageApplications({ limit: 5 }),
+    ]);
+    if (runId !== runIdRef.current) return;
+    if (approvalResult.status === "fulfilled") setApprovals(approvalResult.value);
+    if (agentResult.status === "fulfilled") setAgents(agentResult.value);
+    if (keyResult.status === "fulfilled") setKeys(keyResult.value);
+    if (applicationResult.status === "fulfilled") setApplicationCount(applicationResult.value.length);
+    // Rejections are per-source (a forbidden or unreachable endpoint): the
+    // shell keeps working with whatever sources are available.
   }, []);
 
   useEffect(() => {
@@ -94,18 +110,23 @@ export function useNotifications(data: RedesignData, session: ConsoleSession | n
   // instead of waiting for the next approval poll to change a dependency.
   const envSnapshot = useSyncExternalStore(subscribeEnvCheckSnapshot, latestEnvCheckSnapshot);
 
-  const items = useMemo(
-    () =>
-      deriveNotifications({
-        agents: data.data?.agents ?? [],
-        approvals,
-        capabilities: data.data?.capabilities ?? [],
-        envRows: envSnapshot?.rows ?? [],
-        sessionActor: session?.actor ?? null,
-        templates: catalog.templates,
-      }),
-    [approvals, catalog.templates, data.data, envSnapshot, session],
-  );
+  const items = useMemo(() => {
+    const polledAgents = agents.length > 0 ? agents : (data.data?.agents ?? []);
+    return deriveNotifications({
+      agents: polledAgents,
+      approvals,
+      capabilities: data.data?.capabilities ?? [],
+      envRows: envSnapshot?.rows ?? [],
+      keys,
+      now: Date.now(),
+      sessionActor: session?.actor ?? null,
+      structuralEnv: {
+        applicationCount,
+        registeredTargetCount: registeredMcpTargets(polledAgents).length,
+      },
+      templates: catalog.templates,
+    });
+  }, [agents, approvals, applicationCount, catalog.templates, data.data, envSnapshot, keys, session]);
 
   const read = useMemo(() => effectiveReadIds(items, readState), [items, readState]);
   const unread = useMemo(() => unreadCounts(items, read), [items, read]);

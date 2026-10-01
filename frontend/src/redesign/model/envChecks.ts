@@ -157,11 +157,13 @@ export function corePathCheck(input: {
 
 // Row 4: environment health. Catalog contract issues fail the row; other
 // registered targets that do not answer only warn (plan P3 note 4) so one
-// retired experimental target cannot mark a healthy environment bad.
+// retired experimental target cannot mark a healthy environment bad. Each
+// unreachable entry carries the probe's classified failure detail (round 6,
+// finding #42) so the fix-guidance modal matches the registry probe modal.
 export function envHealthCheck(input: {
   catalogDetail: string | null;
   catalogIssues: readonly string[];
-  unreachable: readonly { endpoint: string; name: string }[];
+  unreachable: readonly { detail: string; endpoint: string; name: string }[];
 }): EnvCheckRow {
   const base = { key: "health" as const };
   if (input.catalogIssues.length > 0) {
@@ -179,7 +181,9 @@ export function envHealthCheck(input: {
   if (input.unreachable.length > 0) {
     return {
       ...base,
-      detail: input.unreachable.map((target) => `${target.name} (${target.endpoint})`).join("; "),
+      detail: input.unreachable
+        .map((target) => `${target.name} (${target.endpoint})${target.detail ? ` — ${target.detail}` : ""}`)
+        .join("; "),
       fixKeys: ["rd.envcheck.health.fixUnreachable"],
       status: "warning",
       subKey: "rd.envcheck.health.unreachable",

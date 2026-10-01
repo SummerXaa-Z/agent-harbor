@@ -175,9 +175,22 @@ test("corePathCheck requires apply, audit and an allowed call", () => {
 test("envHealthCheck: catalog issues fail, other targets only warn", () => {
   assert.equal(envHealthCheck({ catalogDetail: null, catalogIssues: ["stale"], unreachable: [] }).status, "error");
   assert.equal(envHealthCheck({ catalogDetail: "metadata v3", catalogIssues: [], unreachable: [] }).status, "warning");
-  const unreachable = envHealthCheck({ catalogDetail: null, catalogIssues: [], unreachable: [{ endpoint: "http://x", name: "x" }] });
+  // Each unreachable target carries its classified probe failure so the
+  // fix-guidance modal matches the registry probe modal (round 6, #42).
+  const unreachable = envHealthCheck({
+    catalogDetail: null,
+    catalogIssues: [],
+    unreachable: [
+      { detail: "UPSTREAM_CONNECT_ERROR: dial tcp 127.0.0.1:9: connection refused", endpoint: "http://x", name: "x" },
+      { detail: "", endpoint: "http://y", name: "y" },
+    ],
+  });
   assert.equal(unreachable.status, "warning");
-  assert.deepEqual(unreachable.subParams, { count: 1 });
+  assert.deepEqual(unreachable.subParams, { count: 2 });
+  assert.equal(
+    unreachable.detail,
+    "x (http://x) — UPSTREAM_CONNECT_ERROR: dial tcp 127.0.0.1:9: connection refused; y (http://y)",
+  );
   assert.equal(envHealthCheck({ catalogDetail: null, catalogIssues: [], unreachable: [] }).status, "ok");
 });
 

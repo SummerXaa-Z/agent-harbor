@@ -6,6 +6,7 @@ import type { AccessContext } from "../model/accessContext";
 import { apiErrorPresentation } from "../model/apiErrorCategory";
 import {
   buildRuntimeValidationReadiness,
+  classifyRuntimeValidationRun,
   mcpToolCallPayload,
   mcpToolsListPayload,
   type RuntimeValidationBlocker,
@@ -25,8 +26,12 @@ const runtimeValidationKeyName = "runtime validation key";
 
 // Runs the go-live runtime validation with a throwaway agent key: one
 // tools/list, one denied tools/call (when the draft blocks something), one
-// allowed tools/call — then revokes the key either way. Returns true when the
-// evidence landed so the caller can refresh readiness.
+// allowed tools/call — then revokes the key either way. Returns true when
+// any evidence landed so the caller can refresh readiness. A denied probe
+// the gateway does not reject (a pre-existing grant wider than the package,
+// round 6 finding #41) does not abort the run: the allowed probe still
+// executes and the mismatch is diagnosed by name instead of dead-ending
+// readiness with no explanation.
 export function useRuntimeValidation({
   context,
   live,
@@ -66,11 +71,7 @@ export function useRuntimeValidation({
       );
       callerKeyId = callerKey.id;
       const toolList = await callMcpRpc(runPlan.targetId, mcpToolsListPayload(), callerKey.key, runPlan.runId, "", runPlan.subjectId);
-      if (!toolList.ok) {
-        showToast(tx(t, "rd.golive.validationRpcUnexpected", { status: toolList.status }), "danger");
-        return false;
-      }
-      let deniedStatus = 0;
+      let deniedStatus: number | null = null;
       if (runPlan.blockedCapabilityKey) {
         const deniedCall = await callMcpRpc(
           runPlan.targetId,
@@ -80,10 +81,6 @@ export function useRuntimeValidation({
           "",
           runPlan.subjectId,
         );
-        if (deniedCall.status !== 403) {
-          showToast(tx(t, "rd.golive.validationDeniedUnexpected", { status: deniedCall.status }), "danger");
-          return false;
-        }
         deniedStatus = deniedCall.status;
       }
       const allowedCall = await callMcpRpc(
@@ -94,14 +91,34 @@ export function useRuntimeValidation({
         "",
         runPlan.subjectId,
       );
-      if (!allowedCall.ok) {
-        showToast(tx(t, "rd.golive.validationRpcUnexpected", { status: allowedCall.status }), "danger");
+      const outcome = classifyRuntimeValidationRun({
+        allowedOk: allowedCall.ok,
+        allowedStatus: allowedCall.status,
+        blockedCapabilityKey: runPlan.blockedCapabilityKey,
+        deniedStatus,
+        toolListOk: toolList.ok,
+        toolListStatus: toolList.status,
+      });
+      if (outcome.kind === "toolListFailed") {
+        showToast(tx(t, "rd.golive.validationRpcUnexpected", { status: outcome.status }), "danger");
         return false;
       }
+      if (outcome.kind === "allowedFailed") {
+        showToast(tx(t, "rd.golive.validationRpcUnexpected", { status: outcome.status }), "danger");
+        return false;
+      }
+      if (outcome.kind === "denyUnexpected") {
+        showToast(
+          tx(t, "rd.golive.validationDeniedUnexpected", { capability: outcome.blockedCapabilityKey, status: outcome.deniedStatus }),
+          "danger",
+        );
+        showToast(tx(t, "rd.golive.validationDoneDenyMissing", { allowed: outcome.allowedStatus }));
+        return true;
+      }
       showToast(
-        deniedStatus
-          ? tx(t, "rd.golive.validationDone", { allowed: allowedCall.status, denied: deniedStatus })
-          : tx(t, "rd.golive.validationDoneNoDenied", { allowed: allowedCall.status }),
+        outcome.deniedStatus
+          ? tx(t, "rd.golive.validationDone", { allowed: outcome.allowedStatus, denied: outcome.deniedStatus })
+          : tx(t, "rd.golive.validationDoneNoDenied", { allowed: outcome.allowedStatus }),
       );
       return true;
     } catch (error) {

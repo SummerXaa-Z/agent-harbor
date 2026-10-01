@@ -4,7 +4,7 @@ All notable public changes to AgentHarbor will be documented in this file.
 
 This project uses Keep a Changelog-style sections and semantic versioning for tagged releases.
 
-## [Unreleased]
+## [0.6.0] - 2026-10-02
 
 ### Added
 

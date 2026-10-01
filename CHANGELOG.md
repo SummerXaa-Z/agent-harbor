@@ -6,6 +6,10 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ## [Unreleased]
 
+### Added
+
+- Notification phase 2 (plan `docs/engineering/0.5.0-notification-phase2-plan.md`): the notification center now covers handoff-token lifecycle — an Access Handoff token that has expired or been revoked raises a user-side notification (masked prefix, transition time, deep link to go-live) derived from the polled key list. The two structural empty-state environment notifications (no registered MCP target, no permission applications) are now derived from live counts refreshed on the 15-second poll instead of the environment-check snapshot, so they clear the moment the condition resolves instead of lingering unread (round 5, finding #40). Probe-dependent environment rows stay snapshot-derived; server-side active push of target unreachability and token-expiry audit events remain documented non-goals.
+
 ## [0.4.1] - 2026-09-30
 
 ### Fixed

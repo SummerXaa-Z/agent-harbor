@@ -192,3 +192,59 @@ test("read state: baseline, storage round-trip and unread counts", () => {
   );
   assert.deepEqual(parseReadState('{"readIds":[1,"a"]}', "now"), emptyReadState("now"), "missing baseline resets");
 });
+
+test("token lifecycle notifications cover handoff keys only, masked", () => {
+  const now = Date.parse("2026-09-27T12:00:00Z");
+  const keys = [
+    { id: "k-active", agentId: "agt-caller", name: "handoff", prefix: "ah_active01", createdAt: "2026-09-27T11:00:00Z", expiresAt: "2026-09-27T13:00:00Z", createdForHandoffId: "h1" },
+    { id: "k-expired", agentId: "agt-caller", name: "handoff", prefix: "ah_expired1", createdAt: "2026-09-27T10:00:00Z", expiresAt: "2026-09-27T11:30:00Z", createdForHandoffId: "h2" },
+    { id: "k-revoked", agentId: "agt-caller", name: "handoff", prefix: "ah_revoked1", createdAt: "2026-09-27T10:00:00Z", expiresAt: "2026-09-27T13:00:00Z", revokedAt: "2026-09-27T11:45:00Z", createdForHandoffId: "h3" },
+    { id: "k-plain", agentId: "agt-caller", name: "local", prefix: "ah_plain001", createdAt: "2026-09-27T10:00:00Z", expiresAt: "2026-09-27T11:30:00Z" },
+  ];
+  const items = deriveNotifications({
+    agents: [], approvals: [], capabilities: [], envRows: [],
+    keys, now, sessionActor: "local-dev", templates: [],
+  });
+  assert.deepEqual(items.map((item) => item.dedupeId), ["token:k-revoked:revoked", "token:k-expired:expired"]);
+  const revoked = items[0];
+  assert.equal(revoked.surface, "user");
+  assert.equal(revoked.hash, "#user/golive");
+  assert.equal(revoked.titleKey, "rd.nt.token.revoked.title");
+  assert.equal(revoked.createdAt, "2026-09-27T11:45:00Z", "revocation time beats expiry");
+  assert.equal(revoked.params.prefix, "ah_revoked1…");
+  assert.equal(items[1].titleKey, "rd.nt.token.expired.title");
+  assert.equal(items[1].createdAt, "2026-09-27T11:30:00Z");
+  // Pre-baseline token items auto-read like other resolved items, so a new
+  // browser does not replay every long-dead handoff token as unread.
+  const read = effectiveReadIds(items, { baselineAt: "2026-09-27T11:40:00Z", readIds: [] });
+  assert.ok(read.has("token:k-expired:expired"));
+  assert.ok(!read.has("token:k-revoked:revoked"));
+});
+
+test("structural empty-state env notifications follow live data, not the stale snapshot", () => {
+  const envRows = [
+    { detail: "", fixKeys: [], key: "mcp", status: "warning", subKey: "rd.envcheck.mcp.noTarget" },
+    { detail: "", fixKeys: [], key: "corePath", status: "warning", subKey: "rd.envcheck.corePath.noApp" },
+    { detail: "refused", fixKeys: [], key: "mcp", status: "error", subKey: "rd.envcheck.mcp.error", subParams: { endpoint: "http://x" } },
+  ];
+  const base = { agents: [agent()], approvals: [], capabilities: [], envRows, sessionActor: null, templates: [] };
+
+  // Live counts say both conditions cleared: the two snapshot warnings drop
+  // immediately while probe-dependent rows stay (round 5, finding #40).
+  const cleared = deriveNotifications({ ...base, structuralEnv: { applicationCount: 1, registeredTargetCount: 1 } });
+  assert.deepEqual(cleared.map((item) => item.dedupeId), ["env:mcp:error"]);
+
+  // Empty state derives the same items and dedupe ids phase 1 produced, so
+  // read state carries over.
+  const empty = deriveNotifications({ ...base, structuralEnv: { applicationCount: 0, registeredTargetCount: 0 } });
+  assert.deepEqual(
+    empty.map((item) => item.dedupeId),
+    ["env:mcp:error", "env:mcp:warning", "env:corePath:warning"],
+  );
+  const noTarget = empty.find((item) => item.dedupeId === "env:mcp:warning");
+  assert.equal(noTarget.subKey, "rd.envcheck.mcp.noTarget");
+  assert.equal(noTarget.hash, "#admin/cockpit");
+
+  // Without structuralEnv the snapshot rows pass through unchanged.
+  assert.equal(deriveNotifications(base).length, 3);
+});

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"sort"
 	"testing"
 	"time"
 
@@ -292,8 +294,10 @@ func TestUpdateAdminIdentityOwnedAgents(t *testing.T) {
 	patched := decodeData[adminIdentityResponse](t, requestWithAdmin(t, router, http.MethodPatch, "/api/v1/admin-identities/"+created.Identity.ID, map[string]any{
 		"ownedAgentIds": []string{caller.ID, otherCaller.ID, "  ", caller.ID},
 	}, "", "platform-key"))
-	if len(patched.OwnedAgentIDs) != 2 || patched.OwnedAgentIDs[0] != caller.ID || patched.OwnedAgentIDs[1] != otherCaller.ID {
-		t.Fatalf("patch should trim, dedupe and sort owned agents, got %#v", patched.OwnedAgentIDs)
+	expectedOwned := []string{caller.ID, otherCaller.ID}
+	sort.Strings(expectedOwned)
+	if !slices.Equal(patched.OwnedAgentIDs, expectedOwned) {
+		t.Fatalf("patch should trim, dedupe and sort owned agents, got %#v want %#v", patched.OwnedAgentIDs, expectedOwned)
 	}
 
 	events, err := repo.ListAuditEvents(context.Background(), store.AuditEventFilter{ResourceType: "admin_identity", Limit: 50})

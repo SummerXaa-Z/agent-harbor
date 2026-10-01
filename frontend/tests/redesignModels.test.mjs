@@ -192,17 +192,19 @@ test("self review is detected after trimming both sides", () => {
 });
 
 test("session identity names demo mode and only offers sign-out to signed-in sessions", () => {
-  assert.deepEqual(sessionIdentity(null), { actor: "", canSignOut: false, demo: false, roleKey: "" });
+  assert.deepEqual(sessionIdentity(null), { actor: "", canSignOut: false, demo: false, holderAgentCount: 0, roleKey: "" });
   assert.deepEqual(sessionIdentity({ actor: "local-dev", authenticated: false, requiresLogin: false, role: "platform_admin" }), {
     actor: "",
     canSignOut: false,
     demo: true,
+    holderAgentCount: 0,
     roleKey: "auth.role.platform_admin",
   });
   assert.deepEqual(sessionIdentity({ actor: " alice ", authenticated: true, requiresLogin: true, role: "security_reviewer" }), {
     actor: "alice",
     canSignOut: true,
     demo: false,
+    holderAgentCount: 0,
     roleKey: "auth.role.security_reviewer",
   });
   assert.equal(sessionIdentity({ authenticated: false, requiresLogin: true }).canSignOut, false);

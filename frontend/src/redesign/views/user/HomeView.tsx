@@ -44,7 +44,7 @@ export function HomeView({ data, onRetry, session }: UserViewProps) {
   const { language, t } = useRedesignI18n();
   const live = Boolean(data.data?.loadedFromApi);
   const consoleData = data.data;
-  const accessContext = useAccessContext(data, {});
+  const accessContext = useAccessContext(data, {}, session?.holderAgentIds);
   const catalog = usePermissionCatalog(live);
   const records = useUserRecords(live);
   const actor = workbenchActor(session);

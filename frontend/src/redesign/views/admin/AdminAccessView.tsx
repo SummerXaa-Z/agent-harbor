@@ -22,7 +22,7 @@ import { Modal } from "../../ui/Modal";
 import { EmptyState, LoadingState } from "../../ui/StateViews";
 import { Table } from "../../ui/Table";
 import { useToast } from "../../ui/Toast";
-import type { CreateAdminIdentityRequest } from "../../../types";
+import type { CreateAdminIdentityRequest, UpdateAdminIdentityOwnedAgentsRequest } from "../../../types";
 import type { AdminViewProps } from "./adminViewProps";
 
 type AdminColumnKey = "member" | "role" | "scope" | "status" | "actions";
@@ -70,11 +70,22 @@ export function AdminAccessView({ data, onRetry, session }: AdminViewProps) {
   });
   const [rotateTarget, setRotateTarget] = useState<AdminBoundaryRow | null>(null);
   const [disableTarget, setDisableTarget] = useState<AdminBoundaryRow | null>(null);
+  const [editTarget, setEditTarget] = useState<AdminBoundaryRow | null>(null);
+  const [editSelection, setEditSelection] = useState<Record<string, boolean>>({});
   const [oneTimeKey, setOneTimeKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
   const [acting, setActing] = useState(false);
 
   const createReady = createAdminIdentityRequestReady({ actor: createForm.actor, role: createForm.role, tenantId: createForm.tenantId });
+  const localCallers = useMemo(
+    () => (consoleData?.agents ?? []).filter((agent) => agent.channelType === "local"),
+    [consoleData]
+  );
+  const editCandidates = useMemo(() => {
+    if (!editTarget) return [];
+    const tenantId = editTarget.identity.tenantId ?? "";
+    return localCallers.filter((agent) => editTarget.identity.role === "platform_admin" || agent.tenantId === tenantId);
+  }, [editTarget, localCallers]);
 
   function openRotate(row: AdminBoundaryRow) {
     setOneTimeKey(null);
@@ -96,7 +107,10 @@ export function AdminAccessView({ data, onRetry, session }: AdminViewProps) {
     }
   }
 
-  async function runAction(action: AdminAccessAction, input: { body?: CreateAdminIdentityRequest; id?: string }) {
+  async function runAction(
+    action: AdminAccessAction,
+    input: { body?: CreateAdminIdentityRequest | UpdateAdminIdentityOwnedAgentsRequest; id?: string }
+  ) {
     setActing(true);
     setActionError("");
     const result = await access.act(action, input);
@@ -146,6 +160,28 @@ export function AdminAccessView({ data, onRetry, session }: AdminViewProps) {
     }
   }
 
+  function openEdit(row: AdminBoundaryRow) {
+    setOneTimeKey(null);
+    setActionError("");
+    const selected: Record<string, boolean> = {};
+    for (const agentId of row.identity.ownedAgentIds ?? []) selected[agentId] = true;
+    setEditSelection(selected);
+    setEditTarget(row);
+  }
+
+  async function submitEdit() {
+    if (!editTarget) return;
+    const ownedAgentIds = Object.entries(editSelection)
+      .filter(([, checked]) => checked)
+      .map(([agentId]) => agentId)
+      .sort();
+    const ok = await runAction("updateOwnedAgents", { id: editTarget.identity.id, body: { ownedAgentIds } });
+    if (ok) {
+      toast(t("rd.adm.ownedUpdated"));
+      setEditTarget(null);
+    }
+  }
+
   return (
     <>
       <div className="page-head">
@@ -192,7 +228,7 @@ export function AdminAccessView({ data, onRetry, session }: AdminViewProps) {
                 <EmptyState desc={t("rd.adm.emptyDesc")} title={t("rd.adm.empty")} />
               )
             }
-            renderCell={(row, column) => renderAdminCell(row, column, t, setRotateTarget, setDisableTarget)}
+            renderCell={(row, column) => renderAdminCell(row, column, t, setRotateTarget, setDisableTarget, openEdit)}
             rowKey={(row) => (row.kind === "demo" ? "demo-session" : row.row.identity.id)}
             rows={tableRows}
             tableId="adminAdmins"
@@ -386,6 +422,59 @@ export function AdminAccessView({ data, onRetry, session }: AdminViewProps) {
           <p className="muted">{tx(t, "rd.adm.disableConfirm", { name: disableTarget.displayName })}</p>
         ) : null}
       </Modal>
+
+      <Modal
+        footer={
+          <>
+            <Button onClick={() => setEditTarget(null)} variant="ghost">{t("rd.apr.cancel")}</Button>
+            <Button disabled={acting} onClick={() => void submitEdit()} variant="primary">
+              {t("rd.adm.ownedSave")}
+            </Button>
+          </>
+        }
+        onClose={() => setEditTarget(null)}
+        open={editTarget !== null}
+        title={tx(t, "rd.adm.editTitle", { name: editTarget?.displayName ?? "" })}
+      >
+        {editTarget ? (
+          <form
+            className="stack"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitEdit();
+            }}
+          >
+            <p className="muted">{t("rd.adm.editDesc")}</p>
+            <ul className="check-list holder-picker">
+              {editCandidates.map((agent) => {
+                const checked = Boolean(editSelection[agent.id]);
+                return (
+                  <li className="check-line" key={agent.id}>
+                    <input
+                      aria-label={agent.name}
+                      checked={checked}
+                      id={`holder-${agent.id}`}
+                      onChange={(event) =>
+                        setEditSelection({ ...editSelection, [agent.id]: event.target.checked })
+                      }
+                      type="checkbox"
+                    />
+                    <label className="check-main" htmlFor={`holder-${agent.id}`}>
+                      <span className="check-name">{agent.name}</span>
+                      <span className="check-sub mono">
+                        {agent.id}
+                        {agent.tenantId ? ` · ${agent.tenantId}` : ""}
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+            {editCandidates.length === 0 ? <p className="muted">{t("rd.adm.ownedEmpty")}</p> : null}
+            {actionError ? <Banner desc={actionError} title={t("rd.error.other.title")} tone="danger" /> : null}
+          </form>
+        ) : null}
+      </Modal>
     </>
   );
 }
@@ -395,7 +484,8 @@ function renderAdminCell(
   column: AdminColumnKey,
   t: ReturnType<typeof useRedesignI18n>["t"],
   onRotate: (row: AdminBoundaryRow) => void,
-  onDisable: (row: AdminBoundaryRow) => void
+  onDisable: (row: AdminBoundaryRow) => void,
+  onEdit: (row: AdminBoundaryRow) => void
 ) {
   if (row.kind === "demo") {
     switch (column) {
@@ -429,11 +519,18 @@ function renderAdminCell(
       return <Chip tone={roleTone[identity.role]}>{t(roleKeys[identity.role])}</Chip>;
     case "scope":
       return (
-        <span className="small">
-          {identity.tenantId
-            ? `${identity.tenantId}${identity.workspaceId ? ` / ${identity.workspaceId}` : ""}`
-            : t("rd.adm.scope.all")}
-        </span>
+        <div>
+          <span className="small">
+            {identity.tenantId
+              ? `${identity.tenantId}${identity.workspaceId ? ` / ${identity.workspaceId}` : ""}`
+              : t("rd.adm.scope.all")}
+          </span>
+          <div className="small muted">
+            {identity.ownedAgentIds?.length
+              ? tx(t, "rd.adm.ownedCount", { count: identity.ownedAgentIds.length })
+              : t("rd.adm.ownedNone")}
+          </div>
+        </div>
       );
     case "status": {
       if (identity.status === "disabled") return <Chip tone="danger">{t("rd.status.inactive")}</Chip>;
@@ -445,6 +542,9 @@ function renderAdminCell(
       }
       return (
         <div className="apr-actions">
+          <Button onClick={() => onEdit(row.row)} size="sm" variant="link">
+            {t("rd.adm.editOwned")}
+          </Button>
           <Button disabled={identity.status === "disabled"} onClick={() => onRotate(row.row)} size="sm" variant="link">
             {t("rd.adm.rotate")}
           </Button>

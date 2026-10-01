@@ -5,15 +5,17 @@ import {
   disableAdminIdentity,
   fetchAdminIdentities,
   rotateAdminIdentityKey,
+  updateAdminIdentityOwnedAgents,
 } from "../../api";
 import type {
   AdminIdentity,
   CreateAdminIdentityRequest,
   CreateAdminIdentityResponse,
   RotateAdminIdentityKeyResponse,
+  UpdateAdminIdentityOwnedAgentsRequest,
 } from "../../types";
 
-export type AdminAccessAction = "create" | "rotate" | "disable";
+export type AdminAccessAction = "create" | "rotate" | "disable" | "updateOwnedAgents";
 
 export interface AdminAccessActionResult {
   ok: boolean;
@@ -26,7 +28,10 @@ export interface AdminAccessActionResult {
 }
 
 export interface AdminAccessState {
-  act: (action: AdminAccessAction, input: { body?: CreateAdminIdentityRequest; id?: string }) => Promise<AdminAccessActionResult>;
+  act: (
+    action: AdminAccessAction,
+    input: { body?: CreateAdminIdentityRequest | UpdateAdminIdentityOwnedAgentsRequest; id?: string },
+  ) => Promise<AdminAccessActionResult>;
   failed: boolean;
   forbidden: boolean;
   identities: readonly AdminIdentity[];
@@ -73,9 +78,14 @@ export function useAdminAccess(live: boolean): AdminAccessState {
   const act = useCallback<AdminAccessState["act"]>(async (action, { body, id }) => {
     try {
       if (action === "create" && body) {
-        const created = await createAdminIdentity(body);
+        const created = await createAdminIdentity(body as CreateAdminIdentityRequest);
         await reload();
         return { ok: true, outcome: created };
+      }
+      if (action === "updateOwnedAgents" && id && body) {
+        const updated = await updateAdminIdentityOwnedAgents(id, body as UpdateAdminIdentityOwnedAgentsRequest);
+        await reload();
+        return { ok: true, outcome: updated };
       }
       if (action === "rotate" && id) {
         const rotated = await rotateAdminIdentityKey(id);

@@ -402,3 +402,11 @@ test("acceptance report fetch helper is the primary report implementation", () =
   assert.match(apiSource, /fetchPermissionPackageProductionEvidenceReport = fetchPermissionPackageAcceptanceReport/);
   assert.doesNotMatch(apiSource, /function fetchPermissionPackageProductionReport\(/);
 });
+
+test("admin identity holder binding updates go through the PATCH endpoint", () => {
+  assert.match(apiSource, /function updateAdminIdentityOwnedAgents\(/);
+  assert.match(apiSource, /admin-identities\/\$\{encodeURIComponent\(id\)\}/);
+  assert.match(apiSource, /method:\s*'PATCH'/);
+  assert.match(typesSource, /ownedAgentIds\?: string\[\]/);
+  assert.match(typesSource, /UpdateAdminIdentityOwnedAgentsRequest/);
+});

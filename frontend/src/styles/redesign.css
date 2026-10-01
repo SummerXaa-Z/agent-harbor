@@ -428,6 +428,11 @@ body:has(.ah2) {
   font-size: 11px;
 }
 
+.ah2 .u-holder {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
 /* ============ Topbar ============ */
 .ah2 .crumb {
   display: flex;
@@ -2153,6 +2158,18 @@ body:has(.ah2) {
 .ah2 .check-sub {
   color: var(--text-2);
   font-size: 12.5px;
+}
+
+.ah2 .holder-picker {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.ah2 .holder-picker input[type="checkbox"] {
+  accent-color: var(--primary, currentColor);
+  width: 15px;
+  height: 15px;
+  margin: 0;
 }
 
 .ah2 .fix-list {

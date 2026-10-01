@@ -130,13 +130,18 @@ export function sameAccessScope(a: AccessContext, b: AccessContext): boolean {
 }
 
 // Recent applications, newest first and one per scope, for the context switcher.
+// Holder-bound sessions pass their owned agents so a stale cached row can never
+// resurface an out-of-scope context; the server already narrows the list.
 export function accessContextOptions(
   applications: readonly PermissionPackageApplication[],
   limit = 6,
+  holderAgentIds?: readonly string[],
 ): { application: PermissionPackageApplication; context: AccessContext; key: string }[] {
   const seen = new Set<string>();
   const options: { application: PermissionPackageApplication; context: AccessContext; key: string }[] = [];
-  const sorted = [...applications].sort((a, b) => Date.parse(b.appliedAt) - Date.parse(a.appliedAt));
+  const owned = holderAgentIds?.length ? new Set(holderAgentIds) : null;
+  const scoped = owned ? applications.filter((application) => owned.has(application.callerInstanceId)) : applications;
+  const sorted = [...scoped].sort((a, b) => Date.parse(b.appliedAt) - Date.parse(a.appliedAt));
   for (const application of sorted) {
     const context = accessContextFromApplication(application);
     const key = accessContextKey(context);

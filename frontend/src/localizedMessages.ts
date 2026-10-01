@@ -72,12 +72,25 @@ export function localizedApiErrorMessageState(error: unknown, fallbackKey: strin
 // server sentence; zh keeps the localized classification and defers the raw
 // cause to parentheses instead of dropping it entirely. Code-less errors keep
 // the plain fallback, matching the upstream-error convention.
+const apiErrorCodeKeys: Record<string, string> = {
+  HOLDER_SCOPE_DENIED: "error.holderScopeDenied",
+};
+
 export function localizedApiErrorMessage(t: Translator, language: Language, error: unknown, fallbackKey: string) {
   const fallback = localizedErrorMessage(t, language, error, fallbackKey);
-  if (!(error instanceof Error) || language === "en") return fallback;
+  if (!(error instanceof Error)) return fallback;
   const code = typeof (error as { code?: unknown }).code === "string"
     ? (error as { code?: unknown }).code as string
     : "";
+  const dedicated = code ? apiErrorCodeKeys[code] : undefined;
+  if (dedicated) {
+    const detail = error.message.trim();
+    if (language === "en") return detail ? `${t(dedicated)} (${detail})` : t(dedicated);
+    return detail
+      ? `${t(fallbackKey)}${t(dedicated)}（${detail}）`
+      : `${t(fallbackKey)}${t(dedicated)}`;
+  }
+  if (language === "en") return fallback;
   if (!code) return fallback;
   const detail = error.message.trim();
   return detail ? `${t(fallbackKey)}\uff08${code}: ${detail}\uff09` : `${t(fallbackKey)}\uff08${code}\uff09`;

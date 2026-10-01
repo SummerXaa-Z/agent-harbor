@@ -111,6 +111,7 @@ export function auditRangeSince(range: "today" | "week" | "month", now: Date = n
 export function auditResourceTypeLabelKey(resourceType: string): string | null {
   const known: Record<string, string> = {
     access_grant: "auditResource.access_grant",
+    access_handoff: "rd.audit.type.access_handoff",
     access_handoff_token: "rd.audit.type.access_handoff_token",
     admin_identity: "auditResource.admin_identity",
     agent: "auditResource.agent",

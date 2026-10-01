@@ -855,3 +855,141 @@ func decodeMCPToolsListNames(t *testing.T, recorder *httptest.ResponseRecorder) 
 	}
 	return names
 }
+
+type accessHandoffEventReportResponse struct {
+	Action       string `json:"action"`
+	HandoffID    string `json:"handoffId"`
+	AuditEventID string `json:"auditEventId"`
+}
+
+func accessHandoffConfigEventRequest(input map[string]any, handoffID string, subjectID string, action string) map[string]any {
+	event := accessHandoffTokenRequest(input, handoffID, subjectID)
+	delete(event, "expiresInSeconds")
+	event["action"] = action
+	return event
+}
+
+func TestAccessHandoffConfigInteractionsAreAudited(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepo(repo)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var requestBody struct {
+			ID     any    `json:"id"`
+			Method string `json:"method"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			http.Error(w, "invalid JSON-RPC request", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if requestBody.Method == "tools/list" {
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      requestBody.ID,
+				"result": map[string]any{"tools": []map[string]any{
+					{"name": "update_ticket"},
+					{"name": "export_contracts"},
+				}},
+			})
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      requestBody.ID,
+			"result":  map[string]any{"ok": true},
+		})
+	}))
+	defer upstream.Close()
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-events", "tenant-root", "Events tenant", now)
+	caller := domain.Agent{ID: security.NewID("agt"), TenantID: "tenant-events", WorkspaceID: "ws-support", Name: "Events Assistant", ChannelType: "local", Status: domain.AgentStatusActive, CreatedAt: now, UpdatedAt: now}
+	if _, err := repo.CreateAgent(t.Context(), caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target := createDirectAgent(t, repo, "Events MCP", "tenant-root", "ws-support", "mcp", domain.AgentStatusActive, map[string]any{"endpoint": upstream.URL})
+	updateTicket := createDirectCapabilityWithAction(t, repo, target.ID, "update_ticket", domain.CapabilityActionWrite, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	exportContracts := createDirectCapabilityWithAction(t, repo, target.ID, "export_contracts", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+
+	input := map[string]any{
+		"callerInstanceId":      caller.ID,
+		"region":                "us-east",
+		"requestText":           "Allow only ticket updates for this tenant.",
+		"requestedCapabilityId": updateTicket.ID,
+		"subjectSelector":       "user:support-*",
+		"targetId":              target.ID,
+		"templateId":            "support-ticket-triage",
+		"tenantId":              "tenant-events",
+		"workspaceId":           "ws-support",
+	}
+	approval := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, "POST", "/api/v1/permission-packages/approval-requests", input, ""))
+	approved := decodeData[permissionPackageApprovalRequestResponse](t, request(t, router, "POST", "/api/v1/permission-packages/approval-requests/"+approval.ID+"/approve", map[string]any{"reviewer": "security"}, ""))
+
+	blocked := request(t, router, http.MethodPost, "/api/v1/permission-packages/access-handoff/events", accessHandoffConfigEventRequest(input, "handoff:missing", "user:support-001", "config_viewed"), "")
+	if blocked.Code != http.StatusConflict || !strings.Contains(blocked.Body.String(), "ACCESS_HANDOFF_NOT_READY") {
+		t.Fatalf("expected config-event report before readiness to be blocked, got status=%d body=%s", blocked.Code, blocked.Body.String())
+	}
+
+	applyInput := map[string]any{
+		"approvalRequestId":     approved.ID,
+		"callerInstanceId":      caller.ID,
+		"region":                input["region"],
+		"requestText":           input["requestText"],
+		"requestedCapabilityId": input["requestedCapabilityId"],
+		"subjectSelector":       input["subjectSelector"],
+		"targetId":              target.ID,
+		"templateId":            "support-ticket-triage",
+		"tenantId":              "tenant-events",
+		"workspaceId":           "ws-support",
+	}
+	applied := decodeData[permissionPackageApplyResponse](t, request(t, router, "POST", "/api/v1/permission-packages:apply", applyInput, ""))
+	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionDenied, caller, target, exportContracts, "export_contracts", "user:support-001", now.Add(time.Minute))
+	appendPermissionPackageReadinessTrace(t, repo, domain.TraceDecisionAllowed, caller, target, updateTicket, "update_ticket", "user:support-001", now.Add(2*time.Minute))
+
+	ready := decodeData[accessHandoffResponse](t, request(t, router, "GET", permissionPackageAccessHandoffPath(input, "", "user:support-001"), nil, ""))
+	if ready.Status != "ready" || ready.ID != "handoff:"+applied.Application.ID || ready.CopyArtifacts == nil {
+		t.Fatalf("expected ready handoff with copy artifacts, got %#v", ready)
+	}
+
+	invalid := request(t, router, http.MethodPost, "/api/v1/permission-packages/access-handoff/events", accessHandoffConfigEventRequest(input, ready.ID, "user:support-001", "token_nuked"), "")
+	if invalid.Code != http.StatusBadRequest || !strings.Contains(invalid.Body.String(), "VALIDATION_FAILED") {
+		t.Fatalf("expected unknown action to be rejected, got status=%d body=%s", invalid.Code, invalid.Body.String())
+	}
+	stale := request(t, router, http.MethodPost, "/api/v1/permission-packages/access-handoff/events", accessHandoffConfigEventRequest(input, "handoff:other", "user:support-001", "config_copied"), "")
+	if stale.Code != http.StatusConflict || !strings.Contains(stale.Body.String(), "ACCESS_HANDOFF_CHANGED") {
+		t.Fatalf("expected stale handoff id to be rejected, got status=%d body=%s", stale.Code, stale.Body.String())
+	}
+
+	viewed := decodeData[accessHandoffEventReportResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/access-handoff/events", accessHandoffConfigEventRequest(input, ready.ID, "user:support-001", "config_viewed"), ""))
+	if viewed.Action != "access_handoff.config_viewed" || viewed.HandoffID != ready.ID || viewed.AuditEventID == "" {
+		t.Fatalf("unexpected viewed report response: %#v", viewed)
+	}
+	copied := decodeData[accessHandoffEventReportResponse](t, request(t, router, http.MethodPost, "/api/v1/permission-packages/access-handoff/events", accessHandoffConfigEventRequest(input, ready.ID, "user:support-001", "config_copied"), ""))
+	if copied.Action != "access_handoff.config_copied" || copied.AuditEventID == "" || copied.AuditEventID == viewed.AuditEventID {
+		t.Fatalf("unexpected copied report response: %#v", copied)
+	}
+
+	audit := request(t, router, http.MethodGet, "/api/v1/audit/events?resourceId="+ready.ID, nil, "")
+	if strings.Contains(audit.Body.String(), "Bearer ") {
+		t.Fatal("config interaction audit trail must not carry authorization values")
+	}
+	events := decodeData[[]auditEventResponse](t, audit)
+	actions := map[string]auditEventResponse{}
+	for _, event := range events {
+		actions[event.Action] = event
+	}
+	for _, expected := range []string{"access_handoff.config_viewed", "access_handoff.config_copied"} {
+		event, ok := actions[expected]
+		if !ok {
+			t.Fatalf("expected audit action %s in %#v", expected, events)
+		}
+		if event.ResourceType != "access_handoff" || event.ResourceID != ready.ID || event.TenantID != "tenant-events" {
+			t.Fatalf("unexpected audit event shape for %s: %#v", expected, event)
+		}
+		if event.Metadata["artifact"] != "mcp_client_config" || event.Metadata["applicationId"] != applied.Application.ID || event.Metadata["callerInstanceId"] != caller.ID {
+			t.Fatalf("unexpected audit metadata for %s: %#v", expected, event.Metadata)
+		}
+	}
+}

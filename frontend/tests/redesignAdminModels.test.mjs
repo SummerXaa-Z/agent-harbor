@@ -263,6 +263,7 @@ test("auditRangeSince anchors today at local midnight", () => {
 test("auditResourceTypeLabelKey reuses legacy labels and flags the one gap", () => {
   assert.equal(auditResourceTypeLabelKey("agent"), "auditResource.agent");
   assert.equal(auditResourceTypeLabelKey("permission_package_approval_request"), "auditResource.permission_package_approval_request");
+  assert.equal(auditResourceTypeLabelKey("access_handoff"), "rd.audit.type.access_handoff");
   assert.equal(auditResourceTypeLabelKey("access_handoff_token"), "rd.audit.type.access_handoff_token");
   assert.equal(auditResourceTypeLabelKey("mystery_kind"), null);
 });

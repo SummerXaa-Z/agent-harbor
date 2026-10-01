@@ -1,4 +1,4 @@
-import { Copy, FileDown, KeyRound, Play, RefreshCw } from "lucide-react";
+import { ChevronDown, Copy, FileDown, KeyRound, Play, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiBase, fetchPermissionPackageProductionReadiness } from "../../../api";
 import { useAccessHandoffController } from "../../../hooks/useAccessHandoffController";
@@ -69,6 +69,9 @@ export function GoLiveView({ data, onRetry, params }: UserViewProps) {
   const [ttl, setTtl] = useState(defaultTokenTtl(null));
   const [copyOpen, setCopyOpen] = useState(false);
   const [revokeId, setRevokeId] = useState("");
+  // Config preview is opt-in so every reveal is a deliberate action the
+  // backend can audit (evaluation finding 6).
+  const [configPreviewOpen, setConfigPreviewOpen] = useState(false);
   const plaintextRef = useRef("");
   const diagnosticsStarted = useRef(false);
 
@@ -129,6 +132,9 @@ export function GoLiveView({ data, onRetry, params }: UserViewProps) {
         handoff: handoff.handoff,
       })
     : "";
+  const clientConfig = handoff.handoff
+    ? absolutizeHandoffConfig(handoff.handoff.copyArtifacts?.mcpClientConfig ?? "", apiBase)
+    : "";
 
   function recheck() {
     setReadinessKey((key) => key + 1);
@@ -149,17 +155,23 @@ export function GoLiveView({ data, onRetry, params }: UserViewProps) {
   };
 
   async function copyConfig() {
-    const raw = absolutizeHandoffConfig(handoff.handoff?.copyArtifacts?.mcpClientConfig ?? "", apiBase);
-    if (!raw) {
+    if (!clientConfig) {
       showToast(t("rd.golive.copyConfigMissing"), "warning");
       return;
     }
     try {
-      await navigator.clipboard.writeText(raw);
+      await navigator.clipboard.writeText(clientConfig);
+      handoff.reportConfigEvent("config_copied");
       showToast(t("rd.golive.copyConfigDone"));
     } catch {
       showToast(t("rd.common.copyFailed"), "danger");
     }
+  }
+
+  function toggleConfigPreview() {
+    const next = !configPreviewOpen;
+    setConfigPreviewOpen(next);
+    if (next) handoff.reportConfigEvent("config_viewed");
   }
 
   async function issueToken() {
@@ -342,6 +354,25 @@ export function GoLiveView({ data, onRetry, params }: UserViewProps) {
                   <div className="field-label">{t("rd.golive.shellTitle")}</div>
                   <CodeBlock code={shell} label={t("rd.golive.shellTitle")} />
                 </div>
+                {clientConfig ? (
+                  <div>
+                    <Button
+                      aria-expanded={configPreviewOpen}
+                      icon={<ChevronDown aria-hidden="true" className={configPreviewOpen ? "chevron-open" : undefined} size={15} />}
+                      onClick={toggleConfigPreview}
+                      variant="ghost"
+                    >
+                      {t("accessHandoff.previewArtifact")}
+                    </Button>
+                    {configPreviewOpen ? (
+                      <CodeBlock
+                        code={clientConfig}
+                        label={t("accessHandoff.previewArtifact")}
+                        onCopy={() => handoff.reportConfigEvent("config_copied")}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
                 <div className="form-actions">
                   <Button icon={<Copy aria-hidden="true" size={15} />} onClick={() => void copyConfig()} variant="ghost">
                     {t("rd.golive.copyConfig")}

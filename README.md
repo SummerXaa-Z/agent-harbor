@@ -497,6 +497,7 @@ Web 控制台会在 `/healthz` 之后读取 `GET /api/v1/system/info`，先确�
 - `GET /api/v1/permission-packages/production-readiness/report?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&requestedCapabilityId=&subjectId=&traceLimit=`
 - `GET /api/v1/permission-packages/access-handoff?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&requestedCapabilityId=&subjectId=&traceLimit=`
 - `POST /api/v1/permission-packages/access-handoff/tokens`
+- `POST /api/v1/permission-packages/access-handoff/events` (reports config preview/copy interactions for auditing; `action` is `config_viewed` or `config_copied`)
 - `DELETE /api/v1/permission-packages/access-handoff/tokens/{id}`
 - `GET /api/v1/permission-packages/applications/{id}/impact?tenantId=&workspaceId=&rehearsal=`
 - `POST /api/v1/management/mcp`

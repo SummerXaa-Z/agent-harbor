@@ -4,6 +4,12 @@ All notable public changes to AgentHarbor will be documented in this file.
 
 This project uses Keep a Changelog-style sections and semantic versioning for tagged releases.
 
+## [Unreleased]
+
+### Added
+
+- Access-handoff config interactions are now auditable (external evaluation round 3, finding 6): `POST /api/v1/permission-packages/access-handoff/events` records `access_handoff.config_viewed` / `access_handoff.config_copied` audit events when the console user previews or copies the handoff configuration. The endpoint validates the same readiness scope as token creation (409 `ACCESS_HANDOFF_NOT_READY` / `ACCESS_HANDOFF_CHANGED` on stale or blocked handoffs) and its metadata carries identifiers only — the artifacts hold placeholders, and no secret reaches the audit trail. The go-live handoff card makes the MCP client config preview opt-in again (「预览技术细节 / Preview technical details」), so every reveal is a deliberate, audited action, and both copy paths (the copy button and the code block's copy) report `config_copied`.
+
 ## [0.5.2] - 2026-10-01
 
 ### Added

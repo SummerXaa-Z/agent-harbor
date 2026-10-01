@@ -267,6 +267,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/permission-packages/production-readiness", s.getPermissionPackageProductionReadiness)
 			r.Get("/permission-packages/access-handoff", s.getPermissionPackageAccessHandoff)
 			r.Post("/permission-packages/access-handoff/tokens", s.createAccessHandoffToken)
+			r.Post("/permission-packages/access-handoff/events", s.reportAccessHandoffEvent)
 			r.Delete("/permission-packages/access-handoff/tokens/{id}", s.revokeAccessHandoffToken)
 			r.Get("/permission-packages/applications", s.listPermissionPackageApplications)
 			r.Get("/permission-packages/applications/health", s.listPermissionPackageApplicationHealth)

@@ -1247,6 +1247,10 @@ body:has(.ah2) {
   background: var(--code-copy-bg-hover);
 }
 
+.ah2 .chevron-open {
+  transform: rotate(180deg);
+}
+
 .ah2 .kv {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

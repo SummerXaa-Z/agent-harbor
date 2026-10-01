@@ -748,3 +748,27 @@ test("api error messages keep the zh classification with code and cause in paren
     /已为你选中/
   );
 });
+
+test("holder scope denial renders the dedicated bilingual message", () => {
+  const zh = createTranslator("zh-CN");
+  const en = createTranslator("en");
+  const error = new ApiError("HOLDER_SCOPE_DENIED", "caller instance is outside this identity's holder scope");
+
+  assert.equal(
+    localizedApiErrorMessage(zh, "zh-CN", error, "error.createApprovalRequest"),
+    "无法创建审批请求。所选调用方不在当前身份的持有范围内，请联系平台管理员调整绑定。（caller instance is outside this identity's holder scope）"
+  );
+  assert.equal(
+    localizedApiErrorMessage(en, "en", error, "error.createApprovalRequest"),
+    "The selected caller is outside your holder scope. Ask a platform administrator to update the binding. (caller instance is outside this identity's holder scope)"
+  );
+  const bare = new ApiError("HOLDER_SCOPE_DENIED", "");
+  assert.equal(
+    localizedApiErrorMessage(zh, "zh-CN", bare, "error.createApprovalRequest"),
+    "无法创建审批请求。所选调用方不在当前身份的持有范围内，请联系平台管理员调整绑定。"
+  );
+  assert.equal(
+    localizedApiErrorMessage(en, "en", bare, "error.createApprovalRequest"),
+    "The selected caller is outside your holder scope. Ask a platform administrator to update the binding."
+  );
+});

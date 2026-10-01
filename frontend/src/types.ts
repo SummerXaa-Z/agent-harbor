@@ -227,6 +227,9 @@ export interface ConsoleSession {
   authenticated: boolean
   csrfToken?: string
   expiresAt?: string
+  // Per-holder views: present only when the signed-in identity is bound to
+  // specific caller agents; the user surface narrows to them server-side.
+  holderAgentIds?: string[]
   role?: string
   requiresLogin: boolean
   tenantId?: string
@@ -647,6 +650,7 @@ export interface AdminIdentity {
   status: AdminIdentityStatus
   source: AdminIdentitySource
   keyPrefix?: string
+  ownedAgentIds?: string[]
   createdAt: string
   updatedAt: string
   lastUsedAt?: string
@@ -660,9 +664,14 @@ export interface AdminIdentity {
 export interface CreateAdminIdentityRequest {
   actor: string
   displayName?: string
+  ownedAgentIds?: string[]
   role: AdminIdentityRole
   tenantId?: string
   workspaceId?: string
+}
+
+export interface UpdateAdminIdentityOwnedAgentsRequest {
+  ownedAgentIds: string[]
 }
 
 export interface CreateAdminIdentityResponse {

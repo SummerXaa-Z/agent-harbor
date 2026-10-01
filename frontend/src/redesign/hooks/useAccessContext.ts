@@ -44,7 +44,11 @@ function writeStoredContext(context: AccessContext) {
 // Views remount per route, so the context resolves again on every visit:
 // deep link first, then what the user last worked on, then the most recent
 // application. Edits persist so Access query and Request access stay on the same request.
-export function useAccessContext(data: RedesignData, routeParams: RouteParams): AccessContextState {
+export function useAccessContext(
+  data: RedesignData,
+  routeParams: RouteParams,
+  holderAgentIds?: readonly string[],
+): AccessContextState {
   const live = Boolean(data.data?.loadedFromApi);
   const agents = useMemo(() => data.data?.agents ?? [], [data.data]);
   const routeParamsKey = JSON.stringify(routeParams);
@@ -92,7 +96,10 @@ export function useAccessContext(data: RedesignData, routeParams: RouteParams): 
     [resolved.context],
   );
   const reloadApplications = useCallback(() => setApplicationsVersion((version) => version + 1), []);
-  const options = useMemo(() => accessContextOptions(applications), [applications]);
+  const options = useMemo(
+    () => accessContextOptions(applications, 6, holderAgentIds),
+    [applications, holderAgentIds],
+  );
 
   return { applications, applicationsLoaded, context, options, reloadApplications, replace, source, update };
 }

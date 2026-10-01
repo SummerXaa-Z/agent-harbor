@@ -1,6 +1,7 @@
 import { LogOut } from "lucide-react";
 import type { ConsoleSession } from "../../types";
 import { useRedesignI18n } from "../hooks/useRedesignI18n";
+import { tx } from "../../localizedMessages";
 import { sessionIdentity } from "../model/demoRole";
 import {
   adminFooterNav,
@@ -66,6 +67,9 @@ export function Sidebar({ activeView, onSignOut, otherSurfaceUnread, session, su
               {name}
             </div>
             {role ? <div className="u-role">{role}</div> : null}
+            {identity.holderAgentCount > 0 ? (
+              <div className="u-holder">{tx(t, "rd.session.holderScope", { count: identity.holderAgentCount })}</div>
+            ) : null}
           </div>
           {identity.canSignOut ? (
             <button

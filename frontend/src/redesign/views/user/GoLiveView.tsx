@@ -35,12 +35,12 @@ import type { UserViewProps } from "./userViewProps";
 const legTone = { attention: "warning", blocked: "danger", pending: "neutral", ready: "success" } as const;
 const tokenStatusTone = { active: "success", expired: "neutral", revoked: "danger" } as const;
 
-export function GoLiveView({ data, onRetry, params }: UserViewProps) {
+export function GoLiveView({ data, onRetry, params, session }: UserViewProps) {
   const { language, t } = useRedesignI18n();
   const showToast = useToast();
   const live = Boolean(data.data?.loadedFromApi);
   const consoleData = data.data;
-  const accessContext = useAccessContext(data, params);
+  const accessContext = useAccessContext(data, params, session?.holderAgentIds);
   const catalog = usePermissionCatalog(live);
   const context = accessContext.context;
   const flow = usePermissionChangeFlow({ context, live });

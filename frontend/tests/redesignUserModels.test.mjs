@@ -42,6 +42,7 @@ import { splitBlockedCapabilities, unclassifiedCapabilities } from "../src/redes
 import { buildRuntimeValidationReadiness, classifyRuntimeValidationRun } from "../src/redesign/model/runtimeValidation.ts";
 import {
   DEMO_ACTOR,
+  holderScopedCallers,
   keyStatus,
   myPermissions,
   myRequestCounts,
@@ -633,4 +634,29 @@ test("user workbench derives onboarding, requests, resources and permissions", (
   assert.equal(permissions.rows[0].approvalId, "apr-used");
   assert.deepEqual(permissions.rows[0].dataScopes, [{ dataDomain: "support" }]);
   assert.deepEqual(permissions.rows.slice(1).map((row) => row.decision), ["blocked", "blocked"]);
+});
+
+test("holderScopedCallers keeps owned callers only when a holder binding is active", () => {
+  const callers = [
+    { id: "caller-a" },
+    { id: "caller-b" },
+  ];
+  assert.deepEqual(holderScopedCallers(callers), callers, "no binding keeps the full caller list");
+  assert.deepEqual(holderScopedCallers(callers, []), callers, "empty binding keeps the full caller list");
+  assert.deepEqual(holderScopedCallers(callers, ["caller-b"]), [{ id: "caller-b" }]);
+  assert.deepEqual(holderScopedCallers(callers, ["caller-c"]), [], "unknown owned ids drop everything else");
+});
+
+test("accessContextOptions drops out-of-scope callers for holder sessions", () => {
+  const applications = [
+    { id: "ppa-1", callerInstanceId: "caller-a", targetId: "target-a", appliedAt: "2026-10-01T10:00:00Z" },
+    { id: "ppa-2", callerInstanceId: "caller-b", targetId: "target-a", appliedAt: "2026-10-01T11:00:00Z" },
+  ];
+  const unfiltered = accessContextOptions(applications, 6);
+  assert.equal(unfiltered.length, 2);
+  const filtered = accessContextOptions(applications, 6, ["caller-a"]);
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].context.callerInstanceId, "caller-a");
+  const noneOwned = accessContextOptions(applications, 6, ["caller-c"]);
+  assert.equal(noneOwned.length, 0);
 });

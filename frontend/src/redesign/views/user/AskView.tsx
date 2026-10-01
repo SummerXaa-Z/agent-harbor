@@ -44,11 +44,11 @@ export function dataScopeLabel(scope: DataScope): string {
   return [scope.dataDomain, scope.dataset, scope.table, scope.region, scope.classification].filter(Boolean).join(" · ");
 }
 
-export function AskView({ data, onRetry, params }: UserViewProps) {
+export function AskView({ data, onRetry, params, session }: UserViewProps) {
   const { language, t } = useRedesignI18n();
   const live = Boolean(data.data?.loadedFromApi);
   const consoleData = data.data;
-  const accessContext = useAccessContext(data, params);
+  const accessContext = useAccessContext(data, params, session?.holderAgentIds);
   const catalog = usePermissionCatalog(live);
   const [handoff, setHandoff] = useState<AskHandoffContext | null>(null);
   const [seeded, setSeeded] = useState(false);

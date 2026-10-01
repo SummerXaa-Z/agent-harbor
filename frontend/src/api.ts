@@ -98,6 +98,7 @@ import type {
   RotateAdminIdentityKeyResponse,
   RotateAgentCredentialsRequest,
   RoutePolicy,
+  UpdateAdminIdentityOwnedAgentsRequest,
   SystemMetric,
   TargetProbeResult,
   Tenant,
@@ -447,6 +448,18 @@ export async function rotateAdminIdentityKey(
 
 export async function disableAdminIdentity(id: string, adminKey?: string): Promise<AdminIdentity> {
   return request<AdminIdentity>(`/api/v1/admin-identities/${encodeURIComponent(id)}:disable`, { adminKey, body: {} })
+}
+
+export async function updateAdminIdentityOwnedAgents(
+  id: string,
+  body: UpdateAdminIdentityOwnedAgentsRequest,
+  adminKey?: string,
+): Promise<AdminIdentity> {
+  return request<AdminIdentity>(`/api/v1/admin-identities/${encodeURIComponent(id)}`, {
+    adminKey,
+    body,
+    method: 'PATCH',
+  })
 }
 
 export async function fetchAccessGrants(

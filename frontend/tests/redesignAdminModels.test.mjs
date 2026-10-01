@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createTranslator } from "../src/i18n.ts";
+import { sessionIdentity } from "../src/redesign/model/demoRole.ts";
 import { approvalCapabilityRows, approvalList, approvalNoticeKey, approvalRiskSummary, approvalTabCounts, filterApprovalList } from "../src/redesign/model/approvalReview.ts";
 import { auditRangeSince, auditResourceTypeLabelKey, auditResourceTypes, auditTimelineRows, filterAuditTimeline, todayAuditCount, traceResultKind } from "../src/redesign/model/auditTimeline.ts";
 import { apiServiceCheck, corePathCheck, envCheckSummary, envHealthCheck, mcpServiceCheck, preferredProbeTarget, probeFixGuidance, registeredMcpTargets } from "../src/redesign/model/envChecks.ts";
@@ -399,4 +400,28 @@ test("approvalRiskSummary and notice key ordering", () => {
   assert.equal(approvalNoticeKey(summary), "leastPrivilege");
   assert.equal(approvalNoticeKey({ deniedCount: 0, highRiskCount: 2 }), "highRisk");
   assert.equal(approvalNoticeKey({ deniedCount: 0, highRiskCount: 0 }), "matchesTemplate");
+});
+
+test("sessionIdentity reports the holder binding only for bound non-demo sessions", () => {
+  assert.equal(sessionIdentity(null).holderAgentCount, 0);
+  assert.equal(
+    sessionIdentity({ authenticated: true, requiresLogin: false, actor: "local-dev", role: "platform_admin" }).holderAgentCount,
+    0,
+    "demo sessions never report a holder binding",
+  );
+  assert.equal(
+    sessionIdentity({ authenticated: true, requiresLogin: true, actor: "ops", role: "tenant_admin" }).holderAgentCount,
+    0,
+    "unbound identities keep the tenant-scope fallback",
+  );
+  assert.equal(
+    sessionIdentity({
+      authenticated: true,
+      requiresLogin: true,
+      actor: "ops",
+      holderAgentIds: ["agt-1", "agt-2"],
+      role: "tenant_admin",
+    }).holderAgentCount,
+    2,
+  );
 });

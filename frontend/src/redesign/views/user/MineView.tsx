@@ -8,7 +8,7 @@ import { useRedesignI18n } from "../../hooks/useRedesignI18n";
 import { useUserRecords } from "../../hooks/useUserRecords";
 import { apiErrorPresentation } from "../../model/apiErrorCategory";
 import { maskSecret } from "../../model/secretMask";
-import { keyStatus, myPermissions } from "../../model/userWorkbench";
+import { holderScopedCallers, keyStatus, myPermissions } from "../../model/userWorkbench";
 import { userHash, viewLabelKey } from "../../router";
 import { DataStatusBanner, DataStatusChip } from "../../shell/DataStatusBanner";
 import { Notice } from "../../ui/Banner";
@@ -24,14 +24,14 @@ import type { UserViewProps } from "./userViewProps";
 const riskLevel: Record<CapabilityRisk, RiskLevel> = { critical: "high", high: "high", low: "low", medium: "mid" };
 const keyStatusTone = { active: "success", expired: "neutral", revoked: "danger" } as const;
 
-export function MineView({ data, onRetry, params }: UserViewProps) {
+export function MineView({ data, onRetry, params, session }: UserViewProps) {
   const { language, t } = useRedesignI18n();
   const live = Boolean(data.data?.loadedFromApi);
   const consoleData = data.data;
   const accessContext = useAccessContext(data, {});
   const records = useUserRecords(live);
   const agents = useMemo(() => consoleData?.agents ?? [], [consoleData]);
-  const callers = agents.filter((agent) => agent.channelType === "local");
+  const callers = holderScopedCallers(agents.filter((agent) => agent.channelType === "local"), session?.holderAgentIds);
   const callerId = params.caller || accessContext.context.callerInstanceId || callers[0]?.id || "";
   const caller = agents.find((agent) => agent.id === callerId);
   const [profile, setProfile] = useState<TenantAccessProfile | null>(null);

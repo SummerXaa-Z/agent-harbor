@@ -34,6 +34,9 @@ export interface SessionIdentity {
   actor: string;
   canSignOut: boolean;
   demo: boolean;
+  // Per-holder views: > 0 when the signed-in identity is bound to caller
+  // agents, which narrows its user surface server-side.
+  holderAgentCount: number;
   roleKey: string;
 }
 
@@ -48,6 +51,7 @@ export function sessionIdentity(session: ConsoleSession | null): SessionIdentity
     actor: demo ? "" : session?.actor?.trim() ?? "",
     canSignOut: Boolean(session?.requiresLogin && session.authenticated),
     demo,
+    holderAgentCount: demo ? 0 : session?.holderAgentIds?.length ?? 0,
     roleKey: knownRoles.has(role) ? `auth.role.${role}` : "",
   };
 }

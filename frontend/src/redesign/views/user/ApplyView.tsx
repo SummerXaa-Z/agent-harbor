@@ -42,7 +42,7 @@ export function ApplyView({ data, onRetry, params, session }: UserViewProps) {
   const { language, t } = useRedesignI18n();
   const live = Boolean(data.data?.loadedFromApi);
   const consoleData = data.data;
-  const accessContext = useAccessContext(data, params);
+  const accessContext = useAccessContext(data, params, session?.holderAgentIds);
   const catalog = usePermissionCatalog(live);
   const context = accessContext.context;
   const flow = usePermissionChangeFlow({

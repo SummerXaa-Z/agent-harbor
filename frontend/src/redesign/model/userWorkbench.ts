@@ -114,6 +114,16 @@ export function myRequestCounts(rows: readonly MyRequestRow[]): Record<MyRequest
   return counts;
 }
 
+// Per-holder views: a holder-bound session narrows the caller selector to its
+// owned callers so the UI never offers a context the server will deny. The
+// agents list itself stays management-wide, so the filter is client-side with
+// the server-side HOLDER_SCOPE_DENIED check as the backstop.
+export function holderScopedCallers<T extends { id: string }>(callers: readonly T[], holderAgentIds?: readonly string[]): T[] {
+  if (!holderAgentIds?.length) return [...callers];
+  const owned = new Set(holderAgentIds);
+  return callers.filter((caller) => owned.has(caller.id));
+}
+
 export type ResourceRole = "caller" | "target";
 
 export interface MyResourceRow {

@@ -282,6 +282,7 @@ test("capabilityGrantRows collapses the three grant-chain layers", () => {
     ],
   });
   assert.equal(rows.length, 1);
+  assert.equal(rows[0].entitlementId, "e1");
   assert.equal(rows[0].workspaceCount, 2);
   assert.equal(rows[0].callerCount, 2);
   assert.deepEqual(rows[0].subjectSelectors, ["user:support-*", "role:agent"]);

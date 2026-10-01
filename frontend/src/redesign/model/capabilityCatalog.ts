@@ -40,6 +40,7 @@ export interface CapabilityGrantRow {
   callerCount: number;
   capabilityId: string;
   effect: TenantEntitlement["effect"];
+  entitlementId: string;
   status: TenantEntitlement["status"];
   subjectSelectors: string[];
   tenantId: string;
@@ -69,6 +70,7 @@ export function capabilityGrantRows({
         callerCount: new Set(instances.map((item) => item.callerInstanceId)).size,
         capabilityId: entitlement.capabilityId,
         effect: entitlement.effect,
+        entitlementId: entitlement.id,
         status: entitlement.status,
         subjectSelectors: [
           ...new Set(

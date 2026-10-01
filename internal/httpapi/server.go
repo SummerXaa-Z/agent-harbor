@@ -283,10 +283,13 @@ func (s *Server) Router() http.Handler {
 			r.Post("/management/mcp/rpc", s.managementMCP)
 			r.Post("/tenant-entitlements", s.createTenantEntitlement)
 			r.Get("/tenant-entitlements", s.listTenantEntitlements)
+			r.Delete("/tenant-entitlements/{id}", s.deleteTenantEntitlement)
 			r.Post("/workspace-assignments", s.createWorkspaceAssignment)
 			r.Get("/workspace-assignments", s.listWorkspaceAssignments)
+			r.Delete("/workspace-assignments/{id}", s.deleteWorkspaceAssignment)
 			r.Post("/instance-assignments", s.createInstanceAssignment)
 			r.Get("/instance-assignments", s.listInstanceAssignments)
+			r.Delete("/instance-assignments/{id}", s.deleteInstanceAssignment)
 			r.Get("/audit/events", s.listAuditEvents)
 			r.Get("/audit/traces", s.listTraces)
 			r.Get("/metrics/runtime", s.runtimeMetrics)
@@ -4979,6 +4982,198 @@ func (s *Server) listInstanceAssignments(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, rows)
 }
 
+// Grant-chain removal (issue #413): DELETE maps to a status transition, not a
+// row deletion — applied permission packages keep the row ids they recorded,
+// the audit trail survives, and runtime decisions already skip disabled rows
+// at every level. Parents refuse (409) while enabled children still reference
+// them, so narrowing always proceeds leaves-first and nothing is left silently
+// inert.
+const grantChainChildrenActiveCode = "GRANT_CHAIN_CHILDREN_ACTIVE"
+
+func (s *Server) deleteTenantEntitlement(w http.ResponseWriter, r *http.Request) {
+	entitlementID := chi.URLParam(r, "id")
+	entitlements, err := s.repo.ListTenantEntitlements(r.Context(), store.EntitlementFilter{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	entitlement, ok := findTenantEntitlement(entitlements, entitlementID)
+	if !ok {
+		writeError(w, domain.NotFound("tenant entitlement not found"))
+		return
+	}
+	target, capability, err := s.requireTenantEntitlementManagementScope(r, entitlement)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	children, err := s.repo.ListWorkspaceAssignments(r.Context(), store.AssignmentFilter{EntitlementID: entitlement.ID})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if hasEnabledWorkspaceAssignment(children) {
+		writeError(w, domain.Conflict(grantChainChildrenActiveCode, "tenant entitlement still has enabled workspace assignments; disable them first"))
+		return
+	}
+	disabled, ok, err := s.repo.DisableTenantEntitlementWithAudit(r.Context(), entitlement.ID, s.now(), func(disabled domain.TenantEntitlement) domain.AuditEvent {
+		return s.managementAuditEvent(r, target.TenantID, target.WorkspaceID, "tenant_entitlement.disabled", "tenant_entitlement", disabled.ID, "Tenant entitlement disabled", map[string]any{
+			"targetId":      disabled.TargetID,
+			"capabilityId":  disabled.CapabilityID,
+			"capabilityKey": capability.Key,
+			"effect":        disabled.Effect,
+			"status":        disabled.Status,
+		})
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("tenant entitlement not found"))
+		return
+	}
+	writeJSON(w, http.StatusOK, disabled)
+}
+
+func (s *Server) deleteWorkspaceAssignment(w http.ResponseWriter, r *http.Request) {
+	assignmentID := chi.URLParam(r, "id")
+	assignments, err := s.repo.ListWorkspaceAssignments(r.Context(), store.AssignmentFilter{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	assignment, ok := findWorkspaceAssignment(assignments, assignmentID)
+	if !ok {
+		writeError(w, domain.NotFound("workspace assignment not found"))
+		return
+	}
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: assignment.TenantID, WorkspaceID: assignment.WorkspaceID}); err != nil {
+		writeError(w, err)
+		return
+	}
+	entitlements, err := s.repo.ListTenantEntitlements(r.Context(), store.EntitlementFilter{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	entitlement, ok := findTenantEntitlement(entitlements, assignment.TenantEntitlementID)
+	if !ok {
+		writeError(w, domain.NotFound("tenant entitlement not found"))
+		return
+	}
+	target, capability, err := s.requireTenantEntitlementManagementScope(r, entitlement)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	children, err := s.repo.ListInstanceAssignments(r.Context(), store.InstanceAssignmentFilter{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if hasEnabledInstanceAssignmentForWorkspaceAssignment(children, assignment.ID) {
+		writeError(w, domain.Conflict(grantChainChildrenActiveCode, "workspace assignment still has enabled instance assignments; disable them first"))
+		return
+	}
+	disabled, ok, err := s.repo.DisableWorkspaceAssignmentWithAudit(r.Context(), assignment.ID, s.now(), func(disabled domain.WorkspaceAssignment) domain.AuditEvent {
+		return s.managementAuditEvent(r, disabled.TenantID, disabled.WorkspaceID, "workspace_assignment.disabled", "workspace_assignment", disabled.ID, "Workspace assignment disabled", map[string]any{
+			"tenantEntitlementId": disabled.TenantEntitlementID,
+			"targetId":            target.ID,
+			"capabilityId":        entitlement.CapabilityID,
+			"capabilityKey":       capability.Key,
+			"effect":              disabled.Effect,
+			"status":              disabled.Status,
+		})
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("workspace assignment not found"))
+		return
+	}
+	writeJSON(w, http.StatusOK, disabled)
+}
+
+func (s *Server) deleteInstanceAssignment(w http.ResponseWriter, r *http.Request) {
+	assignmentID := chi.URLParam(r, "id")
+	assignments, err := s.repo.ListInstanceAssignments(r.Context(), store.InstanceAssignmentFilter{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	assignment, ok := findInstanceAssignment(assignments, assignmentID)
+	if !ok {
+		writeError(w, domain.NotFound("instance assignment not found"))
+		return
+	}
+	if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: assignment.TenantID, WorkspaceID: assignment.WorkspaceID}); err != nil {
+		writeError(w, err)
+		return
+	}
+	workspaceAssignments, err := s.repo.ListWorkspaceAssignments(r.Context(), store.AssignmentFilter{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	workspaceAssignment, ok := findWorkspaceAssignment(workspaceAssignments, assignment.WorkspaceAssignmentID)
+	if !ok {
+		writeError(w, domain.NotFound("workspace assignment not found"))
+		return
+	}
+	entitlements, err := s.repo.ListTenantEntitlements(r.Context(), store.EntitlementFilter{})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	entitlement, ok := findTenantEntitlement(entitlements, workspaceAssignment.TenantEntitlementID)
+	if !ok {
+		writeError(w, domain.NotFound("tenant entitlement not found"))
+		return
+	}
+	if _, _, err := s.requireTenantEntitlementManagementScope(r, entitlement); err != nil {
+		writeError(w, err)
+		return
+	}
+	disabled, ok, err := s.repo.DisableInstanceAssignmentWithAudit(r.Context(), assignment.ID, s.now(), func(disabled domain.InstanceAssignment) domain.AuditEvent {
+		return s.managementAuditEvent(r, disabled.TenantID, disabled.WorkspaceID, "instance_assignment.disabled", "instance_assignment", disabled.ID, "Instance assignment disabled", map[string]any{
+			"workspaceAssignmentId": disabled.WorkspaceAssignmentID,
+			"callerInstanceId":      disabled.CallerInstanceID,
+			"effect":                disabled.Effect,
+			"status":                disabled.Status,
+		})
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("instance assignment not found"))
+		return
+	}
+	writeJSON(w, http.StatusOK, disabled)
+}
+
+func hasEnabledWorkspaceAssignment(rows []domain.WorkspaceAssignment) bool {
+	for _, row := range rows {
+		if row.Status == domain.PolicyStatusEnabled {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEnabledInstanceAssignmentForWorkspaceAssignment(rows []domain.InstanceAssignment, workspaceAssignmentID string) bool {
+	for _, row := range rows {
+		if row.WorkspaceAssignmentID == workspaceAssignmentID && row.Status == domain.PolicyStatusEnabled {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) requireAgentKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := security.BearerToken(r.Header.Get("Authorization"))
@@ -7960,6 +8155,15 @@ func findWorkspaceAssignment(rows []domain.WorkspaceAssignment, id string) (doma
 		}
 	}
 	return domain.WorkspaceAssignment{}, false
+}
+
+func findInstanceAssignment(rows []domain.InstanceAssignment, id string) (domain.InstanceAssignment, bool) {
+	for _, row := range rows {
+		if row.ID == id {
+			return row, true
+		}
+	}
+	return domain.InstanceAssignment{}, false
 }
 
 func (s *Server) effectiveTenantEntitlementDataScopes(ctx context.Context, entitlement domain.TenantEntitlement) ([]domain.DataScope, error) {

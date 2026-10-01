@@ -49,10 +49,16 @@ type Repository interface {
 	UpdateCapability(context.Context, domain.Capability) (domain.Capability, bool, error)
 	CreateTenantEntitlement(context.Context, domain.TenantEntitlement) (domain.TenantEntitlement, error)
 	ListTenantEntitlements(context.Context, EntitlementFilter) ([]domain.TenantEntitlement, error)
+	DisableTenantEntitlement(context.Context, string, time.Time) (domain.TenantEntitlement, bool, error)
+	DisableTenantEntitlementWithAudit(context.Context, string, time.Time, TenantEntitlementAuditBuilder) (domain.TenantEntitlement, bool, error)
 	CreateWorkspaceAssignment(context.Context, domain.WorkspaceAssignment) (domain.WorkspaceAssignment, error)
 	ListWorkspaceAssignments(context.Context, AssignmentFilter) ([]domain.WorkspaceAssignment, error)
+	DisableWorkspaceAssignment(context.Context, string, time.Time) (domain.WorkspaceAssignment, bool, error)
+	DisableWorkspaceAssignmentWithAudit(context.Context, string, time.Time, WorkspaceAssignmentAuditBuilder) (domain.WorkspaceAssignment, bool, error)
 	CreateInstanceAssignment(context.Context, domain.InstanceAssignment) (domain.InstanceAssignment, error)
 	ListInstanceAssignments(context.Context, InstanceAssignmentFilter) ([]domain.InstanceAssignment, error)
+	DisableInstanceAssignment(context.Context, string, time.Time) (domain.InstanceAssignment, bool, error)
+	DisableInstanceAssignmentWithAudit(context.Context, string, time.Time, InstanceAssignmentAuditBuilder) (domain.InstanceAssignment, bool, error)
 	CreatePermissionPackageApplication(context.Context, domain.PermissionPackageApplication) (domain.PermissionPackageApplication, error)
 	ListPermissionPackageApplications(context.Context, PermissionPackageApplicationFilter) ([]domain.PermissionPackageApplication, error)
 	ApplyPermissionPackage(context.Context, PermissionPackageApplyMutation) (PermissionPackageApplyMutationResult, error)
@@ -91,6 +97,9 @@ type AccessGrantAuditBuilder func(domain.AccessGrant) domain.AuditEvent
 type RoutePolicyAuditBuilder func(domain.RoutePolicy) domain.AuditEvent
 type TenantAuditBuilder func(domain.Tenant) domain.AuditEvent
 type AdminIdentityAuditBuilder func(domain.AdminIdentity) domain.AuditEvent
+type TenantEntitlementAuditBuilder func(domain.TenantEntitlement) domain.AuditEvent
+type WorkspaceAssignmentAuditBuilder func(domain.WorkspaceAssignment) domain.AuditEvent
+type InstanceAssignmentAuditBuilder func(domain.InstanceAssignment) domain.AuditEvent
 
 var ErrPermissionPackageApprovalNotConsumable = errors.New("permission package approval request is not consumable")
 var ErrPermissionPackageApprovalAlreadyPending = errors.New("matching permission package approval request already pending")
@@ -782,6 +791,87 @@ func (m *Memory) ListInstanceAssignments(_ context.Context, filter InstanceAssig
 		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
 	})
 	return rows, nil
+}
+
+func (m *Memory) DisableTenantEntitlement(_ context.Context, id string, now time.Time) (domain.TenantEntitlement, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entitlement, ok := m.entitlements[id]
+	if !ok {
+		return domain.TenantEntitlement{}, false, nil
+	}
+	entitlement.Status = domain.PolicyStatusDisabled
+	entitlement.UpdatedAt = now
+	m.entitlements[id] = entitlement
+	return cloneTenantEntitlement(entitlement), true, nil
+}
+
+func (m *Memory) DisableTenantEntitlementWithAudit(_ context.Context, id string, now time.Time, build TenantEntitlementAuditBuilder) (domain.TenantEntitlement, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entitlement, ok := m.entitlements[id]
+	if !ok {
+		return domain.TenantEntitlement{}, false, nil
+	}
+	entitlement.Status = domain.PolicyStatusDisabled
+	entitlement.UpdatedAt = now
+	m.entitlements[id] = entitlement
+	m.audits = append(m.audits, build(entitlement))
+	return cloneTenantEntitlement(entitlement), true, nil
+}
+
+func (m *Memory) DisableWorkspaceAssignment(_ context.Context, id string, now time.Time) (domain.WorkspaceAssignment, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	assignment, ok := m.workspaceAssignments[id]
+	if !ok {
+		return domain.WorkspaceAssignment{}, false, nil
+	}
+	assignment.Status = domain.PolicyStatusDisabled
+	assignment.UpdatedAt = now
+	m.workspaceAssignments[id] = assignment
+	return cloneWorkspaceAssignment(assignment), true, nil
+}
+
+func (m *Memory) DisableWorkspaceAssignmentWithAudit(_ context.Context, id string, now time.Time, build WorkspaceAssignmentAuditBuilder) (domain.WorkspaceAssignment, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	assignment, ok := m.workspaceAssignments[id]
+	if !ok {
+		return domain.WorkspaceAssignment{}, false, nil
+	}
+	assignment.Status = domain.PolicyStatusDisabled
+	assignment.UpdatedAt = now
+	m.workspaceAssignments[id] = assignment
+	m.audits = append(m.audits, build(assignment))
+	return cloneWorkspaceAssignment(assignment), true, nil
+}
+
+func (m *Memory) DisableInstanceAssignment(_ context.Context, id string, now time.Time) (domain.InstanceAssignment, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	assignment, ok := m.instanceAssignments[id]
+	if !ok {
+		return domain.InstanceAssignment{}, false, nil
+	}
+	assignment.Status = domain.PolicyStatusDisabled
+	assignment.UpdatedAt = now
+	m.instanceAssignments[id] = assignment
+	return cloneInstanceAssignment(assignment), true, nil
+}
+
+func (m *Memory) DisableInstanceAssignmentWithAudit(_ context.Context, id string, now time.Time, build InstanceAssignmentAuditBuilder) (domain.InstanceAssignment, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	assignment, ok := m.instanceAssignments[id]
+	if !ok {
+		return domain.InstanceAssignment{}, false, nil
+	}
+	assignment.Status = domain.PolicyStatusDisabled
+	assignment.UpdatedAt = now
+	m.instanceAssignments[id] = assignment
+	m.audits = append(m.audits, build(assignment))
+	return cloneInstanceAssignment(assignment), true, nil
 }
 
 func (m *Memory) CreatePermissionPackageApplication(_ context.Context, application domain.PermissionPackageApplication) (domain.PermissionPackageApplication, error) {

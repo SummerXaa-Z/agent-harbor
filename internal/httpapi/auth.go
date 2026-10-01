@@ -29,14 +29,15 @@ type consoleSessionPayload struct {
 }
 
 type consoleSessionResponse struct {
-	Actor         string `json:"actor,omitempty"`
-	Role          string `json:"role,omitempty"`
-	TenantID      string `json:"tenantId,omitempty"`
-	WorkspaceID   string `json:"workspaceId,omitempty"`
-	Authenticated bool   `json:"authenticated"`
-	CSRFToken     string `json:"csrfToken,omitempty"`
-	ExpiresAt     string `json:"expiresAt,omitempty"`
-	RequiresLogin bool   `json:"requiresLogin"`
+	Actor          string   `json:"actor,omitempty"`
+	Role           string   `json:"role,omitempty"`
+	TenantID       string   `json:"tenantId,omitempty"`
+	WorkspaceID    string   `json:"workspaceId,omitempty"`
+	Authenticated  bool     `json:"authenticated"`
+	CSRFToken      string   `json:"csrfToken,omitempty"`
+	ExpiresAt      string   `json:"expiresAt,omitempty"`
+	RequiresLogin  bool     `json:"requiresLogin"`
+	HolderAgentIDs []string `json:"holderAgentIds,omitempty"`
 }
 
 const consoleSessionCSRFHeader = "X-AgentHarbor-CSRF"
@@ -52,7 +53,7 @@ type consoleLoginFailure struct {
 func (s *Server) getAuthSession(w http.ResponseWriter, r *http.Request) {
 	setConsoleAuthNoStore(w)
 	principal, expiresAt, ok := s.consoleSessionFromRequest(r)
-	response := s.consoleSessionResponse(principal, expiresAt, ok)
+	response := s.consoleSessionResponse(r, principal, expiresAt, ok)
 	if ok {
 		if sessionToken, tokenOK := consoleSessionTokenFromRequest(r); tokenOK {
 			response.CSRFToken = s.consoleSessionCSRFToken(sessionToken)
@@ -64,7 +65,7 @@ func (s *Server) getAuthSession(w http.ResponseWriter, r *http.Request) {
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	setConsoleAuthNoStore(w)
 	if s.developmentAdminBypassActive() {
-		writeJSON(w, http.StatusOK, s.consoleSessionResponse(platformAdminPrincipal(developmentAdminActor), time.Time{}, true))
+		writeJSON(w, http.StatusOK, s.consoleSessionResponse(r, platformAdminPrincipal(developmentAdminActor), time.Time{}, true))
 		return
 	}
 
@@ -93,7 +94,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, s.consoleSessionCookie(token, expiresAt, false, r))
-	response := s.consoleSessionResponse(principal, expiresAt, true)
+	response := s.consoleSessionResponse(r, principal, expiresAt, true)
 	response.CSRFToken = s.consoleSessionCSRFToken(token)
 	writeJSON(w, http.StatusOK, response)
 }
@@ -110,7 +111,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, s.consoleSessionCookie("", time.Unix(0, 0).UTC(), true, r))
 	principal, expiresAt, ok := s.developmentSession()
-	writeJSON(w, http.StatusOK, s.consoleSessionResponse(principal, expiresAt, ok))
+	writeJSON(w, http.StatusOK, s.consoleSessionResponse(r, principal, expiresAt, ok))
 }
 
 func setConsoleAuthNoStore(w http.ResponseWriter) {
@@ -151,7 +152,7 @@ func (s *Server) developmentAdminBypassActive() bool {
 	return s.adminKey == "" && len(s.adminIdentities) == 0 && s.allowUnauthenticatedAdmin
 }
 
-func (s *Server) consoleSessionResponse(principal adminPrincipal, expiresAt time.Time, authenticated bool) consoleSessionResponse {
+func (s *Server) consoleSessionResponse(r *http.Request, principal adminPrincipal, expiresAt time.Time, authenticated bool) consoleSessionResponse {
 	principal = normalizeAdminPrincipal(principal)
 	response := consoleSessionResponse{
 		Actor:         principal.Actor,
@@ -160,6 +161,11 @@ func (s *Server) consoleSessionResponse(principal adminPrincipal, expiresAt time
 		WorkspaceID:   principal.WorkspaceID,
 		Authenticated: authenticated,
 		RequiresLogin: !s.developmentAdminBypassActive(),
+	}
+	if authenticated {
+		if owned, active, err := s.holderOwnedAgentIDsForPrincipal(r.Context(), principal); err == nil && active {
+			response.HolderAgentIDs = owned
+		}
 	}
 	if !expiresAt.IsZero() {
 		response.ExpiresAt = expiresAt.Format(time.RFC3339)

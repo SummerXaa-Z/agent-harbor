@@ -121,6 +121,11 @@ func (s *Server) buildTenantAccessProfileForRequest(r *http.Request, tenantID st
 	if tenantID != "" && effective.TenantID != tenantID {
 		return tenantAccessProfileResponse{}, domain.PermissionDenied("resource tenant is outside authenticated admin scope")
 	}
+	if query.CallerInstanceID != "" {
+		if err := s.requireHolderScope(r, query.CallerInstanceID); err != nil {
+			return tenantAccessProfileResponse{}, err
+		}
+	}
 	query.WorkspaceID = effective.WorkspaceID
 	return s.buildTenantAccessProfile(r.Context(), tenantID, query)
 }

@@ -86,6 +86,7 @@ type Repository interface {
 	GetAdminIdentityByActor(context.Context, string) (domain.AdminIdentity, bool, error)
 	FindAdminIdentityByKeyHash(context.Context, string) (domain.AdminIdentity, bool, error)
 	CreateAdminIdentityWithAudit(context.Context, domain.AdminIdentity, AdminIdentityAuditBuilder) (domain.AdminIdentity, error)
+	UpdateAdminIdentityOwnedAgentsWithAudit(context.Context, string, []string, time.Time, string, AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error)
 	RotateAdminIdentityKeyWithAudit(context.Context, string, string, string, time.Time, string, AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error)
 	DisableAdminIdentityWithAudit(context.Context, string, time.Time, string, AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error)
 	TouchAdminIdentityLastUsed(context.Context, string, time.Time) error
@@ -1574,6 +1575,21 @@ func (m *Memory) CreateAdminIdentityWithAudit(_ context.Context, identity domain
 	m.adminIdentityActorID[identity.Actor] = identity.ID
 	m.audits = append(m.audits, build(identity))
 	return identity, nil
+}
+
+func (m *Memory) UpdateAdminIdentityOwnedAgentsWithAudit(_ context.Context, id string, ownedAgentIDs []string, now time.Time, actor string, build AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	identity, ok := m.adminIdentities[strings.TrimSpace(id)]
+	if !ok {
+		return domain.AdminIdentity{}, false, nil
+	}
+	identity.OwnedAgentIDs = append([]string(nil), ownedAgentIDs...)
+	identity.UpdatedAt = now
+	identity.UpdatedBy = strings.TrimSpace(actor)
+	m.adminIdentities[identity.ID] = identity
+	m.audits = append(m.audits, build(identity))
+	return identity, true, nil
 }
 
 func (m *Memory) RotateAdminIdentityKeyWithAudit(_ context.Context, id string, keyHash string, keyPrefix string, now time.Time, actor string, build AdminIdentityAuditBuilder) (domain.AdminIdentity, bool, error) {

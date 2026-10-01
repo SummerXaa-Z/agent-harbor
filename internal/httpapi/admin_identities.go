@@ -83,6 +83,20 @@ func (s *Server) disableAdminIdentity(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, disabled)
 }
 
+func (s *Server) updateAdminIdentityOwnedAgents(w http.ResponseWriter, r *http.Request) {
+	var req domain.UpdateAdminIdentityOwnedAgentsRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	updated, err := s.updateManagedAdminIdentityOwnedAgents(r, chi.URLParam(r, "id"), req)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
 func (s *Server) createManagedAdminIdentity(r *http.Request, req domain.CreateAdminIdentityRequest) (domain.CreateAdminIdentityResponse, error) {
 	principal, err := s.requirePlatformAdmin(r)
 	if err != nil {
@@ -99,23 +113,28 @@ func (s *Server) createManagedAdminIdentity(r *http.Request, req domain.CreateAd
 	if exists {
 		return domain.CreateAdminIdentityResponse{}, domain.BadRequest("VALIDATION_FAILED", "admin identity actor already exists")
 	}
+	ownedAgentIDs, err := s.validateHolderBinding(r.Context(), req.Role, req.TenantID, req.OwnedAgentIDs)
+	if err != nil {
+		return domain.CreateAdminIdentityResponse{}, err
+	}
 	plaintext, prefix := security.NewAdminKey()
 	now := s.now()
 	identity := domain.AdminIdentity{
-		ID:          security.NewID("adm"),
-		Actor:       req.Actor,
-		DisplayName: req.DisplayName,
-		Role:        req.Role,
-		TenantID:    req.TenantID,
-		WorkspaceID: req.WorkspaceID,
-		Status:      domain.AdminIdentityStatusActive,
-		Source:      domain.AdminIdentitySourceManaged,
-		KeyHash:     security.HashSecret(plaintext),
-		KeyPrefix:   prefix,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-		CreatedBy:   principal.Actor,
-		UpdatedBy:   principal.Actor,
+		ID:            security.NewID("adm"),
+		Actor:         req.Actor,
+		DisplayName:   req.DisplayName,
+		Role:          req.Role,
+		TenantID:      req.TenantID,
+		WorkspaceID:   req.WorkspaceID,
+		OwnedAgentIDs: ownedAgentIDs,
+		Status:        domain.AdminIdentityStatusActive,
+		Source:        domain.AdminIdentitySourceManaged,
+		KeyHash:       security.HashSecret(plaintext),
+		KeyPrefix:     prefix,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+		CreatedBy:     principal.Actor,
+		UpdatedBy:     principal.Actor,
 	}
 	created, err := s.repo.CreateAdminIdentityWithAudit(r.Context(), identity, func(created domain.AdminIdentity) domain.AuditEvent {
 		return s.managementAuditEvent(r, created.TenantID, created.WorkspaceID, "admin_identity.created", "admin_identity", created.ID, "Admin identity created", adminIdentityAuditMetadata(created))
@@ -124,6 +143,71 @@ func (s *Server) createManagedAdminIdentity(r *http.Request, req domain.CreateAd
 		return domain.CreateAdminIdentityResponse{}, err
 	}
 	return domain.CreateAdminIdentityResponse{Identity: created, Key: plaintext}, nil
+}
+
+func (s *Server) updateManagedAdminIdentityOwnedAgents(r *http.Request, id string, req domain.UpdateAdminIdentityOwnedAgentsRequest) (domain.AdminIdentity, error) {
+	principal, err := s.requirePlatformAdmin(r)
+	if err != nil {
+		return domain.AdminIdentity{}, err
+	}
+	identity, err := s.loadMutableManagedAdminIdentity(r.Context(), id)
+	if err != nil {
+		return domain.AdminIdentity{}, err
+	}
+	owned, err := s.validateHolderBinding(r.Context(), identity.Role, identity.TenantID, req.OwnedAgentIDs)
+	if err != nil {
+		return domain.AdminIdentity{}, err
+	}
+	added, removed := ownedAgentDiff(identity.OwnedAgentIDs, owned)
+	updated, ok, err := s.repo.UpdateAdminIdentityOwnedAgentsWithAudit(r.Context(), identity.ID, owned, s.now(), principal.Actor, func(updated domain.AdminIdentity) domain.AuditEvent {
+		metadata := adminIdentityAuditMetadata(updated)
+		metadata["addedOwnedAgentIds"] = added
+		metadata["removedOwnedAgentIds"] = removed
+		return s.managementAuditEvent(r, updated.TenantID, updated.WorkspaceID, "admin_identity.updated", "admin_identity", updated.ID, "Admin identity updated", metadata)
+	})
+	if err != nil {
+		return domain.AdminIdentity{}, err
+	}
+	if !ok {
+		return domain.AdminIdentity{}, domain.NotFound("admin identity not found")
+	}
+	return updated, nil
+}
+
+// validateHolderBinding normalizes a holder binding and checks every agent
+// exists inside the identity's management range. Scoped roles may only bind
+// agents in their own tenant; platform administrators are unrestricted.
+func (s *Server) validateHolderBinding(ctx context.Context, role domain.AdminIdentityRole, tenantID string, ownedAgentIDs []string) ([]string, error) {
+	owned := normalizeOwnedAgentIDs(ownedAgentIDs)
+	for _, agentID := range owned {
+		agent, ok, err := s.repo.GetAgent(ctx, agentID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, domain.BadRequest("VALIDATION_FAILED", "owned agent "+agentID+" does not exist")
+		}
+		if role != domain.AdminIdentityRolePlatformAdmin && agent.TenantID != tenantID {
+			return nil, domain.BadRequest("VALIDATION_FAILED", "owned agent "+agentID+" is outside the identity tenant scope")
+		}
+	}
+	return owned, nil
+}
+
+func ownedAgentDiff(previous []string, next []string) (added []string, removed []string) {
+	added = []string{}
+	removed = []string{}
+	for _, id := range next {
+		if !containsString(previous, id) {
+			added = append(added, id)
+		}
+	}
+	for _, id := range previous {
+		if !containsString(next, id) {
+			removed = append(removed, id)
+		}
+	}
+	return added, removed
 }
 
 func (s *Server) rotateManagedAdminIdentityKey(r *http.Request, id string) (domain.RotateAdminIdentityKeyResponse, error) {
@@ -363,5 +447,6 @@ func adminIdentityAuditMetadata(identity domain.AdminIdentity) map[string]any {
 		"createdBy":       identity.CreatedBy,
 		"updatedBy":       identity.UpdatedBy,
 		"disabledBy":      identity.DisabledBy,
+		"ownedAgentCount": len(identity.OwnedAgentIDs),
 	}
 }

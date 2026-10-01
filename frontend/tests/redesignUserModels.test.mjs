@@ -39,7 +39,7 @@ import {
 } from "../src/redesign/model/goLive.ts";
 import { rankTemplates, recommendedTemplateId, templateMatch } from "../src/redesign/model/templateMatch.ts";
 import { splitBlockedCapabilities, unclassifiedCapabilities } from "../src/redesign/model/capabilityGovernance.ts";
-import { buildRuntimeValidationReadiness } from "../src/redesign/model/runtimeValidation.ts";
+import { buildRuntimeValidationReadiness, classifyRuntimeValidationRun } from "../src/redesign/model/runtimeValidation.ts";
 import {
   DEMO_ACTOR,
   keyStatus,
@@ -298,6 +298,33 @@ test("runtime validation readiness plans probes and lists blockers in order", ()
 
   const noSubject = buildRuntimeValidationReadiness({ ...base, context: { callerInstanceId: "caller-a", subjectSelector: "", targetId: "target-a" } });
   assert.deepEqual(noSubject.blockers, ["requiresSubject"]);
+});
+
+test("classifyRuntimeValidationRun: an unexpected deny probe is a diagnosis, not an abort", () => {
+  const nominal = {
+    allowedOk: true,
+    allowedStatus: 200,
+    blockedCapabilityKey: "export_contracts",
+    deniedStatus: 403,
+    toolListOk: true,
+    toolListStatus: 200,
+  };
+  // Round 6 finding #41: a grant wider than the package lets the blocked
+  // call through. The allowed probe still lands, and the outcome names the
+  // capability and the observed status instead of dead-ending.
+  const mismatch = classifyRuntimeValidationRun({ ...nominal, deniedStatus: 200 });
+  assert.equal(mismatch.kind, "denyUnexpected");
+  assert.equal(mismatch.blockedCapabilityKey, "export_contracts");
+  assert.equal(mismatch.deniedStatus, 200);
+  assert.equal(mismatch.allowedStatus, 200);
+
+  assert.deepEqual(classifyRuntimeValidationRun(nominal), { allowedStatus: 200, deniedStatus: 403, kind: "completed" });
+  assert.deepEqual(
+    classifyRuntimeValidationRun({ ...nominal, blockedCapabilityKey: null, deniedStatus: null }),
+    { allowedStatus: 200, deniedStatus: null, kind: "completed" },
+  );
+  assert.deepEqual(classifyRuntimeValidationRun({ ...nominal, toolListOk: false, toolListStatus: 500 }), { kind: "toolListFailed", status: 500 });
+  assert.deepEqual(classifyRuntimeValidationRun({ ...nominal, allowedOk: false, allowedStatus: 502 }), { allowedStatus: 502, kind: "allowedFailed", status: 502 });
 });
 
 test("access context persists, defaults to the latest application and honours deep links", () => {

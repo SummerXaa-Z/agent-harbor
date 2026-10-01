@@ -94,3 +94,38 @@ export function mcpToolCallPayload(toolName: string) {
     },
   };
 }
+
+// How a finished validation sequence landed. A denied probe that is not
+// rejected by the gateway (round 6, finding #41 — the caller holds a grant
+// wider than the package) is a diagnosed condition, not an abort: the
+// allowed probe still runs so its evidence lands, and the outcome carries
+// the observed status so the UI can name the capability and the fix.
+export type RuntimeValidationRunOutcome =
+  | { kind: "toolListFailed"; status: number }
+  | { allowedStatus: number; blockedCapabilityKey: string; deniedStatus: number; kind: "denyUnexpected" }
+  | { allowedStatus: number; kind: "allowedFailed"; status: number }
+  | { allowedStatus: number; deniedStatus: number | null; kind: "completed" };
+
+export function classifyRuntimeValidationRun(input: {
+  allowedOk: boolean;
+  allowedStatus: number;
+  blockedCapabilityKey: string | null;
+  deniedStatus: number | null;
+  toolListOk: boolean;
+  toolListStatus: number;
+}): RuntimeValidationRunOutcome {
+  if (!input.toolListOk) return { kind: "toolListFailed", status: input.toolListStatus };
+  // deniedStatus !== 403 with a blocked capability planned means the gateway
+  // let the blocked call through; null means no denied probe was planned.
+  const denyUnexpected = input.blockedCapabilityKey !== null && input.deniedStatus !== 403;
+  if (!input.allowedOk) return { allowedStatus: input.allowedStatus, kind: "allowedFailed", status: input.allowedStatus };
+  if (denyUnexpected && input.blockedCapabilityKey !== null) {
+    return {
+      allowedStatus: input.allowedStatus,
+      blockedCapabilityKey: input.blockedCapabilityKey,
+      deniedStatus: input.deniedStatus ?? 0,
+      kind: "denyUnexpected",
+    };
+  }
+  return { allowedStatus: input.allowedStatus, deniedStatus: input.deniedStatus === 403 ? 403 : null, kind: "completed" };
+}

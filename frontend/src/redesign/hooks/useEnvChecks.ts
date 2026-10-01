@@ -11,10 +11,13 @@ import { managementMcpCatalogDiagnosticFromResult, type ManagementMcpCatalogDiag
 import type { PermissionPackageApplication } from "../../permissionPackages";
 import type { Agent, TargetProbeResult } from "../../types";
 import type { RedesignData } from "./useRedesignData";
-import { apiServiceCheck, corePathCheck, envCheckSummary, envHealthCheck, mcpServiceCheck, preferredProbeTarget, rememberEnvCheckSnapshot, registeredMcpTargets, type EnvCheckRow, type EnvCheckSummary } from "../model/envChecks";
+import { apiServiceCheck, corePathCheck, envCheckSummary, envHealthCheck, mcpServiceCheck, preferredProbeTarget, probeFixGuidance, rememberEnvCheckSnapshot, registeredMcpTargets, type EnvCheckRow, type EnvCheckSummary } from "../model/envChecks";
 import { readinessCheckCount, type ReadinessCheckCount } from "../model/goLive";
 
 export interface UnreachableTarget {
+  // Classified probe failure (e.g. "UPSTREAM_CONNECT_ERROR: dial tcp …"),
+  // shown in the cockpit fix-guidance modal (round 6, finding #42).
+  detail: string;
   endpoint: string;
   name: string;
 }
@@ -87,10 +90,14 @@ export function useEnvChecks(data: RedesignData): EnvChecksState {
       : [];
     if (stale()) return;
 
-    const unreachableTargets = otherProbes
+    const unreachableTargets: UnreachableTarget[] = otherProbes
       .map((probeResult, index) => ({ agent: others[index], probeResult }))
       .filter((entry) => entry.probeResult?.status === "error")
-      .map((entry) => ({ endpoint: agentEndpoint(entry.agent), name: entry.agent.name }));
+      .map((entry) => ({
+        detail: probeFixGuidance(entry.probeResult)?.detail ?? "",
+        endpoint: agentEndpoint(entry.agent),
+        name: entry.agent.name,
+      }));
     const catalogDiagnostic: ManagementMcpCatalogDiagnostic | null = catalog
       ? managementMcpCatalogDiagnosticFromResult(catalog)
       : null;

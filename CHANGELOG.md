@@ -4,6 +4,17 @@ All notable public changes to AgentHarbor will be documented in this file.
 
 This project uses Keep a Changelog-style sections and semantic versioning for tagged releases.
 
+## [Unreleased]
+
+### Fixed
+
+- The go-live runtime validation no longer dead-ends when the denied probe is not rejected by the gateway — a pre-existing grant wider than the package lets the blocked capability through (external evaluation round 6, finding #41). The allowed probe still runs so its run record lands, and the console names the capability that was let through with the observed versus expected status plus the recovery path, instead of aborting the sequence silently and leaving readiness unexplained.
+- The cockpit fix-guidance modal for unreachable targets carries each target's classified probe failure (for example `UPSTREAM_CONNECT_ERROR` with the underlying dial error), matching the registry test-connection modal instead of showing only the name and endpoint (round 6, finding #42).
+
+### Added
+
+- The round-6 external evaluation record is archived with its same-day triage in `docs/product/0.4.0-console-eval.md`: verdict 有条件通过 (conditional pass) on the v0.5.0 released baseline, measured time-to-first-report 25m14s end-to-end (9m21s clean re-walk) against the 30-minute goal, both notification phase-2 specializations passed strongly, all thirteen regression checks (R1–R13) passing, mobile 375/390px covered page by page. Two non-blocking findings: #41 (medium — runtime validation silently aborts when the deny probe does not return 403, e.g. caller grants wider than the package) and #42 (low — cockpit fix-guidance modal lacks the per-target classified technical reason).
+
 ## [0.5.0] - 2026-10-01
 
 ### Added

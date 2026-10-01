@@ -503,10 +503,13 @@ Web 控制台会在 `/healthz` 之后读取 `GET /api/v1/system/info`，先确�
 - `POST /api/v1/management/mcp/rpc`
 - `POST /api/v1/tenant-entitlements`
 - `GET /api/v1/tenant-entitlements?tenantId=&workspaceId=&targetId=&capabilityId=`
+- `DELETE /api/v1/tenant-entitlements/{id}` (disables; 409 while enabled workspace assignments reference it)
 - `POST /api/v1/workspace-assignments`
 - `GET /api/v1/workspace-assignments?tenantId=&workspaceId=&entitlementId=`
+- `DELETE /api/v1/workspace-assignments/{id}` (disables; 409 while enabled instance assignments reference it)
 - `POST /api/v1/instance-assignments`
 - `GET /api/v1/instance-assignments?tenantId=&workspaceId=&callerInstanceId=&capabilityId=`
+- `DELETE /api/v1/instance-assignments/{id}` (disables)
 
 ### Data Plane
 

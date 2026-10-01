@@ -876,6 +876,118 @@ func (p *Postgres) ListInstanceAssignments(ctx context.Context, filter InstanceA
 	return scanInstanceAssignments(rows)
 }
 
+func (p *Postgres) DisableTenantEntitlement(ctx context.Context, id string, now time.Time) (domain.TenantEntitlement, bool, error) {
+	return p.disableTenantEntitlement(ctx, p.pool, id, now)
+}
+
+func (p *Postgres) disableTenantEntitlement(ctx context.Context, exec sqlExecutor, id string, now time.Time) (domain.TenantEntitlement, bool, error) {
+	row := exec.QueryRow(ctx, `
+		update tenant_entitlements
+		set status=$2, updated_at=$3
+		where id=$1
+		returning id, tenant_id, target_agent_id, capability_id, effect, data_scopes, status, priority, created_at, updated_at
+	`, id, string(domain.PolicyStatusDisabled), now)
+	entitlement, err := scanTenantEntitlement(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.TenantEntitlement{}, false, nil
+	}
+	if err != nil {
+		return domain.TenantEntitlement{}, false, fmt.Errorf("disable tenant entitlement: %w", err)
+	}
+	return entitlement, true, nil
+}
+
+func (p *Postgres) DisableTenantEntitlementWithAudit(ctx context.Context, id string, now time.Time, build TenantEntitlementAuditBuilder) (domain.TenantEntitlement, bool, error) {
+	var disabled domain.TenantEntitlement
+	var ok bool
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		disabled, ok, err = p.disableTenantEntitlement(ctx, tx, id, now)
+		if err != nil || !ok {
+			return err
+		}
+		audit := build(disabled)
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return disabled, ok, err
+}
+
+func (p *Postgres) DisableWorkspaceAssignment(ctx context.Context, id string, now time.Time) (domain.WorkspaceAssignment, bool, error) {
+	return p.disableWorkspaceAssignment(ctx, p.pool, id, now)
+}
+
+func (p *Postgres) disableWorkspaceAssignment(ctx context.Context, exec sqlExecutor, id string, now time.Time) (domain.WorkspaceAssignment, bool, error) {
+	row := exec.QueryRow(ctx, `
+		update workspace_assignments
+		set status=$2, updated_at=$3
+		where id=$1
+		returning id, tenant_entitlement_id, tenant_id, workspace_id, effect, data_scopes, status, created_at, updated_at
+	`, id, string(domain.PolicyStatusDisabled), now)
+	assignment, err := scanWorkspaceAssignment(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.WorkspaceAssignment{}, false, nil
+	}
+	if err != nil {
+		return domain.WorkspaceAssignment{}, false, fmt.Errorf("disable workspace assignment: %w", err)
+	}
+	return assignment, true, nil
+}
+
+func (p *Postgres) DisableWorkspaceAssignmentWithAudit(ctx context.Context, id string, now time.Time, build WorkspaceAssignmentAuditBuilder) (domain.WorkspaceAssignment, bool, error) {
+	var disabled domain.WorkspaceAssignment
+	var ok bool
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		disabled, ok, err = p.disableWorkspaceAssignment(ctx, tx, id, now)
+		if err != nil || !ok {
+			return err
+		}
+		audit := build(disabled)
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return disabled, ok, err
+}
+
+func (p *Postgres) DisableInstanceAssignment(ctx context.Context, id string, now time.Time) (domain.InstanceAssignment, bool, error) {
+	return p.disableInstanceAssignment(ctx, p.pool, id, now)
+}
+
+func (p *Postgres) disableInstanceAssignment(ctx context.Context, exec sqlExecutor, id string, now time.Time) (domain.InstanceAssignment, bool, error) {
+	row := exec.QueryRow(ctx, `
+		update instance_assignments
+		set status=$2, updated_at=$3
+		where id=$1
+		returning id, workspace_assignment_id, tenant_id, workspace_id, caller_instance_id, subject_selector,
+			effect, data_scopes, status, created_at, updated_at
+	`, id, string(domain.PolicyStatusDisabled), now)
+	assignment, err := scanInstanceAssignment(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.InstanceAssignment{}, false, nil
+	}
+	if err != nil {
+		return domain.InstanceAssignment{}, false, fmt.Errorf("disable instance assignment: %w", err)
+	}
+	return assignment, true, nil
+}
+
+func (p *Postgres) DisableInstanceAssignmentWithAudit(ctx context.Context, id string, now time.Time, build InstanceAssignmentAuditBuilder) (domain.InstanceAssignment, bool, error) {
+	var disabled domain.InstanceAssignment
+	var ok bool
+	err := p.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		disabled, ok, err = p.disableInstanceAssignment(ctx, tx, id, now)
+		if err != nil || !ok {
+			return err
+		}
+		audit := build(disabled)
+		_, err = p.appendAuditEvent(ctx, tx, audit)
+		return err
+	})
+	return disabled, ok, err
+}
+
 func (p *Postgres) CreatePermissionPackageApplication(ctx context.Context, application domain.PermissionPackageApplication) (domain.PermissionPackageApplication, error) {
 	return p.createPermissionPackageApplication(ctx, p.pool, application)
 }

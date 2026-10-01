@@ -1864,3 +1864,192 @@ func postgresTraceIDs(traces []domain.TraceEvent) []string {
 	}
 	return ids
 }
+
+func TestPostgresGrantChainDisableNarrowsCapabilityDecisions(t *testing.T) {
+	databaseURL := os.Getenv("AGENT_HARBOR_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set AGENT_HARBOR_TEST_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	defer pool.Close()
+	if err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	repo := store.NewPostgresWithCredentialKey(pool, []byte("0123456789abcdef0123456789abcdef"))
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	caller := domain.Agent{
+		ID:          security.NewID("agt"),
+		TenantID:    "tenant-pg-chain",
+		WorkspaceID: "ws-pg-chain",
+		Name:        "PG Chain Caller",
+		ChannelType: "local",
+		Status:      domain.AgentStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	target := domain.Agent{
+		ID:          security.NewID("agt"),
+		TenantID:    "tenant-pg-chain",
+		WorkspaceID: "ws-pg-chain",
+		Name:        "PG Chain MCP",
+		ChannelType: "mcp",
+		Status:      domain.AgentStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if _, err := repo.CreateAgent(ctx, caller); err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	if _, err := repo.CreateAgent(ctx, target); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+	capability := domain.Capability{
+		ID:              security.NewID("cap"),
+		TargetID:        target.ID,
+		Type:            domain.CapabilityTypeMCPTool,
+		Key:             "search_customer",
+		DisplayName:     "search_customer",
+		Action:          domain.CapabilityActionRead,
+		Sensitivity:     domain.CapabilitySensitivityInternal,
+		RiskLevel:       domain.CapabilityRiskLow,
+		EnforcementMode: domain.CapabilityEnforcementGateway,
+		DiscoveryStatus: domain.CapabilityDiscoveryApproved,
+		Version:         1,
+		DiscoveredAt:    now,
+		UpdatedAt:       now,
+	}
+	if _, err := repo.UpsertCapability(ctx, capability); err != nil {
+		t.Fatalf("upsert capability: %v", err)
+	}
+	entitlement, err := repo.CreateTenantEntitlement(ctx, domain.TenantEntitlement{
+		ID:           security.NewID("ent"),
+		TenantID:     caller.TenantID,
+		TargetID:     target.ID,
+		CapabilityID: capability.ID,
+		Effect:       domain.PolicyEffectAllow,
+		Status:       domain.PolicyStatusEnabled,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("create entitlement: %v", err)
+	}
+	workspaceAssignment, err := repo.CreateWorkspaceAssignment(ctx, domain.WorkspaceAssignment{
+		ID:                  security.NewID("wsa"),
+		TenantEntitlementID: entitlement.ID,
+		TenantID:            caller.TenantID,
+		WorkspaceID:         caller.WorkspaceID,
+		Effect:              domain.PolicyEffectAllow,
+		Status:              domain.PolicyStatusEnabled,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	})
+	if err != nil {
+		t.Fatalf("create workspace assignment: %v", err)
+	}
+	instanceAssignment, err := repo.CreateInstanceAssignment(ctx, domain.InstanceAssignment{
+		ID:                    security.NewID("ina"),
+		WorkspaceAssignmentID: workspaceAssignment.ID,
+		TenantID:              caller.TenantID,
+		WorkspaceID:           caller.WorkspaceID,
+		CallerInstanceID:      caller.ID,
+		SubjectSelector:       "user:*",
+		Effect:                domain.PolicyEffectAllow,
+		Status:                domain.PolicyStatusEnabled,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	})
+	if err != nil {
+		t.Fatalf("create instance assignment: %v", err)
+	}
+
+	evaluate := func() domain.CapabilityAccessDecision {
+		t.Helper()
+		decision, err := repo.EvaluateCapabilityAccess(ctx, store.CapabilityAccessRequest{
+			TenantID:         caller.TenantID,
+			WorkspaceID:      caller.WorkspaceID,
+			CallerInstanceID: caller.ID,
+			SubjectID:        "user:pg-chain",
+			TargetID:         target.ID,
+			CapabilityID:     capability.ID,
+			Now:              now,
+		})
+		if err != nil {
+			t.Fatalf("evaluate capability access: %v", err)
+		}
+		return decision
+	}
+	if decision := evaluate(); !decision.Allowed {
+		t.Fatalf("expected chain to allow before disable, got %#v", decision)
+	}
+
+	disabledInstance, ok, err := repo.DisableInstanceAssignmentWithAudit(ctx, instanceAssignment.ID, now.Add(time.Minute), func(disabled domain.InstanceAssignment) domain.AuditEvent {
+		return domain.AuditEvent{ID: security.NewID("evt"), Action: "instance_assignment.disabled", ResourceType: "instance_assignment", ResourceID: disabled.ID, Summary: "Instance assignment disabled", CreatedAt: disabled.UpdatedAt}
+	})
+	if err != nil || !ok {
+		t.Fatalf("disable instance assignment: ok=%v err=%v", ok, err)
+	}
+	if disabledInstance.Status != domain.PolicyStatusDisabled {
+		t.Fatalf("instance assignment should be disabled, got %#v", disabledInstance)
+	}
+	if decision := evaluate(); decision.Allowed {
+		t.Fatalf("disabled instance assignment should deny, got %#v", decision)
+	}
+
+	disabledWorkspace, ok, err := repo.DisableWorkspaceAssignment(ctx, workspaceAssignment.ID, now.Add(2*time.Minute))
+	if err != nil || !ok {
+		t.Fatalf("disable workspace assignment: ok=%v err=%v", ok, err)
+	}
+	if disabledWorkspace.Status != domain.PolicyStatusDisabled {
+		t.Fatalf("workspace assignment should be disabled, got %#v", disabledWorkspace)
+	}
+	disabledEntitlement, ok, err := repo.DisableTenantEntitlement(ctx, entitlement.ID, now.Add(3*time.Minute))
+	if err != nil || !ok {
+		t.Fatalf("disable entitlement: ok=%v err=%v", ok, err)
+	}
+	if disabledEntitlement.Status != domain.PolicyStatusDisabled {
+		t.Fatalf("entitlement should be disabled, got %#v", disabledEntitlement)
+	}
+	if decision := evaluate(); decision.Allowed {
+		t.Fatalf("fully disabled chain should deny, got %#v", decision)
+	}
+
+	entitlements, err := repo.ListTenantEntitlements(ctx, store.EntitlementFilter{})
+	if err != nil {
+		t.Fatalf("list entitlements: %v", err)
+	}
+	found := false
+	for _, row := range entitlements {
+		if row.ID == entitlement.ID {
+			found = true
+			if row.Status != domain.PolicyStatusDisabled {
+				t.Fatalf("listed entitlement should be disabled, got %#v", row)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("disabled entitlement should stay listed, got %#v", entitlements)
+	}
+
+	if _, ok, err := repo.DisableTenantEntitlement(ctx, "ent_pg_missing", now.Add(4*time.Minute)); err != nil || ok {
+		t.Fatalf("disable missing entitlement: ok=%v err=%v", ok, err)
+	}
+
+	audits, err := repo.ListAuditEvents(ctx, store.AuditEventFilter{ResourceID: instanceAssignment.ID})
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	foundDisabledAudit := false
+	for _, event := range audits {
+		if event.Action == "instance_assignment.disabled" {
+			foundDisabledAudit = true
+		}
+	}
+	if !foundDisabledAudit {
+		t.Fatalf("expected instance_assignment.disabled audit event, got %#v", audits)
+	}
+}

@@ -4,6 +4,12 @@ All notable public changes to AgentHarbor will be documented in this file.
 
 This project uses Keep a Changelog-style sections and semantic versioning for tagged releases.
 
+## [Unreleased]
+
+### Added
+
+- Grant-chain removal endpoints (issue #413): `DELETE /api/v1/tenant-entitlements/{id}`, `DELETE /api/v1/workspace-assignments/{id}`, and `DELETE /api/v1/instance-assignments/{id}` map to a status transition (`enabled` → `disabled`) rather than row deletion — applied permission packages keep the row ids they recorded, the audit trail survives, and runtime decisions already skip disabled rows at every level. Parents refuse with `409 GRANT_CHAIN_CHILDREN_ACTIVE` while enabled children still reference them, so narrowing a grant wider than a package proceeds leaves-first with nothing left silently inert (external evaluation round 6, finding 41's triage surfaced the missing removal path). Each removal emits a `tenant_entitlement.disabled` / `workspace_assignment.disabled` / `instance_assignment.disabled` audit event mirroring the created-event metadata. This unblocks the v0.5.1 go-live notice's recovery guidance ("narrow the conflicting grants and re-run") at the API level.
+
 ## [0.5.1] - 2026-10-01
 
 ### Fixed

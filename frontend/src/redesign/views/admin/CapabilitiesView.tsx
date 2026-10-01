@@ -4,6 +4,9 @@ import {
   createInstanceAssignment,
   createTenantEntitlement,
   createWorkspaceAssignment,
+  disableInstanceAssignment,
+  disableTenantEntitlement,
+  disableWorkspaceAssignment,
   refreshTargetCapabilities,
   updateCapability,
 } from "../../../api";
@@ -128,6 +131,11 @@ export function CapabilitiesView({ data, onRetry, params }: AdminViewProps) {
     workspaceId: ""
   }));
   const [chainError, setChainError] = useState("");
+  // Grant-chain management (backend issue 413 console wiring): the detail
+  // modal is fully derived from consoleData, so a successful disable plus
+  // onRetry() re-renders the layers with their new statuses in place.
+  const [chainDetailId, setChainDetailId] = useState("");
+  const [chainActionError, setChainActionError] = useState("");
 
   const agents = consoleData?.agents ?? [];
   const tenants = consoleData?.tenants ?? [];
@@ -269,6 +277,47 @@ export function CapabilitiesView({ data, onRetry, params }: AdminViewProps) {
     }
   }
 
+  const chainDetail = chainDetailId
+    ? (consoleData?.tenantEntitlements ?? []).find((entitlement) => entitlement.id === chainDetailId) ?? null
+    : null;
+  const chainWorkspaces = chainDetail
+    ? (consoleData?.workspaceAssignments ?? []).filter((item) => item.tenantEntitlementId === chainDetail.id)
+    : [];
+  const chainInstancesOf = (workspaceAssignmentId: string) =>
+    (consoleData?.instanceAssignments ?? []).filter((item) => item.workspaceAssignmentId === workspaceAssignmentId);
+
+  function chainStatusChip(status: "enabled" | "disabled") {
+    return (
+      <Chip tone={status === "enabled" ? "success" : "neutral"}>
+        {t(status === "enabled" ? "rd.cap.chainStatusEnabled" : "rd.cap.chainStatusDisabled")}
+      </Chip>
+    );
+  }
+
+  async function disableChainLayer(layer: "entitlement" | "workspace" | "instance", id: string) {
+    setActing(true);
+    setChainActionError("");
+    try {
+      if (layer === "entitlement") await disableTenantEntitlement(id);
+      else if (layer === "workspace") await disableWorkspaceAssignment(id);
+      else await disableInstanceAssignment(id);
+      toast(t("rd.cap.chainDisabled"));
+      await onRetry();
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error
+        ? String((error as { code?: unknown }).code)
+        : "";
+      if (code === "GRANT_CHAIN_CHILDREN_ACTIVE") {
+        setChainActionError(t(layer === "entitlement" ? "rd.cap.chainChildrenEntitlement" : "rd.cap.chainChildrenWorkspace"));
+      } else {
+        const presentation = apiErrorPresentation(t, language, error, "rd.cap.chainFailed");
+        setChainActionError(presentation.detail || presentation.next);
+      }
+    } finally {
+      setActing(false);
+    }
+  }
+
   const domainOptions = useMemo(
     () => [...new Set([...catalog.templates.map((template) => template.defaultDataDomain), ...segments.map((segment) => segment.domain)].filter(Boolean))],
     [catalog.templates, segments]
@@ -365,7 +414,7 @@ export function CapabilitiesView({ data, onRetry, params }: AdminViewProps) {
                 ) : (
                   <div className="cap-list">
                     {grants.map((grant) => (
-                      <div className="cap-row" key={`${grant.tenantId}:${grant.capabilityId}`}>
+                      <div className="cap-row" key={grant.entitlementId}>
                         <div className="cap-main">
                           <div className="cap-name">
                             {capabilities.find((capability) => capability.id === grant.capabilityId)?.displayName ?? grant.capabilityId}
@@ -377,9 +426,21 @@ export function CapabilitiesView({ data, onRetry, params }: AdminViewProps) {
                             <div className="cap-sub mono">{grant.subjectSelectors.join(" · ")}</div>
                           ) : null}
                         </div>
-                        <Chip tone={grant.effect === "deny" ? "danger" : "success"}>
-                          {grant.effect === "deny" ? t("rd.decision.blocked") : t("rd.decision.allowed")}
-                        </Chip>
+                        <div className="apr-button-row">
+                          <Chip tone={grant.effect === "deny" ? "danger" : "success"}>
+                            {grant.effect === "deny" ? t("rd.decision.blocked") : t("rd.decision.allowed")}
+                          </Chip>
+                          <Button
+                            onClick={() => {
+                              setChainDetailId(grant.entitlementId);
+                              setChainActionError("");
+                            }}
+                            size="sm"
+                            variant="link"
+                          >
+                            {t("rd.cap.manageChain")}
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -453,6 +514,108 @@ export function CapabilitiesView({ data, onRetry, params }: AdminViewProps) {
                   ))}
                 </select>
               </Field>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        footer={
+          <Button onClick={() => setChainDetailId("")} variant="primary">{t("rd.common.close")}</Button>
+        }
+        onClose={() => setChainDetailId("")}
+        open={chainDetail !== null}
+        size="wide"
+        title={t("rd.cap.chainDetailTitle")}
+      >
+        {chainDetail ? (
+          <div className="stack">
+            <p className="hint">{t("rd.cap.chainDetailHelp")}</p>
+            {chainActionError ? <Banner desc={chainActionError} title={t("rd.error.other.title")} tone="danger" /> : null}
+            <div className="cap-list">
+              <div className="cap-row">
+                <div className="cap-main">
+                  <div className="cap-name">{t("rd.cap.chainEntitlement")}</div>
+                  <div className="cap-sub mono">
+                    {capabilities.find((capability) => capability.id === chainDetail.capabilityId)?.displayName ?? chainDetail.capabilityId}
+                    {" · "}
+                    {chainDetail.tenantId}
+                  </div>
+                </div>
+                <div className="apr-button-row">
+                  {chainStatusChip(chainDetail.status)}
+                  {chainDetail.status === "enabled" ? (
+                    <Button
+                      disabled={acting}
+                      onClick={() => void disableChainLayer("entitlement", chainDetail.id)}
+                      size="sm"
+                      variant="danger-ghost"
+                    >
+                      {t("rd.cap.chainDisable")}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+              {chainWorkspaces.length === 0 ? (
+                <p className="muted small">{t("rd.cap.chainNoWorkspaces")}</p>
+              ) : (
+                chainWorkspaces.map((workspace) => {
+                  const instances = chainInstancesOf(workspace.id);
+                  return (
+                    <div className="chain-group" key={workspace.id}>
+                      <div className="cap-row">
+                        <div className="cap-main">
+                          <div className="cap-name">{t("rd.cap.chainWorkspace")}</div>
+                          <div className="cap-sub mono">{workspace.workspaceId}</div>
+                        </div>
+                        <div className="apr-button-row">
+                          {chainStatusChip(workspace.status)}
+                          {workspace.status === "enabled" ? (
+                            <Button
+                              disabled={acting}
+                              onClick={() => void disableChainLayer("workspace", workspace.id)}
+                              size="sm"
+                              variant="danger-ghost"
+                            >
+                              {t("rd.cap.chainDisable")}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                      {instances.length === 0 ? (
+                        <p className="muted small chain-indent">{t("rd.cap.chainNoCallers")}</p>
+                      ) : (
+                        <div className="cap-list chain-indent">
+                          {instances.map((instance) => (
+                            <div className="cap-row" key={instance.id}>
+                              <div className="cap-main">
+                                <div className="cap-name">{t("rd.cap.chainCaller")}</div>
+                                <div className="cap-sub mono">
+                                  {agents.find((agent) => agent.id === instance.callerInstanceId)?.name ?? instance.callerInstanceId}
+                                  {instance.subjectSelector ? ` · ${instance.subjectSelector}` : ""}
+                                </div>
+                              </div>
+                              <div className="apr-button-row">
+                                {chainStatusChip(instance.status)}
+                                {instance.status === "enabled" ? (
+                                  <Button
+                                    disabled={acting}
+                                    onClick={() => void disableChainLayer("instance", instance.id)}
+                                    size="sm"
+                                    variant="danger-ghost"
+                                  >
+                                    {t("rd.cap.chainDisable")}
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         ) : null}

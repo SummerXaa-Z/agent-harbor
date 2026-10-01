@@ -991,6 +991,30 @@ export async function createInstanceAssignment(
   return request<InstanceAssignment>('/api/v1/instance-assignments', { adminKey, body })
 }
 
+// Grant-chain removal (backend issue 413): DELETE maps to a status
+// transition (enabled -> disabled), parents refuse with 409 while enabled
+// children reference them.
+export async function disableTenantEntitlement(id: string, adminKey?: string): Promise<TenantEntitlement> {
+  return request<TenantEntitlement>(`/api/v1/tenant-entitlements/${encodeURIComponent(id)}`, {
+    adminKey,
+    method: 'DELETE',
+  })
+}
+
+export async function disableWorkspaceAssignment(id: string, adminKey?: string): Promise<WorkspaceAssignment> {
+  return request<WorkspaceAssignment>(`/api/v1/workspace-assignments/${encodeURIComponent(id)}`, {
+    adminKey,
+    method: 'DELETE',
+  })
+}
+
+export async function disableInstanceAssignment(id: string, adminKey?: string): Promise<InstanceAssignment> {
+  return request<InstanceAssignment>(`/api/v1/instance-assignments/${encodeURIComponent(id)}`, {
+    adminKey,
+    method: 'DELETE',
+  })
+}
+
 export async function disableRoutePolicy(id: string, adminKey?: string): Promise<RoutePolicy> {
   return request<RoutePolicy>(`/api/v1/route-policies/${encodeURIComponent(id)}`, {
     adminKey,

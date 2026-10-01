@@ -2089,6 +2089,15 @@ body:has(.ah2) {
   font-size: 11.5px;
 }
 
+.ah2 .chain-group {
+  display: grid;
+  gap: 6px;
+}
+
+.ah2 .chain-indent {
+  margin-left: 18px;
+}
+
 .ah2 .audit-count {
   align-self: end;
 }

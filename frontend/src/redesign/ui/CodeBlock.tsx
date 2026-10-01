@@ -5,7 +5,7 @@ import { useToast } from "./Toast";
 
 // Code blocks show and copy the same redacted text: handoff snippets carry
 // `${AGENT_HARBOR_TOKEN}`, and any full key that slips in is cut to its prefix.
-export function CodeBlock({ code, label }: { code: string; label: string }) {
+export function CodeBlock({ code, label, onCopy }: { code: string; label: string; onCopy?: () => void }) {
   const { t } = useRedesignI18n();
   const showToast = useToast();
   const safeCode = redactTokens(code);
@@ -13,6 +13,7 @@ export function CodeBlock({ code, label }: { code: string; label: string }) {
   async function copy() {
     try {
       await navigator.clipboard.writeText(safeCode);
+      onCopy?.();
       showToast(t("rd.common.copied"));
     } catch {
       showToast(t("rd.common.copyFailed"), "danger");

@@ -48,6 +48,8 @@ import type {
   PermissionPackageApprovalStatus,
   PermissionPackageApplyInput,
   PermissionPackageApplyPreflight,
+  ReportAccessHandoffConfigEventRequest,
+  ReportAccessHandoffConfigEventResponse,
   PermissionPackageApplyResult,
   PermissionPackageApplication,
   PermissionPackageApplicationHealth,
@@ -797,6 +799,18 @@ export async function createAccessHandoffToken(
   const requestBody: Record<string, unknown> = { ...body }
   delete requestBody.traceLimit
   return request<CreateAccessHandoffTokenResponse>("/api/v1/permission-packages/access-handoff/tokens", { adminKey, body: requestBody })
+}
+
+// Access-handoff config interactions (evaluation finding 6): the console
+// reports each preview/copy of the handoff config so the server records an
+// auditable event; fire-and-forget from the caller's perspective.
+export async function reportAccessHandoffConfigEvent(
+  body: ReportAccessHandoffConfigEventRequest,
+  adminKey?: string,
+): Promise<ReportAccessHandoffConfigEventResponse> {
+  const requestBody: Record<string, unknown> = { ...body }
+  delete requestBody.traceLimit
+  return request<ReportAccessHandoffConfigEventResponse>("/api/v1/permission-packages/access-handoff/events", { adminKey, body: requestBody, method: "POST" })
 }
 
 export async function revokeAccessHandoffToken(id: string, adminKey?: string): Promise<AccessHandoffToken> {

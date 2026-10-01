@@ -4,6 +4,7 @@ export type ButtonVariant = "primary" | "success" | "ghost" | "danger-ghost" | "
 
 interface ButtonBaseProps {
   "aria-label"?: string;
+  "aria-expanded"?: boolean;
   children: ReactNode;
   disabled?: boolean;
   icon?: ReactNode;
@@ -44,6 +45,7 @@ export function Button(props: ButtonProps) {
   return (
     <button
       aria-label={props["aria-label"]}
+      aria-expanded={props["aria-expanded"]}
       className={className}
       disabled={props.disabled}
       onClick={props.onClick}

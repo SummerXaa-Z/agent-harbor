@@ -420,6 +420,83 @@ func (s *Server) revokeAccessHandoffToken(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, accessHandoffTokenFromDomain(revoked, now))
 }
 
+// Config-interaction reporting (evaluation finding 6): previewing or copying
+// the handoff configuration is a sensitive delivery action, so the console
+// reports each one and the server records an audit event. The artifacts carry
+// placeholders only, and so does the audit metadata — no secret is logged.
+type reportAccessHandoffEventRequest struct {
+	createAccessHandoffTokenRequest
+	Action string `json:"action"`
+}
+
+type reportAccessHandoffEventResponse struct {
+	Action       string `json:"action"`
+	HandoffID    string `json:"handoffId"`
+	AuditEventID string `json:"auditEventId"`
+}
+
+func (s *Server) reportAccessHandoffEvent(w http.ResponseWriter, r *http.Request) {
+	var req reportAccessHandoffEventRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	action := strings.TrimSpace(req.Action)
+	if action != "config_viewed" && action != "config_copied" {
+		writeError(w, domain.BadRequest("VALIDATION_FAILED", "action must be one of config_viewed, config_copied"))
+		return
+	}
+	query, err := req.readinessQuery()
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.requirePermissionPackageQueryScope(r, query); err != nil {
+		writeError(w, err)
+		return
+	}
+	handoff, err := s.permissionPackageAccessHandoff(r.Context(), query)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if handoff.Status != "ready" || handoff.CopyArtifacts == nil || handoff.Application == nil {
+		writeError(w, domain.Conflict(accessHandoffNotReadyCode, "access handoff must be ready before reporting config interactions"))
+		return
+	}
+	if handoff.ID != strings.TrimSpace(req.HandoffID) {
+		writeError(w, domain.Conflict(accessHandoffChangedCode, "access handoff changed; refresh before reporting config interactions"))
+		return
+	}
+	agent, ok, err := s.repo.GetAgent(r.Context(), query.CallerInstanceID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, domain.NotFound("caller agent not found"))
+		return
+	}
+	auditAction := "access_handoff." + action
+	summary := "Access handoff config viewed"
+	if action == "config_copied" {
+		summary = "Access handoff config copied"
+	}
+	event, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, agent.TenantID, agent.WorkspaceID, auditAction, "access_handoff", handoff.ID, summary, map[string]any{
+		"applicationId":    handoff.Application.ID,
+		"artifact":         "mcp_client_config",
+		"callerInstanceId": query.CallerInstanceID,
+		"subjectSelector":  handoff.Scope.SubjectSelector,
+		"targetId":         query.TargetID,
+		"templateId":       handoff.Template.ID,
+	}))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, reportAccessHandoffEventResponse{Action: auditAction, HandoffID: handoff.ID, AuditEventID: event.ID})
+}
+
 func (req createAccessHandoffTokenRequest) readinessQuery() (permissionPackageProductionReadinessQuery, error) {
 	query := permissionPackageProductionReadinessQuery{
 		TenantID:              strings.TrimSpace(req.TenantID),

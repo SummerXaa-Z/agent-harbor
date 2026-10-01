@@ -3,17 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import {
   createAccessHandoffToken,
   fetchAccessHandoff,
+  reportAccessHandoffConfigEvent,
   revokeAccessHandoffToken
 } from "../api";
 import type { Translator } from "../consolePresenters";
 import type { Language } from "../i18n";
-import {
-  localizedErrorMessageState,
-  localizedMessageText,
-  type LocalizedMessage
-} from "../localizedMessages";
+import { localizedErrorMessageState, localizedMessageText, type LocalizedMessage } from "../localizedMessages";
 import type {
   AccessHandoff,
+  AccessHandoffConfigAction,
   CreateAccessHandoffTokenResponse,
   PermissionPackageProductionReadinessFilter
 } from "../permissionPackages";
@@ -130,6 +128,19 @@ export function useAccessHandoffController({
     }
   }
 
+  // Config-interaction auditing (evaluation finding 6): previewing or copying
+  // the handoff config is reported to the server so it lands in the audit
+  // trail. Best-effort by design — a reporting failure must never block or
+  // fail the user's copy action after the clipboard already changed.
+  function reportConfigEvent(action: AccessHandoffConfigAction) {
+    if (!handoff?.id || !handoff.copyArtifacts) return;
+    void reportAccessHandoffConfigEvent({
+      ...filter,
+      action,
+      handoffId: handoff.id
+    }, adminKey).catch(() => undefined);
+  }
+
   async function revokeToken(id: string) {
     if (tokenMutationRef.current || !id.trim()) return null;
     tokenMutationRef.current = "revoke";
@@ -167,6 +178,7 @@ export function useAccessHandoffController({
     message: localizedMessageText(messageState, t, language),
     oneTimeToken,
     refresh,
+    reportConfigEvent,
     revokeToken,
     tokenAction
   };

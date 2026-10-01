@@ -321,6 +321,9 @@ test("access handoff API keeps token creation and revocation on dedicated endpoi
   assert.match(apiSource, /delete requestBody\.traceLimit/);
   assert.match(apiSource, /function revokeAccessHandoffToken\(/);
   assert.match(apiSource, /permissionPackageAccessHandoffTokenPath\(id\)/);
+  // Config preview/copy interactions report to their own auditable endpoint.
+  assert.match(apiSource, /function reportAccessHandoffConfigEvent\(/);
+  assert.match(apiSource, /\/api\/v1\/permission-packages\/access-handoff\/events/);
 });
 
 test("permissionPackageAcceptanceReportPath includes acceptance report filters", () => {

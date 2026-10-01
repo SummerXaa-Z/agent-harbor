@@ -315,6 +315,19 @@ export interface CreateAccessHandoffTokenResponse extends AccessHandoffToken {
   key: string;
 }
 
+export type AccessHandoffConfigAction = "config_viewed" | "config_copied";
+
+export interface ReportAccessHandoffConfigEventRequest extends Omit<PermissionPackageProductionReadinessFilter, "traceLimit"> {
+  handoffId: string;
+  action: AccessHandoffConfigAction;
+}
+
+export interface ReportAccessHandoffConfigEventResponse {
+  action: string;
+  handoffId: string;
+  auditEventId: string;
+}
+
 export type PermissionPackageProductionNextActionCode =
   | "resolve_preflight_blockers"
   | "apply_permission_package"

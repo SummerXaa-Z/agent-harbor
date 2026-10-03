@@ -99,7 +99,7 @@ export function useAskAccessController({
     setResult(null);
     setMessage(null);
     onConsumeHandoff();
-  }, [handoffContext, consoleData]);
+  }, [handoffContext, consoleData, onConsumeHandoff]);
 
   useEffect(() => () => activeRequestRef.current?.abort(), []);
 

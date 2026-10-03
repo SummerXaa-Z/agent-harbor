@@ -85,7 +85,6 @@ export function ApprovalsView({ data, onRetry, params, session }: AdminViewProps
     : [];
   const riskSummary = approvalRiskSummary(capabilityRows);
   const selfReview = request ? isSelfReview(approvals.reviewer, request.requestedBy) : false;
-  const pending = selected?.status === "pending";
 
   async function approve() {
     if (!request || acting) return;

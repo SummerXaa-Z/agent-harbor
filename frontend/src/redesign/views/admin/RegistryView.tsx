@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import {
   ApiRequestError,
@@ -67,8 +67,8 @@ export function RegistryView({ data, onRetry, params }: AdminViewProps) {
   const toast = useToast();
   const consoleData = data.data;
   const agents = consoleData?.agents ?? [];
-  const rows = useMemo(() => registryRows(agents), [agents]);
-  const summary = useMemo(() => registrySummary(rows), [rows]);
+  const rows = registryRows(agents);
+  const summary = registrySummary(rows);
   const probeSupported = data.capabilities.has("target_probe_v1");
 
   const [registerOpen, setRegisterOpen] = useState(false);

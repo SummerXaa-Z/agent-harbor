@@ -38,6 +38,7 @@ assert_file_contains() {
   fi
 }
 
+assert_target_depends_on "frontend-lint" "frontend-deps"
 assert_target_depends_on "frontend-test" "frontend-deps"
 assert_target_depends_on "frontend-build" "frontend-deps"
 assert_target_depends_on "ai-admin-browser-journey" "frontend-deps"

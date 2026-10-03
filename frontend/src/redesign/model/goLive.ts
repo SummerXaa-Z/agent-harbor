@@ -104,7 +104,7 @@ export function handoffShellSnippet({
   comments: { call: string; token: string };
   handoff: Pick<AccessHandoff, "allowedCapabilities" | "scope">;
 }): string {
-  const toolName = [...handoff.allowedCapabilities.map((capability) => capability.key)].sort()[0] ?? "<allowed-capability-key>";
+  const toolName = handoff.allowedCapabilities.map((capability) => capability.key).sort()[0] ?? "<allowed-capability-key>";
   const subjectId = handoff.scope.subjectId?.trim() || "<subject-id-matching-selector>";
   const url = `${apiBase.replace(/\/+$/, "")}${runtimeRpcPath(handoff.scope.targetId)}`;
   const body = JSON.stringify({

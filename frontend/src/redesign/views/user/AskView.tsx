@@ -1,5 +1,5 @@
 import { ArrowRight, Play, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   accessDecisionReasonLabel,
   accessDecisionRecordMessageLabel,
@@ -53,13 +53,15 @@ export function AskView({ data, onRetry, params, session }: UserViewProps) {
   const [handoff, setHandoff] = useState<AskHandoffContext | null>(null);
   const [seeded, setSeeded] = useState(false);
 
+  const consumeHandoff = useCallback(() => setHandoff(null), []);
+
   const controller = useAskAccessController({
     adminKey: "",
     consoleData,
     handoffContext: handoff,
     language,
     liveDataAvailable: live,
-    onConsumeHandoff: () => setHandoff(null),
+    onConsumeHandoff: consumeHandoff,
     onStartPermissionChange: startPermissionChange,
     t,
     templates: catalog.templates,

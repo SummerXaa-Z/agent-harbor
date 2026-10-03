@@ -1,0 +1,15 @@
+{
+  "plugins": ["typescript", "unicorn", "react-hooks"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "eslint/no-unused-vars": "error",
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "error",
+    "react/set-state-in-effect": "off",
+    "react/purity": "off",
+    "react/immutability": "off",
+    "react/preserve-manual-memoization": "off"
+  }
+}

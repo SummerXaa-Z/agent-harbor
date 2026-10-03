@@ -46,7 +46,6 @@ import type {
   CreateAccessHandoffTokenRequest,
   CreateAccessHandoffTokenResponse,
   PermissionPackageApprovalRequest,
-  PermissionPackageApprovalStatus,
   PermissionPackageApplyInput,
   PermissionPackageApplyPreflight,
   ReportAccessHandoffConfigEventRequest,
@@ -196,6 +195,18 @@ function parseRetryAfterSeconds(value: string | null): number | undefined {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
+export const API_REQUEST_TIMEOUT_MS = 15_000
+
+// Every console request gets a bounded lifetime: a hung backend must degrade to
+// the same network-failure path as an unreachable one instead of spinning forever.
+export function requestSignal(
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number = API_REQUEST_TIMEOUT_MS,
+): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs)
+  return callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = requestMethod(options)
   const headers: Record<string, string> = { Accept: 'application/json' }
@@ -211,7 +222,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     credentials: 'include',
     headers,
     method,
-    signal: options.signal,
+    signal: requestSignal(options.signal),
   })
 
   let payload: unknown
@@ -255,6 +266,7 @@ async function withFallback<T>(loader: () => Promise<T>, fallback: T): Promise<{
 }
 
 function isFetchNetworkError(error: unknown): boolean {
+  if (error instanceof DOMException && (error.name === 'AbortError' || error.name === 'TimeoutError')) return true
   if (!(error instanceof TypeError)) return false
   const message = error.message.toLowerCase()
   return (
@@ -360,7 +372,7 @@ export async function checkSubjectHeaderCors(signal?: AbortSignal): Promise<Heal
         Accept: 'application/json',
         'X-AgentHarbor-Subject-Id': 'preflight-probe',
       },
-      signal,
+      signal: requestSignal(signal),
     })
     if (!response.ok) {
       return { status: 'error', message: `HTTP ${response.status}` }
@@ -378,7 +390,7 @@ async function checkJsonHealth(url: string, signal?: AbortSignal): Promise<Healt
   try {
     const response = await fetch(url, {
       headers: { Accept: 'application/json' },
-      signal,
+      signal: requestSignal(signal),
     })
     if (!response.ok) {
       return { status: 'error', message: `HTTP ${response.status}` }

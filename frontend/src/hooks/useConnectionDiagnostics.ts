@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   checkApiHealth,
   checkMockMcpHealth,
@@ -38,7 +38,12 @@ export function useConnectionDiagnostics({
     setCheckedAt(null);
   }
 
+  const runIdRef = useRef(0);
+
   async function run() {
+    // Re-running diagnostics must not let a slower earlier run overwrite the
+    // newer rows or clear checking early.
+    const runId = ++runIdRef.current;
     setChecking(true);
     try {
       const session = await fetchConsoleSession().catch(() => null);
@@ -52,6 +57,7 @@ export function useConnectionDiagnostics({
             status: "error"
           }))
       ]);
+      if (runId !== runIdRef.current) return;
       setRows(buildConnectionDiagnosticRows({
         apiHealth,
         liveDataLoaded,
@@ -62,7 +68,9 @@ export function useConnectionDiagnostics({
       }));
       setCheckedAt(new Date());
     } finally {
-      setChecking(false);
+      if (runId === runIdRef.current) {
+        setChecking(false);
+      }
     }
   }
 

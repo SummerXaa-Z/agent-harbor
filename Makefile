@@ -38,7 +38,7 @@ SCENARIO_SCRIPT_LIBS := \
 	scripts/lib/ports.sh \
 	scripts/pnpm.sh
 
-.PHONY: help check release-check dependency-audit fmt gofmt-check test test-fresh test-race test-fuzz vet build frontend-deps frontend-test frontend-build real-mcp-deps makefile-targets-test evaluation-readiness-test scenario-scripts-lint github-config-lint test-postgres test-postgres-race run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
+.PHONY: help check release-check dependency-audit fmt gofmt-check test test-fresh test-race test-fuzz vet build frontend-deps frontend-lint frontend-test frontend-build real-mcp-deps makefile-targets-test evaluation-readiness-test scenario-scripts-lint github-config-lint test-postgres test-postgres-race run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -55,6 +55,7 @@ help:
 	@printf '  make vet                   Run go vet\n'
 	@printf '  make build                 Build Go packages\n'
 	@printf '  make frontend-deps         Install pinned frontend dependencies\n'
+	@printf '  make frontend-lint         Lint frontend sources\n'
 	@printf '  make frontend-test         Run frontend unit tests\n'
 	@printf '  make frontend-build        Build frontend assets\n'
 	@printf '  make makefile-targets-test Verify Makefile release-gate dependencies\n'
@@ -78,9 +79,9 @@ help:
 	@printf '  make scenario-tenant-permission-center Run tenant permission center projection gate\n'
 	@printf '  make scenario-all          Run all scenarios against BASE_URL\n'
 
-check: gofmt-check test vet build makefile-targets-test evaluation-readiness-test frontend-test frontend-build scenario-scripts-lint github-config-lint
+check: gofmt-check test vet build makefile-targets-test evaluation-readiness-test frontend-lint frontend-test frontend-build scenario-scripts-lint github-config-lint
 
-release-check: gofmt-check test-fresh test-race test-fuzz vet build production-hardening scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center makefile-targets-test evaluation-readiness-test frontend-test frontend-build scenario-scripts-lint github-config-lint
+release-check: gofmt-check test-fresh test-race test-fuzz vet build production-hardening scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center makefile-targets-test evaluation-readiness-test frontend-lint frontend-test frontend-build scenario-scripts-lint github-config-lint
 
 dependency-audit:
 	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
@@ -121,6 +122,9 @@ build:
 
 frontend-deps:
 	$(PNPM) --dir frontend install --frozen-lockfile
+
+frontend-lint: frontend-deps
+	$(PNPM) --dir frontend lint
 
 frontend-test: frontend-deps
 	$(PNPM) --dir frontend test

@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "lint": "oxlint src tests",
     "test": "node --test tests/*.test.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "oxlint": "^1.86.0",
     "typescript": "^7.0.2"
   }
 }

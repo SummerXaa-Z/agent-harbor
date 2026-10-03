@@ -11,13 +11,13 @@ import { LoginCard } from "./shell/LoginCard";
 import { CommandPalette } from "./shell/CommandPalette";
 import { Sidebar } from "./shell/Sidebar";
 import { Topbar } from "./shell/Topbar";
+import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { OverlayRootContext } from "./ui/Modal";
 import { LoadingState } from "./ui/StateViews";
 import { ToastProvider, useToast } from "./ui/Toast";
 import { EntryPage } from "./views/EntryPage";
 import { NotFoundView } from "./views/NotFoundView";
 import { AdminView } from "./views/admin/AdminView";
-import type { AdminViewProps } from "./views/admin/adminViewProps";
 import { ApplyView } from "./views/user/ApplyView";
 import { AskView } from "./views/user/AskView";
 import { GoLiveView } from "./views/user/GoLiveView";
@@ -141,7 +141,6 @@ function SurfaceShell({
       <Sidebar
         activeView={route.view}
         onSignOut={() => void auth.logout()}
-        otherSurfaceUnread={otherUnread}
         session={auth.session}
         surface={route.surface}
       />
@@ -157,11 +156,13 @@ function SurfaceShell({
         />
         <main className="content">
           <div className="view" key={routeKey}>
-            {route.surface === "user" ? (
-              <UserView data={data} onRetry={() => void refresh()} params={route.params} session={auth.session} view={route.view} />
-            ) : (
-              <AdminView data={data} onRetry={() => void refresh()} params={route.params} session={auth.session} view={route.view} />
-            )}
+            <ErrorBoundary scope="view">
+              {route.surface === "user" ? (
+                <UserView data={data} onRetry={() => void refresh()} params={route.params} session={auth.session} view={route.view} />
+              ) : (
+                <AdminView data={data} onRetry={() => void refresh()} params={route.params} session={auth.session} view={route.view} />
+              )}
+            </ErrorBoundary>
           </div>
         </main>
       </div>

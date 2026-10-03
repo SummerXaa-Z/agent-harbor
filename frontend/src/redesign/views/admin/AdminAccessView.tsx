@@ -89,11 +89,6 @@ export function AdminAccessView({ data, onRetry, session }: AdminViewProps) {
     return localCallers.filter((agent) => editTarget.identity.role === "platform_admin" || agent.tenantId === tenantId);
   }, [editTarget, localCallers]);
 
-  function openRotate(row: AdminBoundaryRow) {
-    setOneTimeKey(null);
-    setRotateTarget(row);
-  }
-
   function resetCreate() {
     setCreateForm({ actor: "", displayName: "", role: "security_reviewer", tenantId: "", workspaceId: "" });
     setOneTimeKey(null);

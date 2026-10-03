@@ -46,7 +46,7 @@ function ModalDialog({ autoFocusQuery, children, footer, onClose, size = "defaul
     const first = preferred ?? dialog?.querySelector<HTMLElement>(focusableSelector);
     (first ?? dialog)?.focus();
     return () => previouslyFocused?.focus();
-  }, []);
+  }, [autoFocusQuery]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {

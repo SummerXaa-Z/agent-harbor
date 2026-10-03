@@ -146,7 +146,7 @@ The authoritative, executable statement of these rules is the `make production-h
 
 | Gate | Command | Covers |
 | --- | --- | --- |
-| Dev check | `make check` | Go build/tests, gofmt, vet, frontend tests (269) + `tsc` build, script/YAML lint. |
+| Dev check | `make check` | Go build/tests, gofmt, vet, frontend oxlint + tests (269) + `tsc` build, script/YAML lint. |
 | Release gate | `make release-check` | Uncached Go tests + release scenario gates (production safety baseline, approval journey, AI-admin browser journey, admin boundary, managed-admin lifecycle, tenant permission center, console production journey). |
 | Evaluator pack | `make evaluation-readiness` | Walkthrough + environment snapshot for external evaluation rounds. |
 | PG integration | `make test-postgres` (opt-in) | Repository tests against a real PostgreSQL (`AGENT_HARBOR_TEST_DATABASE_URL`). |

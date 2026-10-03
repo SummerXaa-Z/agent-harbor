@@ -42,10 +42,16 @@ export function useAccessHandoffController({
   const [tokenAction, setTokenAction] = useState<"" | "create" | "revoke">("");
   const tokenMutationRef = useRef<"" | "create" | "revoke">("");
   const filterKey = accessHandoffFilterKey(filter);
+  // The effect below keys on filterKey so object identity never refetches;
+  // it reads the live filter through this ref to keep deps honest.
+  const filterRef = useRef(filter);
+  useEffect(() => {
+    filterRef.current = filter;
+  });
 
   useEffect(() => {
     setOneTimeToken(null);
-    if (!enabled || !accessHandoffFilterReady(filter)) {
+    if (!enabled || !accessHandoffFilterReady(filterRef.current)) {
       setHandoff(null);
       setMessage(null);
       return;
@@ -53,7 +59,7 @@ export function useAccessHandoffController({
     const controller = new AbortController();
     setLoading(true);
     setMessage(null);
-    fetchAccessHandoff(filter, adminKey, controller.signal)
+    fetchAccessHandoff(filterRef.current, adminKey, controller.signal)
       .then(setHandoff)
       .catch((error) => {
         if (controller.signal.aborted) return;
@@ -68,7 +74,7 @@ export function useAccessHandoffController({
     // message churn, and never concurrent with a create/revoke mutation.
     const silentLoad = () => {
       if (tokenMutationRef.current || document.visibilityState !== "visible") return;
-      fetchAccessHandoff(filter, adminKey).then(setHandoff).catch(() => undefined);
+      fetchAccessHandoff(filterRef.current, adminKey).then(setHandoff).catch(() => undefined);
     };
     const interval = window.setInterval(silentLoad, accessHandoffSilentRefreshMs);
     const onVisibilityChange = () => {

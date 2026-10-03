@@ -150,7 +150,7 @@ export function connectionDiagnosticsSummaryStatus(rows: ConnectionDiagnosticRow
 
 export function connectionDiagnosticDetail(row: ConnectionDiagnosticRow | undefined, t: Translator) {
   if (!row) return "";
-  const detailParams: Record<string, string | number> = { ...(row.detailParams ?? {}) };
+  const detailParams: Record<string, string | number> = { ...row.detailParams };
   for (const [name, keys] of Object.entries(row.detailParamKeys ?? {})) {
     detailParams[name] = keys.map((key) => t(key)).join(", ");
   }

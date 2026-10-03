@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   createRoutePolicy,
   updateRoutePolicy,
@@ -6,12 +6,10 @@ import {
 import { apiErrorPresentation } from "../../model/apiErrorCategory";
 import { parsePriorityInput, routePolicyRows, routeTypeOptions } from "../../model/routePolicyCatalog";
 import { useRedesignI18n } from "../../hooks/useRedesignI18n";
-import { tx } from "../../../localizedMessages";
 import { DataStatusBanner, DataStatusChip } from "../../shell/DataStatusBanner";
 import { Banner } from "../../ui/Banner";
 import { Button } from "../../ui/Button";
 import { Card } from "../../ui/Card";
-import { Chip } from "../../ui/Chip";
 import { Field } from "../../ui/Field";
 import { Modal } from "../../ui/Modal";
 import { Switch } from "../../ui/Switch";
@@ -50,12 +48,10 @@ export function RoutesView({ data, onRetry }: AdminViewProps) {
   const agents = consoleData?.agents ?? [];
   const policies = consoleData?.routePolicies ?? [];
 
-  const agentName = useMemo(() => {
-    const names = new Map(agents.map((agent) => [agent.id, agent.name]));
-    return (agentId: string) => names.get(agentId) ?? agentId;
-  }, [agents]);
-  const rows = useMemo(() => routePolicyRows(policies, agentName), [policies, agentName]);
-  const typeOptions = useMemo(() => routeTypeOptions(policies), [policies]);
+  const agentNames = new Map(agents.map((agent) => [agent.id, agent.name]));
+  const agentName = (agentId: string) => agentNames.get(agentId) ?? agentId;
+  const rows = routePolicyRows(policies, agentName);
+  const typeOptions = routeTypeOptions(policies);
 
   const [editing, setEditing] = useState<RoutePolicy | null>(null);
   const [formOpen, setFormOpen] = useState(false);

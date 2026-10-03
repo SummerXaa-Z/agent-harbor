@@ -7,7 +7,7 @@ import {
   systemInfoContractIssues,
 } from "../src/systemInfoContract.ts";
 import * as apiPaths from "../src/apiPaths.ts";
-import { loadConsoleData } from "../src/api.ts";
+import { API_REQUEST_TIMEOUT_MS, loadConsoleData, requestSignal } from "../src/api.ts";
 import {
   accessDecisionExplainPath,
   permissionPackageAccessHandoffPath,
@@ -443,4 +443,26 @@ test("loadConsoleData retains previous real rows when one fetch transiently fail
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+test("api requests carry a default timeout signal", () => {
+  assert.equal(API_REQUEST_TIMEOUT_MS, 15_000);
+  assert.match(apiSource, /signal: requestSignal\(options\.signal\)/);
+  assert.match(apiSource, /signal: requestSignal\(signal\)/);
+});
+
+test("timeout and caller aborts classify as network failures", () => {
+  assert.match(apiSource, /error\.name === 'AbortError' \|\| error\.name === 'TimeoutError'/);
+});
+
+test("requestSignal merges caller aborts with the timeout", async () => {
+  const caller = new AbortController();
+  const merged = requestSignal(caller.signal, 5_000);
+  assert.equal(merged.aborted, false);
+  caller.abort();
+  assert.equal(merged.aborted, true);
+
+  const timed = requestSignal(undefined, 5);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(timed.aborted, true);
 });

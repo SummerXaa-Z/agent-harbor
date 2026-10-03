@@ -94,11 +94,8 @@ export function CapabilitiesView({ data, onRetry, params }: AdminViewProps) {
   }, [targetId, missedTarget]);
 
   const capabilities = consoleData?.capabilities ?? [];
-  const targetCapabilities = useMemo(
-    () => capabilities.filter((capability) => capability.targetId === targetId),
-    [capabilities, targetId]
-  );
-  const segments = useMemo(() => capabilityDomainSegments(targetCapabilities), [targetCapabilities]);
+  const targetCapabilities = capabilities.filter((capability) => capability.targetId === targetId);
+  const segments = capabilityDomainSegments(targetCapabilities);
   // Approved but unclassified: template matching needs a data domain, so these
   // stay blocked in every permission preview until governance fills one in.
   const unclassifiedApproved = useMemo(

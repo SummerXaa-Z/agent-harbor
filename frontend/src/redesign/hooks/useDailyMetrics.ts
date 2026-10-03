@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchDailyMetrics } from "../../api";
 import type { DailyMetrics } from "../../types";
 import { dailyTrend, type DailyTrend } from "../model/dailyTrend";
@@ -18,13 +18,18 @@ const trendDays = 7;
 export function useDailyMetrics(live: boolean): DailyMetricsState {
   const [metrics, setMetrics] = useState<DailyMetrics | null>(null);
   const [unsupported, setUnsupported] = useState(false);
+  const runIdRef = useRef(0);
 
   const reload = useCallback(async () => {
+    // A slow earlier reload must not overwrite a newer one's result.
+    const runId = ++runIdRef.current;
     try {
       const next = await fetchDailyMetrics({ days: trendDays, tzOffsetMinutes: -new Date().getTimezoneOffset() });
+      if (runId !== runIdRef.current) return;
       setMetrics(next);
       setUnsupported(false);
     } catch (error) {
+      if (runId !== runIdRef.current) return;
       // Older backends answer 404 without the capability; anything else is a
       // real failure and leaves the previous data in place.
       if (error instanceof Error && "status" in error && (error as { status?: number }).status === 404) {

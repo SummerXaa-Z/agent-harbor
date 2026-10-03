@@ -79,7 +79,7 @@ export function GoLiveView({ data, onRetry, params, session }: UserViewProps) {
     if (!live || diagnosticsStarted.current || diagnostics.checking || diagnostics.status !== null) return;
     diagnosticsStarted.current = true;
     void diagnostics.run();
-  }, [diagnostics.checking, diagnostics.run, diagnostics.status, live]);
+  }, [diagnostics, live]);
 
   useEffect(() => {
     if (!live || !complete) {

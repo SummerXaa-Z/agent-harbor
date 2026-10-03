@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchAuditEvents, fetchTraces } from "../../api";
 import type { AuditEvent, TraceEvent } from "../../types";
 import { auditRangeSince, auditTimelineRows, type AuditTimelineRow } from "../model/auditTimeline";
@@ -31,14 +31,19 @@ export function useAdminAudit(live: boolean, range: AuditRangeKey): AdminAuditSt
   });
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const runIdRef = useRef(0);
 
   const reload = useCallback(async () => {
+    // Switching the range refetches; a slow earlier range must not overwrite
+    // the newer one's rows or leave loading stuck.
+    const runId = ++runIdRef.current;
     const since = auditRangeSince(range);
     setLoading(true);
     const [audits, traces] = await Promise.allSettled([
       fetchAuditEvents({ limit: windowRowLimit, since }),
       fetchTraces({ limit: windowRowLimit, since }),
     ]);
+    if (runId !== runIdRef.current) return;
     const ok = audits.status === "fulfilled" && traces.status === "fulfilled";
     if (ok) {
       setRaw({ audits: audits.value, traces: traces.value });

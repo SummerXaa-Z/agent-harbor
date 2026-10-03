@@ -3,7 +3,6 @@ import type { AiAdminProductionConsoleSummary } from "./aiAdminProductionConsole
 import type {
   PermissionPackageAcceptanceReport,
   PermissionPackageProductionReadiness,
-  PermissionPackageProductionReadinessCheck
 } from "./permissionPackages";
 
 export type ProductionAcceptanceStatus = "ready" | "blocked" | "attention" | "pending";

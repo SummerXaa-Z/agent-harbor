@@ -14,15 +14,15 @@ AgentHarbor supports MCP gateway capabilities, but its primary product surface i
 
 AgentHarbor 支持 MCP 网关能力，但主要产品界面不是通用 MCP 聚合。核心用户旅程是权限运营：描述一个租户范围的访问需求，生成权限包草案，模拟有效访问结果，在风险需要时进入审批路由，通过现有授权链落地，并在事后查看记录。
 
-## Current: v0.6.0 / 当前版本：v0.6.0
+## Current: v0.6.2 / 当前版本：v0.6.2
 
-AgentHarbor is at v0.6.0 and still scoped to local evaluation, design feedback, early integration, and pilot deployments behind the documented production preflight. It is not recommended for production traffic without that preflight.
+AgentHarbor is at v0.6.2 and still scoped to local evaluation, design feedback, early integration, and pilot deployments behind the documented production preflight. It is not recommended for production traffic without that preflight.
 
-AgentHarbor 当前为 v0.6.0，范围仍是本地评估、设计反馈、早期集成，以及通过文档化生产预检的试点部署；未经该预检不建议承载生产流量。
+AgentHarbor 当前为 v0.6.2，范围仍是本地评估、设计反馈、早期集成，以及通过文档化生产预检的试点部署；未经该预检不建议承载生产流量。
 
-v0.4.0 replaced the console with the redesigned dual-surface experience; v0.5.0–v0.5.3 added the notification center phases, approval-detail dual columns, absolutized copied client configuration, and auditable access-handoff config preview/copy; v0.6.0 adds per-holder views. This does not change the developer-preview positioning.
+v0.4.0 replaced the console with the redesigned dual-surface experience; v0.5.0–v0.5.3 added the notification center phases, approval-detail dual columns, absolutized copied client configuration, and auditable access-handoff config preview/copy; v0.6.0 adds per-holder views; v0.6.1–v0.6.2 are evaluation-follow-up and code-audit hardening patches. This does not change the developer-preview positioning.
 
-v0.4.0 起控制台切换为重设计的双面体验；v0.5.0–v0.5.3 增加了通知中心各阶段、审批明细双列、复制配置完整地址与可审计的交接配置预览/复制；v0.6.0 增加持有者视图。这不会改变当前开发者预览定位。
+v0.4.0 起控制台切换为重设计的双面体验；v0.5.0–v0.5.3 增加了通知中心各阶段、审批明细双列、复制配置完整地址与可审计的交接配置预览/复制；v0.6.0 增加持有者视图；v0.6.1–v0.6.2 为评估跟进与代码审计加固补丁。这不会改变当前开发者预览定位。
 
 - The redesigned dual-surface console pairs a user workbench (access query, permission requests, my permissions, go-live handoff) with a management console (approvals, capability governance, registry, tenants, traces), plus a command palette, notification center, and mobile-ready layouts.
   重设计双面控制台将用户工作台（访问查询、申请权限、我的权限、上线交接）与管理控制台（变更审批、能力治理、资源管理、租户组织、运行审计）配对，并提供命令面板、通知中心与移动端可用布局。

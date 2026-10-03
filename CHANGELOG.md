@@ -4,6 +4,24 @@ All notable public changes to AgentHarbor will be documented in this file.
 
 This project uses Keep a Changelog-style sections and semantic versioning for tagged releases.
 
+## [0.6.2] - 2026-10-03
+
+### Changed
+
+- `internal/httpapi/server.go` is split into 11 domain files (PR #428). The 8,382-line catch-all became a 556-line wiring core plus `system`, `registry`, `policies`, `capabilities`, `permission_applications`, `permission_readiness`, `permission_approvals`, `visibility`, `grant_chain`, `data_plane`, and `observability`, closing the code-evaluation round's top maintainability finding. The move was mechanical and verified with exact line-multiset accounting (zero lines lost or duplicated); behavior, routing, and contracts are unchanged. The frontend localization guard tests now scan the whole `internal/httpapi` package instead of a single file, so future moves cannot silently drop guarded copy.
+- Every console API request now carries a default 15-second timeout (PR #430). `requestSignal()` combines `AbortSignal.timeout` with an optional caller-provided signal via `AbortSignal.any` and is applied to all three raw fetch sites (the request core, the JSON health probes, and the subject-header CORS probe). A timeout abort classifies as a network failure, so a hung backend degrades through the existing stale-data and fallback paths instead of leaving the request pending indefinitely.
+
+### Added
+
+- Console error boundaries (PR #430): an app-scope boundary around the console root and a route-keyed view-scope boundary around each page. A render failure in any single view now shows a localized fallback card (explanatory hint, the error message, and a working reload action) instead of a white screen; the shell and navigation stay alive, and switching away and back starts a fresh page. Verified in a browser against an injected render throw.
+- A frontend lint gate (PR #430): oxlint with the correctness category runs in `make check`, `make release-check`, and CI ahead of the test step. Enabling it surfaced 20 findings, all fixed — dead imports, variables, and functions; three unstable `useMemo`s; and seven `exhaustive-deps` completions, including a latest-ref pattern in `useAccessHandoffController` that keeps its fetch effect keyed on the primitive filter key while reading the live filter.
+- Unit tests for credential encryption (PR #429, internal-security-audit follow-up): round trip, nonce uniqueness, ciphertext-plaintext separation, wrong-key and tamper detection, truncated or wrong-size keys, and authenticated-but-not-JSON payloads for `EncryptCredentials`/`DecryptCredentials` in `internal/security` (own-package coverage 41.4% → 65.5%). The tests pin the deliberate empty-blob short-circuit ahead of key validation.
+- An engineering documentation map (PR #427): `docs/engineering/architecture.md` gains a technical map and an API reference, and the README front door is slimmed (559 → 217 lines) to route readers by intent.
+
+### Fixed
+
+- The last three console data hooks without race guards are guarded (PR #430): `useDailyMetrics`, `useAdminAudit`, and `useConnectionDiagnostics` now use the same monotonic run-id pattern as their 14 siblings, so a slow earlier request can no longer overwrite a newer one's rows — most visibly the audit timeline when switching ranges — and connection diagnostics cannot clear its checking state for a superseded run.
+
 ## [0.6.1] - 2026-10-03
 
 ### Fixed

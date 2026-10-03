@@ -38,6 +38,7 @@ import {
   type PermissionPackageApplicationImpactPathScope,
   type PermissionPackageApplicationsPathFilter,
   type PermissionPackageApprovalRequestPathFilter,
+  queryString,
 } from './apiPaths.ts'
 import type {
   AccessHandoff,
@@ -147,15 +148,6 @@ export const apiBase =
 
 function endpoint(path: string): string {
   return `${apiBase}${path.startsWith('/') ? path : `/${path}`}`
-}
-
-function queryString(params: Record<string, string | undefined>): string {
-  const query = new URLSearchParams()
-  Object.entries(params).forEach(([key, value]) => {
-    if (value?.trim()) query.set(key, value.trim())
-  })
-  const value = query.toString()
-  return value ? `?${value}` : ''
 }
 
 function isEnvelope<T>(value: unknown): value is ApiEnvelope<T> {

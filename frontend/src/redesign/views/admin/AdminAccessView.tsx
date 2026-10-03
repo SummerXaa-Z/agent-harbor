@@ -40,7 +40,9 @@ const roleTone: Record<AdminRoleKey, "info" | "neutral" | "warning"> = {
   tenant_admin: "neutral"
 };
 
-function maskSecret(value: string): string {
+// Head-and-tail inline mask for one-time key panels; the prefix-only
+// convention for stored key prefixes lives in model/secretMask.ts.
+function maskInlineSecret(value: string): string {
   return value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : "••••";
 }
 
@@ -303,7 +305,7 @@ export function AdminAccessView({ data, onRetry, session }: AdminViewProps) {
           <div className="stack">
             <div className="key-panel">
               <div className="key-panel-main">
-                <div className="key-panel-value">{maskSecret(oneTimeKey)}</div>
+                <div className="key-panel-value">{maskInlineSecret(oneTimeKey)}</div>
                 <div className="key-panel-sub">{t("rd.adm.keyHint")}</div>
               </div>
               <Button onClick={() => void copyKey(oneTimeKey)} size="sm" variant="primary">
@@ -392,7 +394,7 @@ export function AdminAccessView({ data, onRetry, session }: AdminViewProps) {
         {rotateTarget && oneTimeKey ? (
           <div className="key-panel">
             <div className="key-panel-main">
-              <div className="key-panel-value">{maskSecret(oneTimeKey)}</div>
+              <div className="key-panel-value">{maskInlineSecret(oneTimeKey)}</div>
               <div className="key-panel-sub">{t("rd.adm.keyHint")}</div>
             </div>
             <Button onClick={() => void copyKey(oneTimeKey)} size="sm" variant="primary">

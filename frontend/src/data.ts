@@ -13,7 +13,7 @@ import type {
   TenantEntitlement,
   TraceEvent,
   WorkspaceAssignment,
-} from './types'
+} from './types.ts'
 
 const now = '2026-05-29T09:30:00Z'
 

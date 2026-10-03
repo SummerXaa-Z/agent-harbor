@@ -1,6 +1,7 @@
 import { subjectIdExampleFromSelector } from "./permissionPackages.ts";
 import type { PermissionPackageDraftInput, PermissionPackageTemplate } from "./permissionPackages";
 import type { Translator } from "./consolePresenters";
+import { tx } from "./localizedMessages.ts";
 import type {
   AccessDecisionExplainRequest,
   AccessDecisionExplainResult,
@@ -579,11 +580,4 @@ function sanitizeAccessGuidance(value: string) {
     .replaceAll("list_capabilities", "capability list")
     .replace(/\bdataScopes\b/g, "data scopes")
     .replace(/_/g, " ")
-}
-
-function tx(t: Translator, key: string, values: Record<string, string | number>) {
-  return Object.entries(values).reduce(
-    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
-    t(key)
-  );
 }

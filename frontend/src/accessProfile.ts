@@ -4,7 +4,7 @@ import type {
   DataScope,
   TenantAccessProfile,
   TenantAccessProfileGrant,
-} from './types'
+} from './types.ts'
 
 export const DEFAULT_ACCESS_PROFILE_TRACE_LIMIT = 20
 

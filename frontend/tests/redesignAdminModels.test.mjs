@@ -173,26 +173,16 @@ test("corePathCheck requires apply, audit and an allowed call", () => {
   assert.equal(corePathCheck({ allowedTrace, application, appliedAudit }).status, "ok");
 });
 
-test("envHealthCheck: catalog issues fail, other targets only warn", () => {
-  assert.equal(envHealthCheck({ catalogDetail: null, catalogIssues: ["stale"], unreachable: [] }).status, "error");
-  assert.equal(envHealthCheck({ catalogDetail: "metadata v3", catalogIssues: [], unreachable: [] }).status, "warning");
-  // Each unreachable target carries its classified probe failure so the
-  // fix-guidance modal matches the registry probe modal (round 6, #42).
-  const unreachable = envHealthCheck({
-    catalogDetail: null,
-    catalogIssues: [],
-    unreachable: [
-      { detail: "UPSTREAM_CONNECT_ERROR: dial tcp 127.0.0.1:9: connection refused", endpoint: "http://x", name: "x" },
-      { detail: "", endpoint: "http://y", name: "y" },
-    ],
-  });
-  assert.equal(unreachable.status, "warning");
-  assert.deepEqual(unreachable.subParams, { count: 2 });
-  assert.equal(
-    unreachable.detail,
-    "x (http://x) — UPSTREAM_CONNECT_ERROR: dial tcp 127.0.0.1:9: connection refused; y (http://y)",
-  );
-  assert.equal(envHealthCheck({ catalogDetail: null, catalogIssues: [], unreachable: [] }).status, "ok");
+test("envHealthCheck reports the management catalog only", () => {
+  assert.equal(envHealthCheck({ catalogDetail: null, catalogIssues: ["stale"] }).status, "error");
+  assert.equal(envHealthCheck({ catalogDetail: "metadata v3", catalogIssues: [] }).status, "warning");
+  // The row never claims coverage over registered targets (round 7, E7-04):
+  // the automatic check probes the preferred target only (mcpServiceCheck),
+  // per-target probes live in resource management's Test connection.
+  const ok = envHealthCheck({ catalogDetail: null, catalogIssues: [] });
+  assert.equal(ok.status, "ok");
+  assert.equal(ok.subKey, "rd.envcheck.health.ok");
+  assert.deepEqual(ok.subParams, undefined);
 });
 
 test("envCheckSummary counts abnormal rows", () => {

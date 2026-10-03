@@ -155,15 +155,14 @@ export function corePathCheck(input: {
   return { ...base, fixKeys: [], status: "ok", subKey: "rd.envcheck.corePath.ok" };
 }
 
-// Row 4: environment health. Catalog contract issues fail the row; other
-// registered targets that do not answer only warn (plan P3 note 4) so one
-// retired experimental target cannot mark a healthy environment bad. Each
-// unreachable entry carries the probe's classified failure detail (round 6,
-// finding #42) so the fix-guidance modal matches the registry probe modal.
+// Row 4: environment health, i.e. the management tool catalog. Target
+// reachability is intentionally out of scope here: the automatic check only
+// probes the preferred target (row 2), and each registered target can be
+// probed on demand from resource management, so the row copy never claims
+// coverage over every registered target (plan P3 note 4, round 7 E7-04).
 export function envHealthCheck(input: {
   catalogDetail: string | null;
   catalogIssues: readonly string[];
-  unreachable: readonly { detail: string; endpoint: string; name: string }[];
 }): EnvCheckRow {
   const base = { key: "health" as const };
   if (input.catalogIssues.length > 0) {
@@ -177,18 +176,6 @@ export function envHealthCheck(input: {
   }
   if (input.catalogDetail) {
     return { ...base, detail: input.catalogDetail, fixKeys: [], status: "warning", subKey: "rd.envcheck.health.catalogWarn" };
-  }
-  if (input.unreachable.length > 0) {
-    return {
-      ...base,
-      detail: input.unreachable
-        .map((target) => `${target.name} (${target.endpoint})${target.detail ? ` — ${target.detail}` : ""}`)
-        .join("; "),
-      fixKeys: ["rd.envcheck.health.fixUnreachable"],
-      status: "warning",
-      subKey: "rd.envcheck.health.unreachable",
-      subParams: { count: input.unreachable.length },
-    };
   }
   return { ...base, detail: "", fixKeys: [], status: "ok", subKey: "rd.envcheck.health.ok" };
 }

@@ -9,18 +9,9 @@ import {
 import { subjectIdExampleFromSelector } from "../../permissionPackages";
 import { managementMcpCatalogDiagnosticFromResult, type ManagementMcpCatalogDiagnostic } from "../../connectionDiagnostics";
 import type { PermissionPackageApplication } from "../../permissionPackages";
-import type { Agent, TargetProbeResult } from "../../types";
 import type { RedesignData } from "./useRedesignData";
-import { apiServiceCheck, corePathCheck, envCheckSummary, envHealthCheck, mcpServiceCheck, preferredProbeTarget, probeFixGuidance, rememberEnvCheckSnapshot, registeredMcpTargets, type EnvCheckRow, type EnvCheckSummary } from "../model/envChecks";
+import { apiServiceCheck, corePathCheck, envCheckSummary, envHealthCheck, mcpServiceCheck, preferredProbeTarget, rememberEnvCheckSnapshot, type EnvCheckRow, type EnvCheckSummary } from "../model/envChecks";
 import { readinessCheckCount, type ReadinessCheckCount } from "../model/goLive";
-
-export interface UnreachableTarget {
-  // Classified probe failure (e.g. "UPSTREAM_CONNECT_ERROR: dial tcp …"),
-  // shown in the cockpit fix-guidance modal (round 6, finding #42).
-  detail: string;
-  endpoint: string;
-  name: string;
-}
 
 export interface EnvChecksState {
   checking: boolean;
@@ -29,14 +20,12 @@ export interface EnvChecksState {
   recheck: () => Promise<void>;
   rows: readonly EnvCheckRow[];
   summary: EnvCheckSummary;
-  unreachableTargets: readonly UnreachableTarget[];
 }
 
 interface EnvChecksResult {
   latestApplication: PermissionPackageApplication | null;
   readinessCount: ReadinessCheckCount | null;
   rows: readonly EnvCheckRow[];
-  unreachableTargets: readonly UnreachableTarget[];
 }
 
 const emptySummary: EnvCheckSummary = { abnormal: 0, error: 0, warning: 0 };
@@ -44,13 +33,13 @@ const idleResult: EnvChecksResult = {
   latestApplication: null,
   readinessCount: null,
   rows: [],
-  unreachableTargets: [],
 };
 
 // Runs the four cockpit checks (plan P3 note): API contract, an MCP probe at
 // the preferred registered target, the core permission path of the latest
-// application, and environment health (management catalog plus the other
-// registered targets, which only warn). Probes are read-only.
+// application, and environment health (management catalog). Probes are
+// read-only and scoped to the preferred target only; every registered target
+// can still be probed on demand from resource management (round 7, E7-04).
 export function useEnvChecks(data: RedesignData): EnvChecksState {
   const [result, setResult] = useState<EnvChecksResult>(idleResult);
   const [checking, setChecking] = useState(false);
@@ -83,21 +72,8 @@ export function useEnvChecks(data: RedesignData): EnvChecksState {
     const agents = snapshot?.agents ?? [];
     const capabilities = snapshot?.capabilities ?? [];
     const preferred = preferredProbeTarget(agents, capabilities);
-    const others = preferred ? registeredMcpTargets(agents).filter((agent) => agent.id !== preferred.agent.id) : [];
     const probe = preferred && probeSupported ? await probeTarget(preferred.agent.id).catch(() => null) : null;
-    const otherProbes = probeSupported
-      ? await Promise.all(others.slice(0, 4).map((agent) => probeTarget(agent.id).catch(() => null)))
-      : [];
     if (stale()) return;
-
-    const unreachableTargets: UnreachableTarget[] = otherProbes
-      .map((probeResult, index) => ({ agent: others[index], probeResult }))
-      .filter((entry) => entry.probeResult?.status === "error")
-      .map((entry) => ({
-        detail: probeFixGuidance(entry.probeResult)?.detail ?? "",
-        endpoint: agentEndpoint(entry.agent),
-        name: entry.agent.name,
-      }));
     const catalogDiagnostic: ManagementMcpCatalogDiagnostic | null = catalog
       ? managementMcpCatalogDiagnosticFromResult(catalog)
       : null;
@@ -125,13 +101,12 @@ export function useEnvChecks(data: RedesignData): EnvChecksState {
       envHealthCheck({
         catalogDetail: catalogDiagnosticDetail(catalogDiagnostic),
         catalogIssues: catalogDiagnosticIssues(catalogDiagnostic),
-        unreachable: unreachableTargets,
       }),
     ];
 
     setChecking(false);
     rememberEnvCheckSnapshot(rows);
-    setResult({ latestApplication, readinessCount: readinessCheckCount(readiness, null), rows, unreachableTargets });
+    setResult({ latestApplication, readinessCount: readinessCheckCount(readiness, null), rows });
   }, [probeSupported, snapshot]);
 
   useEffect(() => {
@@ -165,11 +140,6 @@ function readinessFilterFor(application: PermissionPackageApplication) {
     tenantId: application.tenantId,
     workspaceId: application.workspaceId,
   };
-}
-
-function agentEndpoint(agent: Agent): string {
-  const endpoint = (agent.channelConfig as { endpoint?: unknown } | undefined)?.endpoint;
-  return typeof endpoint === "string" ? endpoint : "";
 }
 
 function catalogDiagnosticIssues(catalog: ManagementMcpCatalogDiagnostic | null): string[] {

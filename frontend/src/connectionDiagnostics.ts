@@ -1,5 +1,6 @@
 import type { HealthCheckResult } from "./api";
 import type { Translator } from "./consolePresenters";
+import { tx } from "./localizedMessages.ts";
 import { systemCapabilityLabelKeys } from "./systemCapabilityLabels.ts";
 import { isManagementMcpToolCatalogContractIssue } from "./systemInfoContract.ts";
 import type { Agent, Capability, ConsoleSession, JsonObject, JsonValue } from "./types";
@@ -499,11 +500,4 @@ function hasOnlyManagementMcpCatalogContractIssues(
   const issues = Array.isArray(contractIssues) ? contractIssues : [];
   const capabilities = Array.isArray(missingCapabilities) ? missingCapabilities : [];
   return capabilities.length === 0 && issues.length > 0 && issues.every(isManagementMcpToolCatalogContractIssue);
-}
-
-function tx(t: Translator, key: string, values: Record<string, string | number>) {
-  return Object.entries(values).reduce(
-    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
-    t(key)
-  );
 }

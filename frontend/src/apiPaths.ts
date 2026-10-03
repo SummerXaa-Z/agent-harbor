@@ -1,6 +1,6 @@
-import type { PermissionPackageApprovalStatus } from './permissionPackages'
+import type { PermissionPackageApprovalStatus } from './permissionPackages.ts'
 
-function queryString(params: Record<string, string | undefined>): string {
+export function queryString(params: Record<string, string | undefined>): string {
   const query = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => {
     if (value?.trim()) query.set(key, value.trim())

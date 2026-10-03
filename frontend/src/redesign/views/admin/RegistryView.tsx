@@ -56,7 +56,9 @@ interface OneTimeKey {
 
 const keyTtlOptions = [15, 30, 60] as const;
 
-function maskSecret(value: string): string {
+// Head-and-tail inline mask for one-time key panels; the prefix-only
+// convention for stored key prefixes lives in model/secretMask.ts.
+function maskInlineSecret(value: string): string {
   return value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : "••••";
 }
 
@@ -488,7 +490,7 @@ export function RegistryView({ data, onRetry, params }: AdminViewProps) {
             {rotateDone ? (
               <div className="key-panel">
                 <div className="key-panel-main">
-                  <div className="key-panel-value">{maskSecret(rotateDone.copied)}</div>
+                  <div className="key-panel-value">{maskInlineSecret(rotateDone.copied)}</div>
                   <div className="key-panel-sub">
                     {tx(t, "rd.registry.rotateCopyHint", { version: rotateDone.version })}
                   </div>
@@ -522,7 +524,7 @@ export function RegistryView({ data, onRetry, params }: AdminViewProps) {
             {oneTimeKey ? (
               <div className="key-panel">
                 <div className="key-panel-main">
-                  <div className="key-panel-value">{maskSecret(oneTimeKey.key)}</div>
+                  <div className="key-panel-value">{maskInlineSecret(oneTimeKey.key)}</div>
                   <div className="key-panel-sub">
                     {t("rd.registry.keyMaskedHint")} · {tx(t, "rd.registry.keyExpires", { time: formatDate(oneTimeKey.expiresAt, language) })}
                   </div>

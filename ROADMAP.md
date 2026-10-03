@@ -46,8 +46,6 @@ v0.4.0 起控制台切换为重设计的双面体验；v0.5.0–v0.5.3 增加了
 
 - Keep running the external evaluator loop on released baselines (rounds 4–7 are archived in `docs/product/0.4.0-console-eval.md`), with `time-to-first-report` and first-blocker records as the primary inputs; complete the round-7 deferrals (EN spot-check and free exploration) in the next round.
   持续在已发布基线上运行外部评估闭环（第 4–7 轮已归档于 `docs/product/0.4.0-console-eval.md`），以 `time-to-first-report` 和首个阻塞点记录作为主要输入；下一轮补完第七轮推迟的英文抽查与自由探索。
-- Close the round-7 follow-ups: resource lists occasionally rendering stale rows after write operations (reload currently restores them) and the cockpit environment-check coverage wording.
-  收敛第七轮后续项：写操作后资源列表偶发陈旧（当前靠刷新恢复）与驾驶舱环境检查口径文案。
 - Fix repeated evaluator blockers before adding new product surface area.
   新增产品界面前，先修复外部评估中重复出现的阻塞点。
 - Keep release-candidate hardening limited to setup reliability, Permission Changes comprehension, report trust, security regressions, and documentation gaps.

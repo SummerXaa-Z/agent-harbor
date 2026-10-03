@@ -4,6 +4,17 @@ All notable public changes to AgentHarbor will be documented in this file.
 
 This project uses Keep a Changelog-style sections and semantic versioning for tagged releases.
 
+## [0.6.1] - 2026-10-03
+
+### Fixed
+
+- Resource lists no longer silently swap in sample rows when a refresh request transiently fails (external evaluation round 7, finding E7-03, PR #423). `loadConsoleData` previously fell back per collection to fabricated sample rows on network errors, so one dropped GET could replace a live console's agents, grants, or audit views with sample data until a manual reload. A transient failure now retains the previous real rows, a new "stale" data status (distinct from "sample") drives a 「数据可能未更新 / Data may be outdated」 chip and banner with a retry action, and console reads send `cache: "no-store"` so a cached response can never masquerade as a refresh. Sample rows can still appear before the first successful load, and everything still resets on sign-out.
+- The cockpit environment checks state their actual scope (external evaluation round 7, finding E7-04, PR #424). The "All registered targets reachable / 已注册目标均可访问" line overclaimed: the automatic check probed the preferred target plus at most four other registered targets — warn-only, and skipped entirely when the backend lacks the `target_probe_v1` capability — so the claim was unfounded whenever probes were unsupported or more than five targets were registered. The automatic check is now scoped to the preferred target (the MCP tool-service row reads 「主目标 {endpoint} 在 … 毫秒内响应 / Preferred target {endpoint} answered in …」), the environment-health row covers the management catalog only (「管理目录正常 / Management catalog healthy」), and the cockpit risk card no longer lists unreachable non-preferred targets. Per-target verification remains available in resource management's 「测试连接 / Test connection」, and the probe-failure fix guidance points there.
+
+### Added
+
+- The round-7 external evaluation record is archived with its triage in `docs/product/0.4.0-console-eval.md` (PR #422): functional pass on the released v0.6.0 baseline — main journey 10/10, readiness 11/11 with zero blocking items, the three specializations (per-holder views, grant-chain modal, handoff-config audit) correct, mobile 375/390px covered, and security behaviors verified. Time-to-first-report was missed (~1h55m) on two environment issues rather than product ones; the EN spot-check and free exploration were deferred to the next round, which also refreshed the roadmap and README status for v0.6.0.
+
 ## [0.6.0] - 2026-10-02
 
 ### Added

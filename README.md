@@ -31,20 +31,13 @@ Open-source timing is intentionally secondary to production hardening. Before an
 
 开源节奏会服从生产可用性。任何发布就绪声明之前，都必须确保安全基线、发布检查和核心权限包用户旅程能在全新本地检出中通过。
 
-## What It Provides
+## Architecture / 技术图谱
 
-- **Tenant-first governance / 租户优先治理**: register a three-level tenant tree and scope management views by tenant subtree. 注册三级租户树，并按租户子树限定管理视图。
-- **Agent and target registry / Agent 与目标注册**: manage caller agents, MCP targets, OpenAPI services, webhooks, credentials, and short-lived Agent Keys. 管理调用方 Agent、MCP 目标、OpenAPI 服务、Webhook、凭据和短期 Agent Key。
-- **Route policy controls / 路由策略控制**: allow or deny MCP/OpenAPI routes with priority, wildcard matching, and bounded retry overrides. 通过优先级、通配匹配和有界重试覆盖来允许或拒绝 MCP/OpenAPI 路由。
-- **Capability governance / 能力治理**: discover target tools, approve capabilities, and grant them through tenant, workspace, and caller-instance assignments. 发现目标工具，审批能力，并通过租户、工作区和调用方实例分配进行授权。
-- **Data permission enforcement / 数据权限控制**: narrow `dataScopes` across capability, tenant entitlement, workspace assignment, and instance assignment boundaries. 在能力、租户授权、工作区分配和实例分配边界上逐层收敛 `dataScopes`。
-- **AI-friendly permission operations / AI 友好的权限运营**: draft tenant-scoped permission package changes from administrator intent, preview allow/deny outcomes, run apply preflight, run approval-required packages, apply them through the grant chain, and review structured application health and impact. 从管理员意图生成租户范围的权限包草案，预览允许/拒绝结果，运行应用前预检，运行需审批权限包，通过授权链落地，并查看结构化落地状态与影响复核。
-- **Approval and audit trail / 审批与审计**: route approval queues to configured approvers, expire and consume approval requests, record applied package records, review active or missing created objects, and keep audit trails for every privileged permission change. 将审批队列路由给已配置审批人，对审批请求设置过期和一次性消费，记录权限包应用记录，复核已创建对象是否仍有效，并为高风险权限变更保留审计链。
-- **Access Handoff / 接入交付**: turn a ready permission application into a bounded capability and data-scope summary, copyable MCP configuration, prompt guidance, and an administrator-issued one-time short-lived token that can be revoked and audited. 把已就绪的权限应用转换为有边界的能力与数据范围摘要、可复制 MCP 配置、提示词指引，以及由管理员签发、一次展示、可撤销且可审计的短期 Token。
-- **Runtime records / 运行记录**: record traces, audit events, metrics, upstream attempts, effective data scopes, and deny reasons. 记录 trace、审计事件、指标、上游尝试、有效数据范围和拒绝原因。
-- **Access Profile / 权限画像**: inspect each tenant's effective access profile, grant chain, invalid scope rows, and recent trace records. 查看每个租户的有效访问画像、授权链、无效范围行和近期运行记录。
+One Go binary serves three planes — management REST, Management MCP, and the governed data-plane proxy — backed by an in-memory (default) or PostgreSQL store, with a Vite + React dual-surface console on top. The full component map, domain model, authentication surfaces, and verification topology live in [docs/engineering/architecture.md](docs/engineering/architecture.md).
 
-## Core Model
+单个 Go 二进制承载三个面——管理 REST、管理 MCP 和受治理的数据面代理——底层默认使用内存存储、可选 PostgreSQL,上层是 Vite + React 双面控制台。完整组件图、领域模型、认证面和验证拓扑见 [docs/engineering/architecture.md](docs/engineering/architecture.md)。
+
+Core grant chain:
 
 ```text
 Tenant
@@ -56,85 +49,38 @@ Tenant
   -> Runtime decision and trace records
 ```
 
-The tenant is the primary control boundary. A registered tenant can manage its own subtree; unregistered tenant strings keep exact-match behavior for compatibility.
+The tenant is the primary control boundary; `dataScopes` narrow layer by layer and runtime decisions record the effective inherited scope. Management APIs require admin authentication (`AGENT_HARBOR_ADMIN_KEY` shared key, `AGENT_HARBOR_ADMIN_IDENTITIES` named roles, or a console session); the data plane uses short-lived Agent Keys plus optional `X-AgentHarbor-Subject-Id`. Day-to-day administrators are managed identities created in the console (keys shown once, rotation and disable act as immediate containment); bootstrap env identities stay read-only break-glass. Non-platform identities can additionally be bound to owned caller agents (`ownedAgentIds`), narrowing their user surface server-side (`403 HOLDER_SCOPE_DENIED`). Security headers, body limits, credential encryption, and production preflight rules are summarized in the [architecture doc](docs/engineering/architecture.md) and enforced by `make production-hardening`.
 
-The data plane uses short-lived Agent Keys. Management APIs require configured admin authentication by default: use `AGENT_HARBOR_ADMIN_KEY` for a shared local admin key or `AGENT_HARBOR_ADMIN_IDENTITIES` for named administrators and reviewers. Named identities can also carry role, tenant, and workspace boundaries, for example `AGENT_HARBOR_ADMIN_IDENTITIES="platform=platform-admin-key-32|role=platform_admin;east=east-admin-key-32|role=tenant_admin|tenant=tenant-east|workspace=ws-support"`. Actor names must be stable machine identifiers using 1-80 letters, numbers, dots, underscores, hyphens, or at signs. Scoped tenant admins can only read or mutate their allowed tenant subtree and workspace across REST management APIs, permission-package operations, and the management MCP endpoint. Production deployment mode rejects short or common weak bootstrap admin keys, rejects a shared admin key that matches any named bootstrap identity key, and reserves the `admin-key` and `local-dev` actor names for built-in bootstrap/development identities, so keep shared and named bootstrap keys long, distinct, and stored outside the product. The web console signs in through `/api/v1/auth/login` and exchanges the admin key for an HttpOnly `agent_harbor_session` cookie; direct `X-Admin-Key` remains available for API clients and advanced local overrides. Browser console cookie sessions require a session-bound CSRF header for every unsafe management method; direct API-key clients are unaffected. Management JSON, Management MCP JSON-RPC, and Agent-key-protected MCP RPC endpoints require `application/json`; management endpoints reject request bodies larger than 1 MiB before decoding, while data-plane MCP RPC keeps the 4 MiB proxy body limit. OpenAPI proxy relative paths reject decoded traversal markers before an allowed request is prepared for upstream services. REST management JSON also requires a single complete JSON value. All HTTP responses include `Permissions-Policy: camera=(), microphone=(), geolocation=()`, `Referrer-Policy: no-referrer`, and `X-Frame-Options: DENY`; HTTPS and trusted HTTPS-proxy responses also include `Strict-Transport-Security: max-age=31536000; includeSubDomains`; JSON success, error, and Management MCP JSON-RPC responses include `X-Content-Type-Options: nosniff`. Unexpected handler panics are recovered as the same JSON error envelope with `INTERNAL_ERROR`, without returning panic details to clients. Management, Agent-key-protected data-plane, and console authentication responses set `Cache-Control: no-store`, `Pragma: no-cache`, and `Expires: 0`; Agent-key-protected MCP and OpenAPI data-plane responses also set `X-Content-Type-Options: nosniff`. Console session cookies set `Secure` for direct TLS requests and for trusted loopback/private proxy requests that carry `X-Forwarded-Proto: https` or `Forwarded: proto=https`; forwarded scheme headers from public clients are ignored. Set `AGENT_HARBOR_SESSION_SECRET` for deployment-style environments so console sessions are signed with a stable, high-entropy secret; production mode blocks missing, short, or common weak session secrets. `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true` is development-only and must not be used for production deployments.
-
-数据面使用短期 Agent Key。管理 API 默认要求配置管理员认证：可以使用 `AGENT_HARBOR_ADMIN_KEY` 作为共享本地管理员密钥，也可以使用 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置具名管理员和审批人。具名身份也可以绑定角色、租户和工作区边界，例如 `AGENT_HARBOR_ADMIN_IDENTITIES="platform=platform-admin-key-32|role=platform_admin;east=east-admin-key-32|role=tenant_admin|tenant=tenant-east|workspace=ws-support"`。actor 名必须是稳定机器标识，只能使用 1-80 位字母、数字、点、下划线、连字符或 at 符号。租户管理员只能在被授权的租户子树和工作区内读取或变更 REST 管理 API、权限包操作和管理 MCP 端点。生产部署模式会拒绝过短或常见弱值的引导管理员密钥，也会拒绝共享管理员密钥与任一具名引导身份密钥相同的配置，并把 `admin-key` 和 `local-dev` 作为内置引导/开发身份的保留 actor 名，因此共享密钥和具名引导密钥都应保持足够长度、彼此不同，并存放在产品外。Web 控制台通过 `/api/v1/auth/login` 登录，并把管理员密钥换成 HttpOnly `agent_harbor_session` Cookie；直接 `X-Admin-Key` 仍保留给 API 客户端和本地高级覆盖。浏览器控制台使用 Cookie 会话调用危险管理方法时，必须携带绑定当前会话的 CSRF 头；直接使用 API key 的客户端不受影响。管理 JSON、Management MCP JSON-RPC 和 Agent Key 保护的 MCP RPC 接口都要求 `application/json`；管理接口会在解码前拒绝超过 1 MiB 的请求体，数据面 MCP RPC 保留 4 MiB 代理 body 上限。OpenAPI 代理相对路径会在请求上游前拒绝解码后的目录穿越标记。REST 管理 JSON 还要求请求体只包含一个完整 JSON 值。所有 HTTP 响应都会包含 `Permissions-Policy: camera=(), microphone=(), geolocation=()`、`Referrer-Policy: no-referrer` 和 `X-Frame-Options: DENY`；真实 HTTPS 和可信 HTTPS 代理响应还会包含 `Strict-Transport-Security: max-age=31536000; includeSubDomains`；JSON 成功、错误和 Management MCP JSON-RPC 响应都会包含 `X-Content-Type-Options: nosniff`。未预期的 handler panic 会被恢复为同一套 JSON 错误 envelope 和 `INTERNAL_ERROR`，不会把 panic 细节返回给客户端。管理、Agent Key 保护的数据面和控制台认证响应会设置 `Cache-Control: no-store`、`Pragma: no-cache` 和 `Expires: 0`；Agent Key 保护的 MCP 和 OpenAPI 数据面响应还会设置 `X-Content-Type-Options: nosniff`。控制台会话 Cookie 会在真实 TLS 请求，或可信本机/私网代理携带 `X-Forwarded-Proto: https` 或 `Forwarded: proto=https` 时设置 `Secure`；来自公网客户端的转发协议头会被忽略。部署式环境必须设置 `AGENT_HARBOR_SESSION_SECRET`，确保控制台会话使用稳定高熵密钥签名；生产模式会阻断缺失、过短或常见弱值会话密钥。`AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true` 仅用于开发，不得用于生产部署。
-
-The **Tenant Permission Center** turns each registered tenant into a governance workspace: platform administrators can review assigned administrators, workspaces, permission packages, allowed and blocked capabilities, data scopes, and safe next actions from one tenant detail page. Tenant administrators see the same page bounded to their assigned tenant/workspace and cannot manage administrator identities.
-
-**租户权限中心** 会把每个已注册租户变成一个治理工作区：平台管理员可以在租户详情页查看负责管理员、工作区、权限包、允许和禁止能力、数据范围以及下一步动作。租户管理员只能看到自己被分配的租户/工作区范围，不能管理管理员身份。
-
-### Administrator Identity Management
-
-Bootstrap administrator identities from `AGENT_HARBOR_ADMIN_KEY` and `AGENT_HARBOR_ADMIN_IDENTITIES` are read-only in the product and should be kept as production break-glass access. Day-to-day administrators should be managed in the web console under **Administrators & Boundaries**: platform administrators can create managed identities, scope them to a role, tenant, and workspace, rotate their keys, disable them, and review lifecycle audit records. Managed administrator actors cannot reuse bootstrap administrator actors, keeping sessions, audit rows, and approval routing unambiguous. Managed administrator keys are shown once on create or rotate and are never returned by list or audit APIs. Rotating a managed administrator key invalidates browser sessions issued before the rotation, and disabling a managed administrator invalidates that administrator's existing browser sessions, so either action can be used as an immediate containment step. Tenant administrators cannot manage administrator identities; they can only operate inside their assigned tenant/workspace boundary. For production recovery, keep at least one bootstrap platform administrator configured outside the product.
-
-### 管理员身份管理
-
-通过 `AGENT_HARBOR_ADMIN_KEY` 和 `AGENT_HARBOR_ADMIN_IDENTITIES` 配置的引导管理员在产品内是只读身份，应保留为生产 break-glass 入口。日常管理员建议在 Web 控制台的 **管理员与边界** 中管理：平台管理员可以创建托管身份，按角色、租户和工作区设定范围，轮换密钥，禁用身份，并查看生命周期审计记录。托管管理员 actor 不能复用引导管理员 actor，避免会话主体、审计记录和审批路由含混。托管管理员密钥只会在创建或轮换时展示一次，列表和审计 API 不会再次返回明文；轮换托管管理员密钥会让轮换前签发的浏览器会话失效，禁用托管管理员也会让该管理员已有浏览器会话失效，因此两者都可作为即时止损动作。租户管理员不能管理管理员身份，只能在被分配的租户/工作区边界内操作。生产恢复路径上，应至少保留一个产品外配置的引导平台管理员。平台管理员还可以为托管身份绑定「持有调用方」（`ownedAgentIds`，创建时随 `POST /api/v1/admin-identities` 传入，之后用 `PATCH /api/v1/admin-identities/{id}` 整体替换）：绑定后，该身份在用户侧（申请、权限、上线交接、API 密钥）只能以其持有的调用方作为接入上下文查看与操作，服务端强制（越权返回 `403 HOLDER_SCOPE_DENIED`），改绑即时生效；空绑定保持既有租户范围语义，升级无破坏。绑定校验要求每个调用方存在且落在身份自身管理范围内（平台管理员不限，租户范围角色限本租户），每次变更写入 `admin_identity.updated` 审计事件（携带新增/移除的调用方与持有数量，不含密钥材料）。登录会话响应在该身份已绑定且非平台管理员时携带 `holderAgentIds`；演示模式与平台管理员行为不变。控制台的「管理员与边界」页为每个身份显示持有调用方数量，「持有调用方」编辑弹窗按身份管理范围列出 local 调用方供多选改绑（保存即整体替换并写入审计，引导身份保持只读）；已绑定的非平台管理员登录后，用户侧侧栏显示「持有 N 个调用方」，调用方选择与申请 / 权限 / 上线上下文只列出其持有的调用方，过期缓存上下文触发越权时以专门双语文案提示（不再落入通用错误）。
+租户是主控制边界;`dataScopes` 逐层收敛,运行时决策记录最终生效的范围。管理 API 要求管理员认证(`AGENT_HARBOR_ADMIN_KEY` 共享密钥、`AGENT_HARBOR_ADMIN_IDENTITIES` 具名角色或控制台会话);数据面使用短期 Agent Key 和可选的 `X-AgentHarbor-Subject-Id`。日常管理员建议使用控制台内创建的托管身份(密钥只展示一次,轮换和禁用即可即时止损);环境变量引导身份保持只读 break-glass。非平台身份还可以绑定持有的调用方(`ownedAgentIds`),在服务端收窄其用户面(`403 HOLDER_SCOPE_DENIED`)。安全响应头、请求体限制、凭据加密和生产预检规则摘录见[架构文档](docs/engineering/architecture.md),由 `make production-hardening` 强制验证。
 
 ## Quick Start
 
-Use the repository toolchain pins before running local commands:
-
-- Go version comes from `go.mod`.
-- Node major version defaults to `.node-version`; the frontend supports Node 24 through 26, and CI verifies Node 24 and Node 26.
-- Frontend package manager comes from `frontend/package.json`.
+Use the repository toolchain pins (Go from `go.mod`; Node from `.node-version`, 24–26; frontend pnpm from `frontend/package.json`).
 
 ```bash
 make demo
 ```
 
-Then open `http://127.0.0.1:5174/`. The demo command starts the API in explicit unauthenticated development mode, the official MCP TypeScript SDK demo service, and the web console together for the first browser evaluation.
+Then open `http://127.0.0.1:5174/`. The demo starts the API (`:9090`, explicit unauthenticated development mode), the official MCP TypeScript SDK demo service (`:8787/mcp`), and the web console (`:5174`) together. `Ctrl+C` stops all demo services. If ports are busy, set `AGENT_HARBOR_DEMO_API_PORT`, `AGENT_HARBOR_DEMO_FRONTEND_PORT`, and `MOCK_MCP_PORT`; the script wires the frontend API base and local browser CORS automatically.
 
-The web console opens on **Getting Started** when the live system is not configured yet, then defaults back to **Permission Changes** once tenant, Agent, capability, and grant-chain setup is complete. Confirm the runtime checks are ready, then run the validation journey. The **Self-Check** workspace remains available for the lower-level `6/6` core permission loop validation.
+A fresh system opens the console on **Getting Started** (six-step setup checklist); once tenant, agent, capability, and grant-chain setup is complete it opens on **Access Query**, and daily changes happen in **Permission Changes**. The console reads `VITE_API_BASE` (default `http://127.0.0.1:9090`); when the backend is unavailable it falls back to a read-only sample preview with a persistent warning and disabled mutations. Journey detail lives in [docs/product/0.2.0-ai-admin-permission-journey.md](docs/product/0.2.0-ai-admin-permission-journey.md) and the evaluation archive in [docs/product/0.4.0-console-eval.md](docs/product/0.4.0-console-eval.md).
 
-Generate the external evaluator pack when you want a fresh reviewer to run the product without author guidance:
+For manual troubleshooting, the three-terminal path: `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run`, then `make real-mcp`, then `cd frontend && pnpm install && pnpm dev`.
 
-```bash
-make evaluation-readiness
-```
-
-This writes a walkthrough, environment snapshot, feedback log, and acceptance-report notes to a local output directory. Use it with [AgentHarbor Evaluation Readiness](docs/product/evaluation-readiness.md) to record `time-to-first-report`, the first blocker, and the exported report digest.
-
-Use the local development check when you want to verify backend, frontend, and static gate wiring without running the longer scenario gates:
+## Verify
 
 ```bash
-make check
+make check                    # backend + frontend + static wiring (fast daily gate)
+make release-check            # uncached Go tests + all release scenario gates
+make production-hardening     # conservative runtime defaults baseline
+make evaluation-readiness     # external-evaluator pack (walkthrough, snapshot, feedback log)
 ```
 
-`make check` installs the pinned frontend dependencies from `frontend/pnpm-lock.yaml` before running frontend tests and builds.
+`make release-check` includes the production safety baseline, the approval-required permission package journey, the browser-facing AI-admin journey, scoped-admin tenant boundary, managed-admin lifecycle, tenant permission center, and web-console production journey gates. See [docs/engineering/release-checklist.md](docs/engineering/release-checklist.md) for the full checklist.
 
-Use the uncached release gate before merge or release handoff:
+## Core Journey
 
-```bash
-make release-check
-```
-
-`make release-check` runs uncached Go tests and the release scenario gates, including the production safety baseline, approval-required permission package journey, browser-facing AI Admin journey gate, scoped admin tenant boundary gate, managed administrator lifecycle gate, tenant permission center gate, and web console production journey smoke gate.
-
-Use the production safety gate when you want to verify conservative runtime defaults:
-
-```bash
-make production-hardening
-```
-
-This starts a local API with `AGENT_HARBOR_ADMIN_KEY` configured and private upstreams disabled. It verifies health remains public, management APIs reject missing or wrong admin keys, permission-package and management MCP endpoints use the same admin-key protection, loopback MCP targets are rejected by default, and public HTTPS MCP targets remain registrable. The default server also rejects management routes when no admin key, named identity, or explicit development unauthenticated flag is configured.
-
-The API listens on `:9090` by default. Override it with:
-
-```bash
-AGENT_HARBOR_ADDR=:9091 go run ./cmd/agent-harbor
-```
-
-The default binary HTTP server uses bounded connection settings: 5s read-header timeout, 15s read timeout, 35s write timeout, 60s idle timeout, and a 1 MiB request-header limit.
-
-默认二进制启动的 HTTP Server 使用有界连接设置：读 header 超时 5 秒、读超时 15 秒、写超时 35 秒、空闲连接超时 60 秒、请求 header 上限 1 MiB。
-
-## Try the Core Journey in 10 Minutes
-
-This local scenario runs the most important AgentHarbor workflow: create a three-level tenant tree, register an MCP target, discover tools, approve one tool, assign it to a tenant/workspace/caller instance, run allowed and denied calls, and verify access-profile plus audit records.
+The most important workflow as a scriptable regression check — tenant tree, MCP target, tool discovery, capability approval, grant chain, allowed/denied calls, access profile, and audit records:
 
 Terminal 1:
 
@@ -148,7 +94,7 @@ Terminal 2:
 make core-journey
 ```
 
-The scenario starts the dependency-free mock MCP server automatically and points AgentHarbor at `http://127.0.0.1:8787/mcp`. The `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` flag is required only for local development scenarios that use loopback or private-network upstreams; do not enable it for production deployments.
+The scenario starts the dependency-free mock MCP server automatically. `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` is required only for local loopback/private upstreams and must not be enabled in production. All scenario scripts (`make scenario-all`, approval journeys, `MCP_SERVER_MODE=real`, shared-admin-key mode, public-endpoint MCP scenarios) are documented inline in `scripts/` and run the same journeys as executable gates.
 
 ## Try the Permission Changes Console
 
@@ -218,143 +164,27 @@ Terminal 2:
 make scenario-permission-package-approval
 ```
 
-The default scenario starts `scripts/mock-mcp-server.py` automatically for a dependency-free regression path. To run the same journey against the official MCP TypeScript SDK demo service, start the API with private upstreams and explicit unauthenticated development mode enabled, then run `MCP_SERVER_MODE=real make scenario-permission-package-approval`; the SDK service exposes the same `search_customer`, `update_ticket`, and `export_contracts` tools over Streamable HTTP. The scenario verifies that missing approval is blocked by preflight, approved preflight passes without consuming approval, production readiness and the acceptance report block before apply, and the approved request is marked consumed only after apply and cannot be reused. After allowed and denied runtime calls plus applied audit records are present, production readiness and the acceptance report must report ready.
-
-默认脚本会自动启动 `scripts/mock-mcp-server.py`，用于无额外依赖的回归验证。如果要用官方 MCP TypeScript SDK 演示服务跑同一条旅程，先用私有上游模式启动 API，再执行 `MCP_SERVER_MODE=real make scenario-permission-package-approval`；该 SDK 服务通过 Streamable HTTP 暴露同一组 `search_customer`、`update_ticket` 和 `export_contracts` 工具。脚本会验证缺少审批会被预检阻断、已批准预检不会消费审批、应用前上线就绪状态和验收报告仍然阻断，以及已批准请求只会在应用后被消费且不能复用。当允许/拒绝运行调用和应用审计记录都存在后，上线就绪状态和验收报告都必须显示可上线。
-
-For release-candidate validation of the browser-facing path, run:
-
-```bash
-make ai-admin-browser-journey
-```
-
-This starts the API with split requester and reviewer admin identities, the official SDK MCP demo service, and web console. It verifies browser CORS allows `X-AgentHarbor-Subject-Id`, verifies requester-key reviewer impersonation is rejected, then runs the approval-required package scenario against those services.
-
-该门禁会用分离的申请人与审批人管理身份启动 API、官方 SDK MCP 演示服务和 Web 控制台；它会验证浏览器 CORS 允许 `X-AgentHarbor-Subject-Id`，验证申请人 key 冒充审批人会被拒绝，然后跑完整的需审批权限包场景。
-
-For release-candidate validation of the served web console production journey, run:
-
-```bash
-make web-console-production-journey
-```
-
-This starts an isolated local API, the official SDK MCP demo service, and the web console, then verifies the production journey smoke signals, go-live check center contract, connection diagnostics contract, system-info auth metadata, and route-level console tests without adding browser automation dependencies.
-
-如果要验证已启动 Web 控制台上的生产旅程路径，可以运行 `make web-console-production-journey`。它会启动隔离端口的本地 API、官方 SDK MCP 演示服务和 Web 控制台，并在不新增浏览器自动化依赖的前提下验证生产旅程 smoke 信号、上线检查中心合约、连接诊断合约、系统信息认证元数据和路由级控制台测试。
-
-For release-candidate validation of production defaults, run:
-
-```bash
-make production-hardening
-```
-
-`make release-check` also includes the production safety baseline, approval-required permission package journey, browser-facing AI Admin journey gate, scoped admin tenant boundary gate, managed administrator lifecycle gate, tenant permission center gate, and the web console production journey smoke gate.
-
-`make release-check` 同时包含生产安全基线、需审批权限包旅程、浏览器侧 AI Admin 旅程门禁、范围化管理员租户边界门禁、托管管理员生命周期门禁、租户权限中心门禁和 Web 控制台生产旅程 smoke gate。
-
-## Web Console
-
-0.4.0 ships a redesigned console at the same URL. The empty hash opens an entry page that picks between two surfaces: the **user workbench** (apply for permissions, access query, go-live check, my records) and the **admin console** (cockpit, approvals, capability governance, resource registry, tenants & workspaces, access policies, route rules, runtime audit, administrators & boundaries). Press ⌘K / Ctrl+K anywhere for the command palette — every page, high-frequency actions, and recently updated agents and approval requests are two keystrokes away. The top-bar bell opens the notification center: new pending approvals for admins, approval outcomes for the requester, and environment-check failures, all derived from live APIs with 15-second polling that pauses while the tab is hidden; read state is shared across browser tabs. On screens up to 860px wide the shell collapses to a compact mobile layout. The pre-0.4.0 console is retired: old bookmarks like `#ask` or `#admin-access` redirect to their redesign successors, and anything unrecognized lands on a not-found page.
-
-0.4.0 起同一地址进入重设计控制台。空 hash 打开入口页，在两个面之间选择：**用户工作台**（申请权限、访问查询、上线检查、我的记录）和**管理控制台**（驾驶舱、变更审批、能力治理、资源管理、租户与组织、访问策略、路由规则、运行审计、管理员与边界）。任意页面按 ⌘K / Ctrl+K 打开命令面板，两个面的全部页面、高频动作、最近更新的 Agent 与审批单都在两次按键之内。顶栏铃铛打开通知中心：面向管理侧的新待审批申请、面向申请人的审批结果、以及环境检查失败，全部由实时 API 派生，15 秒轮询且页面隐藏时暂停，已读状态跨标签页同步。860px 以下自动收为移动布局。过渡期内，旧版控制台仍可从入口页一键进入。
-
-For the first browser evaluation, run:
-
-```bash
-make demo
-```
-
-Then open `http://127.0.0.1:5174/`. If the live system is empty, the web console opens on **Getting Started** and shows the setup chain before any permission-change work. After tenant, Agent, capability, and grant-chain setup is complete, the same URL opens on **Access Query**: operators first ask whether a caller can access a target capability, review the decision chain, and then use **Start permission fix** to prefill **Permission Changes** without copying technical IDs. **Permission Changes** remains the production approval and readiness workspace for the approval-required **Support ticket triage** path. The **Go-Live Check** workspace turns connection diagnostics, the current permission change, runtime validation, and handoff status into one ready/blocked decision with explicit next actions. When that decision is ready, **Access Handoff** exposes the bounded capability and data-scope summary, copyable MCP configuration and prompt guidance, and an administrator-issued short-lived token. Token plaintext is shown once, stays out of browser storage and audit records, and can be revoked from the same handoff even if readiness later becomes blocked. Each validation run uses fresh `ui-approval-*` identifiers, applies permissions through live APIs, sends runtime MCP calls with `X-AgentHarbor-Subject-Id`, and surfaces the application record, application impact review, tenant access profile, traces, applied audit event, go-live readiness, and bounded acceptance export in the console.
-
-打开 `http://127.0.0.1:5174/` 后，如果实时系统为空，Web 控制台会进入 **开始使用** 并先展示配置链路；当租户、Agent、能力和授权链完成后，同一个地址会进入 **访问查询**。管理员先查询某个调用方能否访问目标能力，查看判定链路，再通过 **发起权限修复** 把上下文预填到 **权限变更**，不需要复制技术 ID。**权限变更** 仍然负责审批、应用和状态检查；**上线检查** 会把连接诊断、当前权限变更、运行验证和交接状态收束成一个可上线/已阻断判断，并给出明确下一步。当状态就绪后，**接入交付** 会展示有边界的能力与数据范围、可复制的 MCP 配置和提示词，以及由管理员签发的短期 Token。Token 明文只显示一次，不写入浏览器存储或审计记录；即使交接状态后来被阻断，已有 Token 仍然可以从原交接中撤销。
-
-The global **Connection Settings** popover includes **Run diagnostics** for the production path: it checks the browser session, API compatibility contract, live data source, and MCP tool-service health in one compact panel. The Permission Changes console also shows runtime checks for the API, MCP tool service, browser subject-header CORS, local private-upstream mode, and current data source before validation runs. Use the **Self-Check** workspace when you need the lower-level core permission loop check; it verifies API and MCP tool service readiness before enabling the run button and keeps **Reset session** non-destructive.
-
-全局 **连接设置** 弹层提供 **运行诊断**，用于一次性检查浏览器会话、API 兼容合约、实时数据源和 MCP 工具服务健康状态。权限变更控制台在运行验证前也会展示 API、MCP 工具服务、浏览器主体 Header CORS、本地私有上游模式和当前数据源检查。需要更底层的核心权限闭环检查时，可以使用 **系统自检** 工作区。
-
-`make demo` starts:
-
-- AgentHarbor API at `http://127.0.0.1:9090`
-- Official SDK MCP demo service at `http://127.0.0.1:8787/mcp`
-- Web console at `http://127.0.0.1:5174`
-
-Use `Ctrl+C` in the demo terminal to stop all demo services.
-
-If those ports are already in use, set only the demo ports; the script wires the frontend API base and local browser CORS automatically:
-
-```bash
-AGENT_HARBOR_DEMO_API_PORT=19094 \
-AGENT_HARBOR_DEMO_FRONTEND_PORT=15184 \
-MOCK_MCP_PORT=18794 \
-  make demo
-```
-
-如果默认端口已被本机其他开发服务占用，只需要切换上面的三个端口；脚本会自动把前端连接地址和本地浏览器 CORS 配好。
-
-If you need to troubleshoot a single service, use the manual three-terminal path:
-
-Terminal 1:
-
-```bash
-AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
-```
-
-Terminal 2:
-
-```bash
-make real-mcp
-```
-
-Terminal 3:
-
-```bash
-cd frontend
-pnpm install
-pnpm dev
-```
-
-The console reads `VITE_API_BASE`; if unset, it uses `http://127.0.0.1:9090`. When the backend is unavailable during local development, the UI falls back to a read-only sample preview so the console remains navigable, shows a persistent warning, and disables mutation actions that would otherwise imply a durable permission change.
-
-The **Self-Check** workspace creates a fresh tenant tree, caller, MCP target, scoped capability grant chain, allowed call, denied call, and tenant access profile records through the real API. This lower-level core permission loop supports English and Simplified Chinese. The browser language is used on first load, and the visible `中文` / `EN` toggle persists the operator's choice locally.
-
-The console also includes a **Permission Changes** workspace for the v0.2.0 permission-package journey. It lets an administrator create a permission change, select a deterministic permission package template, preview allow/deny simulation rows, run apply preflight, apply low-risk requests through the backend permission-package API, request approval for high-risk requests, and then inspect the refreshed tenant access profile. Each draft includes a policy gate: direct apply is allowed for low-risk read-oriented templates, while write, export, admin, high-risk, critical-risk, confidential, or restricted allowed capabilities require an approval request before apply. The Apply Preflight panel calls `POST /api/v1/permission-packages:preflight` and blocks live apply when draft readiness, access-object binding, approval match, capability fingerprint match, data-scope fit, or other safety checks fail. Approved requests snapshot the draft, template version, scope, allowed capabilities, data scopes, per-capability configuration fingerprints, and policy-gate reasons so apply rejects drift before writing permissions. Approval requests expire after 24 hours, reject self-approval, and are consumed in the same repository transaction or lock as the successful application, so the same approval cannot apply the request twice even under concurrent reuse. When `AGENT_HARBOR_APPROVAL_REVIEWERS` is configured, the Approval queue and approve/reject operations are scoped to the approver's configured tenant subtree and workspace; when `AGENT_HARBOR_ADMIN_IDENTITIES` is configured, the reviewer is bound to the authenticated admin key. Non-platform administrators who omit `reviewer` on approval-list reads are automatically scoped to their authenticated actor's routed queue, while platform administrators can omit `reviewer` for an all-queue operational view. The Permission Changes and tenant access-profile workspaces include a read-only effective permission explanation panel so operators can inspect why a tenant/workspace/caller/capability decision is currently allowed or denied, which decision layer matched or blocked, and which remediation step comes next. Each successful permission application records the template version, draft id, created entitlement and assignment ids, capability ids, and data scopes; the applied audit event links the approval request id when one was used. The read-only application health endpoint and Permission Changes panel summarize recent applications as ready, drifted, or needs review by reusing the impact calculation and stable blocker codes. The read-only production readiness endpoint and Permission Changes panel combine preflight, latest application, health, impact, access-profile, runtime allowed/denied traces, and applied audit records into one final ready, needs-review, or blocked gate. The read-only impact review endpoint and Permission Changes panel resolve those recorded ids against current state, show created/active/missing object counts, mark capability rollback as manual review, and return a read-only remediation plan with ordered manual-review, disable, drift-investigation, and final verification actions without executing rollback. Drift blockers also include stable `blockerCodes` such as `missing_created_objects`, `inactive_created_objects`, and `no_allowed_capabilities` so UI and admin agents can localize and reason about unsafe states reliably. The optional `rehearsal=grant_drift` impact query and **Rehearse drift** button simulate those blockers without changing any grants, which lets operators practice remediation review safely. See [the v0.2.0 journey note](docs/product/0.2.0-ai-admin-permission-journey.md).
-
-权限变更工作区承载 v0.2.0 权限包旅程。管理员发起的是权限变更，选择的是权限包模板；随后可以预览允许/拒绝模拟行、运行应用前预检、通过后端权限包 API 应用低风险变更、为高风险变更提交审批，并查看刷新的租户访问画像。应用前预检面板调用 `POST /api/v1/permission-packages:preflight`，当草案就绪、访问对象绑定、审批匹配、能力配置指纹、数据范围边界或其他安全检查失败时阻断实时应用。审批请求会拒绝自审批，并通过每能力配置指纹阻断审批后能力变宽；配置 `AGENT_HARBOR_ADMIN_IDENTITIES` 后，审批人来自已认证管理 key，而不是请求体自报。配置审批人路由后，非平台管理员读取审批队列即使省略 `reviewer`，也会默认限定到当前认证 actor 的可审批队列；平台管理员省略 `reviewer` 时仍可查看全局队列。能力治理里的直接授权也优先选择角色、部门或成员访问对象，只有高级场景才暴露主体选择器表达式。只读落地状态端点和权限变更面板会复用影响计算，把最近的权限应用归类为正常、已漂移或需复核；它不执行调度、通知或回滚。只读上线就绪端点和权限变更面板会把预检、最新应用、落地状态、影响复核、访问画像、允许/拒绝运行追踪和应用审计记录合并成最后的可上线、需复核或阻断判断。只读影响复核端点和权限变更面板会把记录中的授权对象与当前状态对齐，展示已创建/有效/缺失对象数量，返回只读处置计划，并用稳定的 `blockerCodes` 解释缺失、未启用或无允许能力等不安全状态。可选的 `rehearsal=grant_drift` 查询和 **演练漂移** 按钮会在不修改任何授权的前提下模拟这些阻断，让操作员安全练习处置复核。
-
-### v0.3.0 permission-boundary compatibility / v0.3.0 权限边界兼容性
-
-- A non-empty `requestedCapabilityId` means an **exact one-capability request**. Exact-mode clients must carry the same value through draft, approval, apply, application/health lookup, production readiness/report, Access Handoff, and token creation. An omitted or empty value intentionally preserves the legacy template-bundle behavior; it does not mean “match any exact request.” / 非空 `requestedCapabilityId` 表示**只申请这一项能力**，调用方必须在草案、审批、应用、落地记录/健康查询、上线就绪/报告、接入交付和 Token 创建阶段持续传递同一个值。省略或传空值会保留旧版模板整包语义，并不表示“匹配任意精确请求”。
-- Readiness and Access Handoff may recognize a legacy application with an empty stored `requestedCapabilityId` as exact-equivalent only when its `allowedCapabilityIds` contains exactly the requested capability and all current scope, template-version, data-scope, and drift checks still pass. This is a read-time compatibility rule: AgentHarbor does not backfill or rewrite the legacy record's provenance. / 只有当旧应用记录的允许能力集合恰好只有被查询的这一项，并且当前范围、模板版本、数据范围和漂移检查全部通过时，上线就绪与接入交付才会把它视为精确请求的等价记录。该规则只用于读取兼容，不会回填或改写旧记录的来源语义。
-- All built-in permission-package templates are now version 2. A capability must declare at least one explicit data domain through `dataDomains` or `dataScopes[].dataDomain`; every non-empty declared domain must equal the selected template's `defaultDataDomain`. Missing, unsupported, or mixed domains fail closed. Classify capabilities in **Capability Governance**, or use `PATCH /api/v1/capabilities/{id}` with `dataDomains`, before previewing a v2 request. / 所有内置权限包模板已升级到 v2。能力必须通过 `dataDomains` 或 `dataScopes[].dataDomain` 至少声明一个显式数据域，且所有非空声明都必须与所选模板的 `defaultDataDomain` 一致；缺失、未知或混合数据域都会默认阻断。请先在**能力治理**中完成分类，或通过 `PATCH /api/v1/capabilities/{id}` 写入 `dataDomains`，再重新预览 v2 请求。
-- PostgreSQL migrations `014_access_handoff_agent_keys.sql` and `015_permission_package_requested_capability.sql` add the Access Handoff key bindings and exact-capability provenance field. Existing provenance rows keep the empty-string legacy bundle value. Version-1 applications remain available as history but do not satisfy current v2 readiness. Handoff tokens tied to those pre-v2 applications can still be listed and revoked, but they no longer authorize governed MCP tool calls. Re-preview, re-approve when required, apply the v2 package, and issue a fresh token. See the [v0.3.0 PRD](docs/product/0.3.0-access-handoff-prd.md) and [v0.3.0 release notes](docs/engineering/0.3.0-access-handoff-release-notes.md). / PostgreSQL 迁移 014 和 015 会分别加入接入交付 Key 绑定与精确能力来源字段；现有来源记录保留空字符串的旧版整包语义。v1 应用仍可查询历史，但不能满足当前 v2 上线就绪。绑定这些旧应用的交付 Token 仍可列出和撤销，但不再能授权受治理的 MCP 工具调用。请重新预览、按需审批、应用 v2 权限包并签发新 Token。
-
-AgentHarbor also exposes the same workflow as a management MCP endpoint at `POST /api/v1/management/mcp`. Admin agents can call `tools/list` and then use tools such as `draft_permission_package`, `preflight_permission_package`, `check_permission_package_production_readiness`, `export_permission_package_production_report`, `create_permission_package_approval_request`, `list_permission_package_approval_requests`, `approve_permission_package_approval_request`, `reject_permission_package_approval_request`, `withdraw_permission_package_approval_request`, `apply_permission_package`, `list_permission_package_applications`, `explain_permission_package_draft`, `explain_access_decision`, `get_tenant_access_profile`, `list_agents`, and `list_capabilities`. Legacy report-export aliases remain available for old clients; see [Management MCP compatibility aliases](docs/engineering/management-mcp-compatibility-aliases.md) for the compatibility map. REST also exposes `POST /api/v1/permission-packages:preflight` for read-only apply preflight, `GET /api/v1/permission-packages/production-readiness?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&subjectId=` for the read-only production gate, `GET /api/v1/permission-packages/production-readiness/report?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&subjectId=` for the bounded production acceptance report, `GET /api/v1/permission-packages/applications/health?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&limit=` for read-only application health, and `GET /api/v1/permission-packages/applications/{id}/impact?tenantId=&workspaceId=` for read-only application impact review and remediation planning, plus `rehearsal=grant_drift` for response-only drift rehearsal. The production report includes `generatedBy`, `reportDigest`, and `reportDigestAlgorithm`, plus `platformContract.apiVersion` and `platformContract.managementMcpToolCatalog` with `metadataVersion` and `catalogDigest`, so handoff reviewers can check who exported the report and whether the downloaded JSON payload and catalog contract match the generated report. `list_permission_package_approval_requests` accepts an optional `reviewer` field so an admin agent can fetch only the requests that reviewer is allowed to handle; with reviewer routing configured, omitting `reviewer` defaults non-platform administrators to their authenticated actor's queue. Approve and reject validate the same reviewer route before status changes, while withdraw is limited to the original pending requester. This endpoint requires `X-Admin-Key` unless the API is explicitly started with `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true` for local development.
-
-AgentHarbor 也通过 `POST /api/v1/management/mcp` 暴露同一套管理工作流。管理 Agent 可以使用 `preflight_permission_package` 在应用前执行只读预检，使用 `check_permission_package_production_readiness` 获取上线就绪状态，也可以使用 `export_permission_package_production_report` 生成有边界的上线状态报告。旧版报告导出别名会继续保留；兼容映射见 [Management MCP compatibility aliases](docs/engineering/management-mcp-compatibility-aliases.md)。REST 端点 `POST /api/v1/permission-packages:preflight` 用于只读应用前预检；`GET /api/v1/permission-packages/production-readiness?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&subjectId=` 用于只读上线就绪门禁；`GET /api/v1/permission-packages/production-readiness/report?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&subjectId=` 用于有边界的上线状态报告；`GET /api/v1/permission-packages/applications/health?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&limit=` 用于只读落地状态巡检；`GET /api/v1/permission-packages/applications/{id}/impact?tenantId=&workspaceId=` 用于只读影响复核和处置规划，也支持 `rehearsal=grant_drift` 做仅影响响应的漂移演练。上线状态报告会写入 `generatedBy`、`reportDigest`、`reportDigestAlgorithm`、`platformContract.apiVersion` 和 `platformContract.managementMcpToolCatalog`，其中包含 `metadataVersion` 与 `catalogDigest`，方便交接人确认报告导出人、下载后的 JSON 内容以及报告生成时使用的 API 与 Management MCP 工具目录合同。审批队列过滤以及 REST/管理 MCP 的审批通过或拒绝都会把 `reviewer` 绑定到已认证管理员身份；配置审批人路由后，非平台管理员省略 `reviewer` 也会默认读取自己的审批队列，避免调用方通过参数或省略参数扩大查看范围。除非本地开发显式设置 `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true`，否则这些端点与其他管理 API 一样需要 `X-Admin-Key`。
+The default scenario starts `scripts/mock-mcp-server.py` automatically for a dependency-free regression path. To run the same journey against the official MCP TypeScript SDK demo service, run `MCP_SERVER_MODE=real make scenario-permission-package-approval` against an API started with private upstreams and explicit unauthenticated development mode enabled.
 
 ## Runtime Configuration
 
-Use `.env.example` as the local configuration template.
+Use [.env.example](.env.example) as the template — it documents every variable with production-mode validation rules. Summary:
 
 | Variable | Purpose |
 | --- | --- |
-| `AGENT_HARBOR_ADDR` | API listen address. Defaults to `:9090`. |
-| `AGENT_HARBOR_DEPLOYMENT_MODE` | Optional deployment mode. Set to `production` for deployment-style preflight checks that block development-only admin bypass, private-upstream flags, malformed, invalid-actor, weak, reserved-actor, or misleading bootstrap admin identities, production configs without a bootstrap platform administrator, conflicting bootstrap admin keys, malformed or unauthenticated approval reviewer routing, missing or weak session secrets, missing or invalid persistent storage, and missing or weak credential encryption keys before startup, and disable default local CORS origins. 可选部署模式；设置为 `production` 后，启动前会执行部署预检并阻断开发专用的管理绕过、私有上游开关、格式错误、actor 格式无效、弱值、使用保留 actor 或表达误导的引导管理员身份、缺少引导平台管理员的生产配置、冲突的引导管理员密钥、格式错误或没有可认证审批人身份的审批人路由、缺失或弱值会话密钥、缺失或无效的持久化存储，以及缺失或弱值凭据加密密钥，并关闭默认本地 CORS 来源。 |
-| `AGENT_HARBOR_ADMIN_KEY` | Optional shared management API key. Management and audit endpoints require this key, a named admin identity, or the explicit development unauthenticated flag. Production mode requires at least 16 characters and rejects common weak values such as `admin`, `secret`, `password`, `test-admin`, or `local-admin-key`. 可选共享管理 API 密钥；生产模式要求至少 16 个字符，并拒绝常见弱值。 |
-| `AGENT_HARBOR_ADMIN_IDENTITIES` | Optional named admin identities for production approvals and scoped administration. Use comma or semicolon separated entries: `actor=key` for a platform admin, or `actor=key\|role=tenant_admin\|tenant=tenant-east\|workspace=ws-support` for a tenant/workspace-scoped admin. Supported roles are `platform_admin`, `tenant_admin`, and `security_reviewer`; scoped roles must include `tenant`, while `platform_admin` entries must not include `tenant` or `workspace` because platform administrators are intentionally unscoped. Actors must use 1-80 letters, numbers, dots, underscores, hyphens, or at signs; actors and keys must be unique. Production preflight validates the full configured syntax before storage initialization, including duplicate actors/keys, reserved actors (`admin-key` and `local-dev`), role names, role/scope consistency, scoped tenant requirements, 16-character key length, and common weak values. Production must include `AGENT_HARBOR_ADMIN_KEY` or at least one `role=platform_admin` named identity so recovery administration remains possible. In production, a named identity key must also be different from `AGENT_HARBOR_ADMIN_KEY`. Matching keys set `requestedBy` and `reviewedBy` to the actor, prevent reviewer impersonation, and restrict scoped admins across REST management APIs and management MCP tools. 可选具名管理身份，用于生产审批和范围化管理；`actor=key` 表示平台管理员，`actor=key\|role=tenant_admin\|tenant=tenant-east\|workspace=ws-support` 表示限定租户/工作区的管理员。支持的角色为 `platform_admin`、`tenant_admin` 和 `security_reviewer`；范围化角色必须包含 `tenant`，而 `platform_admin` 不能包含 `tenant` 或 `workspace`，因为平台管理员按设计不受租户范围限制。actor 必须使用 1-80 位字母、数字、点、下划线、连字符或 at 符号；actor 和 key 必须唯一。生产预检会在存储初始化前完整校验已配置语法，包括重复 actor/key、保留 actor（`admin-key` 和 `local-dev`）、角色名、角色与范围一致性、范围化租户要求、16 字符 key 长度和常见弱值。生产环境必须包含 `AGENT_HARBOR_ADMIN_KEY` 或至少一个 `role=platform_admin` 具名身份，确保恢复管理入口仍然可用，并要求具名身份 key 与 `AGENT_HARBOR_ADMIN_KEY` 不同。匹配后审批发起人与审批人来自认证身份，并且范围化管理员会在 REST 管理 API 与管理 MCP 工具中受到同一边界限制。 |
-| `AGENT_HARBOR_SESSION_SECRET` | Optional in development and required in production for web-console HttpOnly session signing. Production mode requires at least 32 characters and rejects common weak values. Web 控制台 HttpOnly 会话签名密钥；开发模式可选，生产模式必填，且必须至少 32 个字符并避免常见弱值。 |
-| `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN` | Development-only boolean. Allows management endpoints without `X-Admin-Key` only when no admin key or named identities are configured. Defaults to `false`. |
-| `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` | Development-only boolean. Allows loopback/private upstream endpoints for local scenarios when set to `true`. Defaults to `false`. |
-| `AGENT_HARBOR_APPROVAL_REVIEWERS` | Optional approval reviewer routing rules. Use comma or semicolon separated `reviewer=tenantId/workspaceId` entries, for example `security-root=tenant-root/*;security-east=tenant-east/ws-support`. `*` allows any tenant or workspace. Production preflight validates the configured format before storage initialization, and each configured reviewer must match `admin-key` or an `AGENT_HARBOR_ADMIN_IDENTITIES` actor with `role=security_reviewer` or `role=platform_admin`. For scoped reviewer identities, the approval route tenant must match the identity tenant, and a workspace-scoped identity cannot use a wider `*` workspace route. 可选审批人路由规则；生产预检会在存储初始化前校验已配置的格式，并要求每个审批人匹配 `admin-key` 或一个 `AGENT_HARBOR_ADMIN_IDENTITIES` actor，且角色必须是 `security_reviewer` 或 `platform_admin`。对于带范围的审批人身份，审批路由租户必须与身份租户一致；如果身份已限定工作区，则不能使用更宽的 `*` 工作区路由。 |
-| `AGENT_HARBOR_CORS_ORIGINS` | Optional comma or semicolon separated browser origins. Entries must be full `http` or `https` origins with scheme, host, and optional port only; wildcard, path, query, fragment, user-info, or non-HTTP entries are rejected. Development mode adds these origins to the default local console origins; production deployment mode allows only the origins listed here. Use it for isolated browser gates, non-default local frontend ports, or production console domains. 可选浏览器来源白名单，使用逗号或分号分隔。每一项必须是完整的 `http` 或 `https` Origin，只能包含 scheme、host 和可选端口；通配、路径、查询、片段、用户信息或非 HTTP 来源都会被拒绝。开发模式会把这些来源追加到默认本地控制台来源；生产部署模式只允许这里显式列出的来源。可用于隔离浏览器门禁、非默认本地前端端口或生产控制台域名。 |
-| `AGENT_HARBOR_DATABASE_URL` | Optional in development and required in production PostgreSQL connection string. Production preflight validates that it is parseable before PostgreSQL initialization and does not echo credentials in startup errors. If unset outside production, AgentHarbor uses the in-memory repository for local evaluation only. PostgreSQL 连接串；开发模式可选，生产模式必填。生产预检会在 PostgreSQL 初始化前校验其可解析性，并且启动错误不会回显凭据。非生产未设置时会使用内存仓库，仅适合本地评估。 |
-| `AGENT_HARBOR_CREDENTIAL_KEY` | 32 random raw bytes or a base64-encoded 32-byte random key used to encrypt persisted agent credentials. Required with PostgreSQL; repeated, low-diversity, or common sample keys are rejected. 用于加密持久化 Agent 凭据的 32 字节随机原始值或 base64 编码随机 key；配置 PostgreSQL 时必填，重复、低多样性或常见示例 key 会被拒绝。 |
-| `AGENT_HARBOR_TEST_DATABASE_URL` | PostgreSQL connection string used by integration tests. |
+| `AGENT_HARBOR_ADDR` | API listen address (default `:9090`). |
+| `AGENT_HARBOR_DEPLOYMENT_MODE` | `production` enables deployment preflight and blocks development-only flags/weak configs. 生产模式启用部署预检。 |
+| `AGENT_HARBOR_ADMIN_KEY` | Shared management API key (production: ≥16 chars, weak values rejected). 共享管理密钥。 |
+| `AGENT_HARBOR_ADMIN_IDENTITIES` | Named admin identities with optional role/tenant/workspace scope. 具名管理身份,支持角色与租户/工作区范围。 |
+| `AGENT_HARBOR_SESSION_SECRET` | Console session signing key (production: required, ≥32 chars). 控制台会话签名密钥,生产必填。 |
+| `AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN` | Development-only unauthenticated management bypass. 仅限开发。 |
+| `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` | Development-only loopback/private upstream targets. 仅限开发。 |
+| `AGENT_HARBOR_APPROVAL_REVIEWERS` | Approval reviewer routing (`reviewer=tenantId/workspaceId`). 审批人路由。 |
+| `AGENT_HARBOR_CORS_ORIGINS` | Explicit browser origins (production allowlist). 浏览器来源白名单。 |
+| `AGENT_HARBOR_DATABASE_URL` | PostgreSQL connection string (production: required). PostgreSQL 连接串,生产必填。 |
+| `AGENT_HARBOR_CREDENTIAL_KEY` | 32-byte key encrypting persisted agent credentials (required with PostgreSQL). 凭据加密密钥。 |
+| `AGENT_HARBOR_TEST_DATABASE_URL` | PostgreSQL connection string for integration tests. 集成测试用连接串。 |
 | `VITE_API_BASE` | Frontend API base URL. |
-
-Run `make production-hardening` before any deployment-style handoff. It proves that `AGENT_HARBOR_ADMIN_KEY` protection is enforced across management APIs, that management routes fail closed without configured admin authentication, that console login behind a trusted HTTPS-forwarding proxy emits a Secure session cookie, that `AGENT_HARBOR_DEPLOYMENT_MODE=production` rejects development-only flags, weak or conflicting bootstrap admin keys, malformed approval reviewer routing, missing or weak session secrets, missing or invalid persistent storage, missing credential encryption keys, and invalid CORS origins before startup or storage initialization, and that `AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS` stays disabled unless explicitly set for local development scenarios.
-
-部署式交付前请先运行 `make production-hardening`。它会验证管理 API 的管理员密钥保护、未配置管理员认证时的失败关闭行为、可信 HTTPS 转发代理后的控制台登录会设置 Secure 会话 Cookie、生产模式会在启动或存储初始化前拒绝开发专用开关、弱或冲突的引导管理员密钥、缺失或弱值会话密钥、缺失或无效的持久化存储、缺失凭据加密密钥和无效 CORS 来源，并确认私有上游访问默认保持关闭。
 
 PostgreSQL example:
 
@@ -364,195 +194,23 @@ AGENT_HARBOR_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/a
   go run ./cmd/agent-harbor
 ```
 
-## Local Verification
+## API and Semantics
 
-```bash
-make frontend-deps
-make test
-make test-fresh
-make test-race
-make test-fuzz
-make vet
-make build
-make frontend-test
-make frontend-build
-make scenario-scripts-lint
-make github-config-lint
-```
+Full endpoint reference (management, data plane, audit/traces/metrics, target probe): [docs/engineering/api-reference.md](docs/engineering/api-reference.md). Grant-chain, route-policy, data-scope, and permission-package lifecycle semantics: [docs/engineering/architecture.md](docs/engineering/architecture.md).
 
-PostgreSQL integration remains opt-in. Use a fresh isolated test database for each command:
-
-```bash
-AGENT_HARBOR_TEST_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' \
-  make test-postgres
-AGENT_HARBOR_TEST_DATABASE_URL='postgres://agent_harbor:agent_harbor@127.0.0.1:5432/agent_harbor?sslmode=disable' \
-  make test-postgres-race
-```
-
-## Scenario Scripts
-
-The repository includes executable scenario scripts under `scripts/` for local end-to-end smoke coverage. Start the API first, then run:
-
-```bash
-make scenario-all
-```
-
-The core journey has its own script because it intentionally uses a local mock MCP endpoint:
-
-```bash
-AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
-make core-journey
-```
-
-The core journey proves an assigned tool is allowed with its effective inherited data scope, an unassigned tool is denied, and a later capability-scope narrowing fails closed when an older workspace assignment no longer fits the live boundary.
-
-The approval-required permission package journey is part of `make release-check`. By default, `make scenario-permission-package-approval` starts an isolated local API plus the dependency-free mock MCP server. To run the same journey against an already running API and the official SDK MCP demo service, set `BASE_URL` and `MCP_SERVER_MODE=real`:
-
-```bash
-AGENT_HARBOR_ALLOW_UNAUTHENTICATED_ADMIN=true AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS=true make run
-BASE_URL=http://127.0.0.1:9090 MCP_SERVER_MODE=real make scenario-permission-package-approval
-```
-
-This scenario verifies approval expiry metadata and one-time approval consumption in addition to the runtime allow/deny checks.
-
-With a shared admin key instead of the local unauthenticated development flag:
-
-```bash
-AGENT_HARBOR_ADMIN_KEY=local-admin-key go run ./cmd/agent-harbor
-ADMIN_KEY=local-admin-key make scenario-all
-```
-
-For MCP capability scenarios, provide a safe public test endpoint because AgentHarbor rejects loopback and private-network target endpoints by design:
-
-```bash
-MCP_ENDPOINT=https://mcp.example.test/rpc \
-ALLOWED_TOOL=search_customer \
-DENIED_TOOL=export_contracts \
-ADMIN_KEY=local-admin-key \
-  make scenario-all
-```
-
-## API Overview
-
-### Health and Contracts
-
-- `GET /healthz`
-- `GET /api/v1/system/info`
-- `GET /api/v1/contracts/providers`
-- `GET /api/v1/contracts/channels`
-
-The web console uses `GET /api/v1/system/info` after `/healthz` to verify API compatibility before running permission changes. The same compatibility metadata also reports whether console authentication is required, so the Connection diagnostics panel can distinguish deployment-style login requirements from explicit local development bypass. If the endpoint is unavailable or required capabilities are missing, the console blocks runtime validation with an upgrade prompt instead of surfacing late-stage business errors.
-
-Web 控制台会在 `/healthz` 之后读取 `GET /api/v1/system/info`，先确认 API 兼容信息，再执行权限变更。同一份兼容信息也会返回控制台是否要求登录，因此连接诊断可以区分部署式登录要求和显式本地开发绕过。如果端点不可用或缺少必要能力，控制台会在运行验证前提示升级 API，而不是让管理员在后续流程里遇到零散业务错误。
-
-### Tenants and Access Profile
-
-- `POST /api/v1/tenants`
-- `GET /api/v1/tenants?tenantId=&parentTenantId=`
-- `GET /api/v1/tenants/{id}`
-- `GET /api/v1/tenants/{id}/access-profile?workspaceId=&targetId=&capabilityId=&callerInstanceId=&traceLimit=`
-
-### Agents and Keys
-
-- `POST /api/v1/agents`
-- `GET /api/v1/agents?tenantId=&workspaceId=`
-- `GET /api/v1/agents/{id}`
-- `PATCH /api/v1/agents/{id}`
-- `DELETE /api/v1/agents/{id}`
-- `POST /api/v1/agents/{id}/credentials:rotate`
-- `POST /api/v1/agent-keys`
-- `GET /api/v1/api-keys?tenantId=&workspaceId=`
-- `POST /api/v1/api-keys`
-- `DELETE /api/v1/api-keys/{id}`
-
-### Route Policies and Legacy Grants
-
-- `POST /api/v1/access-grants`
-- `GET /api/v1/access-grants?tenantId=&workspaceId=`
-- `DELETE /api/v1/access-grants/{id}`
-- `POST /api/v1/route-policies`
-- `GET /api/v1/route-policies?tenantId=&workspaceId=`
-- `PATCH /api/v1/route-policies/{id}`
-- `DELETE /api/v1/route-policies/{id}`
-
-### Capabilities and Assignments
-
-- `POST /api/v1/targets/{targetId}/capabilities:refresh`
-- `POST /api/v1/targets/{targetId}:probe`
-- `GET /api/v1/capabilities?tenantId=&workspaceId=&targetId=&status=`
-- `PATCH /api/v1/capabilities/{id}`
-- `GET /api/v1/access-decisions:explain?tenantId=&workspaceId=&callerInstanceId=&targetId=&capabilityId=&subjectId=`
-- `GET /api/v1/permission-packages/templates`
-- `GET /api/v1/permission-packages/access-subjects`
-- `POST /api/v1/permission-packages/drafts`
-- `POST /api/v1/permission-packages/approval-requests`
-- `GET /api/v1/permission-packages/approval-requests?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&requestedCapabilityId=&status=&reviewer=&limit=`
-- `POST /api/v1/permission-packages/approval-requests/{id}/approve`
-- `POST /api/v1/permission-packages/approval-requests/{id}/reject`
-- `POST /api/v1/permission-packages:preflight`
-- `POST /api/v1/permission-packages:apply`
-- `GET /api/v1/permission-packages/applications?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&requestedCapabilityId=&limit=`
-- `GET /api/v1/permission-packages/applications/health?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&requestedCapabilityId=&limit=`
-- `GET /api/v1/permission-packages/production-readiness?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&requestedCapabilityId=&subjectId=&traceLimit=`
-- `GET /api/v1/permission-packages/production-readiness/report?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&requestedCapabilityId=&subjectId=&traceLimit=`
-- `GET /api/v1/permission-packages/access-handoff?tenantId=&workspaceId=&templateId=&targetId=&callerInstanceId=&requestedCapabilityId=&subjectId=&traceLimit=`
-- `POST /api/v1/permission-packages/access-handoff/tokens`
-- `POST /api/v1/permission-packages/access-handoff/events` (reports config preview/copy interactions for auditing; `action` is `config_viewed` or `config_copied`)
-- `DELETE /api/v1/permission-packages/access-handoff/tokens/{id}`
-- `GET /api/v1/permission-packages/applications/{id}/impact?tenantId=&workspaceId=&rehearsal=`
-- `POST /api/v1/management/mcp`
-- `POST /api/v1/management/mcp/rpc`
-- `POST /api/v1/tenant-entitlements`
-- `GET /api/v1/tenant-entitlements?tenantId=&workspaceId=&targetId=&capabilityId=`
-- `DELETE /api/v1/tenant-entitlements/{id}` (disables; 409 while enabled workspace assignments reference it)
-- `POST /api/v1/workspace-assignments`
-- `GET /api/v1/workspace-assignments?tenantId=&workspaceId=&entitlementId=`
-- `DELETE /api/v1/workspace-assignments/{id}` (disables; 409 while enabled instance assignments reference it)
-- `POST /api/v1/instance-assignments`
-- `GET /api/v1/instance-assignments?tenantId=&workspaceId=&callerInstanceId=&capabilityId=`
-- `DELETE /api/v1/instance-assignments/{id}` (disables)
-
-### Data Plane
-
-- `GET /api/v1/self/access-profile`
-- `POST /api/v1/mcp/agents/{targetId}`
-- `POST /api/v1/mcp/agents/{targetId}/rpc`
-- `POST /api/v1/openapi/agents/{targetId}/operations/{operationId}`
-- `ANY /api/v1/openapi/agents/{targetId}/{relativePath...}`
-
-### Audit, Traces, and Metrics
-
-- `GET /api/v1/audit/events?tenantId=&workspaceId=&action=&resourceType=&resourceId=&since=&until=&limit=`
-- `GET /api/v1/audit/traces?tenantId=&workspaceId=&runId=&decision=&callerAgentId=&targetAgentId=&since=&until=&limit=`
-- `GET /api/v1/metrics/runtime?tenantId=&workspaceId=`
-- `GET /api/v1/metrics/daily?tenantId=&workspaceId=&days=&tzOffsetMinutes=`
-
-Audit and trace lists return rows in ascending time order. `limit` keeps the newest rows (audit events default to 100, traces are unbounded unless `limit` is set, both cap at 500); `since` is inclusive and `until` exclusive, both RFC3339. Daily metrics count gateway decisions and audit events per local day (`days` 1–30, `tzOffsetMinutes` −720–840) with the same visibility rules as the lists, zero-filled days, `denyRate: null` on days without calls, and `truncated: true` when a window exceeds the server row cap.
-
-`POST /api/v1/targets/{targetId}:probe` sends the same `tools/list` request as a capability refresh but writes neither capabilities nor audit events. A reachability failure is returned as a `200` result with `status: "error"` and an `UPSTREAM_*` `errorCode` (connect, DNS, TLS, timeout, or generic); only an unknown target (`404`), a target outside the caller's management scope (`403`), a non-MCP target, or an invalid agent configuration (`400`) is an HTTP error.
-
-## Policy and Data Scope Semantics
-
-Route policies match `routeType` and optional `routeKey`; for MCP, route keys include `initialize`, `tools/list`, and `tools/call`. Higher priority wins, `deny` wins ties, disabled policies are ignored, and direct access grants remain as a compatibility fallback when no route policy matches.
-
-MCP protocol lifecycle methods (`initialize`, `ping`, and `notifications/*`) are answered by the gateway itself so standards-compliant MCP clients can complete their handshake: the response is synthesized locally, never forwarded upstream, and `tools/list` remains filtered to the capabilities the caller is actually authorized for. An explicit route policy still takes precedence — an `allow` policy on `initialize` proxies it upstream and a `deny` policy keeps rejecting it. Access Handoff tokens receive synthesized lifecycle responses within their application's subject and target binding; every other method still requires an authorized capability or route.
-
-MCP capabilities must be approved before they can be granted. Tenant entitlements, workspace assignments, and caller instance assignments form the effective grant chain for capability-aware MCP calls.
-
-`dataScopes` are hierarchical OR alternatives. A child assignment may fill an empty parent dimension, but it cannot change a fixed parent dimension such as `region` or `tenantFilter`. Runtime traces record the effective inherited scope list, and governed MCP `tools/call` forwards the same list in `X-AgentHarbor-Context`. Caller-supplied, static target, and credential-backed values for `X-AgentHarbor-Context` are reserved and not forwarded.
-
-The tenant access profile endpoint is read-only. It returns configured grants, effective scope calculations, invalid historical scope records, and recent trace records for a registered tenant subtree. `traceLimit=0` disables recent traces.
-
-`GET /api/v1/self/access-profile` is the caller-facing counterpart: any agent key (with `X-AgentHarbor-Subject-Id` when applicable) can read its own effective boundary — caller identity, key kind and expiry, and per-target capability lists evaluated exactly like the governed data plane evaluates them. Access Handoff tokens are bounded by their application binding, so the profile shows only the bound target and allowed capabilities, and a non-matching subject stays rejected. Authentication failures are diagnosable: a hash-matched token that is dead reports whether it was revoked or expired, while guessed tokens keep the generic invalid message. The endpoint is read-only — renewing an expired or revoked token still goes through the administrator-issued handoff flow, pending the My Access self-service loop.
+完整端点参考见 [docs/engineering/api-reference.md](docs/engineering/api-reference.md);授权链、路由策略、数据范围与权限包生命周期语义见 [docs/engineering/architecture.md](docs/engineering/architecture.md)。
 
 ## Project Docs
 
+- [docs/engineering/architecture.md](docs/engineering/architecture.md): technical map / 技术图谱.
+- [docs/engineering/api-reference.md](docs/engineering/api-reference.md): endpoint reference.
 - [CONTRIBUTING.md](CONTRIBUTING.md): contribution workflow and verification expectations.
 - [SECURITY.md](SECURITY.md): private vulnerability reporting and security handling.
 - [.env.example](.env.example): local configuration template.
 - [ROADMAP.md](ROADMAP.md): public product and contribution direction.
-- [docs/engineering/](docs/engineering): release, review, dependency, and engineering workflow references.
 - [CHANGELOG.md](CHANGELOG.md): public release notes and notable changes.
+- [docs/engineering/](docs/engineering): release, review, dependency, and engineering workflow references.
+- [docs/product/](docs/product): PRDs, journey notes, and the external evaluation archive.
 
 ## License
 

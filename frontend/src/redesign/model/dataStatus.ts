@@ -1,17 +1,23 @@
-export type ConsoleDataStatus = "loading" | "live" | "sample" | "error";
+export type ConsoleDataStatus = "loading" | "live" | "stale" | "sample" | "error";
 
 export interface ConsoleDataStatusInput {
   hasData: boolean;
   hasError: boolean;
   loadedFromApi?: boolean;
   loading: boolean;
+  retainedFromPrevious?: boolean;
 }
 
 // Sample data is never shown silently: `loadConsoleData` falls back to sample
 // rows on network failures, so that state gets its own status and banner.
+// A refresh that kept the previous real collections for a transient failure
+// reports `stale` (real rows, possibly outdated) instead of `sample`.
 // A failed refresh keeps the previous data and its status; the toast reports it.
-export function consoleDataStatus({ hasData, hasError, loadedFromApi, loading }: ConsoleDataStatusInput): ConsoleDataStatus {
-  if (hasData) return loadedFromApi ? "live" : "sample";
+export function consoleDataStatus({ hasData, hasError, loadedFromApi, loading, retainedFromPrevious }: ConsoleDataStatusInput): ConsoleDataStatus {
+  if (hasData) {
+    if (loadedFromApi) return "live";
+    return retainedFromPrevious ? "stale" : "sample";
+  }
   if (hasError && !loading) return "error";
   return "loading";
 }

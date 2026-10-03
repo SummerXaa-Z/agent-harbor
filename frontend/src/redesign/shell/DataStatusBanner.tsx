@@ -9,11 +9,13 @@ import { Chip } from "../ui/Chip";
 export function DataStatusChip({ status }: { status: RedesignData["status"] }) {
   const { t } = useRedesignI18n();
   if (status === "live") return <Chip tone="success">{t("rd.data.live")}</Chip>;
+  if (status === "stale") return <Chip tone="warning">{t("rd.data.stale")}</Chip>;
   if (status === "sample") return <Chip tone="warning">{t("rd.data.sample")}</Chip>;
   return null;
 }
 
-// Sample rows and failed loads are always announced; live data needs no banner.
+// Sample rows, retained (possibly outdated) rows, and failed loads are always
+// announced; live data needs no banner.
 export function DataStatusBanner({ data, onRetry }: { data: RedesignData; onRetry: () => void }) {
   const { language, t } = useRedesignI18n();
   const retry = (
@@ -22,6 +24,10 @@ export function DataStatusBanner({ data, onRetry }: { data: RedesignData; onRetr
     </Button>
   );
 
+  if (data.status === "stale") {
+    const copy = apiErrorCopy(t, "network");
+    return <Banner actions={retry} desc={`${copy.next} ${t("rd.data.staleDesc")}`} title={copy.title} tone="warning" />;
+  }
   if (data.status === "sample") {
     const copy = apiErrorCopy(t, "network");
     return <Banner actions={retry} desc={`${copy.next} ${t("rd.data.sampleDesc")}`} title={copy.title} tone="danger" />;

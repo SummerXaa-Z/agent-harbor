@@ -225,6 +225,9 @@ test("console data status never presents sample rows as live", () => {
   assert.equal(consoleDataStatus({ hasData: true, hasError: false, loadedFromApi: true, loading: false }), "live");
   assert.equal(consoleDataStatus({ hasData: true, hasError: false, loadedFromApi: false, loading: false }), "sample");
   assert.equal(consoleDataStatus({ hasData: true, hasError: false, loading: false }), "sample");
+  assert.equal(consoleDataStatus({ hasData: true, hasError: false, loadedFromApi: false, retainedFromPrevious: true, loading: false }), "stale");
+  assert.equal(consoleDataStatus({ hasData: true, hasError: false, loadedFromApi: false, retainedFromPrevious: false, loading: false }), "sample");
+  assert.equal(consoleDataStatus({ hasData: true, hasError: false, loadedFromApi: true, retainedFromPrevious: true, loading: false }), "live");
   assert.equal(consoleDataStatus({ hasData: true, hasError: true, loadedFromApi: true, loading: true }), "live");
 });
 

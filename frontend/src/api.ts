@@ -1,6 +1,6 @@
 import {
   type AccessSubjectOption,
-} from './accessSubjects'
+} from './accessSubjects.ts'
 import {
   evidenceRuns,
   routePolicies,
@@ -16,14 +16,14 @@ import {
   sampleTraces,
   sampleWorkspaceAssignments,
   systemMetrics,
-} from './data'
-import { normalizeAccessProfileFilters } from './accessProfile'
-import type { ManagementMcpToolsListResult } from './connectionDiagnostics'
+} from './data.ts'
+import { normalizeAccessProfileFilters } from './accessProfile.ts'
+import type { ManagementMcpToolsListResult } from './connectionDiagnostics.ts'
 import {
   missingConsoleCapabilities,
   systemInfoContractIssues,
   type SystemInfo,
-} from './systemInfoContract'
+} from './systemInfoContract.ts'
 import {
   accessDecisionExplainPath,
   permissionPackageAccessHandoffPath,
@@ -38,7 +38,7 @@ import {
   type PermissionPackageApplicationImpactPathScope,
   type PermissionPackageApplicationsPathFilter,
   type PermissionPackageApprovalRequestPathFilter,
-} from './apiPaths'
+} from './apiPaths.ts'
 import type {
   AccessHandoff,
   AccessHandoffToken,
@@ -61,7 +61,7 @@ import type {
   PermissionPackageProductionReadinessFilter,
   PermissionPackageTemplate,
   PermissionPackageWorkbenchPreview,
-} from './permissionPackages'
+} from './permissionPackages.ts'
 import type {
   AccessGrant,
   AccessDecisionExplainRequest,
@@ -112,14 +112,14 @@ import type {
   UpdateCapabilityRequest,
   UpdateRoutePolicyRequest,
   WorkspaceAssignment,
-} from './types'
+} from './types.ts'
 
 export {
   missingConsoleCapabilities,
   requiredConsoleCapabilities,
   systemInfoContractIssues,
   type SystemInfo,
-} from './systemInfoContract'
+} from './systemInfoContract.ts'
 
 const DEFAULT_API_BASE = 'http://127.0.0.1:9090'
 
@@ -215,6 +215,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   const response = await fetch(endpoint(path), {
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    cache: 'no-store',
     credentials: 'include',
     headers,
     method,
@@ -1074,7 +1075,12 @@ export async function loadConsoleData(
   adminKey?: string,
   traceFilters: TraceFilters = {},
   scope?: ManagementScope,
+  previous?: ConsoleData,
 ): Promise<ConsoleData> {
+  // Transient per-collection failures fall back to the previous real rows
+  // when they exist, so one dropped GET cannot silently swap fabricated
+  // sample rows into a console that already holds live data; samples only
+  // ever appear before the first successful load.
   const [
     catalogResult,
     tenantsResult,
@@ -1090,20 +1096,20 @@ export async function loadConsoleData(
     metricsResult,
   ] = await Promise.all([
     withFallback(() => fetchCatalog(), {
-      providers: sampleProviders,
-      channels: sampleChannels,
+      providers: previous?.providers ?? sampleProviders,
+      channels: previous?.channels ?? sampleChannels,
     }),
-    withFallback(() => fetchTenants(adminKey), sampleTenants),
-    withFallback(() => fetchAgents(scope, adminKey), sampleAgents),
-    withFallback(() => fetchAccessGrants(scope, adminKey), []),
-    withFallback(() => fetchCapabilities(scope, adminKey), sampleCapabilities),
-    withFallback(() => fetchTenantEntitlements(scope, adminKey), sampleTenantEntitlements),
-    withFallback(() => fetchWorkspaceAssignments(scope, adminKey), sampleWorkspaceAssignments),
-    withFallback(() => fetchInstanceAssignments(scope, adminKey), sampleInstanceAssignments),
-    withFallback(() => fetchRoutePolicies(scope, adminKey), routePolicies),
-    withFallback(() => fetchTraces(traceFilters, scope, adminKey), sampleTraces),
-    withFallback(() => fetchAuditEvents(scope, adminKey), sampleAuditEvents),
-    withFallback(() => fetchRuntimeMetrics(scope, adminKey), systemMetrics),
+    withFallback(() => fetchTenants(adminKey), previous?.tenants ?? sampleTenants),
+    withFallback(() => fetchAgents(scope, adminKey), previous?.agents ?? sampleAgents),
+    withFallback(() => fetchAccessGrants(scope, adminKey), previous?.accessGrants ?? []),
+    withFallback(() => fetchCapabilities(scope, adminKey), previous?.capabilities ?? sampleCapabilities),
+    withFallback(() => fetchTenantEntitlements(scope, adminKey), previous?.tenantEntitlements ?? sampleTenantEntitlements),
+    withFallback(() => fetchWorkspaceAssignments(scope, adminKey), previous?.workspaceAssignments ?? sampleWorkspaceAssignments),
+    withFallback(() => fetchInstanceAssignments(scope, adminKey), previous?.instanceAssignments ?? sampleInstanceAssignments),
+    withFallback(() => fetchRoutePolicies(scope, adminKey), previous?.routePolicies ?? routePolicies),
+    withFallback(() => fetchTraces(traceFilters, scope, adminKey), previous?.traces ?? sampleTraces),
+    withFallback(() => fetchAuditEvents(scope, adminKey), previous?.auditEvents ?? sampleAuditEvents),
+    withFallback(() => fetchRuntimeMetrics(scope, adminKey), previous?.systemMetrics ?? systemMetrics),
   ])
 
   const loadedFromApi =
@@ -1140,9 +1146,10 @@ export async function loadConsoleData(
     traces: tracesResult.data,
     auditEvents: auditEventsResult.data,
     routePolicies: policiesResult.data,
-    evidenceRuns: loadedFromApi ? [] : evidenceRuns,
+    evidenceRuns: loadedFromApi ? [] : (previous?.evidenceRuns ?? evidenceRuns),
     systemMetrics: metricsResult.data,
     loadedFromApi,
+    retainedFromPrevious: previous !== undefined && !loadedFromApi,
     setupLoadedFromApi,
     grantsLoadedFromApi: grantsResult.ok,
     capabilitiesLoadedFromApi: capabilitiesResult.ok,

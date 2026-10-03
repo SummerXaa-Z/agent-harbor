@@ -34,6 +34,7 @@ export function useRedesignData(enabled: boolean): RedesignData {
   const [state, setState] = useState<RedesignDataState>(initialState);
   const mountedRef = useRef(true);
   const requestRef = useRef(0);
+  const previousDataRef = useRef<ConsoleData | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -45,15 +46,27 @@ export function useRedesignData(enabled: boolean): RedesignData {
   const reload = useCallback(async () => {
     const requestId = ++requestRef.current;
     setState((current) => ({ ...current, loading: true }));
-    const [dataResult, infoResult] = await Promise.allSettled([loadConsoleData(), fetchSystemInfo()]);
+    // Only real rows are eligible as fallback carriers, so samples never
+    // replace data that was already live (or already retained) mid-session.
+    const previous = previousDataRef.current;
+    const previousForFallback =
+      previous && (previous.loadedFromApi || previous.retainedFromPrevious) ? previous : undefined;
+    const [dataResult, infoResult] = await Promise.allSettled([
+      loadConsoleData(undefined, {}, undefined, previousForFallback),
+      fetchSystemInfo(),
+    ]);
     if (!mountedRef.current || requestId !== requestRef.current) return false;
-    setState((current) => ({
-      data: dataResult.status === "fulfilled" ? dataResult.value : current.data,
-      error: dataResult.status === "rejected" ? dataResult.reason : null,
-      failed: dataResult.status === "rejected",
-      loading: false,
-      systemInfo: infoResult.status === "fulfilled" ? infoResult.value : current.systemInfo,
-    }));
+    setState((current) => {
+      const data = dataResult.status === "fulfilled" ? dataResult.value : current.data;
+      previousDataRef.current = data;
+      return {
+        data,
+        error: dataResult.status === "rejected" ? dataResult.reason : null,
+        failed: dataResult.status === "rejected",
+        loading: false,
+        systemInfo: infoResult.status === "fulfilled" ? infoResult.value : current.systemInfo,
+      };
+    });
     return dataResult.status === "fulfilled" && dataResult.value.loadedFromApi;
   }, []);
 
@@ -63,6 +76,7 @@ export function useRedesignData(enabled: boolean): RedesignData {
       return;
     }
     requestRef.current += 1;
+    previousDataRef.current = null;
     setState((current) => (current === initialState ? current : initialState));
   }, [enabled, reload]);
 
@@ -72,6 +86,7 @@ export function useRedesignData(enabled: boolean): RedesignData {
     hasError: state.failed,
     loadedFromApi: state.data?.loadedFromApi,
     loading: state.loading,
+    retainedFromPrevious: state.data?.retainedFromPrevious,
   });
 
   return { ...state, capabilities, reload, status };

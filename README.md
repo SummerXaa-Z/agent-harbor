@@ -23,9 +23,9 @@ AgentHarbor 支持 MCP 网关能力，但不把自己定位成另一个通用 MC
 
 ## Project Status
 
-AgentHarbor is at v0.6.0: the redesigned dual-surface console, notification phases, and per-holder views. It keeps developer-preview positioning — ready for local evaluation, design feedback, and early integration work; deployment-style handoffs must pass the documented production preflight before any production traffic.
+AgentHarbor is at v0.6.2: the redesigned dual-surface console, notification phases, and per-holder views. It keeps developer-preview positioning — ready for local evaluation, design feedback, and early integration work; deployment-style handoffs must pass the documented production preflight before any production traffic.
 
-AgentHarbor 当前版本为 v0.6.0：重设计双面控制台、通知阶段与持有者视图。仍保持开发者预览定位——适合本地评估、设计反馈和早期集成；部署式交付必须先通过文档化的生产预检，再承载生产流量。
+AgentHarbor 当前版本为 v0.6.2：重设计双面控制台、通知阶段与持有者视图。仍保持开发者预览定位——适合本地评估、设计反馈和早期集成；部署式交付必须先通过文档化的生产预检，再承载生产流量。
 
 Open-source timing is intentionally secondary to production hardening. Before any release-readiness claim, the current standard is that the safety baseline, release checks, and primary Permission Changes journey all pass from a fresh local checkout.
 

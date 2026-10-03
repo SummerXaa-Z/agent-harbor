@@ -407,6 +407,7 @@ export interface ConsoleData {
   evidenceRuns: AcceptanceRun[]
   systemMetrics: SystemMetric[]
   loadedFromApi: boolean
+  retainedFromPrevious?: boolean
   setupLoadedFromApi: boolean
   grantsLoadedFromApi: boolean
   capabilitiesLoadedFromApi: boolean

@@ -7,6 +7,7 @@ import {
   systemInfoContractIssues,
 } from "../src/systemInfoContract.ts";
 import * as apiPaths from "../src/apiPaths.ts";
+import { loadConsoleData } from "../src/api.ts";
 import {
   accessDecisionExplainPath,
   permissionPackageAccessHandoffPath,
@@ -409,4 +410,37 @@ test("admin identity holder binding updates go through the PATCH endpoint", () =
   assert.match(apiSource, /method:\s*'PATCH'/);
   assert.match(typesSource, /ownedAgentIds\?: string\[\]/);
   assert.match(typesSource, /UpdateAdminIdentityOwnedAgentsRequest/);
+});
+
+test("loadConsoleData retains previous real rows when one fetch transiently fails", async () => {
+  const realFetch = globalThis.fetch;
+  const fetchCacheModes = [];
+  const okJson = (payload) => ({ ok: true, json: async () => payload });
+  const realAgent = { id: "agt_retained_real", name: "retained-caller", status: "active" };
+  globalThis.fetch = async (input, init) => {
+    fetchCacheModes.push(init?.cache);
+    if (String(input).includes("/api/v1/agents")) throw new TypeError("Failed to fetch");
+    return okJson([]);
+  };
+  try {
+    // A dropped agents GET keeps the previous real rows instead of swapping
+    // in fabricated sample rows, and marks the snapshot as retained.
+    const previous = { agents: [realAgent], loadedFromApi: true };
+    const retained = await loadConsoleData(undefined, {}, undefined, previous);
+    assert.equal(retained.loadedFromApi, false);
+    assert.equal(retained.retainedFromPrevious, true);
+    assert.deepEqual(retained.agents, [realAgent]);
+
+    // Without previous real data the same failure still falls back to samples
+    // (the offline first-run demo contract).
+    const sampled = await loadConsoleData(undefined, {}, undefined, undefined);
+    assert.equal(sampled.loadedFromApi, false);
+    assert.equal(sampled.retainedFromPrevious, false);
+    assert.ok(sampled.agents.some((agent) => agent.id === "agt_console_ops"));
+
+    assert.ok(fetchCacheModes.length > 0);
+    assert.ok(fetchCacheModes.every((mode) => mode === "no-store"));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

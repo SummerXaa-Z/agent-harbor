@@ -6,7 +6,7 @@ import { permissionApprovalStatusTone } from "../../../permissionWorkbenchPresen
 import { useAdminAudit } from "../../hooks/useAdminAudit";
 import { useApprovals } from "../../hooks/useApprovals";
 import { useDailyMetrics } from "../../hooks/useDailyMetrics";
-import { useEnvChecks, type EnvChecksState } from "../../hooks/useEnvChecks";
+import { useEnvChecks } from "../../hooks/useEnvChecks";
 import { useRedesignI18n } from "../../hooks/useRedesignI18n";
 import { approvalList } from "../../model/approvalReview";
 import { todayAuditCount, type AuditTimelineRow } from "../../model/auditTimeline";
@@ -198,19 +198,10 @@ export function CockpitView({ data, onRetry, session }: AdminViewProps) {
             </Card>
 
             <Card title={t("rd.cockpit.riskTitle")}>
-              {riskNotices(checks, pending.length).length === 0 ? (
+              {pending.length === 0 ? (
                 <p className="muted">{t("rd.cockpit.riskEmpty")}</p>
               ) : (
-                <div className="stack">
-                  {checks.unreachableTargets.map((target) => (
-                    <Notice key={target.name} tone="warn">
-                      {tx(t, "rd.cockpit.riskUnreachable", { count: 1, name: target.name })}
-                    </Notice>
-                  ))}
-                  {pending.length === 0 ? null : (
-                    <Notice tone="warn">{tx(t, "rd.cockpit.riskPending", { count: pending.length })}</Notice>
-                  )}
-                </div>
+                <Notice tone="warn">{tx(t, "rd.cockpit.riskPending", { count: pending.length })}</Notice>
               )}
             </Card>
           </div>
@@ -234,10 +225,6 @@ export function CockpitView({ data, onRetry, session }: AdminViewProps) {
       </Modal>
     </>
   );
-}
-
-function riskNotices(checks: EnvChecksState, pendingCount: number): unknown[] {
-  return [...checks.unreachableTargets, ...(pendingCount > 0 ? [pendingCount] : [])];
 }
 
 function checkTone(status: EnvCheckRow["status"]): "success" | "warning" | "danger" | "neutral" {

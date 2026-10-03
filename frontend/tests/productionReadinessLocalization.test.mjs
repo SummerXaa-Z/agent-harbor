@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import { createTranslator } from "../src/i18n.ts";
@@ -9,11 +9,13 @@ import { productionReadinessNextActionKeys } from "../src/productionReadinessCop
 // (docs/product/0.3.x-console-message-localization.md): the backend emits
 // readiness check codes and next-action codes; the frontend must keep
 // localized copy for every one of them. Reading the Go source keeps this
-// test honest when new checks appear server-side.
-const serverSource = readFileSync(
-  new URL("../../internal/httpapi/server.go", import.meta.url),
-  "utf8"
-);
+// test honest when new checks appear server-side. The emitters are spread
+// across the httpapi package, so scan every non-test Go file.
+const serverSource = readdirSync(new URL("../../internal/httpapi", import.meta.url))
+  .filter((name) => name.endsWith(".go") && !name.endsWith("_test.go"))
+  .sort()
+  .map((name) => readFileSync(new URL(`../../internal/httpapi/${name}`, import.meta.url), "utf8"))
+  .join("\n");
 
 function unique(matches) {
   return [...new Set(matches)];

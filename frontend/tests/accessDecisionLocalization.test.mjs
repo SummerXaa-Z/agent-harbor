@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import { accessTraceReasonLabel } from "../src/consolePresenters.ts";
@@ -31,6 +31,15 @@ const nextActionCodesBody = functionBody("func managementMCPAccessNextActionCode
 function unique(matches) {
   return [...new Set(matches)];
 }
+
+// Audit-event and readiness-check emitters are spread across the httpapi
+// package; scan every non-test Go file so the guard keeps following the code
+// across file moves.
+const httpapiSources = readdirSync(new URL("../../internal/httpapi", import.meta.url))
+  .filter((name) => name.endsWith(".go") && !name.endsWith("_test.go"))
+  .sort()
+  .map((name) => readFileSync(new URL(`../../internal/httpapi/${name}`, import.meta.url), "utf8"))
+  .join("\n");
 
 function translatorResolves(key) {
   for (const language of ["en", "zh-CN"]) {
@@ -108,9 +117,8 @@ test("every backend trace deny reason maps to localized runtime audit copy", () 
 });
 
 test("every backend management audit action, resource, and summary maps to localized copy", () => {
-  const serverSource = readFileSync(new URL("../../internal/httpapi/server.go", import.meta.url), "utf8");
   const literalPairs = [
-    ...serverSource.matchAll(/"([a-z_]+\.[a-z_]+)", "([a-z_]+)", [^,]+, "([^"]+)"/g)
+    ...httpapiSources.matchAll(/"([a-z_]+\.[a-z_]+)", "([a-z_]+)", [^,]+, "([^"]+)"/g)
   ].map((m) => ({ action: m[1], resource: m[2], summary: m[3] }));
   // The approval resolution handler writes its action/summary through variables.
   const variablePairs = [
@@ -128,8 +136,7 @@ test("every backend management audit action, resource, and summary maps to local
 });
 
 test("every backend production readiness check code maps to localized copy", () => {
-  const serverSource = readFileSync(new URL("../../internal/httpapi/server.go", import.meta.url), "utf8");
-  const codes = unique([...serverSource.matchAll(/permissionPackageProductionReadinessCheckFor\("([a-z_]+)"/g)].map((m) => m[1]));
+  const codes = unique([...httpapiSources.matchAll(/permissionPackageProductionReadinessCheckFor\("([a-z_]+)"/g)].map((m) => m[1]));
   assert.ok(codes.length >= 13, `expected a real readiness-check inventory, found ${codes.length}`);
   for (const code of codes) {
     translatorResolves(`productionCheck.${code}`);

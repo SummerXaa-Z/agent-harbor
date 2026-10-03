@@ -14,15 +14,20 @@ AgentHarbor supports MCP gateway capabilities, but its primary product surface i
 
 AgentHarbor 支持 MCP 网关能力，但主要产品界面不是通用 MCP 聚合。核心用户旅程是权限运营：描述一个租户范围的访问需求，生成权限包草案，模拟有效访问结果，在风险需要时进入审批路由，通过现有授权链落地，并在事后查看记录。
 
-## Current v0.3 Developer Preview / 当前 v0.3 开发者预览
+## Current: v0.6.0 / 当前版本：v0.6.0
 
-The v0.3 developer preview is scoped to local evaluation, design feedback, and early integration work. It is not recommended for production traffic.
+AgentHarbor is at v0.6.0 and still scoped to local evaluation, design feedback, early integration, and pilot deployments behind the documented production preflight. It is not recommended for production traffic without that preflight.
 
-当前 v0.3 开发者预览范围是本地评估、设计反馈和早期集成；暂不建议承载生产流量。
+AgentHarbor 当前为 v0.6.0，范围仍是本地评估、设计反馈、早期集成，以及通过文档化生产预检的试点部署；未经该预检不建议承载生产流量。
 
-v0.3 Phase 1 completes the answer-first access-change journey and the first Access Handoff product slice. This does not change the production-readiness status of the developer preview.
+v0.4.0 replaced the console with the redesigned dual-surface experience; v0.5.0–v0.5.3 added the notification center phases, approval-detail dual columns, absolutized copied client configuration, and auditable access-handoff config preview/copy; v0.6.0 adds per-holder views. This does not change the developer-preview positioning.
 
-v0.3 Phase 1 已完成从访问查询、精确权限修复到接入交付的首个完整切片；这不会改变当前开发者预览尚未面向生产流量的定位。
+v0.4.0 起控制台切换为重设计的双面体验；v0.5.0–v0.5.3 增加了通知中心各阶段、审批明细双列、复制配置完整地址与可审计的交接配置预览/复制；v0.6.0 增加持有者视图。这不会改变当前开发者预览定位。
+
+- The redesigned dual-surface console pairs a user workbench (access query, permission requests, my permissions, go-live handoff) with a management console (approvals, capability governance, registry, tenants, traces), plus a command palette, notification center, and mobile-ready layouts.
+  重设计双面控制台将用户工作台（访问查询、申请权限、我的权限、上线交接）与管理控制台（变更审批、能力治理、资源管理、租户组织、运行审计）配对，并提供命令面板、通知中心与移动端可用布局。
+- Per-holder views let platform administrators bind managed admin identities to the caller agents they operate, narrowing that identity's user surface server-side; empty bindings keep tenant-scope visibility.
+  持有者视图允许平台管理员把托管管理员身份绑定到其负责的调用方，在服务端收窄该身份的用户面；空绑定保持租户范围可见性。
 
 - Permission Changes supports deterministic package drafts, allow/deny simulation, policy gates, approval-required apply, read-only preflight, application health, impact review, go-live status, and bounded acceptance-report export.
   权限变更已支持确定性权限包草案、允许/拒绝模拟、策略门禁、需审批应用、只读预检、落地状态、影响复核、上线状态和有边界的验收报告导出。
@@ -39,19 +44,19 @@ v0.3 Phase 1 已完成从访问查询、精确权限修复到接入交付的首�
 
 ## Near Term / 近期
 
-- Run the external evaluator loop with platform engineer, security reviewer, and tenant administrator roles, using `time-to-first-report` and first-blocker records as the primary inputs.
-  用平台工程师、安全审核人和租户管理员三个角色跑外部评估，以 `time-to-first-report` 和首个阻塞点记录作为主要输入。
+- Keep running the external evaluator loop on released baselines (rounds 4–7 are archived in `docs/product/0.4.0-console-eval.md`), with `time-to-first-report` and first-blocker records as the primary inputs; complete the round-7 deferrals (EN spot-check and free exploration) in the next round.
+  持续在已发布基线上运行外部评估闭环（第 4–7 轮已归档于 `docs/product/0.4.0-console-eval.md`），以 `time-to-first-report` 和首个阻塞点记录作为主要输入；下一轮补完第七轮推迟的英文抽查与自由探索。
+- Close the round-7 follow-ups: resource lists occasionally rendering stale rows after write operations (reload currently restores them) and the cockpit environment-check coverage wording.
+  收敛第七轮后续项：写操作后资源列表偶发陈旧（当前靠刷新恢复）与驾驶舱环境检查口径文案。
 - Fix repeated evaluator blockers before adding new product surface area.
   新增产品界面前，先修复外部评估中重复出现的阻塞点。
 - Keep release-candidate hardening limited to setup reliability, Permission Changes comprehension, report trust, security regressions, and documentation gaps.
   发布候选加固只覆盖启动可靠性、权限变更可理解性、报告可信度、安全回归和文档缺口。
-- Publish the `v0.3.0-dev-preview` tag only after release-preparation review, local gates, PR CI, and main CI pass on the final source tree.
-  只有在发布准备评审、本地门禁、PR CI 和 main CI 都在最终源码树上通过后，才发布 `v0.3.0-dev-preview` 标签。
 
 ## Next / 下一阶段
 
-- Run the external evaluator loop on the v0.3 developer preview before opening the My Access self-service slice.
-  在开启 My Access 自助视图前，先基于 v0.3 开发者预览完成外部评估闭环。
+- Refine the managed-identity and holder-binding model from operational feedback.
+  根据运营反馈完善托管身份与持有者绑定模型。
 - Add package version conflict remediation and data-scope repair flows before apply when evaluator feedback shows these block real usage.
   当外部评估显示版本冲突或数据范围修复阻碍真实使用时，再补应用前修复流程。
 - Add OpenAPI capability discovery and assignment semantics alongside MCP tools.
@@ -71,8 +76,8 @@ v0.3 Phase 1 已完成从访问查询、精确权限修复到接入交付的首�
   在发布租户、工作区或调用方实例变更前增加策略模拟。
 - Add observability integrations for metrics, traces, and structured audit sinks.
   增加指标、trace 和结构化审计接收端的可观测集成。
-- Define versioned API compatibility guarantees after the first tagged release.
-  在首个正式标签版本后定义版本化 API 兼容性承诺。
+- Define versioned API compatibility guarantees as external integrations grow.
+  随着外部集成增长，定义版本化 API 兼容性承诺。
 
 ## Non-Goals For The First Public Release / 首个公开版本非目标
 

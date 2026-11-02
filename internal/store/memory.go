@@ -275,7 +275,7 @@ func (m *Memory) CreateTenantWithAudit(_ context.Context, tenant domain.Tenant, 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.tenants[tenant.ID] = tenant
-	m.audits = append(m.audits, build(tenant))
+	m.appendAuditLocked(build(tenant))
 	return tenant, nil
 }
 
@@ -350,7 +350,7 @@ func (m *Memory) CreateAgentWithAudit(_ context.Context, agent domain.Agent, bui
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.agents[agent.ID] = agent
-	m.audits = append(m.audits, build(agent))
+	m.appendAuditLocked(build(agent))
 	return agent, nil
 }
 
@@ -404,7 +404,7 @@ func (m *Memory) UpdateAgentWithAudit(_ context.Context, agent domain.Agent, bui
 	agent.Credentials = existing.Credentials
 	agent.CredentialVersion = existing.CredentialVersion
 	m.agents[agent.ID] = agent
-	m.audits = append(m.audits, build(agent))
+	m.appendAuditLocked(build(agent))
 	return agent, true, nil
 }
 
@@ -433,7 +433,7 @@ func (m *Memory) RotateAgentCredentialsWithAudit(_ context.Context, id string, c
 	agent.CredentialVersion++
 	agent.UpdatedAt = now
 	m.agents[id] = agent
-	m.audits = append(m.audits, build(agent))
+	m.appendAuditLocked(build(agent))
 	return agent, true, nil
 }
 
@@ -460,7 +460,7 @@ func (m *Memory) DisableAgentWithAudit(_ context.Context, id string, now time.Ti
 	agent.Status = domain.AgentStatusDisabled
 	agent.UpdatedAt = now
 	m.agents[id] = agent
-	m.audits = append(m.audits, build(agent))
+	m.appendAuditLocked(build(agent))
 	return agent, true, nil
 }
 
@@ -475,7 +475,7 @@ func (m *Memory) CreateAgentKeyWithAudit(_ context.Context, key domain.AgentKey,
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.keys[key.ID] = key
-	m.audits = append(m.audits, build(key))
+	m.appendAuditLocked(build(key))
 	return key, nil
 }
 
@@ -489,7 +489,7 @@ func (m *Memory) CreateAccessHandoffAgentKeyWithAudit(_ context.Context, key dom
 		}
 	}
 	m.keys[key.ID] = key
-	m.audits = append(m.audits, build(key))
+	m.appendAuditLocked(build(key))
 	return key, nil
 }
 
@@ -535,7 +535,7 @@ func (m *Memory) RevokeAgentKeyWithAudit(_ context.Context, id string, now time.
 	}
 	key.RevokedAt = now
 	m.keys[id] = key
-	m.audits = append(m.audits, build(key))
+	m.appendAuditLocked(build(key))
 	return key, true, nil
 }
 
@@ -598,7 +598,7 @@ func (m *Memory) CreateAccessGrantWithAudit(_ context.Context, grant domain.Acce
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.grants[grant.ID] = grant
-	m.audits = append(m.audits, build(grant))
+	m.appendAuditLocked(build(grant))
 	return grant, nil
 }
 
@@ -643,7 +643,7 @@ func (m *Memory) RevokeAccessGrantWithAudit(_ context.Context, id string, now ti
 	}
 	grant.RevokedAt = now
 	m.grants[id] = grant
-	m.audits = append(m.audits, build(grant))
+	m.appendAuditLocked(build(grant))
 	return grant, true, nil
 }
 
@@ -817,7 +817,7 @@ func (m *Memory) DisableTenantEntitlementWithAudit(_ context.Context, id string,
 	entitlement.Status = domain.PolicyStatusDisabled
 	entitlement.UpdatedAt = now
 	m.entitlements[id] = entitlement
-	m.audits = append(m.audits, build(entitlement))
+	m.appendAuditLocked(build(entitlement))
 	return cloneTenantEntitlement(entitlement), true, nil
 }
 
@@ -844,7 +844,7 @@ func (m *Memory) DisableWorkspaceAssignmentWithAudit(_ context.Context, id strin
 	assignment.Status = domain.PolicyStatusDisabled
 	assignment.UpdatedAt = now
 	m.workspaceAssignments[id] = assignment
-	m.audits = append(m.audits, build(assignment))
+	m.appendAuditLocked(build(assignment))
 	return cloneWorkspaceAssignment(assignment), true, nil
 }
 
@@ -871,7 +871,7 @@ func (m *Memory) DisableInstanceAssignmentWithAudit(_ context.Context, id string
 	assignment.Status = domain.PolicyStatusDisabled
 	assignment.UpdatedAt = now
 	m.instanceAssignments[id] = assignment
-	m.audits = append(m.audits, build(assignment))
+	m.appendAuditLocked(build(assignment))
 	return cloneInstanceAssignment(assignment), true, nil
 }
 
@@ -996,7 +996,7 @@ func (m *Memory) ApplyPermissionPackage(_ context.Context, mutation PermissionPa
 	application := clonePermissionPackageApplication(mutation.Application)
 	m.packageApplications[application.ID] = application
 	result.Application = clonePermissionPackageApplication(application)
-	m.audits = append(m.audits, mutation.AuditEvent)
+	m.appendAuditLocked(mutation.AuditEvent)
 	result.AuditEvent = mutation.AuditEvent
 	return result, nil
 }
@@ -1257,7 +1257,7 @@ func (m *Memory) CreateRoutePolicyWithAudit(_ context.Context, policy domain.Rou
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.policies[policy.ID] = policy
-	m.audits = append(m.audits, build(policy))
+	m.appendAuditLocked(build(policy))
 	return policy, nil
 }
 
@@ -1318,7 +1318,7 @@ func (m *Memory) UpdateRoutePolicyWithAudit(_ context.Context, policy domain.Rou
 	policy.TargetID = existing.TargetID
 	policy.CreatedAt = existing.CreatedAt
 	m.policies[policy.ID] = policy
-	m.audits = append(m.audits, build(policy))
+	m.appendAuditLocked(build(policy))
 	return policy, true, nil
 }
 
@@ -1345,7 +1345,7 @@ func (m *Memory) DisableRoutePolicyWithAudit(_ context.Context, id string, now t
 	policy.Status = domain.RoutePolicyStatusDisabled
 	policy.UpdatedAt = now
 	m.policies[id] = policy
-	m.audits = append(m.audits, build(policy))
+	m.appendAuditLocked(build(policy))
 	return policy, true, nil
 }
 
@@ -1411,10 +1411,37 @@ func (m *Memory) topMatchingRoutePolicyLocked(callerID string, targetID string, 
 	return best, found
 }
 
+// The in-memory store is the dev/eval backend: its append-only event logs keep
+// only the newest window of rows so a long-running local session cannot grow
+// without bound. The caps sit well above the largest bounded query the API
+// layer issues (daily metrics fetch 20,001 trace rows and 5,001 audit rows), so
+// retention can never silently undercut one of those queries. Production
+// deployments use the PostgreSQL store, which keeps full history.
+const (
+	maxMemoryTraceEvents = 40_000
+	maxMemoryAuditEvents = 40_000
+)
+
+// appendTraceLocked and appendAuditLocked require m.mu held for writing; they
+// trim the oldest rows once an event log passes its cap.
+func (m *Memory) appendTraceLocked(event domain.TraceEvent) {
+	m.traces = append(m.traces, event)
+	if excess := len(m.traces) - maxMemoryTraceEvents; excess > 0 {
+		m.traces = m.traces[excess:]
+	}
+}
+
+func (m *Memory) appendAuditLocked(event domain.AuditEvent) {
+	m.audits = append(m.audits, event)
+	if excess := len(m.audits) - maxMemoryAuditEvents; excess > 0 {
+		m.audits = m.audits[excess:]
+	}
+}
+
 func (m *Memory) AppendTrace(_ context.Context, event domain.TraceEvent) (domain.TraceEvent, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.traces = append(m.traces, event)
+	m.appendTraceLocked(event)
 	return event, nil
 }
 
@@ -1459,7 +1486,7 @@ func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.Tra
 func (m *Memory) AppendAuditEvent(_ context.Context, event domain.AuditEvent) (domain.AuditEvent, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.audits = append(m.audits, event)
+	m.appendAuditLocked(event)
 	return event, nil
 }
 
@@ -1573,7 +1600,7 @@ func (m *Memory) CreateAdminIdentityWithAudit(_ context.Context, identity domain
 	}
 	m.adminIdentities[identity.ID] = identity
 	m.adminIdentityActorID[identity.Actor] = identity.ID
-	m.audits = append(m.audits, build(identity))
+	m.appendAuditLocked(build(identity))
 	return identity, nil
 }
 
@@ -1588,7 +1615,7 @@ func (m *Memory) UpdateAdminIdentityOwnedAgentsWithAudit(_ context.Context, id s
 	identity.UpdatedAt = now
 	identity.UpdatedBy = strings.TrimSpace(actor)
 	m.adminIdentities[identity.ID] = identity
-	m.audits = append(m.audits, build(identity))
+	m.appendAuditLocked(build(identity))
 	return identity, true, nil
 }
 
@@ -1605,7 +1632,7 @@ func (m *Memory) RotateAdminIdentityKeyWithAudit(_ context.Context, id string, k
 	identity.UpdatedAt = now
 	identity.UpdatedBy = strings.TrimSpace(actor)
 	m.adminIdentities[identity.ID] = identity
-	m.audits = append(m.audits, build(identity))
+	m.appendAuditLocked(build(identity))
 	return identity, true, nil
 }
 
@@ -1622,7 +1649,7 @@ func (m *Memory) DisableAdminIdentityWithAudit(_ context.Context, id string, now
 	identity.UpdatedBy = strings.TrimSpace(actor)
 	identity.DisabledBy = strings.TrimSpace(actor)
 	m.adminIdentities[identity.ID] = identity
-	m.audits = append(m.audits, build(identity))
+	m.appendAuditLocked(build(identity))
 	return identity, true, nil
 }
 

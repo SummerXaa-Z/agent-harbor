@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -1564,4 +1565,64 @@ func traceIDsForStore(traces []domain.TraceEvent) []string {
 		ids = append(ids, trace.ID)
 	}
 	return ids
+}
+
+func TestMemoryAppendTraceKeepsNewestEvents(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	base := time.Date(2026, 11, 3, 8, 0, 0, 0, time.UTC)
+	total := maxMemoryTraceEvents + 250
+	for i := 0; i < total; i++ {
+		if _, err := repo.AppendTrace(ctx, domain.TraceEvent{
+			ID:        fmt.Sprintf("trc_cap_%05d", i),
+			RouteType: "mcp",
+			Decision:  domain.TraceDecisionAllowed,
+			CreatedAt: base.Add(time.Duration(i) * time.Second),
+		}); err != nil {
+			t.Fatalf("append trace %d: %v", i, err)
+		}
+	}
+	rows, err := repo.ListTraces(ctx, TraceFilter{})
+	if err != nil {
+		t.Fatalf("list traces: %v", err)
+	}
+	if len(rows) != maxMemoryTraceEvents {
+		t.Fatalf("trace log should keep only the newest %d events, got %d", maxMemoryTraceEvents, len(rows))
+	}
+	if rows[0].ID != "trc_cap_00250" {
+		t.Fatalf("oldest retained trace should be the first after the trimmed excess, got %s", rows[0].ID)
+	}
+	if last := rows[len(rows)-1].ID; last != fmt.Sprintf("trc_cap_%05d", total-1) {
+		t.Fatalf("newest trace should be retained, got %s", last)
+	}
+}
+
+func TestMemoryAppendAuditEventKeepsNewestEvents(t *testing.T) {
+	repo := NewMemory()
+	ctx := t.Context()
+	base := time.Date(2026, 11, 3, 8, 0, 0, 0, time.UTC)
+	total := maxMemoryAuditEvents + 250
+	for i := 0; i < total; i++ {
+		if _, err := repo.AppendAuditEvent(ctx, domain.AuditEvent{
+			ID:           fmt.Sprintf("aud_cap_%05d", i),
+			Action:       "agent.updated",
+			ResourceType: "agent",
+			CreatedAt:    base.Add(time.Duration(i) * time.Second),
+		}); err != nil {
+			t.Fatalf("append audit event %d: %v", i, err)
+		}
+	}
+	rows, err := repo.ListAuditEvents(ctx, AuditEventFilter{})
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	if len(rows) != maxMemoryAuditEvents {
+		t.Fatalf("audit log should keep only the newest %d events, got %d", maxMemoryAuditEvents, len(rows))
+	}
+	if rows[0].ID != "aud_cap_00250" {
+		t.Fatalf("oldest retained audit event should be the first after the trimmed excess, got %s", rows[0].ID)
+	}
+	if last := rows[len(rows)-1].ID; last != fmt.Sprintf("aud_cap_%05d", total-1) {
+		t.Fatalf("newest audit event should be retained, got %s", last)
+	}
 }

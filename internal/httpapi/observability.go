@@ -82,13 +82,21 @@ func (s *Server) listAuditEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rows)
 }
 
+// runtimeMetricsWindow bounds how much trace history one runtime-metrics poll
+// summarizes: the panel reports recent gateway health, not an all-time census,
+// and the window keeps each poll from replaying the entire event log.
+const runtimeMetricsWindow = 24 * time.Hour
+
 func (s *Server) runtimeMetrics(w http.ResponseWriter, r *http.Request) {
 	scope, err := s.effectiveManagementScopeFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	rows, err := s.repo.ListTraces(r.Context(), store.TraceFilter{ManagementScope: scope})
+	rows, err := s.repo.ListTraces(r.Context(), store.TraceFilter{
+		ManagementScope: scope,
+		Since:           s.now().Add(-runtimeMetricsWindow),
+	})
 	if err != nil {
 		writeError(w, err)
 		return

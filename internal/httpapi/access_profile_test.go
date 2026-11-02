@@ -3,10 +3,12 @@ package httpapi_test
 import (
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
+	httpapi "github.com/SummerXaa-Z/agent-harbor/internal/httpapi"
 	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 	"github.com/SummerXaa-Z/agent-harbor/internal/store"
 )
@@ -338,4 +340,64 @@ func traceIDs(rows []traceResponse) []string {
 		ids = append(ids, row.ID)
 	}
 	return ids
+}
+
+func TestTenantAccessProfileHonorsScopedAdminBoundary(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	supportCaller := createDirectAgent(t, repo, "Support caller", "tenant-east", "ws-support", "local", domain.AgentStatusActive, nil)
+	supportTarget := createDirectAgent(t, repo, "Support MCP", "tenant-east", "ws-support", "mcp", domain.AgentStatusActive, nil)
+	supportCapability := createDirectCapabilityWithAction(t, repo, supportTarget.ID, "search_ticket", domain.CapabilityActionRead, domain.CapabilityRiskLow, domain.CapabilitySensitivityInternal, now)
+	supportEntitlement := createDirectTenantEntitlement(t, repo, "tenant-east", supportTarget.ID, supportCapability.ID, []domain.DataScope{{DataDomain: "support", Dataset: "tickets", Region: "us-east"}}, now)
+	supportWorkspace := createDirectWorkspaceAssignment(t, repo, supportEntitlement.ID, "tenant-east", "ws-support", []domain.DataScope{{DataDomain: "support", Dataset: "tickets", Region: "us-east"}}, now)
+	createDirectInstanceAssignment(t, repo, supportWorkspace.ID, "tenant-east", "ws-support", supportCaller.ID, []domain.DataScope{{DataDomain: "support", Dataset: "tickets", Region: "us-east"}}, now)
+
+	financeCaller := createDirectAgent(t, repo, "Finance caller", "tenant-east", "ws-finance", "local", domain.AgentStatusActive, nil)
+	financeTarget := createDirectAgent(t, repo, "Finance MCP", "tenant-east", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	financeCapability := createDirectCapabilityWithAction(t, repo, financeTarget.ID, "export_invoices", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	financeEntitlement := createDirectTenantEntitlement(t, repo, "tenant-east", financeTarget.ID, financeCapability.ID, []domain.DataScope{{DataDomain: "finance", Dataset: "invoices", Region: "eu-west"}}, now)
+	financeWorkspace := createDirectWorkspaceAssignment(t, repo, financeEntitlement.ID, "tenant-east", "ws-finance", []domain.DataScope{{DataDomain: "finance", Dataset: "invoices", Region: "eu-west"}}, now)
+	createDirectInstanceAssignment(t, repo, financeWorkspace.ID, "tenant-east", "ws-finance", financeCaller.ID, []domain.DataScope{{DataDomain: "finance", Dataset: "invoices", Region: "eu-west"}}, now)
+
+	profile := requestWithAdmin(t, router, http.MethodGet, "/api/v1/tenants/tenant-east/access-profile", nil, "", "support-key")
+	if profile.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read own access profile, got %d body=%s", profile.Code, profile.Body.String())
+	}
+	body := profile.Body.String()
+	if !strings.Contains(body, supportCapability.ID) || strings.Contains(body, financeCapability.ID) || strings.Contains(body, "export_invoices") || strings.Contains(body, "ws-finance") {
+		t.Fatalf("scoped access profile should stay inside workspace boundary, body=%s", body)
+	}
+
+	widen := requestWithAdmin(t, router, http.MethodGet, "/api/v1/tenants/tenant-east/access-profile?workspaceId=ws-finance", nil, "", "support-key")
+	if widen.Code != http.StatusForbidden {
+		t.Fatalf("scoped admin should not widen access profile to another workspace, got %d body=%s", widen.Code, widen.Body.String())
+	}
+}
+
+func TestTenantAccessProfileRedactsOutOfScopeHydratedObjects(t *testing.T) {
+	repo := store.NewMemory()
+	router := newRouterWithRepoAndAdminIdentities(repo, []httpapi.AdminIdentity{
+		{Actor: "support-admin", Key: "support-key", Role: "tenant_admin", TenantID: "tenant-east", WorkspaceID: "ws-support"},
+	})
+	now := time.Now().UTC()
+	createDirectTenant(t, repo, "tenant-root", "", "Root tenant", now)
+	createDirectTenant(t, repo, "tenant-east", "tenant-root", "East tenant", now)
+	financeTarget := createDirectAgent(t, repo, "Finance MCP", "tenant-east", "ws-finance", "mcp", domain.AgentStatusActive, nil)
+	financeCapability := createDirectCapabilityWithAction(t, repo, financeTarget.ID, "export_invoices", domain.CapabilityActionExport, domain.CapabilityRiskHigh, domain.CapabilitySensitivityConfidential, now)
+	entitlement := createDirectTenantEntitlement(t, repo, "tenant-east", financeTarget.ID, financeCapability.ID, []domain.DataScope{{DataDomain: "finance", Dataset: "invoices", Region: "eu-west"}}, now)
+	createDirectWorkspaceAssignment(t, repo, entitlement.ID, "tenant-east", "ws-support", []domain.DataScope{{DataDomain: "finance", Dataset: "invoices", Region: "eu-west"}}, now)
+
+	resp := requestWithAdmin(t, router, http.MethodGet, "/api/v1/tenants/tenant-east/access-profile", nil, "", "support-key")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("scoped admin should read own access profile, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	body := resp.Body.String()
+	if strings.Contains(body, "Finance MCP") || strings.Contains(body, "export_invoices") {
+		t.Fatalf("scoped access profile leaked hydrated out-of-scope object details: %s", body)
+	}
 }

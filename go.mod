@@ -3,7 +3,7 @@ module github.com/SummerXaa-Z/agent-harbor
 go 1.26.10
 
 require (
-	github.com/go-chi/chi/v5 v5.3.2
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/jackc/pgx/v5 v5.11.0
 )
 

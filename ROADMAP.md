@@ -50,6 +50,10 @@ Scope:
 
 - First boot auto-provisions a default tenant and workspace; the tenant hierarchy disappears from the UI unless multi-tenant mode is enabled.
   首启动自动建默认租户与工作区；除非启用多租户模式，租户层级从界面消失。
+- The grant surface collapses to a single object — agent, capability, constraints, effect. The three-layer chain remains as internal storage and per-layer audit records, and disappears from every API and UI surface.
+  授权表面塌缩为单一对象——agent、能力、约束、effect。三层链保留为内部存储与逐层审计账本，从一切 API 与界面表面消失。
+- Inside a workspace the default is allow: capabilities are callable without explicit grants, high-risk calls execute but are flagged in the audit timeline, cross-workspace access always requires an explicit grant, and a per-workspace strict flag flips the default to deny, where single-line grants then apply.
+  工作区内默认放行：能力无需显式授权即可调用，高风险调用照常执行但在审计时间线上标红，跨工作区访问永远需要显式授权；工作区级 strict 开关翻开即默认拒，此时单行 grant 生效。
 - Policy configuration as files: YAML import for entitlements and route policies (export already exists in the management MCP), applied via CLI or file watch; PR review replaces the console approval flow as the default path.
   策略配置即文件：entitlement 与 route policy 的 YAML 导入（导出已存在于 management MCP），经 CLI 或文件监听生效；PR review 取代控制台审批流成为默认路径。
 - `harbor import`: reads existing client MCP configuration (Claude Code and friends, or portable catalogs such as `~/.agent-shared/mcp/servers.json`), registers agents, proposes starter policies, and emits per-client config snippets pointing at harbor — no console required for bootstrap.
@@ -57,9 +61,9 @@ Scope:
 - Console investment goes to the audit viewer and the decision explainer only; all other governance views freeze at their current state.
   控制台投入只进审计查看器与决策解释器；其余治理视图冻结在当前状态。
 
-Acceptance: at least two of our own agent clients route HTTP MCP traffic through harbor for a full week; the audit page answers "what did my agents do yesterday" in under a minute; at least one policy denies a call and the explainer shows the evidence chain; a fresh install reaches its first audited tool call in under five minutes via the `harbor import` path (time-to-first-audit-event).
+Acceptance: at least two of our own agent clients route HTTP MCP traffic through harbor for a full week; the audit page answers "what did my agents do yesterday" in under a minute; at least one policy denies a call and the explainer shows the evidence chain; a fresh install reaches its first audited tool call in under five minutes via the `harbor import` path (time-to-first-audit-event); a workspace flipped to strict mode denies an ungranted capability call, and flipping it back restores access.
 
-验收：自己的至少两个 agent 客户端的 HTTP MCP 流量过 harbor 连续一周；审计页 1 分钟内回答「我的 agent 昨天做了什么」；至少一条策略实际拒绝一次调用且解释器展示证据链；全新安装经 `harbor import` 路径在五分钟内出现第一条被审计的工具调用（time-to-first-audit-event）。
+验收：自己的至少两个 agent 客户端的 HTTP MCP 流量过 harbor 连续一周；审计页 1 分钟内回答「我的 agent 昨天做了什么」；至少一条策略实际拒绝一次调用且解释器展示证据链；全新安装经 `harbor import` 路径在五分钟内出现第一条被审计的工具调用（time-to-first-audit-event）；工作区翻开严格模式后未授权的能力调用被拒，翻回即恢复。
 
 ## M2 — Cover The stdio Half / 覆盖 stdio 半壁（target v0.8.0, ~3 part-time weeks）
 

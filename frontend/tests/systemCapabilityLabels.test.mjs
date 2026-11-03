@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-import { createTranslator } from "../src/i18n.ts";
+import { createTranslator } from "../src/i18nSync.ts";
 import { requiredConsoleCapabilities } from "../src/systemInfoContract.ts";
 
 const moduleUrl = new URL("../src/systemCapabilityLabels.ts", import.meta.url);

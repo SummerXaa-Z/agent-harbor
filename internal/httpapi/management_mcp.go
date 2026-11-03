@@ -320,291 +320,218 @@ func (s *Server) callManagementMCPTool(r *http.Request, req managementMCPRequest
 	if confirmed {
 		r = r.WithContext(context.WithValue(r.Context(), managementMCPWriteConfirmationContextKey{}, confirmation))
 	}
-	switch req.Params.Name {
-	case "list_admin_identities":
-		rows, err := s.adminIdentityRowsForPlatform(r)
+	handler, ok := managementMCPToolHandlers[req.Params.Name]
+	if !ok {
+		return managementMCPCallResult{}, domain.BadRequest("VALIDATION_FAILED", fmt.Sprintf("management MCP tool %q is not supported", req.Params.Name))
+	}
+	return handler(s, r, req)
+}
+
+type managementMCPToolCall func(s *Server, r *http.Request, req managementMCPRequest) (managementMCPCallResult, error)
+
+// managementMCPToolArgs builds a handler that decodes typed arguments before
+// the tool-specific logic runs; managementMCPToolNoArgs serves tools whose
+// catalog entry declares no arguments.
+
+func managementMCPToolArgs[T any](call func(*Server, *http.Request, T) (any, error)) managementMCPToolCall {
+	return func(s *Server, r *http.Request, req managementMCPRequest) (managementMCPCallResult, error) {
+		args, err := decodeManagementMCPArguments[T](req.Params.Arguments)
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
-		return managementMCPResult(rows), nil
-	case "create_admin_identity":
-		args, err := decodeManagementMCPArguments[managementMCPCreateAdminIdentityArgs](req.Params.Arguments)
+		result, err := call(s, r, args)
 		if err != nil {
 			return managementMCPCallResult{}, err
 		}
-		created, err := s.createManagedAdminIdentity(r, domain.CreateAdminIdentityRequest{
+		return managementMCPResult(result), nil
+	}
+}
+
+func managementMCPToolNoArgs(call func(*Server, *http.Request) (any, error)) managementMCPToolCall {
+	return func(s *Server, r *http.Request, req managementMCPRequest) (managementMCPCallResult, error) {
+		result, err := call(s, r)
+		if err != nil {
+			return managementMCPCallResult{}, err
+		}
+		return managementMCPResult(result), nil
+	}
+}
+
+var managementMCPProductionExportTool = managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPPermissionPackageProductionReadinessArgs) (any, error) {
+	query, err := permissionPackageProductionReadinessQueryFromMCPArgs(args)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.requirePermissionPackageQueryScope(r, query); err != nil {
+		return nil, err
+	}
+	return s.permissionPackageProductionEvidenceReport(r.Context(), query, managementActor(r))
+})
+
+// managementMCPToolHandlers routes tools/call names to their handlers.
+
+var managementMCPToolHandlers = map[string]managementMCPToolCall{
+	"list_admin_identities": managementMCPToolNoArgs(func(s *Server, r *http.Request) (any, error) {
+		return s.adminIdentityRowsForPlatform(r)
+	}),
+	"create_admin_identity": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPCreateAdminIdentityArgs) (any, error) {
+		return s.createManagedAdminIdentity(r, domain.CreateAdminIdentityRequest{
 			Actor:       args.Actor,
 			DisplayName: args.DisplayName,
 			Role:        domain.AdminIdentityRole(args.Role),
 			TenantID:    args.TenantID,
 			WorkspaceID: args.WorkspaceID,
 		})
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(created), nil
-	case "rotate_admin_identity_key":
-		args, err := decodeManagementMCPArguments[managementMCPAdminIdentityIDArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		rotated, err := s.rotateManagedAdminIdentityKey(r, args.ID)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(rotated), nil
-	case "disable_admin_identity":
-		args, err := decodeManagementMCPArguments[managementMCPAdminIdentityIDArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		disabled, err := s.disableManagedAdminIdentity(r, args.ID)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(disabled), nil
-	case "list_permission_package_templates":
-		return managementMCPResult(permissionpack.Templates()), nil
-	case "draft_permission_package":
-		args, err := decodeManagementMCPArguments[domain.PermissionPackageDraftRequest](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+	}),
+	"rotate_admin_identity_key": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPAdminIdentityIDArgs) (any, error) {
+		return s.rotateManagedAdminIdentityKey(r, args.ID)
+	}),
+	"disable_admin_identity": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPAdminIdentityIDArgs) (any, error) {
+		return s.disableManagedAdminIdentity(r, args.ID)
+	}),
+	"list_permission_package_templates": managementMCPToolNoArgs(func(*Server, *http.Request) (any, error) {
+		return permissionpack.Templates(), nil
+	}),
+	"draft_permission_package": managementMCPToolArgs(func(s *Server, r *http.Request, args domain.PermissionPackageDraftRequest) (any, error) {
 		if err := s.requirePermissionPackageDraftScope(r, args); err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		draft, err := s.buildPermissionPackageDraft(r.Context(), args)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(draft), nil
-	case "preflight_permission_package":
-		args, err := decodeManagementMCPArguments[domain.PermissionPackageApplyRequest](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return s.buildPermissionPackageDraft(r.Context(), args)
+	}),
+	"preflight_permission_package": managementMCPToolArgs(func(s *Server, r *http.Request, args domain.PermissionPackageApplyRequest) (any, error) {
 		if err := s.requirePermissionPackageDraftScope(r, args.PermissionPackageDraftRequest); err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		preflight, err := s.preflightPermissionPackageRequest(r.Context(), args)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(preflight), nil
-	case "apply_permission_package":
-		args, err := decodeManagementMCPArguments[domain.PermissionPackageApplyRequest](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		applied, err := s.applyPermissionPackageRequest(r, args)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(applied), nil
-	case "create_permission_package_approval_request":
-		args, err := decodeManagementMCPArguments[domain.PermissionPackageDraftRequest](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return s.preflightPermissionPackageRequest(r.Context(), args)
+	}),
+	"apply_permission_package": managementMCPToolArgs(func(s *Server, r *http.Request, args domain.PermissionPackageApplyRequest) (any, error) {
+		return s.applyPermissionPackageRequest(r, args)
+	}),
+	"create_permission_package_approval_request": managementMCPToolArgs(func(s *Server, r *http.Request, args domain.PermissionPackageDraftRequest) (any, error) {
 		if err := s.requirePermissionPackageDraftScope(r, args); err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
 		created, err := s.createPermissionPackageApprovalRequestRecord(r.Context(), args, managementActor(r), s.now())
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
 		if _, err := s.repo.AppendAuditEvent(r.Context(), s.managementAuditEvent(r, created.TenantID, created.WorkspaceID, "permission_package.approval_requested", "permission_package_approval_request", created.ID, "Permission package approval requested", permissionPackageApprovalAuditMetadata(created))); err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		return managementMCPResult(permissionPackageApprovalRequestResponse(created, s.now())), nil
-	case "list_permission_package_approval_requests":
-		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageApprovalRequestArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return permissionPackageApprovalRequestResponse(created, s.now()), nil
+	}),
+	"list_permission_package_approval_requests": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPPermissionPackageApprovalRequestArgs) (any, error) {
 		filter, err := permissionPackageApprovalRequestFilterFromMCPArgs(args)
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
 		filter.ManagementScope, err = s.effectiveManagementScopeForRequest(r, filter.ManagementScope)
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
 		rows, err := s.listPermissionPackageApprovalRequestsForRequest(r.Context(), r, filter, args.Reviewer, filter.Limit)
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		return managementMCPResult(permissionPackageApprovalRequestResponses(rows, s.now())), nil
-	case "approve_permission_package_approval_request":
-		args, err := decodeManagementMCPArguments[managementMCPApprovalResolutionArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return permissionPackageApprovalRequestResponses(rows, s.now()), nil
+	}),
+	"approve_permission_package_approval_request": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPApprovalResolutionArgs) (any, error) {
 		approved, err := s.resolveManagementMCPPermissionPackageApprovalRequest(r, args, domain.PermissionPackageApprovalStatusApproved)
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		return managementMCPResult(permissionPackageApprovalRequestResponse(approved, s.now())), nil
-	case "reject_permission_package_approval_request":
-		args, err := decodeManagementMCPArguments[managementMCPApprovalResolutionArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return permissionPackageApprovalRequestResponse(approved, s.now()), nil
+	}),
+	"reject_permission_package_approval_request": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPApprovalResolutionArgs) (any, error) {
 		rejected, err := s.resolveManagementMCPPermissionPackageApprovalRequest(r, args, domain.PermissionPackageApprovalStatusRejected)
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		return managementMCPResult(permissionPackageApprovalRequestResponse(rejected, s.now())), nil
-	case "withdraw_permission_package_approval_request":
-		args, err := decodeManagementMCPArguments[managementMCPApprovalResolutionArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return permissionPackageApprovalRequestResponse(rejected, s.now()), nil
+	}),
+	"withdraw_permission_package_approval_request": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPApprovalResolutionArgs) (any, error) {
 		withdrawn, err := s.withdrawManagementMCPPermissionPackageApprovalRequest(r, args)
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		return managementMCPResult(permissionPackageApprovalRequestResponse(withdrawn, s.now())), nil
-	case "list_permission_package_applications":
-		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageApplicationArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return permissionPackageApprovalRequestResponse(withdrawn, s.now()), nil
+	}),
+	"list_permission_package_applications": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPPermissionPackageApplicationArgs) (any, error) {
 		filter, err := permissionPackageApplicationFilterFromMCPArgs(args)
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
 		filter.ManagementScope, err = s.effectiveManagementScopeForRequest(r, filter.ManagementScope)
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
 		rows, err := s.repo.ListPermissionPackageApplications(r.Context(), filter)
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
 		rows, err = s.visiblePermissionPackageApplications(r.Context(), rows, filter.ManagementScope)
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		rows = permissionPackageApplicationsForRequestedCapability(rows, filter.RequestedCapabilityID)
-		return managementMCPResult(rows), nil
-	case "check_permission_package_production_readiness":
-		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageProductionReadinessArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return permissionPackageApplicationsForRequestedCapability(rows, filter.RequestedCapabilityID), nil
+	}),
+	"check_permission_package_production_readiness": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPPermissionPackageProductionReadinessArgs) (any, error) {
 		query, err := permissionPackageProductionReadinessQueryFromMCPArgs(args)
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
 		if err := s.requirePermissionPackageQueryScope(r, query); err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		readiness, err := s.permissionPackageProductionReadiness(r.Context(), query)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(readiness), nil
-	case "export_permission_package_production_report", "export_permission_package_production_evidence":
-		args, err := decodeManagementMCPArguments[managementMCPPermissionPackageProductionReadinessArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		query, err := permissionPackageProductionReadinessQueryFromMCPArgs(args)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		if err := s.requirePermissionPackageQueryScope(r, query); err != nil {
-			return managementMCPCallResult{}, err
-		}
-		report, err := s.permissionPackageProductionEvidenceReport(r.Context(), query, managementActor(r))
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(report), nil
-	case "explain_permission_package_draft":
-		args, err := decodeManagementMCPArguments[domain.PermissionPackageDraftRequest](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return s.permissionPackageProductionReadiness(r.Context(), query)
+	}),
+	"export_permission_package_production_report":   managementMCPProductionExportTool,
+	"export_permission_package_production_evidence": managementMCPProductionExportTool,
+	"explain_permission_package_draft": managementMCPToolArgs(func(s *Server, r *http.Request, args domain.PermissionPackageDraftRequest) (any, error) {
 		if err := s.requirePermissionPackageDraftScope(r, args); err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		explanation, err := s.explainManagementMCPPermissionPackageDraft(r, args)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(explanation), nil
-	case "explain_access_decision":
-		args, err := decodeManagementMCPArguments[managementMCPExplainAccessArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return s.explainManagementMCPPermissionPackageDraft(r, args)
+	}),
+	"explain_access_decision": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPExplainAccessArgs) (any, error) {
 		if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: strings.TrimSpace(args.TenantID), WorkspaceID: strings.TrimSpace(args.WorkspaceID)}); err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		explanation, err := s.explainManagementMCPAccessDecision(r, args)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(explanation), nil
-	case "get_tenant_access_profile":
-		args, err := decodeManagementMCPArguments[managementMCPAccessProfileArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return s.explainManagementMCPAccessDecision(r, args)
+	}),
+	"get_tenant_access_profile": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPAccessProfileArgs) (any, error) {
 		if err := s.requireRequestedScopeAllowed(r, store.ManagementScope{TenantID: strings.TrimSpace(args.TenantID), WorkspaceID: strings.TrimSpace(args.WorkspaceID)}); err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		profile, err := s.managementMCPAccessProfile(r, args)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(profile), nil
-	case "list_agents":
-		args, err := decodeManagementMCPArguments[managementMCPScopeArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return s.managementMCPAccessProfile(r, args)
+	}),
+	"list_agents": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPScopeArgs) (any, error) {
 		scope, err := s.effectiveManagementScopeForRequest(r, store.ManagementScope{
 			TenantID:    strings.TrimSpace(args.TenantID),
 			WorkspaceID: strings.TrimSpace(args.WorkspaceID),
 		})
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		rows, err := s.repo.ListAgents(r.Context(), store.AgentFilter{ManagementScope: scope})
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(rows), nil
-	case "list_capabilities":
-		args, err := decodeManagementMCPArguments[managementMCPCapabilityArgs](req.Params.Arguments)
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
+		return s.repo.ListAgents(r.Context(), store.AgentFilter{ManagementScope: scope})
+	}),
+	"list_capabilities": managementMCPToolArgs(func(s *Server, r *http.Request, args managementMCPCapabilityArgs) (any, error) {
 		if args.Status != "" && !validCapabilityDiscoveryStatus(args.Status) {
-			return managementMCPCallResult{}, domain.BadRequest("VALIDATION_FAILED", "status must be pending_review, approved, deprecated, or removed")
+			return nil, domain.BadRequest("VALIDATION_FAILED", "status must be pending_review, approved, deprecated, or removed")
 		}
 		scope, err := s.effectiveManagementScopeForRequest(r, store.ManagementScope{
 			TenantID:    strings.TrimSpace(args.TenantID),
 			WorkspaceID: strings.TrimSpace(args.WorkspaceID),
 		})
 		if err != nil {
-			return managementMCPCallResult{}, err
+			return nil, err
 		}
-		rows, err := s.repo.ListCapabilities(r.Context(), store.CapabilityFilter{
+		return s.repo.ListCapabilities(r.Context(), store.CapabilityFilter{
 			ManagementScope: scope,
 			TargetID:        strings.TrimSpace(args.TargetID),
 			Status:          args.Status,
 		})
-		if err != nil {
-			return managementMCPCallResult{}, err
-		}
-		return managementMCPResult(rows), nil
-	default:
-		return managementMCPCallResult{}, domain.BadRequest("VALIDATION_FAILED", fmt.Sprintf("management MCP tool %q is not supported", req.Params.Name))
-	}
+	}),
 }
 
 func managementMCPTools() []managementMCPTool {

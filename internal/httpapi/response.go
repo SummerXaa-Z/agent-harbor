@@ -14,10 +14,11 @@ import (
 )
 
 type envelope struct {
-	Code    int    `json:"code"`
-	Data    any    `json:"data,omitempty"`
-	Error   string `json:"error,omitempty"`
-	Message string `json:"message,omitempty"`
+	Code    int            `json:"code"`
+	Data    any            `json:"data,omitempty"`
+	Error   string         `json:"error,omitempty"`
+	Message string         `json:"message,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 const maxJSONBodyBytes int64 = 1 << 20
@@ -37,6 +38,7 @@ func writeError(w http.ResponseWriter, err error) {
 			Code:    appErr.Status,
 			Error:   appErr.Code,
 			Message: appErr.Message,
+			Details: appErr.Details,
 		})
 		return
 	}

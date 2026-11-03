@@ -41,6 +41,8 @@ agents:
 6. 不可变默认：`version` 不认识的字段报错拒绝加载（防未来语法静默失效）。
 7. **可见性即权限（严格模式）**：`tools/list` 只返回策略放行的工具——agent 根本看不到会被拒的工具，不浪费调用量、prompt 上下文干净（Stripe 模式：key 权限决定工具可见性，而非仅决定放行）。宽松模式不过滤，只标红。
 
+实现约束（源码级参照）：可见性过滤（tools/list）与调用判定（tools/call）必须委托**同一个纯函数**——MCPHub 的 authorizationService 即此结构（discover/invoke 同一真源），杜绝两处逻辑漂移；`tools/list` 的多工具判定走**批量请求**（Docker `pkg/policy` 的批量模式），不做 N 次往返。
+
 工具链：`harbor apply --dry-run` 输出 diff；`harbor apply` 幂等物化（内部照旧展开三层链存储，表面无感）；文件可放 git，PR review 即审批。schema 校验进 `make check`。
 
 ## 2. `harbor import`
@@ -51,6 +53,8 @@ agents:
 2. **预注册 agents**（codex/claude/kimi 等，按发现的客户端命名），打印一次性 agent key。
 3. **生成初始 `harbor.yaml`**：单一 main 工作区、导入目标全进圈、`strict: false`——现状即基线，迁移零行为变化。
 4. **`harbor connect <client>` 直接接线**：探测本机已安装的客户端（claude-code、cursor、codex…），保持 server 名不变（工具 ID 前缀不变，agent 无感）、端点换成 harbor、注入 agent key 引用，**直接写入该客户端的配置**；`--print` 退回仅打印片段。mcpm 式集中配置目录同格式可读——与配置同步工具互操作，不在纯同步上竞争（harbor 的增量永远是策略与审计）。
+
+   客户端注册表是**数据不是代码**（抄 Docker `pkg/client/config.yml` 的 schema）：每个客户端声明 `installCheckPaths`（探测是否安装）、分 OS 的配置文件路径、以及 list/set/del 三个编辑操作（yq 表达式）；支持新客户端 = 加一段注册表，零代码。首版客户端清单从 Docker 的表冷启动（claude-desktop / claude-code / cline / cursor / continue-dev / kiro / vscode / zed / codex…）。
 
 幂等：重复运行输出 diff（新发现的 server、已消失的标记 stale）。time-to-first-audit-event（目标 5 分钟）由此路径度量。全程不需要控制台：**无头模式（不启 Web 界面，仅 CLI + API + MCP 端点）是一等运行形态**，不是隐藏选项。
 
@@ -98,7 +102,25 @@ agent 客户端 ←stdio JSON-RPC→ harbor-wrap ←stdio→ 真实 MCP server
 3. 提示注入诱导的「合法但错误」调用——权限管边界，不管语义。
 4. 绕过 wrap 直连真实 server 的本机进程（wrap 不是强制卡点，是自觉卡点；强制卡点=网关模式 + 网络层只允许网关出流量）。
 
-## 6. 开放问题（不阻塞 M1）
+## 6. 决策引擎接口与 agent key 模型（2026-11-04 源码调研定型）
+
+**Decide 词表**（对齐 Docker `pkg/policy` 的生产形状，M3 沿用）：
+
+```ts
+Request  = { workspace, target, tool?, action: "load" | "invoke", subject? }
+Decision = { allowed: boolean, reason: string, ruleRef?: "harbor.yaml:12", evidence: [] }
+```
+
+- `load` = 可见性判定（tools/list 过滤），`invoke` = 执行判定（tools/call）；两者共用第 1 节的同一纯函数。
+- `reason` + `ruleRef` 是「拒绝即解释」的数据源，随 MCP 错误结构一并返回。
+- MCP 的 prompts/resources 两个面暂不建模，词表预留扩展位（Docker 已有 `prompt` action 先例）。
+
+**Agent key 存储与作用域**（抄 MCPHub `BearerKey` 的机制，其上叠加工具级）：
+
+- 存储：只存 sha256 哈希 + 短前缀（索引查找用）；明文仅签发时一次性展示，历史明文字段启动即清空。
+- 作用域两层叠加：key 定粗边界（`workspace` + include/exclude 目标列表，默认 all——MCPHub 的 accessType 模式）；harbor.yaml 定细粒度（工具级 allow/deny）。两层皆可拒，deny 永远赢。
+
+## 7. 开放问题（不阻塞 M1）
 
 - 快照签名：wrap 校验快照真伪（v1 仅 checksum；若多机分发再考虑签名）。
 - 多工作区的文件组织：单文件多 workspace vs 每工作区一目录（先单文件，痛了再拆）。
@@ -106,8 +128,9 @@ agent 客户端 ←stdio JSON-RPC→ harbor-wrap ←stdio→ 真实 MCP server
 - per-agent 凭据绑定：一把 agent key 绑定个人上游凭据（MCPHub 的 per-user credentials 模式），隔离的 stdio 运行时随之而来。
 - 工具侧沙箱：wrap 模式下被包装 server 的容器化隔离与最小主机权限（Docker MCP Gateway 模式）。
 - 响应脱敏插件：工具返回值中的敏感信息掩码（Lasso token masking 模式）；请求侧已有 argsDigest，响应侧暂缺。
+- MCP prompts/resources 两个面的策略建模（Docker 已有 `prompt` action 先例）。
 
-## 7. 设计出处（2026-11-04 同类产品调研）
+## 8. 设计出处（2026-11-04 同类产品调研）
 
 | 设计 | 出处 |
 | --- | --- |
@@ -117,5 +140,9 @@ agent 客户端 ←stdio JSON-RPC→ harbor-wrap ←stdio→ 真实 MCP server
 | 无头模式一等化；文件存储默认 + PG 可选 | MCPHub：`DISABLE_WEB` 显式 flag、Database Mode 可选 |
 | 零迁移注册（`wrap --register` 候选）与响应脱敏 | [Lasso mcp-gateway](https://github.com/lasso-security/mcp-gateway)：读现有客户端配置自注册、护栏插件化 |
 | 配置互操作不竞争 | [mcpm](https://github.com/pathintegral-institute/mcpm.sh)：集中配置同步已有专职工具，harbor 读同格式作输入 |
+| 客户端注册表数据化（installCheckPaths + 分 OS 路径 + yq 三操作） | [Docker `pkg/client/config.yml`](https://github.com/docker/mcp-gateway/blob/main/pkg/client/config.yml) |
+| 决策词表 `{action: load/invoke}` 与批量判定 | [Docker `pkg/policy`](https://github.com/docker/mcp-gateway/blob/main/pkg/policy/policy.go) |
+| key 哈希+前缀存储、include/exclude 作用域 | [MCPHub `BearerKey`](https://github.com/samanhappy/mcphub/blob/main/src/db/entities/BearerKey.ts) |
+| 单一可见性过滤器（discover/invoke 同真源） | [MCPHub `authorizationService`](https://github.com/samanhappy/mcphub/blob/main/src/services/authorizationService.ts) |
 
 差异化对照（调研确认的空位）：以上产品无一同时具备「工具级策略文件 + 跨全部 server 的证据链审计 + 拒绝即解释」。

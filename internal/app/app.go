@@ -15,6 +15,7 @@ import (
 	"github.com/SummerXaa-Z/agent-harbor/internal/db"
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
 	"github.com/SummerXaa-Z/agent-harbor/internal/httpapi"
+	"github.com/SummerXaa-Z/agent-harbor/internal/policy"
 	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 	"github.com/SummerXaa-Z/agent-harbor/internal/store"
 )
@@ -93,19 +94,31 @@ func New(ctx context.Context) (*App, error) {
 		closeFn = pool.Close
 	}
 
+	serverOptions := []httpapi.Option{
+		httpapi.WithAdminKey(os.Getenv("AGENT_HARBOR_ADMIN_KEY")),
+		httpapi.WithAdminIdentities(adminIdentities),
+		httpapi.WithSessionSecret(os.Getenv("AGENT_HARBOR_SESSION_SECRET")),
+		httpapi.WithUnauthenticatedAdminAllowed(allowUnauthenticatedAdmin),
+		httpapi.WithPrivateUpstreamsAllowed(allowPrivateUpstreams),
+		httpapi.WithPermissionPackageApprovalReviewers(approvalReviewers),
+		httpapi.WithCORSOrigins(corsOrigins),
+		httpapi.WithDefaultLocalCORSOrigins(defaultLocalCORSOriginsAllowed(deploymentMode)),
+	}
+	// AGENT_HARBOR_POLICY_FILE activates harbor.yaml mode: decisions route
+	// through internal/policy instead of the grant-chain store evaluation.
+	// A bad file fails boot loudly (never run on assumptions).
+	if policyPath := os.Getenv("AGENT_HARBOR_POLICY_FILE"); policyPath != "" {
+		parsedPolicy, err := policy.LoadFile(policyPath)
+		if err != nil {
+			closeFn()
+			return nil, fmt.Errorf("load harbor policy: %w", err)
+		}
+		serverOptions = append(serverOptions, httpapi.WithPolicy(parsedPolicy))
+	}
+
 	return &App{
-		server: httpapi.New(
-			repo,
-			httpapi.WithAdminKey(os.Getenv("AGENT_HARBOR_ADMIN_KEY")),
-			httpapi.WithAdminIdentities(adminIdentities),
-			httpapi.WithSessionSecret(os.Getenv("AGENT_HARBOR_SESSION_SECRET")),
-			httpapi.WithUnauthenticatedAdminAllowed(allowUnauthenticatedAdmin),
-			httpapi.WithPrivateUpstreamsAllowed(allowPrivateUpstreams),
-			httpapi.WithPermissionPackageApprovalReviewers(approvalReviewers),
-			httpapi.WithCORSOrigins(corsOrigins),
-			httpapi.WithDefaultLocalCORSOrigins(defaultLocalCORSOriginsAllowed(deploymentMode)),
-		),
-		close: closeFn,
+		server: httpapi.New(repo, serverOptions...),
+		close:  closeFn,
 	}, nil
 }
 
@@ -124,6 +137,7 @@ func deploymentEnvFromOS() map[string]string {
 		"AGENT_HARBOR_ALLOW_PRIVATE_UPSTREAMS",
 		"AGENT_HARBOR_ADMIN_KEY",
 		"AGENT_HARBOR_ADMIN_IDENTITIES",
+		"AGENT_HARBOR_POLICY_FILE",
 		"AGENT_HARBOR_SESSION_SECRET",
 		"AGENT_HARBOR_DATABASE_URL",
 		"AGENT_HARBOR_CREDENTIAL_KEY",

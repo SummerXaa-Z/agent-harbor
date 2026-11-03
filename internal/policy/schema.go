@@ -3,6 +3,7 @@ package policy
 import (
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -333,4 +334,15 @@ func joinQuoted(values []string) string {
 		quoted[i] = strconv.Quote(value)
 	}
 	return strings.Join(quoted, ", ")
+}
+
+// LoadFile reads and parses a harbor.yaml from disk; boot fails loudly on a
+// bad policy file rather than running on assumptions.
+func LoadFile(path string) (*Policy, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open policy file: %w", err)
+	}
+	defer file.Close()
+	return Parse(file)
 }

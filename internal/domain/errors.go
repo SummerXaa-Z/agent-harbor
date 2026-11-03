@@ -6,6 +6,9 @@ type AppError struct {
 	Status  int
 	Code    string
 	Message string
+	// Details carries structured context for machine readers (v2 policy
+	// denials attach policy/ruleRef/auditId); nil on plain errors.
+	Details map[string]any `json:"details,omitempty"`
 }
 
 func (e AppError) Error() string {
@@ -38,6 +41,10 @@ func Unauthorized(message string) AppError {
 
 func PermissionDenied(message string) AppError {
 	return AppError{Status: 403, Code: "PERMISSION_DENIED", Message: message}
+}
+
+func PermissionDeniedWithDetails(message string, details map[string]any) AppError {
+	return AppError{Status: 403, Code: "PERMISSION_DENIED", Message: message, Details: details}
 }
 
 func UpstreamError(message string) AppError {

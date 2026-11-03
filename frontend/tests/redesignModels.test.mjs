@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createTranslator, translationKeys } from "../src/i18n.ts";
+import { createTranslator, translationKeys } from "../src/i18nSync.ts";
 import {
   apiErrorCategory,
   apiErrorCopy,

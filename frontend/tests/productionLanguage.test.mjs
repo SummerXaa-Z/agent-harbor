@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   createTranslator,
   translationKeys
-} from "../src/i18n.ts";
+} from "../src/i18nSync.ts";
 
 test("visible production copy avoids evidence wording", () => {
   for (const language of ["en", "zh-CN"]) {

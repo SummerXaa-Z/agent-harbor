@@ -21,7 +21,7 @@ import {
 } from "../src/askJourney.ts";
 import {
   createTranslator
-} from "../src/i18n.ts";
+} from "../src/i18nSync.ts";
 import { permissionPackageTemplates } from "../src/permissionPackages.ts";
 
 const now = "2026-06-11T10:00:00Z";

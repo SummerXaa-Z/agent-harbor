@@ -2,7 +2,7 @@ import type { AccessSubjectOption } from "./accessSubjects";
 import type { AiAdminProductionConsoleStatus } from "./aiAdminProductionConsole";
 import type { MetricTone } from "./consoleMetrics";
 import { capabilityKeyDisplayName } from "./consolePresenters";
-import { createTranslator } from "./i18n";
+import type { Translator } from "./consolePresenters";
 import type { PermissionRequestWizardStep } from "./permissionRequestJourney";
 import type {
   PermissionPackageApplyPreflight,
@@ -28,7 +28,7 @@ import type {
 } from "./types";
 
 export type Tone = MetricTone;
-export type Translator = ReturnType<typeof createTranslator>;
+export type { Translator };
 export type PermissionRequestStepTarget = PermissionRequestWizardStep | "validation" | "acceptance";
 
 const defaultWorkspaceId = "workspace-sandbox";

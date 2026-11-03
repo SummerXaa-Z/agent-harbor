@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { apiBase } from "../api";
 import { useConsoleAuth } from "../hooks/useConsoleAuth";
 import "../styles/redesign.css";
-import { RedesignI18nContext, useRedesignI18n, useRedesignLanguage } from "./hooks/useRedesignI18n";
+import { RedesignI18nContext, useRedesignI18n, useRedesignLanguage, type InitialI18n } from "./hooks/useRedesignI18n";
 import { useNotifications } from "./hooks/useNotifications";
 import { useRedesignData, type RedesignData } from "./hooks/useRedesignData";
 import { recentItems } from "./model/paletteIndex";
@@ -31,9 +31,9 @@ const MineView = lazy(() => import("./views/user/MineView").then((m) => ({ defau
 
 type ConsoleAuth = ReturnType<typeof useConsoleAuth>;
 
-export default function RedesignApp({ hash }: { hash: string }) {
+export default function RedesignApp({ hash, initialI18n }: { hash: string; initialI18n: InitialI18n }) {
   const parsed = parseRedesignHash(hash);
-  const i18n = useRedesignLanguage();
+  const i18n = useRedesignLanguage(initialI18n);
   const auth = useConsoleAuth();
   const data = useRedesignData(auth.accessReady);
   const [overlayRoot, setOverlayRoot] = useState<HTMLDivElement | null>(null);

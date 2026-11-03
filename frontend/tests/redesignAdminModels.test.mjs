@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createTranslator } from "../src/i18n.ts";
+import { createTranslator } from "../src/i18nSync.ts";
 import { sessionIdentity } from "../src/redesign/model/demoRole.ts";
 import { approvalCapabilityRows, approvalList, approvalNoticeKey, approvalRiskSummary, approvalTabCounts, filterApprovalList } from "../src/redesign/model/approvalReview.ts";
 import { auditRangeSince, auditResourceTypeLabelKey, auditResourceTypes, auditTimelineRows, filterAuditTimeline, todayAuditCount, traceResultKind } from "../src/redesign/model/auditTimeline.ts";

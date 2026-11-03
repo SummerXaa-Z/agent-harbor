@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import { accessTraceReasonLabel } from "../src/consolePresenters.ts";
-import { createTranslator } from "../src/i18n.ts";
+import { createTranslator } from "../src/i18nSync.ts";
 import { accessNextActionKeys } from "../src/askJourney.ts";
 
 // Guard for the console message localization contract

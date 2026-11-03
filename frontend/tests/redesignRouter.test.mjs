@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { translationKeys } from "../src/i18n.ts";
+import { translationKeys } from "../src/i18nSync.ts";
 import {
   adminFooterNav,
   adminHash,

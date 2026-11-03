@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { createTranslator } from "../src/i18n.ts";
+import { createTranslator } from "../src/i18nSync.ts";
 import { knownDecisionReasons } from "../src/askJourney.ts";
 
 // Phase 3 guards for the console message localization contract

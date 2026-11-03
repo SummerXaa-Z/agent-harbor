@@ -3,14 +3,23 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  createTranslator,
-  translationKeys,
   normalizeLanguage,
   resolveInitialLanguage
 } from "../src/i18n.ts";
+import { createTranslator, translationKeys } from "../src/i18nSync.ts";
 import { localizedApiErrorMessage, tx } from "../src/localizedMessages.ts";
 
-const i18nSource = readFileSync(new URL("../src/i18n.ts", import.meta.url), "utf8");
+// The locale catalogs live in their own modules now; the stale-key bans below
+// target catalog copy, so they read both files joined.
+const i18nSource = ["../src/i18n/en.ts", "../src/i18n/zh.ts"]
+  .map((path) => readFileSync(new URL(path, import.meta.url), "utf8"))
+  .join("\n");
+
+test("en and zh-CN catalogs stay in full key parity", () => {
+  // loadTranslator fetches only the active locale and the app translator has
+  // no cross-locale fallback, so every key must exist in both catalogs.
+  assert.deepEqual(translationKeys("zh-CN"), translationKeys("en"));
+});
 
 test("normalizeLanguage supports English and Simplified Chinese", () => {
   assert.equal(normalizeLanguage("zh-CN"), "zh-CN");

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-import { createTranslator, translationKeys } from "../src/i18n.ts";
+import { createTranslator, translationKeys } from "../src/i18nSync.ts";
 import { adminViews, userViews } from "../src/redesign/router.ts";
 import { tableColumns } from "../src/redesign/model/tableColumns.ts";
 
@@ -234,10 +234,10 @@ test("the legacy console is fully retired (D1)", () => {
   const rootEntry = read("../src/RootEntry.tsx");
   const redesignApp = read("../src/redesign/RedesignApp.tsx");
 
-  assert.match(main, /<RootEntry \/>/);
+  assert.match(main, /<RootEntry initialI18n=\{\{ language: initialLanguage, t: initialTranslator \}\} \/>/);
   assert.doesNotMatch(main, /["']\.\/App["']|styles\.css/);
   assert.match(rootEntry, /import RedesignApp from "\.\/redesign\/RedesignApp";/);
-  assert.match(rootEntry, /<RedesignApp hash=\{hash\} \/>/);
+  assert.match(rootEntry, /<RedesignApp hash=\{hash\} initialI18n=\{initialI18n\} \/>/);
   assert.match(redesignApp, /import "\.\.\/styles\/redesign\.css";/);
 
   // No legacy entry, controller, or stylesheet may creep back into src/.

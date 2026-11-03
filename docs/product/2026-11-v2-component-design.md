@@ -23,6 +23,7 @@ agents:
   - id: codex                    # 调用方，对应一把 agent key
     workspace: main
     allow:                       # 严格模式下=显式放行；宽松模式下=高危例外放行
+      - capability: "crm.*"      # 整 server 放行是默认习惯用法：常用粒度在 server 级（MCPHub 观察）
       - capability: crm.lookupCustomer
     deny:                        # 两种模式下都生效：例外收紧
       - capability: "crm.*delete*"
@@ -30,14 +31,15 @@ agents:
     subjects: ["user:support-*"] # 可代行的主体（可选，继承自 subject selector 语义）
 ```
 
-判定语义（六条，全部可实现为纯函数）：
+判定语义（七条，全部可实现为纯函数）：
 
-1. 匹配用 glob：`capability` 支持精确名与 `*` 通配。
+1. 匹配用 glob：`capability` 支持精确名与 `*` 通配；**整 server 放行（`crm.*`）是文档推荐的默认习惯用法**，逐工具枚举是可选深度。
 2. **deny 永远赢**：命中 deny 即拒，无论模式。
 3. 宽松模式（strict=false）：未命中 deny 即放行；高危调用放行但在审计事件上打风险标记。
 4. 严格模式（strict=true）：命中 allow 才放行，其余拒；拒的原因引用规则位置（文件 + 行）。
 5. 跨工作区：目标不在 agent 所属工作区的 `targets` 里 = 拒（与模式无关——边界是边界）。
 6. 不可变默认：`version` 不认识的字段报错拒绝加载（防未来语法静默失效）。
+7. **可见性即权限（严格模式）**：`tools/list` 只返回策略放行的工具——agent 根本看不到会被拒的工具，不浪费调用量、prompt 上下文干净（Stripe 模式：key 权限决定工具可见性，而非仅决定放行）。宽松模式不过滤，只标红。
 
 工具链：`harbor apply --dry-run` 输出 diff；`harbor apply` 幂等物化（内部照旧展开三层链存储，表面无感）；文件可放 git，PR review 即审批。schema 校验进 `make check`。
 
@@ -48,9 +50,9 @@ agents:
 1. **读 server 清单**，提议 targets（id/endpoint/channel）。上游凭据若在源配置的环境变量里，读取**值**迁入 harbor 服务端加密存储（internal/security 现成能力）；终端只显示掩码，`--confirm` 确认后才落库。
 2. **预注册 agents**（codex/claude/kimi 等，按发现的客户端命名），打印一次性 agent key。
 3. **生成初始 `harbor.yaml`**：单一 main 工作区、导入目标全进圈、`strict: false`——现状即基线，迁移零行为变化。
-4. **生成各客户端替换片段**：保持 server 名不变（工具 ID 前缀不变，agent 无感），端点换成 harbor，注入 agent key 引用。
+4. **`harbor connect <client>` 直接接线**：探测本机已安装的客户端（claude-code、cursor、codex…），保持 server 名不变（工具 ID 前缀不变，agent 无感）、端点换成 harbor、注入 agent key 引用，**直接写入该客户端的配置**；`--print` 退回仅打印片段。mcpm 式集中配置目录同格式可读——与配置同步工具互操作，不在纯同步上竞争（harbor 的增量永远是策略与审计）。
 
-幂等：重复运行输出 diff（新发现的 server、已消失的标记 stale）。time-to-first-audit-event（目标 5 分钟）由此路径度量。
+幂等：重复运行输出 diff（新发现的 server、已消失的标记 stale）。time-to-first-audit-event（目标 5 分钟）由此路径度量。全程不需要控制台：**无头模式（不启 Web 界面，仅 CLI + API + MCP 端点）是一等运行形态**，不是隐藏选项。
 
 ## 3. 统一审计事件
 
@@ -101,3 +103,19 @@ agent 客户端 ←stdio JSON-RPC→ harbor-wrap ←stdio→ 真实 MCP server
 - 快照签名：wrap 校验快照真伪（v1 仅 checksum；若多机分发再考虑签名）。
 - 多工作区的文件组织：单文件多 workspace vs 每工作区一目录（先单文件，痛了再拆）。
 - wrap 模式下的上游凭据：本地 server 仍需本地凭据，零密钥仅网关模式成立（README 同步声明）。
+- per-agent 凭据绑定：一把 agent key 绑定个人上游凭据（MCPHub 的 per-user credentials 模式），隔离的 stdio 运行时随之而来。
+- 工具侧沙箱：wrap 模式下被包装 server 的容器化隔离与最小主机权限（Docker MCP Gateway 模式）。
+- 响应脱敏插件：工具返回值中的敏感信息掩码（Lasso token masking 模式）；请求侧已有 argsDigest，响应侧暂缺。
+
+## 7. 设计出处（2026-11-04 同类产品调研）
+
+| 设计 | 出处 |
+| --- | --- |
+| 可见性即权限（严格模式过滤 `tools/list`） | [Stripe MCP](https://docs.stripe.com/mcp)：restricted key 权限决定工具可见性；2026-12 起拒收全权限 key |
+| `harbor connect` 单命令接线 | [Docker MCP Gateway](https://github.com/docker/mcp-gateway)：`--connect cursor`；profile 可经 OCI registry 分享（工作区可移植性的未来参照） |
+| 整 server 粒度为默认习惯用法 | [MCPHub](https://github.com/samanhappy/mcphub)（2.6k star，同生态位最强对照）：仅 server/分组可见性 + 认证，无 per-tool 策略——粒度常在 server 级 |
+| 无头模式一等化；文件存储默认 + PG 可选 | MCPHub：`DISABLE_WEB` 显式 flag、Database Mode 可选 |
+| 零迁移注册（`wrap --register` 候选）与响应脱敏 | [Lasso mcp-gateway](https://github.com/lasso-security/mcp-gateway)：读现有客户端配置自注册、护栏插件化 |
+| 配置互操作不竞争 | [mcpm](https://github.com/pathintegral-institute/mcpm.sh)：集中配置同步已有专职工具，harbor 读同格式作输入 |
+
+差异化对照（调研确认的空位）：以上产品无一同时具备「工具级策略文件 + 跨全部 server 的证据链审计 + 拒绝即解释」。

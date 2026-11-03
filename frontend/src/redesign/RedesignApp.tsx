@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { apiBase } from "../api";
 import { useConsoleAuth } from "../hooks/useConsoleAuth";
 import "../styles/redesign.css";
@@ -17,13 +17,17 @@ import { LoadingState } from "./ui/StateViews";
 import { ToastProvider, useToast } from "./ui/Toast";
 import { EntryPage } from "./views/EntryPage";
 import { NotFoundView } from "./views/NotFoundView";
-import { AdminView } from "./views/admin/AdminView";
-import { ApplyView } from "./views/user/ApplyView";
-import { AskView } from "./views/user/AskView";
-import { GoLiveView } from "./views/user/GoLiveView";
-import { HomeView } from "./views/user/HomeView";
-import { MineView } from "./views/user/MineView";
 import type { UserViewProps } from "./views/user/userViewProps";
+
+// Views load on demand so each route ships as its own chunk; the shell,
+// login, and entry surfaces stay eager for first paint. Chunk failures
+// surface through the view-scoped ErrorBoundary around the Suspense.
+const AdminView = lazy(() => import("./views/admin/AdminView").then((m) => ({ default: m.AdminView })));
+const ApplyView = lazy(() => import("./views/user/ApplyView").then((m) => ({ default: m.ApplyView })));
+const AskView = lazy(() => import("./views/user/AskView").then((m) => ({ default: m.AskView })));
+const GoLiveView = lazy(() => import("./views/user/GoLiveView").then((m) => ({ default: m.GoLiveView })));
+const HomeView = lazy(() => import("./views/user/HomeView").then((m) => ({ default: m.HomeView })));
+const MineView = lazy(() => import("./views/user/MineView").then((m) => ({ default: m.MineView })));
 
 type ConsoleAuth = ReturnType<typeof useConsoleAuth>;
 
@@ -157,11 +161,13 @@ function SurfaceShell({
         <main className="content">
           <div className="view" key={routeKey}>
             <ErrorBoundary scope="view">
-              {route.surface === "user" ? (
-                <UserView data={data} onRetry={() => void refresh()} params={route.params} session={auth.session} view={route.view} />
-              ) : (
-                <AdminView data={data} onRetry={() => void refresh()} params={route.params} session={auth.session} view={route.view} />
-              )}
+              <Suspense fallback={<LoadingState label={t("rd.common.loading")} />}>
+                {route.surface === "user" ? (
+                  <UserView data={data} onRetry={() => void refresh()} params={route.params} session={auth.session} view={route.view} />
+                ) : (
+                  <AdminView data={data} onRetry={() => void refresh()} params={route.params} session={auth.session} view={route.view} />
+                )}
+              </Suspense>
             </ErrorBoundary>
           </div>
         </main>

@@ -110,17 +110,18 @@ func exitForError(status int, envelope apiEnvelope) int {
 }
 
 type traceRow struct {
-	ID         string    `json:"id"`
-	RunID      string    `json:"runId,omitempty"`
-	CallerID   string    `json:"callerAgentId,omitempty"`
-	TargetID   string    `json:"targetAgentId"`
-	RouteKey   string    `json:"routeKey,omitempty"`
-	Decision   string    `json:"decision"`
-	Reason     string    `json:"reason,omitempty"`
-	ArgsDigest string    `json:"argsDigest,omitempty"`
-	RiskFlags  []string  `json:"riskFlags,omitempty"`
-	RuleRef    string    `json:"ruleRef,omitempty"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID           string    `json:"id"`
+	RunID        string    `json:"runId,omitempty"`
+	CallerID     string    `json:"callerAgentId,omitempty"`
+	TargetID     string    `json:"targetAgentId"`
+	CapabilityID string    `json:"capabilityId,omitempty"`
+	RouteKey     string    `json:"routeKey,omitempty"`
+	Decision     string    `json:"decision"`
+	Reason       string    `json:"reason,omitempty"`
+	ArgsDigest   string    `json:"argsDigest,omitempty"`
+	RiskFlags    []string  `json:"riskFlags,omitempty"`
+	RuleRef      string    `json:"ruleRef,omitempty"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 
 func cmdAudit(args []string, stdout, stderr io.Writer) int {

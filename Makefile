@@ -14,6 +14,7 @@ SCENARIO_SCRIPTS := \
 	scripts/scenario-credential-redaction.sh \
 	scripts/scenario-retry-config.sh \
 	scripts/scenario-runtime-metrics.sh \
+	scripts/scenario-harbor-policy.sh \
 	scripts/scenario-credential-rotation.sh \
 	scripts/scenario-management-audit.sh \
 	scripts/scenario-route-policies.sh \
@@ -38,7 +39,7 @@ SCENARIO_SCRIPT_LIBS := \
 	scripts/lib/ports.sh \
 	scripts/pnpm.sh
 
-.PHONY: help check release-check dependency-audit fmt gofmt-check test test-fresh test-race test-fuzz vet build frontend-deps frontend-lint frontend-test frontend-build real-mcp-deps makefile-targets-test evaluation-readiness-test scenario-scripts-lint github-config-lint test-postgres test-postgres-race test-postgres-notice run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-all
+.PHONY: help check release-check dependency-audit fmt gofmt-check test test-fresh test-race test-fuzz vet build frontend-deps frontend-lint frontend-test frontend-build real-mcp-deps makefile-targets-test evaluation-readiness-test scenario-scripts-lint github-config-lint test-postgres test-postgres-race test-postgres-notice run mock-mcp real-mcp demo evaluation-readiness core-journey scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey production-hardening scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-harbor-policy scenario-all
 
 help:
 	@printf 'AgentHarbor developer targets\n'
@@ -60,6 +61,7 @@ help:
 	@printf '  make frontend-build        Build frontend assets\n'
 	@printf '  make makefile-targets-test Verify Makefile release-gate dependencies\n'
 	@printf '  make evaluation-readiness-test Verify external evaluator pack generation\n'
+	@printf '  make scenario-harbor-policy End-to-end harbor.yaml policy scenario (needs PostgreSQL)\n'
 	@printf '  make scenario-scripts-lint Syntax-check scenario scripts\n'
 	@printf '  make github-config-lint    Parse-check GitHub YAML configuration\n'
 	@printf '  make test-postgres         Run store tests using AGENT_HARBOR_TEST_DATABASE_URL\n'
@@ -82,7 +84,7 @@ help:
 
 check: gofmt-check test test-postgres-notice vet build makefile-targets-test evaluation-readiness-test frontend-lint frontend-test frontend-build scenario-scripts-lint github-config-lint
 
-release-check: gofmt-check test-fresh test-race test-fuzz test-postgres-notice vet build production-hardening scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center makefile-targets-test evaluation-readiness-test frontend-lint frontend-test frontend-build scenario-scripts-lint github-config-lint
+release-check: gofmt-check test-fresh test-race test-fuzz test-postgres-notice vet build production-hardening scenario-permission-package-approval ai-admin-browser-journey web-console-production-journey scenario-admin-tenant-boundary scenario-admin-access-management scenario-tenant-permission-center scenario-harbor-policy makefile-targets-test evaluation-readiness-test frontend-lint frontend-test frontend-build scenario-scripts-lint github-config-lint
 
 dependency-audit:
 	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
@@ -245,6 +247,9 @@ web-console-production-journey: frontend-deps real-mcp-deps
 
 production-hardening:
 	bash scripts/scenario-production-hardening.sh
+
+scenario-harbor-policy:
+	AGENT_HARBOR_TEST_DATABASE_URL="$${AGENT_HARBOR_TEST_DATABASE_URL:-}" bash scripts/scenario-harbor-policy.sh
 
 scenario-admin-tenant-boundary:
 	bash scripts/scenario-admin-tenant-boundary.sh

@@ -24,7 +24,14 @@ const windowRowLimit = 200;
 // One merged audit + trace window for the runtime audit page and the cockpit
 // "recent audit" card. P0 gave both endpoints since/limit windows, so the
 // range select refetches instead of slicing whatever the console load brought.
-export function useAdminAudit(live: boolean, range: AuditRangeKey): AdminAuditState {
+export interface AdminAuditOptions {
+  // Server-side red-flag filter for traces (the audit timeline's
+  // high-risk-only toggle); audit events carry no risk flags and are
+  // skipped by the view when this is on.
+  highRiskOnly?: boolean
+}
+
+export function useAdminAudit(live: boolean, range: AuditRangeKey, options: AdminAuditOptions = {}): AdminAuditState {
   const [raw, setRaw] = useState<{ audits: readonly AuditEvent[]; traces: readonly TraceEvent[] }>({
     audits: [],
     traces: [],
@@ -33,6 +40,7 @@ export function useAdminAudit(live: boolean, range: AuditRangeKey): AdminAuditSt
   const [failed, setFailed] = useState(false);
   const runIdRef = useRef(0);
 
+  const highRiskOnly = options.highRiskOnly === true;
   const reload = useCallback(async () => {
     // Switching the range refetches; a slow earlier range must not overwrite
     // the newer one's rows or leave loading stuck.
@@ -41,7 +49,7 @@ export function useAdminAudit(live: boolean, range: AuditRangeKey): AdminAuditSt
     setLoading(true);
     const [audits, traces] = await Promise.allSettled([
       fetchAuditEvents({ limit: windowRowLimit, since }),
-      fetchTraces({ limit: windowRowLimit, since }),
+      fetchTraces({ limit: windowRowLimit, since, ...(highRiskOnly ? { highRisk: true } : {}) }),
     ]);
     if (runId !== runIdRef.current) return;
     const ok = audits.status === "fulfilled" && traces.status === "fulfilled";
@@ -50,7 +58,7 @@ export function useAdminAudit(live: boolean, range: AuditRangeKey): AdminAuditSt
     }
     setFailed(!ok);
     setLoading(false);
-  }, [range]);
+  }, [range, highRiskOnly]);
 
   useEffect(() => {
     if (!live) return;

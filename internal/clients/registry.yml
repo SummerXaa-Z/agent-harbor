@@ -1,0 +1,28 @@
+# Client registry: which MCP clients harbor knows, how to detect them,
+# where their config lives, and which editor handles it. New clients of a
+# known format are entries here, not code.
+clients:
+  - key: claude-code
+    displayName: Claude Code
+    format: mcp-json
+    writable: true
+    installCheck: ["~/.claude"]
+    configPaths: ["~/.claude.json"]
+
+  - key: claude-desktop
+    displayName: Claude Desktop
+    format: mcp-json
+    writable: true
+    installCheck:
+      - "~/Library/Application Support/Claude"
+      - "~/.config/Claude"
+    configPaths:
+      - "~/Library/Application Support/Claude/claude_desktop_config.json"
+      - "~/.config/Claude/claude_desktop_config.json"
+
+  - key: codex
+    displayName: Codex
+    format: codex-toml
+    writable: false # print-only in M1: a TOML editor is a dependency decision
+    installCheck: ["~/.codex"]
+    configPaths: ["~/.codex/config.toml"]

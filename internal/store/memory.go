@@ -153,13 +153,15 @@ type AgentFilter struct {
 // the result stays in ascending time order.
 type TraceFilter struct {
 	ManagementScope
-	RunID    string
-	Decision domain.TraceDecision
-	CallerID string
-	TargetID string
-	Since    time.Time
-	Until    time.Time
-	Limit    int
+	TraceID      string
+	RunID        string
+	Decision     domain.TraceDecision
+	CallerID     string
+	TargetID     string
+	HighRiskOnly bool
+	Since        time.Time
+	Until        time.Time
+	Limit        int
 }
 
 type AuditEventFilter struct {
@@ -1451,6 +1453,9 @@ func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.Tra
 	tenantIDs := m.tenantIDsForScopeLocked(filter.TenantID)
 	rows := make([]domain.TraceEvent, 0, len(m.traces))
 	for _, trace := range m.traces {
+		if filter.TraceID != "" && trace.ID != filter.TraceID {
+			continue
+		}
 		if filter.RunID != "" && trace.RunID != filter.RunID {
 			continue
 		}
@@ -1461,6 +1466,9 @@ func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.Tra
 			continue
 		}
 		if filter.TargetID != "" && trace.TargetID != filter.TargetID {
+			continue
+		}
+		if filter.HighRiskOnly && len(trace.RiskFlags) == 0 {
 			continue
 		}
 		if !createdAtInWindow(trace.CreatedAt, filter.Since, filter.Until) {

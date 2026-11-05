@@ -144,6 +144,7 @@ function SurfaceShell({
     <>
       <Sidebar
         activeView={route.view}
+        minimal={data.systemInfo?.policyMode === true}
         onSignOut={() => void auth.logout()}
         session={auth.session}
         surface={route.surface}

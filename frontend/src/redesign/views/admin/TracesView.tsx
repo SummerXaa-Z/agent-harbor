@@ -15,10 +15,13 @@ import { Button } from "../../ui/Button";
 import { Card } from "../../ui/Card";
 import { Chip } from "../../ui/Chip";
 import { CodeBlock } from "../../ui/CodeBlock";
+import { Switch } from "../../ui/Field";
 import { Modal } from "../../ui/Modal";
 import { EmptyState, LoadingState } from "../../ui/StateViews";
 import { Table } from "../../ui/Table";
+import type { TraceEvent } from "../../../types";
 import type { AdminViewProps } from "./adminViewProps";
+import { TracePolicyDetail } from "./TracePolicyDetail";
 
 const resultFilters: readonly (AuditResultKind | "all")[] = ["all", "success", "denied", "failed"];
 
@@ -38,8 +41,10 @@ export function TracesView({ data, onRetry, params }: AdminViewProps) {
   const [range, setRange] = useState<AuditRangeKey>(normalizeAuditRange(params.range));
   const [type, setType] = useState(params.type || "all");
   const [result, setResult] = useState<AuditResultKind | "all">(normalizeResult(params.result));
+  const [highRisk, setHighRisk] = useState(false);
+  const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<AuditTimelineRow | null>(null);
-  const audit = useAdminAudit(live, range);
+  const audit = useAdminAudit(live, range, { highRiskOnly: highRisk });
 
   // Filters stay local (no remount churn); the hash is kept in sync for deep
   // links and refreshes.
@@ -58,7 +63,30 @@ export function TracesView({ data, onRetry, params }: AdminViewProps) {
     () => [...new Set(audit.rows.map((row) => row.resourceType).filter(Boolean))],
     [audit.rows],
   );
-  const rows = useMemo(() => filterAuditTimeline(audit.rows, { result, type }), [audit.rows, result, type]);
+  const rows = useMemo(() => {
+    let filtered = filterAuditTimeline(audit.rows, { result, type });
+    if (highRisk) {
+      filtered = filtered.filter((row) => {
+        if (row.kind !== "trace") return false;
+        const flags = (row.event as TraceEvent).riskFlags ?? [];
+        return flags.length > 0;
+      });
+    }
+    const needle = search.trim().toLowerCase();
+    if (needle) {
+      filtered = filtered.filter(
+        (row) =>
+          row.resource.toLowerCase().includes(needle)
+          || (row.subject || "").toLowerCase().includes(needle)
+          || (row.kind === "trace" ? accessTraceReasonLabel(
+            (row.event as TraceEvent).reason,
+            (row.event as TraceEvent).decision === "allowed" ? "allow" : "deny",
+            t,
+          ) : row.operation).toLowerCase().includes(needle),
+      );
+    }
+    return filtered;
+  }, [audit.rows, result, type, highRisk, search, t]);
 
   return (
     <>
@@ -114,6 +142,23 @@ export function TracesView({ data, onRetry, params }: AdminViewProps) {
               <Chip tone="neutral">{tx(t, "rd.audit.count", { count: rows.length })}</Chip>
             </div>
           </div>
+          <div className="form-grid form-grid-4">
+            <div>
+              <label className="field-label" htmlFor="audit-search">{t("rd.audit.searchPlaceholder")}</label>
+              <input
+                aria-label={t("rd.audit.searchPlaceholder")}
+                className="input"
+                id="audit-search"
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t("rd.audit.searchPlaceholder")}
+                type="search"
+                value={search}
+              />
+            </div>
+            <div className="apr-button-row">
+              <Switch checked={highRisk} label={t("rd.audit.highRiskOnly")} onChange={setHighRisk} />
+            </div>
+          </div>
         </Card>
 
         <Card
@@ -149,6 +194,9 @@ export function TracesView({ data, onRetry, params }: AdminViewProps) {
         {detail ? (
           <div className="stack">
             <div className="mono small">{formatDate(detail.time, language)} · {detail.resource}</div>
+            {detail.kind === "trace" ? (
+              <TracePolicyDetail trace={detail.event as TraceEvent} t={t} />
+            ) : null}
             <CodeBlock code={JSON.stringify(detail.event, null, 2)} label={t("rd.audit.detailJson")} />
           </div>
         ) : null}
@@ -179,12 +227,20 @@ function renderAuditCell(
       return <Chip tone={resultTone[row.result]}>{t(`rd.audit.result.${row.result}`)}</Chip>;
     case "summary":
       if (row.kind === "trace") {
-        const trace = row.event as { decision: "allowed" | "denied"; reason?: string };
+        const trace = row.event as TraceEvent;
         return (
           <div className="trace-summary">
             <span className="small muted">
               {accessTraceReasonLabel(trace.reason, trace.decision === "allowed" ? "allow" : "deny", t)}
             </span>
+            {trace.riskFlags && trace.riskFlags.length > 0 ? (
+              <span className="apr-button-row">
+                {trace.riskFlags.map((flag) => (
+                  <Chip key={flag} tone="danger">{flag}</Chip>
+                ))}
+              </span>
+            ) : null}
+            {trace.ruleRef ? <span className="mono small muted">{trace.ruleRef}</span> : null}
             <Button onClick={() => onDetail(row)} size="sm" variant="link">
               {t("rd.audit.detail")}
             </Button>

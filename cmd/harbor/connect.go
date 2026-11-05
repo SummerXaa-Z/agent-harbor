@@ -105,7 +105,7 @@ func connectEditConfig(configPath string, spec clients.ClientSpec, state importS
 			"type": "http",
 			"url":  client.baseURL + "/api/v1/mcp/agents/" + state.Targets[name] + "/rpc",
 			"headers": map[string]any{
-				"X-Agent-Key": agentKey,
+				"Authorization": "Bearer " + agentKey,
 			},
 		}
 	}
@@ -126,7 +126,7 @@ func snippetFor(spec clients.ClientSpec, state importState, client *cliClient, a
 		for _, name := range names {
 			fmt.Fprintf(&builder, "[mcp_servers.%s]\n", name)
 			fmt.Fprintf(&builder, "url = %q\n", client.baseURL+"/api/v1/mcp/agents/"+state.Targets[name]+"/rpc")
-			fmt.Fprintf(&builder, "http_headers = { \"X-Agent-Key\" = %q }\n\n", agentKey)
+			fmt.Fprintf(&builder, "http_headers = { \"Authorization\" = %q }\n\n", "Bearer "+agentKey)
 		}
 		return builder.String()
 	}
@@ -137,7 +137,7 @@ func snippetFor(spec clients.ClientSpec, state importState, client *cliClient, a
 			"type": "http",
 			"url":  client.baseURL + "/api/v1/mcp/agents/" + state.Targets[name] + "/rpc",
 			"headers": map[string]any{
-				"X-Agent-Key": agentKey,
+				"Authorization": "Bearer " + agentKey,
 			},
 		}
 	}

@@ -1859,6 +1859,9 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 		args = append(args, value)
 		query += fmt.Sprintf(" and "+sql, len(args))
 	}
+	if filter.TraceID != "" {
+		add("id=$%d", filter.TraceID)
+	}
 	if filter.RunID != "" {
 		add("run_id=$%d", filter.RunID)
 	}

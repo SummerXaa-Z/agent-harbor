@@ -153,6 +153,7 @@ type AgentFilter struct {
 // the result stays in ascending time order.
 type TraceFilter struct {
 	ManagementScope
+	TraceID      string
 	RunID        string
 	Decision     domain.TraceDecision
 	CallerID     string
@@ -1452,6 +1453,9 @@ func (m *Memory) ListTraces(_ context.Context, filter TraceFilter) ([]domain.Tra
 	tenantIDs := m.tenantIDsForScopeLocked(filter.TenantID)
 	rows := make([]domain.TraceEvent, 0, len(m.traces))
 	for _, trace := range m.traces {
+		if filter.TraceID != "" && trace.ID != filter.TraceID {
+			continue
+		}
 		if filter.RunID != "" && trace.RunID != filter.RunID {
 			continue
 		}

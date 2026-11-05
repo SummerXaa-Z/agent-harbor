@@ -18,10 +18,10 @@ func reviewRow(target, capability, decision string, flags ...string) traceRow {
 func TestAggregateReviewSuggestsOnlyUnblockedHighRisk(t *testing.T) {
 	names := map[string]string{"cap_write": "tgt.update_ticket", "cap_read": "tgt.search", "cap_export": "tgt.export"}
 	rows := []traceRow{
-		reviewRow("tgt", "cap_write", "allowed", "write"),            // unblocked high-risk -> suggestion
-		reviewRow("tgt", "cap_write", "allowed", "write"),            // counted twice
-		reviewRow("tgt", "cap_export", "denied", "export"),           // high-risk but blocked -> no suggestion
-		reviewRow("tgt", "cap_read", "allowed"),                      // no flags -> never suggested
+		reviewRow("tgt", "cap_write", "allowed", "write"),  // unblocked high-risk -> suggestion
+		reviewRow("tgt", "cap_write", "allowed", "write"),  // counted twice
+		reviewRow("tgt", "cap_export", "denied", "export"), // high-risk but blocked -> no suggestion
+		reviewRow("tgt", "cap_read", "allowed"),            // no flags -> never suggested
 	}
 	aggregate := aggregateReview(rows, names)
 	if aggregate.TotalCalls != 4 || aggregate.DeniedCalls != 1 {

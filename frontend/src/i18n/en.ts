@@ -2303,6 +2303,15 @@ export const catalog: Record<string, string> = {
 "rd.audit.failedDesc": "Check the API service, then refresh.",
 "rd.audit.emptyDesc": "No records match the current filters.",
 "rd.audit.detail": "Details",
+"rd.audit.highRiskOnly": "High-risk only",
+"rd.audit.searchPlaceholder": "Search agent / tool / reason",
+"rd.audit.policySection": "Policy evaluation",
+"rd.audit.policyReason": "Reason",
+"rd.audit.policyRule": "Rule",
+"rd.audit.policyRisk": "Risk flags",
+"rd.audit.policyArgs": "Arguments",
+"rd.audit.policyArgsNote": "Digest only - the payload is not stored",
+
 "rd.audit.detailJson": "Structured record",
 
 "rd.audit.result.all": "All results",

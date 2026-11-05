@@ -761,11 +761,17 @@ type TraceEvent struct {
 	DataScopes            []DataScope   `json:"dataScopes,omitempty"`
 	Decision              TraceDecision `json:"decision"`
 	Reason                string        `json:"reason,omitempty"`
-	DurationMs            int64         `json:"durationMs,omitempty"`
-	UpstreamAttempts      int           `json:"upstreamAttempts,omitempty"`
-	UpstreamStatus        int           `json:"upstreamStatus,omitempty"`
-	UpstreamError         string        `json:"upstreamError,omitempty"`
-	CreatedAt             time.Time     `json:"createdAt"`
+	// Policy-evaluation fields (v2 M1): args are recorded as a digest only so
+	// the audit trail itself is not a leak surface; RuleRef cites the
+	// harbor.yaml line behind the decision; RiskFlags drive the red markers.
+	ArgsDigest       string    `json:"argsDigest,omitempty"`
+	RiskFlags        []string  `json:"riskFlags,omitempty"`
+	RuleRef          string    `json:"ruleRef,omitempty"`
+	DurationMs       int64     `json:"durationMs,omitempty"`
+	UpstreamAttempts int       `json:"upstreamAttempts,omitempty"`
+	UpstreamStatus   int       `json:"upstreamStatus,omitempty"`
+	UpstreamError    string    `json:"upstreamError,omitempty"`
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 type SystemMetric struct {

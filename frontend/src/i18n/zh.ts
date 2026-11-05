@@ -2303,6 +2303,15 @@ export const catalog: Record<string, string> = {
 "rd.audit.failedDesc": "请检查 API 服务后刷新。",
 "rd.audit.emptyDesc": "当前筛选条件下没有记录。",
 "rd.audit.detail": "详情",
+"rd.audit.highRiskOnly": "仅高危",
+"rd.audit.searchPlaceholder": "搜索 agent / 工具 / 原因",
+"rd.audit.policySection": "策略判定",
+"rd.audit.policyReason": "原因",
+"rd.audit.policyRule": "规则",
+"rd.audit.policyRisk": "风险标记",
+"rd.audit.policyArgs": "参数",
+"rd.audit.policyArgsNote": "仅存摘要，参数原文不落盘",
+
 "rd.audit.detailJson": "结构化记录",
 
 "rd.audit.result.all": "全部结果",

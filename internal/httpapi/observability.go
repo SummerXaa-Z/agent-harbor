@@ -17,9 +17,11 @@ func (s *Server) listTraces(w http.ResponseWriter, r *http.Request) {
 	}
 	filter := store.TraceFilter{
 		ManagementScope: scope,
+		TraceID:         r.URL.Query().Get("traceId"),
 		RunID:           r.URL.Query().Get("runId"),
 		CallerID:        r.URL.Query().Get("callerAgentId"),
 		TargetID:        r.URL.Query().Get("targetAgentId"),
+		HighRiskOnly:    r.URL.Query().Get("highRisk") == "true",
 	}
 	switch decision := domain.TraceDecision(r.URL.Query().Get("decision")); decision {
 	case "", domain.TraceDecisionAllowed, domain.TraceDecisionDenied:

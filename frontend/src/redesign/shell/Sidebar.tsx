@@ -12,6 +12,7 @@ import {
   userNavSections,
   type AdminView,
   type NavEntry,
+  type NavSection,
   type RedesignView,
   type Surface,
   type UserView,
@@ -21,14 +22,22 @@ import { SurfaceSwitch } from "./SurfaceSwitch";
 
 interface SidebarProps {
   activeView: RedesignView;
+  // v2 policy mode: the console collapses to the audit timeline and its
+  // decision explainer; the frozen governance views stay reachable only
+  // with the full (no-harbor.yaml) console.
+  minimal?: boolean;
   onSignOut: () => void;
   session: ConsoleSession | null;
   surface: Surface;
 }
 
-export function Sidebar({ activeView, onSignOut, session, surface }: SidebarProps) {
+export function Sidebar({ activeView, minimal = false, onSignOut, session, surface }: SidebarProps) {
   const { t } = useRedesignI18n();
-  const sections = surface === "user" ? userNavSections : adminNavSections;
+  const sections = surface === "user"
+    ? userNavSections
+    : minimal
+      ? minimalAdminNavSections()
+      : adminNavSections;
   const identity = sessionIdentity(session);
   const name = identity.demo ? t("rd.demo.localAdmin") : identity.actor || t("auth.unknownActor");
   const role = identity.roleKey ? t(identity.roleKey) : "";
@@ -112,4 +121,16 @@ function NavLink({
       <span className="nav-label">{label}</span>
     </a>
   );
+}
+
+// The v2 surface: only the audit timeline (the decision explainer is its
+// detail drawer). Derived from the registry so label keys stay in one place.
+export function minimalAdminNavSections(): readonly NavSection<AdminView>[] {
+  const traces = adminNavSections
+    .flatMap((section) => section.items)
+    .find((item) => item.view === "traces");
+  if (!traces) {
+    return adminNavSections;
+  }
+  return [{ items: [traces] }];
 }

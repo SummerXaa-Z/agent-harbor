@@ -1819,20 +1819,25 @@ func (p *Postgres) AppendTrace(ctx context.Context, event domain.TraceEvent) (do
 	if err != nil {
 		return domain.TraceEvent{}, fmt.Errorf("marshal trace data scopes: %w", err)
 	}
+	riskFlags, err := json.Marshal(event.RiskFlags)
+	if err != nil {
+		return domain.TraceEvent{}, fmt.Errorf("marshal trace risk flags: %w", err)
+	}
 	_, err = p.pool.Exec(ctx, `
 		insert into trace_events (
 			id, run_id, caller_agent_id, target_agent_id, route_type, route_key, decision, reason,
 			duration_ms, upstream_attempts, upstream_status, upstream_error,
 			tenant_id, workspace_id, caller_instance_id, subject_id,
 			capability_id, capability_version, entitlement_id, workspace_assignment_id,
-			instance_assignment_id, data_scopes, created_at
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+			instance_assignment_id, data_scopes, args_digest, risk_flags, rule_ref, high_risk, created_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
 	`, event.ID, event.RunID, event.CallerID, event.TargetID, event.RouteType,
 		event.RouteKey, string(event.Decision), event.Reason, event.DurationMs,
 		event.UpstreamAttempts, event.UpstreamStatus, event.UpstreamError,
 		event.TenantID, event.WorkspaceID, event.CallerInstanceID, event.SubjectID,
 		event.CapabilityID, event.CapabilityVersion, event.EntitlementID,
-		event.WorkspaceAssignmentID, event.InstanceAssignmentID, dataScopes, event.CreatedAt)
+		event.WorkspaceAssignmentID, event.InstanceAssignmentID, dataScopes,
+		event.ArgsDigest, riskFlags, event.RuleRef, len(event.RiskFlags) > 0, event.CreatedAt)
 	if err != nil {
 		return domain.TraceEvent{}, fmt.Errorf("insert trace event: %w", err)
 	}
@@ -1845,7 +1850,7 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 			duration_ms, upstream_attempts, upstream_status, upstream_error,
 			tenant_id, workspace_id, caller_instance_id, subject_id,
 			capability_id, capability_version, entitlement_id, workspace_assignment_id,
-			instance_assignment_id, data_scopes, created_at
+			instance_assignment_id, data_scopes, args_digest, risk_flags, rule_ref, created_at
 		from trace_events
 		where 1=1
 	`
@@ -1853,6 +1858,9 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 	add := func(sql string, value any) {
 		args = append(args, value)
 		query += fmt.Sprintf(" and "+sql, len(args))
+	}
+	if filter.TraceID != "" {
+		add("id=$%d", filter.TraceID)
 	}
 	if filter.RunID != "" {
 		add("run_id=$%d", filter.RunID)
@@ -1865,6 +1873,9 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 	}
 	if filter.TargetID != "" {
 		add("target_agent_id=$%d", filter.TargetID)
+	}
+	if filter.HighRiskOnly {
+		query += " and high_risk"
 	}
 	if !filter.Since.IsZero() {
 		add("created_at >= $%d", filter.Since)
@@ -3046,16 +3057,20 @@ func scanTraceEvents(rows pgx.Rows) ([]domain.TraceEvent, error) {
 		var trace domain.TraceEvent
 		var decision string
 		var dataScopes []byte
+		var riskFlags []byte
 		if err := rows.Scan(&trace.ID, &trace.RunID, &trace.CallerID, &trace.TargetID, &trace.RouteType,
 			&trace.RouteKey, &decision, &trace.Reason, &trace.DurationMs, &trace.UpstreamAttempts,
 			&trace.UpstreamStatus, &trace.UpstreamError, &trace.TenantID, &trace.WorkspaceID,
 			&trace.CallerInstanceID, &trace.SubjectID, &trace.CapabilityID, &trace.CapabilityVersion,
 			&trace.EntitlementID, &trace.WorkspaceAssignmentID, &trace.InstanceAssignmentID,
-			&dataScopes, &trace.CreatedAt); err != nil {
+			&dataScopes, &trace.ArgsDigest, &riskFlags, &trace.RuleRef, &trace.CreatedAt); err != nil {
 			return nil, err
 		}
 		trace.Decision = domain.TraceDecision(decision)
 		if err := unmarshalJSON(dataScopes, &trace.DataScopes, "trace data scopes"); err != nil {
+			return nil, err
+		}
+		if err := unmarshalJSON(riskFlags, &trace.RiskFlags, "trace risk flags"); err != nil {
 			return nil, err
 		}
 		out = append(out, trace)

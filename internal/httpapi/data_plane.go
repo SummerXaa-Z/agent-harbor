@@ -3,12 +3,16 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
 	"github.com/SummerXaa-Z/agent-harbor/internal/permissionpack"
+	"github.com/SummerXaa-Z/agent-harbor/internal/policy"
 	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 	"github.com/SummerXaa-Z/agent-harbor/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -433,6 +437,9 @@ type traceRecordInput struct {
 	Capability         domain.Capability
 	CapabilityDecision domain.CapabilityAccessDecision
 	ProxyResult        proxyTraceResult
+	ArgsDigest         string
+	RiskFlags          []string
+	RuleRef            string
 }
 
 func identityFromRequest(r *http.Request, caller domain.Agent) runtimeIdentity {
@@ -491,36 +498,70 @@ func (s *Server) handleMCPToolCall(w http.ResponseWriter, r *http.Request, info 
 		writeError(w, err)
 		return true
 	}
-	decision, err := s.repo.EvaluateCapabilityAccess(r.Context(), store.CapabilityAccessRequest{
-		TenantID:         identity.TenantID,
-		WorkspaceID:      identity.WorkspaceID,
-		CallerInstanceID: identity.CallerInstanceID,
-		SubjectID:        identity.SubjectID,
-		TargetID:         targetID,
-		CapabilityID:     capability.ID,
-		Now:              s.now(),
-	})
-	if err != nil {
-		writeError(w, err)
-		return true
-	}
-	if !decision.Allowed {
-		if _, err := s.recordCapabilityTrace(r, traceRecordInput{
-			Identity:           identity,
-			CallerID:           caller.ID,
-			TargetID:           targetID,
-			RouteType:          "mcp",
-			RouteKey:           info.Method,
-			Decision:           domain.TraceDecisionDenied,
-			Reason:             decision.Reason,
-			Capability:         capability,
-			CapabilityDecision: decision,
-		}); err != nil {
+	var decision domain.CapabilityAccessDecision
+	var policyArgsDigest string
+	var policyRiskFlags []string
+	var policyRuleRef string
+	if s.policy != nil {
+		gate := s.policyDecide(caller, targetID, info.ToolName, identity.SubjectID, policy.ActionInvoke)
+		if !gate.Allowed {
+			trace, traceErr := s.recordCapabilityTrace(r, traceRecordInput{
+				Identity:   identity,
+				CallerID:   caller.ID,
+				TargetID:   targetID,
+				RouteType:  "mcp",
+				RouteKey:   info.Method,
+				Decision:   domain.TraceDecisionDenied,
+				Reason:     gate.Reason,
+				Capability: capability,
+				ArgsDigest: digestRequestBody(info.Body),
+				RiskFlags:  capabilityRiskFlags(capability),
+				RuleRef:    gate.RuleRef,
+			})
+			if traceErr != nil {
+				writeError(w, traceErr)
+				return true
+			}
+			writeError(w, policyDenial(gate, trace.ID))
+			return true
+		}
+		decision = domain.CapabilityAccessDecision{Allowed: true, Reason: gate.Reason}
+		policyArgsDigest = digestRequestBody(info.Body)
+		policyRiskFlags = capabilityRiskFlags(capability)
+		policyRuleRef = gate.RuleRef
+	} else {
+		var err error
+		decision, err = s.repo.EvaluateCapabilityAccess(r.Context(), store.CapabilityAccessRequest{
+			TenantID:         identity.TenantID,
+			WorkspaceID:      identity.WorkspaceID,
+			CallerInstanceID: identity.CallerInstanceID,
+			SubjectID:        identity.SubjectID,
+			TargetID:         targetID,
+			CapabilityID:     capability.ID,
+			Now:              s.now(),
+		})
+		if err != nil {
 			writeError(w, err)
 			return true
 		}
-		writeError(w, domain.PermissionDenied(decision.Reason))
-		return true
+		if !decision.Allowed {
+			if _, err := s.recordCapabilityTrace(r, traceRecordInput{
+				Identity:           identity,
+				CallerID:           caller.ID,
+				TargetID:           targetID,
+				RouteType:          "mcp",
+				RouteKey:           info.Method,
+				Decision:           domain.TraceDecisionDenied,
+				Reason:             decision.Reason,
+				Capability:         capability,
+				CapabilityDecision: decision,
+			}); err != nil {
+				writeError(w, err)
+				return true
+			}
+			writeError(w, domain.PermissionDenied(decision.Reason))
+			return true
+		}
 	}
 	target, ok, err := s.repo.GetAgent(r.Context(), targetID)
 	if err != nil {
@@ -562,6 +603,9 @@ func (s *Server) handleMCPToolCall(w http.ResponseWriter, r *http.Request, info 
 			Capability:         capability,
 			CapabilityDecision: decision,
 			ProxyResult:        result,
+			ArgsDigest:         policyArgsDigest,
+			RiskFlags:          policyRiskFlags,
+			RuleRef:            policyRuleRef,
 		})
 	}
 	contextHeader, err := agentHarborContextHeaderValue(identity, target.ID, capability, decision, info.ToolName)
@@ -655,6 +699,12 @@ func (s *Server) handleMCPToolsList(w http.ResponseWriter, r *http.Request, info
 			continue
 		}
 		if handoffApplication != nil && !stringSliceContains(handoffApplication.AllowedCapabilityIDs, capability.ID) {
+			continue
+		}
+		if s.policy != nil {
+			if s.policyDecide(caller, targetID, capability.Key, identity.SubjectID, policy.ActionLoad).Allowed {
+				allowedTools[capability.Key] = capability
+			}
 			continue
 		}
 		decision, err := s.repo.EvaluateCapabilityAccess(r.Context(), store.CapabilityAccessRequest{
@@ -781,6 +831,9 @@ func (s *Server) recordCapabilityTrace(r *http.Request, input traceRecordInput) 
 		DataScopes:            input.CapabilityDecision.DataScopes,
 		Decision:              input.Decision,
 		Reason:                input.Reason,
+		ArgsDigest:            input.ArgsDigest,
+		RiskFlags:             input.RiskFlags,
+		RuleRef:               input.RuleRef,
 		DurationMs:            input.ProxyResult.durationMs,
 		UpstreamAttempts:      input.ProxyResult.upstreamAttempts,
 		UpstreamStatus:        input.ProxyResult.upstreamStatus,
@@ -1592,4 +1645,50 @@ func sleepBeforeRetry(ctx context.Context, backoff time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
+}
+
+// policyDecide is the single harbor-policy entry for the data plane: both
+// tools/list visibility and tools/call enforcement route through it (the
+// single-filter constraint). Callers must branch on a loaded policy first;
+// with none loaded the store's grant-chain evaluation decides as before.
+func (s *Server) policyDecide(caller domain.Agent, targetID string, tool string, subjectID string, action policy.Action) policy.Decision {
+	return s.policy.Decide(policy.Request{
+		Agent:   caller.ID,
+		Target:  targetID,
+		Tool:    tool,
+		Action:  action,
+		Subject: subjectID,
+	})
+}
+
+// policyDenial renders a deny for its two readers: the LLM at the call site
+// (verdict first, explicit no-retry, a way out) and the operator through
+// structured details carrying the rule reference and audit id.
+func policyDenial(decision policy.Decision, auditID string) domain.AppError {
+	details := map[string]any{"reason": decision.Reason, "auditId": auditID}
+	if decision.RuleRef != "" {
+		details["policy"] = decision.RuleRef
+	}
+	message := fmt.Sprintf("%s. Do not retry; ask the operator if you need this capability. (audit %s)", decision.Reason, auditID)
+	return domain.PermissionDeniedWithDetails(message, details)
+}
+
+// capabilityRiskFlags merges both halves of the audit red-flag heuristic:
+// capability-name patterns from the policy package plus the declared action.
+func capabilityRiskFlags(capability domain.Capability) []string {
+	flags := policy.NameRiskFlags(capability.Key)
+	switch capability.Action {
+	case domain.CapabilityActionWrite, domain.CapabilityActionDelete, domain.CapabilityActionExport, domain.CapabilityActionAdmin:
+		if !stringSliceContains(flags, string(capability.Action)) {
+			flags = append(flags, string(capability.Action))
+		}
+	}
+	return flags
+}
+
+// digestRequestBody records tool arguments as a digest only - the audit
+// trail must not become a second copy of the payload data.
+func digestRequestBody(body []byte) string {
+	sum := sha256.Sum256(body)
+	return "sha256:" + hex.EncodeToString(sum[:])
 }

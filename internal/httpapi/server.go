@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SummerXaa-Z/agent-harbor/internal/domain"
+	"github.com/SummerXaa-Z/agent-harbor/internal/policy"
 	"github.com/SummerXaa-Z/agent-harbor/internal/security"
 	"github.com/SummerXaa-Z/agent-harbor/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -45,6 +46,9 @@ type Server struct {
 	loginFailureMu            sync.Mutex
 	loginFailures             map[string]consoleLoginFailure
 	sessionSecret             []byte
+	// harbor policy loaded from harbor.yaml; nil means legacy chain mode,
+	// where the store's grant-chain evaluation decides as it always has.
+	policy *policy.Policy
 }
 
 const (
@@ -141,6 +145,12 @@ func WithCORSOrigins(origins []string) Option {
 			}
 			s.corsOrigins = append(s.corsOrigins, normalized)
 		}
+	}
+}
+
+func WithPolicy(parsed *policy.Policy) Option {
+	return func(s *Server) {
+		s.policy = parsed
 	}
 }
 

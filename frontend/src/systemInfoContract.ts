@@ -2,6 +2,7 @@ export interface SystemInfo {
   name: string
   apiVersion: string
   authRequired: boolean
+  policyMode: boolean
   capabilities: string[]
   managementMcpToolCatalog: {
     metadataVersion: number

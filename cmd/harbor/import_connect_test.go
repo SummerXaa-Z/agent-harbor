@@ -102,7 +102,7 @@ func TestConnectEditsConfigWithBackup(t *testing.T) {
 		t.Fatalf("crm must point at the gateway: %s", raw)
 	}
 	headers := wired["headers"].(map[string]any)
-	if headers["X-Agent-Key"] != "ahx_test" {
+	if headers["Authorization"] != "Bearer ahx_test" {
 		t.Fatalf("agent key header missing: %s", raw)
 	}
 }
@@ -111,7 +111,7 @@ func TestSnippetForCodexIsPrintOnly(t *testing.T) {
 	state := importState{Targets: map[string]string{"crm": "agt_crm"}}
 	spec := clients.ClientSpec{Key: "codex", Format: clients.FormatCodexTOML, Writable: false}
 	snippet := snippetFor(spec, state, &cliClient{baseURL: "http://h:1"}, "ahx_k")
-	for _, want := range []string{"[mcp_servers.crm]", `url = "http://h:1/api/v1/mcp/agents/agt_crm/rpc"`, "X-Agent-Key"} {
+	for _, want := range []string{"[mcp_servers.crm]", `url = "http://h:1/api/v1/mcp/agents/agt_crm/rpc"`, "Authorization"} {
 		if !strings.Contains(snippet, want) {
 			t.Fatalf("codex snippet missing %q: %s", want, snippet)
 		}

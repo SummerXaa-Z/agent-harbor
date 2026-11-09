@@ -150,6 +150,9 @@ export interface UpdateRoutePolicyRequest {
 export interface TraceEvent {
   id: string
   runId?: string
+  argsDigest?: string
+  riskFlags?: string[]
+  ruleRef?: string
   callerAgentId?: string
   targetAgentId: string
   routeType: string
@@ -578,6 +581,7 @@ export interface TraceFilters {
   decision?: TraceDecision | ''
   callerAgentId?: string
   targetAgentId?: string
+  highRisk?: boolean
   limit?: number
   since?: string
   until?: string

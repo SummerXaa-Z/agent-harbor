@@ -500,6 +500,7 @@ export async function fetchTraces(
   const query = queryString({
     callerAgentId: filters.callerAgentId,
     decision: filters.decision || undefined,
+    highRisk: filters.highRisk === true ? "true" : undefined,
     limit: filters.limit ? String(filters.limit) : undefined,
     runId: filters.runId,
     since: filters.since,

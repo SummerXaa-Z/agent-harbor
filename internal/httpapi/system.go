@@ -28,10 +28,13 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 }
 
 type systemInfoResponse struct {
-	Name                     string                                 `json:"name"`
-	APIVersion               string                                 `json:"apiVersion"`
-	AuthRequired             bool                                   `json:"authRequired"`
-	Capabilities             []string                               `json:"capabilities"`
+	Name         string   `json:"name"`
+	APIVersion   string   `json:"apiVersion"`
+	AuthRequired bool     `json:"authRequired"`
+	Capabilities []string `json:"capabilities"`
+	// PolicyMode reports whether a harbor.yaml is loaded: the v2 minimal
+	// console (audit timeline + decision explainer) keys off this.
+	PolicyMode               bool                                   `json:"policyMode"`
 	ManagementMcpToolCatalog systemInfoManagementMcpToolCatalogInfo `json:"managementMcpToolCatalog"`
 }
 
@@ -50,6 +53,7 @@ func (s *Server) systemInfo(w http.ResponseWriter, _ *http.Request) {
 		APIVersion:               systemAPIVersion,
 		AuthRequired:             !s.developmentAdminBypassActive(),
 		Capabilities:             append([]string(nil), systemCapabilities...),
+		PolicyMode:               s.policy != nil,
 		ManagementMcpToolCatalog: systemInfoManagementMcpToolCatalogSummary(),
 	})
 }

@@ -23,6 +23,8 @@ Usage:
   harbor key revoke <keyId>
   harbor key list [<agentId>]
   harbor key rotate <agentId> --old <keyId>
+  harbor import [--from FILE] [--confirm] [--output harbor.yaml]
+  harbor connect <client> [--agent-key K] [--print]
 
 Client flags (audit/why/key): --url (HARBOR_URL, default http://127.0.0.1:9090),
 --admin-key (HARBOR_ADMIN_KEY) sent as X-Admin-Key.
@@ -54,6 +56,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		code = cmdWhy(rest, stdout, stderr)
 	case "key":
 		code = cmdKey(rest, stdout, stderr)
+	case "import":
+		code = cmdImport(rest, stdout, stderr)
+	case "connect":
+		code = cmdConnect(rest, stdout, stderr)
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usageText)
 		return 0

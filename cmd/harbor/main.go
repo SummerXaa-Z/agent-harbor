@@ -25,6 +25,7 @@ Usage:
   harbor key rotate <agentId> --old <keyId>
   harbor import [--from FILE] [--confirm] [--output harbor.yaml]
   harbor connect <client> [--agent-key K] [--print]
+  harbor review [--days N]                          usage recap and deny suggestions
 
 Client flags (audit/why/key): --url (HARBOR_URL, default http://127.0.0.1:9090),
 --admin-key (HARBOR_ADMIN_KEY) sent as X-Admin-Key.
@@ -60,6 +61,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		code = cmdImport(rest, stdout, stderr)
 	case "connect":
 		code = cmdConnect(rest, stdout, stderr)
+	case "review":
+		code = cmdReview(rest, stdout, stderr)
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usageText)
 		return 0

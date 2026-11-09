@@ -233,8 +233,7 @@ func cmdImport(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	fmt.Fprintf(stdout, "wrote %s (open mode, %d target(s) in circle) and %s\n", *output, len(state.Targets), *statePath)
-	issueKeysForClients(client, state, installed, stdout, stderr)
-	return 0
+	return issueKeysForClients(client, state, installed, stdout, stderr)
 }
 
 // writeGeneratedPolicy emits the import-as-baseline harbor.yaml: one open
@@ -291,19 +290,28 @@ func loadState(path string) (importState, error) {
 	return state, nil
 }
 
-func issueKeysForClients(client *cliClient, state importState, installed []clients.ClientSpec, stdout, stderr io.Writer) {
+// issueKeysForClients returns the first failure's exit code: a key that
+// could not be issued must not look like a successful import.
+func issueKeysForClients(client *cliClient, state importState, installed []clients.ClientSpec, stdout, stderr io.Writer) int {
 	for _, spec := range installed {
 		agentID := state.Clients[spec.Key]
 		if agentID == "" {
 			continue
 		}
 		fmt.Fprintf(stdout, "\nconnect %s:\n", spec.Key)
-		code := cmdKeyIssue([]string{agentID}, stdout, stderr)
-		if code != 0 {
-			return
+		// The key must be issued against the SAME server the import
+		// targeted - the subcommand's own default URL would point elsewhere.
+		args := []string{"--url", client.baseURL}
+		if client.adminKey != "" {
+			args = append(args, "--admin-key", client.adminKey)
+		}
+		args = append(args, agentID)
+		if code := cmdKeyIssue(args, stdout, stderr); code != 0 {
+			return code
 		}
 		fmt.Fprintf(stdout, "  harbor connect %s --agent-key <key-above>\n", spec.Key)
 	}
+	return 0
 }
 
 func expandTilde(path string) string {

@@ -2,6 +2,7 @@ package wrap
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -263,4 +264,68 @@ func resultContent(response map[string]any) (string, bool) {
 	}
 	echo, _ := result["echo"].(string)
 	return echo, true
+}
+
+// Audit classification must not alter the response seen by the MCP client.
+func TestWrapCompletionOutcomesPreserveResponses(t *testing.T) {
+	cases := []struct {
+		name    string
+		result  string
+		outcome string
+	}{
+		{"success without flag", `"result":{"content":[]}`, "ok"},
+		{"explicit success", `"result":{"content":[],"isError":false}`, "ok"},
+		{"tool error", `"result":{"content":[{"type":"text","text":"tool failed"}],"isError":true}`, "error"},
+		{"protocol error", `"error":{"code":-32603,"message":"internal error"}`, "error"},
+		{"nested flag is not tool error", `"result":{"structuredContent":{"isError":true}}`, "ok"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			policyPath := filepath.Join(dir, "harbor.yaml")
+			if err := os.WriteFile(policyPath, []byte(testPolicy), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+			pump := NewPump(Options{
+				AgentID: "a1", TargetID: "w1", PolicyPath: policyPath,
+				SpoolDir: filepath.Join(dir, "spool"),
+				Now:      func() time.Time { return now },
+			})
+			t.Cleanup(func() {
+				if pump.spoolFile != nil {
+					_ = pump.spoolFile.Close()
+				}
+			})
+			request := `{"jsonrpc":"2.0","id":"call-1","method":"tools/call","params":{"name":"search_notes","arguments":{}}}`
+			if _, deny := pump.interceptToolCall([]byte(request)); deny {
+				t.Fatal("test call should be allowed")
+			}
+			now = now.Add(25 * time.Millisecond)
+			response := `{ "jsonrpc": "2.0", "id": "call-1", ` + tc.result + " }\n"
+			var output bytes.Buffer
+			if err := pump.pumpChildToClient(strings.NewReader(response), &lockedWriter{target: &output}); err != nil {
+				t.Fatal(err)
+			}
+			if output.String() != response {
+				t.Fatalf("response changed: got %q, want %q", output.String(), response)
+			}
+			h := wrapHarness{spoolDir: pump.options.SpoolDir}
+			events := h.spoolEvents(t)
+			if len(events) != 1 {
+				t.Fatalf("want one completion event, got %+v", events)
+			}
+			event := events[0]
+			if event.Outcome != tc.outcome || event.Decision != "allowed" {
+				t.Fatalf("want allowed/%s, got %+v", tc.outcome, event)
+			}
+			if event.Capability != "search_notes" || event.DurationMs != 25 {
+				t.Fatalf("completion correlation changed: %+v", event)
+			}
+			pump.recordCompletion([]byte(response))
+			if events := h.spoolEvents(t); len(events) != 1 {
+				t.Fatalf("duplicate response created another event: %+v", events)
+			}
+		})
+	}
 }

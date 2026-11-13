@@ -234,6 +234,15 @@ func (p *Pump) recordCompletion(line []byte) {
 	outcome := "ok"
 	if response.Error != nil {
 		outcome = "error"
+	} else {
+		// MCP tool execution failures are successful JSON-RPC responses
+		// with result.isError set, not top-level protocol errors.
+		var result struct {
+			IsError bool `json:"isError"`
+		}
+		if json.Unmarshal(response.Result, &result) == nil && result.IsError {
+			outcome = "error"
+		}
 	}
 	p.spool(Event{
 		ID:         security.NewID("trc"),

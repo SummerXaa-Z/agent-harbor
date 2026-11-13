@@ -149,6 +149,9 @@ export interface UpdateRoutePolicyRequest {
 
 export interface TraceEvent {
   id: string
+  source?: "gateway" | "wrap"
+  toolName?: string
+  outcome?: "ok" | "error" | "denied"
   runId?: string
   argsDigest?: string
   riskFlags?: string[]

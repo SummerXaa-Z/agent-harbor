@@ -78,6 +78,7 @@ type Repository interface {
 	DisableRoutePolicyWithAudit(context.Context, string, time.Time, RoutePolicyAuditBuilder) (domain.RoutePolicy, bool, error)
 	EvaluateRouteAccess(context.Context, string, string, string, string, time.Time) (domain.RouteAccessDecision, error)
 	AppendTrace(context.Context, domain.TraceEvent) (domain.TraceEvent, error)
+	IngestTraces(context.Context, []domain.TraceEvent) error
 	ListTraces(context.Context, TraceFilter) ([]domain.TraceEvent, error)
 	AppendAuditEvent(context.Context, domain.AuditEvent) (domain.AuditEvent, error)
 	ListAuditEvents(context.Context, AuditEventFilter) ([]domain.AuditEvent, error)
@@ -230,6 +231,7 @@ type CapabilityAccessRequest struct {
 }
 
 type Memory struct {
+	traceReceipts        map[string][]byte
 	mu                   sync.RWMutex
 	tenants              map[string]domain.Tenant
 	agents               map[string]domain.Agent
@@ -1427,6 +1429,7 @@ const (
 // appendTraceLocked and appendAuditLocked require m.mu held for writing; they
 // trim the oldest rows once an event log passes its cap.
 func (m *Memory) appendTraceLocked(event domain.TraceEvent) {
+	event = normalizeTrace(event)
 	m.traces = append(m.traces, event)
 	if excess := len(m.traces) - maxMemoryTraceEvents; excess > 0 {
 		m.traces = m.traces[excess:]
@@ -1441,6 +1444,7 @@ func (m *Memory) appendAuditLocked(event domain.AuditEvent) {
 }
 
 func (m *Memory) AppendTrace(_ context.Context, event domain.TraceEvent) (domain.TraceEvent, error) {
+	event = normalizeTrace(event)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.appendTraceLocked(event)

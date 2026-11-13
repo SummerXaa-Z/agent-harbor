@@ -743,6 +743,9 @@ const (
 )
 
 type TraceEvent struct {
+	Source                string        `json:"source"`
+	Outcome               string        `json:"outcome,omitempty"`
+	ToolName              string        `json:"toolName,omitempty"`
 	ID                    string        `json:"id"`
 	RunID                 string        `json:"runId,omitempty"`
 	CallerID              string        `json:"callerAgentId,omitempty"`

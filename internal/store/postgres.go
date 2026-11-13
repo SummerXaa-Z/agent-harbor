@@ -1815,33 +1815,42 @@ func (p *Postgres) EvaluateRouteAccess(ctx context.Context, callerID string, tar
 }
 
 func (p *Postgres) AppendTrace(ctx context.Context, event domain.TraceEvent) (domain.TraceEvent, error) {
+	event = normalizeTrace(event)
+	_, err := insertTrace(ctx, p.pool, event, nil, false)
+	return event, err
+}
+func insertTrace(ctx context.Context, exec sqlExecutor, event domain.TraceEvent, payload []byte, ignoreConflict bool) (bool, error) {
 	dataScopes, err := json.Marshal(event.DataScopes)
 	if err != nil {
-		return domain.TraceEvent{}, fmt.Errorf("marshal trace data scopes: %w", err)
+		return false, fmt.Errorf("marshal trace data scopes: %w", err)
 	}
 	riskFlags, err := json.Marshal(event.RiskFlags)
 	if err != nil {
-		return domain.TraceEvent{}, fmt.Errorf("marshal trace risk flags: %w", err)
+		return false, fmt.Errorf("marshal trace risk flags: %w", err)
 	}
-	_, err = p.pool.Exec(ctx, `
+	query := `
 		insert into trace_events (
 			id, run_id, caller_agent_id, target_agent_id, route_type, route_key, decision, reason,
 			duration_ms, upstream_attempts, upstream_status, upstream_error,
 			tenant_id, workspace_id, caller_instance_id, subject_id,
 			capability_id, capability_version, entitlement_id, workspace_assignment_id,
-			instance_assignment_id, data_scopes, args_digest, risk_flags, rule_ref, high_risk, created_at
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
-	`, event.ID, event.RunID, event.CallerID, event.TargetID, event.RouteType,
+			instance_assignment_id, data_scopes, args_digest, risk_flags, rule_ref, high_risk, created_at, source, outcome, ingest_payload, tool_name
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+	`
+	if ignoreConflict {
+		query += " on conflict (id) do nothing"
+	}
+	tag, err := exec.Exec(ctx, query, event.ID, event.RunID, event.CallerID, event.TargetID, event.RouteType,
 		event.RouteKey, string(event.Decision), event.Reason, event.DurationMs,
 		event.UpstreamAttempts, event.UpstreamStatus, event.UpstreamError,
 		event.TenantID, event.WorkspaceID, event.CallerInstanceID, event.SubjectID,
 		event.CapabilityID, event.CapabilityVersion, event.EntitlementID,
 		event.WorkspaceAssignmentID, event.InstanceAssignmentID, dataScopes,
-		event.ArgsDigest, riskFlags, event.RuleRef, len(event.RiskFlags) > 0, event.CreatedAt)
+		event.ArgsDigest, riskFlags, event.RuleRef, len(event.RiskFlags) > 0, event.CreatedAt, event.Source, event.Outcome, payload, event.ToolName)
 	if err != nil {
-		return domain.TraceEvent{}, fmt.Errorf("insert trace event: %w", err)
+		return false, fmt.Errorf("insert trace event: %w", err)
 	}
-	return event, nil
+	return tag.RowsAffected() > 0, nil
 }
 
 func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain.TraceEvent, error) {
@@ -1850,7 +1859,7 @@ func (p *Postgres) ListTraces(ctx context.Context, filter TraceFilter) ([]domain
 			duration_ms, upstream_attempts, upstream_status, upstream_error,
 			tenant_id, workspace_id, caller_instance_id, subject_id,
 			capability_id, capability_version, entitlement_id, workspace_assignment_id,
-			instance_assignment_id, data_scopes, args_digest, risk_flags, rule_ref, created_at
+			instance_assignment_id, data_scopes, args_digest, risk_flags, rule_ref, created_at, source, outcome, tool_name
 		from trace_events
 		where 1=1
 	`
@@ -3063,7 +3072,7 @@ func scanTraceEvents(rows pgx.Rows) ([]domain.TraceEvent, error) {
 			&trace.UpstreamStatus, &trace.UpstreamError, &trace.TenantID, &trace.WorkspaceID,
 			&trace.CallerInstanceID, &trace.SubjectID, &trace.CapabilityID, &trace.CapabilityVersion,
 			&trace.EntitlementID, &trace.WorkspaceAssignmentID, &trace.InstanceAssignmentID,
-			&dataScopes, &trace.ArgsDigest, &riskFlags, &trace.RuleRef, &trace.CreatedAt); err != nil {
+			&dataScopes, &trace.ArgsDigest, &riskFlags, &trace.RuleRef, &trace.CreatedAt, &trace.Source, &trace.Outcome, &trace.ToolName); err != nil {
 			return nil, err
 		}
 		trace.Decision = domain.TraceDecision(decision)

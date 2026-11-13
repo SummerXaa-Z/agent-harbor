@@ -218,4 +218,4 @@ AgentHarbor is released under the [Apache License 2.0](LICENSE).
 
 ## Wrapper audit synchronization
 
-For local stdio MCP tools, see [wrapper audit sync](docs/engineering/wrapper-audit-sync.md): `harbor-wrap` records locally and `harbor sync` imports retained evidence into the shared timeline. PostgreSQL is required for durable server storage.
+For local stdio MCP tools, see [wrapper audit sync](docs/engineering/wrapper-audit-sync.md): `harbor-wrap` records locally and `harbor sync` imports retained records into the shared timeline. PostgreSQL is required for durable server storage.

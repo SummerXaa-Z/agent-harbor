@@ -9,8 +9,10 @@ import type { useRedesignI18n } from "../../hooks/useRedesignI18n";
 // (legacy rows predate policy evaluation) simply stay absent.
 export function TracePolicyDetail({ trace, t }: { trace: TraceEvent; t: ReturnType<typeof useRedesignI18n>["t"] }) {
   const items: KvItem[] = [];
-  if (trace.source || trace.outcome) {
+  if (trace.source) {
     items.push({ key: "source", label: t("rd.audit.sourceLabel"), value: t(`rd.audit.source.${traceSource(trace)}`) });
+  }
+  if (trace.outcome) {
     items.push({ key: "outcome", label: t("rd.audit.outcomeLabel"), value: t(`rd.audit.result.${traceResultKind(trace)}`) });
   }
   if (trace.toolName) {

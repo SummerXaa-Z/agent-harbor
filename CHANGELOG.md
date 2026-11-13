@@ -4,6 +4,12 @@ All notable public changes to AgentHarbor will be documented in this file.
 
 This project uses Keep a Changelog-style sections and semantic versioning for tagged releases.
 
+## [Unreleased]
+
+### Added
+
+- M2 wrapper audit synchronization: bounded `harbor sync` batches with retained spool/checkpoints and replay, authenticated atomic/idempotent ingestion, source/outcome/tool-name persistence and audit display. See [operating and reliability boundaries](docs/engineering/wrapper-audit-sync.md).
+
 ## [0.6.2] - 2026-10-03
 
 ### Changed

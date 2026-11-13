@@ -110,6 +110,9 @@ func exitForError(status int, envelope apiEnvelope) int {
 }
 
 type traceRow struct {
+	Source       string    `json:"source"`
+	Outcome      string    `json:"outcome,omitempty"`
+	ToolName     string    `json:"toolName,omitempty"`
 	ID           string    `json:"id"`
 	RunID        string    `json:"runId,omitempty"`
 	CallerID     string    `json:"callerAgentId,omitempty"`
@@ -194,6 +197,13 @@ func formatTraceRow(row traceRow) string {
 		coalesce(row.CallerID, "-"),
 		row.TargetID,
 		coalesce(row.Reason, ""))
+	if row.ToolName != "" {
+		line += " " + row.ToolName
+	}
+	line += "  [" + coalesce(row.Source, "gateway") + "]"
+	if row.Outcome != "" {
+		line += " " + row.Outcome
+	}
 	if len(row.RiskFlags) > 0 {
 		line += "  [" + strings.Join(row.RiskFlags, ",") + "]"
 	}
@@ -236,6 +246,13 @@ func cmdWhy(args []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "when     %s\n", row.CreatedAt.Local().Format("2006-01-02 15:04:05 MST"))
 	fmt.Fprintf(stdout, "caller   %s -> %s (%s)\n", coalesce(row.CallerID, "-"), row.TargetID, coalesce(row.RouteKey, "call"))
 	fmt.Fprintf(stdout, "decision %s\n", strings.ToUpper(row.Decision))
+	fmt.Fprintf(stdout, "source   %s\n", coalesce(row.Source, "gateway"))
+	if row.ToolName != "" {
+		fmt.Fprintf(stdout, "tool     %s\n", row.ToolName)
+	}
+	if row.Outcome != "" {
+		fmt.Fprintf(stdout, "outcome  %s\n", row.Outcome)
+	}
 	if row.Reason != "" {
 		fmt.Fprintf(stdout, "reason   %s\n", row.Reason)
 	}

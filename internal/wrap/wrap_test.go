@@ -176,6 +176,9 @@ func TestWrapPassesAllowedCallsThroughAndRecords(t *testing.T) {
 	if len(events) != 1 || events[0].Decision != "allowed" || events[0].Capability != "search_notes" {
 		t.Fatalf("allowed event missing: %+v", events)
 	}
+	if events[0].ArgsDigest != digestArguments(json.RawMessage(`{"q":"hello"}`)) {
+		t.Fatalf("allowed call must retain only the argument digest: %+v", events[0])
+	}
 	if events[0].Source != "wrap" || events[0].CallerID != "a1" || events[0].TargetID != "w1" {
 		t.Fatalf("event identity fields wrong: %+v", events[0])
 	}
@@ -327,5 +330,69 @@ func TestWrapCompletionOutcomesPreserveResponses(t *testing.T) {
 				t.Fatalf("duplicate response created another event: %+v", events)
 			}
 		})
+	}
+}
+
+func TestSpoolFailuresAreReportedWithoutChangingResponses(t *testing.T) {
+	for _, failedOperation := range []string{"create", "write"} {
+		t.Run(failedOperation, func(t *testing.T) {
+			dir := t.TempDir()
+			var reported []error
+			pump := NewPump(Options{
+				SpoolDir:    dir,
+				ReportError: func(err error) { reported = append(reported, err) },
+			})
+			if failedOperation == "create" {
+				blocked := filepath.Join(dir, "not-a-directory")
+				if err := os.WriteFile(blocked, nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				pump.options.SpoolDir = blocked
+			} else {
+				file, err := os.CreateTemp(dir, "closed")
+				if err != nil {
+					t.Fatal(err)
+				}
+				_ = file.Close()
+				pump.spoolFile = file
+			}
+			pump.pending["1"] = pendingCall{tool: "read", startedAt: time.Now()}
+			response := "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"content\":[]}}\n"
+			var output bytes.Buffer
+			if err := pump.pumpChildToClient(strings.NewReader(response), &lockedWriter{target: &output}); err != nil {
+				t.Fatal(err)
+			}
+			if output.String() != response {
+				t.Fatalf("audit failure changed response: %q", output.String())
+			}
+			if len(reported) != 1 {
+				t.Fatalf("want one reported audit failure, got %v", reported)
+			}
+		})
+	}
+}
+
+func TestSeparatePumpsUseDistinctSpoolFiles(t *testing.T) {
+	dir := t.TempDir()
+	when := time.Date(2026, 11, 13, 1, 2, 3, 0, time.UTC)
+	for i := 0; i < 2; i++ {
+		pump := NewPump(Options{SpoolDir: dir, ReportError: func(err error) { t.Fatal(err) }})
+		pump.spool(Event{ID: fmt.Sprint(i), CreatedAt: when})
+		if pump.spoolFile == nil {
+			t.Fatal("spool file missing")
+		}
+		_ = pump.spoolFile.Close()
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("same-second sessions must not share files: %v", entries)
+	}
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".jsonl") {
+			t.Fatalf("sync must discover spool file %q", entry.Name())
+		}
 	}
 }

@@ -1,3 +1,4 @@
+import { traceResultKind, traceSource } from "../../model/auditTimeline";
 import { Chip } from "../../ui/Chip";
 import { KvList, type KvItem } from "../../ui/KvList";
 import type { TraceEvent } from "../../../types";
@@ -8,6 +9,15 @@ import type { useRedesignI18n } from "../../hooks/useRedesignI18n";
 // (legacy rows predate policy evaluation) simply stay absent.
 export function TracePolicyDetail({ trace, t }: { trace: TraceEvent; t: ReturnType<typeof useRedesignI18n>["t"] }) {
   const items: KvItem[] = [];
+  if (trace.source) {
+    items.push({ key: "source", label: t("rd.audit.sourceLabel"), value: t(`rd.audit.source.${traceSource(trace)}`) });
+  }
+  if (trace.outcome) {
+    items.push({ key: "outcome", label: t("rd.audit.outcomeLabel"), value: t(`rd.audit.result.${traceResultKind(trace)}`) });
+  }
+  if (trace.toolName) {
+    items.push({ key: "tool", label: t("rd.audit.toolName"), value: <span className="mono small">{trace.toolName}</span> });
+  }
   if (trace.reason) {
     items.push({ key: "reason", label: t("rd.audit.policyReason"), value: trace.reason });
   }
@@ -26,7 +36,7 @@ export function TracePolicyDetail({ trace, t }: { trace: TraceEvent; t: ReturnTy
       ),
     });
   }
-  if (!trace.reason && !trace.ruleRef && !trace.argsDigest) {
+  if (items.length === 0) {
     return null;
   }
   return (

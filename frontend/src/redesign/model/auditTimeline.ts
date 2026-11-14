@@ -12,7 +12,7 @@ export interface AuditTimelineRow {
   operation: string;
   // Human label is resolved in the view through i18n (auditAction.* keys).
   result: AuditResultKind;
-  // Resource identifier: audit resourceId, trace capabilityId.
+  // Resource identifier: audit resourceId, wrapper toolName or gateway capabilityId.
   resource: string;
   // Audit resourceType (`agent`, `capability`) or `trace`.
   resourceType: string;
@@ -30,8 +30,14 @@ export interface AuditTimelineFilter {
 // Traces: allowed without an upstream error succeeded; denied is a policy
 // decision, not a failure; an allowed call whose upstream errored failed.
 export function traceResultKind(trace: TraceEvent): AuditResultKind {
-  if (trace.upstreamError?.trim()) return "failed";
+  if (trace.outcome === "error" || trace.upstreamError?.trim()) return "failed";
+  if (trace.outcome === "denied") return "denied";
   return trace.decision === "allowed" ? "success" : "denied";
+}
+
+// Rows written before source tagging came from the HTTP gateway.
+export function traceSource(trace: TraceEvent): "gateway" | "wrap" {
+  return trace.source === "wrap" ? "wrap" : "gateway";
 }
 
 // Newest first. Both endpoints return ascending windows (P0), so the merge
@@ -59,7 +65,7 @@ export function auditTimelineRows(
       kind: "trace",
       operation: "call",
       result: traceResultKind(event),
-      resource: event.capabilityId ?? event.targetAgentId,
+      resource: event.toolName ?? event.capabilityId ?? event.targetAgentId,
       resourceType: "trace",
       subject: event.subjectId ?? event.callerAgentId ?? "",
       summary: event.reason ?? null,

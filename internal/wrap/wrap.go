@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -40,9 +39,12 @@ type Options struct {
 	// edits harbor.yaml and the next tool call already follows it.
 	PolicyPath string
 	// SpoolDir receives one JSONL line per audited event (append-only;
-	// harbor sync uploads and only then truncates).
+	// harbor sync checkpoints acknowledged bytes without truncating active files).
 	SpoolDir string
-	// Clock and ID are seams for tests.
+	// ReportError receives local audit failures without interrupting tool calls.
+	// The default reports to stderr; it never writes to the MCP stdout stream.
+	ReportError func(error)
+	// Clock is a seam for tests.
 	Now func() time.Time
 }
 
@@ -61,13 +63,17 @@ type Pump struct {
 }
 
 type pendingCall struct {
-	tool      string
-	startedAt time.Time
+	tool       string
+	argsDigest string
+	startedAt  time.Time
 }
 
 func NewPump(options Options) *Pump {
 	if options.Now == nil {
 		options.Now = time.Now
+	}
+	if options.ReportError == nil {
+		options.ReportError = func(err error) { fmt.Fprintf(os.Stderr, "harbor-wrap: audit spool: %v\n", err) }
 	}
 	return &Pump{options: options, pending: map[string]pendingCall{}}
 }
@@ -169,7 +175,7 @@ func (p *Pump) interceptToolCall(line []byte) (string, bool) {
 	if decision.Allowed {
 		id := string(*request.ID)
 		p.pendingMu.Lock()
-		p.pending[id] = pendingCall{tool: tool, startedAt: p.options.Now()}
+		p.pending[id] = pendingCall{tool: tool, argsDigest: digestArguments(request.Params.Arguments), startedAt: p.options.Now()}
 		p.pendingMu.Unlock()
 		return "", false
 	}
@@ -252,7 +258,7 @@ func (p *Pump) recordCompletion(line []byte) {
 		Method:     toolCallMethod,
 		Decision:   "allowed",
 		Reason:     "wrap passthrough",
-		ArgsDigest: "",
+		ArgsDigest: call.argsDigest,
 		RiskFlags:  policy.NameRiskFlags(call.tool),
 		DurationMs: p.options.Now().Sub(call.startedAt).Milliseconds(),
 		Outcome:    outcome,
@@ -307,23 +313,39 @@ type Event struct {
 
 func (p *Pump) spool(event Event) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	err := p.writeSpool(event)
+	p.mu.Unlock()
+	if err != nil {
+		p.options.ReportError(err)
+	}
+}
+
+// writeSpool runs under mu. Each pump owns a unique append-only file so
+// independent wrapper sessions cannot interleave or reuse checkpoint offsets.
+func (p *Pump) writeSpool(event Event) error {
 	if p.spoolFile == nil {
-		if err := os.MkdirAll(p.options.SpoolDir, 0o755); err != nil {
-			return
+		if err := os.MkdirAll(p.options.SpoolDir, 0o700); err != nil {
+			return err
 		}
-		path := filepath.Join(p.options.SpoolDir, "wrap-"+event.CreatedAt.Format("20060102-150405")+".jsonl")
-		file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		file, err := os.CreateTemp(p.options.SpoolDir, "wrap-"+event.CreatedAt.Format("20060102-150405")+"-*.jsonl")
 		if err != nil {
-			return
+			return err
 		}
 		p.spoolFile = file
 	}
 	encoded, err := json.Marshal(event)
 	if err != nil {
-		return
+		return err
 	}
-	_, _ = p.spoolFile.Write(append(encoded, '\n'))
+	line := append(encoded, '\n')
+	n, err := p.spoolFile.Write(line)
+	if err != nil {
+		return err
+	}
+	if n != len(line) {
+		return io.ErrShortWrite
+	}
+	return nil
 }
 
 // digestArguments records the arguments as a digest only - the audit trail

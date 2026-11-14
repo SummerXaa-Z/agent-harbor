@@ -4,7 +4,7 @@ import test from "node:test";
 import { createTranslator } from "../src/i18nSync.ts";
 import { sessionIdentity } from "../src/redesign/model/demoRole.ts";
 import { approvalCapabilityRows, approvalList, approvalNoticeKey, approvalRiskSummary, approvalTabCounts, filterApprovalList } from "../src/redesign/model/approvalReview.ts";
-import { auditRangeSince, auditResourceTypeLabelKey, auditResourceTypes, auditTimelineRows, filterAuditTimeline, todayAuditCount, traceResultKind } from "../src/redesign/model/auditTimeline.ts";
+import { auditRangeSince, auditResourceTypeLabelKey, auditResourceTypes, auditTimelineRows, filterAuditTimeline, todayAuditCount, traceResultKind, traceSource } from "../src/redesign/model/auditTimeline.ts";
 import { apiServiceCheck, corePathCheck, envCheckSummary, envHealthCheck, mcpServiceCheck, preferredProbeTarget, probeFixGuidance, registeredMcpTargets } from "../src/redesign/model/envChecks.ts";
 import { dailyTrend, trendDenyPeak, trendDirection, trendHasData, trendPeakDayLabel, trendSummary } from "../src/redesign/model/dailyTrend.ts";
 
@@ -414,4 +414,21 @@ test("sessionIdentity reports the holder binding only for bound non-demo session
     }).holderAgentCount,
     2,
   );
+});
+
+
+test("wrapper outcomes and legacy source fallback stay distinct", () => {
+  assert.equal(traceResultKind(traceEvent({ source: "wrap", outcome: "error" })), "failed");
+  assert.equal(traceResultKind(traceEvent({ source: "wrap", outcome: "ok" })), "success");
+  assert.equal(traceResultKind(traceEvent({ source: "wrap", decision: "denied", outcome: "denied" })), "denied");
+  const [row] = auditTimelineRows([], [traceEvent({ source: "wrap", toolName: "search_notes", capabilityId: undefined, targetAgentId: "w1" })]);
+  assert.equal(row.resource, "search_notes");
+  assert.equal(traceSource(traceEvent()), "gateway");
+  assert.equal(traceSource(traceEvent({ source: "wrap" })), "wrap");
+  for (const language of ["zh-CN", "en"]) {
+    const t = createTranslator(language);
+    for (const key of ["rd.audit.toolName", "rd.audit.sourceLabel", "rd.audit.outcomeLabel", "rd.audit.source.gateway", "rd.audit.source.wrap"]) {
+      assert.notEqual(t(key), key);
+    }
+  }
 });

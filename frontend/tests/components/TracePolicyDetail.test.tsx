@@ -39,6 +39,20 @@ describe("TracePolicyDetail", () => {
     expect(screen.getByText("delete")).toBeTruthy();
   });
 
+  it("shows wrapper source and a failed execution separately from permission", () => {
+    renderDetail({ source: "wrap", outcome: "error", decision: "allowed", toolName: "search_notes" });
+    expect(screen.getByText("search_notes")).toBeTruthy();
+    expect(screen.getByText("rd.audit.source.wrap")).toBeTruthy();
+    expect(screen.getByText("rd.audit.result.failed")).toBeTruthy();
+  });
+
+  it("does not infer an execution result for legacy gateway traces", () => {
+    renderDetail({ source: "gateway", decision: "allowed" });
+    expect(screen.getByText("rd.audit.source.gateway")).toBeTruthy();
+    expect(screen.queryByText("rd.audit.outcomeLabel")).toBeNull();
+    expect(screen.queryByText("rd.audit.result.success")).toBeNull();
+  });
+
   it("renders nothing for legacy traces without policy fields", () => {
     // Pre-policy allowed traces carry no reason/ruleRef/digest at all.
     const { container } = renderDetail({});

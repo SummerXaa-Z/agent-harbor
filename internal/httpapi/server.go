@@ -256,6 +256,7 @@ func (s *Server) Router() http.Handler {
 			r.Delete("/instance-assignments/{id}", s.deleteInstanceAssignment)
 			r.Get("/audit/events", s.listAuditEvents)
 			r.Get("/audit/traces", s.listTraces)
+			r.Post("/audit/traces/ingest", s.ingestWrapTraces)
 			r.Get("/metrics/runtime", s.runtimeMetrics)
 			r.Get("/metrics/daily", s.dailyMetrics)
 		})

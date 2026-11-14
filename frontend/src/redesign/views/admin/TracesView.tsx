@@ -6,6 +6,7 @@ import { useAdminAudit, normalizeAuditRange, type AuditRangeKey } from "../../ho
 import {
   auditResourceTypeLabelKey,
   filterAuditTimeline,
+  traceSource,
   type AuditResultKind,
   type AuditTimelineRow,
 } from "../../model/auditTimeline";
@@ -230,6 +231,7 @@ function renderAuditCell(
         const trace = row.event as TraceEvent;
         return (
           <div className="trace-summary">
+            <Chip tone="neutral" icon={false}>{t(`rd.audit.source.${traceSource(trace)}`)}</Chip>
             <span className="small muted">
               {accessTraceReasonLabel(trace.reason, trace.decision === "allowed" ? "allow" : "deny", t)}
             </span>

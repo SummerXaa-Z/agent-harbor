@@ -26,6 +26,8 @@ Usage:
   harbor import [--from FILE] [--confirm] [--output harbor.yaml]
   harbor connect <client> [--agent-key K] [--print]
   harbor sync [--spool DIR] [--replay]              upload wrapper audit events
+  harbor wrap add <client> <name> [--wrap-bin PATH]  wrap a stdio server for a client
+  harbor wrap remove <client> <name>                 restore the unwrapped server
   harbor review [--days N]                          usage recap and deny suggestions
 
 Client flags (audit/why/key/sync): --url (HARBOR_URL, default http://127.0.0.1:9090),
@@ -64,6 +66,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		code = cmdConnect(rest, stdout, stderr)
 	case "sync":
 		code = cmdSync(rest, stdout, stderr)
+	case "wrap":
+		code = cmdWrap(rest, stdout, stderr)
 	case "review":
 		code = cmdReview(rest, stdout, stderr)
 	case "help", "-h", "--help":

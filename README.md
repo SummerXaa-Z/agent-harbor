@@ -31,6 +31,21 @@ Open-source timing is intentionally secondary to production hardening. Before an
 
 开源节奏会服从生产可用性。任何发布就绪声明之前，都必须确保安全基线、发布检查和核心权限包用户旅程能在全新本地检出中通过。
 
+## Local stdio wrapping
+
+Build `cmd/harbor` and `cmd/harbor-wrap`, then wrap a configured stdio MCP server:
+
+```bash
+harbor wrap add --wrap-bin /absolute/path/to/harbor-wrap --policy /absolute/path/to/harbor.yaml claude-code node_repl
+harbor wrap remove claude-code node_repl
+```
+
+Flags precede the client and server names. The default policy is `~/.harbor/harbor.yaml`; a missing policy starts in open mode, so review and tighten it before relying on restrictions. Existing multi-workspace policies require the agent and target to be declared in the same intended workspace before wrapping. The client always receives the selected absolute policy path.
+
+Recovery records live separately in `~/.harbor/wrap-state.json` (`--state` overrides it; never reuse import state). Config, backup and recovery files may contain credentials and are written owner-only. `remove` refuses to overwrite an entry edited since installation. It restores the client entry, not policy declarations. Restart the client after either operation.
+
+File replacements are atomic individually, not across all files. Ordinary write failures roll back; after a crash, retain recovery state and inspect any `.harbor-lock` files before removing stale locks. With no other wrap command running and unchanged client entries, `wrap remove` can reconcile an interrupted install/removal. Do not delete recovery records or force an edited entry back to old values. Close external config editors during these operations; lock files coordinate wrap commands, not arbitrary external writers.
+
 ## Architecture / 技术图谱
 
 One Go binary serves three planes — management REST, Management MCP, and the governed data-plane proxy — backed by an in-memory (default) or PostgreSQL store, with a Vite + React dual-surface console on top. The full component map, domain model, authentication surfaces, and verification topology live in [docs/engineering/architecture.md](docs/engineering/architecture.md).

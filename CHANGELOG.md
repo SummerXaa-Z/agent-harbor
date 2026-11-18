@@ -10,10 +10,6 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 - Local `harbor wrap add/remove` with explicit policy selection, workspace-scoped installation checks, private recovery state, conflict detection and recoverable file writes.
 
-## [Unreleased]
-
-### Added
-
 - M2 wrapper audit synchronization: bounded `harbor sync` batches with retained spool/checkpoints and replay, authenticated atomic/idempotent ingestion, source/outcome/tool-name persistence and audit display. See [operating and reliability boundaries](docs/engineering/wrapper-audit-sync.md).
 
 ## [0.6.2] - 2026-10-03

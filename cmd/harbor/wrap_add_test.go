@@ -94,7 +94,7 @@ func TestWrapAddRewritesClientEntryAndGeneratesPolicy(t *testing.T) {
 		t.Fatalf("command must be the wrapper: %+v", entry)
 	}
 	args := stringArgs(entry["args"])
-	want := []string{"--agent", "claude-code", "--target", "node_repl", "--", "/usr/local/bin/node_repl", "--verbose", "--port", "1"}
+	want := []string{"--policy", f.policy, "--agent", "claude-code", "--target", "node_repl", "--", "/usr/local/bin/node_repl", "--verbose", "--port", "1"}
 	if strings.Join(args, " ") != strings.Join(want, " ") {
 		t.Fatalf("wrapped args wrong: %v", args)
 	}

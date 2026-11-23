@@ -55,15 +55,21 @@ func cmdWrapAdd(args []string, stdout, stderr io.Writer) int {
 	wrapBin := flags.String("wrap-bin", defaultWrapBin(), "harbor-wrap binary the client will spawn")
 	policyPath := flags.String("policy", defaultPolicyPath(), "harbor.yaml to extend")
 	statePath := flags.String("state", defaultWrapStatePath(), "dedicated wrap state file")
+	agentID := flags.String("agent-id", "", "registered caller ID already declared in the local policy")
+	targetID := flags.String("target-id", "", "registered target ID already declared in the caller workspace")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
 	rest := flags.Args()
 	if len(rest) != 2 {
-		fmt.Fprintln(stderr, "usage: harbor wrap add [--wrap-bin PATH] [--policy FILE] [--state FILE] <client> <name>")
+		fmt.Fprintln(stderr, "usage: harbor wrap add [--wrap-bin PATH] [--policy FILE] [--state FILE] [--agent-id ID --target-id ID] <client> <name>")
 		return 2
 	}
-	err := wrapAdd(rest[0], rest[1], *wrapBin, *policyPath, *statePath)
+	if (*agentID == "") != (*targetID == "") {
+		fmt.Fprintln(stderr, "harbor wrap add: --agent-id and --target-id must be supplied together")
+		return 2
+	}
+	err := wrapAdd(rest[0], rest[1], *wrapBin, *policyPath, *statePath, *agentID, *targetID)
 	if err != nil {
 		fmt.Fprintf(stderr, "harbor wrap add: %v\n", err)
 		return 2
@@ -72,7 +78,25 @@ func cmdWrapAdd(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func wrapAdd(clientKey, name, wrapBin, policyPath, statePath string) error {
+func wrapAdd(clientKey, name, wrapBin, policyPath, statePath, agentID, targetID string) error {
+	bound := agentID != ""
+	if !bound {
+		agentID, targetID = clientKey, name
+	}
+	ensurePolicy := func(write wrapWriteFunc) error {
+		if !bound {
+			return ensureWrapPolicyWithWriter(policyPath, targetID, agentID, write)
+		}
+		parsed, err := policy.LoadFile(policyPath)
+		if err != nil {
+			return fmt.Errorf("registry binding requires an existing valid local policy: %w", err)
+		}
+		workspace, hasAgent := wrapAgentWorkspace(parsed, agentID)
+		if !hasAgent || !wrapWorkspaceHasTarget(parsed, workspace, targetID) {
+			return manualAddError(targetID, agentID)
+		}
+		return nil
+	}
 	configPath, err := wrapConfigPath(clientKey)
 	if err != nil {
 		return err
@@ -105,10 +129,11 @@ func wrapAdd(clientKey, name, wrapBin, policyPath, statePath string) error {
 			if !sameWrapEntry(entry, record.Installed) {
 				return fmt.Errorf("wrapped entry changed; refusing to overwrite it")
 			}
-			if record.Policy != policyPath || entry["command"] != wrapBin {
+			installedArgs := stringArgs(entry["args"])
+			if record.Policy != policyPath || entry["command"] != wrapBin || len(installedArgs) < 6 || installedArgs[3] != agentID || installedArgs[5] != targetID {
 				return fmt.Errorf("already wrapped with different options; remove first")
 			}
-			return ensureWrapPolicyWithWriter(policyPath, name, clientKey, write)
+			return ensurePolicy(write)
 		}
 		command, _ := entry["command"].(string)
 		if strings.TrimSpace(command) == "" {
@@ -130,12 +155,12 @@ func wrapAdd(clientKey, name, wrapBin, policyPath, statePath string) error {
 			wrapped[key] = value
 		}
 		wrapped["command"] = wrapBin
-		wrapped["args"] = append([]string{"--policy", policyPath, "--agent", clientKey, "--target", name, "--", command}, originalArgs...)
+		wrapped["args"] = append([]string{"--policy", policyPath, "--agent", agentID, "--target", targetID, "--", command}, originalArgs...)
 		installed, err := json.Marshal(wrapped)
 		if err != nil {
 			return err
 		}
-		if err := ensureWrapPolicyWithWriter(policyPath, name, clientKey, write); err != nil {
+		if err := ensurePolicy(write); err != nil {
 			return err
 		}
 		if state.Wrapped[clientKey] == nil {

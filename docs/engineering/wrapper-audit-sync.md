@@ -21,7 +21,7 @@ evaluation and loses its state on restart.
 Register both caller and target through `POST /api/v1/agents` with
 `channelType: local`, without endpoints or credentials. Use their returned IDs
 in the policy and the wrapper's `--agent` and `--target` options. `harbor import`
-remains HTTP-only; automated stdio wiring belongs to PR-3.
+remains HTTP-only. For automatic config wiring, use `harbor wrap add --agent-id ID --target-id ID` with those IDs. Both must already be declared in the caller’s local policy workspace. Unbound local names are not registry IDs.
 
 ```sh
 ./bin/harbor-wrap --agent <registered-caller-id> --target <registered-target-id> \

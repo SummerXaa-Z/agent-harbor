@@ -182,3 +182,57 @@ func TestWrapAddExtendsAnExistingPolicyAndRefusesOddLayouts(t *testing.T) {
 		t.Fatal("the policy file must be untouched when extension fails")
 	}
 }
+
+func TestWrapAddRequiresExplicitPolicyForRegistryBinding(t *testing.T) {
+	const boundPolicy = `version: 1
+workspaces:
+  - id: team
+    strict: true
+    targets:
+      - id: agt_target
+agents:
+  - id: agt_caller
+    workspace: team
+`
+	for _, tc := range []struct {
+		name, policy string
+		flags        []string
+		ok           bool
+	}{
+		{"valid", boundPolicy, []string{"--agent-id", "agt_caller", "--target-id", "agt_target"}, true},
+		{"missing policy", "", []string{"--agent-id", "agt_caller", "--target-id", "agt_target"}, false},
+		{"undeclared target", boundPolicy, []string{"--agent-id", "agt_caller", "--target-id", "agt_other"}, false},
+		{"incomplete binding", boundPolicy, []string{"--agent-id", "agt_caller"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := setupWrapFixture(t)
+			if tc.policy != "" {
+				if err := os.WriteFile(f.policy, []byte(tc.policy), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			args := []string{"wrap", "add", "--state", f.state, "--wrap-bin", f.wrapBin, "--policy", f.policy}
+			args = append(args, tc.flags...)
+			args = append(args, "claude-code", "node_repl")
+			var out, errOut strings.Builder
+			code := run(args, &out, &errOut)
+			if (code == 0) != tc.ok {
+				t.Fatalf("exit %d: %s", code, errOut.String())
+			}
+			if !tc.ok {
+				config, err := os.ReadFile(f.config)
+				if err != nil || string(config) != wrapClientConfig {
+					t.Fatalf("failed binding changed user config: %v", err)
+				}
+				return
+			}
+			got := strings.Join(stringArgs(f.entry(t, "node_repl")["args"]), " ")
+			if !strings.Contains(got, "--agent agt_caller --target agt_target") {
+				t.Fatalf("wrapper spec does not use binding: %s", got)
+			}
+			if policy, err := os.ReadFile(f.policy); err != nil || string(policy) != boundPolicy {
+				t.Fatalf("binding changed policy: %v", err)
+			}
+		})
+	}
+}

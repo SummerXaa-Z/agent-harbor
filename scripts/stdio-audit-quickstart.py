@@ -134,9 +134,13 @@ agents:
             require(len(responses[2]["result"]["tools"]) == 2, "sample tools missing")
             require(responses[3]["result"]["content"][0]["text"] == "hello", "hello did not run")
             denial = responses[4]["error"]["data"]
+            require("pending; 2 pending events" in cli("sync", "--status"),
+                    "status did not show both pending records")
             require(denial["reason"] == "sample allows hello only", "policy denial missing")
             require("synced 2 events" in cli("sync"), "first sync did not send both records")
             require("synced 0 events" in cli("sync"), "checkpoint did not suppress repeat upload")
+            require("synced; 0 pending events" in cli("sync", "--status"),
+                    "status did not show acknowledged records")
             require("synced 2 events" in cli("sync", "--replay"), "replay did not send both records")
 
             # Use the scoped API to check duplicates; the display CLI itself deduplicates.

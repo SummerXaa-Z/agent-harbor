@@ -8,12 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SummerXaa-Z/agent-harbor/internal/wrap"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/SummerXaa-Z/agent-harbor/internal/wrap"
 )
 
 const (
@@ -39,9 +40,14 @@ func cmdSync(args []string, stdout, stderr io.Writer) int {
 	flags := newFlagSet("sync", stderr)
 	clientFlags := addClientFlags(flags)
 	home, _ := os.UserHomeDir()
+	status := flags.Bool("status", false, "inspect local audit backlog without contacting the server")
 	replay := flags.Bool("replay", false, "replay retained events even if previously acknowledged")
 	spool := flags.String("spool", filepath.Join(home, ".harbor", "spool"), "wrapper audit spool directory")
 	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if *status && *replay {
+		fmt.Fprintln(stderr, "harbor sync: --status and --replay are mutually exclusive")
 		return 2
 	}
 	if len(flags.Args()) != 0 {
@@ -49,6 +55,9 @@ func cmdSync(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	client := clientFromFlags(clientFlags)
+	if *status {
+		return reportSyncStatus(client, *spool, stdout, stderr)
+	}
 	// Never forward an administrative credential to a redirect destination.
 	client.httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	count, err := syncSpool(client, *spool, *replay)
@@ -78,17 +87,13 @@ func syncSpool(client *cliClient, spool string, replay bool) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	checkpointDir := syncCheckpointDir(spool, client.baseURL, client.adminKey)
-	if info, err := os.Lstat(checkpointDir); err == nil {
-		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return 0, fmt.Errorf("checkpoint path is not a regular directory")
-		}
-	} else if !os.IsNotExist(err) {
+	checkpointDir, err := checkedSyncCheckpointDir(spool, client)
+	if err != nil {
 		return 0, err
 	}
 	total := 0
 	for _, entry := range entries {
-		if !strings.HasPrefix(entry.Name(), "wrap-") || !strings.HasSuffix(entry.Name(), ".jsonl") {
+		if !isSpoolRecord(entry.Name()) {
 			continue
 		}
 		if !entry.Type().IsRegular() {
@@ -102,6 +107,23 @@ func syncSpool(client *cliClient, spool string, replay bool) (int, error) {
 	}
 	return total, nil
 }
+
+func isSpoolRecord(name string) bool {
+	return strings.HasPrefix(name, "wrap-") && strings.HasSuffix(name, ".jsonl")
+}
+
+func checkedSyncCheckpointDir(spool string, client *cliClient) (string, error) {
+	dir := syncCheckpointDir(spool, client.baseURL, client.adminKey)
+	if info, err := os.Lstat(dir); err == nil {
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("checkpoint path is not a regular directory")
+		}
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+	return dir, nil
+}
+
 func prefixDigest(file *os.File, n int64) (string, error) {
 	hash := sha256.New()
 	if _, err := io.CopyN(hash, io.NewSectionReader(file, 0, n), n); err != nil {
@@ -240,17 +262,9 @@ func syncSpoolFile(client *cliClient, path, checkpointPath string, replay bool) 
 				return total, err
 			}
 		}
-		var event wrap.Event
-		decoder := json.NewDecoder(bytes.NewReader(line))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&event); err != nil {
-			return total, fmt.Errorf("invalid event at offset %d: %w", offset, err)
-		}
-		if err := decoder.Decode(new(any)); err != io.EOF {
-			return total, fmt.Errorf("trailing event data at offset %d", offset)
-		}
-		if event.ID == "" || event.Source != "wrap" {
-			return total, fmt.Errorf("invalid wrapper event at offset %d", offset)
+		event, err := decodeSyncEvent(line, offset)
+		if err != nil {
+			return total, err
 		}
 		batch = append(batch, event)
 		_, _ = prefixHash.Write(line)
@@ -263,6 +277,22 @@ func syncSpoolFile(client *cliClient, path, checkpointPath string, replay bool) 
 		}
 	}
 }
+func decodeSyncEvent(line []byte, offset int64) (wrap.Event, error) {
+	var event wrap.Event
+	decoder := json.NewDecoder(bytes.NewReader(line))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&event); err != nil {
+		return event, fmt.Errorf("invalid event at offset %d: %w", offset, err)
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return event, fmt.Errorf("trailing event data at offset %d", offset)
+	}
+	if event.ID == "" || event.Source != "wrap" {
+		return event, fmt.Errorf("invalid wrapper event at offset %d", offset)
+	}
+	return event, nil
+}
+
 func (client *cliClient) ingestWrapEvents(events []wrap.Event) error {
 	body, err := json.Marshal(struct {
 		Events []wrap.Event `json:"events"`

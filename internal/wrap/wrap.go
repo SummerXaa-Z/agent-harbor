@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -54,12 +55,13 @@ type Options struct {
 type Pump struct {
 	options Options
 
-	mu        sync.Mutex
-	policyMod time.Time
-	loaded    *policy.Policy
-	spoolFile *os.File
-	pendingMu sync.Mutex
-	pending   map[string]pendingCall
+	mu            sync.Mutex
+	policyMod     time.Time
+	loaded        *policy.Policy
+	spoolFile     *os.File
+	markedFailure bool
+	pendingMu     sync.Mutex
+	pending       map[string]pendingCall
 }
 
 type pendingCall struct {
@@ -73,7 +75,9 @@ func NewPump(options Options) *Pump {
 		options.Now = time.Now
 	}
 	if options.ReportError == nil {
-		options.ReportError = func(err error) { fmt.Fprintf(os.Stderr, "harbor-wrap: audit spool: %v\n", err) }
+		options.ReportError = func(err error) {
+			fmt.Fprintf(os.Stderr, "harbor-wrap: audit degraded; event was not fully persisted: %v\n", err)
+		}
 	}
 	return &Pump{options: options, pending: map[string]pendingCall{}}
 }
@@ -314,10 +318,29 @@ type Event struct {
 func (p *Pump) spool(event Event) {
 	p.mu.Lock()
 	err := p.writeSpool(event)
+	if err != nil && !p.markedFailure {
+		p.markedFailure = markSpoolWriteFailure(p.options.SpoolDir) == nil
+	}
 	p.mu.Unlock()
 	if err != nil {
 		p.options.ReportError(err)
 	}
+}
+
+// SpoolWriteFailureMarker is a sticky indication that the local audit may be
+// incomplete. It is best effort and deliberately contains no event data.
+const SpoolWriteFailureMarker = ".audit-write-failed"
+
+func markSpoolWriteFailure(dir string) error {
+	file, err := os.OpenFile(filepath.Join(dir, SpoolWriteFailureMarker), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if os.IsExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return file.Sync()
 }
 
 // writeSpool runs under mu. Each pump owns a unique append-only file so

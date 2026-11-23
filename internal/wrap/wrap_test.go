@@ -396,3 +396,25 @@ func TestSeparatePumpsUseDistinctSpoolFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestAuditWriteFailureLeavesDataFreeMarker(t *testing.T) {
+	dir := t.TempDir()
+	var spoolErr error
+	p := NewPump(Options{SpoolDir: dir, ReportError: func(err error) { spoolErr = err }})
+	f, err := os.CreateTemp(dir, "wrap-*.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	p.spoolFile = f
+	p.spool(Event{ID: "not-persisted", Source: "wrap"})
+	if spoolErr == nil {
+		t.Fatal("audit write failure was not reported")
+	}
+	info, err := os.Stat(filepath.Join(dir, SpoolWriteFailureMarker))
+	if err != nil || info.Size() != 0 || info.Mode().Perm()&0o077 != 0 {
+		t.Fatalf("expected an empty, owner-only failure marker: %v, %v", info, err)
+	}
+}

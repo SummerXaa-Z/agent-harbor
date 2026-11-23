@@ -68,6 +68,22 @@ Migration 018 adds source, outcome, tool name, and private ingest receipts.
 PostgreSQL inserts the batch atomically and retains original timestamp
 nanoseconds in the receipt for exact retry comparison.
 
+## Check the local audit backlog
+
+`harbor sync --status` uses the same destination and credential checkpoint as
+sync but does not contact the server or change files. It distinguishes empty,
+pending, locally acknowledged (synced), blocked, and recorded write failures
+(degraded). Pending is a count of complete local records; a separate incomplete
+file count covers records not yet complete. A checkpoint is not proof of
+current server health or that no historical records were lost.
+
+Write failures produce a wrapper stderr warning and a best-effort, sticky
+write-failure marker in the spool directory. New records can sync after the
+underlying problem is repaired, but sync cannot recover records that never
+reached disk and does not clear that marker. When the directory cannot accept
+writes at all, the marker itself may also be unavailable; check wrapper stderr.
+Keep spool evidence until investigated; no audit records are automatically deleted.
+
 ## Reliability and retention boundaries
 
 - The wrapper writes unique, owner-only `wrap-*.jsonl` files and records argument

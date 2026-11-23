@@ -321,3 +321,58 @@ func TestSyncCheckpointHashesAcknowledgedBytesNotLaterRewrite(t *testing.T) {
 		t.Fatal(ids)
 	}
 }
+
+func TestSyncStatusDistinguishesEmptyPendingSyncedAndWriteLoss(t *testing.T) {
+	dir := t.TempDir()
+	remoteStatus := 503
+	c := syncTestClient(syncTestServer(t, nil, &remoteStatus))
+	requireStatus := func(want string, code int) {
+		t.Helper()
+		var out, errOut strings.Builder
+		got := reportSyncStatus(c, dir, &out, &errOut)
+		if got != code || !strings.Contains(out.String()+errOut.String(), want) {
+			t.Fatalf("status=%d %s %s; want %d %q", got, out.String(), errOut.String(), code, want)
+		}
+	}
+	requireStatus("empty; 0 pending events", 0)
+	original := syncTestLine("one")
+	path := writeSyncSpool(t, dir, original)
+	requireStatus("pending; 1 pending events", 0)
+	if _, err := syncSpool(c, dir, false); err == nil {
+		t.Fatal("expected remote sync rejection")
+	}
+	requireStatus("pending; 1 pending events", 0)
+	remoteStatus = 200
+	if n, err := syncSpool(c, dir, false); err != nil || n != 1 {
+		t.Fatalf("sync recovery=%d %v", n, err)
+	}
+	requireStatus("synced; 0 pending events", 0)
+	if err := os.WriteFile(filepath.Join(dir, wrap.SpoolWriteFailureMarker), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	requireStatus("degraded (previous write failed; records may be missing); 0 pending", 2)
+	if bytes, err := os.ReadFile(path); err != nil || string(bytes) != original {
+		t.Fatalf("spool changed: %v", err)
+	}
+}
+
+func TestSyncStatusReportsUncertainBacklog(t *testing.T) {
+	dir := t.TempDir()
+	client := &cliClient{baseURL: "http://127.0.0.1:1"}
+	path := writeSyncSpool(t, dir, strings.TrimSuffix(syncTestLine("partial"), "\n"))
+	var out, errOut strings.Builder
+	if got := reportSyncStatus(client, dir, &out, &errOut); got != 0 || !strings.Contains(out.String(), "pending; 0 pending events; 1 incomplete files") {
+		t.Fatalf("incomplete status: %d %s %s", got, &out, &errOut)
+	}
+	out.Reset()
+	if err := os.WriteFile(path, []byte("not-json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := reportSyncStatus(client, dir, &out, &errOut); got != 2 || out.Len() != 0 || !strings.Contains(errOut.String(), "blocked (pending count unavailable)") {
+		t.Fatalf("invalid status: %d %s %s", got, &out, &errOut)
+	}
+	errOut.Reset()
+	if got := reportSyncStatus(client, path, &out, &errOut); got != 2 || out.Len() != 0 {
+		t.Fatalf("unreadable spool status: %d %s %s", got, &out, &errOut)
+	}
+}

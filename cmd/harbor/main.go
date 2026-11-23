@@ -25,8 +25,8 @@ Usage:
   harbor key rotate <agentId> --old <keyId>
   harbor import [--from FILE] [--confirm] [--output harbor.yaml]
   harbor connect <client> [--agent-key K] [--print]
-  harbor sync [--spool DIR] [--replay]              upload wrapper audit events
-  harbor wrap add [--wrap-bin PATH] <client> <name>  wrap a stdio server for a client
+  harbor sync [--spool DIR] [--replay | --status]   upload events or inspect the local backlog
+  harbor wrap add [flags] <client> <name>            wrap a stdio server for a client
   harbor wrap remove <client> <name>                 restore the unwrapped server
   harbor review [--days N]                          usage recap and deny suggestions
 

@@ -7,7 +7,7 @@ import {
   systemInfoContractIssues,
 } from "../src/systemInfoContract.ts";
 import * as apiPaths from "../src/apiPaths.ts";
-import { API_REQUEST_TIMEOUT_MS, loadConsoleData, requestSignal } from "../src/api.ts";
+import { API_REQUEST_TIMEOUT_MS, fetchTraces, loadConsoleData, requestSignal } from "../src/api.ts";
 import {
   accessDecisionExplainPath,
   permissionPackageAccessHandoffPath,
@@ -410,6 +410,29 @@ test("admin identity holder binding updates go through the PATCH endpoint", () =
   assert.match(apiSource, /method:\s*'PATCH'/);
   assert.match(typesSource, /ownedAgentIds\?: string\[\]/);
   assert.match(typesSource, /UpdateAdminIdentityOwnedAgentsRequest/);
+});
+
+test("console snapshots request bounded traces without changing the standalone trace client", async () => {
+  const traceRequests = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === "/api/v1/audit/traces") traceRequests.push(url.searchParams);
+    return { ok: true, json: async () => [] };
+  };
+  try {
+    await loadConsoleData();
+    await loadConsoleData(undefined, { runId: "demo-run", decision: "denied" });
+    await loadConsoleData(undefined, { limit: 25, highRisk: true });
+    await fetchTraces();
+    assert.equal(traceRequests.length, 4);
+    assert.deepEqual(traceRequests.map((params) => params.get("limit")), ["200", "200", "25", null]);
+    assert.equal(traceRequests[1].get("runId"), "demo-run");
+    assert.equal(traceRequests[1].get("decision"), "denied");
+    assert.equal(traceRequests[2].get("highRisk"), "true");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 test("loadConsoleData retains previous real rows when one fetch transiently fails", async () => {

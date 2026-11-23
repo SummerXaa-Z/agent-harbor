@@ -1076,6 +1076,8 @@ export async function probeTarget(targetId: string, adminKey?: string): Promise<
   })
 }
 
+const consoleTraceRowLimit = 200
+
 export async function loadConsoleData(
   adminKey?: string,
   traceFilters: TraceFilters = {},
@@ -1112,7 +1114,7 @@ export async function loadConsoleData(
     withFallback(() => fetchWorkspaceAssignments(scope, adminKey), previous?.workspaceAssignments ?? sampleWorkspaceAssignments),
     withFallback(() => fetchInstanceAssignments(scope, adminKey), previous?.instanceAssignments ?? sampleInstanceAssignments),
     withFallback(() => fetchRoutePolicies(scope, adminKey), previous?.routePolicies ?? routePolicies),
-    withFallback(() => fetchTraces(traceFilters, scope, adminKey), previous?.traces ?? sampleTraces),
+    withFallback(() => fetchTraces({ ...traceFilters, limit: traceFilters.limit || consoleTraceRowLimit }, scope, adminKey), previous?.traces ?? sampleTraces),
     withFallback(() => fetchAuditEvents(scope, adminKey), previous?.auditEvents ?? sampleAuditEvents),
     withFallback(() => fetchRuntimeMetrics(scope, adminKey), previous?.systemMetrics ?? systemMetrics),
   ])

@@ -128,7 +128,7 @@ export type ResourceRole = "caller" | "target";
 
 export interface MyResourceRow {
   agent: Agent;
-  lastActivity: string;
+  lastActivity: string | null;
   role: ResourceRole;
 }
 
@@ -147,7 +147,7 @@ export function myResources(
           ? trace.callerInstanceId === agent.id || trace.callerAgentId === agent.id
           : trace.targetAgentId === agent.id))
         .reduce<string>((latest, trace) => (Date.parse(trace.createdAt) > Date.parse(latest || "0") ? trace.createdAt : latest), "");
-      return { agent, lastActivity: latestTrace || agent.updatedAt, role };
+      return { agent, lastActivity: latestTrace || null, role };
     })
     .sort((a, b) => (a.role === b.role ? a.agent.name.localeCompare(b.agent.name) : a.role === "caller" ? -1 : 1));
 }

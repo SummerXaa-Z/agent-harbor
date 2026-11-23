@@ -148,7 +148,7 @@ export function corePathCheck(input: {
       ...base,
       detail: input.application.id,
       fixKeys,
-      status: "error",
+      status: input.appliedAudit ? "warning" : "error",
       subKey: "rd.envcheck.corePath.missing",
     };
   }

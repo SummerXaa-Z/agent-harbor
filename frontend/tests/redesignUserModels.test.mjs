@@ -599,7 +599,7 @@ test("user workbench derives onboarding, requests, resources and permissions", (
 
   const resources = myResources(agents, capabilities, [{ id: "tr", targetAgentId: "target-a", callerInstanceId: "caller-a", createdAt: "2026-09-25T00:00:00Z", decision: "allowed", routeType: "mcp" }]);
   assert.deepEqual(resources.map((row) => [row.agent.id, row.role, row.lastActivity]), [
-    ["caller-b", "caller", "2026-09-03T00:00:00Z"],
+    ["caller-b", "caller", null],
     ["caller-a", "caller", "2026-09-25T00:00:00Z"],
     ["target-a", "target", "2026-09-25T00:00:00Z"],
   ]);

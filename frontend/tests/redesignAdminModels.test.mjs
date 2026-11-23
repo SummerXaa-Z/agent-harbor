@@ -170,6 +170,9 @@ test("corePathCheck requires apply, audit and an allowed call", () => {
   const missing = corePathCheck({ allowedTrace: null, application, appliedAudit: null });
   assert.equal(missing.status, "error");
   assert.deepEqual(missing.fixKeys, ["rd.envcheck.corePath.missingTrace", "rd.envcheck.corePath.missingAudit"]);
+  const outsideTraceWindow = corePathCheck({ allowedTrace: null, application, appliedAudit });
+  assert.equal(outsideTraceWindow.status, "warning");
+  assert.deepEqual(outsideTraceWindow.fixKeys, ["rd.envcheck.corePath.missingTrace"]);
   assert.equal(corePathCheck({ allowedTrace, application, appliedAudit }).status, "ok");
 });
 

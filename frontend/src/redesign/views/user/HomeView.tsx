@@ -183,7 +183,7 @@ export function HomeView({ data, onRetry, session }: UserViewProps) {
                       </Chip>
                     );
                   case "lastActivity":
-                    return formatDate(row.lastActivity, language);
+                    return row.lastActivity ? formatDate(row.lastActivity, language) : t("rd.home.noRecentCall");
                 }
               }}
               rowKey={(row) => row.agent.id}

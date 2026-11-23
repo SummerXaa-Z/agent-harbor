@@ -8,6 +8,8 @@ This project uses Keep a Changelog-style sections and semantic versioning for ta
 
 ### Added
 
+- Read-only wrapper audit backlog status and a local indicator when an audit write failed.
+
 - Disposable stdio audit quickstart and explicit registry ID binding for automatic wrapper setup.
 
 - Local `harbor wrap add/remove` with explicit policy selection, workspace-scoped installation checks, private recovery state, conflict detection and recoverable file writes.

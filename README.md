@@ -8,6 +8,19 @@ It helps platform, security, and tenant operations teams answer one production q
 
 它帮助平台、安全和租户运营团队回答一个生产问题：哪个租户、工作区、调用方实例和主体可以访问哪些工具或数据范围，为什么可以访问，以及对应的审批和审计记录是什么。
 
+## Quick Start: first stdio audit
+
+From a checkout with Go and Python 3:
+
+```sh
+make scenario-stdio-audit
+```
+
+A disposable client profile runs two sample tools through the actual wrapper: one
+allowed and one denied. The script syncs both audit records, explains the denial
+with `harbor why`, checks that replay does not create duplicates, and verifies
+config restoration. It does not touch your existing clients or deployments.
+
 ## Positioning
 
 AgentHarbor supports MCP gateway capabilities, but it is not positioned as another generic MCP gateway. MCP servers are one governed target type. The product identity is tenant-first access governance, AI-friendly permission operations, and audit-ready runtime enforcement across MCP tools, APIs, agents, and data systems.
@@ -40,7 +53,7 @@ harbor wrap add --wrap-bin /absolute/path/to/harbor-wrap --policy /absolute/path
 harbor wrap remove claude-code node_repl
 ```
 
-Flags precede the client and server names. The default policy is `~/.harbor/harbor.yaml`; a missing policy starts in open mode, so review and tighten it before relying on restrictions. Existing multi-workspace policies require the agent and target to be declared in the same intended workspace before wrapping. The client always receives the selected absolute policy path.
+Flags precede the client and server names. The default policy is `~/.harbor/harbor.yaml`; a missing policy starts in open mode, so review and tighten it before relying on restrictions. Existing multi-workspace policies require the agent and target to be declared in the same intended workspace before wrapping. The client always receives the selected absolute policy path. To sync this wrapper’s audit to the server, pass `--agent-id ID --target-id ID` before the client and server names. Use the registered IDs, already declared together in an existing local policy; the local client and server names remain unchanged. See [audit sync setup](docs/engineering/wrapper-audit-sync.md).
 
 Recovery records live separately in `~/.harbor/wrap-state.json` (`--state` overrides it; never reuse import state). Config, backup and recovery files may contain credentials and are written owner-only. `remove` refuses to overwrite an entry edited since installation. It restores the client entry, not policy declarations. Restart the client after either operation.
 
@@ -68,7 +81,7 @@ The tenant is the primary control boundary; `dataScopes` narrow layer by layer a
 
 租户是主控制边界;`dataScopes` 逐层收敛,运行时决策记录最终生效的范围。管理 API 要求管理员认证(`AGENT_HARBOR_ADMIN_KEY` 共享密钥、`AGENT_HARBOR_ADMIN_IDENTITIES` 具名角色或控制台会话);数据面使用短期 Agent Key 和可选的 `X-AgentHarbor-Subject-Id`。日常管理员建议使用控制台内创建的托管身份(密钥只展示一次,轮换和禁用即可即时止损);环境变量引导身份保持只读 break-glass。非平台身份还可以绑定持有的调用方(`ownedAgentIds`),在服务端收窄其用户面(`403 HOLDER_SCOPE_DENIED`)。安全响应头、请求体限制、凭据加密和生产预检规则摘录见[架构文档](docs/engineering/architecture.md),由 `make production-hardening` 强制验证。
 
-## Quick Start
+## Web console demo
 
 Use the repository toolchain pins (Go from `go.mod`; Node from `.node-version`, 24–26; frontend pnpm from `frontend/package.json`).
 

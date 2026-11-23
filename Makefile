@@ -257,7 +257,10 @@ scenario-admin-tenant-boundary:
 scenario-admin-access-management:
 	bash scripts/scenario-admin-access-management.sh
 
-.PHONY: scenario-tenant-permission-center
+.PHONY: scenario-tenant-permission-center scenario-stdio-audit
+
+scenario-stdio-audit:
+	python3 scripts/stdio-audit-quickstart.py
 scenario-tenant-permission-center: build
 	bash scripts/scenario-tenant-permission-center.sh
 
